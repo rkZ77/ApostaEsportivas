@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   AlertTriangle, CheckCircle2, Database, Gavel, Pencil, PlayCircle, RefreshCw,
   Save, ShieldAlert, User, Users, X,
 } from 'lucide-react'
 import api from '../services/api'
 import AdminAmostra, { type AlvoAmostra } from './AdminAmostra'
-import { Button, EmptyState, Pagination, SpinnerBlock, StatTile } from './ui'
+import {
+  Button, EmptyState, ErrorState, Pagination, Skeleton, SkeletonRows, SpinnerBlock, StatTile,
+} from './ui'
 
 /*
  * O que o motor tem pra ler, onde estão os buracos, e o que dá pra fazer.
@@ -206,6 +208,49 @@ interface Jogadores {
   erro?: string
 }
 
+/** Uma linha de `team_statistics` agregada · a média que o motor lê do time.
+ *
+ * A lista nasce das PARTIDAS, e não da tabela de médias: o time que nunca teve
+ * média calculada é o caso mais desatualizado que existe, e partindo da tabela
+ * de médias ele simplesmente não apareceria. Por isso `sem_media` é uma linha
+ * com as colunas vazias, e não uma ausência de linha. */
+interface TimeMedia {
+  team_id: number
+  league_id: number | null
+  season: number | null
+  time: string | null
+  liga: string | null
+  /** Partidas do time em `match_statistics` · a matéria-prima da média. */
+  partidas: number
+  ultima_partida: string | null
+  /** Jogos que entraram na média. Menor que `partidas` quando falta contexto. */
+  jogos: number | null
+  calculada_em: string | null
+  sem_media: boolean
+  desatualizada: boolean
+  amostra_curta: boolean
+  /** As médias chegam como `<chave>_m`, uma por coluna. */
+  [k: string]: unknown
+}
+
+interface Times {
+  season: number | null
+  temporadas: number[]
+  ligas: { league_id: number; liga: string | null; partidas: number }[]
+  league_id?: number | null
+  mando: string
+  problema?: string | null
+  ordenar?: string
+  total: number
+  times: TimeMedia[]
+  min_jogos: number
+  colunas: { chave: string; rotulo: string }[]
+  velhas: number
+  sem_media: number
+  curtas: number
+  erro?: string
+}
+
 interface Vermelho {
   disponivel: boolean
   alvo?: number
@@ -215,6 +260,30 @@ interface Vermelho {
 }
 
 const POR_PAGINA = 10
+
+/* AS CINCO PERGUNTAS DA TELA, na ordem em que se caminha por elas.
+ *
+ * O corte não é por assunto, é pela pergunta que cada uma responde:
+ *
+ *   Problemas   o que está errado AGORA e o que dá pra fazer;
+ *   Cobertura   o que o motor tem pra ler, e onde estão os furos;
+ *   Times       a média que o motor de fato lê, e o estado de cada uma;
+ *   Partidas    jogo a jogo, com o que a folha não trouxe;
+ *   Pessoas     árbitro e jogador, a mesma régua aplicada ao indivíduo.
+ *
+ * Times e Pessoas nasceram de dentro de Partidas em 28/08: a aba tinha três
+ * tabelas grandes empilhadas, e a lista de jogos · que é onde ficam os botões
+ * de conserto · era a última das três. Quem abria "Partidas" caía em árbitros.
+ */
+const SECOES = [
+  ['problemas', 'Problemas'],
+  ['cobertura', 'Cobertura'],
+  ['times', 'Times'],
+  ['partidas', 'Partidas'],
+  ['pessoas', 'Pessoas'],
+] as const
+
+type Secao = (typeof SECOES)[number][0]
 
 const numero = (v: number | null | undefined) =>
   v == null ? '·' : v.toLocaleString('pt-BR')
@@ -292,6 +361,17 @@ export default function AdminDados() {
   const [ligaJogadores, setLigaJogadores] = useState<number | ''>('')
 
   /** Alvo do drawer de amostra · time ou árbitro, um por vez. */
+  /* Médias de time · a aba nova. O recorte inteiro vive aqui porque cada
+   * controle refaz a consulta, e o servidor devolve o que aceitou (o mando
+   * ou a ordenação inválida viram o padrão lá, não um erro). */
+  const [times, setTimes] = useState<Times | null>(null)
+  const [paginaTimes, setPaginaTimes] = useState(0)
+  const [mandoTimes, setMandoTimes] = useState<'todos' | 'casa' | 'fora'>('todos')
+  const [ligaTimes, setLigaTimes] = useState<number | ''>('')
+  const [problemaTimes, setProblemaTimes] = useState<'' | 'velha' | 'sem_media' | 'curta'>('')
+  const [ordenarTimes, setOrdenarTimes] = useState('gols')
+  const [buscaTime, setBuscaTime] = useState('')
+
   const [amostra, setAmostra] = useState<AlvoAmostra | null>(null)
 
   /* Em qual das três perguntas a tela está.
@@ -311,7 +391,7 @@ export default function AdminDados() {
    *
    * A contagem de problemas fica no próprio botão, senão trocar de seção
    * viraria esconder o alerta. */
-  const [secao, setSecao] = useState<'problemas' | 'cobertura' | 'partidas'>('problemas')
+  const [secao, setSecao] = useState<Secao>('problemas')
 
   /** fixture_id em coleta. Um por vez: cada clique custa 2 requisições da cota. */
   const [rodando, setRodando] = useState<number | null>(null)
@@ -427,6 +507,34 @@ export default function AdminDados() {
     }
   }
 
+  /** A consulta de times. Tudo que a tela filtra viaja junto: o servidor não
+   *  guarda recorte nenhum, e cada controle refaz a pergunta inteira. */
+  const buscarTimes = useCallback((o: {
+    season?: number | null
+    liga?: number | ''
+    mando?: 'todos' | 'casa' | 'fora'
+    problema?: '' | 'velha' | 'sem_media' | 'curta'
+    ordenar?: string
+    busca?: string
+    pagina?: number
+  }) => {
+    const pagina = o.pagina ?? 0
+    setPaginaTimes(pagina)
+    api.get('/admin/dados/times', {
+      params: {
+        ...(o.season != null ? { season: o.season } : {}),
+        ...(o.liga !== '' && o.liga != null ? { league_id: o.liga } : {}),
+        mando: o.mando ?? 'todos',
+        ...(o.problema ? { problema: o.problema } : {}),
+        ordenar: o.ordenar ?? 'gols',
+        ...(o.busca?.trim() ? { busca: o.busca.trim() } : {}),
+        pagina, por_pagina: POR_PAGINA,
+      },
+    })
+      .then(r => setTimes(r.data))
+      .catch(() => setTimes(t => (t ? { ...t, erro: 'Não deu pra ler as médias de time.' } : null)))
+  }, [])
+
   const buscarMedias = useCallback(() => {
     api.get('/admin/dados/medias-velhas')
       .then(r => setMedias(r.data))
@@ -439,26 +547,85 @@ export default function AdminDados() {
       .catch(() => {})
   }, [])
 
-  const buscar = () => {
+  /* O QUE JÁ FOI PEDIDO. Uma chave por recurso, não por seção · `historico`
+   * serve a duas abas, e marcar por seção o faria vir duas vezes. */
+  const carregadas = useRef<Set<string>>(new Set())
+
+  const puxar = (chave: string, fn: () => void) => {
+    if (carregadas.current.has(chave)) return
+    carregadas.current.add(chave)
+    fn()
+  }
+
+  /* CADA SEÇÃO PUXA O QUE ELA MOSTRA, na primeira vez que é aberta.
+   *
+   * Até 28/08 o mount disparava NOVE requisições de uma vez · estado do banco,
+   * buracos, vermelho legado, placar falso, diagnóstico, recoleta, médias,
+   * árbitros e jogadores. O navegador só mantém seis conexões por origem, e
+   * várias dessas consultas varrem tabela grande, então as últimas ficavam na
+   * fila até estourar o timeout de 15s do axios · a tela inteira travava numa
+   * bolinha e terminava no toast de "o servidor demorou para responder".
+   *
+   * O único bloco que continua no mount é o estado do banco (que desenha a
+   * tela) e o de Problemas, que é a seção inicial e a que tem alerta. */
+  const buscarEstado = () => {
     setCarregando(true)
     setErro('')
     api.get('/admin/dados')
       .then(r => setDados(r.data))
       .catch(e => setErro(msgErro(e, 'Não deu pra ler o estado do banco.')))
       .finally(() => setCarregando(false))
-    // Volta pra primeira página: "Atualizar" com a página 3 na tela mostraria
-    // a terceira dezena de uma lista que acabou de mudar embaixo.
-    setPagina(0)
-    buscarHistorico(0, filtroPartidas?.chave, diagnostico?.meses)
-    buscarBuracos()
-    buscarDiagnostico(diagnostico?.meses ?? 12)
-    buscarRecoleta()
-    buscarMedias()
-    buscarArbitros(arbitros?.season, 0, buscaArbitro)
-    buscarJogadores(jogadores?.season, mandoJogadores, ordenarJogadores, 0, buscaJogador, ligaJogadores)
   }
 
-  useEffect(buscar, [])
+  useEffect(() => {
+    if (secao === 'problemas') {
+      puxar('buracos', buscarBuracos)
+      puxar('medias', buscarMedias)
+      puxar('recoleta', buscarRecoleta)
+    } else if (secao === 'cobertura') {
+      puxar('diagnostico', () => buscarDiagnostico(12))
+      puxar('historico', () => buscarHistorico(0, filtroPartidas?.chave))
+    } else if (secao === 'times') {
+      puxar('medias', buscarMedias)
+      puxar('times', () => buscarTimes({ mando: mandoTimes, ordenar: ordenarTimes }))
+    } else if (secao === 'partidas') {
+      puxar('historico', () => buscarHistorico(0, filtroPartidas?.chave))
+    } else if (secao === 'pessoas') {
+      puxar('arbitros', () => buscarArbitros())
+      puxar('jogadores', () => buscarJogadores())
+    }
+  }, [secao])
+
+  /** "Atualizar" · esquece o que já veio e repete só o da seção aberta. */
+  const buscar = () => {
+    carregadas.current.clear()
+    setPagina(0)
+    buscarEstado()
+    if (secao === 'problemas') {
+      buscarBuracos(); buscarMedias(); buscarRecoleta()
+      carregadas.current.add('buracos'); carregadas.current.add('medias')
+      carregadas.current.add('recoleta')
+    } else if (secao === 'cobertura') {
+      buscarDiagnostico(diagnostico?.meses ?? 12)
+      buscarHistorico(0, filtroPartidas?.chave, diagnostico?.meses)
+      carregadas.current.add('diagnostico'); carregadas.current.add('historico')
+    } else if (secao === 'times') {
+      buscarMedias()
+      buscarTimes({ season: times?.season, liga: ligaTimes, mando: mandoTimes,
+                    problema: problemaTimes, ordenar: ordenarTimes, busca: buscaTime })
+      carregadas.current.add('medias'); carregadas.current.add('times')
+    } else if (secao === 'partidas') {
+      buscarHistorico(0, filtroPartidas?.chave, diagnostico?.meses)
+      carregadas.current.add('historico')
+    } else if (secao === 'pessoas') {
+      buscarArbitros(arbitros?.season, 0, buscaArbitro)
+      buscarJogadores(jogadores?.season, mandoJogadores, ordenarJogadores, 0,
+                      buscaJogador, ligaJogadores)
+      carregadas.current.add('arbitros'); carregadas.current.add('jogadores')
+    }
+  }
+
+  useEffect(buscarEstado, [])
 
   /* Enquanto o lote roda, a tela pergunta o estado. O intervalo é de 3s e não
    * de 1s de propósito: o trabalho é de segundos POR PARTIDA (duas requisições
@@ -661,8 +828,31 @@ export default function AdminDados() {
     }
   }
 
-  if (carregando && !dados) return <SpinnerBlock className="py-20" />
-  if (erro) return <p className="text-red-400 text-sm py-8">{erro}</p>
+  /* ESQUELETO NO LUGAR DA BOLINHA (28/08).
+   *
+   * Um spinner centralizado numa caixa vazia não diz o que está vindo, e
+   * quando a resposta demora ele parece travado · a animação continua, mas
+   * sem nada em volta pra dar referência de movimento não há como notar.
+   * O esqueleto já nasce com a forma da tela (título, as cinco abas, o cartão
+   * de alerta, os contadores e a lista), então o conteúdo só preenche o que
+   * já estava reservado, e a barra de progresso do topo cuida do resto. */
+  if (carregando && !dados) return (
+    <div className="space-y-6" aria-busy="true">
+      <div className="flex items-center justify-between gap-3">
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="h-8 w-24" />
+      </div>
+      <div className="flex gap-1.5">
+        {SECOES.map(([chave]) => <Skeleton key={chave} className="h-9 w-24 shrink-0" />)}
+      </div>
+      <Skeleton className="h-20 w-full rounded-xl" />
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
+      </div>
+      <div className="card p-0 overflow-hidden"><SkeletonRows rows={4} /></div>
+    </div>
+  )
+  if (erro) return <ErrorState title="Não deu pra ler o estado do banco" description={erro} onRetry={buscar} />
   if (!dados) return null
 
   const totalBuracos = dados.buracos?.total ?? 0
@@ -692,11 +882,11 @@ export default function AdminDados() {
       {/* Quantos alertas estão abertos. É o que faz a navegação não esconder
         * problema: o número vive no botão, não dentro da seção. */}
       <div className="flex gap-1.5 overflow-x-auto">
-        {([
-          ['problemas', 'Problemas', abertos],
-          ['cobertura', 'Cobertura', 0],
-          ['partidas', 'Partidas', 0],
-        ] as const).map(([chave, rotulo, n]) => (
+        {SECOES.map(([chave, rotulo]) => {
+          const n = chave === 'problemas' ? abertos
+            : chave === 'times' ? (medias?.total ?? 0)
+            : 0
+          return (
           <button
             key={chave}
             type="button"
@@ -711,7 +901,8 @@ export default function AdminDados() {
               <span className="font-mono text-[10px] tabular-nums text-yellow-400">{n}</span>
             )}
           </button>
-        ))}
+          )
+        })}
       </div>
 
       {secao === 'problemas' && (<>
@@ -946,87 +1137,6 @@ export default function AdminDados() {
         <StatTile label="Picks VIP"        value={numero(dados.contagem?.picks_vip)} />
         <StatTile label="Picks free"       value={numero(dados.contagem?.picks_free)} />
       </div>
-
-      {/* Médias desatualizadas.
-        *
-        * `team_statistics` é o que o motor lê, e é DERIVADA de
-        * `match_statistics`. Derivada não se atualiza sozinha: coletar a
-        * partida e não refazer a média deixa o motor lendo a média de ontem
-        * sobre um histórico de hoje · o pior dos dois mundos, porque parece
-        * atualizado e não tem sintoma nenhum na tela.
-        *
-        * O cartão fica em Cobertura e não em Problemas de propósito: média
-        * velha por alguns minutos é o estado NORMAL entre a coleta e a próxima
-        * varredura, e um alerta que acende todo dia deixa de ser alerta. */}
-      {medias?.disponivel && (
-        <div className="card p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h3 className="text-sm font-bold text-ink-1">Médias de time</h3>
-              <p className="text-[11px] text-ink-4 mt-0.5 leading-relaxed">
-                {medias.total > 0
-                  ? <>
-                      <span className="text-yellow-400 font-semibold">
-                        {numero(medias.total)} time(s)
-                      </span>{' '}
-                      têm partida gravada depois da última vez que a média deles foi calculada ·
-                      é essa média que o motor lê. Recalcular não gasta requisição da API: sai tudo
-                      do banco.
-                    </>
-                  : <>Toda média está em dia com as partidas coletadas. O motor está lendo o
-                      número de agora.</>}
-              </p>
-              <p className="text-[10px] text-ink-4 mt-1.5 leading-relaxed">
-                Só entram os times que de fato mudaram · a varredura antiga refazia a conta de
-                todo time que tivesse jogado nos últimos 3 dias, tivesse mudado alguma coisa nele
-                ou não, e isso rodava no caminho de uma visita ao site.
-              </p>
-            </div>
-            {medias.total > 0 && !medias.rodando && (
-              <Button size="sm" variant="ghost" className="shrink-0"
-                      loading={pedindoMedias} onClick={recalcularMedias}>
-                <RefreshCw className="w-3.5 h-3.5" />
-                Atualizar as {numero(medias.total)}
-              </Button>
-            )}
-          </div>
-
-          {medias.rodando && (
-            <>
-              <div className="flex items-baseline justify-between gap-3 mt-3">
-                <p className="text-[11px] font-semibold text-ink-2">
-                  Recalculando {medias.feitas} de {medias.total}
-                </p>
-                {medias.falhas > 0 && (
-                  <p className="text-[10px] font-mono text-yellow-400">{medias.falhas} falha(s)</p>
-                )}
-              </div>
-              <div className="h-1.5 bg-surface-2 rounded-full overflow-hidden mt-2">
-                <div
-                  className="h-full bg-green-500 transition-all duration-1"
-                  style={{ width: `${Math.round((medias.feitas / Math.max(1, medias.total)) * 100)}%` }}
-                />
-              </div>
-              <p className="text-[10px] text-ink-4 mt-1.5">
-                Dá pra sair da aba · o recálculo continua no servidor.
-              </p>
-            </>
-          )}
-
-          {!medias.rodando && medias.terminada_em && (
-            <p className="text-[11px] text-green-400 mt-2">
-              Último recálculo: {medias.feitas} time(s)
-              {medias.falhas > 0 && ` · ${medias.falhas} falha(s)`}
-            </p>
-          )}
-          {medias.erro && <p className="text-[11px] text-red-400 mt-2">{medias.erro}</p>}
-          {aviso?.fixture === -5 && (
-            <p className={`text-[11px] mt-2 ${aviso.ok ? 'text-green-400' : 'text-red-400'}`}>
-              {aviso.texto}
-            </p>
-          )}
-        </div>
-      )}
 
       {/* Coleta automática · o que substituiu o clique manual. */}
       <div className="card p-4">
@@ -1302,7 +1412,630 @@ export default function AdminDados() {
         * daquele árbitro. Refazer não custa cota: sai tudo do banco. */}
       </>)}
 
+      {secao === 'times' && (<>
+      {/* Médias desatualizadas.
+        *
+        * `team_statistics` é o que o motor lê, e é DERIVADA de
+        * `match_statistics`. Derivada não se atualiza sozinha: coletar a
+        * partida e não refazer a média deixa o motor lendo a média de ontem
+        * sobre um histórico de hoje · o pior dos dois mundos, porque parece
+        * atualizado e não tem sintoma nenhum na tela.
+        *
+        * O cartão fica aqui e não em Problemas de propósito: média velha por
+        * alguns minutos é o estado NORMAL entre a coleta e a próxima varredura,
+        * e um alerta que acende todo dia deixa de ser alerta. Ele abre a aba
+        * porque é o botão que conserta a coluna vazia da tabela de baixo. */}
+      {medias?.disponivel && (
+        <div className="card p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="text-sm font-bold text-ink-1">Médias de time</h3>
+              <p className="text-[11px] text-ink-4 mt-0.5 leading-relaxed">
+                {medias.total > 0
+                  ? <>
+                      <span className="text-yellow-400 font-semibold">
+                        {numero(medias.total)} time(s)
+                      </span>{' '}
+                      têm partida gravada depois da última vez que a média deles foi calculada ·
+                      é essa média que o motor lê. Recalcular não gasta requisição da API: sai tudo
+                      do banco.
+                    </>
+                  : <>Toda média está em dia com as partidas coletadas. O motor está lendo o
+                      número de agora.</>}
+              </p>
+              <p className="text-[10px] text-ink-4 mt-1.5 leading-relaxed">
+                Só entram os times que de fato mudaram · a varredura antiga refazia a conta de
+                todo time que tivesse jogado nos últimos 3 dias, tivesse mudado alguma coisa nele
+                ou não, e isso rodava no caminho de uma visita ao site.
+              </p>
+            </div>
+            {medias.total > 0 && !medias.rodando && (
+              <Button size="sm" variant="ghost" className="shrink-0"
+                      loading={pedindoMedias} onClick={recalcularMedias}>
+                <RefreshCw className="w-3.5 h-3.5" />
+                Atualizar as {numero(medias.total)}
+              </Button>
+            )}
+          </div>
+
+          {medias.rodando && (
+            <>
+              <div className="flex items-baseline justify-between gap-3 mt-3">
+                <p className="text-[11px] font-semibold text-ink-2">
+                  Recalculando {medias.feitas} de {medias.total}
+                </p>
+                {medias.falhas > 0 && (
+                  <p className="text-[10px] font-mono text-yellow-400">{medias.falhas} falha(s)</p>
+                )}
+              </div>
+              <div className="h-1.5 bg-surface-2 rounded-full overflow-hidden mt-2">
+                <div
+                  className="h-full bg-green-500 transition-all duration-1"
+                  style={{ width: `${Math.round((medias.feitas / Math.max(1, medias.total)) * 100)}%` }}
+                />
+              </div>
+              <p className="text-[10px] text-ink-4 mt-1.5">
+                Dá pra sair da aba · o recálculo continua no servidor.
+              </p>
+            </>
+          )}
+
+          {!medias.rodando && medias.terminada_em && (
+            <p className="text-[11px] text-green-400 mt-2">
+              Último recálculo: {medias.feitas} time(s)
+              {medias.falhas > 0 && ` · ${medias.falhas} falha(s)`}
+            </p>
+          )}
+          {medias.erro && <p className="text-[11px] text-red-400 mt-2">{medias.erro}</p>}
+          {aviso?.fixture === -5 && (
+            <p className={`text-[11px] mt-2 ${aviso.ok ? 'text-green-400' : 'text-red-400'}`}>
+              {aviso.texto}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* A média de time, linha a linha · a tabela que faltava.
+        *
+        * `team_statistics` é O NÚMERO QUE O MOTOR LÊ pra todo mercado de time,
+        * e era a única tabela grande do banco sem tela: dava pra ver a partida
+        * (a matéria-prima), o árbitro e o jogador, mas não o agregado que fica
+        * no meio do caminho. Sem ele, "a média está estranha" só se investigava
+        * abrindo o banco.
+        *
+        * A lista nasce das PARTIDAS e não das médias, então o time que nunca
+        * teve média calculada aparece com as colunas vazias em vez de sumir ·
+        * ele é o caso mais desatualizado que existe. */}
+      <div className="card p-0 overflow-hidden">
+        <div className="px-4 py-3 border-b border-line">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h3 className="flex items-center gap-2 text-sm font-bold text-ink-1">
+                <Users className="w-4 h-4" />
+                Médias de time{times?.season ? ` · temporada ${times.season}` : ''}
+              </h3>
+              <p className="text-[11px] text-ink-4 mt-0.5 leading-relaxed">
+                É daqui que sai o baseline de escanteio, falta, cartão e chute de cada pick.
+                A média é separada por mando porque o motor lê a do lado em que o time vai
+                jogar · mandante e visitante produzem escanteio e falta em taxas diferentes,
+                e a média misturada não descreve nenhum dos dois casos. Toque no time para
+                ver os jogos que formaram o número.
+              </p>
+            </div>
+            {!!times?.temporadas?.length && times.temporadas.length > 1 && (
+              <select
+                value={times.season ?? ''}
+                onChange={e => buscarTimes({ season: Number(e.target.value), liga: ligaTimes,
+                                             mando: mandoTimes, problema: problemaTimes,
+                                             ordenar: ordenarTimes, busca: buscaTime })}
+                className="bg-surface-1 border border-line-strong rounded-md text-xs text-ink-2 px-2 py-2 min-h-[36px] shrink-0 focus:border-ink-4 focus:outline-none"
+                aria-label="Temporada dos times"
+              >
+                {times.temporadas.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 mt-2.5">
+            <div className="flex gap-1">
+              {([['todos', 'Casa e fora'], ['casa', 'Em casa'], ['fora', 'Fora']] as const)
+                .map(([chave, rotulo]) => (
+                  <button
+                    key={chave}
+                    type="button"
+                    onClick={() => {
+                      setMandoTimes(chave)
+                      buscarTimes({ season: times?.season, liga: ligaTimes, mando: chave,
+                                    problema: problemaTimes, ordenar: ordenarTimes,
+                                    busca: buscaTime })
+                    }}
+                    className={`text-[11px] font-semibold px-2.5 py-1.5 min-h-[36px] rounded-md border transition-colors duration-1 ${
+                      mandoTimes === chave
+                        ? 'border-line-strong bg-surface-2 text-ink-1'
+                        : 'border-line text-ink-3 hover:text-ink-2'}`}
+                  >
+                    {rotulo}
+                  </button>
+                ))}
+            </div>
+
+            {(times?.ligas?.length ?? 0) > 1 && (
+              <select
+                value={ligaTimes}
+                onChange={e => {
+                  const liga = e.target.value === '' ? '' : Number(e.target.value)
+                  setLigaTimes(liga)
+                  buscarTimes({ season: times?.season, liga, mando: mandoTimes,
+                                problema: problemaTimes, ordenar: ordenarTimes, busca: buscaTime })
+                }}
+                className="bg-surface-1 border border-line-strong rounded-md text-xs text-ink-2 px-2 py-2 min-h-[36px] max-w-[12rem] focus:border-ink-4 focus:outline-none"
+                aria-label="Competição"
+              >
+                <option value="">Todas as competições</option>
+                {times?.ligas.map(l => (
+                  <option key={l.league_id} value={l.league_id}>
+                    {l.liga ?? `liga ${l.league_id}`} · {l.partidas}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {!!times?.colunas?.length && (
+              <select
+                value={ordenarTimes}
+                onChange={e => {
+                  setOrdenarTimes(e.target.value)
+                  buscarTimes({ season: times?.season, liga: ligaTimes, mando: mandoTimes,
+                                problema: problemaTimes, ordenar: e.target.value, busca: buscaTime })
+                }}
+                className="bg-surface-1 border border-line-strong rounded-md text-xs text-ink-2 px-2 py-2 min-h-[36px] focus:border-ink-4 focus:outline-none"
+                aria-label="Ordenar por"
+              >
+                {times.colunas.map(c => (
+                  <option key={c.chave} value={c.chave}>Maior média de {c.rotulo.toLowerCase()}</option>
+                ))}
+              </select>
+            )}
+
+            <input
+              value={buscaTime}
+              onChange={e => setBuscaTime(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  buscarTimes({ season: times?.season, liga: ligaTimes, mando: mandoTimes,
+                                problema: problemaTimes, ordenar: ordenarTimes, busca: buscaTime })
+                }
+              }}
+              onBlur={() => buscarTimes({ season: times?.season, liga: ligaTimes, mando: mandoTimes,
+                                          problema: problemaTimes, ordenar: ordenarTimes,
+                                          busca: buscaTime })}
+              placeholder="Procurar time"
+              aria-label="Procurar time pelo nome"
+              className="flex-1 min-w-[8rem] bg-surface-1 border border-line-strong rounded-md text-xs text-ink-2 px-2 py-2 min-h-[36px] focus:border-ink-4 focus:outline-none"
+            />
+          </div>
+
+          {/* OS TRÊS DEFEITOS DA MÉDIA, cada um virando lista com um toque.
+            *
+            * O contador sozinho não dá pra agir · saber que há 40 médias velhas
+            * não diz de quais times, e era exatamente isso que obrigava a abrir
+            * o banco. Os números saem do MESMO recorte da tabela (temporada,
+            * liga e busca), senão o chip contaria uma coisa e a lista mostraria
+            * outra. */}
+          {!!times && !times.erro && (
+            <div className="flex flex-wrap gap-1.5 mt-2.5">
+              {([
+                ['', 'Todos', times.total],
+                ['velha', 'Média velha', times.velhas],
+                ['sem_media', 'Sem média', times.sem_media],
+                ['curta', `Menos de ${times.min_jogos} jogos`, times.curtas],
+              ] as const).map(([chave, rotulo, n]) => (
+                <button
+                  key={chave || 'todos'}
+                  type="button"
+                  onClick={() => {
+                    setProblemaTimes(chave)
+                    buscarTimes({ season: times.season, liga: ligaTimes, mando: mandoTimes,
+                                  problema: chave, ordenar: ordenarTimes, busca: buscaTime })
+                  }}
+                  className={`flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 min-h-[32px] rounded-md border transition-colors duration-1 ${
+                    problemaTimes === chave
+                      ? 'border-line-strong bg-surface-2 text-ink-1'
+                      : 'border-line text-ink-3 hover:text-ink-2'}`}
+                >
+                  {rotulo}
+                  <span className={`font-mono tabular-nums ${
+                    chave && n > 0 ? 'text-yellow-400' : 'text-ink-4'}`}>{numero(n)}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {times?.erro ? (
+          <p className="px-4 py-6 text-[11px] text-red-400">{times.erro}</p>
+        ) : !times ? (
+          <SkeletonRows rows={6} />
+        ) : !times.times.length ? (
+          <EmptyState
+            compact
+            Icon={Users}
+            title="Nenhum time neste recorte"
+            description="Sem partida coletada para esta temporada, competição ou nome procurado."
+          />
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs min-w-[44rem]">
+                <thead>
+                  <tr className="text-ink-4 text-[10px] border-b border-line">
+                    <th className="text-left font-medium px-4 py-2">Time</th>
+                    <th className="text-right font-medium px-2 py-2">Jogos</th>
+                    {times.colunas.map(c => (
+                      <th key={c.chave} className="text-right font-medium px-2 py-2 whitespace-nowrap">
+                        {c.rotulo}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {times.times.map(t => (
+                    <tr
+                      key={`${t.team_id}-${t.league_id}`}
+                      onClick={() => setAmostra({ tipo: 'time', teamId: t.team_id,
+                                                  leagueId: t.league_id, season: t.season,
+                                                  nome: t.time })}
+                      className={`border-b border-line/60 cursor-pointer hover:bg-surface-2/60 transition-colors duration-1 ${
+                        t.sem_media ? 'bg-red-500/5' : ''}`}
+                    >
+                      <td className="px-4 py-2.5 align-top">
+                        <span className="text-ink-2 block truncate max-w-[11rem]">
+                          {t.time ?? `time ${t.team_id}`}
+                        </span>
+                        <span className="text-[10px] text-ink-4 block truncate max-w-[11rem]">
+                          {t.liga ?? 'liga ?'}
+                        </span>
+                      </td>
+                      <td className="px-2 py-2.5 text-right align-top">
+                        {/* "Jogos" é a amostra da MÉDIA, e `partidas` é o que o
+                          * banco tem do time · quando os dois diferem, a média
+                          * está vendo menos jogo do que existe. É o sintoma que
+                          * some quando se olha só o número formatado. */}
+                        <span className={`font-mono tabular-nums ${
+                          t.sem_media ? 'text-red-400'
+                            : t.amostra_curta ? 'text-yellow-400' : 'text-ink-2'}`}>
+                          {t.jogos == null ? '·' : numero(t.jogos)}
+                          <span className="text-ink-4">/{numero(t.partidas)}</span>
+                        </span>
+                        {t.sem_media ? (
+                          <span className="block text-[10px] text-red-400">sem média</span>
+                        ) : t.desatualizada ? (
+                          <span className="block text-[10px] text-yellow-400">média velha</span>
+                        ) : (
+                          <span className="block text-[10px] text-ink-4">{diaMes(t.ultima_partida)}</span>
+                        )}
+                      </td>
+                      {times.colunas.map(c => {
+                        const media = t[`${c.chave}_m`] as number | string | null
+                        return (
+                          <td key={c.chave}
+                              className="px-2 py-2.5 text-right font-mono tabular-nums align-top">
+                            <span className={media == null ? 'text-ink-4' : 'text-ink-1'}>
+                              {media == null ? '·' : decimal(Number(media))}
+                            </span>
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {times.total > POR_PAGINA && (
+              <Pagination
+                page={paginaTimes}
+                pageSize={POR_PAGINA}
+                total={times.total}
+                unit="times"
+                onChange={pag => buscarTimes({ season: times.season, liga: ligaTimes,
+                                               mando: mandoTimes, problema: problemaTimes,
+                                               ordenar: ordenarTimes, busca: buscaTime,
+                                               pagina: pag })}
+              />
+            )}
+          </>
+        )}
+      </div>
+
+      </>)}
+
       {secao === 'partidas' && (<>
+
+      {/* Partida a partida · o que o motor leu, e o que veio vazio na linha. */}
+      <div className="card p-0 overflow-hidden">
+        <div className="px-4 py-3 border-b border-line">
+          <h3 className="text-sm font-bold text-ink-1">
+            {filtroPartidas ? `Partidas sem ${filtroPartidas.rotulo}` : 'Últimas partidas coletadas'}
+          </h3>
+          {filtroPartidas ? (
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <p className="text-[11px] text-ink-4 leading-relaxed">
+                As {numero(historico?.total)} partidas dos últimos {historico?.meses ?? 24} meses
+                que estão sem esse número, da mais recente pra mais antiga. Aqui o teto de{' '}
+                {historico?.teto ?? 40} não vale · ele existe pra lista sem filtro, e manteria
+                escondida justamente a partida antiga que precisa de conserto.
+              </p>
+              <button
+                type="button"
+                onClick={limparFiltro}
+                className="text-[11px] font-semibold text-ink-2 underline underline-offset-4 hover:text-ink-1"
+              >
+                limpar o filtro
+              </button>
+            </div>
+          ) : (
+          <p className="text-[11px] text-ink-4 mt-0.5">
+            As {historico?.teto ?? 40} mais recentes que entraram em{' '}
+            <span className="font-mono">match_statistics</span>. Toque na partida para ver as{' '}
+            {historico?.familias ?? 16} estatísticas que o banco tem dela, coletar de novo ou
+            preencher o que faltou.
+          </p>
+          )}
+
+          {/* OS DOIS BURACOS, na própria aba onde estão os botões de conserto.
+            *
+            * O servidor já aceitava os dois recortes, mas a única entrada pra
+            * eles era o diagnóstico, na aba de Cobertura · quem queria "as
+            * partidas que a API não trouxe estatística" tinha que sair daqui,
+            * achar o cartão certo e voltar. Ligar o filtro amplia a janela das
+            * 40 últimas pros últimos meses, que é onde a partida velha mora. */}
+          <div className="flex flex-wrap gap-1.5 mt-2.5">
+            {([
+              ['', 'Últimas coletadas'],
+              ['folha_incompleta', 'Falta estatística'],
+              ['zeradas', 'Coletada zerada'],
+            ] as const).map(([chave, rotulo]) => (
+              <button
+                key={chave || 'todas'}
+                type="button"
+                onClick={() => (chave ? abrirFiltro(chave, rotulo.toLowerCase()) : limparFiltro())}
+                className={`text-[11px] font-semibold px-2.5 py-1.5 min-h-[32px] rounded-md border transition-colors duration-1 ${
+                  (filtroPartidas?.chave ?? '') === chave
+                    ? 'border-line-strong bg-surface-2 text-ink-1'
+                    : 'border-line text-ink-3 hover:text-ink-2'}`}
+              >
+                {rotulo}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* O jogo coletado vazio é o erro que nenhuma contagem pega: zero não é
+          * nulo, então ele passa por "preenchido" em toda métrica de cobertura. */}
+        {!!historico?.zeradas && (
+          <div className="flex items-start gap-2.5 px-4 py-3 border-b border-line bg-red-500/5">
+            <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+            <p className="text-[11px] text-ink-3 leading-relaxed">
+              <span className="font-bold text-ink-1">
+                {historico.zeradas} partida(s) com escanteios, chutes e faltas em zero.
+              </span>{' '}
+              Zero não é ausência: essas linhas entram nas médias como jogo real e puxam
+              o baseline para baixo sem aparecer em nenhuma contagem de cobertura.
+            </p>
+          </div>
+        )}
+
+        {historico?.erro ? (
+          <p className="px-4 py-6 text-[11px] text-red-400">{historico.erro}</p>
+        ) : !historico ? (
+          <SpinnerBlock className="py-10" />
+        ) : historico.partidas.length === 0 ? (
+          <EmptyState
+            compact
+            Icon={Database}
+            title={filtroPartidas ? 'Nenhuma partida neste filtro' : 'Nenhuma partida coletada'}
+            description={filtroPartidas
+              ? `Nenhuma partida dos últimos ${historico?.meses ?? 24} meses está sem ${filtroPartidas.rotulo}. O buraco pode ser mais antigo que a janela do diagnóstico.`
+              : 'Sem linha em match_statistics não há baseline de liga, média de time nem confronto direto.'}
+          />
+        ) : (
+          <>
+            <div className={`divide-y divide-line/60 ${trocandoPagina ? 'opacity-50' : ''} transition-opacity duration-1`}>
+              {historico.partidas.map(p => {
+                const gols = p.stats?.gols ?? [null, null]
+                const incompleta = p.completas < historico.familias
+                const escancarada = aberta === p.fixture_id
+                const emEdicao = editando === p.fixture_id
+                const manual = p.manual_stats ?? {}
+                const temManual = Object.keys(manual).length > 0
+                return (
+                  <div key={p.fixture_id} className={p.zerada ? 'bg-red-500/5' : ''}>
+                    <button
+                      type="button"
+                      onClick={() => setAberta(escancarada ? null : p.fixture_id)}
+                      aria-expanded={escancarada}
+                      className="w-full text-left px-4 py-2.5 hover:bg-surface-2/60 transition-colors duration-1"
+                    >
+                      <div className="flex items-baseline gap-2">
+                        <span className="font-mono text-[11px] text-ink-4 shrink-0 w-9 tabular-nums">
+                          {diaMes(p.data)}
+                        </span>
+                        <span className="flex-1 min-w-0 text-sm text-ink-2 truncate">
+                          {p.mandante ?? 'Time ?'}
+                          <span className="font-mono font-bold text-ink-1 mx-1.5 tabular-nums">
+                            {numero(gols[0])}x{numero(gols[1])}
+                          </span>
+                          {p.visitante ?? 'Time ?'}
+                        </span>
+                        {p.status && p.status !== 'FT' && (
+                          <span className="font-mono text-[10px] text-yellow-400 shrink-0">{p.status}</span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 pl-11 mt-0.5 text-[10px] text-ink-4">
+                        <span className="truncate max-w-[40%]">{p.liga ?? 'liga ?'}</span>
+                        <span className={`font-mono tabular-nums ${
+                          incompleta ? 'text-yellow-400' : 'text-green-400'}`}>
+                          {p.completas}/{historico.familias} estatísticas
+                        </span>
+                        {p.zerada && <span className="text-red-400 font-semibold">zerada</span>}
+                        {temManual && <span className="text-ink-3">tem número à mão</span>}
+                      </div>
+                    </button>
+
+                    {escancarada && (
+                      <div className="px-4 pb-3 sm:pl-11">
+                        <div className="rounded-lg border border-line/60 overflow-hidden">
+                          <div className={`grid ${emEdicao ? 'grid-cols-[1fr_4.5rem_4.5rem]' : 'grid-cols-[1fr_3rem_3rem]'} gap-x-2 px-3 py-1.5 border-b border-line/60 text-[10px] text-ink-4`}>
+                            <span>Estatística</span>
+                            <span className="text-right truncate">Casa</span>
+                            <span className="text-right truncate">Fora</span>
+                          </div>
+                          {familias.map(f => {
+                            const [casa, fora] = p.stats?.[f.chave] ?? [null, null]
+                            const vazio = casa == null || fora == null
+                            const daMao = !!manual[f.chave]
+                            if (emEdicao) {
+                              const [casaTxt, foraTxt] = rascunho[f.chave] ?? ['', '']
+                              const trocar = (lado: 0 | 1, valor: string) =>
+                                setRascunho(r => {
+                                  const par: [string, string] = [...(r[f.chave] ?? ['', ''])] as [string, string]
+                                  par[lado] = valor
+                                  return { ...r, [f.chave]: par }
+                                })
+                              return (
+                                <div
+                                  key={f.chave}
+                                  className="grid grid-cols-[1fr_4.5rem_4.5rem] gap-x-2 items-center px-3 py-1 text-[11px] odd:bg-surface-2/40"
+                                >
+                                  <span className={`truncate ${vazio ? 'text-yellow-400' : 'text-ink-3'}`}>
+                                    {f.rotulo}
+                                  </span>
+                                  {([0, 1] as const).map(lado => (
+                                    <input
+                                      key={lado}
+                                      type="number"
+                                      inputMode="decimal"
+                                      min={0}
+                                      value={lado === 0 ? casaTxt : foraTxt}
+                                      onChange={e => trocar(lado, e.target.value)}
+                                      aria-label={`${f.rotulo} · ${lado === 0 ? 'casa' : 'fora'}`}
+                                      className="w-full min-h-[32px] bg-surface-0 border border-line-strong rounded px-1.5 py-1 font-mono text-[11px] text-right tabular-nums text-ink-1 focus:border-ink-4 focus:outline-none"
+                                    />
+                                  ))}
+                                </div>
+                              )
+                            }
+                            return (
+                              <div
+                                key={f.chave}
+                                className="grid grid-cols-[1fr_3rem_3rem] gap-x-2 px-3 py-1 text-[11px] odd:bg-surface-2/40"
+                              >
+                                <span className={`truncate ${vazio ? 'text-yellow-400' : 'text-ink-3'}`}
+                                      title={daMao ? `à mão por ${manual[f.chave].por ?? 'admin'}` : undefined}>
+                                  {f.rotulo}
+                                  {daMao && <span className="text-ink-4 font-mono ml-1">à mão</span>}
+                                </span>
+                                <span className={`font-mono text-right tabular-nums ${
+                                  casa == null ? 'text-yellow-400' : 'text-ink-2'}`}>
+                                  {numero(casa)}
+                                </span>
+                                <span className={`font-mono text-right tabular-nums ${
+                                  fora == null ? 'text-yellow-400' : 'text-ink-2'}`}>
+                                  {numero(fora)}
+                                </span>
+                              </div>
+                            )
+                          })}
+                        </div>
+
+                        {/* As duas saídas, na ordem: pedir de novo pra API antes
+                          * de digitar. Número da mão é o último recurso. */}
+                        <div className="flex flex-wrap items-center gap-2 mt-2">
+                          {emEdicao ? (
+                            <>
+                              <Button size="sm" variant="primary" loading={salvando}
+                                      onClick={() => salvarManual(p, familias)}>
+                                <Save className="w-3.5 h-3.5" />
+                                Salvar
+                              </Button>
+                              <Button size="sm" variant="ghost" disabled={salvando}
+                                      onClick={() => setEditando(null)}>
+                                <X className="w-3.5 h-3.5" />
+                                Cancelar
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button size="sm" variant="ghost"
+                                      loading={rodando === p.fixture_id}
+                                      disabled={rodando != null}
+                                      onClick={() => rodar(p.fixture_id)}>
+                                <RefreshCw className="w-3.5 h-3.5" />
+                                Rodar
+                              </Button>
+                              <Button size="sm" variant="ghost"
+                                      onClick={() => abrirEdicao(p, familias)}>
+                                <Pencil className="w-3.5 h-3.5" />
+                                Preencher à mão
+                              </Button>
+                              {/* A média que o motor lê não é a desta partida ·
+                                * é a do time na temporada. Daqui se vê quais
+                                * jogos formaram esse número. */}
+                              <Button size="sm" variant="ghost"
+                                      onClick={() => abrirAmostraDaPartida(p.fixture_id, 'casa')}>
+                                <Users className="w-3.5 h-3.5" />
+                                Amostra do mandante
+                              </Button>
+                              <Button size="sm" variant="ghost"
+                                      onClick={() => abrirAmostraDaPartida(p.fixture_id, 'fora')}>
+                                <Users className="w-3.5 h-3.5" />
+                                Amostra do visitante
+                              </Button>
+                            </>
+                          )}
+                        </div>
+
+                        {erroEdicao && emEdicao && (
+                          <p className="text-[11px] text-red-400 mt-1.5">{erroEdicao}</p>
+                        )}
+                        {aviso?.fixture === p.fixture_id && !emEdicao && (
+                          <p className={`text-[11px] mt-1.5 ${aviso.ok ? 'text-green-400' : 'text-yellow-400'}`}>
+                            {aviso.texto}
+                          </p>
+                        )}
+
+                        <p className="text-[10px] text-ink-4 mt-1.5 leading-relaxed">
+                          {emEdicao ? (
+                            <>Campo em branco apaga o número de volta para ausência · é assim que se
+                            desfaz um valor digitado errado sem inventar zero no lugar. Salvar refaz
+                            o total da família e a média dos dois times na temporada.</>
+                          ) : (
+                            <>Árbitro: {p.referee || 'não informado'} · coletada em{' '}
+                            {diaMes(p.coletada_em)} · fixture{' '}
+                            <span className="font-mono">{p.fixture_id}</span></>
+                          )}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+            <Pagination
+              page={pagina}
+              pageSize={POR_PAGINA}
+              total={historico.total}
+              onChange={irPara}
+              unit="partidas"
+            />
+          </>
+        )}
+      </div>
+
+      </>)}
+
+      {secao === 'pessoas' && (<>
 
       {/* Árbitros. Renderiza mesmo com a página vazia desde 27/08: com busca e
         * paginação, lista vazia é resultado de filtro, não ausência de dado ·
@@ -1638,260 +2371,6 @@ export default function AdminDados() {
           )}
         </div>
       )}
-
-      {/* Partida a partida · o que o motor leu, e o que veio vazio na linha. */}
-      <div className="card p-0 overflow-hidden">
-        <div className="px-4 py-3 border-b border-line">
-          <h3 className="text-sm font-bold text-ink-1">
-            {filtroPartidas ? `Partidas sem ${filtroPartidas.rotulo}` : 'Últimas partidas coletadas'}
-          </h3>
-          {filtroPartidas ? (
-            <div className="mt-1 flex flex-wrap items-center gap-2">
-              <p className="text-[11px] text-ink-4 leading-relaxed">
-                As {numero(historico?.total)} partidas dos últimos {historico?.meses ?? 24} meses
-                que estão sem esse número, da mais recente pra mais antiga. Aqui o teto de{' '}
-                {historico?.teto ?? 40} não vale · ele existe pra lista sem filtro, e manteria
-                escondida justamente a partida antiga que precisa de conserto.
-              </p>
-              <button
-                type="button"
-                onClick={limparFiltro}
-                className="text-[11px] font-semibold text-ink-2 underline underline-offset-4 hover:text-ink-1"
-              >
-                limpar o filtro
-              </button>
-            </div>
-          ) : (
-          <p className="text-[11px] text-ink-4 mt-0.5">
-            As {historico?.teto ?? 40} mais recentes que entraram em{' '}
-            <span className="font-mono">match_statistics</span>. Toque na partida para ver as{' '}
-            {historico?.familias ?? 16} estatísticas que o banco tem dela, coletar de novo ou
-            preencher o que faltou.
-          </p>
-          )}
-        </div>
-
-        {/* O jogo coletado vazio é o erro que nenhuma contagem pega: zero não é
-          * nulo, então ele passa por "preenchido" em toda métrica de cobertura. */}
-        {!!historico?.zeradas && (
-          <div className="flex items-start gap-2.5 px-4 py-3 border-b border-line bg-red-500/5">
-            <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-            <p className="text-[11px] text-ink-3 leading-relaxed">
-              <span className="font-bold text-ink-1">
-                {historico.zeradas} partida(s) com escanteios, chutes e faltas em zero.
-              </span>{' '}
-              Zero não é ausência: essas linhas entram nas médias como jogo real e puxam
-              o baseline para baixo sem aparecer em nenhuma contagem de cobertura.
-            </p>
-          </div>
-        )}
-
-        {historico?.erro ? (
-          <p className="px-4 py-6 text-[11px] text-red-400">{historico.erro}</p>
-        ) : !historico ? (
-          <SpinnerBlock className="py-10" />
-        ) : historico.partidas.length === 0 ? (
-          <EmptyState
-            compact
-            Icon={Database}
-            title={filtroPartidas ? 'Nenhuma partida neste filtro' : 'Nenhuma partida coletada'}
-            description={filtroPartidas
-              ? `Nenhuma partida dos últimos ${historico?.meses ?? 24} meses está sem ${filtroPartidas.rotulo}. O buraco pode ser mais antigo que a janela do diagnóstico.`
-              : 'Sem linha em match_statistics não há baseline de liga, média de time nem confronto direto.'}
-          />
-        ) : (
-          <>
-            <div className={`divide-y divide-line/60 ${trocandoPagina ? 'opacity-50' : ''} transition-opacity duration-1`}>
-              {historico.partidas.map(p => {
-                const gols = p.stats?.gols ?? [null, null]
-                const incompleta = p.completas < historico.familias
-                const escancarada = aberta === p.fixture_id
-                const emEdicao = editando === p.fixture_id
-                const manual = p.manual_stats ?? {}
-                const temManual = Object.keys(manual).length > 0
-                return (
-                  <div key={p.fixture_id} className={p.zerada ? 'bg-red-500/5' : ''}>
-                    <button
-                      type="button"
-                      onClick={() => setAberta(escancarada ? null : p.fixture_id)}
-                      aria-expanded={escancarada}
-                      className="w-full text-left px-4 py-2.5 hover:bg-surface-2/60 transition-colors duration-1"
-                    >
-                      <div className="flex items-baseline gap-2">
-                        <span className="font-mono text-[11px] text-ink-4 shrink-0 w-9 tabular-nums">
-                          {diaMes(p.data)}
-                        </span>
-                        <span className="flex-1 min-w-0 text-sm text-ink-2 truncate">
-                          {p.mandante ?? 'Time ?'}
-                          <span className="font-mono font-bold text-ink-1 mx-1.5 tabular-nums">
-                            {numero(gols[0])}x{numero(gols[1])}
-                          </span>
-                          {p.visitante ?? 'Time ?'}
-                        </span>
-                        {p.status && p.status !== 'FT' && (
-                          <span className="font-mono text-[10px] text-yellow-400 shrink-0">{p.status}</span>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 pl-11 mt-0.5 text-[10px] text-ink-4">
-                        <span className="truncate max-w-[40%]">{p.liga ?? 'liga ?'}</span>
-                        <span className={`font-mono tabular-nums ${
-                          incompleta ? 'text-yellow-400' : 'text-green-400'}`}>
-                          {p.completas}/{historico.familias} estatísticas
-                        </span>
-                        {p.zerada && <span className="text-red-400 font-semibold">zerada</span>}
-                        {temManual && <span className="text-ink-3">tem número à mão</span>}
-                      </div>
-                    </button>
-
-                    {escancarada && (
-                      <div className="px-4 pb-3 sm:pl-11">
-                        <div className="rounded-lg border border-line/60 overflow-hidden">
-                          <div className={`grid ${emEdicao ? 'grid-cols-[1fr_4.5rem_4.5rem]' : 'grid-cols-[1fr_3rem_3rem]'} gap-x-2 px-3 py-1.5 border-b border-line/60 text-[10px] text-ink-4`}>
-                            <span>Estatística</span>
-                            <span className="text-right truncate">Casa</span>
-                            <span className="text-right truncate">Fora</span>
-                          </div>
-                          {familias.map(f => {
-                            const [casa, fora] = p.stats?.[f.chave] ?? [null, null]
-                            const vazio = casa == null || fora == null
-                            const daMao = !!manual[f.chave]
-                            if (emEdicao) {
-                              const [casaTxt, foraTxt] = rascunho[f.chave] ?? ['', '']
-                              const trocar = (lado: 0 | 1, valor: string) =>
-                                setRascunho(r => {
-                                  const par: [string, string] = [...(r[f.chave] ?? ['', ''])] as [string, string]
-                                  par[lado] = valor
-                                  return { ...r, [f.chave]: par }
-                                })
-                              return (
-                                <div
-                                  key={f.chave}
-                                  className="grid grid-cols-[1fr_4.5rem_4.5rem] gap-x-2 items-center px-3 py-1 text-[11px] odd:bg-surface-2/40"
-                                >
-                                  <span className={`truncate ${vazio ? 'text-yellow-400' : 'text-ink-3'}`}>
-                                    {f.rotulo}
-                                  </span>
-                                  {([0, 1] as const).map(lado => (
-                                    <input
-                                      key={lado}
-                                      type="number"
-                                      inputMode="decimal"
-                                      min={0}
-                                      value={lado === 0 ? casaTxt : foraTxt}
-                                      onChange={e => trocar(lado, e.target.value)}
-                                      aria-label={`${f.rotulo} · ${lado === 0 ? 'casa' : 'fora'}`}
-                                      className="w-full min-h-[32px] bg-surface-0 border border-line-strong rounded px-1.5 py-1 font-mono text-[11px] text-right tabular-nums text-ink-1 focus:border-ink-4 focus:outline-none"
-                                    />
-                                  ))}
-                                </div>
-                              )
-                            }
-                            return (
-                              <div
-                                key={f.chave}
-                                className="grid grid-cols-[1fr_3rem_3rem] gap-x-2 px-3 py-1 text-[11px] odd:bg-surface-2/40"
-                              >
-                                <span className={`truncate ${vazio ? 'text-yellow-400' : 'text-ink-3'}`}
-                                      title={daMao ? `à mão por ${manual[f.chave].por ?? 'admin'}` : undefined}>
-                                  {f.rotulo}
-                                  {daMao && <span className="text-ink-4 font-mono ml-1">à mão</span>}
-                                </span>
-                                <span className={`font-mono text-right tabular-nums ${
-                                  casa == null ? 'text-yellow-400' : 'text-ink-2'}`}>
-                                  {numero(casa)}
-                                </span>
-                                <span className={`font-mono text-right tabular-nums ${
-                                  fora == null ? 'text-yellow-400' : 'text-ink-2'}`}>
-                                  {numero(fora)}
-                                </span>
-                              </div>
-                            )
-                          })}
-                        </div>
-
-                        {/* As duas saídas, na ordem: pedir de novo pra API antes
-                          * de digitar. Número da mão é o último recurso. */}
-                        <div className="flex flex-wrap items-center gap-2 mt-2">
-                          {emEdicao ? (
-                            <>
-                              <Button size="sm" variant="primary" loading={salvando}
-                                      onClick={() => salvarManual(p, familias)}>
-                                <Save className="w-3.5 h-3.5" />
-                                Salvar
-                              </Button>
-                              <Button size="sm" variant="ghost" disabled={salvando}
-                                      onClick={() => setEditando(null)}>
-                                <X className="w-3.5 h-3.5" />
-                                Cancelar
-                              </Button>
-                            </>
-                          ) : (
-                            <>
-                              <Button size="sm" variant="ghost"
-                                      loading={rodando === p.fixture_id}
-                                      disabled={rodando != null}
-                                      onClick={() => rodar(p.fixture_id)}>
-                                <RefreshCw className="w-3.5 h-3.5" />
-                                Rodar
-                              </Button>
-                              <Button size="sm" variant="ghost"
-                                      onClick={() => abrirEdicao(p, familias)}>
-                                <Pencil className="w-3.5 h-3.5" />
-                                Preencher à mão
-                              </Button>
-                              {/* A média que o motor lê não é a desta partida ·
-                                * é a do time na temporada. Daqui se vê quais
-                                * jogos formaram esse número. */}
-                              <Button size="sm" variant="ghost"
-                                      onClick={() => abrirAmostraDaPartida(p.fixture_id, 'casa')}>
-                                <Users className="w-3.5 h-3.5" />
-                                Amostra do mandante
-                              </Button>
-                              <Button size="sm" variant="ghost"
-                                      onClick={() => abrirAmostraDaPartida(p.fixture_id, 'fora')}>
-                                <Users className="w-3.5 h-3.5" />
-                                Amostra do visitante
-                              </Button>
-                            </>
-                          )}
-                        </div>
-
-                        {erroEdicao && emEdicao && (
-                          <p className="text-[11px] text-red-400 mt-1.5">{erroEdicao}</p>
-                        )}
-                        {aviso?.fixture === p.fixture_id && !emEdicao && (
-                          <p className={`text-[11px] mt-1.5 ${aviso.ok ? 'text-green-400' : 'text-yellow-400'}`}>
-                            {aviso.texto}
-                          </p>
-                        )}
-
-                        <p className="text-[10px] text-ink-4 mt-1.5 leading-relaxed">
-                          {emEdicao ? (
-                            <>Campo em branco apaga o número de volta para ausência · é assim que se
-                            desfaz um valor digitado errado sem inventar zero no lugar. Salvar refaz
-                            o total da família e a média dos dois times na temporada.</>
-                          ) : (
-                            <>Árbitro: {p.referee || 'não informado'} · coletada em{' '}
-                            {diaMes(p.coletada_em)} · fixture{' '}
-                            <span className="font-mono">{p.fixture_id}</span></>
-                          )}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-            <Pagination
-              page={pagina}
-              pageSize={POR_PAGINA}
-              total={historico.total}
-              onChange={irPara}
-              unit="partidas"
-            />
-          </>
-        )}
-      </div>
 
       </>)}
 

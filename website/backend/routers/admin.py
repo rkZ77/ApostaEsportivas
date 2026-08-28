@@ -4073,6 +4073,247 @@ def recalcular_medias_velhas(limite: int = 0, current_user: dict = Depends(requi
     threading.Thread(target=_rodar_medias, args=(max(0, limite),), daemon=True).start()
     return {"ok": True, "mensagem": "Recálculo iniciado."}
 
+# ─── Médias de time ─────────────────────────────────────────────────────────
+#
+# `team_statistics` é O NÚMERO QUE O MOTOR LÊ. Toda linha de pick de mercado de
+# time sai daqui · baseline de escanteio, de falta, de cartão, de chute. E até
+# 28/08 ela era a única tabela grande do banco sem tela nenhuma: dava pra ver a
+# partida (a matéria-prima), o árbitro e o jogador, mas não o agregado que fica
+# entre a partida e o pick.
+#
+# A ausência de tela escondia justamente o defeito silencioso: média DERIVADA
+# não se atualiza sozinha. Coletar a partida e não refazer o agregado deixa o
+# motor lendo a média de ontem sobre um histórico de hoje, e isso não parece
+# defeito de nada · o número está lá, formatado, com duas casas.
+#
+# ENTÃO A LISTA NÃO NASCE DE `team_statistics`, NASCE DE `match_statistics`.
+# Se ela partisse da tabela de médias, o time que NUNCA teve média calculada
+# simplesmente não apareceria · e esse é o caso mais desatualizado que existe.
+# Partindo dos jogos, o time sem linha aparece com as colunas vazias e o rótulo
+# "sem média", que é a informação que interessa.
+#
+# É a mesma pergunta de `TeamStatsReader.get_teams_with_stale_statistics`, que
+# alimenta o botão de recálculo · aqui ela vira lista, com nome e número, em
+# vez de só um contador.
+
+#: (chave, rótulo, coluna de team_statistics). A ordem é a da tela, e ela
+#: começa pelos contadores que viram mercado · gol, escanteio, falta e cartão
+#: são o que o motor publica, e chute/defesa/posse são o contexto que explica.
+STATS_DO_TIME = [
+    ("gols",              "Gols",              "avg_goals_for"),
+    ("gols_contra",       "Gols sofridos",     "avg_goals_against"),
+    ("escanteios",        "Escanteios",        "avg_corners_for"),
+    ("escanteios_contra", "Escanteios contra", "avg_corners_against"),
+    ("faltas",            "Faltas",            "avg_fouls_for"),
+    ("amarelos",          "Amarelos",          "avg_yellow_for"),
+    ("chutes",            "Chutes",            "avg_total_shots_for"),
+    ("chutes_alvo",       "Chutes no alvo",    "avg_shots_on_for"),
+    ("defesas",           "Defesas",           "avg_saves_for"),
+    ("posse",             "Posse (%)",         "avg_possession_for"),
+]
+
+#: Mando -> context_type de `team_statistics`. A tabela guarda uma linha por
+#: contexto, e o motor lê a do lado em que o time vai jogar · misturar casa e
+#: fora numa média só descreve um time que não existe (mandante e visitante
+#: produzem escanteio e falta em taxas diferentes). Por isso "todos" pondera
+#: pelo número de jogos de cada lado em vez de tirar a média das duas médias.
+_CONTEXTO_DO_TIME = {"casa": "HOME", "fora": "AWAY"}
+
+#: Abaixo disto a média descreve a amostra, e não o time.
+_MIN_JOGOS_DO_TIME = 5
+
+
+@router.get("/dados/times")
+def lista_de_times(
+    season: int | None = None,
+    league_id: int | None = None,
+    mando: str = "todos",
+    problema: str | None = None,
+    ordenar: str = "gols",
+    busca: str | None = None,
+    pagina: int = 0,
+    por_pagina: int = 15,
+    current_user: dict = Depends(require_admin),
+):
+    """As médias de time que o motor lê, com o estado de cada uma.
+
+    `problema` recorta o que está ruim, e é o que faz a tela virar trabalho em
+    vez de consulta:
+
+      velha      a última partida do time foi gravada DEPOIS da média · o motor
+                 está lendo número vencido. Resolve com o recálculo, que não
+                 gasta requisição de API nenhuma;
+      sem_media  o time tem jogo em `match_statistics` e nenhuma linha em
+                 `team_statistics` · o motor cai no baseline da liga;
+      curta      a média existe, mas saiu de menos jogos que o piso.
+    """
+    pagina = max(0, pagina)
+    por_pagina = min(max(1, por_pagina), 100)
+    mando = mando if mando in ("todos", "casa", "fora") else "todos"
+    colunas_validas = {chave: coluna for chave, _rot, coluna in STATS_DO_TIME}
+    ordenar = ordenar if ordenar in colunas_validas else "gols"
+    problema = problema if problema in ("velha", "sem_media", "curta") else None
+    colunas = [{"chave": c, "rotulo": r} for c, r, _x in STATS_DO_TIME]
+    vazio = {"season": season, "temporadas": [], "ligas": [], "times": [], "total": 0,
+             "mando": mando, "ordenar": ordenar, "problema": problema,
+             "min_jogos": _MIN_JOGOS_DO_TIME, "colunas": colunas,
+             "velhas": 0, "sem_media": 0, "curtas": 0}
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT DISTINCT season FROM match_statistics ORDER BY season DESC")
+        temporadas = [r["season"] for r in cur.fetchall() if r["season"] is not None]
+        if season is None:
+            season = temporadas[0] if temporadas else None
+        if season is None:
+            return vazio
+
+        cur.execute("""
+            SELECT ms.league_id, l.name AS liga, COUNT(*) AS partidas
+              FROM match_statistics ms
+         LEFT JOIN leagues l ON l.league_id = ms.league_id
+             WHERE ms.season = %s
+          GROUP BY ms.league_id, l.name
+          ORDER BY COUNT(*) DESC
+        """, (season,))
+        ligas = [dict(r) for r in cur.fetchall()]
+
+        # Ponderada pelo número de jogos de cada contexto, e não a média das
+        # duas médias: um time com 12 jogos em casa e 3 fora não tem os dois
+        # lados pesando igual.
+        agregados = ",\n                       ".join(
+            f"ROUND((SUM({coluna} * games_count) / NULLIF(SUM(games_count), 0))::numeric, 2)"
+            f" AS {chave}_m"
+            for chave, _rot, coluna in STATS_DO_TIME
+        )
+        onde_contexto = ""
+        if mando in _CONTEXTO_DO_TIME:
+            onde_contexto = f"AND context_type = '{_CONTEXTO_DO_TIME[mando]}'"
+
+        filtro_liga, params_liga = "", []
+        if league_id is not None:
+            filtro_liga = "AND ms.league_id = %s"
+            params_liga = [league_id]
+
+        filtro_busca, params_busca = "", []
+        if busca and busca.strip():
+            filtro_busca = "AND t.name ILIKE %s"
+            params_busca = [f"%{busca.strip()}%"]
+
+        # MIN em `calculada_em` pela mesma razão do reader: a média do time só
+        # está em dia quando a MAIS VELHA das linhas de contexto estiver.
+        base = f"""
+            WITH jogados AS (
+                SELECT lado.team_id, ms.league_id, ms.season,
+                       COUNT(*)                 AS partidas,
+                       MAX(ms.last_updated)     AS gravada_em,
+                       MAX(ms.match_date)::text AS ultima_partida
+                  FROM match_statistics ms
+                  CROSS JOIN LATERAL (VALUES (ms.home_team_id), (ms.away_team_id))
+                       AS lado(team_id)
+                 WHERE ms.season = %s
+                   AND lado.team_id IS NOT NULL
+                   {filtro_liga}
+              GROUP BY lado.team_id, ms.league_id, ms.season
+            ),
+            medias AS (
+                SELECT team_id, league_id, season,
+                       SUM(games_count)  AS jogos,
+                       MIN(last_updated) AS calculada_em,
+                       {agregados}
+                  FROM team_statistics
+                 WHERE season = %s
+                   {onde_contexto}
+              GROUP BY team_id, league_id, season
+            )
+            SELECT j.team_id, j.league_id, j.season, j.partidas, j.ultima_partida,
+                   t.name AS time, l.name AS liga,
+                   m.jogos, m.calculada_em::text AS calculada_em,
+                   (m.team_id IS NULL) AS sem_media,
+                   (m.calculada_em IS NULL OR j.gravada_em > m.calculada_em)
+                       AS desatualizada,
+                   (m.jogos IS NOT NULL AND m.jogos < {_MIN_JOGOS_DO_TIME})
+                       AS amostra_curta,
+                   {', '.join(f'm.{c}_m' for c, _r, _x in STATS_DO_TIME)}
+              FROM jogados j
+         LEFT JOIN medias m
+                ON m.team_id = j.team_id
+               AND m.league_id = j.league_id
+               AND m.season = j.season
+         LEFT JOIN leagues l ON l.league_id = j.league_id
+         LEFT JOIN LATERAL (
+                   SELECT name FROM teams
+                    WHERE team_id = j.team_id
+                    ORDER BY season DESC LIMIT 1
+               ) t ON TRUE
+             WHERE TRUE
+               {filtro_busca}
+        """
+        params = tuple([season] + params_liga + [season] + params_busca)
+
+        # Os três contadores saem do MESMO recorte da lista (temporada, liga e
+        # busca) de propósito · um total global aqui brigaria com o que a tela
+        # está mostrando logo abaixo.
+        cur.execute(f"""
+            SELECT COUNT(*) FILTER (WHERE desatualizada) AS velhas,
+                   COUNT(*) FILTER (WHERE sem_media)     AS sem_media,
+                   COUNT(*) FILTER (WHERE amostra_curta) AS curtas
+              FROM ({base}) c
+        """, params)
+        contagem = dict(cur.fetchone() or {})
+
+        onde_problema = ""
+        if problema == "velha":
+            onde_problema = "WHERE desatualizada"
+        elif problema == "sem_media":
+            onde_problema = "WHERE sem_media"
+        elif problema == "curta":
+            onde_problema = "WHERE amostra_curta"
+
+        cur.execute(f"SELECT COUNT(*) AS n FROM ({base}) c {onde_problema}", params)
+        total = (cur.fetchone() or {}).get("n") or 0
+
+        # NULLS LAST importa: com o filtro `sem_media` ligado, TODA linha tem a
+        # coluna de ordenação vazia, e sem isso a ordem viraria a do disco.
+        cur.execute(f"""
+            SELECT * FROM ({base}) c
+            {onde_problema}
+            ORDER BY {ordenar}_m DESC NULLS LAST, partidas DESC
+            LIMIT %s OFFSET %s
+        """, params + (por_pagina, pagina * por_pagina))
+        times = [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        conn.rollback()
+        # Banco de site que nunca rodou `main.py setup` não tem a tabela · não
+        # é defeito do painel. Mesma saída de `lista_de_jogadores`.
+        if "team_statistics" in str(e) and "exist" in str(e).lower():
+            return {**vazio, "season": season,
+                    "erro": "Nenhuma média de time calculada neste banco ainda."}
+        logging.getLogger(__name__).warning("[ADMIN/TIMES] lista: %s", e)
+        return {**vazio, "season": season, "erro": str(e)[:200]}
+    finally:
+        cur.close()
+        conn.close()
+
+    return {
+        "season": season,
+        "temporadas": temporadas,
+        "ligas": ligas,
+        "league_id": league_id,
+        "mando": mando,
+        "problema": problema,
+        "ordenar": ordenar,
+        "total": total,
+        "pagina": pagina,
+        "por_pagina": por_pagina,
+        "times": times,
+        "min_jogos": _MIN_JOGOS_DO_TIME,
+        "colunas": colunas,
+        "velhas": contagem.get("velhas") or 0,
+        "sem_media": contagem.get("sem_media") or 0,
+        "curtas": contagem.get("curtas") or 0,
+    }
 
 # ─── Jogadores ──────────────────────────────────────────────────────────────
 #
