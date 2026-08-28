@@ -498,6 +498,15 @@ def run_migrations():
         "ALTER TABLE engine_decisions ADD COLUMN IF NOT EXISTS pick_table TEXT;",
         "ALTER TABLE engine_decisions ADD COLUMN IF NOT EXISTS pick_id BIGINT;",
         "CREATE INDEX IF NOT EXISTS idx_engine_decisions_run ON engine_decisions (run_id);",
+
+        # -- Amostra por metrica na media do time (2026-08-28) --------------
+        # `games_count` conta os jogos do time NAQUELE MANDO; esta coluna conta
+        # quantos deles sustentaram CADA metrica. Os dois numeros divergem
+        # sempre que a folha da partida vem incompleta, e ate' aqui o motor so'
+        # tinha o primeiro -- entao o encolhimento de stats_model pesava a
+        # media de escanteio por uma amostra que incluia jogo sem escanteio
+        # publicado. Ver a docstring de _aggregate_games.
+        "ALTER TABLE team_statistics ADD COLUMN IF NOT EXISTS games_by_stat JSONB;",
     ]
     conn = get_connection()
     cur = conn.cursor()
@@ -792,7 +801,6 @@ class Comando:
     ambientes: tuple = ("dev", "prod")
     uso: str = ""                # forma no HELP quando difere do nome ("dados [full]")
     detalhe: str = ""            # linhas extras do HELP, uma por linha
-    migrar: bool = True          # roda run_migrations() antes
 
 
 def _tem(args: tuple, palavra: str) -> bool:
@@ -939,7 +947,7 @@ COMANDOS: tuple = (
     # Estar no menu do run_prod seria oferecer um botão que só sabe recusar.
     Comando("live", "Motor Ao Vivo · uma rodada (dry run)",
             "Motor Ao Vivo · UMA rodada (DEV apenas, dry run por padrão)",
-            lambda *a: cmd_live(*a), ambientes=("dev",), migrar=False,
+            lambda *a: cmd_live(*a), ambientes=("dev",),
             detalhe="live                    respeita o .env\n"
                     "live gravar             grava de verdade nesta rodada\n"
                     "live fixture 123456     analisa só essa partida"),
@@ -981,14 +989,14 @@ if __name__ == "__main__":
         print(f"Comando desconhecido: '{cmd}'\n{HELP}")
         sys.exit(1)
 
-    # `live` NAO passa pelas migracoes do pre-jogo (2026-08-11, hoje declarado
-    # como migrar=False no registro). Duas razoes, e a segunda e' a que
-    # importa: o motor Live provisiona o proprio esquema
-    # (engine_pipelines/live_pipeline.criar_tabelas) e nao depende de nenhuma
-    # coluna nova das tabelas de pick pre-jogo; e rodar a lista inteira de
-    # ALTER TABLE toda vez que alguem testa uma rodada Live aproximaria o
-    # produto novo de escrever no esquema do produto que esta em producao.
-    if cmd == "setup" or alvo.migrar:
+    # Migracao so' pelo `setup` (2026-08-28). Antes toda etapa rodava a lista
+    # inteira de ALTER TABLE antes de trabalhar: dezenas de comandos DDL e um
+    # commit cada, a cada `pickboost`/`vip`/`dados`, pra um esquema que ja'
+    # esta criado ha' meses. O `live` ja' era excecao pela mesma razao (o
+    # motor Live provisiona o proprio esquema); agora a regra vale pra todos.
+    # O preco e' explicito: coluna nova so' entra depois de rodar
+    # `python main.py setup` na mao no ambiente -- inclusive em PROD.
+    if cmd == "setup":
         run_migrations()
 
     if cmd != "setup":
