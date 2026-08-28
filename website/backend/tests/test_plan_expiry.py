@@ -58,9 +58,56 @@ def test_sem_data_nao_conta():
     assert dias_restantes(None, agora=AGORA) is None
 
 
-@pytest.mark.parametrize("dias,esperada", [(0, 0), (1, 1), (2, 3), (3, 3), (4, None), (10, None)])
-def test_faixas(dias, esperada):
-    assert faixa_do_aviso(dias) == esperada
+@pytest.mark.parametrize("horas,esperada", [
+    (0, 6), (5, 6), (20, 24), (24, 24), (48, 72), (72, 72), (73, None), (240, None),
+])
+def test_faixas_do_vip(horas, esperada):
+    assert faixa_do_aviso(horas, "vip") == esperada
+
+
+@pytest.mark.parametrize("horas,esperada", [
+    (0, 6), (5, 6), (20, 24), (24, 24), (25, None), (47, None),
+])
+def test_faixas_do_teste(horas, esperada):
+    """O teste dura 2 dias · uma faixa de 3 dias nasceria vencida nele."""
+    assert faixa_do_aviso(horas, "trial") == esperada
+
+
+def test_teste_recem_criado_nao_avisa_nada():
+    """O DEFEITO QUE ISTO TRAVA (28/08/2026).
+
+    O aviso saía no instante em que o teste era criado. Faltando 47h59, o
+    truncamento pra dia dava `1`, a faixa mais distante era 3 DIAS, e 1 <= 3
+    disparava o e-mail ali mesmo: a pessoa confirmava o e-mail, ganhava o
+    teste e recebia na mesma hora um aviso de que ele estava acabando.
+    """
+    cur, enviados = CursorFalso(), []
+    recem = {**_usuario("trial"), "expires_at": AGORA + timedelta(days=2, seconds=-1)}
+
+    resultado = avisar_plano_expirando(
+        cur, recem, "https://x", enviar_email=lambda *a: enviados.append(a), agora=AGORA)
+
+    assert resultado is None
+    assert cur.inseridos == []
+    assert enviados == []
+
+
+def test_teste_avisa_faltando_um_dia():
+    """O aviso que o usuário pediu · um dia inteiro antes de acabar."""
+    cur, enviados = CursorFalso(), []
+    user = {**_usuario("trial"), "expires_at": AGORA + timedelta(hours=23)}
+
+    assert avisar_plano_expirando(
+        cur, user, "https://x", enviar_email=lambda *a: enviados.append(a),
+        agora=AGORA) is not None
+    assert "Teste grátis" in enviados[0][1]
+
+
+def test_vip_recem_assinado_nao_avisa():
+    """Mesma armadilha do teste, do outro lado: assinar não é vencer."""
+    cur = CursorFalso()
+    user = {**_usuario("vip"), "expires_at": AGORA + timedelta(days=30)}
+    assert avisar_plano_expirando(cur, user, "https://x", agora=AGORA) is None
 
 
 # ── disparo ───────────────────────────────────────────────────────────────

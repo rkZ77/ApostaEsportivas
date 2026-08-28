@@ -22,12 +22,37 @@ abandonada · não gastamos e-mail com quem sumiu.
 POR QUE FAIXAS E NÃO "TODO LOGIN"
 ---------------------------------
 Sem faixa, alguém que entra três vezes por dia receberia três e-mails por dia
-na última semana do plano. As faixas abaixo transformam a contagem contínua de
-dias em três eventos discretos, e a `dedupe_key` garante um aviso por evento
-mesmo com dez logins no mesmo dia.
+na última semana do plano. As faixas abaixo transformam a contagem contínua em
+poucos eventos discretos, e a `dedupe_key` garante um aviso por evento mesmo
+com dez logins no mesmo dia.
 
 Renovar muda `expires_at`, que entra na chave · o ciclo seguinte volta a
 avisar normalmente, sem precisar limpar nada.
+
+AS FAIXAS SÃO EM HORAS, E POR PLANO (2026-08-28)
+------------------------------------------------
+Elas eram `(3, 1, 0)` DIAS, iguais pros dois planos, e comparadas contra
+`dias_restantes`, que trunca pra baixo. As duas escolhas juntas produziram o
+defeito que o usuário viu: **o e-mail de "seu teste expira" saía no instante
+em que o teste era criado.**
+
+O teste dura 2 dias. No momento da ativação faltam 47h59, e:
+
+  · truncado, isso vira `1` · a contagem diz "um dia" quando ainda há dois;
+  · a faixa mais distante era 3 dias, e 1 <= 3, então ela disparava ali mesmo.
+
+Ou seja: a pessoa confirmava o e-mail, ganhava o teste e recebia na mesma hora
+um aviso de que ele estava acabando. O mesmo vale pro VIP curto (o crédito de
+indicação dá 1 dia).
+
+A correção é medir em HORAS pra decidir, e continuar contando em DIAS pra
+escrever · o texto fala do último dia cheio da pessoa, e ali truncar é o certo.
+E a lista passa a ser por plano, porque uma faixa de 3 dias não cabe num plano
+de 2: a faixa mais distante de um plano nunca pode ser maior que o próprio
+plano, senão ela nasce vencida.
+
+O usuário pediu explicitamente o aviso de 1 dia no teste (28/08). São dois
+eventos ali: um dia inteiro antes, e as últimas horas.
 """
 from datetime import datetime, timezone
 
@@ -38,9 +63,17 @@ from email_templates import NOTA_PLANO_ENCERRADO, aviso_de_plano_html, url_logo
 # ("seu plano") faria o trial parecer cobrança.
 LABEL_PLANO = {"vip": "Plano VIP", "trial": "Teste grátis"}
 
-# Faixas de aviso em dias restantes, da mais distante pra mais próxima.
-# Três avisos no total: um pra decidir, um pra lembrar, um pro último dia.
-FAIXAS = (3, 1, 0)
+#: Faixas de aviso em HORAS restantes, por plano, da mais distante pra mais
+#: próxima. Ver o cabeçalho: em horas porque o dia truncado disparava a faixa
+#: no ato da criação, e por plano porque o teste dura 2 dias e não cabe numa
+#: faixa de 3.
+#:
+#:   VIP    72h (decidir) · 24h (lembrar) · 6h (último aviso)
+#:   teste  24h (é o aviso de 1 dia que o usuário pediu) · 6h
+FAIXAS_POR_PLANO = {
+    "vip":   (72, 24, 6),
+    "trial": (24, 6),
+}
 
 PLANOS_COM_VALIDADE = ("vip", "trial")
 
@@ -61,10 +94,26 @@ def dias_restantes(expires_at, agora: datetime | None = None) -> int | None:
     return (exp - agora).days
 
 
-def faixa_do_aviso(dias: int) -> int | None:
-    """Faixa em que esses dias caem, ou None se ainda é cedo pra avisar."""
-    for faixa in sorted(FAIXAS):
-        if dias <= faixa:
+def horas_restantes(expires_at, agora: datetime | None = None) -> float | None:
+    """Horas até o vencimento, SEM truncar · é o número que decide a faixa.
+
+    Separado de `dias_restantes` de propósito: aquele arredonda pra baixo pra
+    escrever a frase certa ("seu último dia cheio"), e usar o mesmo número pra
+    decidir era o que fazia um plano de 2 dias nascer dentro da faixa de 1.
+    """
+    if not expires_at:
+        return None
+    agora = agora or datetime.now(timezone.utc)
+    exp = expires_at
+    if exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)
+    return (exp - agora).total_seconds() / 3600
+
+
+def faixa_do_aviso(horas: float, plan: str = "vip") -> int | None:
+    """Faixa em que essas horas caem, ou None se ainda é cedo pra avisar."""
+    for faixa in sorted(FAIXAS_POR_PLANO.get(plan, FAIXAS_POR_PLANO["vip"])):
+        if horas <= faixa:
             return faixa
     return None
 
@@ -109,20 +158,24 @@ def avisar_plano_expirando(cur, user: dict, site_url: str,
     if plan not in PLANOS_COM_VALIDADE:
         return None
 
-    dias = dias_restantes(user.get("expires_at"), agora=agora)
-    if dias is None or dias < 0:
+    horas = horas_restantes(user.get("expires_at"), agora=agora)
+    if horas is None or horas < 0:
         # Já vencido não é aviso de vencimento: o login rebaixa pra free antes
         # de chegar aqui, e insistir seria oferecer renovação de algo que a
         # pessoa já perdeu (isso é outra conversa, não este aviso).
         return None
 
-    faixa = faixa_do_aviso(dias)
+    # Decide em horas, escreve em dias · ver o cabeçalho.
+    faixa = faixa_do_aviso(horas, plan)
     if faixa is None:
         return None
+    dias = dias_restantes(user.get("expires_at"), agora=agora) or 0
 
     exp = user["expires_at"]
     data_exp = exp.date() if hasattr(exp, "date") else exp
-    chave = f"plano_expirando:{plan}:{data_exp}:{faixa}"
+    # A faixa entra na chave com o "h": ela mudou de unidade, e uma chave nova
+    # evita que um aviso de 3 DIAS já gravado bloqueie o de 72 HORAS.
+    chave = f"plano_expirando:{plan}:{data_exp}:{faixa}h"
 
     # Existência antes de criar: create_notification faz upsert, então sozinho
     # ele não distingue "criei agora" de "já existia" -- e é essa distinção que
