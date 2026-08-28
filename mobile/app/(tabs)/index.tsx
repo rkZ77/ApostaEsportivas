@@ -98,7 +98,8 @@ export default function Inicio() {
         {hoje.carregando ? (
           <Carregando />
         ) : destaque ? (
-          <PickCard pick={destaque} onPress={() => router.push(`/pick/${destaque.id}?tipo=vip`)} />
+          <PickCard pick={destaque} banca={banca.dados}
+            onPress={() => router.push(`/pick/${destaque.id}?tipo=vip`)} />
         ) : (
           <Vazio
             icone={<Target size={32} color={cores.ink4} />}

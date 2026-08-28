@@ -53,6 +53,10 @@ export interface Pick {
   profit?: number | null
   is_followed?: boolean
   user_stake_units?: number | null
+  /* Sugestão do backend (`calculate_stake`, com a banca real do usuário). É o
+     mesmo campo que o card do site usa como primeira opção · o app NÃO
+     recalcula, pra não existir uma segunda implementação da mesma conta. */
+  suggested_stake_units?: number | null
 }
 
 export interface RespostaHoje {

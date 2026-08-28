@@ -22,7 +22,7 @@ import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Target } from 'lucide-react-native'
 import { useDados } from '../../src/hooks/useDados'
-import { picks as apiPicks } from '../../src/api/endpoints'
+import { minhasApostas, picks as apiPicks } from '../../src/api/endpoints'
 import { Carregando, Txt, Vazio } from '../../src/components/ui'
 import { PickCard } from '../../src/components/PickCard'
 import { cores, espaco, raio } from '../../src/theme/tokens'
@@ -36,6 +36,9 @@ export default function Picks() {
   const [filtro, setFiltro] = useState<Filtro>('todos')
 
   const { dados, carregando, atualizando, erro, atualizar } = useDados(() => apiPicks.hoje(), [])
+  /* A banca só serve pra traduzir unidade em reais no card · falhar aqui não
+     pode esconder os picks, e o hook já trata erro em silêncio. */
+  const banca = useDados(() => minhasApostas.resumo(), [])
 
   /* Defesas só entra na barra quando o dia tem pick dela · ver o cabeçalho. */
   const filtros = useMemo(() => {
@@ -120,7 +123,8 @@ export default function Picks() {
           }}
           refreshControl={<RefreshControl refreshing={atualizando} onRefresh={atualizar} tintColor={cores.ink3} />}
           renderItem={({ item }) => (
-            <PickCard pick={item} onPress={() => router.push(`/pick/${item.id}?tipo=${item.origem}`)} />
+            <PickCard pick={item} banca={banca.dados}
+              onPress={() => router.push(`/pick/${item.id}?tipo=${item.origem}`)} />
           )}
           ListEmptyComponent={
             <Vazio

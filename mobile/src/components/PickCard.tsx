@@ -10,8 +10,8 @@
 import { Image, View } from 'react-native'
 import { Card, Selo, Txt } from './ui'
 import { cores, espaco } from '../theme/tokens'
-import { confianca, escudo, estiloDoResultado, horaDoJogo, mercadoCompleto, odd, timeCasa, timeFora } from '../lib/formato'
-import type { Pick } from '../api/types'
+import { confianca, escudo, estiloDoResultado, horaDoJogo, mercadoCompleto, odd, reais, timeCasa, timeFora } from '../lib/formato'
+import type { Banca, Pick } from '../api/types'
 
 function Escudo({ id }: { id?: number | null }) {
   const uri = escudo(id)
@@ -19,9 +19,37 @@ function Escudo({ id }: { id?: number | null }) {
   return <Image source={{ uri }} style={{ width: 20, height: 20 }} resizeMode="contain" />
 }
 
-export function PickCard({ pick, onPress }: { pick: Pick; onPress?: () => void }) {
+/** O que o card precisa da banca · o resumo inteiro seria acoplamento à toa. */
+export interface BancaDoCard {
+  bankroll_current?: number | null
+  unit_value?: number | null
+}
+
+export function PickCard({ pick, onPress, banca }: {
+  pick: Pick
+  onPress?: () => void
+  banca?: BancaDoCard | null
+}) {
   const resultado = estiloDoResultado(pick.result ?? null)
   const hora = horaDoJogo(pick.match_datetime)
+
+  /* QUANTAS UNIDADES, E QUANTO ISSO É EM REAIS.
+   *
+   * Faltava no app inteiro · o card mostrava mercado, odd e confiança, e parava
+   * aí. O usuário tinha o pick e não tinha a aposta: a unidade é o que traduz
+   * "78% e odd 1.72" numa decisão, e sem ela ele voltava pro site pra descobrir.
+   *
+   * O NÚMERO É DO BACKEND, não recalculado aqui. `suggested_stake_units` sai de
+   * `calculate_stake` com a banca real do usuário, e é o mesmo campo que o card
+   * do site usa como primeira opção. Portar o Kelly pro app criaria uma segunda
+   * implementação da mesma conta, e as duas divergiriam no primeiro ajuste ·
+   * é o erro que o projeto já pagou com `stakePlan` e resolveu com um teste
+   * comparando os dois lados.
+   *
+   * Quem já apostou vê o que APOSTOU, não o que era sugerido. */
+  const unidades = pick.user_stake_units ?? pick.suggested_stake_units ?? null
+  const valorDaUnidade = banca?.unit_value ?? null
+  const jaApostou = pick.user_stake_units != null
 
   return (
     <Card onPress={onPress} style={{ gap: espaco.md }}>
@@ -74,6 +102,41 @@ export function PickCard({ pick, onPress }: { pick: Pick; onPress?: () => void }
           </Txt>
         </View>
       </View>
+
+      {/* quanto apostar · só enquanto a aposta ainda existe. Num pick já
+          resolvido a unidade sugerida vira ruído: a decisão passou. */}
+      {unidades != null && !pick.result ? (
+        <View
+          style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'flex-end',
+            gap: espaco.md,
+            borderTopWidth: 1,
+            borderTopColor: cores.line,
+            paddingTop: espaco.md,
+          }}
+        >
+          <View style={{ gap: 2 }}>
+            <Txt variante="rotulo">{jaApostou ? 'Apostado' : 'Apostar'}</Txt>
+            <Txt variante="numero" cor={cores.green}>{unidades}u</Txt>
+            {valorDaUnidade ? (
+              <Txt variante="apoio">{reais(unidades * valorDaUnidade)}</Txt>
+            ) : null}
+          </View>
+          <View style={{ alignItems: 'flex-end', gap: 2 }}>
+            <Txt variante="rotulo">Lucro pot.</Txt>
+            <Txt variante="numero" cor={cores.ink1}>
+              +{((Number(pick.odd) - 1) * unidades).toFixed(2)}u
+            </Txt>
+            {valorDaUnidade ? (
+              <Txt variante="apoio">
+                +{reais((Number(pick.odd) - 1) * unidades * valorDaUnidade)}
+              </Txt>
+            ) : null}
+          </View>
+        </View>
+      ) : null}
 
       {/* rodapé: confiança e situação */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: espaco.sm }}>

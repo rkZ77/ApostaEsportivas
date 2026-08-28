@@ -200,8 +200,15 @@ def _compute_suggested_stake_units(
             max_pct, max_units = 0.03, 5
         final_pct = min(float(stake_pct), max_pct)
     else:
-        # Free / Múltipla / VIP sem stake_pct: Kelly direto
-        MAX_PCT = {'free': 0.02, 'multipla': 0.025}
+        # Free / Múltipla / mercados próprios / VIP sem stake_pct: Kelly direto
+        #
+        # Os mercados de modelo próprio herdam o teto percentual do Free: são
+        # picks de perna única com amostra histórica menor que a do VIP, que é
+        # exatamente o critério que já definiu o teto de UNIDADES deles em
+        # banca.STAKE_LIMITS. Boost fica um degrau abaixo por ser combinado.
+        MAX_PCT = {'free': 0.02, 'multipla': 0.025,
+                   'faltas': 0.02, 'goleiros': 0.02, 'player_stats': 0.02,
+                   'boost': 0.015}
         max_pct = MAX_PCT.get(pick_type, 0.03)
 
         # EV negativo sem base sólida → stake mínimo (1u)
@@ -219,7 +226,20 @@ def _compute_suggested_stake_units(
 
         final_pct = min(max_pct, kelly * kelly_frac)
         final_pct = max(0.005, final_pct)
-        max_units = {'free': 6, 'multipla': 3}.get(pick_type, 9999)
+
+        # O TETO DE UNIDADES VEM DE banca.STAKE_LIMITS, e não de uma segunda
+        # lista aqui (2026-08-28).
+        #
+        # Este dict tinha só `free` e `multipla`, e todo tipo novo caía no
+        # default de 9999 · ou seja, SEM teto. A sugestão podia passar do que o
+        # `POST /banca/follow` aceita, e o usuário só descobriria no erro,
+        # depois de confirmar. É o mesmo defeito que MAX_UNITS_POR_TIPO já
+        # corrigiu do lado do card.
+        #
+        # Import local pra não criar ciclo: banca.py importa deste módulo.
+        from routers.banca import STAKE_LIMITS
+        limite = STAKE_LIMITS.get(pick_type)
+        max_units = limite[1] if limite else 9999
 
     stake_amount = final_pct * bankroll
     units = round(stake_amount / unit_value)
@@ -800,6 +820,34 @@ def get_today_suggestions(
                         m["suggested_stake_units"] = _compute_suggested_stake_units(
                             'multipla', None, m.get("confidence"), m.get("total_odd"),
                             None, bankroll, unit_value,
+                        )
+
+                # OS MERCADOS PROPRIOS FICAVAM DE FORA (corrigido em 28/08).
+                #
+                # O bloco cobria vip, dica e multipla, e parou de crescer
+                # enquanto os produtos cresciam: faltas, jogadores e Pick Boost
+                # chegavam na tela SEM `suggested_stake_units`.
+                #
+                # No site isso nao aparecia como erro -- o card cai no Kelly
+                # local quando o campo falta --, mas o Kelly local nao conhece
+                # `stake_pct` e nao e' o mesmo numero. No APP, que nao tem
+                # Kelly nenhum de proposito (pra nao existir uma segunda
+                # implementacao da mesma conta), o card simplesmente nao
+                # mostrava quanto apostar.
+                #
+                # `pick_type` decide o TETO dentro de _compute_suggested_stake_
+                # units, e por isso cada um manda o seu -- nao da' pra
+                # generalizar num "mercado" so'.
+                for chave, tipo in (("faltas", "faltas"),
+                                    ("goleiros", "goleiros"),
+                                    ("player_stats", "player_stats"),
+                                    ("boost", "boost")):
+                    for p in result.get(chave) or []:
+                        if p.get("is_followed"):
+                            continue
+                        p["suggested_stake_units"] = _compute_suggested_stake_units(
+                            tipo, p.get("stake_pct"), p.get("confidence"),
+                            p.get("odd"), p.get("ev"), bankroll, unit_value,
                         )
 
         return result
