@@ -18,14 +18,24 @@ O scheduler do projeto foi deletado em 2026-08-01 por queimar cota da API, e a
 diferenca que importa e' essa: aqui existe um teto de requisicoes declarado na
 linha de comando e um humano que viu o processo comecar.
 
-TRAVA DE AMBIENTE, QUE E' O PEDIDO
-----------------------------------
-O modulo CRAVA `DB_ENV=dev` antes de qualquer import que abra conexao, e
-recusa rodar se alguem tentou apontar pra outro lugar. Tambem recusa a valvula
-`LIVE_ENGINE_ALLOW_PROD`, que existe pra uma rodada manual consciente em
-`live_pipeline.py` e nao pode valer pra um laco: rodada unica com a valvula
-aberta e' uma decisao, um laco com a valvula aberta e' um acidente que se
-repete a cada 8 minutos.
+TRAVA DE AMBIENTE (REMOVIDA EM 2026-08-28)
+------------------------------------------
+O modulo CRAVAVA `DB_ENV=dev` antes de qualquer import que abrisse conexao, e
+recusava a valvula `LIVE_ENGINE_ALLOW_PROD` com um argumento que continua bom:
+rodada unica com a valvula aberta e' uma decisao, um laco com a valvula aberta
+e' um acidente que se repete a cada 8 minutos.
+
+O que mudou nao foi o argumento, foi o alvo. O Live virou produto publicado, as
+variaveis dele sairam do Railway, e nao ha' mais um banco de DEV pra onde
+cravar -- um laco preso em DEV hoje nao protege producao, so' escreve pick que
+ninguem le'.
+
+O QUE SEGURA O ACIDENTE NO LUGAR DA TRAVA, e por que ainda e' suficiente pra um
+laco: o `--orcamento` e' um teto de requisicoes da SESSAO inteira, declarado na
+linha de comando; `--ate` e' um horario de parada; e `--ocioso-para` desliga
+sozinho depois de N rodadas sem jogo elegivel. O laco morre por conta propria
+de tres jeitos diferentes. O que a trava impedia era a rodada 30 alcancar o
+banco errado -- hoje so' existe um banco, o do ambiente de quem chamou.
 
 ORCAMENTO
 ---------
@@ -71,28 +81,19 @@ TZ_BR = ZoneInfo("America/Sao_Paulo")
 
 
 def _cravar_dev() -> None:
-    """DEV, e so' DEV. Roda ANTES de importar qualquer coisa que conecte.
+    """NAO CRAVA MAIS NADA (2026-08-28) · ver o topo do modulo.
 
-    `utils/db_utils.get_connection()` le DB_ENV no momento da chamada e cai no
-    `.env.prod` quando ela esta vazia. Cravar aqui, no topo, e' o que garante
-    que nenhuma rodada deste laco alcance producao -- inclusive as rodadas
-    numero 2, 7 e 30, que sao as que ninguem esta olhando.
+    A funcao e a chamada ficam porque a razao original merece ser encontrada
+    aqui, e nao num `git log`: `utils/db_utils.get_connection()` le' DB_ENV no
+    momento da chamada e cai no `.env.prod` quando ela esta' vazia. Era esse
+    detalhe que exigia cravar no TOPO, antes de qualquer import que conecte --
+    e ele continua verdadeiro pra qualquer trava futura que alguem queira por
+    aqui.
+
+    Hoje o laco herda o ambiente de quem o chamou, como o resto do projeto.
     """
-    atual = (os.getenv("DB_ENV") or "").strip().lower()
-    if atual and atual != "dev":
-        raise SystemExit(
-            f"[LIVE-WATCH] DB_ENV={atual}. Este acompanhamento so' roda em DEV.\n"
-            f"             Para uma rodada unica em outro ambiente, use\n"
-            f"             engine_pipelines/live_pipeline.py, que e' manual."
-        )
-    if (os.getenv("LIVE_ENGINE_ALLOW_PROD") or "").strip().lower() in (
-            "1", "true", "on", "yes", "sim"):
-        raise SystemExit(
-            "[LIVE-WATCH] LIVE_ENGINE_ALLOW_PROD esta ligado. Essa valvula vale\n"
-            "             pra uma rodada manual consciente, nao pra um laco.\n"
-            "             Desligue a variavel antes de acompanhar os jogos."
-        )
-    os.environ["DB_ENV"] = "dev"
+    return
+
 
 
 _cravar_dev()
@@ -167,9 +168,10 @@ def acompanhar(intervalo: int = 10, intervalo_ocioso: int = 15, orcamento: int =
     config = LiveEngineConfig.do_ambiente()
     if not config.habilitado:
         raise SystemExit(
-            "[LIVE-WATCH] LIVE_ENGINE_ENABLED=false. O motor esta desligado no\n"
-            "             ambiente, entao o laco so' gastaria relogio. Ligue a\n"
-            "             variavel no .env antes de acompanhar."
+            "[LIVE-WATCH] LIVE_ENGINE_ENABLED=false. O motor foi desligado neste\n"
+            "             ambiente de proposito (o padrao e' LIGADO desde 28/08),\n"
+            "             entao o laco so' gastaria relogio. Tire a variavel ou\n"
+            "             ponha =true antes de acompanhar."
         )
 
     sessao = {"rodadas": 0, "requisicoes": 0, "picks": [], "erros": [],
@@ -177,8 +179,8 @@ def acompanhar(intervalo: int = 10, intervalo_ocioso: int = 15, orcamento: int =
     ociosas_seguidas = 0
 
     print("\n" + "#" * 62)
-    print("LIVE WATCH · acompanhamento ao vivo em DEV")
-    print(f"  banco:     DEV (cravado)")
+    print("LIVE WATCH · acompanhamento ao vivo")
+    print(f"  banco:     {(os.getenv('DB_ENV') or 'prod').upper()} (herdado do ambiente)")
     print(f"  gravacao:  {'NAO (dry run)' if dry_run else 'SIM, grava em picks_live'}")
     print(f"  intervalo: {intervalo} min com jogo · {intervalo_ocioso} min sem jogo")
     print(f"  orcamento: {orcamento} requisicoes na sessao inteira")

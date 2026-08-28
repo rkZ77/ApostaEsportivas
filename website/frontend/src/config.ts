@@ -3,25 +3,20 @@ export const SITE_NAME   = 'Pick IA'
 export const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY ?? ''
 
 /**
- * Aba "Picks Ao Vivo" visível para o assinante.
+ * Aba "Picks Ao Vivo" visível para o assinante · SEMPRE.
  *
- * LIGADA POR PADRÃO desde 2026-08-27 · o produto abriu.
+ * Esta constante teve três vidas curtas: nasceu desligada (motor em validação),
+ * virou "ligada salvo VITE_LIVE_PICKS_ENABLED=false" quando o produto abriu, e
+ * em 2026-08-28 perdeu a variável — o usuário removeu as variáveis do Live no
+ * Railway, e um interruptor que ninguém configura é só um caminho a mais para
+ * o produto sumir por engano.
  *
- * O padrão inverteu, e a inversão é a decisão. Enquanto o Motor Live estava em
- * validação, o padrão era desligado porque esquecer a variável só custava uma
- * aba escondida. Agora custa o contrário: esquecer a variável em produção
- * ESCONDERIA um produto que já existe, e ninguém perceberia · o site não
- * reclama de uma aba que não aparece.
+ * Ela continua existindo como CONSTANTE, e não foi apagada, porque `Picks.tsx`
+ * a usa para decidir a aba e o nome documenta a intenção ali. Se um dia o
+ * produto precisar ser escondido de novo, é uma linha aqui — e uma linha que
+ * aparece no diff, diferente de uma variável de ambiente que some sem rastro.
  *
- * É a mesma escolha de `SIDE_EFFECTS` em runtime_env.py e de `STATS_SWEEP` na
- * varredura: o default é o comportamento certo, e a variável existe para
- * DESLIGAR quando algo dá errado, sem deploy de código:
- *
- *     VITE_LIVE_PICKS_ENABLED=false
- *
- * A aba continua sendo `premiumOnly` · "todos" aqui é todo assinante, e quem
- * não é vê o mesmo cadeado dos outros produtos VIP. E esconder a aba nunca foi
- * o que protege o dado: quem decide é `require_live_reader` no backend.
+ * A aba continua sendo `premiumOnly`: quem não é assinante vê o mesmo cadeado
+ * dos outros produtos VIP. E quem decide o DADO é o backend.
  */
-export const LIVE_PICKS_ENABLED =
-  (import.meta.env.VITE_LIVE_PICKS_ENABLED ?? 'true').toString().toLowerCase() !== 'false'
+export const LIVE_PICKS_ENABLED = true

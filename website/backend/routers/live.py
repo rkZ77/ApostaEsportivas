@@ -1559,6 +1559,107 @@ def _alavancagem_stakes(cur, user_id: int) -> dict:
     return stakes
 
 
+#: Dias depois do jogo a partir dos quais a estatistica ausente deixa de ser
+#: "ainda nao publicaram" e passa a ser "nunca vao publicar".
+#:
+#: Boost e Jogador contam em DIAS, e nao nas 12 horas de `_HORAS_PARA_ANULAR`,
+#: porque as duas tabelas guardam `match_date` (DATE puro, sem hora) e nao o
+#: horario do apito. Contar hora a partir de uma data sem hora seria inventar
+#: precisao -- e errar pro lado de anular cedo demais e' justamente o que a
+#: regra do VIP evita. Um dia inteiro de folga cobre qualquer jogo da data.
+_DIAS_PARA_ANULAR = int(os.getenv("PICK_VOID_SEM_ESTATISTICA_DIAS", "1"))
+
+
+def _anular_sem_estatistica(cur, conn, today_br, resolved) -> None:
+    """PUSH pro pick de Boost/Jogador que NUNCA vai poder ser liquidado.
+
+    E' a mesma regra que `_anulacao_sem_estatistica` ja' aplicava em VIP, free e
+    multipla, estendida em 2026-08-28 aos dois produtos que liquidam por conta
+    propria e por isso tinham ficado de fora.
+
+    O SINTOMA QUE ISSO FECHA
+    ------------------------
+    Os dois blocos acima so' liquidam quando a estatistica EXISTE -- e estao
+    certos nisso: inventar numero e' pior que nao ter (primeira invariante do
+    settlement, a que foi violada em 05/08 e gravou RED num pick GREEN). O
+    efeito colateral e' que um jogo cuja folha o provedor nunca publica deixa o
+    pick "Pendente" pra sempre: a varredura desiste depois de
+    _SWEEP_MAX_AGE_DAYS e ninguem volta nele. Foi o que travou a multipla #137
+    em 20/08, do outro lado.
+
+    PUSH, e nao RED, pelo mesmo motivo da casa: mercado que nao pode ser
+    conferido devolve a entrada. Punir o usuario por falha do provedor seria
+    cobrar dele um erro que nao e' nosso nem dele.
+
+    SO' COM O JOGO ENCERRADO E MOTIVO NOMEADO. As duas consultas exigem
+    `ms.status IN ('FT','AET','PEN')`: sem isso, um jogo adiado ou cancelado
+    viraria PUSH silencioso, e pick que nao resolveu por BUG nosso (mapeamento
+    de mercado errado, por exemplo) tem que continuar pendente e visivel --
+    isso e' bug pra investigar, nao pick pra anular.
+    """
+    limite = today_br - timedelta(days=_DIAS_PARA_ANULAR)
+
+    # Jogador · a linha do jogador nao existe, ou a coluna do mercado veio NULL.
+    try:
+        cur.execute("""
+            SELECT pp.id, pp.odd, pp.player_name, pp.method, pp.fixture_id
+              FROM picks_player_stats pp
+              JOIN match_statistics ms ON ms.fixture_id = pp.fixture_id
+             WHERE pp.result IS NULL
+               AND pp.match_date <= %s
+               AND ms.status IN ('FT','AET','PEN')
+               AND NOT EXISTS (
+                     SELECT 1 FROM player_match_stats pms
+                      WHERE pms.fixture_id = pp.fixture_id
+                        AND pms.player_id  = pp.player_id)
+        """, (limite,))
+        for p in cur.fetchall():
+            try:
+                logger.warning(
+                    "[AUTO-RESULT] player_stats #%s (%s · %s, fixture %s) anulado "
+                    "como PUSH: provedor nao publicou a folha do jogador",
+                    p["id"], p["player_name"], p["method"], p["fixture_id"])
+                _save_market_pick_result(
+                    "picks_player_stats", p["id"], "player_stats",
+                    settlement.PUSH, float(p["odd"] or 1), conn)
+                resolved["player_stats"] += 1
+            except Exception as e:
+                logger.error("[AUTO-RESULT] anulacao player_stats #%s erro: %s", p["id"], e)
+    except Exception as e:
+        logger.error("[AUTO-RESULT] anulacao player_stats query erro: %s", e)
+
+    # Boost · falta o placar do intervalo (o caso comum) ou o total de gols.
+    try:
+        cur.execute("""
+            SELECT pb.id, pb.odd, pb.fixture_id,
+                   ms.total_goals, ms.home_goals_ht
+              FROM picks_boost pb
+              JOIN match_statistics ms ON ms.fixture_id = pb.fixture_id
+             WHERE pb.result IS NULL
+               AND pb.match_date <= %s
+               AND ms.status IN ('FT','AET','PEN')
+               AND (ms.total_goals   IS NULL
+                 OR ms.home_goals_ht IS NULL
+                 OR ms.away_goals_ht IS NULL)
+        """, (limite,))
+        for p in cur.fetchall():
+            try:
+                motivo = ("provedor nao publicou o total de gols"
+                          if p["total_goals"] is None
+                          else "provedor nao publicou o placar do intervalo")
+                logger.warning(
+                    "[AUTO-RESULT] boost #%s (fixture %s) anulado como PUSH: %s",
+                    p["id"], p["fixture_id"], motivo)
+                _save_market_pick_result(
+                    "picks_boost", p["id"], "boost",
+                    settlement.PUSH, float(p["odd"] or 1), conn)
+                resolved["boost"] += 1
+            except Exception as e:
+                logger.error("[AUTO-RESULT] anulacao boost #%s erro: %s", p["id"], e)
+    except Exception as e:
+        logger.error("[AUTO-RESULT] anulacao boost query erro: %s", e)
+
+
 @router.get("/my-picks")
 def get_live_my_picks(current_user: dict = Depends(get_current_user)):
     user_id  = current_user["id"]
@@ -2529,6 +2630,9 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
                     logger.error("[AUTO-RESULT] boost #%s erro: %s", p["id"], e)
         except Exception as e:
             logger.error("[AUTO-RESULT] boost query erro: %s", e)
+
+        # ── ANULACAO POR FALTA DE ESTATISTICA · Boost e Jogador ─────────────
+        _anular_sem_estatistica(cur, conn, today_br, resolved)
 
     finally:
         cur.close()

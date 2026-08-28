@@ -31,6 +31,11 @@ import { Spinner } from './ui'
  *
  * O laço mora no processo do backend, não aqui: fechar esta página não desliga
  * nada. Um restart do serviço, sim · e o painel diz isso em vez de fingir.
+ *
+ * O PAINEL ENCOLHEU EM 28/08, junto com as variáveis do Live no Railway. Saíram
+ * os avisos de "grava em dev", "ligue LIVE_ENGINE_ALLOW_PROD" e o selo de
+ * visibilidade: o motor virou produto, roda no banco do serviço que o disparou,
+ * e alerta que não pode mais disparar é ruído que ensina a ignorar o painel.
  */
 
 interface Checagem { item: string; ok: boolean; detalhe: string }
@@ -42,7 +47,7 @@ interface Diagnostico {
    * `=== 'false'` entenderia ao contrário.
    */
   dry_run_padrao_ativo?: boolean
-  /** O produto está visível pro assinante (LIVE_PICKS_PUBLIC). */
+  /** Constante `true` desde 28/08 · a aba não depende mais de variável. */
   publico?: boolean
   /** "produção" | "desenvolvimento" · onde a rodada grava. */
   grava_em?: string
@@ -266,28 +271,21 @@ export default function AdminMotorLive() {
           </button>
         </div>
 
-        {/* Onde o pick vai parar. É a informação que decide se a rodada é teste
-            ou produção, e ela não pode ficar implícita num painel de admin.
-            Vem do servidor · o painel não adivinha o ambiente. */}
-        {diag?.grava_em === 'produção' ? (
-          <div className="mt-3 flex items-start gap-2 rounded-md border border-red-500/30 bg-red-500/[0.08] px-3 py-2">
-            <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
-            <p className="text-[11px] text-ink-2 leading-relaxed">
-              Esta rodada grava no banco de <b className="text-red-300">PRODUÇÃO</b>
-              {' '}(<span className="font-mono text-red-300">LIVE_ENGINE_ALLOW_PROD</span> ligado).
-              O pick gerado é real e entra na base de verdade. Use dry run enquanto estiver testando.
-            </p>
-          </div>
-        ) : (
-          <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-500/25 bg-amber-500/[0.07] px-3 py-2">
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
-            <p className="text-[11px] text-ink-2 leading-relaxed">
-              O disparo roda com <span className="font-mono text-amber-300">DB_ENV=dev</span>, então o
-              pick vai pro banco de <b>desenvolvimento</b> mesmo clicando daqui da produção. Pra gravar
-              na base real, ligue <span className="font-mono text-amber-300">LIVE_ENGINE_ALLOW_PROD=true</span>.
-            </p>
-          </div>
-        )}
+        {/* Onde o pick vai parar · a informação que decide se a rodada é teste
+            ou produção, e que não pode ficar implícita num painel de admin.
+            Vem do servidor · o painel não adivinha o ambiente.
+
+            O aviso ficou UM só, e não dois: desde 28/08 a rodada sempre grava
+            no banco deste serviço, então o segundo ramo descrevia um estado que
+            não existe mais. O alerta continua vermelho de propósito · o pick
+            gerado aqui é o mesmo que o assinante vê. */}
+        <div className="mt-3 flex items-start gap-2 rounded-md border border-red-500/30 bg-red-500/[0.08] px-3 py-2">
+          <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
+          <p className="text-[11px] text-ink-2 leading-relaxed">
+            Esta rodada grava no banco <b className="text-red-300">deste serviço</b>. O pick gerado é
+            real e o assinante vê na aba Ao Vivo. Marque <b>dry run</b> enquanto estiver testando.
+          </p>
+        </div>
       </div>
 
       {/* ── Diagnóstico · sempre visível ──────────────────────────────────── */}
@@ -304,8 +302,8 @@ export default function AdminMotorLive() {
           )}
         </div>
         {/* Onde o motor GRAVA · o painel dizia "rodada concluída" sem nunca
-            dizer em qual banco, e a resposta muda com LIVE_ENGINE_ALLOW_PROD.
-            Num painel que existe pra testar, essa é a primeira pergunta. */}
+            dizer em qual banco. Num painel que existe pra testar, essa é a
+            primeira pergunta · mesmo hoje, que a resposta é sempre a mesma. */}
         {diag?.grava_em && (
           <p className="text-[11px] text-ink-4 mb-2">
             Grava no banco de{' '}

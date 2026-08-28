@@ -221,10 +221,11 @@ function TabBar({ tab, setTab, canSeeVip, verAoVivo, counts, liveCount, onPrefet
          ruído numa barra que rola no celular. */
       key: 'ao_vivo' as Tab, label: 'Picks Ao Vivo',
       premiumOnly: true,
-      /* NA BARRA por padrão desde 27/08 · o produto abriu. A variável continua
-         existindo, mas virou o contrário do que era: agora ela DESLIGA
-         (`VITE_LIVE_PICKS_ENABLED=false`), sem deploy, se algo der errado.
-         Ver LIVE_PICKS_ENABLED em config.ts e `podeVerAoVivo` aqui. */
+      /* NA BARRA por padrão desde 27/08 · o produto abriu. A variável de
+         ambiente sumiu em 28/08 (o usuário removeu as do Live no Railway) e
+         `LIVE_PICKS_ENABLED` virou constante em config.ts · uma linha que
+         aparece no diff, e não um interruptor que some sem rastro.
+         Ver `podeVerAoVivo` aqui. */
       oculta: !verAoVivo,
     },
     {
@@ -1985,14 +1986,14 @@ export default function Picks() {
   /*
    * Quem enxerga a aba "Picks Ao Vivo".
    *
-   * O produto abriu em 27/08: `LIVE_PICKS_ENABLED` é `true` por padrão, então
-   * todo assinante enxerga. A variável não sumiu, ela INVERTEU · hoje serve pra
-   * desligar sem deploy (`VITE_LIVE_PICKS_ENABLED=false`) se algo der errado.
+   * O produto abriu em 27/08 e a variável de ambiente saiu em 28/08:
+   * `LIVE_PICKS_ENABLED` é uma CONSTANTE `true` em config.ts, então todo
+   * assinante enxerga. Esconder de novo é editar aquela linha.
    *
-   * O `|| isAdmin` sobrevive à inversão e não é redundante: é justamente
-   * quando o produto está DESLIGADO que quem opera precisa ver a mesma tela
-   * que o assinante veria, no mesmo lugar dos outros picks, e não só o painel
-   * de diagnóstico do /admin.
+   * O `|| isAdmin` sobrevive e não é redundante: é justamente quando alguém
+   * desligar a constante que quem opera precisa ver a mesma tela que o
+   * assinante veria, no mesmo lugar dos outros picks, e não só o painel de
+   * diagnóstico do /admin.
    *
    * Quem decide o DADO continua sendo o backend (`require_live_reader` em
    * live_picks.py, que também abre por padrão e também deixa admin passar

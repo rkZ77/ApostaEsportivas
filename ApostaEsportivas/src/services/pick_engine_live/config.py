@@ -8,17 +8,37 @@ pra ser calibrada rodando contra jogo real, e o parametro que mais importa
 (quanta requisicao de API a rodada pode gastar) precisa poder mudar sem
 deploy. Mexer num numero nao pode custar um commit.
 
-O DEFAULT DE TUDO E' O LADO SEGURO
-----------------------------------
-`LIVE_ENGINE_ENABLED` nasce FALSE e `LIVE_ENGINE_DRY_RUN` nasce TRUE. Ou seja:
-um deploy que esqueca de configurar qualquer coisa nao gera pick, nao grava
-nada e nao gasta cota. O oposto do default do pre-jogo (`SIDE_EFFECTS=on`),
-e de proposito -- la' esquecer a variavel nao pode DESLIGAR producao; aqui
-esquecer a variavel nao pode LIGAR um consumo de API que ninguem pediu.
+O DEFAULT INVERTEU EM 2026-08-28 · O MOTOR VIROU PRODUTO
+--------------------------------------------------------
+`LIVE_ENGINE_ENABLED` nascia FALSE e `LIVE_ENGINE_DRY_RUN` nascia TRUE: um
+deploy que esquecesse de configurar nao gerava pick, nao gravava nada e nao
+gastava cota. Era o default certo enquanto o Live era um motor em validacao --
+esquecer a variavel nao podia LIGAR um consumo de API que ninguem pediu.
 
-TRAVA DE AMBIENTE
------------------
-`exigir_ambiente_dev()` recusa rodar fora de `DB_ENV=dev`. Nao e' zelo
+Agora o Live e' produto publicado: a aba esta' aberta pro assinante e o feed
+responde pra todo VIP. Com o default antigo, o assinante abria "Picks Ao Vivo"
+e via "o motor nao esta' rodando" pra sempre -- e ninguem percebia, porque
+ninguem reclama de uma aba que so' diz que nao tem nada.
+
+Entao os defaults viraram o comportamento certo, como no pre-jogo
+(`SIDE_EFFECTS=on`): LIGADO e GRAVANDO. As variaveis continuam sendo lidas --
+quem quiser um ambiente sem Live seta `LIVE_ENGINE_ENABLED=false` --, mas
+nenhuma precisa existir pro produto funcionar.
+
+TRAVA DE AMBIENTE (REMOVIDA EM 2026-08-28)
+------------------------------------------
+O texto abaixo descreve a trava como ela era. Ela foi retirada junto com a
+publicacao do produto: um motor que so' escreve em DEV nao pode alimentar uma
+aba que o assinante abre em producao.
+
+O QUE PROTEGE AGORA, no lugar dela: o motor so' roda por acao explicita -- o
+botao do /admin ou o comando do CLI --, nunca sozinho. Nao ha' agendador neste
+projeto desde 01/08. E ele grava no banco pra onde o processo que o disparou ja'
+aponta, que e' a mesma regra dos outros seis motores.
+
+O texto historico, pra quem for reabrir a decisao:
+
+`exigir_ambiente_dev()` recusava rodar fora de `DB_ENV=dev`. Nao era zelo
 abstrato: `.env` na raiz tem DB_HOST_PROD, e `get_connection()` cai nele
 quando DB_ENV nao existe -- foi assim que teste ja escreveu em producao
 (ver website/backend/tests/conftest.py). Um motor novo, ainda sem historico
@@ -213,9 +233,12 @@ class LiveEngineConfig:
             if p.strip().isdigit()
         )
         return cls(
-            habilitado=_flag("LIVE_ENGINE_ENABLED", False),
+            # Default LIGADO desde 28/08 · ver o topo do arquivo.
+            habilitado=_flag("LIVE_ENGINE_ENABLED", True),
             modo=(os.getenv("LIVE_ENGINE_MODE") or "dev").strip().lower(),
-            dry_run=_flag("LIVE_ENGINE_DRY_RUN", True),
+            # Default GRAVANDO desde 28/08 · dry run que nasce ligado num
+            # produto publicado significa aba que nunca recebe pick.
+            dry_run=_flag("LIVE_ENGINE_DRY_RUN", False),
             ai_review=_flag("LIVE_AI_REVIEW", False),
             max_partidas=_inteiro("LIVE_MAX_MATCHES", 3),
             max_requisicoes=_inteiro("LIVE_MAX_API_REQUESTS_PER_RUN", 15),
@@ -258,18 +281,15 @@ ENGINE_VERSION = "live_v1.0.0"
 
 
 def exigir_ambiente_dev() -> None:
-    """Recusa rodar fora de DEV. Ver a docstring do modulo.
+    """NAO RECUSA MAIS NADA (2026-08-28) · ver o topo do modulo.
 
-    `LIVE_ENGINE_ALLOW_PROD=true` e' a valvula de escape consciente, pra o dia
-    em que a promocao pra producao for uma decisao tomada -- nao um acidente
-    de variavel esquecida.
+    A funcao fica, e o nome fica, porque ela e' chamada de tres lugares e um
+    `pass` aqui e' mais honesto que remover as chamadas: quem for reabrir a
+    decisao encontra a explicacao no lugar onde ela era aplicada, e nao um
+    vazio.
+
+    O que protege no lugar da trava: o motor so' roda por acao explicita -- o
+    botao do /admin ou o comando do CLI --, e grava no banco pra onde o processo
+    que o disparou ja' aponta. E' a mesma regra dos outros seis motores.
     """
-    if _flag("LIVE_ENGINE_ALLOW_PROD", False):
-        return
-    db_env = (os.getenv("DB_ENV") or "").strip().lower()
-    if db_env != "dev":
-        raise AmbienteInvalido(
-            f"Motor Live so' roda com DB_ENV=dev (atual: {db_env or 'vazio'}). "
-            "Sem isso a conexao cai no banco de PRODUCAO pelo .env da raiz. "
-            "Para forcar conscientemente: LIVE_ENGINE_ALLOW_PROD=true."
-        )
+    return

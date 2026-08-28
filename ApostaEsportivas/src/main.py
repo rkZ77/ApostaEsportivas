@@ -647,17 +647,20 @@ def cmd_playerstats(*args):
 
 
 def cmd_live(*args):
-    """Motor de Picks Ao Vivo · UMA rodada, DEV apenas.
+    """Motor de Picks Ao Vivo · UMA rodada.
 
     FORA do cmd_tudo de proposito, e nao por esquecimento: o Live nao e' uma
-    etapa do pipeline diario, e' um motor que so' faz sentido rodando durante
-    os jogos. Alem disso ele gasta cota da API por execucao e ainda nao tem
-    historico medido -- entrar no "Rodar Tudo" o transformaria em custo fixo
-    de uma coisa que ainda esta em validacao.
+    etapa do pipeline diario, e' um motor que so' faz sentido rodando DURANTE
+    os jogos. Rodar de manha junto com o resto so' gastaria cota lendo partida
+    que nem comecou. E' a unica razao que sobrou pra ele estar fora -- a antiga
+    ("ainda esta em validacao") caducou em 28/08, quando a aba foi publicada.
 
-    Recusa rodar sem DB_ENV=dev (ver pick_engine_live/config.exigir_ambiente_dev)
-    e nasce em dry run, entao `python main.py live` sem configurar nada nao
-    grava pick nem gasta requisicao.
+    A trava de DB_ENV=dev saiu na mesma data, junto com as variaveis do Live no
+    Railway: a rodada grava no banco pra onde o ambiente ja' aponta, e nasce
+    GRAVANDO. Pra uma rodada de teste, peca o dry run na mao.
+
+    Pra acompanhar varios jogos seguidos, o laco e'
+    `engine_pipelines/live_watch.py`, que tem teto de requisicoes por sessao.
 
       python main.py live                    uma rodada (respeita o .env)
       python main.py live gravar             sai do dry run nesta rodada

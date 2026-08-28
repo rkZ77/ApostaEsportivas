@@ -56,17 +56,25 @@ class TestLiberacao:
         assert live.require_live_reader(assinante) is assinante
 
     @pytest.mark.parametrize("valor", ["off", "false", "0", "no", "nao", "OFF"])
-    def test_a_variavel_agora_DESLIGA(self, monkeypatch, valor):
-        """Ela deixou de ser liberacao e virou interruptor de emergencia."""
+    def test_a_variavel_sumiu_e_o_assinante_passa(self, monkeypatch, valor):
+        """`LIVE_PICKS_PUBLIC` deixou de existir em 2026-08-28.
+
+        Ela teve duas vidas: liberacao (o produto nascia admin-only) e, depois
+        que o produto abriu, interruptor de emergencia. Morreu quando o usuario
+        removeu as variaveis do Live no Railway -- um interruptor que ninguem
+        configura e' so' um `if` a mais entre o assinante e o produto, e um
+        caminho a mais pro produto sumir por engano.
+
+        `require_vip` faz o trabalho todo. Este teste tranca que setar a
+        variavel velha nao volta a barrar ninguem.
+        """
         monkeypatch.setenv("LIVE_PICKS_PUBLIC", valor)
         import routers.live_picks as live
 
-        with pytest.raises(Exception):
-            live.require_live_reader({"id": 1, "plan": "vip"})
+        vip = {"id": 1, "plan": "vip"}
+        assert live.require_live_reader(vip) is vip
 
-    def test_admin_atravessa_o_desligamento(self, monkeypatch):
-        """Desligar pro assinante nao pode cegar quem opera · e' justamente
-        quando algo deu errado que o admin precisa olhar a tela."""
+    def test_admin_tambem_passa(self, monkeypatch):
         monkeypatch.setenv("LIVE_PICKS_PUBLIC", "off")
         import routers.live_picks as live
 
@@ -79,12 +87,17 @@ class TestLiberacao:
         src = _ler(_BACKEND, "routers", "live_picks.py")
         assert "Depends(require_vip)" in src
 
-    def test_o_front_tambem_abre_por_padrao(self):
-        """Sem `VITE_LIVE_PICKS_ENABLED` a aba tem que APARECER · o inverso
-        deixaria o produto invisivel por esquecimento de variavel."""
+    def test_o_front_abre_sem_depender_de_variavel(self):
+        """`LIVE_PICKS_ENABLED` virou CONSTANTE em 28/08.
+
+        A aba tem que APARECER sem ninguem configurar nada · o inverso deixaria
+        o produto invisivel por esquecimento de variavel, com o pior sintoma
+        possivel: nenhum. Esconder de novo passou a ser editar uma linha, que
+        aparece no diff, em vez de mexer numa variavel que some sem rastro.
+        """
         src = _ler(_FRONT, "config.ts")
-        assert "?? 'true'" in src and "!== 'false'" in src, \
-            "o front voltou a exigir a variavel pra mostrar a aba"
+        assert "export const LIVE_PICKS_ENABLED = true" in src
+        assert "import.meta.env.VITE_LIVE_PICKS_ENABLED" not in src
 
     def test_a_aba_continua_sendo_premium(self):
         src = _ler(_FRONT, "pages", "Picks.tsx")

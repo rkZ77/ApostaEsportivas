@@ -1334,36 +1334,69 @@ def test_vocabulario_de_resultado_e_o_do_settlement():
 # ═════════════════════════════════════════════════════════════════════════
 # 17 · SEGURANCA E AMBIENTE
 # ═════════════════════════════════════════════════════════════════════════
-def test_motor_recusa_rodar_fora_de_dev(monkeypatch):
-    monkeypatch.delenv("LIVE_ENGINE_ALLOW_PROD", raising=False)
-    for valor in ("prod", "", "producao"):
+def test_a_trava_de_ambiente_nao_recusa_mais_nada(monkeypatch):
+    """REMOVIDA EM 2026-08-28, junto com as variaveis do Live no Railway.
+
+    `exigir_ambiente_dev()` recusava rodar fora de `DB_ENV=dev`, e a razao era
+    boa enquanto valeu: `utils/db_utils.get_connection()` le' DB_ENV na hora da
+    chamada e cai no `.env.prod` quando ela esta' vazia, entao um deploy
+    desatento levava o motor ao banco de producao sem ninguem decidir isso.
+
+    O que mudou nao foi o risco, foi o alvo. O Live virou produto publicado: a
+    aba esta' aberta pro assinante, e um motor que so' escreve em DEV alimenta
+    uma tela de producao com nada. Manter a trava seria garantir que o feed
+    ficasse vazio pra sempre -- com o pior sintoma possivel, que e' nenhum.
+
+    O QUE PROTEGE NO LUGAR: o motor so' roda por acao explicita (o botao do
+    /admin, que ja' exige admin, ou o comando do CLI). Nao ha' agendador neste
+    projeto desde 01/08.
+
+    A funcao continua existindo, e este teste tambem, porque ela e' chamada de
+    tres lugares -- e porque quem for reabrir a decisao precisa achar a
+    explicacao onde ela era aplicada, e nao um vazio.
+    """
+    for valor in ("prod", "", "producao", "dev"):
         monkeypatch.setenv("DB_ENV", valor)
-        with pytest.raises(AmbienteInvalido):
-            exigir_ambiente_dev()
+        exigir_ambiente_dev()   # nao levanta
 
 
-def test_motor_aceita_dev(monkeypatch):
-    monkeypatch.delenv("LIVE_ENGINE_ALLOW_PROD", raising=False)
-    monkeypatch.setenv("DB_ENV", "dev")
-    exigir_ambiente_dev()
+def test_defaults_viraram_o_comportamento_certo(monkeypatch):
+    """LIGADO e GRAVANDO desde 28/08 · antes era desligado e em dry run.
 
+    O default antigo era o certo pra um motor em validacao: um deploy que
+    esquecesse de configurar nao gerava pick, nao gravava e nao gastava cota.
 
-def test_valvula_de_escape_e_explicita(monkeypatch):
-    monkeypatch.setenv("DB_ENV", "prod")
-    monkeypatch.setenv("LIVE_ENGINE_ALLOW_PROD", "true")
-    exigir_ambiente_dev()
+    Com a aba publicada, o mesmo default vira o contrario de seguro. O
+    assinante abre "Picks Ao Vivo", ve' "o motor nao esta' rodando" pra sempre,
+    e ninguem percebe -- ninguem reclama de uma tela que so' diz que nao tem
+    nada. E' a mesma escolha que o pre-jogo ja' fez com `SIDE_EFFECTS=on`:
+    esquecer a variavel nao pode DESLIGAR producao.
 
-
-def test_defaults_sao_o_lado_seguro(monkeypatch):
+    O que NAO mudou: `ai_review` continua False (nao gasta token) e os tetos de
+    partidas e requisicoes continuam apertados. Ligar o motor nao e' o mesmo
+    que soltar o consumo.
+    """
     for var in ("LIVE_ENGINE_ENABLED", "LIVE_ENGINE_DRY_RUN", "LIVE_AI_REVIEW",
                 "LIVE_MAX_MATCHES", "LIVE_MAX_API_REQUESTS_PER_RUN", "LIVE_LEAGUES",
                 "LIVE_FETCH_EVENTS"):
         monkeypatch.delenv(var, raising=False)
     c = LiveEngineConfig.do_ambiente()
-    assert c.habilitado is False   # nao gera pick sem alguem ligar
-    assert c.dry_run is True       # nao grava sem alguem desligar o dry run
-    assert c.ai_review is False    # nao gasta token na V1
+    assert c.habilitado is True    # produto publicado nasce ligado
+    assert c.dry_run is False      # dry run que nasce ligado = aba sem pick
+    assert c.ai_review is False    # continua sem gastar token
     assert (c.max_partidas, c.max_requisicoes) == (3, 15)
+
+
+def test_a_variavel_ainda_DESLIGA_um_ambiente(monkeypatch):
+    """O default inverteu; a leitura continua existindo.
+
+    Quem quiser um ambiente sem Live seta a variavel. O que sumiu foi a
+    NECESSIDADE dela pro produto funcionar.
+    """
+    monkeypatch.setenv("LIVE_ENGINE_ENABLED", "false")
+    monkeypatch.setenv("LIVE_ENGINE_DRY_RUN", "true")
+    c = LiveEngineConfig.do_ambiente()
+    assert (c.habilitado, c.dry_run) == (False, True)
 
 
 def test_config_le_o_ambiente(monkeypatch):
@@ -1390,64 +1423,89 @@ def test_ia_generativa_esta_desligada_na_v1():
 # ═════════════════════════════════════════════════════════════════════════
 # 18 · AUTORIZACAO DE DISPARO (o botao do /admin)
 # ═════════════════════════════════════════════════════════════════════════
-def test_disparo_nao_exige_baixar_app_env(monkeypatch):
-    """APP_ENV controla a flag `Secure` do cookie de sessao (auth_utils.py:59
-    e :86). Se a autorizacao do motor dependesse dele, liberar o botao num
-    servico exposto na internet tiraria o Secure do cookie de autenticacao de
-    todo mundo naquele dominio.
+def test_disparo_nunca_dependeu_de_APP_ENV(monkeypatch):
+    """A flag de disparo saiu em 28/08, mas a razao dela merece sobreviver.
 
-    Por isso a autorizacao e' flag PROPRIA -- mesmo padrao de SIDE_EFFECTS=off,
-    que separa staging de producao sem mexer em APP_ENV.
+    `LIVE_ENGINE_ALLOW_RUN` era uma flag PROPRIA, e nao um `APP_ENV ==
+    development`, por um motivo que continua valendo pra qualquer gate futuro
+    deste projeto: APP_ENV controla a flag `Secure` do cookie de sessao
+    (auth_utils.py:59 e :86). Se a autorizacao de um motor dependesse dele,
+    liberar um botao num servico exposto na internet tiraria o `Secure` do
+    cookie de autenticacao de todo mundo naquele dominio.
+
+    Hoje `_pode_disparar` autoriza sempre -- a rota ja' exige `require_admin`,
+    e o motor nunca roda sozinho. Este teste guarda o unico acoplamento que
+    nao pode voltar: APP_ENV nao decide nada aqui.
+    """
+    import inspect
+    import routers.live_picks as lp
+
+    for ambiente in ("production", "development", "staging"):
+        monkeypatch.setenv("APP_ENV", ambiente)
+        assert lp._pode_disparar()[0] is True
+
+    assert "APP_ENV" not in inspect.getsource(lp._pode_disparar).split('"""')[2]
+
+
+def test_a_rodada_grava_no_banco_deste_servico(monkeypatch):
+    """`DB_ENV=dev` era cravado no subprocesso, sempre.
+
+    A trava existia pra o botao do /admin nao virar o caminho acidental ate' o
+    banco de producao. Saiu com a publicacao do produto: o pick que o admin
+    dispara e' o mesmo que o assinante le', entao gravar em outro banco nao e'
+    seguranca, e' o painel testando uma coisa e a tela mostrando outra.
+
+    O `_rodar` nao pode voltar a sobrescrever DB_ENV · e' o que este teste
+    tranca.
+    """
+    import inspect
+    import routers.live_picks as lp
+
+    assert lp._rodar_em_prod() is True
+    corpo = inspect.getsource(lp._rodar)
+    assert 'env["DB_ENV"]' not in corpo
+    assert '"DB_ENV"' not in corpo.split("PYTHONPATH")[1]
+
+
+def test_credenciais_dev_deixaram_de_ser_precondicao(monkeypatch):
+    """A regra que a lista defendia continua verdadeira, e por isso fica escrita.
+
+    `_dev_configurado` exigia as variaveis `*_DEV` e NUNCA as fabricava a partir
+    de `DB_HOST` -- mesma decisao de `routers/admin.py::_dev_env`, e pelo mesmo
+    motivo: DB_HOST neste processo aponta pra producao, e fabricar credencial
+    "de dev" a partir dele criaria o caminho em que o motor grava pick na base
+    errada acreditando que e' DEV.
+
+    Como a rodada passou a usar o banco deste servico, nao ha' mais banco de dev
+    pra ter credencial. Exigir as variaveis seria pedir a senha de um banco que
+    a rodada nao vai tocar -- e o painel diria "falta configurar" pra sempre.
     """
     import routers.live_picks as lp
 
-    monkeypatch.setenv("APP_ENV", "production")
-    monkeypatch.delenv("LIVE_ENGINE_ALLOW_RUN", raising=False)
-    autorizado, motivo = lp._pode_disparar()
-    assert autorizado is False
-    assert "LIVE_ENGINE_ALLOW_RUN" in motivo
-    assert "APP_ENV" in motivo  # o motivo avisa pra NAO baixar APP_ENV
-
-    monkeypatch.setenv("LIVE_ENGINE_ALLOW_RUN", "true")
-    assert lp._pode_disparar()[0] is True
-
-
-def test_fora_de_producao_o_disparo_e_liberado_sem_flag(monkeypatch):
-    import routers.live_picks as lp
-
-    monkeypatch.setenv("APP_ENV", "development")
-    monkeypatch.delenv("LIVE_ENGINE_ALLOW_RUN", raising=False)
-    assert lp._pode_disparar()[0] is True
-
-
-def test_credenciais_dev_nunca_sao_fabricadas_a_partir_de_db_host(monkeypatch):
-    """Mesma decisao de routers/admin.py::_dev_env, e pelo mesmo motivo:
-    DB_HOST neste processo pode apontar pra producao. Fabricar credencial
-    "de dev" a partir dele criaria o caminho em que o motor grava pick na base
-    errada acreditando que e' DEV."""
-    import routers.live_picks as lp
-
     monkeypatch.setenv("DB_HOST", "host-de-producao")
-    for chave in lp._CHAVES_DEV:
-        monkeypatch.delenv(chave, raising=False)
-    faltando = lp._dev_configurado()
-    assert set(faltando) == set(lp._CHAVES_DEV)
-
-    for chave in lp._CHAVES_DEV:
-        monkeypatch.setenv(chave, "valor")
     assert lp._dev_configurado() == []
 
 
-def test_diagnostico_lista_todas_as_precondicoes():
-    """Seis condicoes independentes. Sem o diagnostico, descobrir qual falhou
-    num ambiente remoto exige ler log de subprocesso."""
+def test_diagnostico_so_lista_o_que_ainda_pode_falhar():
+    """Eram seis checagens; sobraram as que um deploy pode de fato quebrar.
+
+    Sairam "disponivel pro assinante", "credenciais _DEV" e "disparo
+    autorizado": as tres passaram a responder sempre a mesma coisa. Checagem
+    que nao pode falhar nao e' diagnostico, e' ruido -- e ruido num painel de
+    diagnostico ensina a ignorar o painel inteiro, inclusive as linhas que
+    importam.
+    """
     import inspect
     import routers.live_picks as lp
 
     fonte = inspect.getsource(lp.diagnostico)
-    for item in ("motor habilitado", "disparo autorizado", "credenciais _DEV",
-                 "codigo do motor", "chave da API-Football", "tabela picks_live"):
+    for item in ("motor habilitado", "codigo do motor",
+                 "chave da API-Football", "tabela picks_live"):
         assert item in fonte, f"diagnostico nao cobre: {item}"
+    # `"item": ...` e nao o texto solto: o comentario que explica a REMOCAO cita
+    # os tres nomes, e uma busca ingenua acusaria o proprio registro da decisao.
+    for saiu in ("disparo autorizado", "credenciais _DEV", "disponivel pro assinante"):
+        assert f'"item": "{saiu}"' not in fonte, f"checagem que nao pode mais falhar: {saiu}"
 
 
 # ═════════════════════════════════════════════════════════════════════════
@@ -1456,10 +1514,9 @@ def test_diagnostico_lista_todas_as_precondicoes():
 def _live_watch(monkeypatch):
     """Importa o supervisor com o ambiente limpo.
 
-    O modulo crava DB_ENV=dev no IMPORT, de proposito -- e' o que garante que
-    nenhuma rodada do laco alcance producao. Limpar as variaveis antes do
-    primeiro import mantem a coleta do pytest previsivel numa maquina que por
-    acaso tenha DB_ENV=prod exportado.
+    O modulo cravava DB_ENV=dev no IMPORT ate' 28/08. Nao crava mais, mas a
+    limpeza das variaveis fica: ela mantem a coleta do pytest previsivel numa
+    maquina que por acaso tenha DB_ENV=prod exportado.
     """
     monkeypatch.delenv("DB_ENV", raising=False)
     monkeypatch.delenv("LIVE_ENGINE_ALLOW_PROD", raising=False)
@@ -1467,39 +1524,49 @@ def _live_watch(monkeypatch):
     return lw
 
 
-def test_acompanhamento_recusa_banco_que_nao_seja_dev(monkeypatch):
-    """Uma rodada manual apontada pro lugar errado e' um erro; um LACO apontado
+def test_o_laco_herda_o_ambiente_de_quem_chamou(monkeypatch):
+    """O laco tambem perdeu a trava, e o argumento contra isso era o melhor.
+
+    Uma rodada manual apontada pro lugar errado e' um erro; um LACO apontado
     pro lugar errado e' o mesmo erro se repetindo a cada 7 minutos sem ninguem
-    olhando. Por isso a recusa e' mais dura aqui que em live_pipeline."""
+    olhando. Por isso a recusa aqui era mais dura que em `live_pipeline`, e
+    `LIVE_ENGINE_ALLOW_PROD` -- valvula pra uma rodada unica consciente -- era
+    explicitamente RECUSADA: decisao consciente nao se repete sozinha trinta
+    vezes.
+
+    O que derrubou o argumento nao foi ele estar errado, foi o "lugar errado"
+    ter deixado de existir. Nao ha' mais banco de DEV do Live; um laco preso em
+    DEV hoje nao protege producao, so' escreve pick que ninguem le'.
+
+    O QUE SEGURA O ACIDENTE AGORA sao tres desligamentos automaticos que o laco
+    ja' tinha: `--orcamento` (teto de requisicoes da sessao inteira),
+    `--ate` (horario de parada) e `--ocioso-para` (N rodadas sem jogo
+    elegivel). O laco morre sozinho de tres jeitos.
+    """
     lw = _live_watch(monkeypatch)
 
-    monkeypatch.setenv("DB_ENV", "prod")
-    with pytest.raises(SystemExit) as erro:
-        lw._cravar_dev()
-    assert "DEV" in str(erro.value)
-
-
-def test_acompanhamento_recusa_a_valvula_de_producao(monkeypatch):
-    """LIVE_ENGINE_ALLOW_PROD existe pra uma rodada unica consciente
-    (config.exigir_ambiente_dev). O laco nao aceita: decisao consciente nao se
-    repete sozinha trinta vezes."""
-    lw = _live_watch(monkeypatch)
+    for valor in ("prod", "dev", "producao"):
+        monkeypatch.setenv("DB_ENV", valor)
+        lw._cravar_dev()                       # nao levanta
+        assert os.environ["DB_ENV"] == valor   # e nao reescreve
 
     monkeypatch.setenv("LIVE_ENGINE_ALLOW_PROD", "true")
-    with pytest.raises(SystemExit) as erro:
-        lw._cravar_dev()
-    assert "ALLOW_PROD" in str(erro.value)
+    lw._cravar_dev()
 
 
-def test_acompanhamento_crava_dev_quando_o_ambiente_esta_vazio(monkeypatch):
-    """DB_ENV vazia faz get_connection cair no .env.prod. Cravar (em vez de so'
-    exigir) e' o que impede a sessao inteira de nascer apontada pra producao
-    por uma variavel esquecida."""
+def test_o_laco_nao_inventa_ambiente_quando_a_variavel_esta_vazia(monkeypatch):
+    """DB_ENV vazia faz `get_connection` cair no `.env.prod`.
+
+    Esse detalhe e' o que exigia cravar no TOPO, antes de qualquer import que
+    conecte, e continua valendo pra qualquer trava futura. Hoje o laco nao
+    define nada: quem decide o banco e' o ambiente de quem chamou, como no
+    resto do projeto.
+    """
     lw = _live_watch(monkeypatch)
 
     monkeypatch.delenv("DB_ENV", raising=False)
     lw._cravar_dev()
-    assert os.environ["DB_ENV"] == "dev"
+    assert "DB_ENV" not in os.environ
 
 
 def test_sessao_para_quando_o_orcamento_acaba(monkeypatch):

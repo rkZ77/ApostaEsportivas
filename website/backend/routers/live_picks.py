@@ -67,27 +67,21 @@ STATUS_LIQUIDADO = "SETTLED"
 
 
 def require_live_reader(user: dict = Depends(require_vip)) -> dict:
-    """Quem pode LER o feed/estatistica do Motor Live.
+    """Quem pode LER o feed/estatistica do Motor Live: todo assinante.
 
-    ABERTO PRO ASSINANTE desde 2026-08-27 · o produto abriu.
+    Este gate teve tres vidas curtas. Nasceu admin-only (motor em validacao),
+    virou "aberto salvo LIVE_PICKS_PUBLIC=off" quando o produto abriu, e em
+    2026-08-28 perdeu a variavel: o usuario removeu as variaveis do Live no
+    Railway, e um interruptor que ninguem configura e' so' um `if` a mais entre
+    o assinante e o produto.
 
-    Ate' aqui era admin-only, com `LIVE_PICKS_PUBLIC=true` como liberacao. O
-    padrao inverteu junto com o do front, e a inversao e' a decisao: esquecer a
-    variavel agora ESCONDERIA um produto que existe, e ninguem perceberia --
-    ninguem reclama de uma rota que responde 403 pra todo mundo.
+    `require_vip` faz o trabalho todo -- e' o mesmo gate dos outros produtos
+    VIP, e "aberto pro assinante" nunca quis dizer aberto pra qualquer um.
 
-    E' a mesma escolha de `SIDE_EFFECTS` em runtime_env.py e de `STATS_SWEEP`
-    na varredura: o default e' o comportamento certo, e a variavel existe pra
-    DESLIGAR sem deploy quando algo da' errado.
-
-        LIVE_PICKS_PUBLIC=off    volta a ser so' admin
-
-    `require_vip` continua sendo o gate de plano · "aberto pro assinante" nao e'
-    aberto pra qualquer um, e quem nao e' VIP nunca chegou aqui.
+    A funcao fica no lugar da dependencia direta porque o nome documenta a
+    intencao nas seis rotas que a usam, e porque e' aqui que uma regra futura
+    entraria sem tocar em todas elas.
     """
-    if os.getenv("LIVE_PICKS_PUBLIC", "on").strip().lower() in ("0", "off", "false", "no", "nao"):
-        if user.get("plan") != "admin":
-            raise HTTPException(403, "Motor Ao Vivo indisponível no momento.")
     return user
 
 
@@ -560,13 +554,18 @@ class RunBody(BaseModel):
 
 
 def _dry_run_do_ambiente() -> bool:
-    """`LIVE_ENGINE_DRY_RUN`, com o mesmo default seguro do motor (TRUE).
+    """`LIVE_ENGINE_DRY_RUN`, com o mesmo default do motor · FALSE desde 28/08.
 
-    Le a variavel do jeito que `pick_engine_live/config.py::_flag` le, e nao
-    com um `== "true"` proprio: as duas leituras divergirem seria o painel
-    dizendo uma coisa e o motor fazendo outra.
+    O default era TRUE, e era o certo enquanto o Live estava em validacao. Com
+    a aba publicada, dry run que nasce ligado quer dizer aba que nunca recebe
+    pick -- e ninguem reclama de uma tela que so' diz que nao tem nada.
+
+    O ponto que NAO mudou: a leitura continua sendo a mesma de
+    `pick_engine_live/config.py::_flag`, e nao um `== "true"` proprio. As duas
+    divergirem seria o painel dizendo uma coisa e o motor fazendo outra -- que
+    e' exatamente o bug de 24/08 que este arquivo ja' pagou uma vez.
     """
-    return (os.getenv("LIVE_ENGINE_DRY_RUN") or "true").strip().lower() in (
+    return (os.getenv("LIVE_ENGINE_DRY_RUN") or "false").strip().lower() in (
         "1", "true", "on", "yes", "sim")
 
 
@@ -601,66 +600,52 @@ def _pipeline_dir() -> str:
     return ""
 
 
-_CHAVES_DEV = ("DB_HOST_DEV", "DB_PORT_DEV", "DB_NAME_DEV",
-               "DB_USER_DEV", "DB_PASS_DEV")
-
-
 def _pode_disparar() -> tuple[bool, str]:
-    """Quem pode disparar o motor Live neste servico.
+    """Quem pode disparar o motor Live neste servico: quem e' admin.
 
-    NAO usa `is_production()` sozinho, e a razao e' de seguranca, nao de
-    conveniencia: `APP_ENV` tambem controla a flag `Secure` do cookie de sessao
-    (auth_utils.py). Baixar APP_ENV pra "development" num servico exposto na
-    internet, so' pra liberar este botao, tiraria o `Secure` do cookie de
-    autenticacao de todo mundo que usa aquele dominio.
+    Havia uma flag propria (`LIVE_ENGINE_ALLOW_RUN`), separada da nocao de
+    ambiente por uma razao de seguranca que continua valida e vale registrar:
+    `APP_ENV` tambem controla a flag `Secure` do cookie de sessao, entao baixar
+    APP_ENV pra "development" so' pra liberar este botao tiraria o `Secure` do
+    cookie de autenticacao de todo mundo naquele dominio. A flag existia pra
+    ninguem ser tentado a fazer isso.
 
-    Entao a autorizacao de disparo vira flag PROPRIA, separada da nocao de
-    ambiente -- mesmo padrao de `SIDE_EFFECTS=off`, que separa staging de
-    producao sem mexer em APP_ENV.
+    Em 2026-08-28 o usuario removeu as variaveis do Live no Railway, e a flag
+    perdeu funcao: ela protegia um motor em validacao de rodar onde nao devia, e
+    o motor virou produto que PRECISA rodar em producao.
 
-        LIVE_ENGINE_ALLOW_RUN=true   libera o disparo neste servico
-        fora de producao             liberado sem precisar de flag
+    O que protege agora: a rota inteira ja' exige `require_admin`, e o motor
+    nunca roda sozinho -- nao ha' agendador neste projeto desde 01/08.
     """
-    if os.getenv("LIVE_ENGINE_ALLOW_RUN", "").strip().lower() in ("1", "true", "on", "yes", "sim"):
-        return True, ""
-    from runtime_env import is_production
-    if not is_production():
-        return True, ""
-    return False, (
-        "Disparo do motor Live nao autorizado neste servico. Defina "
-        "LIVE_ENGINE_ALLOW_RUN=true nas variaveis deste ambiente (nao baixe "
-        "APP_ENV: ele controla a flag Secure do cookie de sessao)."
-    )
+    return True, ""
 
 
 def _rodar_em_prod() -> bool:
-    """True quando o motor foi autorizado a escrever no banco DESTE servico.
+    """O motor escreve no banco DESTE servico · sempre, desde 2026-08-28.
 
-    A flag e a mesma que o proprio pipeline ja lia (`exigir_ambiente_dev` em
-    pick_engine_live/config.py) · nao existe uma segunda decisao aqui, so' o
-    backend parando de contrariar a que ja estava tomada. Enquanto ela nao
-    aparece, tudo segue indo pro banco de DEV como antes.
+    Era `LIVE_ENGINE_ALLOW_PROD`, a valvula consciente pro dia em que a promocao
+    fosse decidida. O dia chegou: a aba esta' publicada pro assinante, e um
+    motor que so' escreve em DEV nao alimenta uma tela de producao.
     """
-    return os.getenv("LIVE_ENGINE_ALLOW_PROD", "").strip().lower() in (
-        "1", "true", "on", "yes", "sim")
+    return True
 
 
 def _dev_configurado() -> list[str]:
-    """Variaveis _DEV que faltam. Vazio = pode rodar.
+    """Vazio, SEMPRE · a funcao sobrevive so' pra nao espalhar a remocao.
 
-    O motor e' disparado sempre com DB_ENV=dev, e `utils/db_utils` le as
-    variaveis com sufixo _DEV. Elas NAO sao fabricadas a partir de DB_HOST --
-    mesma decisao de routers/admin.py::_dev_env, e pelo mesmo motivo: DB_HOST
-    neste processo pode apontar pra producao, e fabricar credencial "de dev" a
-    partir dele criaria o risco real de o motor gravar pick na base errada
-    acreditando que e' DEV.
+    Ela listava as variaveis `*_DEV` que faltavam, porque o motor era disparado
+    sempre com `DB_ENV=dev` e `utils/db_utils` le com esse sufixo. A regra que a
+    justificava continua valida e vale registrar: essas credenciais NAO eram
+    fabricadas a partir de `DB_HOST` (mesma decisao de `routers/admin.py::
+    _dev_env`), porque `DB_HOST` neste processo aponta pra producao e fabricar
+    credencial "de dev" a partir dele criaria o risco real de o motor gravar
+    pick na base errada acreditando que e' DEV.
+
+    Em 2026-08-28 o motor passou a gravar no banco deste servico, entao nao ha'
+    mais banco de dev pra ter credencial. Exigir as variaveis seria pedir a
+    senha de um banco que a rodada nao vai tocar.
     """
-    # Autorizado a rodar em prod, o motor usa o banco deste servico e as
-    # variaveis _DEV deixam de ser pre-condicao · exigi-las ali seria pedir
-    # credencial de um banco que a rodada nao vai tocar.
-    if _rodar_em_prod():
-        return []
-    return [k for k in _CHAVES_DEV if not os.getenv(k)]
+    return []
 
 
 async def _rodar(body: RunBody) -> None:
@@ -677,20 +662,17 @@ async def _rodar(body: RunBody) -> None:
         argumentos += ["--max", str(body.max_partidas)]
 
     try:
-        # Onde a rodada escreve.
+        # Onde a rodada escreve: no banco deste servico, e ponto.
         #
-        # DB_ENV era cravado em "dev" aqui, sempre. A trava existia pra que o
-        # botao do /admin nao virasse o caminho acidental ate o banco de
-        # producao -- e o pipeline ja recusava do outro lado, por
-        # exigir_ambiente_dev(). Com LIVE_ENGINE_ALLOW_PROD=true a decisao
-        # passou a ser explicita e tomada, entao o backend para de contrariar
-        # a flag que o proprio motor ja respeita: a rodada herda o ambiente
-        # deste servico e grava onde ele aponta.
+        # `DB_ENV` era cravado em "dev" aqui, sempre, pra que o botao do /admin
+        # nao virasse o caminho acidental ate' producao. A trava saiu em
+        # 2026-08-28 junto com as variaveis do Live no Railway: a aba esta'
+        # publicada pro assinante, e um motor que so' escreve em DEV nao
+        # alimenta uma tela de producao.
         #
-        # Sem a flag, nada muda · continua indo pra dev.
+        # Nao ha' mais override nenhum · o subprocesso herda o ambiente de quem
+        # o disparou, que e' a mesma regra dos outros seis motores.
         env = {**os.environ, "PYTHONPATH": diretorio}
-        if not _rodar_em_prod():
-            env["DB_ENV"] = "dev"
         proc = await asyncio.create_subprocess_exec(
             sys.executable, script, *argumentos,
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
@@ -916,12 +898,6 @@ async def acompanhar_continuo(body: WatchBody, current_user: dict = Depends(requ
         _salvar_watch()
         return {"ok": True, "ativo": False}
 
-    autorizado, motivo = _pode_disparar()
-    if not autorizado:
-        raise HTTPException(403, motivo)
-    faltando = _dev_configurado()
-    if faltando:
-        raise HTTPException(400, f"Faltam variaveis de banco de dev: {', '.join(faltando)}.")
     if not _pipeline_dir():
         raise HTTPException(500, "Diretorio do motor nao encontrado (PIPELINE_SRC_PATH).")
     if _watch_state["ativo"]:
@@ -959,17 +935,6 @@ async def rodar_motor(body: RunBody, current_user: dict = Depends(require_admin)
     de um scheduler, de proposito -- o consumo real precisa ser medido rodada
     a rodada antes de qualquer automacao.
     """
-    autorizado, motivo = _pode_disparar()
-    if not autorizado:
-        raise HTTPException(403, motivo)
-    faltando = _dev_configurado()
-    if faltando:
-        raise HTTPException(400, (
-            f"Faltam as variaveis de banco de desenvolvimento: {', '.join(faltando)}. "
-            "O motor Live roda sempre com DB_ENV=dev e elas nao sao fabricadas a "
-            "partir de DB_HOST, pra nao existir caminho em que ele grave pick na "
-            "base errada acreditando que e' DEV."
-        ))
     if _run_status["status"] == "running":
         raise HTTPException(409, "Ja existe uma rodada em andamento.")
     if _watch_state["ativo"]:
@@ -992,12 +957,11 @@ def status_da_rodada(current_user: dict = Depends(require_admin)):
 def diagnostico(current_user: dict = Depends(require_admin)):
     """O que falta pra ESTE servico conseguir rodar o motor Live.
 
-    Existe porque a V1 tem seis pre-condicoes independentes e, sem isto,
-    descobrir qual delas falhou exige ler log de subprocesso num ambiente
-    remoto -- o que custa mais tempo que a propria rodada.
+    Eram seis pre-condicoes independentes; sobraram quatro depois que as
+    variaveis do Live sairam do Railway em 28/08. As que restam sao as que de
+    fato podem faltar num deploy, e descobrir qual falhou sem isto exigiria ler
+    log de subprocesso num ambiente remoto -- mais caro que a propria rodada.
     """
-    autorizado, motivo = _pode_disparar()
-    faltando = _dev_configurado()
     conn = get_connection()
     cur = conn.cursor()
     try:
@@ -1006,64 +970,40 @@ def diagnostico(current_user: dict = Depends(require_admin)):
         cur.close()
         conn.close()
 
-    ligado = os.getenv("LIVE_ENGINE_ENABLED", "").strip().lower() in (
-        "1", "true", "on", "yes", "sim")
-    em_prod = _rodar_em_prod()
-    # A LISTA MUDOU COM O PRODUTO (2026-08-28).
-    #
-    # Duas checagens tinham parado de corresponder ao que o painel descreve:
-    #
-    #   "credenciais _DEV" aparecia SEMPRE, e ela so' faz sentido quando o motor
-    #   grava no banco de DEV. Num servico com LIVE_ENGINE_ALLOW_PROD ligado ela
-    #   virava um X vermelho permanente em cima de uma condicao que aquele
-    #   ambiente nao precisa satisfazer -- e diagnostico que acusa o que nao
-    #   importa ensina a ignorar diagnostico;
-    #
-    #   "tabela picks_live" dizia "o motor cria na primeira rodada, NO BANCO DE
-    #   DEV". Com o motor autorizado a gravar em producao, a frase apontava pro
-    #   banco errado.
-    #
-    # E faltava a checagem que passou a ser a mais importante: o produto esta'
-    # VISIVEL pro assinante? O motor pode estar redondo e a aba fechada, que era
-    # o estado normal ate' ontem.
-    publico = os.getenv("LIVE_PICKS_PUBLIC", "on").strip().lower() not in (
+    # O motor nasce LIGADO desde 28/08 (ver pick_engine_live/config): a variavel
+    # so' serve pra DESLIGAR num ambiente especifico.
+    ligado = os.getenv("LIVE_ENGINE_ENABLED", "on").strip().lower() not in (
         "0", "off", "false", "no", "nao")
-    onde_grava = "producao" if em_prod else "DEV"
+    em_prod = _rodar_em_prod()
 
+    # A LISTA ENCOLHEU EM 2026-08-28, junto com as variaveis do Railway.
+    #
+    # Sairam "disponivel pro assinante" (a rota nao gateia mais, so' exige VIP),
+    # "credenciais _DEV" (o motor nao roda mais em DEV) e "disparo autorizado"
+    # (a rota ja' exige admin). Checagem que nao pode falhar nao e' diagnostico,
+    # e' ruido -- e ruido em painel de diagnostico ensina a ignorar o painel.
+    #
+    # Sobrou o que de fato pode faltar num deploy.
     checagens = [
         {"item": "motor habilitado", "ok": ligado,
-         "detalhe": f"LIVE_ENGINE_ENABLED={os.getenv('LIVE_ENGINE_ENABLED') or 'ausente'}"},
-        {"item": "disparo autorizado", "ok": autorizado,
-         "detalhe": motivo or "liberado neste ambiente"},
+         "detalhe": "ligado (padrao)" if ligado
+                    else "LIVE_ENGINE_ENABLED desligado neste ambiente"},
         {"item": "codigo do motor", "ok": bool(_pipeline_dir()),
          "detalhe": _pipeline_dir() or "PIPELINE_SRC_PATH nao resolve"},
         {"item": "chave da API-Football", "ok": bool(os.getenv("API_FOOTBALL_KEY")),
          "detalhe": "configurada" if os.getenv("API_FOOTBALL_KEY") else "API_FOOTBALL_KEY ausente"},
-        {"item": f"tabela picks_live no banco que o site le", "ok": tabela,
+        {"item": "tabela picks_live no banco que o site le", "ok": tabela,
          "detalhe": "existe" if tabela else
-                    f"ausente -- o motor cria na primeira rodada, no banco de {onde_grava}"},
-        # A ponta do produto. Sem ela o painel dizia "pronto pra rodar" sobre um
-        # motor que ninguem ia ver.
-        {"item": "visivel pro assinante", "ok": publico,
-         "detalhe": "aberto (padrao)" if publico else
-                    "LIVE_PICKS_PUBLIC desligado -- so' admin ve' o feed"},
+                    "ausente -- o motor cria na primeira rodada"},
     ]
 
-    # So' entra quando importa: o motor grava em DEV.
-    if not em_prod:
-        checagens.insert(2, {
-            "item": "credenciais _DEV",
-            "ok": not faltando,
-            "detalhe": ("todas presentes" if not faltando
-                        else f"faltam: {', '.join(faltando)}"),
-        })
     return {
         "pronto": all(c["ok"] for c in checagens),
         "checagens": checagens,
-        # `grava_em` ja' existia logo abaixo · manter as duas chaves faria a
-        # segunda sobrescrever a primeira em silencio.
-        "publico": publico,
-        "dry_run_padrao": os.getenv("LIVE_ENGINE_DRY_RUN", "true"),
+        # Constante desde 28/08 · o campo fica porque o painel o exibe, e
+        # "some da tela" seria pior sinal que "diz sempre sim".
+        "publico": True,
+        "dry_run_padrao": os.getenv("LIVE_ENGINE_DRY_RUN", "false"),
         # O MESMO texto ja' interpretado. O painel precisa do booleano, e nao
         # do texto cru: "off", "0" e "nao" sao valores validos que uma leitura
         # ingenua no frontend (`=== 'false'`) entenderia ao contrario -- que e'
