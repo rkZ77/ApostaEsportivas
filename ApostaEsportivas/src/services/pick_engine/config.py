@@ -1,6 +1,23 @@
 """Limites e pesos configuraveis do motor de picks. Cada pipeline
 (VIP/Dica do Dia/Multipla/Alavancagem) pode instanciar sua propria config
 em vez de depender de numeros magicos espalhados pelo codigo."""
+
+# PISO DE AMOSTRA: 4 JOGOS (2026-08-28, decisao do usuario)
+# ---------------------------------------------------------
+# "numero maximo de jogos exigidos para gerar pick sao 4, 2 casa e 2 fora · ai'
+# na 5a rodada ele gera". Vale pra TODOS os pipelines e todos os tipos de pick.
+#
+# O QUE ISSO CUSTA, ESCRITO PRA NAO VIRAR SURPRESA
+#
+# `pool_and_field` filtra o pool pelo MANDO que o mercado descreve, entao 4
+# jogos totais viram ~2 no pool de um mercado de lado. Quatro fica abaixo de
+# `sample_scarce_n`, entao esses picks nascem com Q de amostra ESCASSA e
+# confidence menor -- e' o desconto correto, e ele continua valendo: o piso
+# libera o pick, nao apaga a incerteza.
+#
+# Efeito esperado: MAIS pick no comeco de temporada (que era o buraco -- com
+# piso 5/6 uma liga so' comecava a produzir na 6a ou 7a rodada) e confidence
+# media MENOR no conjunto. As duas coisas juntas, nao uma sem a outra.
 from dataclasses import dataclass
 
 
@@ -13,7 +30,8 @@ class PickEngineConfig:
     # foi calibrado para o pool antigo -- com o pool honesto, candidatos legitimos
     # de 0.60-0.64 ficavam fora mesmo com ev>0, edge>=0.05 e conf>=0.55.
     min_taxa: float = 0.60
-    min_amostra: int = 5
+    # Ver a nota sobre o piso de amostra no topo deste arquivo.
+    min_amostra: int = 4
     min_confidence: float = 0.55
     min_ev: float = 0.0  # EV deve ser estritamente positivo para aprovar a aposta
     # Mercado com 1 so bookmaker nao tem consenso pra checar contra erro de

@@ -75,7 +75,12 @@ class CashoutBody(BaseModel):
 # chave zeraria o P&L daquele usuario em silencio -- que e' exatamente o modo de
 # falhar descrito no comentario acima.
 _TABELAS_MERCADO = {"faltas": "picks_faltas", "goleiros": "picks_goleiros",
-                    "player_stats": "picks_player_stats"}
+                    "player_stats": "picks_player_stats",
+                    # Pick Boost (28/08). Entra aqui e nao no ramo de bilhete:
+                    # apesar de combinar dois mercados, e' UM jogo, UMA odd e
+                    # UMA linha em `picks_boost` -- o formato de picks_free, que
+                    # e' o que este mapa exige.
+                    "boost": "picks_boost"}
 
 
 def _mercado_maps(cur, followed: list, colunas: str = "id, result, odd") -> dict:
@@ -170,6 +175,21 @@ def _resolve_pick(cur, pick_id: int, pick_type: str) -> Optional[dict]:
             FROM picks_goleiros pg
             LEFT JOIN fixtures f ON f.fixture_id = pg.fixture_id
             WHERE pg.id = %s
+        """, (pick_id,))
+    elif pick_type == "boost":
+        # A "linha" ja' vem pronta do pipeline com as DUAS pernas dentro
+        # ("Over 1.5 FT + Under 2.5 HT"): a aposta e' a combinacao, e mostrar
+        # so' uma delas descreveria outra coisa.
+        cur.execute("""
+            SELECT pb.result, pb.profit, 1 AS stake,
+                   pb.home_team AS home_team_name, pb.away_team AS away_team_name,
+                   COALESCE(pb.home_team_id, f.home_team_id) AS home_team_id,
+                   COALESCE(pb.away_team_id, f.away_team_id) AS away_team_id,
+                   pb.market, pb.line, pb.odd,
+                   f.match_datetime
+            FROM picks_boost pb
+            LEFT JOIN fixtures f ON f.fixture_id = pb.fixture_id
+            WHERE pb.id = %s
         """, (pick_id,))
     elif pick_type == "player_stats":
         # Prop de jogador, mesmo formato do de goleiro acima: a "linha" ja vem
@@ -405,6 +425,7 @@ PIPELINES_DA_QUEBRA: tuple = (
     ("free",      "Free",      ("free",)),
     ("multipla",  "Múltipla",  ("multipla", "multiplas")),
     ("mercados",  "Mercados",  ("faltas", "goleiros", "player_stats")),
+    ("boost",     "Pick Boost", ("boost",)),
     ("live",      "Ao Vivo",   ("live",)),
 )
 
@@ -1069,6 +1090,10 @@ STAKE_LIMITS = {
     # linha o follow devolvia "Tipo invalido" e o botao Apostar do card
     # quebrava -- foi o que aconteceu com faltas/goleiros da primeira vez.
     "player_stats": (1, 6),
+    # Pick Boost: teto entre a multipla (5) e os mercados proprios (6) pela
+    # mesma razao do peso em stake_plan · e' combinado, e combinado quebra
+    # inteiro quando uma perna erra.
+    "boost":      (1, 5),
     # Ao vivo. Teto mais baixo que qualquer produto pre-jogo, pelo mesmo
     # motivo do cap em pick_engine/staking.py: o motor Live ainda nao tem
     # historico proprio e a odd pode mudar entre a publicacao e a aposta.
@@ -1078,7 +1103,7 @@ STAKE_LIMITS = {
 STAKE_LABELS = {
     "vip": "VIP", "free": "Free", "multipla": "Múltipla",
     "alavancagem": "Alavancagem", "faltas": "de Faltas", "goleiros": "de Defesas",
-    "player_stats": "de Jogador",
+    "player_stats": "de Jogador", "boost": "Pick Boost",
     "live": "Ao Vivo",
 }
 
@@ -1957,6 +1982,7 @@ def get_fechamentos_resumo(current_user: dict = Depends(get_current_user)):
             ("vip", "picks_vip", "odd"), ("free", "picks_free", "odd"),
             ("faltas", "picks_faltas", "odd"), ("goleiros", "picks_goleiros", "odd"),
             ("player_stats", "picks_player_stats", "odd"),
+            ("boost", "picks_boost", "odd"),
         ):
             ids = _ids(tipo)
             m: dict = {}

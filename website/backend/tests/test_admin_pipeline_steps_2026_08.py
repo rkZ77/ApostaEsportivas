@@ -126,15 +126,29 @@ def test_defesas_aponta_pro_motor_que_a_rodada_diaria_usa():
     assert args.get("gerar_goleiros") == ["saves"]
 
 
-def test_os_motores_novos_tem_botao_e_ficam_fora_do_tudo(passos):
-    """Fora do "Rodar Tudo" e' decisao, nao esquecimento (ver main.py: motor
-    sem historico medido nao vira custo fixo da rodada diaria). Mas sem botao
-    a unica forma de roda-los era a linha de comando."""
+def test_produto_publicado_e_gerado_todo_dia(passos):
+    """Pick Boost ENTROU no "Rodar Tudo" em 2026-08-28.
+
+    Ele nasceu fora, pelo criterio que ainda vale pro Player Stats completo e
+    pro Live: motor sem historico medido nao vira custo fixo da rodada diaria.
+    O que mudou foi o produto, nao o criterio -- ele foi publicado pro
+    assinante, com um pick gratuito por dia, e produto publicado TEM que ser
+    gerado todo dia: senao a aba abre vazia e ninguem sabe por que.
+
+    As duas coisas andam juntas, e este teste e' o que trava isso: se alguem
+    tirar o Boost do `tudo` sem despublicar, a aba comeca a mentir.
+    """
+    assert "gerar_pickboost" in passos, "produto publicado tem que rodar no dia"
+
+
+def test_o_player_stats_completo_continua_sob_demanda(passos):
+    """Cinco dos seis metodos nunca geraram um pick real · `saves` roda todo
+    dia (como etapa `gerar_goleiros`), e o resto espera medicao. Botao existe;
+    custo fixo da rodada, nao."""
     scripts = _literal("_PIPELINE_SCRIPTS")
 
-    for cmd in ("gerar_playerstats", "gerar_pickboost"):
-        assert cmd in scripts, f"{cmd} sem script"
-        assert cmd not in passos, f"{cmd} nao pode ser etapa do Rodar Tudo"
+    assert "gerar_playerstats" in scripts, "sem botao, so' resta a linha de comando"
+    assert "gerar_playerstats" not in passos
 
 
 def test_todo_passo_tem_script(passos):

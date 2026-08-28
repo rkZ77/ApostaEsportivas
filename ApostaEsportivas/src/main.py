@@ -815,6 +815,14 @@ COMANDOS: tuple = (
     Comando("goleiros", "Player Stats · defesas de goleiro",
             "Gera picks de defesas por goleiro (método `saves` do Player Stats)",
             lambda *a: cmd_playerstats("saves"), etapa="DEFESAS DE GOLEIRO"),
+    # Pick Boost e' etapa desde 2026-08-28 (publicado pro assinante, com um pick
+    # gratuito por dia). A POSICAO importa: tem que ser antes de `resultados`,
+    # senao o pick nasce depois da liquidacao e fica pendente ate' o dia
+    # seguinte. Ele estava no fim do registro, na secao "fora do pipeline", e
+    # so' declarar `etapa` o colocaria DEPOIS de resultados na ordem do `tudo`.
+    Comando("pickboost", "Pick Boost · Over 1.5 FT + Under 2.5 HT",
+            "Escolhe os melhores JOGOS do dia para a combinação fixa",
+            lambda *a: cmd_pick_boost(), etapa="PICK BOOST"),
     Comando("resultados", "Atualizar resultados (VIP+Free+Mult+Alav)",
             "Atualiza resultados de todos os picks",
             lambda *a: cmd_resultados(), etapa="RESULTADOS"),
@@ -829,20 +837,21 @@ COMANDOS: tuple = (
 
     # --- Fora do pipeline diário (sem `etapa`) ------------------------------
     #
-    # PICK BOOST E PLAYER STATS (completo) ficam FORA do `tudo`, e nao por
-    # esquecimento -- e' o mesmo criterio que ja' mantem o `live` de fora:
-    # motor sem historico medido nao vira custo fixo da rodada diaria. Pick
-    # Boost nasceu so' no Admin (fase 1) e os outros cinco metodos do Player
-    # Stats nunca geraram um pick real.
+    # PLAYER STATS (completo) fica FORA do `tudo`, e nao por esquecimento --
+    # e' o mesmo criterio que ja' mantem o `live` de fora: motor sem historico
+    # medido nao vira custo fixo da rodada diaria, e os outros cinco metodos do
+    # Player Stats nunca geraram um pick real.
+    #
+    # PICK BOOST SAIU DESTA LISTA em 2026-08-28: ele foi publicado pro
+    # assinante (com um pick gratuito por dia), e produto publicado tem que ser
+    # gerado todo dia -- senao a aba abre vazia sem ninguem saber por que. Ele
+    # subiu pra etapa do `tudo`, la' em cima.
     #
     # A excecao e' `goleiros`, que segue como etapa la' em cima: aquele metodo
     # JA' rodava em producao todo dia, e tira-lo do `tudo` seria uma regressao
     # de produto disfarcada de reorganizacao.
     #
     # Entram no `tudo` quando tiverem resultado medido. Ate' la', na mao.
-    Comando("pickboost", "Pick Boost · Over 1.5 FT + Under 2.5 HT",
-            "Escolhe os melhores JOGOS do dia para a combinação fixa (fase 1: só Admin)",
-            lambda *a: cmd_pick_boost()),
     Comando("playerstats", "Player Stats · props de jogador",
             "Gera props de jogador (saves, chutes, faltas, desarmes, passes)",
             lambda *a: cmd_playerstats(*a),

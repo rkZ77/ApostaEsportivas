@@ -64,7 +64,9 @@ MEDIA_FALTAS_JOGO = 22.78
 # Minimo de jogos pra confiar em cada historico. O de arbitro e' menor
 # porque arbitro apita menos que time joga -- exigir 5 descartaria quase
 # todos (so' 30 arbitros passam de 6 jogos na base atual).
-MIN_JOGOS_TIME = 5
+# 4 desde 2026-08-28 · piso unico de amostra pra todos os pipelines (2 em
+# casa e 2 fora, entao a 5a rodada ja' produz). O do ARBITRO ja' era 4.
+MIN_JOGOS_TIME = 4
 MIN_JOGOS_ARBITRO = 4
 
 

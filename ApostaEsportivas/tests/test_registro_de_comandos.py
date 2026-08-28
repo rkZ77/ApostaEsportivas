@@ -60,10 +60,20 @@ def test_setup_nao_esta_no_registro():
 
 
 # ── O `tudo` ──────────────────────────────────────────────────────────────
-def test_tudo_roda_as_nove_etapas_do_pipeline_diario():
+def test_tudo_roda_as_etapas_do_pipeline_diario():
+    """A ORDEM importa e por isso a lista e' literal: dados e odds antes dos
+    geradores, e resultados por ultimo.
+
+    PICK BOOST entrou em 2026-08-28, junto com a publicacao dele pro assinante.
+    A regra que governa esta lista continua sendo a mesma: produto publicado e'
+    gerado todo dia, e motor que ainda nao foi publicado (Player Stats completo,
+    Live) fica fora pra nao virar custo fixo da rodada.
+    """
     assert [c.etapa for c in main.COMANDOS if c.etapa] == [
         "DADOS", "ODDS", "PICKS VIP", "DICA DO DIA", "MÚLTIPLA",
-        "ALAVANCAGEM", "FALTAS", "DEFESAS DE GOLEIRO", "RESULTADOS",
+        "ALAVANCAGEM", "FALTAS", "DEFESAS DE GOLEIRO", "PICK BOOST", "RESULTADOS",
+        # PICK BOOST antes de RESULTADOS nao e' detalhe: gerar depois da
+        # liquidacao deixa o pick do dia pendente ate' o dia seguinte.
     ]
 
 

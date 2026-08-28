@@ -65,6 +65,9 @@ export interface RespostaHoje {
      precisa dizer o MÉTODO ("Chutes no alvo" não é "Defesas"). Mesma decisão
      do backend, que devolve as duas separadas desde 27/08. */
   player_stats?: Pick[]
+  /* Pick Boost · combinação fixa (Over 1.5 FT + Under 2.5 HT) em que o motor
+     escolhe o JOGO. Um por dia é gratuito, marcado em `plano`. */
+  boost?: Pick[]
   goleiros?: Pick[]
 }
 
@@ -149,6 +152,7 @@ export interface ResumoDeHoje {
   alavancagem: number
   faltas: number
   player_stats: number
+  boost: number
   goleiros: number
   total: number
 }

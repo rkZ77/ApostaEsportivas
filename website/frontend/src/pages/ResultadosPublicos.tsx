@@ -71,13 +71,14 @@ interface PublicData {
 const SRC_LBL: Record<string, string> = {
   vip: 'VIP', free: 'Free', multiplas: 'Múlt.', alavancagem: 'Alav.',
   faltas: 'Faltas', goleiros: 'Defesas', player_stats: 'Jogador',
+  boost: 'Boost',
 }
 const SOURCES = ['all', 'vip', 'free', 'multiplas', 'alavancagem', 'faltas',
-                 'player_stats', 'goleiros']
+                 'player_stats', 'boost', 'goleiros']
 const SOURCE_LABELS: Record<string, string> = {
   all: 'Todos', vip: 'VIP', free: 'Free', multiplas: 'Múltiplas',
   alavancagem: 'Alavancagem', faltas: 'Faltas', goleiros: 'Defesas',
-  player_stats: 'Jogadores',
+  player_stats: 'Jogadores', boost: 'Pick Boost',
 }
 
 /*

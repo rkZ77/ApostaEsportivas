@@ -110,7 +110,7 @@ function LeagueLogo({ id, name, size = 18 }: { id?: number; name?: string; size?
  * decide nao e' o confronto, e' o individuo · o card fala de uma pessoa, a
  * busca e' por nome, e a amostra e' de atuacoes e nao de partidas. Empilhar
  * isso embaixo da grade VIP misturava duas perguntas. */
-type Tab = 'hoje' | 'pick_seguro' | 'vip' | 'multiplas' | 'alavancagem' | 'jogadores' | 'ao_vivo' | 'minhas_apostas'
+type Tab = 'hoje' | 'pick_seguro' | 'vip' | 'multiplas' | 'alavancagem' | 'jogadores' | 'boost' | 'ao_vivo' | 'minhas_apostas'
 
 /** Chave antiga na URL -> aba atual.
  *
@@ -199,6 +199,15 @@ function TabBar({ tab, setTab, canSeeVip, verAoVivo, counts, liveCount, onPrefet
          desarmes e passes. Aba própria e não uma seção do VIP: o que decide
          aqui é o indivíduo e não o confronto. */
       key: 'jogadores' as Tab, label: 'Jogadores', premiumOnly: true,
+    },
+    {
+      /* Pick Boost · combinação fixa (Over 1.5 FT + Under 2.5 HT) em que o
+         motor escolhe os JOGOS, não o mercado.
+         SEM `premiumOnly`: um pick por dia é gratuito, e uma aba marcada VIP
+         que abre com um pick liberado dentro contradiz o próprio selo. O
+         restante do dia vem trancado, com o mesmo teaser dos outros. */
+      key: 'boost' as Tab, label: 'Pick Boost',
+      badge: 'NOVO', badgeCls: 'bg-cyan-400/10 text-cyan-400 border-cyan-400/20',
     },
     {
       /* O produto novo: oportunidades que o motor achou durante o jogo.
@@ -1439,7 +1448,7 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
 // primeira tela em qualquer aparelho.
 
 /** Os mercados de modelo proprio que a aba desenha. */
-type TipoMercado = 'faltas' | 'goleiros' | 'player_stats'
+type TipoMercado = 'faltas' | 'goleiros' | 'player_stats' | 'boost'
 
 /* Rotulo em PT de cada metodo do Player Stats.
  *
@@ -1474,6 +1483,9 @@ interface MercadoPick {
   /* Só Player Stats · nele a odd é faixa de sanidade e quem ordena é o Score
      estatístico de 0 a 100. */
   method?: string; score?: number | null
+  /* Só Pick Boost · 'free' no de maior Score do dia, 'vip' no resto. O campo é
+     explícito e não inferido pela posição porque a tela pode reordenar. */
+  plano?: 'free' | 'vip'
   reasoning?: string
   stake_units?: number
   result?: string | null
@@ -1516,6 +1528,9 @@ function mercadoParaSuggestion(p: MercadoPick, tipo: TipoMercado) {
        perde: ele já vem dentro de `line` ("Fulano · 2 ou mais chutes"). */
     market: tipo === 'player_stats'
       ? (LABEL_DO_METODO[p.method ?? ''] ?? p.method ?? p.market)
+      /* O Boost tem DUAS pernas e uma odd só. `market` do pipeline já vem com
+         a combinação escrita; manter o texto dele é o que impede o card de
+         anunciar só metade da aposta. */
       : p.market,
     line: p.line,
     odd: Number(p.odd),
@@ -1545,6 +1560,25 @@ function mercadoParaSuggestion(p: MercadoPick, tipo: TipoMercado) {
        mesmo papel de suggested_stake_units nos outros tipos. */
     suggested_stake_units: p.stake_units,
   }
+}
+
+/* SEÇÃO SEM PICK · UM DESENHO SÓ PRA TODAS AS ABAS.
+ *
+ * Cada aba tinha inventado o seu: o VIP mostrava uma caixa tracejada de 150px
+ * dizendo "ainda não gerados", faltas mostrava uma linha cinza solta, múltipla
+ * mostrava outra coisa. Três formas de dizer a mesma coisa, e nenhuma delas
+ * parecida com a de baixo · o usuário lia como se fossem estados diferentes do
+ * produto, quando é sempre o mesmo: hoje não saiu.
+ *
+ * A regra que fica: o CABEÇALHO e a EXPLICAÇÃO continuam, porque é o que diz o
+ * que a aba é mesmo num dia vazio; a grade some e no lugar dela vem UMA linha,
+ * sempre com o mesmo tom. Caixa tracejada grande anunciando ausência ocupa mais
+ * tela que a seção que tem pick.
+ */
+function SecaoVazia({ texto }: { texto: string }) {
+  return (
+    <p className="text-xs text-ink-4 leading-relaxed mb-2">{texto}</p>
+  )
 }
 
 function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando, banca }: {
@@ -1578,14 +1612,16 @@ function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando, banca 
            uma caixa tracejada de 150px de altura anunciando "nao tem nada"
            ocupava mais tela que a secao que tem pick. Dia sem pick aqui e' o
            normal, e o normal nao merece destaque. */
-        <p className="text-xs text-ink-4 leading-relaxed mb-2">
-          Sem pick de {titulo.toLowerCase()} hoje.{' '}
-          {tipo === 'goleiros'
-            ? 'É um mercado raro, aparece em menos de 1% dos jogos.'
-            : tipo === 'player_stats'
-              ? 'Depende de a casa cotar o mercado do jogador e de ele ter atuações suficientes na competição.'
-              : 'Aparece quando algum jogo do dia tiver margem suficiente no modelo.'}
-        </p>
+        <SecaoVazia texto={
+          `Sem pick de ${titulo.toLowerCase()} hoje. ` + (
+            tipo === 'goleiros'
+              ? 'É um mercado raro, aparece em menos de 1% dos jogos.'
+              : tipo === 'player_stats'
+                ? 'Depende de a casa cotar o mercado do jogador e de ele ter atuações suficientes na competição.'
+                : tipo === 'boost'
+                  ? 'Ele só publica quando o jogo é forte nas duas pernas ao mesmo tempo, e isso não acontece todo dia.'
+                  : 'Aparece quando algum jogo do dia tiver margem suficiente no modelo.')
+        } />
       ) : (
         <div className="lista-longa grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {cards.map(c => (
@@ -2001,7 +2037,7 @@ export default function Picks() {
     // nem tem bloco de conteúdo, então /picks#chat abria a página com NENHUMA
     // aba ativa e a área vazia -- exatamente o sintoma que o comentário acima
     // descreve pro #ao_vivo. O chat vive no botão do Agente e em /agente.
-    const valid: Tab[] = ['hoje','pick_seguro','vip','multiplas','alavancagem','jogadores','minhas_apostas',
+    const valid: Tab[] = ['hoje','pick_seguro','vip','multiplas','alavancagem','jogadores','boost','minhas_apostas',
                           ...(podeVerAoVivo ? ['ao_vivo' as Tab] : [])]
     setTab(valid.includes(hash) ? hash : 'hoje')
   }, [location.hash, podeVerAoVivo])
@@ -2062,6 +2098,14 @@ export default function Picks() {
     () => (goleiros === null ? null : aplicarFiltro(goleiros, FILTRO_INICIAL)), [goleiros])
   const playerStatsOrdenados = useMemo(
     () => (playerStats === null ? null : aplicarFiltro(playerStats, FILTRO_INICIAL)), [playerStats])
+
+  /* Pick Boost · a lista JÁ vem ordenada por Score do servidor, e aqui ela NÃO
+     é reordenada: no Boost a odd não seleciona (é faixa de sanidade), então
+     ordenar por margem como nos outros mercados contradiz o critério do motor.
+     Ver services/pick_engine_boost/config.py. */
+  const boost = (today?.boost ?? null) as MercadoPick[] | null
+  const boostFree = useMemo(() => (boost ?? []).filter(p => p.plano !== 'vip'), [boost])
+  const boostVip = useMemo(() => (boost ?? []).filter(p => p.plano === 'vip'), [boost])
   /* Defesas parou de crescer em 27/08 (virou o método `saves` do Player
      Stats). A seção continua existindo pro dia antigo, mas desenhar todo dia
      um bloco que nunca mais vai ter pick é ruído · ela só aparece quando tem
@@ -2515,6 +2559,7 @@ export default function Picks() {
                             .filter((s: any) => !s.result).length) || undefined,
             jogadores:   ([...(today?.player_stats ?? []), ...(today?.goleiros ?? [])]
                             .filter((s: any) => !s.result).length) || undefined,
+            boost:       ((today?.boost ?? []).filter((s: any) => !s.result).length) || undefined,
             multiplas:   (today?.multiplas ?? []).filter((m: any) => !m.result).length || undefined,
             alavancagem: today?.alavancagem && !today.alavancagem.result ? 1 : undefined,
           }}
@@ -2858,10 +2903,11 @@ export default function Picks() {
                         ))}
                       </motion.div>
                     ) : (
-                      <div className="card p-8 text-center border-dashed">
-                        <p className="text-ink-3 text-sm font-semibold">{leagueFilter || vipResultFilter ? 'Nenhum pick encontrado com esse filtro.' : 'Picks VIP do dia ainda não gerados.'}</p>
-                        <p className="text-ink-4 text-xs mt-1">{leagueFilter || vipResultFilter ? '' : 'Os picks saem pela manhã. Volte mais tarde.'}</p>
-                      </div>
+                      <SecaoVazia texto={
+                        leagueFilter || vipResultFilter
+                          ? 'Nenhum pick VIP com esses filtros. Limpe o filtro para ver o dia inteiro.'
+                          : 'Sem pick VIP hoje. Não há horário fixo de publicação: eles saem quando o motor encontra jogo que passa nos cortes.'
+                      } />
                     )}
                   </>
                 )
@@ -2952,29 +2998,54 @@ export default function Picks() {
 
         {tab === 'alavancagem' && (
           <motion.div key="alavancagem" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6">
-            {/* Como funciona */}
+            {/* UMA explicação só, e a certa.
+              *
+              * Havia DUAS, e elas se contradiziam: esta caixa descrevia o
+              * modelo ANTIGO (banca fixa de R$50, reset a cada RED, odd
+              * 1.45-1.90, "5 greens viram R$300"), e um `<details>` logo abaixo
+              * descrevia o modelo ATUAL (caminho, entrada definida pelo
+              * usuário, odd combinada 1.40-1.55, RED custa só a entrada).
+              *
+              * Não era só duplicação · era informação errada em cima. E a de
+              * cima era a que aparecia primeiro, aberta, enquanto a certa
+              * ficava fechada atrás de um clique.
+              *
+              * Fica no formato dos outros produtos (card colorido, "O que é",
+              * três números), que é o padrão que a página usa em VIP,
+              * Múltiplas, Jogadores e Boost. */}
             <div className="card p-5 border-orange-500/20 bg-orange-500/5">
-              <p className="font-display text-sm font-bold text-orange-400 mb-3">Como funciona a Alavancagem?</p>
+              <p className="font-display text-sm font-bold text-orange-400 mb-3">
+                O que é a Alavancagem?
+              </p>
               <div className="space-y-2 text-sm text-ink-2 leading-relaxed">
                 <p>
-                  A banca começa em <span className="text-ink-1 font-bold">R$50</span> e o lucro de cada GREEN é
-                  reinvestido integralmente na próxima aposta, sem retirar nada.
+                  Não é uma aposta por dia, é um{' '}
+                  <span className="text-ink-1 font-bold">caminho</span>. Você define o valor de
+                  entrada e, a cada green, reaposta o bolo inteiro no pick do dia seguinte. Cada
+                  etapa tem odd combinada entre{' '}
+                  <span className="text-ink-1 font-bold">1.40 e 1.55</span>.
                 </p>
                 <p>
-                  A cada <span className="text-red-400 font-bold">RED</span>, a banca reseta para R$50 e uma nova
-                  série começa do zero. A IA seleciona 1 pick (ou combinada de 2 com alta correlação)
-                  com <span className="text-ink-1 font-bold">odd combinada entre 1.45 e 1.90</span> para maximizar a consistência.
+                  O caminho fecha sozinho ao chegar em{' '}
+                  <span className="text-green-400 font-bold">{userAlavSerie?.meta ?? 6} greens</span>,
+                  que multiplicam a entrada por cerca de 10. Aí o lucro vira dinheiro e entra na sua
+                  banca. Você também pode encerrar antes, a qualquer momento.
                 </p>
                 <p>
-                  O objetivo é <span className="text-green-400 font-bold">encadear greens consecutivos</span> e multiplicar
-                  a banca progressivamente durante o torneio. Uma sequência de 5 greens transforma R$50 em mais de R$300.
+                  Se der <span className="text-red-400 font-bold">red</span> em qualquer etapa, o
+                  caminho acaba e você perde <span className="text-ink-1 font-bold">apenas o valor
+                  de entrada</span>, nunca o acumulado · o bolo que estava em jogo nunca saiu da
+                  mesa, então nunca foi seu para perder. Um caminho novo começa em seguida.
                 </p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+                <p className="text-ink-3">
+                  É por isso que o valor em andamento não conta na sua banca: ele está inteiro
+                  apostado na próxima etapa.
+                </p>
+                <div className="grid grid-cols-3 gap-3 mt-3">
                   {[
-                    { label: 'Banca inicial', value: 'R$50',   color: 'text-orange-400' },
-                    { label: 'Odd alvo',      value: '1.45–1.90', color: 'text-green-400'  },
-                    { label: 'Reset no RED',  value: 'R$50',   color: 'text-red-400'    },
-                    { label: '5 greens',      value: 'R$300+', color: 'text-ink-1'      },
+                    { label: 'Odd por etapa', value: '1.40–1.55', color: 'text-orange-400' },
+                    { label: 'Meta',          value: `${userAlavSerie?.meta ?? 6} greens`, color: 'text-green-400' },
+                    { label: 'Risco',         value: '1u',        color: 'text-ink-1'      },
                   ].map(({ label, value, color }) => (
                     <div key={label} className="bg-surface-1 rounded-md p-3 text-center">
                       <div className={`text-lg font-black ${color}`}>{value}</div>
@@ -2993,39 +3064,6 @@ export default function Picks() {
               </div>
             ) : (
               <>
-                {/* Como funciona, antes de qualquer numero. A alavancagem e o
-                    unico produto do site que nao e "uma aposta, um resultado",
-                    e sem explicar a regra o card vira um monte de valor solto. */}
-                <details className="card p-4 border-orange-500/20 mb-4">
-                  <summary className="cursor-pointer text-sm font-bold text-orange-400 select-none">
-                    Como funciona a alavancagem
-                  </summary>
-                  <div className="mt-3 space-y-2 text-xs text-ink-2 leading-relaxed">
-                    <p>
-                      Não é uma aposta por dia, é um <b>caminho</b>. Você define um valor de
-                      entrada e, a cada green, reaposta o bolo inteiro no pick do dia seguinte.
-                      Cada etapa tem odd combinada entre 1.40 e 1.55.
-                    </p>
-                    <p>
-                      O caminho fecha sozinho ao chegar em <b>{userAlavSerie?.meta ?? 6} greens</b>,
-                      que multiplicam a entrada por cerca de 10. Aí o lucro vira dinheiro e entra
-                      na sua banca. Você também pode encerrar antes, a qualquer momento: se quiser
-                      parar no segundo green, para no segundo.
-                    </p>
-                    <p>
-                      Se der <b>red</b> em qualquer etapa, o caminho acaba e você perde apenas o
-                      valor de entrada, nunca o acumulado. O bolo que estava em jogo nunca saiu da
-                      mesa, então nunca foi seu para perder. Um caminho novo começa em seguida, no
-                      mesmo valor.
-                    </p>
-                    <p className="text-ink-3">
-                      É por isso que o valor em andamento não conta na sua banca: ele está inteiro
-                      apostado na próxima etapa. Em unidades, o caminho arrisca 1u e paga cerca de
-                      +9u quando fecha.
-                    </p>
-                  </div>
-                </details>
-
                 {/* Pick de hoje */}
                 {todayLoading ? <PickLoading /> : (
                   <div>
@@ -3439,6 +3477,99 @@ export default function Picks() {
 
             <button onClick={() => navigate('/resultados')}
               className="w-full text-center text-xs text-orange-400 hover:text-orange-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong font-semibold">
+              Ver todos os resultados
+            </button>
+          </motion.div>
+        )}
+
+        {/* Pick Boost · combinação fixa, e o motor escolhe o JOGO.
+            É o único produto com um pick gratuito por dia: como ele publica
+            vários jogos na mesma rodada, dar um não esvazia o resto. */}
+        {tab === 'boost' && (
+          <motion.div key="boost" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6">
+            <div className="card p-5 border-cyan-400/20 bg-cyan-400/5">
+              <p className="font-display text-sm font-bold text-cyan-400 mb-3">
+                O que é o Pick Boost?
+              </p>
+              <div className="space-y-2 text-sm text-ink-2 leading-relaxed">
+                <p>
+                  Uma combinação <span className="text-ink-1 font-bold">fixa</span>, no mesmo jogo:{' '}
+                  <span className="text-ink-1 font-bold">Mais de 1.5 gols no jogo inteiro</span> e{' '}
+                  <span className="text-ink-1 font-bold">Menos de 2.5 gols no primeiro tempo</span>.
+                </p>
+                <p>
+                  Nos outros produtos o motor olha um jogo e escolhe o melhor mercado dele. Aqui é o
+                  contrário: <span className="text-ink-1 font-bold">o mercado já está definido e o
+                  que se escolhe são os jogos</span> · por isso o dia costuma ter mais de um, e isso
+                  é o esperado, não anomalia.
+                </p>
+                <p>
+                  A ordem é pelo <span className="text-ink-1 font-bold">Score Estatístico</span>, não
+                  pela odd. No Boost a odd não seleciona: ela é faixa de sanidade, porque um Mais de
+                  1.5 pagando 1.05 não deixa margem, e pagando 2.40 é o mercado dizendo que o jogo é
+                  fraco de gol · contra o que o modelo estaria afirmando.
+                </p>
+                <div className="grid grid-cols-3 gap-3 mt-3">
+                  {[
+                    { label: 'Pernas',    value: '2',         color: 'text-cyan-400'  },
+                    { label: 'Odd alvo',  value: '1.30–2.30', color: 'text-green-400' },
+                    { label: 'Grátis',    value: '1 por dia', color: 'text-ink-1'     },
+                  ].map(({ label, value, color }) => (
+                    <div key={label} className="bg-surface-1 rounded-md p-3 text-center">
+                      <div className={`text-lg font-black ${color}`}>{value}</div>
+                      <div className="text-xs text-ink-4 mt-0.5">{label}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* O gratuito do dia · fora do bloqueio, com selo próprio. */}
+            <div>
+              <SectionHeader color="bg-green-400" label="Grátis de hoje" badge="FREE" />
+              {boost === null && todayLoading ? (
+                <PickLoading />
+              ) : boostFree.length === 0 ? (
+                <SecaoVazia texto="Sem Pick Boost hoje. Ele só publica quando o jogo é forte nas duas pernas ao mesmo tempo, e isso não acontece todo dia." />
+              ) : (
+                <div className="lista-longa grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                  {boostFree.map(p => (
+                    <SuggestionCard
+                      key={p.id}
+                      s={mercadoParaSuggestion(p, 'boost')}
+                      banca={bancaSummary?.has_banca ? bancaSummary : null}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* O resto do dia · VIP. Não aparece quando não há, pelo mesmo
+                critério do resto da página. */}
+            {!canSeeVip ? (
+              (boostVip.length > 0 || (today?.bloqueados?.mercados?.length ?? 0) > 0) && (
+                <div>
+                  <SectionHeader color="bg-cyan-400" label="Os outros do dia" badge="VIP" />
+                  <VipLockOverlay color="blue" picks={today?.bloqueados?.mercados} rotulo="Pick Boost" />
+                </div>
+              )
+            ) : boostVip.length > 0 && (
+              <div>
+                <SectionHeader color="bg-cyan-400" label={`Os outros do dia · ${boostVip.length}`} badge="VIP" />
+                <div className="lista-longa grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                  {boostVip.map(p => (
+                    <SuggestionCard
+                      key={p.id}
+                      s={mercadoParaSuggestion(p, 'boost')}
+                      banca={bancaSummary?.has_banca ? bancaSummary : null}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <button onClick={() => navigate('/resultados')}
+              className="w-full text-center text-xs text-cyan-400 hover:text-cyan-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong font-semibold">
               Ver todos os resultados
             </button>
           </motion.div>

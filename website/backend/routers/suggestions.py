@@ -325,6 +325,21 @@ def _teaser_de_alavancagem(row) -> dict:
     return d
 
 
+def _marcar_boost_free(picks: list) -> None:
+    """Marca `plano` em cada pick do Boost · o primeiro e' free, o resto e' VIP.
+
+    A lista JA' chega ordenada por score (a consulta ordena), entao "o primeiro"
+    e' "o de maior Score Estatistico" -- o mesmo criterio que ordena a lista do
+    assinante. Sem isso o free podia cair no meio do ranking VIP e parecer
+    escolha aleatoria.
+
+    O campo e' explicito e nao inferido pela posicao: a tela reordena (por odd,
+    por data) e a marca tem que sobreviver a isso.
+    """
+    for i, p in enumerate(picks or []):
+        p["plano"] = "free" if i == 0 else "vip"
+
+
 @router.get("/today")
 def get_today_suggestions(
     current_user: dict = Depends(get_current_user),
@@ -540,6 +555,34 @@ def get_today_suggestions(
                 WHERE {_merc_where.replace('match_date', 'pp.match_date').replace('result IS NULL', 'pp.result IS NULL')}
                 ORDER BY pp.score DESC NULLS LAST
             """, _d)]
+
+            # PICK BOOST (28/08) · Over 1.5 FT + Under 2.5 HT, combinacao fixa.
+            #
+            # Chave propria e nao junto de `vip`: aqui o mercado ja' esta'
+            # definido e o que o motor escolhe sao os JOGOS. Nao ha'
+            # exclusividade de partida nem "melhor pick do jogo" -- varios picks
+            # no mesmo dia e' o caso ESPERADO, e misturar isso na grade VIP
+            # (que e' um pick por jogo) daria a impressao de repeticao.
+            #
+            # Ordena por `score`, e nao por edge: no Pick Boost a odd nao
+            # seleciona, ela e' faixa de sanidade. Ver pick_engine_boost/config.
+            result["boost"] = [dict(r) for r in _safe_query(cur, f"""
+                SELECT pb.id, pb.fixture_id, pb.match_date,
+                       pb.home_team, pb.away_team, pb.home_team_id, pb.away_team_id,
+                       pb.league_id, pb.market, pb.market_type, pb.line, pb.odd,
+                       pb.odd_ft, pb.odd_ht, pb.bet_house_ft, pb.bet_house_ht,
+                       pb.confidence, pb.prob_real, pb.prob_real AS probability,
+                       pb.prob_ft, pb.prob_ht, pb.edge, pb.ev, pb.score,
+                       pb.reasoning, pb.stake_pct, pb.stake_units,
+                       pb.result, pb.result_ft, pb.result_ht, pb.profit, pb.created_at,
+                       f.match_datetime, l.name AS league_name
+                FROM picks_boost pb
+                LEFT JOIN fixtures f ON f.fixture_id = pb.fixture_id
+                LEFT JOIN leagues  l ON l.league_id  = pb.league_id
+                WHERE {_merc_where.replace('match_date', 'pb.match_date').replace('result IS NULL', 'pb.result IS NULL')}
+                ORDER BY pb.score DESC NULLS LAST
+            """, _d)]
+            _marcar_boost_free(result["boost"])
         else:
             row = _safe_query_one(cur, _picks_free_sql, _d)
             result["dica_do_dia"] = dict(row) if row else None
@@ -548,6 +591,38 @@ def get_today_suggestions(
             result["faltas"] = []
             result["goleiros"] = []
             result["player_stats"] = []
+
+            # PICK BOOST TEM UM FREE POR DIA (2026-08-28, decisao do usuario).
+            #
+            # E' o unico mercado de modelo proprio que nao e' 100% VIP, e a
+            # razao e' o formato: o Boost publica VARIOS jogos no mesmo dia (o
+            # mercado e' fixo e o que se escolhe sao as partidas), entao dar um
+            # nao esvazia o produto -- diferente de faltas ou de prop de
+            # jogador, onde o dia costuma ter um punhado e o "de graca" seria
+            # quase tudo.
+            #
+            # O free e' o de MAIOR SCORE, e nao o mais antigo nem o de maior
+            # odd: e' o mesmo criterio que ordena a lista VIP, entao o assinante
+            # nunca ve' o free numa posicao que contradiz o ranking dele.
+            result["boost"] = _safe_query(cur, f"""
+                SELECT pb.id, pb.fixture_id, pb.match_date,
+                       pb.home_team, pb.away_team, pb.home_team_id, pb.away_team_id,
+                       pb.league_id, pb.market, pb.market_type, pb.line, pb.odd,
+                       pb.odd_ft, pb.odd_ht, pb.bet_house_ft, pb.bet_house_ht,
+                       pb.confidence, pb.prob_real, pb.prob_real AS probability,
+                       pb.prob_ft, pb.prob_ht, pb.edge, pb.ev, pb.score,
+                       pb.reasoning, pb.stake_pct, pb.stake_units,
+                       pb.result, pb.result_ft, pb.result_ht, pb.profit, pb.created_at,
+                       f.match_datetime, l.name AS league_name
+                FROM picks_boost pb
+                LEFT JOIN fixtures f ON f.fixture_id = pb.fixture_id
+                LEFT JOIN leagues  l ON l.league_id  = pb.league_id
+                WHERE {_merc_where.replace('match_date', 'pb.match_date').replace('result IS NULL', 'pb.result IS NULL')}
+                ORDER BY pb.score DESC NULLS LAST
+                LIMIT 1
+            """, _d)
+            result["boost"] = [dict(r) for r in (result["boost"] or [])]
+            _marcar_boost_free(result["boost"])
 
             # ── Vitrine do que esta' trancado ──────────────────────────────
             #
@@ -608,7 +683,8 @@ def get_today_suggestions(
             teaser_mercados = []
             for tipo, tabela in (("faltas", "picks_faltas"),
                                  ("goleiros", "picks_goleiros"),
-                                 ("player_stats", "picks_player_stats")):
+                                 ("player_stats", "picks_player_stats"),
+                                 ("boost", "picks_boost")):
                 teaser_mercados += [
                     {**dict(r), "pick_type": tipo}
                     for r in _safe_query(cur, f"""
@@ -661,6 +737,7 @@ def get_today_suggestions(
         _alvo("faltas",      result.get("faltas") or [])
         _alvo("goleiros",    result.get("goleiros") or [])
         _alvo("player_stats", result.get("player_stats") or [])
+        _alvo("boost",        result.get("boost") or [])
         _alvo("free",        [result["dica_do_dia"]] if result.get("dica_do_dia") else [])
         _alvo("alavancagem", [result["alavancagem"]] if result.get("alavancagem") else [])
 
@@ -693,6 +770,7 @@ def get_today_suggestions(
         _marcar("faltas",      result.get("faltas") or [])
         _marcar("goleiros",    result.get("goleiros") or [])
         _marcar("player_stats", result.get("player_stats") or [])
+        _marcar("boost",        result.get("boost") or [])
         _marcar("free",        [result["dica_do_dia"]] if result.get("dica_do_dia") else [])
         _marcar("alavancagem", [result["alavancagem"]] if result.get("alavancagem") else [])
 
@@ -1073,9 +1151,10 @@ def get_suggestion_detail(
         # picks_vip: abrir a analise de um pick de faltas devolvia o pick VIP
         # de mesmo id, ou 404. Os dois mercados sao pipeline proprio e
         # precisam ler da sua tabela, igual multipla e alavancagem.
-        if pick_type in ("faltas", "goleiros", "player_stats"):
+        if pick_type in ("faltas", "goleiros", "player_stats", "boost"):
             tabela = {"faltas": "picks_faltas", "goleiros": "picks_goleiros",
-                      "player_stats": "picks_player_stats"}[pick_type]
+                      "player_stats": "picks_player_stats",
+                      "boost": "picks_boost"}[pick_type]
             cur.execute(f"""
                 SELECT p.id, p.match_date, p.home_team, p.away_team,
                        p.home_team_id, p.away_team_id,
@@ -1656,6 +1735,8 @@ def get_quick_stats(current_user: dict = Depends(get_current_user)):
                 -- valendo no placar. Pick Boost NAO entra -- fase 1 e' so'
                 -- Admin (peso 0 em stake_plan, e ausencia aqui).
                 SELECT result, profit * {STAKE_PADRAO['player_stats']} AS profit FROM picks_player_stats
+                UNION ALL
+                SELECT result, profit * {STAKE_PADRAO['boost']} AS profit FROM picks_boost
             ) AS all_picks
             WHERE result IS NOT NULL
         """)
@@ -1684,6 +1765,8 @@ def get_quick_stats(current_user: dict = Depends(get_current_user)):
                 SELECT result, match_date, id FROM picks_goleiros
                 UNION ALL
                 SELECT result, match_date, id FROM picks_player_stats
+                UNION ALL
+                SELECT result, match_date, id FROM picks_boost
             ) AS todos
             WHERE result IS NOT NULL
             ORDER BY match_date DESC, id DESC
@@ -1760,7 +1843,7 @@ def _source_games_sql(source: str, date_cond: str, result_null_cond: str = "IS N
             LEFT JOIN fixtures f ON f.fixture_id = pf.fixture_id
             WHERE pf.result {result_null_cond} {date_cond}
         """
-    if source in ("faltas", "goleiros", "player_stats"):
+    if source in ("faltas", "goleiros", "player_stats", "boost"):
         # Mesma forma de picks_free (um jogo, um mercado, uma odd), então o
         # SELECT é o mesmo com a tabela trocada. Os dois mercados já contavam
         # no ROI público e no histórico de /public/results desde 01/08; só esta

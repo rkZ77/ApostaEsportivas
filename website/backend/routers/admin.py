@@ -327,6 +327,10 @@ _PIPELINE_TIMEOUTS = {
 # clica "Rodar Tudo" espera o dia inteiro resolvido, e ela e' idempotente.
 _TUDO_STEPS = ["atualizar_jogos", "capturar_odds", "gerar_vip", "gerar_free",
                "gerar_multipla", "gerar_alavancagem", "gerar_faltas", "gerar_goleiros",
+               # Pick Boost entrou em 2026-08-28, junto com a publicacao dele
+               # pro assinante · produto publicado tem que ser gerado todo dia,
+               # senao a aba abre vazia sem ninguem saber por que.
+               "gerar_pickboost",
                "atualizar_resultados"]
 
 _STEP_LABELS = {
@@ -651,7 +655,7 @@ def ai_review_status(current_user: dict = Depends(require_admin)):
 _PIPELINE_POR_PICK_TYPE = {
     "vip": "vip", "free": "dica", "multipla": "multipla",
     "alavancagem": "alavancagem", "faltas": "faltas", "goleiros": "goleiros",
-    "player_stats": "player_stats",
+    "player_stats": "player_stats", "boost": "boost",
 }
 
 #: Nome do mercado em portugues. `market_type` e' a chave estavel do motor
@@ -1132,6 +1136,7 @@ _PICK_TABLES = {
     # jogador pelo /admin devolvia "tipo invalido" -- e e' justamente o tipo
     # mais novo, o que mais precisa de correcao manual enquanto e' medido.
     "player_stats": ("picks_player_stats", "home_team",     "away_team"),
+    "boost":        ("picks_boost",        "home_team",     "away_team"),
 }
 _VALID_RESULTS = {"GREEN", "RED", "PUSH", "HALF-WIN", "HALF-LOSS", None}
 
@@ -1144,14 +1149,14 @@ _VALID_RESULTS = {"GREEN", "RED", "PUSH", "HALF-WIN", "HALF-LOSS", None}
 #: existir uma terceira vez.
 _ODD_COL = {
     "vip": "odd", "free": "odd", "faltas": "odd", "goleiros": "odd",
-    "player_stats": "odd",
+    "player_stats": "odd", "boost": "odd",
     "multipla": "total_odd", "alavancagem": "odd_combined",
 }
 
 
 #: Tabelas com UMA fixture por pick · só nelas dá pra cruzar com
 #: match_statistics e dizer se o provedor publicou a folha do jogo.
-_PICK_TABLES_UMA_FIXTURE = ("vip", "free", "faltas", "goleiros", "player_stats")
+_PICK_TABLES_UMA_FIXTURE = ("vip", "free", "faltas", "goleiros", "player_stats", "boost")
 
 
 @router.get("/users/engajamento")

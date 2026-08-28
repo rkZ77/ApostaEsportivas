@@ -129,7 +129,10 @@ def test_detalhe_le_da_tabela_certa_pros_mercados():
     # `player_stats` entrou em 27/08 como sucessor de goleiros -- o ramo passou
     # de um `if/else` de duas tabelas pra um mapa, porque com tres opcoes o
     # ternario deixa de ser legivel e passa a esconder o caso do meio.
-    assert 'if pick_type in ("faltas", "goleiros", "player_stats"):' in src
+    # A lista cresce a cada motor novo · o que o teste protege e' que o
+    # detalhe NAO caia em picks_vip pros mercados de modelo proprio (era o bug:
+    # abrir a analise de um pick de faltas devolvia o pick VIP daquele jogo).
+    assert 'if pick_type in ("faltas", "goleiros", "player_stats", "boost"):' in src
     for tabela in ("picks_faltas", "picks_goleiros", "picks_player_stats"):
         assert f'"{tabela}"' in src
 

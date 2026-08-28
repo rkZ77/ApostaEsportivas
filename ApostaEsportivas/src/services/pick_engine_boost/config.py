@@ -24,9 +24,18 @@ from __future__ import annotations
 
 # -- Amostra -----------------------------------------------------------------
 #: Jogos com placar final, por time. Abaixo disso o jogo nem e' avaliado.
-MIN_JOGOS_FT = 6
+#:
+#: 4 desde 2026-08-28 (era 6): piso unico de amostra pra todos os pipelines,
+#: decisao do usuario -- 2 em casa e 2 fora, entao a 5a rodada ja' produz.
+MIN_JOGOS_FT = 4
 #: Jogos com placar de intervalo, por time.
-MIN_JOGOS_HT = 5
+#:
+#: MESMO numero que o de FT desde 28/08. Os dois eram separados porque a
+#: cobertura de HT e' menor que a de FT, e exigir 6 nos dois zerava o metodo em
+#: liga onde o provedor publica pouco intervalo. Com o piso em 4 essa distincao
+#: perde funcao: ela existia pra nao afrouxar o lado bom compensando o ruim, e
+#: agora os dois estao no mesmo chao.
+MIN_JOGOS_HT = 4
 #: Recortes que o metodo declara analisar. O de 10 e' a base; o de 5 mede
 #: TENDENCIA contra ela (ver stats_model.tendencia).
 JANELA_LONGA = 10

@@ -34,10 +34,14 @@ def test_o_jogo_nunca_entra_na_propria_previsao():
 
     amostras = fc.previsoes(jogos, usar_mando=False)
 
-    assert len(amostras) == 1
-    assert amostras[0]["fixture_id"] == 6
-    assert amostras[0]["previsto"] == pytest.approx(22.0)
-    assert amostras[0]["real"] == pytest.approx(1998.0)
+    # QUANTAS amostras saem depende de MIN_JOGOS_TIME, que e' decisao de
+    # produto e ja' mudou (5 -> 4 em 28/08). O que este teste protege e' o
+    # LOOKAHEAD, e ele nao depende do piso: a previsao do jogo do outlier tem
+    # que ignorar o proprio outlier.
+    outlier = next(a for a in amostras if a["fixture_id"] == 6)
+    assert outlier["real"] == pytest.approx(1998.0)
+    assert outlier["previsto"] == pytest.approx(22.0), \
+        "o jogo entrou na propria previsao"
 
 
 def test_amostra_so_aparece_com_historico_minimo():

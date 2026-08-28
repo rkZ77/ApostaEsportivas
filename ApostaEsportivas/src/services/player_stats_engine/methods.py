@@ -27,6 +27,15 @@ AMOSTRA E CARGO
 `min_atuacoes` e' por metodo porque as frequencias sao muito diferentes: uma
 defesa aparece em 0.86% das atuacoes medidas e um passe aparece em todas.
 Exigir o mesmo numero nos dois zeraria uns e afrouxaria outros.
+
+PISO DE 4 (2026-08-28, decisao do usuario). Os valores eram 3 a 6 e passaram a
+4 em todos: piso unico de amostra pra todos os pipelines e todos os tipos de
+pick. O campo CONTINUA sendo por metodo -- e' ele que permite subir de novo o de
+um contador especifico quando houver medicao pedindo, sem mexer nos outros.
+
+Aqui o piso morde mais que no resto do motor: atuacao so' conta com 60+ minutos
+(player_history.MIN_MINUTOS), entao 4 atuacoes sao 4 jogos de titular efetivo, e
+nao 4 aparicoes.
 """
 from __future__ import annotations
 
@@ -69,7 +78,7 @@ SAVES = Metodo(
     slug="saves", label="Defesas de goleiro", coluna="saves",
     nomes_mercado=frozenset({"goalkeeper saves", "goalkeeper saves over/under",
                              "player saves", "saves"}),
-    min_atuacoes=3, min_amostra_adversario=5,
+    min_atuacoes=4, min_amostra_adversario=4,
     depende_do_adversario=True, coluna_do_adversario="shots_on",
     posicoes=frozenset({"G"}),
     rotulo_linha="{n} ou mais defesas", phi_congelado=3.19,
@@ -79,7 +88,7 @@ SHOTS_ON = Metodo(
     slug="shots_on", label="Chutes no alvo", coluna="shots_on",
     nomes_mercado=frozenset({"player shots on target", "shots on target",
                              "player shots on goal", "shots on target by player"}),
-    min_atuacoes=5,
+    min_atuacoes=4,
     rotulo_linha="{n} ou mais chutes no alvo",
 )
 
@@ -87,7 +96,7 @@ SHOTS = Metodo(
     slug="shots", label="Chutes", coluna="shots_total",
     nomes_mercado=frozenset({"player shots", "total shots by player",
                              "player total shots", "shots"}),
-    min_atuacoes=5,
+    min_atuacoes=4,
     rotulo_linha="{n} ou mais chutes",
 )
 
@@ -95,14 +104,14 @@ FOULS = Metodo(
     slug="fouls", label="Faltas cometidas", coluna="fouls_committed",
     nomes_mercado=frozenset({"player fouls committed", "fouls committed",
                              "player fouls"}),
-    min_atuacoes=6,
+    min_atuacoes=4,
     rotulo_linha="{n} ou mais faltas",
 )
 
 TACKLES = Metodo(
     slug="tackles", label="Desarmes", coluna="tackles_total",
     nomes_mercado=frozenset({"player tackles", "tackles", "player tackles made"}),
-    min_atuacoes=6,
+    min_atuacoes=4,
     rotulo_linha="{n} ou mais desarmes",
 )
 
@@ -114,7 +123,7 @@ PASSES = Metodo(
     # menor -- amostra curta ja' estima bem a media, mas a linha do mercado e'
     # alta e um jogo de substituicao (20 minutos) desloca muito. O filtro de
     # minutos em player_history e' o que segura isso; a amostra so' acompanha.
-    min_atuacoes=6,
+    min_atuacoes=4,
     rotulo_linha="{n} ou mais passes",
 )
 

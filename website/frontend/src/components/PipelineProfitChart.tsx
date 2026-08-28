@@ -46,11 +46,12 @@ const COR: Record<string, string> = {
   /* Mesmo âmbar do selo de Player Stats em utils/resultStyle · a cor é como o
      produto é reconhecido, e ela tem que ser a mesma em toda tela. */
   player_stats:'rgb(var(--c-amber-400))',
+  boost:       'rgb(var(--c-sky-400))',
 }
 const NOME: Record<string, string> = {
   vip: 'VIP', free: 'Free', multiplas: 'Múltiplas',
   alavancagem: 'Alavancagem', faltas: 'Faltas', goleiros: 'Defesas',
-  player_stats: 'Jogadores',
+  player_stats: 'Jogadores', boost: 'Pick Boost',
 }
 
 const fmtDia = (s: string) =>

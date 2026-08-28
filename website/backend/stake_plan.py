@@ -67,11 +67,22 @@ STAKE_PADRAO: dict[str, int] = {
     # na vitrine. Peso diferente pro sucessor faria o placar dar um degrau no
     # dia da troca, sem nada ter mudado na aposta.
     "player_stats": 3,
-    # Pick Boost nasce fora do placar publico (fase 1 = so' Admin, decisao do
-    # usuario em 27/08). Zero e' explicito de proposito: sem a chave ele cairia
-    # no STAKE_FALLBACK de 1u no dia em que alguem o incluisse numa consulta, e
-    # entraria no placar por descuido em vez de por decisao.
-    "boost":       0,
+    # Pick Boost publicado em 2026-08-28. Peso 2, entre a multipla (1) e os
+    # mercados proprios (3), e o meio nao e' indecisao:
+    #
+    #   e' um COMBINADO (Over 1.5 FT + Under 2.5 HT), e combinado quebra
+    #   inteiro quando uma perna erra -- por isso nao merece o peso de um pick
+    #   de perna unica;
+    #
+    #   mas as duas pernas sao do MESMO jogo e do MESMO evento (gols), com
+    #   probabilidade individual alta (piso de 72% e 70%) e faixa de odd curta
+    #   (1.30-2.30 no combinado). Nao e' a aposta de 3 pernas independentes que
+    #   justifica o peso 1 da multipla.
+    #
+    # Ate' 27/08 era 0, e o zero era explicito: fase 1 do produto era so' Admin,
+    # e sem a chave ele cairia no STAKE_FALLBACK de 1u no dia em que entrasse
+    # numa consulta -- entrando no placar por descuido em vez de por decisao.
+    "boost":       2,
     "multiplas":   1,
     # Zero = fora do placar de unidades. Ver o bloco no topo deste arquivo.
     "alavancagem": 0,

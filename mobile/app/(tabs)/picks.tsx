@@ -28,7 +28,7 @@ import { PickCard } from '../../src/components/PickCard'
 import { cores, espaco, raio } from '../../src/theme/tokens'
 import type { Pick } from '../../src/api/types'
 
-type Filtro = 'todos' | 'vip' | 'gratuito' | 'faltas' | 'player_stats' | 'goleiros'
+type Filtro = 'todos' | 'vip' | 'gratuito' | 'faltas' | 'player_stats' | 'boost' | 'goleiros'
 
 export default function Picks() {
   const router = useRouter()
@@ -45,6 +45,7 @@ export default function Picks() {
       { chave: 'gratuito', rotulo: 'Gratuito' },
       { chave: 'faltas', rotulo: 'Faltas' },
       { chave: 'player_stats', rotulo: 'Jogadores' },
+      { chave: 'boost', rotulo: 'Boost' },
     ]
     if ((dados?.goleiros?.length ?? 0) > 0) base.push({ chave: 'goleiros', rotulo: 'Defesas' })
     return base
@@ -61,14 +62,16 @@ export default function Picks() {
     const gratuito = dados.dica_do_dia ? marcar([dados.dica_do_dia], 'free') : []
     const faltas = marcar(dados.faltas, 'faltas')
     const playerStats = marcar(dados.player_stats, 'player_stats')
+    const boost = marcar(dados.boost, 'boost')
     const goleiros = marcar(dados.goleiros, 'goleiros')
 
     if (filtro === 'vip') return vip
     if (filtro === 'gratuito') return gratuito
     if (filtro === 'faltas') return faltas
     if (filtro === 'player_stats') return playerStats
+    if (filtro === 'boost') return boost
     if (filtro === 'goleiros') return goleiros
-    return [...gratuito, ...vip, ...faltas, ...playerStats, ...goleiros]
+    return [...gratuito, ...vip, ...faltas, ...playerStats, ...boost, ...goleiros]
   }, [dados, filtro])
 
   return (

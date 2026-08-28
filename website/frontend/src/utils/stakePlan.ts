@@ -25,8 +25,11 @@ export const STAKE_PADRAO: Record<string, number> = {
   // Player Stats herda o peso de goleiros · é o mesmo produto, o mesmo formato
   // de entrada e o mesmo lugar na vitrine. Ver o comentário no Python.
   player_stats: 3,
-  // Pick Boost está fora do placar público na fase 1 (só Admin).
-  boost:       0,
+  // Pick Boost publicado em 28/08 · peso 2, entre a múltipla (1) e os mercados
+  // próprios (3). É um COMBINADO e quebra inteiro quando uma perna erra, mas as
+  // duas pernas são do mesmo jogo e do mesmo evento, com probabilidade
+  // individual alta. Ver o comentário no Python, que é a fonte.
+  boost:       2,
   multiplas:   1,
   // O front usa a forma de rota ('multipla'); o backend, o nome da tabela
   // ('multiplas'). As duas chaves apontam pro mesmo peso pra que nenhum

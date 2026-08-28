@@ -884,13 +884,18 @@ def _uniao_de_picks(sql: str) -> set:
 # DUAS ficam, porque goleiros parou de crescer e nao de existir: apagar a fonte
 # apagaria o passado do produto do numero que a tela estampa.
 #
-# picks_boost NAO esta' aqui de proposito: o Pick Boost nasceu so' no Admin
-# (fase 1), com peso 0 em stake_plan.py. No dia em que ele for publicado, esta
-# constante e o peso mudam juntos -- se so' um mudar, este teste quebra, que e'
-# exatamente o servico dele.
+# picks_boost ENTROU em 2026-08-28. Ele nasceu so' no Admin (fase 1) com peso 0
+# em stake_plan.py, e a constante dizia que "no dia em que ele for publicado,
+# esta constante e o peso mudam juntos -- se so' um mudar, este teste quebra,
+# que e' exatamente o servico dele". Foi o que aconteceu: o peso virou 2 e a
+# fonte entrou aqui, na mesma mudanca.
+#
+# A regra continua valendo pro proximo motor: fonte no placar com peso 0
+# contaria acerto e nao contaria unidade, e o percentual descreveria um produto
+# que o lucro ignora.
 _FONTES_DO_PLACAR = {"picks_vip", "picks_free", "picks_multiplas",
                      "picks_alavancagem", "picks_faltas", "picks_goleiros",
-                     "picks_player_stats"}
+                     "picks_player_stats", "picks_boost"}
 #: Nome antigo, mantido pra nao reescrever as asserts uma a uma.
 _SEIS = _FONTES_DO_PLACAR
 
@@ -938,8 +943,12 @@ def test_banca_do_usuario_conta_os_dois_mercados():
     """
     import routers.banca as banca
 
-    assert set(banca._TABELAS_MERCADO) == {"faltas", "goleiros", "player_stats"}
+    assert set(banca._TABELAS_MERCADO) == {"faltas", "goleiros", "player_stats", "boost"}
     assert banca._TABELAS_MERCADO["player_stats"] == "picks_player_stats"
+    # Pick Boost entra aqui e nao no ramo de bilhete: apesar de combinar dois
+    # mercados, e' UM jogo, UMA odd e UMA linha em `picks_boost` -- o formato
+    # de picks_free, que e' o que este mapa exige.
+    assert banca._TABELAS_MERCADO["boost"] == "picks_boost"
     for fn in ("_compute_bankroll_current", "_compute_month_stats"):
         assert "_mercado_maps(cur, followed)" in _codigo("routers/banca.py", fn), \
             f"{fn} ignora os mercados"

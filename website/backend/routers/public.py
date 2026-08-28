@@ -230,8 +230,13 @@ _SUB_BUILDERS = {
     # de jogador. As duas ficam: goleiros parou de crescer, e apagar a fonte
     # apagaria o historico do produto do placar publico.
     #
-    # Pick Boost NAO entra: fase 1 e' so' Admin (peso 0 em stake_plan.py).
     "player_stats": _sub_mercado("picks_player_stats", "player_stats", "Player Stats"),
+    # Pick Boost publicado em 2026-08-28 · saiu da fase 1 (so' Admin) e entrou
+    # no placar junto com o peso 2 em stake_plan.py. As duas coisas mudam
+    # juntas de proposito: fonte no placar com peso 0 contaria acerto e nao
+    # contaria unidade, e o percentual descreveria um produto que o lucro
+    # ignora.
+    "boost":      _sub_mercado("picks_boost", "boost", "Pick Boost"),
 }
 
 def _build_union(date_cond: str, source: Optional[str]) -> str:
@@ -562,7 +567,8 @@ def public_results(
                 COUNT(*) FILTER (WHERE source = 'alavancagem') AS alavancagem_total,
                 COUNT(*) FILTER (WHERE source = 'faltas')     AS faltas_total,
                 COUNT(*) FILTER (WHERE source = 'goleiros')   AS goleiros_total,
-                COUNT(*) FILTER (WHERE source = 'player_stats') AS player_stats_total
+                COUNT(*) FILTER (WHERE source = 'player_stats') AS player_stats_total,
+                COUNT(*) FILTER (WHERE source = 'boost')        AS boost_total
             FROM (
                 SELECT 'vip'        AS source FROM picks_vip        WHERE result IS NOT NULL
                 UNION ALL
@@ -577,6 +583,8 @@ def public_results(
                 SELECT 'goleiros'   AS source FROM picks_goleiros   WHERE result IS NOT NULL
                 UNION ALL
                 SELECT 'player_stats' AS source FROM picks_player_stats WHERE result IS NOT NULL
+                UNION ALL
+                SELECT 'boost'      AS source FROM picks_boost      WHERE result IS NOT NULL
             ) AS t
         """)
 
@@ -659,7 +667,8 @@ def public_pick(pick_type: str, pick_id: int):
             # Mesmo contrato dos outros: teaser sem market nem reasoning, que
             # e o que o link compartilhado pode mostrar sem entregar a analise.
             tabela = {"faltas": "picks_faltas", "goleiros": "picks_goleiros",
-                      "player_stats": "picks_player_stats"}[pick_type]
+                      "player_stats": "picks_player_stats",
+                      "boost": "picks_boost"}[pick_type]
             cur.execute(f"""
                 SELECT id, match_date,
                        home_team AS home_team_name, away_team AS away_team_name,
@@ -717,6 +726,7 @@ def public_today_summary():
                 COUNT(*) FILTER (WHERE t.source = 'faltas')      AS faltas,
                 COUNT(*) FILTER (WHERE t.source = 'goleiros')    AS goleiros,
                 COUNT(*) FILTER (WHERE t.source = 'player_stats') AS player_stats,
+                COUNT(*) FILTER (WHERE t.source = 'boost')        AS boost,
                 COUNT(*)                                         AS total
             FROM (
                 SELECT 'vip'         AS source FROM picks_vip         WHERE match_date = {HOJE_BR}
@@ -732,11 +742,13 @@ def public_today_summary():
                 SELECT 'goleiros'    AS source FROM picks_goleiros    WHERE match_date = {HOJE_BR}
                 UNION ALL
                 SELECT 'player_stats' AS source FROM picks_player_stats WHERE match_date = {HOJE_BR}
+                UNION ALL
+                SELECT 'boost'      AS source FROM picks_boost      WHERE match_date = {HOJE_BR}
             ) t
         """)
         return dict(row) if row else {"vip": 0, "free": 0, "multiplas": 0,
                                       "alavancagem": 0, "faltas": 0, "goleiros": 0,
-                                      "player_stats": 0, "total": 0}
+                                      "player_stats": 0, "boost": 0, "total": 0}
     finally:
         cur.close()
         conn.close()
@@ -1066,6 +1078,7 @@ def public_leaderboard():
                         WHEN 'faltas'      THEN pfa.result
                         WHEN 'goleiros'    THEN pg.result
                         WHEN 'player_stats' THEN pps.result
+                        WHEN 'boost'       THEN pbo.result
                     END AS result,
                     CASE uf.pick_type
                         WHEN 'vip'         THEN COALESCE(pv.profit, 0)
@@ -1075,6 +1088,7 @@ def public_leaderboard():
                         WHEN 'faltas'      THEN COALESCE(pfa.profit, 0)
                         WHEN 'goleiros'    THEN COALESCE(pg.profit, 0)
                         WHEN 'player_stats' THEN COALESCE(pps.profit, 0)
+                        WHEN 'boost'       THEN COALESCE(pbo.profit, 0)
                         ELSE 0
                     END AS profit
                 FROM user_followed_picks uf
@@ -1093,6 +1107,7 @@ def public_leaderboard():
                 -- sem o JOIN e o CASE, a aposta do usuario num pick de jogador
                 -- conta na banca dele e some do ranking publico.
                 LEFT JOIN picks_player_stats pps ON pps.id = uf.pick_id AND uf.pick_type = 'player_stats'
+                LEFT JOIN picks_boost pbo ON pbo.id = uf.pick_id AND uf.pick_type = 'boost'
             ),
             user_stats AS (
                 SELECT
