@@ -176,27 +176,72 @@ class PlayerStatsCollectorService:
         print(f"[PLAYER_STATS] {total} linhas de jogador gravadas.")
         return total
 
-    def coletar_pendentes(self, limite: int = 50) -> int:
+    def coletar_pendentes(self, limite: int = 50, por_liga: int | None = None) -> int:
         """Fixtures ja finalizadas que ainda nao tem estatistica de jogador.
 
         Usa match_statistics como fonte de jogos encerrados -- e' a mesma
         tabela que o resto do projeto trata como registro permanente.
+
+        RODIZIO POR LIGA (2026-08-27)
+        -----------------------------
+        Ate' aqui era `ORDER BY match_date DESC LIMIT 50`, e com backlog isso
+        NAO e' um limite, e' um filtro: as 50 partidas mais recentes do banco
+        inteiro caem quase todas nas ligas que jogaram ontem. Liga que joga em
+        outro dia da semana nunca era alcancada enquanto a fila fosse maior que
+        o limite -- e ela sempre e', porque cada rodada acrescenta jogo novo no
+        topo enquanto o antigo espera embaixo.
+
+        O sintoma nao e' erro: e' o banco de jogador ficar com "muita liga
+        faltando" pra sempre, e o Player Stats so' publicar prop das duas ou
+        tres ligas de calendario mais denso.
+
+        O rodizio corta por LIGA: cada uma avanca `por_liga` partidas por
+        execucao, e a ordem dentro dela continua sendo a mais recente primeiro
+        (a API publica folha de jogo velho cada vez menos, mesma razao da
+        recoleta em lote do /admin). Assim toda liga da aba Ligas anda, mesmo
+        que devagar, em vez de umas andarem e outras nunca comecarem.
+
+        `por_liga=None` reparte o limite entre as ligas que TEM fila, com o
+        piso de 1: com 12 ligas pendentes e limite 50, sao 4 por liga.
         """
         conn = get_connection()
         cur = conn.cursor()
+
+        # Quantas ligas tem fila AGORA · e' o divisor do rodizio, e ele muda a
+        # cada execucao (liga que zerou sai, liga que jogou ontem entra).
         cur.execute("""
-            SELECT ms.fixture_id, ms.league_id, ms.season, ms.match_date
+            SELECT COUNT(DISTINCT ms.league_id)
             FROM match_statistics ms
             LEFT JOIN player_match_stats p ON p.fixture_id = ms.fixture_id
-            WHERE p.fixture_id IS NULL
-            ORDER BY ms.match_date DESC
+            WHERE p.fixture_id IS NULL AND ms.league_id IS NOT NULL
+        """)
+        ligas_com_fila = (cur.fetchone() or [0])[0] or 0
+
+        if por_liga is None:
+            por_liga = max(1, limite // ligas_com_fila) if ligas_com_fila else limite
+
+        cur.execute("""
+            SELECT fixture_id, league_id, season, match_date FROM (
+                SELECT ms.fixture_id, ms.league_id, ms.season, ms.match_date,
+                       ROW_NUMBER() OVER (PARTITION BY ms.league_id
+                                          ORDER BY ms.match_date DESC) AS ordem
+                  FROM match_statistics ms
+             LEFT JOIN player_match_stats p ON p.fixture_id = ms.fixture_id
+                 WHERE p.fixture_id IS NULL
+            ) t
+            WHERE t.ordem <= %s
+            -- Entre as ligas, a mais recente primeiro · quando o limite geral
+            -- corta antes do fim, ele corta o jogo mais velho, nao a liga mais
+            -- azarada da ordenacao.
+            ORDER BY t.match_date DESC
             LIMIT %s
-        """, (limite,))
+        """, (por_liga, limite))
         fixtures = [{"fixture_id": r[0], "league_id": r[1], "season": r[2], "match_date": r[3]}
                     for r in cur.fetchall()]
         cur.close()
         conn.close()
-        print(f"[PLAYER_STATS] {len(fixtures)} fixtures pendentes (limite {limite}).")
+        print(f"[PLAYER_STATS] {len(fixtures)} fixtures pendentes "
+              f"({ligas_com_fila} liga(s) com fila · ate' {por_liga} por liga · teto {limite}).")
         return self.coletar(fixtures)
 
 
