@@ -100,6 +100,12 @@ const PERIODOS = [
 const diaMes = (d?: string | null) =>
   d ? d.slice(5, 10).split('-').reverse().join('/') : '·'
 
+/** "2026-08-28T15:41:36-03:00" -> "15:41". Fatiado, nunca por `new Date`: o
+ *  backend já grava no fuso de Brasília (ver _relogio_do_watch em
+ *  routers/live_picks.py), e qualquer parse reintroduziria a conversão que
+ *  essa escolha existe justamente pra evitar. */
+const horaCurta = (iso?: string | null) => (iso ? iso.slice(11, 16) : '')
+
 export default function AdminMotorLive() {
   const [diag, setDiag]       = useState<Diagnostico | null>(null)
   const [run, setRun]         = useState<RunStatus | null>(null)
@@ -382,8 +388,8 @@ export default function AdminMotorLive() {
           <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
             {[
               { l: 'Rodadas', v: String(watch?.rodadas ?? 0) },
-              { l: 'Desde',   v: watch?.iniciado_em ?? '·' },
-              { l: 'Última',  v: watch?.ultima_rodada ?? 'primeira em curso' },
+              { l: 'Desde',   v: horaCurta(watch?.iniciado_em) || '·' },
+              { l: 'Última',  v: horaCurta(watch?.ultima_rodada) || 'primeira em curso' },
               {
                 l: 'Próxima em',
                 v: watch?.proxima_rodada_em == null ? 'rodando'
@@ -462,8 +468,8 @@ export default function AdminMotorLive() {
 
         {(run?.started_at || run?.finished_at) && (
           <p className="text-[11px] text-ink-4 mt-2">
-            {run.started_at && <>início {run.started_at}</>}
-            {run.finished_at && <> · fim {run.finished_at}</>}
+            {run.started_at && <>início {horaCurta(run.started_at)}</>}
+            {run.finished_at && <> · fim {horaCurta(run.finished_at)}</>}
             {run.returncode !== null && (
               <span className={run.returncode === 0 ? ' text-green-400' : ' text-red-400'}>
                 {' '}· saída {run.returncode}

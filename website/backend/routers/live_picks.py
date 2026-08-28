@@ -428,6 +428,97 @@ def feed(
     }
 
 
+#: Quanto tempo uma observação continua descrevendo "agora".
+#:
+#: O motor roda a cada 8 minutos no mínimo, e uma partida some da varredura
+#: quando acaba · sem janela, o painel mostraria o jogo de ontem como se ele
+#: ainda estivesse rolando. Uma hora é folgado o bastante pra sobreviver a uma
+#: rodada que falhou e curto o bastante pra não inventar jogo em andamento.
+_JANELA_EM_LEITURA_MIN = 60
+
+
+@router.get("/em-leitura")
+def em_leitura(current_user: dict = Depends(require_live_reader), limit: int = Query(12, ge=1, le=40)):
+    """As partidas que o motor Live LEU na última varredura, com o placar.
+
+    POR QUE ISTO EXISTE (2026-08-28, pedido do usuário)
+    ---------------------------------------------------
+    A aba Ao Vivo passa a maior parte do tempo mostrando "nenhuma oportunidade
+    ao vivo agora", e essa frase é verdadeira e vazia ao mesmo tempo: ela não
+    distingue "o motor varreu doze jogos e nenhum pagava" de "não há jogo
+    nenhum acontecendo". As duas leituras pedem reações opostas · esperar, ou
+    fechar o site. O aviso de motor ligado (28/08) resolveu metade disso; esta
+    rota resolve a outra, mostrando O QUE ele está olhando.
+
+    NÃO CUSTA REQUISIÇÃO DE API NENHUMA. A fonte é `live_match_observations`,
+    que o próprio motor grava a cada partida processada (ver
+    live_pipeline.gravar_observacao) · o número que aparece aqui é literalmente
+    o que ele leu, não uma segunda consulta que poderia divergir dele.
+
+    Só entram as partidas com status EM ANDAMENTO na última observação: jogo
+    encerrado dentro da janela já não é o que o motor está lendo.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        try:
+            cur.execute("""
+                WITH ultima AS (
+                    SELECT DISTINCT ON (fixture_id)
+                           fixture_id, minuto, status,
+                           goals_observado, corners_observado,
+                           shots_observado, shots_on_target_observado,
+                           red_cards_observado, observed_at
+                      FROM live_match_observations
+                     WHERE observed_at >= NOW() - (%s * INTERVAL '1 minute')
+                  ORDER BY fixture_id, observed_at DESC
+                )
+                SELECT u.fixture_id, u.minuto, u.status,
+                       u.goals_observado, u.corners_observado,
+                       u.shots_observado, u.shots_on_target_observado,
+                       u.red_cards_observado, u.observed_at::text AS lido_em,
+                       f.home_team, f.away_team,
+                       COALESCE(l.name, 'Liga ' || f.league_id::text) AS liga,
+                       -- Se o motor já publicou pick desta partida hoje. É o
+                       -- que separa "está olhando" de "já achou": sem isso, um
+                       -- jogo com pick vivo apareceria na lista de espera como
+                       -- se nada tivesse saído dele.
+                       EXISTS (SELECT 1 FROM picks_live p
+                                WHERE p.fixture_id = u.fixture_id
+                                  AND p.match_date >= (NOW() AT TIME ZONE
+                                      'America/Sao_Paulo')::date) AS tem_pick
+                  FROM ultima u
+             LEFT JOIN fixtures f ON f.fixture_id = u.fixture_id
+             LEFT JOIN leagues  l ON l.league_id  = f.league_id
+                 WHERE u.status = ANY(%s)
+              ORDER BY u.observed_at DESC, u.minuto DESC NULLS LAST
+                 LIMIT %s
+            """, (_JANELA_EM_LEITURA_MIN, list(LIVE_STATUSES), limit))
+            linhas = [dict(r) for r in cur.fetchall()]
+        except Exception as e:
+            conn.rollback()
+            # Banco que nunca rodou o motor Live não tem a tabela · não é
+            # defeito, é ambiente. Mesma saída do resto do módulo.
+            logger.info("[LIVE] em-leitura indisponivel: %s", str(e)[:200])
+            return {"disponivel": False, "partidas": []}
+    finally:
+        cur.close()
+        conn.close()
+
+    return {
+        "disponivel": True,
+        "janela_min": _JANELA_EM_LEITURA_MIN,
+        "total": len(linhas),
+        "partidas": linhas,
+        # O mesmo estado que o /feed devolve · a tela mostra os dois juntos, e
+        # duas chamadas trariam dois retratos de instantes diferentes.
+        "motor": {
+            "ligado": bool(_watch_state["ativo"]),
+            "ultima_rodada": _watch_state["ultima_rodada"],
+        },
+    }
+
+
 @router.get("/stats")
 def estatisticas(current_user: dict = Depends(require_live_reader)):
     """Performance do Live, SEPARADA da do pre-jogo.
@@ -649,7 +740,7 @@ def _dev_configurado() -> list[str]:
 
 
 async def _rodar(body: RunBody) -> None:
-    agora = lambda: datetime.now(timezone.utc).strftime("%H:%M:%S")
+    agora = _relogio_do_watch
     _run_status.update({"status": "running", "started_at": agora(),
                         "finished_at": None, "returncode": None, "error": None})
     diretorio = _pipeline_dir()
@@ -817,6 +908,25 @@ def reconciliar_watch_no_boot() -> dict | None:
     return dict(linha)
 
 
+#: O relógio do Motor Live · ISO COM DATA e no fuso de Brasília.
+#:
+#: Era `strftime("%H:%M:%S")` em UTC, e as duas escolhas erravam de formas que
+#: se escondiam:
+#:
+#:   · sem data, `horaCurta` no front (que fatia [11:16], como todo horário
+#:     deste projeto) lia string vazia · a aba Ao Vivo mostrava literalmente
+#:     "Última varredura às ." pro assinante;
+#:   · em UTC, o painel do admin exibia a string crua e o horário aparecia três
+#:     horas adiantado, sem nada na tela dizendo que era outro fuso.
+#:
+#: Gravado JÁ em Brasília de propósito: assim a fatia continua sendo a leitura
+#: certa e ninguém precisa converter fuso no cliente, que é a regra do projeto
+#: pra todo horário exibido.
+def _relogio_do_watch() -> str:
+    from zoneinfo import ZoneInfo
+    return datetime.now(ZoneInfo("America/Sao_Paulo")).isoformat(timespec="seconds")
+
+
 _watch_state: dict = {
     "ativo": False, "iniciado_em": None, "rodadas": 0, "falhas_seguidas": 0,
     "ultima_rodada": None, "proxima_rodada_em": None, "motivo_parada": None,
@@ -841,7 +951,7 @@ async def _laco_de_acompanhamento(intervalo_min: int, dry_run: bool,
     """Roda rodadas sucessivas até alguém desligar."""
     intervalo = max(_INTERVALO_MIN_MINUTOS, int(intervalo_min)) * 60
     body = RunBody(dry_run=dry_run, max_partidas=max_partidas)
-    agora = lambda: datetime.now(timezone.utc).strftime("%H:%M:%S")
+    agora = _relogio_do_watch
 
     try:
         while _watch_state["ativo"]:
@@ -909,7 +1019,7 @@ async def acompanhar_continuo(body: WatchBody, current_user: dict = Depends(requ
     dry_run = _resolver_dry_run(body.dry_run)
     _watch_state.update({
         "ativo": True,
-        "iniciado_em": datetime.now(timezone.utc).strftime("%H:%M:%S"),
+        "iniciado_em": _relogio_do_watch(),
         "rodadas": 0, "falhas_seguidas": 0, "motivo_parada": None,
         "ultima_rodada": None, "proxima_rodada_em": None,
         "intervalo_min": max(_INTERVALO_MIN_MINUTOS, int(body.intervalo_min)),

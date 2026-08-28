@@ -39,11 +39,12 @@
  */
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Radio, Timer, CheckCircle2, ChevronDown, PowerOff } from 'lucide-react'
+import { Radio, Timer, CheckCircle2, ChevronDown, PowerOff, Eye } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import ApostaModal from './ApostaModal'
-import { Badge, Button, EmptyState, ErrorState, LiveDot, ResultBadge, SkeletonPickGrid, StatTile } from './ui'
+import { Badge, Button, EmptyState, ErrorState, LiveDot, ResultBadge, Skeleton,
+         SkeletonPickGrid, StatTile } from './ui'
 import { PickProbability } from './PickCardParts'
 import { calcVipStake } from '../utils/stakeUtils'
 
@@ -57,9 +58,202 @@ import { calcVipStake } from '../utils/stakeUtils'
  * mesmo defeito que MAX_UNITS_POR_TIPO já corrigiu nos cards pré-jogo. */
 const MAX_UNIDADES_LIVE = 4
 
-/** "2026-08-27T21:04:12" -> "21:04". Fatiado e nunca por `new Date`: o
- *  timestamp do watch não carrega fuso, e o construtor de Date assume um. */
+/** "2026-08-28T21:04:12-03:00" -> "21:04". Fatiado e nunca por `new Date`:
+ *  o backend grava o relógio do motor já em Brasília (ver `_relogio_do_watch`
+ *  em routers/live_picks.py), e qualquer parse reintroduziria a conversão de
+ *  fuso que essa escolha existe pra evitar. */
 const horaCurta = (iso?: string | null) => (iso ? iso.slice(11, 16) : '')
+
+/** Uma linha de `live_match_observations` · o que o motor leu daquele jogo. */
+interface EmLeitura {
+  fixture_id: number
+  minuto: number | null
+  status: string | null
+  goals_observado: number | null
+  corners_observado: number | null
+  shots_observado: number | null
+  shots_on_target_observado: number | null
+  red_cards_observado: number | null
+  lido_em: string | null
+  home_team: string | null
+  away_team: string | null
+  liga: string | null
+  tem_pick: boolean
+}
+
+/* O PLACAR DO LIVE, dentro do "O que é" da aba · o mesmo bloco que os outros
+ * produtos ganharam em 28/08, só que desta fonte.
+ *
+ * Ele NÃO pode sair de /suggestions/stats/quick: aquele endpoint soma os oito
+ * pipelines de pré-jogo, e o Live é medido à parte de propósito (ver a
+ * docstring de live_picks.estatisticas · "juntar os dois é decisão de produto
+ * que ainda não foi tomada"). Puxar o número de lá rotularia de "Ao Vivo" um
+ * desempenho que não é dele.
+ */
+function PlacarDoLive() {
+  const [d, setD] = useState<any>(null)
+  const [pronto, setPronto] = useState(false)
+
+  useEffect(() => {
+    let vivo = true
+    api.get('/live-picks/stats')
+      .then(r => { if (vivo) setD(r.data) })
+      .catch(() => { /* placar é contexto, não conteúdo · falha em silêncio */ })
+      .finally(() => { if (vivo) setPronto(true) })
+    return () => { vivo = false }
+  }, [])
+
+  if (!pronto) {
+    return (
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-3" aria-busy="true">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Skeleton key={i} className="h-[4.5rem] rounded-md" />
+        ))}
+      </div>
+    )
+  }
+
+  const resolvidos = Number(d?.resolvidos ?? 0)
+  if (!d?.disponivel || resolvidos === 0) {
+    return (
+      <p className="text-[11px] text-ink-4 mt-3 leading-relaxed">
+        Nenhum pick ao vivo foi liquidado ainda · o placar aparece aqui assim que o
+        primeiro fechar.
+      </p>
+    )
+  }
+
+  const win = Number(d.win_rate ?? 0)
+  const lucro = Number(d.profit ?? 0)
+  const tiles = [
+    { label: 'Picks', value: String(resolvidos),          cor: 'text-ink-1' },
+    { label: 'Green', value: String(d.greens ?? 0),       cor: 'text-accent-ink' },
+    { label: 'Red',   value: String(d.reds ?? 0),         cor: 'text-red-400' },
+    { label: 'Win %', value: `${win}%`,                   cor: win >= 55 ? 'text-accent-ink' : 'text-ink-2' },
+    { label: 'Lucro', value: `${lucro >= 0 ? '+' : ''}${lucro.toFixed(1).replace('.', ',')}u`,
+      cor: lucro >= 0 ? 'text-accent-ink' : 'text-red-400' },
+  ]
+
+  return (
+    <div className="mt-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        {tiles.map(({ label, value, cor }) => (
+          <div key={label} className="bg-surface-1 border border-line rounded-md p-3 text-center">
+            <div className={`font-mono text-xl font-black tabular-nums ${cor}`}>{value}</div>
+            <div className="text-[10px] text-ink-3 mt-1">{label}</div>
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] text-red-400/70 mt-1.5 leading-relaxed">
+        Só do Ao Vivo · o placar do pré-jogo é medido à parte. Entra todo pick que o motor
+        gerou, seguido ou não: a taxa descreve o motor, não o que deu tempo de pegar.
+        {typeof d.minuto_medio === 'number' && ` Minuto médio de entrada: ${d.minuto_medio}'.`}
+      </p>
+    </div>
+  )
+}
+
+/* AS PARTIDAS QUE O MOTOR ESTÁ LENDO AGORA (28/08, pedido do usuário).
+ *
+ * A aba passa a maior parte do tempo dizendo "nenhuma oportunidade ao vivo
+ * agora", e essa frase é verdadeira e vazia ao mesmo tempo · ela não separa
+ * "varreu doze jogos e nenhum pagava" de "não tem jogo nenhum rolando". O
+ * aviso de motor ligado resolveu metade; isto resolve a outra, mostrando O QUE
+ * ele está olhando, com o placar de cada jogo.
+ *
+ * O número não custa requisição de API: sai de `live_match_observations`, que
+ * o próprio motor grava a cada partida processada. É literalmente o que ele
+ * leu · não uma segunda consulta que poderia divergir dele.
+ */
+function EmLeituraAgora({ isActive }: { isActive: boolean }) {
+  const [dados, setDados] = useState<{ partidas: EmLeitura[]; disponivel: boolean } | null>(null)
+  const timer = useRef<number | null>(null)
+
+  const carregar = useCallback(() => {
+    api.get('/live-picks/em-leitura')
+      .then(r => setDados(r.data))
+      .catch(() => setDados({ partidas: [], disponivel: false }))
+  }, [])
+
+  useEffect(() => {
+    if (!isActive) {
+      if (timer.current) { clearInterval(timer.current); timer.current = null }
+      return
+    }
+    carregar()
+    timer.current = window.setInterval(carregar, POLL_MS)
+    return () => { if (timer.current) clearInterval(timer.current) }
+  }, [isActive, carregar])
+
+  const partidas = dados?.partidas ?? []
+  if (!dados?.disponivel || partidas.length === 0) return null
+
+  return (
+    <div className="mb-6">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="w-1 h-4 rounded-full bg-red-400" />
+        <h3 className="text-sm font-bold text-ink-1 flex items-center gap-1.5">
+          <Eye className="w-3.5 h-3.5 text-red-400" />
+          Em leitura agora · {partidas.length}
+        </h3>
+      </div>
+      <p className="text-[11px] text-ink-4 mb-3 leading-relaxed">
+        Os jogos que o motor está acompanhando nesta varredura, com o que ele leu de cada
+        um · os números são o total da partida, os dois times somados. Ele só publica
+        quando ela se afasta do esperado e a odd paga por isso.
+      </p>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        {partidas.map(p => (
+          <div
+            key={p.fixture_id}
+            className={`rounded-lg border p-3 ${
+              p.tem_pick ? 'border-red-400/40 bg-red-500/5' : 'border-line bg-surface-1'}`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] text-ink-4 truncate">{p.liga ?? 'liga ?'}</span>
+              <span className="flex items-center gap-1.5 shrink-0">
+                {/* O minuto é o que faz a linha parecer viva · sem ele o
+                  * cartão descreve um jogo sem dizer em que ponto ele está. */}
+                <LiveDot tone="red" />
+                <span className="font-mono text-[11px] font-bold text-red-300 tabular-nums">
+                  {p.minuto != null ? `${p.minuto}'` : (p.status ?? '·')}
+                </span>
+              </span>
+            </div>
+
+            {/* Nomes sem número no meio: `live_match_observations` guarda o
+              * TOTAL da partida, e não o placar por lado · um número único
+              * entre os dois times seria lido como placar e mentiria em todo
+              * jogo que não está 0 a 0. O gol entra na fila de contadores
+              * abaixo, onde "total" é a leitura certa. */}
+            <p className="text-sm text-ink-2 mt-1 truncate">
+              {p.home_team ?? 'Time ?'}
+              <span className="text-ink-4 mx-1.5">x</span>
+              {p.away_team ?? 'Time ?'}
+            </p>
+
+            {/* Os contadores que o motor de fato usa pra decidir, todos como
+              * TOTAL da partida. Escanteio e chute no alvo primeiro porque são
+              * os dois mercados que ele publica. */}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-[10px] text-ink-4">
+              <span>gols <span className="font-mono text-ink-1 tabular-nums">{p.goals_observado ?? '·'}</span></span>
+              <span>escanteios <span className="font-mono text-ink-2 tabular-nums">{p.corners_observado ?? '·'}</span></span>
+              <span>no alvo <span className="font-mono text-ink-2 tabular-nums">{p.shots_on_target_observado ?? '·'}</span></span>
+              <span>chutes <span className="font-mono text-ink-2 tabular-nums">{p.shots_observado ?? '·'}</span></span>
+              {!!p.red_cards_observado && (
+                <span className="text-red-400 font-semibold">{p.red_cards_observado} vermelho(s)</span>
+              )}
+              {p.tem_pick && (
+                <span className="text-red-300 font-semibold ml-auto">já virou pick</span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 /** Unidades sugeridas pra ESTE pick e ESTA banca · a mesma conta do card VIP.
  *
@@ -653,7 +847,10 @@ export default function LivePicksFeed({ isActive, banca }: {
           A odd ao vivo muda rápido: o preço mostrado é o do instante da análise.{' '}
           <span className="font-bold text-ink-2">Confira o valor na casa antes de apostar.</span>
         </p>
+        <PlacarDoLive />
       </div>
+
+      <EmLeituraAgora isActive={isActive} />
 
       {/* O VAZIO PRECISA DIZER SE O MOTOR ESTÁ LIGADO.
         *
