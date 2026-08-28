@@ -113,6 +113,22 @@ interface Diagnostico {
   erro?: string
 }
 
+/** Médias de time que estão mais velhas que a última partida do time.
+ *
+ * `team_statistics` é o que o motor lê, e é DERIVADA de `match_statistics` ·
+ * derivada não se atualiza sozinha. Coletar a partida e não refazer a média
+ * deixa o motor lendo a média de ontem sobre um histórico de hoje, que é o pior
+ * dos dois mundos porque parece atualizado. */
+interface Medias {
+  disponivel: boolean
+  total: number
+  rodando: boolean
+  feitas: number
+  falhas: number
+  terminada_em?: string | null
+  erro?: string | null
+}
+
 /** Estado do lote de recoleta · vive na memória do processo do site. */
 interface Recoleta {
   rodando: boolean
@@ -250,6 +266,8 @@ export default function AdminDados() {
   const [corrigindoPlacar, setCorrigindoPlacar] = useState(false)
 
   const [diagnostico, setDiagnostico] = useState<Diagnostico | null>(null)
+  const [medias, setMedias] = useState<Medias | null>(null)
+  const [pedindoMedias, setPedindoMedias] = useState(false)
   const [recoleta, setRecoleta] = useState<Recoleta | null>(null)
   const [lote, setLote] = useState(20)
   const [pedindoLote, setPedindoLote] = useState(false)
@@ -409,6 +427,12 @@ export default function AdminDados() {
     }
   }
 
+  const buscarMedias = useCallback(() => {
+    api.get('/admin/dados/medias-velhas')
+      .then(r => setMedias(r.data))
+      .catch(() => setMedias(null))
+  }, [])
+
   const buscarRecoleta = useCallback(() => {
     api.get('/admin/dados/recoleta-status')
       .then(r => setRecoleta(r.data))
@@ -429,6 +453,7 @@ export default function AdminDados() {
     buscarBuracos()
     buscarDiagnostico(diagnostico?.meses ?? 12)
     buscarRecoleta()
+    buscarMedias()
     buscarArbitros(arbitros?.season, 0, buscaArbitro)
     buscarJogadores(jogadores?.season, mandoJogadores, ordenarJogadores, 0, buscaJogador, ligaJogadores)
   }
@@ -438,6 +463,22 @@ export default function AdminDados() {
   /* Enquanto o lote roda, a tela pergunta o estado. O intervalo é de 3s e não
    * de 1s de propósito: o trabalho é de segundos POR PARTIDA (duas requisições
    * à API cada), então pesquisar mais rápido só gera request sem novidade. */
+  /* Enquanto o recálculo roda, a tela pergunta o estado. Não custa API
+   * nenhuma do provedor · sai tudo do banco, então o intervalo pode ser curto
+   * sem o cuidado que a recoleta exige. */
+  useEffect(() => {
+    if (!medias?.rodando) return
+    const t = setInterval(() => {
+      api.get('/admin/dados/medias-velhas')
+        .then(r => {
+          setMedias(r.data)
+          if (!r.data?.rodando) api.get('/admin/dados').then(x => setDados(x.data)).catch(() => {})
+        })
+        .catch(() => {})
+    }, 2000)
+    return () => clearInterval(t)
+  }, [medias?.rodando])
+
   useEffect(() => {
     if (!recoleta?.rodando) return
     const t = setInterval(() => {
@@ -458,6 +499,20 @@ export default function AdminDados() {
     return () => clearInterval(t)
   }, [recoleta?.rodando, pagina, diagnostico?.meses, filtroPartidas?.chave,
       buscarHistorico, buscarBuracos, buscarDiagnostico])
+
+  const recalcularMedias = async () => {
+    setPedindoMedias(true)
+    setAviso(null)
+    try {
+      const r = await api.post('/admin/dados/medias-velhas')
+      setAviso({ fixture: -5, texto: r.data?.mensagem ?? 'Recálculo iniciado.', ok: true })
+      buscarMedias()
+    } catch (e) {
+      setAviso({ fixture: -5, texto: msgErro(e, 'Não deu pra iniciar.'), ok: false })
+    } finally {
+      setPedindoMedias(false)
+    }
+  }
 
   const dispararRecoleta = async () => {
     setPedindoLote(true)
@@ -891,6 +946,87 @@ export default function AdminDados() {
         <StatTile label="Picks VIP"        value={numero(dados.contagem?.picks_vip)} />
         <StatTile label="Picks free"       value={numero(dados.contagem?.picks_free)} />
       </div>
+
+      {/* Médias desatualizadas.
+        *
+        * `team_statistics` é o que o motor lê, e é DERIVADA de
+        * `match_statistics`. Derivada não se atualiza sozinha: coletar a
+        * partida e não refazer a média deixa o motor lendo a média de ontem
+        * sobre um histórico de hoje · o pior dos dois mundos, porque parece
+        * atualizado e não tem sintoma nenhum na tela.
+        *
+        * O cartão fica em Cobertura e não em Problemas de propósito: média
+        * velha por alguns minutos é o estado NORMAL entre a coleta e a próxima
+        * varredura, e um alerta que acende todo dia deixa de ser alerta. */}
+      {medias?.disponivel && (
+        <div className="card p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="text-sm font-bold text-ink-1">Médias de time</h3>
+              <p className="text-[11px] text-ink-4 mt-0.5 leading-relaxed">
+                {medias.total > 0
+                  ? <>
+                      <span className="text-yellow-400 font-semibold">
+                        {numero(medias.total)} time(s)
+                      </span>{' '}
+                      têm partida gravada depois da última vez que a média deles foi calculada ·
+                      é essa média que o motor lê. Recalcular não gasta requisição da API: sai tudo
+                      do banco.
+                    </>
+                  : <>Toda média está em dia com as partidas coletadas. O motor está lendo o
+                      número de agora.</>}
+              </p>
+              <p className="text-[10px] text-ink-4 mt-1.5 leading-relaxed">
+                Só entram os times que de fato mudaram · a varredura antiga refazia a conta de
+                todo time que tivesse jogado nos últimos 3 dias, tivesse mudado alguma coisa nele
+                ou não, e isso rodava no caminho de uma visita ao site.
+              </p>
+            </div>
+            {medias.total > 0 && !medias.rodando && (
+              <Button size="sm" variant="ghost" className="shrink-0"
+                      loading={pedindoMedias} onClick={recalcularMedias}>
+                <RefreshCw className="w-3.5 h-3.5" />
+                Atualizar as {numero(medias.total)}
+              </Button>
+            )}
+          </div>
+
+          {medias.rodando && (
+            <>
+              <div className="flex items-baseline justify-between gap-3 mt-3">
+                <p className="text-[11px] font-semibold text-ink-2">
+                  Recalculando {medias.feitas} de {medias.total}
+                </p>
+                {medias.falhas > 0 && (
+                  <p className="text-[10px] font-mono text-yellow-400">{medias.falhas} falha(s)</p>
+                )}
+              </div>
+              <div className="h-1.5 bg-surface-2 rounded-full overflow-hidden mt-2">
+                <div
+                  className="h-full bg-green-500 transition-all duration-1"
+                  style={{ width: `${Math.round((medias.feitas / Math.max(1, medias.total)) * 100)}%` }}
+                />
+              </div>
+              <p className="text-[10px] text-ink-4 mt-1.5">
+                Dá pra sair da aba · o recálculo continua no servidor.
+              </p>
+            </>
+          )}
+
+          {!medias.rodando && medias.terminada_em && (
+            <p className="text-[11px] text-green-400 mt-2">
+              Último recálculo: {medias.feitas} time(s)
+              {medias.falhas > 0 && ` · ${medias.falhas} falha(s)`}
+            </p>
+          )}
+          {medias.erro && <p className="text-[11px] text-red-400 mt-2">{medias.erro}</p>}
+          {aviso?.fixture === -5 && (
+            <p className={`text-[11px] mt-2 ${aviso.ok ? 'text-green-400' : 'text-red-400'}`}>
+              {aviso.texto}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Coleta automática · o que substituiu o clique manual. */}
       <div className="card p-4">

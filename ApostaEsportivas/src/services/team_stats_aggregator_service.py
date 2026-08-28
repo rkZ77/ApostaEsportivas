@@ -72,6 +72,45 @@ class TeamStatsAggregatorService:
         print("\n[TeamStatsAggregatorService] Finalizado.\n")
 
     ##########################################################################
+    # Atualiza SÓ o que ficou desatualizado (2026-08-27)
+    ##########################################################################
+    def update_stale_teams_statistics(self, limite: int = 0, progresso=None) -> dict:
+        """Recalcula a média só dos times cuja partida é mais nova que a média.
+
+        É o meio-termo que faltava entre reprocessar a temporada inteira
+        (`update_full_season_statistics`, que APAGA a tabela) e reprocessar todo
+        time que jogou nos últimos dias (`update_recent_teams_statistics`, que
+        refaz a conta de quem não mudou). Ver a docstring de
+        `TeamStatsReader.get_teams_with_stale_statistics`.
+
+        `progresso(feitos, total)` é chamado a cada time · o /admin usa pra
+        mostrar a barra sem precisar ler o stdout.
+
+        Não custa requisição de API nenhuma: tudo sai do banco.
+        """
+        alvos = self.reader.get_teams_with_stale_statistics(limite=limite)
+        total = len(alvos)
+        print(f"\n[TeamStatsAggregatorService] {total} time(s) com média desatualizada.\n")
+
+        feitos, falhas = 0, 0
+        for t in alvos:
+            try:
+                self.process_single_team(
+                    team_id=t["team_id"], league_id=t["league_id"], season=t["season"])
+            except Exception as e:
+                # Um time que falha não pode derrubar o lote · a média dele
+                # continua velha e ele volta na próxima passada, porque o
+                # critério é o estado do banco e não uma lista guardada.
+                falhas += 1
+                print(f"   ✖ Falha no time {t['team_id']}: {e}")
+            feitos += 1
+            if progresso:
+                progresso(feitos, total)
+
+        print(f"\n[TeamStatsAggregatorService] {feitos - falhas} de {total} atualizados.\n")
+        return {"total": total, "feitos": feitos, "falhas": falhas}
+
+    ##########################################################################
     # Processa seleção nacional · últimos N jogos (amistosos + Copa)
     ##########################################################################
     def process_national_team(self, team_id, season=2026, last_n=10):

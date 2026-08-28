@@ -110,6 +110,76 @@ class TeamStatsReader:
     ##########################################################################
     # UPSERT na team_statistics COM CONTEXT_TYPE
     ##########################################################################
+    def get_teams_with_stale_statistics(self, limite: int = 0):
+        """Times cuja MEDIA esta' mais velha que a ultima partida deles.
+
+        POR QUE ISTO EXISTE (2026-08-27)
+
+        As duas formas que havia eram grossas demais nas duas pontas:
+
+          update_full_season_statistics()      APAGA `team_statistics` inteira
+                                               e reprocessa todo time do banco;
+          update_recent_teams_statistics(3)    reprocessa todo time que teve
+                                               jogo nos ultimos 3 dias.
+
+        A segunda e' a que a varredura automatica usava, e ela refaz a conta de
+        um time mesmo quando NADA daquele time mudou na passada -- basta ele ter
+        jogado. Numa janela de tres dias cheia sao dezenas de times, cada um
+        custando duas leituras da temporada inteira e dois upserts com conexao
+        propria. O trabalho e' quase todo desperdicio, e ele acontece no
+        caminho de uma VISITA ao site.
+
+        Aqui a pergunta e' a exata: existe partida daquele time gravada DEPOIS
+        da ultima vez que a media dele foi escrita? Se nao existe, refazer a
+        conta produz o mesmo numero.
+
+        Custa zero requisicao de API -- e' comparacao de `last_updated` entre
+        duas tabelas que ja' tem a coluna.
+
+        Time SEM linha em `team_statistics` entra: media que nunca foi
+        calculada e' o caso mais desatualizado que existe, e o LEFT JOIN
+        devolveria NULL, que nao e' "menor que" nada em SQL.
+        """
+        conn = get_connection()
+        cur = conn.cursor()
+        # `team_statistics` tem uma linha por contexto (HOME/AWAY); a media do
+        # time so' esta' em dia quando A MAIS VELHA delas for mais nova que a
+        # ultima partida. MIN, portanto, e nao MAX.
+        cur.execute(f"""
+            WITH ultima_partida AS (
+                SELECT lado.team_id, ms.league_id, ms.season,
+                       MAX(ms.last_updated) AS gravada_em
+                  FROM match_statistics ms
+                  CROSS JOIN LATERAL (VALUES (ms.home_team_id), (ms.away_team_id))
+                       AS lado(team_id)
+                 WHERE lado.team_id IS NOT NULL
+                 GROUP BY lado.team_id, ms.league_id, ms.season
+            ),
+            media AS (
+                SELECT team_id, league_id, season, MIN(last_updated) AS calculada_em
+                  FROM team_statistics
+                 GROUP BY team_id, league_id, season
+            )
+            SELECT u.team_id, u.league_id, u.season
+              FROM ultima_partida u
+              -- INNER JOIN em `teams`: o mesmo recorte de
+              -- get_teams_with_recent_fixtures. Time nao cadastrado naquela
+              -- liga/temporada nao tem media pra atualizar.
+              JOIN teams t ON t.team_id = u.team_id
+                          AND t.league_id = u.league_id
+                          AND t.season = u.season
+              LEFT JOIN media m ON m.team_id = u.team_id
+                               AND m.league_id = u.league_id
+                               AND m.season = u.season
+             WHERE m.calculada_em IS NULL OR m.calculada_em < u.gravada_em
+             ORDER BY u.gravada_em DESC
+             {"LIMIT %s" if limite else ""}
+        """, (limite,) if limite else ())
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        return [{"team_id": r[0], "league_id": r[1], "season": r[2]} for r in rows]
+
     def upsert_team_statistics(self, team_id, league_id, season, stats):
 
         conn = get_connection()

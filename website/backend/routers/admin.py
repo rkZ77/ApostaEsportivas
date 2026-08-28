@@ -3794,6 +3794,108 @@ def lista_de_arbitros(
             "amostra_minima": 3}
 
 
+# ─── Médias desatualizadas ──────────────────────────────────────────────────
+#
+# `team_statistics` é o que o motor lê. Ela é derivada de `match_statistics`, e
+# derivada não se atualiza sozinha: coletar a partida e não refazer a média
+# deixa o motor lendo a média de ontem sobre um histórico de hoje · o pior dos
+# dois mundos, porque parece atualizado.
+#
+# As duas formas que existiam eram grossas demais nas duas pontas:
+#
+#   update_full_season_statistics()     APAGA a tabela inteira e reprocessa
+#                                       todo time do banco;
+#   update_recent_teams_statistics(3)   reprocessa todo time que TEVE JOGO nos
+#                                       últimos três dias, tenha algo mudado
+#                                       nele ou não.
+#
+# A segunda era a da varredura automática, e ela refaz a conta de dezenas de
+# times para produzir exatamente o mesmo número que já estava lá · no caminho
+# de uma visita ao site.
+#
+# `update_stale_teams_statistics` faz a pergunta exata: existe partida deste
+# time gravada DEPOIS da última vez que a média dele foi escrita? É comparação
+# de `last_updated` entre duas tabelas, custa zero requisição de API, e quando
+# nada mudou a resposta é uma lista vazia.
+#
+# Este botão é essa mesma operação na mão · serve pra quando alguém acabou de
+# preencher estatística à mão, ou rodou a recoleta em lote, e quer o motor
+# lendo o número novo sem esperar a próxima visita disparar a varredura.
+
+#: Estado do recálculo. Memória do processo, igual à recoleta: é acompanhamento
+#: de execução, não histórico.
+_medias: dict = {
+    "rodando": False, "total": 0, "feitas": 0, "falhas": 0,
+    "iniciada_em": None, "terminada_em": None, "erro": None,
+}
+_medias_lock = threading.Lock()
+
+
+def _contar_medias_velhas() -> dict:
+    """Quantos times têm a média mais velha que a última partida deles."""
+    try:
+        _no_path()
+        from services.team_stats_reader import TeamStatsReader
+        alvos = TeamStatsReader().get_teams_with_stale_statistics()
+        return {"disponivel": True, "total": len(alvos)}
+    except Exception as e:
+        logging.getLogger(__name__).warning("[ADMIN/MEDIAS] contagem: %s", e)
+        return {"disponivel": False, "total": 0, "erro": str(e)[:200]}
+
+
+@router.get("/dados/medias-velhas")
+def medias_velhas(current_user: dict = Depends(require_admin)):
+    estado = dict(_medias)
+    estado.update(_contar_medias_velhas())
+    return estado
+
+
+def _rodar_medias(limite: int) -> None:
+    try:
+        _no_path()
+        from services.team_stats_aggregator_service import TeamStatsAggregatorService
+
+        def progresso(feitos, total):
+            with _medias_lock:
+                _medias["feitas"] = feitos
+                _medias["total"] = total
+
+        resultado = TeamStatsAggregatorService().update_stale_teams_statistics(
+            limite=limite, progresso=progresso)
+        with _medias_lock:
+            _medias["total"] = resultado.get("total", 0)
+            _medias["feitas"] = resultado.get("feitos", 0)
+            _medias["falhas"] = resultado.get("falhas", 0)
+    except Exception as e:
+        logging.getLogger(__name__).error("[ADMIN/MEDIAS] lote: %s", e, exc_info=True)
+        with _medias_lock:
+            _medias["erro"] = str(e)[:200]
+    finally:
+        with _medias_lock:
+            _medias["rodando"] = False
+            _medias["terminada_em"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+@router.post("/dados/medias-velhas")
+def recalcular_medias_velhas(limite: int = 0, current_user: dict = Depends(require_admin)):
+    """Dispara o recálculo em segundo plano. `limite=0` = todos.
+
+    Em thread pelo mesmo motivo da recoleta: são duas leituras da temporada e
+    dois upserts POR TIME, e quem clicou não pode ficar segurando a requisição
+    até o fim. Diferente da recoleta, aqui não há cota de API envolvida.
+    """
+    with _medias_lock:
+        if _medias["rodando"]:
+            raise HTTPException(409, "Já há um recálculo em andamento.")
+        _medias.update({
+            "rodando": True, "total": 0, "feitas": 0, "falhas": 0, "erro": None,
+            "iniciada_em": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "terminada_em": None,
+        })
+    threading.Thread(target=_rodar_medias, args=(max(0, limite),), daemon=True).start()
+    return {"ok": True, "mensagem": "Recálculo iniciado."}
+
+
 # ─── Jogadores ──────────────────────────────────────────────────────────────
 #
 # A régua dos times e dos árbitros, aplicada ao jogador. `player_match_stats`

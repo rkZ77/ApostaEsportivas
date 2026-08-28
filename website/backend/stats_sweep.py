@@ -42,6 +42,11 @@ _INTERVALO = int(os.getenv("STATS_SWEEP_INTERVAL_SECONDS", "600"))
 #: sozinho: se a estatistica nao apareceu em tres dias, ela nao vai aparecer, e
 #: reconsultar viraria custo fixo e permanente. O botao do /admin continua
 #: varrendo sem janela.
+#:
+#: Vale so' pra COLETA. O recalculo de medias deixou de usar janela em
+#: 2026-08-27: ele pergunta quais medias estao velhas, e essa pergunta nao tem
+#: prazo -- uma partida coletada a mao hoje, de um jogo de duas semanas atras,
+#: precisa refazer a media do mesmo jeito.
 _JANELA_DIAS = int(os.getenv("STATS_SWEEP_MAX_AGE_DAYS", "3"))
 
 #: Teto de partidas por passada. O trabalho e' 1 requisicao por jogo; sem teto,
@@ -115,7 +120,7 @@ def _coletar() -> dict:
     from collectors.match_statistics_sync_service import MatchStatisticsSyncService
     from services.team_stats_aggregator_service import TeamStatsAggregatorService
 
-    resumo = {"partidas": 0, "times": 0}
+    resumo = {"partidas": 0, "times": 0, "falhas": 0}
 
     servico = MatchStatisticsSyncService()
     saida = servico.sync_pending_fixtures()
@@ -125,8 +130,26 @@ def _coletar() -> dict:
     # As medias TEM que ser recalculadas junto. Gravar a partida e nao
     # atualizar `team_statistics` deixa o motor lendo a media de ontem sobre um
     # historico de hoje -- o pior dos dois mundos, porque parece atualizado.
-    TeamStatsAggregatorService().update_recent_teams_statistics(days=_JANELA_DIAS)
-    resumo["times"] = -1  # o servico nao devolve contagem; -1 = "rodou"
+    #
+    # SO' O QUE MUDOU (2026-08-27). Ate' aqui era
+    # `update_recent_teams_statistics(days=3)`: todo time que TEVE JOGO nos
+    # ultimos tres dias, tenha a passada coletado alguma coisa dele ou nao.
+    # Numa janela cheia sao dezenas de times, cada um custando duas leituras da
+    # temporada inteira e dois upserts com conexao propria -- e quase tudo
+    # produzindo exatamente o mesmo numero que ja' estava la'. Pior: isso
+    # acontece no caminho de uma VISITA ao site.
+    #
+    # `update_stale_teams_statistics` pergunta a coisa exata: existe partida
+    # deste time gravada DEPOIS da ultima vez que a media dele foi escrita?
+    # Quando a passada nao coletou nada, a lista vem vazia e a varredura custa
+    # uma consulta em vez de dezenas de recalculos.
+    #
+    # O criterio e' o ESTADO DO BANCO, nao uma lista guardada em memoria: time
+    # que falhar volta sozinho na proxima passada, e uma coleta feita por outro
+    # caminho (o botao do /admin, o pipeline) tambem e' percebida aqui.
+    medias = TeamStatsAggregatorService().update_stale_teams_statistics()
+    resumo["times"] = medias.get("feitos", 0)
+    resumo["falhas"] = medias.get("falhas", 0)
     return resumo
 
 
