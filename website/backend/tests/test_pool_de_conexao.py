@@ -282,3 +282,85 @@ def test_shutdown_fecha_o_pool():
     import main
 
     assert "fechar_pool" in inspect.getsource(main.fechar_pool_hook)
+
+
+##############################################################################
+# Conexao MORTA no pool (2026-08-28)
+#
+# `ThreadedConnectionPool.getconn()` nao valida nada: devolve o objeto que
+# estiver na pilha. O Supabase derruba conexao parada. A primeira visita depois
+# de uma calmaria recebia uma conexao ja' morta e o request quebrava com
+# "server closed the connection unexpectedly" -- nao lento, QUEBRADO.
+#
+# `_devolver` ja' descartava conexao quebrada, mas so' na DEVOLUCAO: uma
+# conexao que morre esperando no pool nunca passa por la' antes de ser
+# entregue. E' o sintoma que o usuario relatou -- tela que carrega e tela que
+# nao carrega, sem mudar nada.
+##############################################################################
+
+def test_conexao_fechada_no_pool_nao_e_entregue(pool):
+    morta = pool.livres[-1]
+    morta.closed = 1
+
+    conn = _get_connection()
+
+    assert conn._conn is not morta
+    assert morta in pool.fechadas_ao_devolver
+
+
+def test_conexao_parada_ha_muito_tempo_e_testada_antes_de_entregar(pool, monkeypatch):
+    """Passou de `_PING_APOS` parada · vale uma ida ao banco pra confirmar."""
+    monkeypatch.setattr(database, "_PING_APOS", 0.0)
+
+    class _ConnQueResponde(_ConnFake):
+        def __init__(self):
+            super().__init__()
+            self.pingou = False
+
+        def cursor(self):
+            conn = self
+
+            class _Cur:
+                def __enter__(self_): return self_
+                def __exit__(self_, *a): return False
+                def execute(self_, *a): conn.pingou = True
+                def fetchone(self_): return (1,)
+            return _Cur()
+
+    viva = _ConnQueResponde()
+    pool.livres = [viva]
+    database._ociosas[id(viva)] = -1000.0   # parada ha muito tempo
+
+    conn = _get_connection()
+
+    assert conn._conn is viva
+    assert viva.pingou
+
+
+def test_conexao_que_falha_no_ping_e_descartada(pool, monkeypatch):
+    monkeypatch.setattr(database, "_PING_APOS", 0.0)
+
+    class _ConnMortaSilenciosa(_ConnFake):
+        def cursor(self):
+            raise database.psycopg2.OperationalError(
+                "server closed the connection unexpectedly")
+
+    podre = _ConnMortaSilenciosa()
+    boa = _ConnFake()
+    pool.livres = [boa, podre]              # `podre` sai primeiro (pop)
+    database._ociosas[id(podre)] = -1000.0
+
+    conn = _get_connection()
+
+    assert conn._conn is boa
+    assert podre in pool.fechadas_ao_devolver
+
+
+def test_conexao_recem_devolvida_nao_paga_ping(pool):
+    """O teste custa uma ida ao banco · so' vale pra conexao que ficou parada."""
+    recente = pool.livres[-1]
+    database._ociosas[id(recente)] = database.time.monotonic()
+
+    conn = _get_connection()   # _ConnFake.cursor() levanta se for consultada
+
+    assert conn._conn is recente

@@ -7,47 +7,73 @@ quanto para clubes -- national_team_profile_service.py nao e alterado."""
 from services.pick_engine.stats_model import offensive_efficiency
 
 
+#: Rótulo do perfil -> coluna de `match_statistics`, sem o prefixo home_/away_.
+_CAMPOS_TATICOS = {
+    "possession": "possession",
+    "shots": "total_shots",
+    "shots_on": "shots_on",
+    "passes": "passes",
+    "pass_accuracy": "passes_accuracy",
+    "corners": "corners",
+    "fouls": "fouls",
+}
+
+
 def tactical_patterns(matches: list, team_id: int) -> dict:
+    """Perfil tático do time a partir das partidas cruas.
+
+    CADA MÉDIA DIVIDE PELOS JOGOS EM QUE O CONTADOR EXISTE (2026-08-28).
+
+    Antes isto somava `m.get(campo) or 0` e dividia tudo por `count`, e o
+    estrago aqui é maior que uma média torta: `_determine_playing_style` lê a
+    posse de bola pra classificar o time, e posse é justamente o campo que
+    NUNCA pode virar zero (utils/stat_sheet._NUNCA_ZERO -- posse 0% num jogo
+    que aconteceu é impossível). Um único jogo sem folha derrubava a média de
+    posse abaixo dos 45%, e o time era rotulado "Contra-ataque rápido" por
+    causa de uma partida em que o provedor não publicou estatística.
+    """
     if not matches:
         return _default_tactical_profile()
 
-    total_possession = total_shots = total_shots_on = 0
-    total_passes = total_pass_accuracy = total_corners = total_fouls = 0
+    somas = {chave: 0.0 for chave in _CAMPOS_TATICOS}
+    amostras = {chave: 0 for chave in _CAMPOS_TATICOS}
     count = 0
 
     for m in matches:
-        is_home = m["home_team_id"] == team_id
-        if is_home:
-            total_possession += m.get("home_possession") or 0
-            total_shots += m.get("home_total_shots") or 0
-            total_shots_on += m.get("home_shots_on") or 0
-            total_passes += m.get("home_passes") or 0
-            total_pass_accuracy += m.get("home_passes_accuracy") or 0
-            total_corners += m.get("home_corners") or 0
-            total_fouls += m.get("home_fouls") or 0
-        else:
-            total_possession += m.get("away_possession") or 0
-            total_shots += m.get("away_total_shots") or 0
-            total_shots_on += m.get("away_shots_on") or 0
-            total_passes += m.get("away_passes") or 0
-            total_pass_accuracy += m.get("away_passes_accuracy") or 0
-            total_corners += m.get("away_corners") or 0
-            total_fouls += m.get("away_fouls") or 0
+        prefixo = "home" if m["home_team_id"] == team_id else "away"
+        for chave, coluna in _CAMPOS_TATICOS.items():
+            valor = m.get(f"{prefixo}_{coluna}")
+            if valor is None:
+                continue
+            somas[chave] += float(valor)
+            amostras[chave] += 1
         count += 1
 
     if count == 0:
         return _default_tactical_profile()
 
-    avg_possession = total_possession / count
-    avg_shots = total_shots / count
-    avg_shots_on = total_shots_on / count
-    avg_passes = total_passes / count
-    avg_pass_accuracy = total_pass_accuracy / count
-    avg_corners = total_corners / count
-    avg_fouls = total_fouls / count
+    def media(chave):
+        n = amostras[chave]
+        return (somas[chave] / n) if n else 0
+
+    avg_possession = media("possession")
+    avg_shots = media("shots")
+    avg_shots_on = media("shots_on")
+    avg_passes = media("passes")
+    avg_pass_accuracy = media("pass_accuracy")
+    avg_corners = media("corners")
+    avg_fouls = media("fouls")
+
+    # Sem UM jogo com posse publicada não dá pra falar de estilo: o
+    # classificador leria zero e devolveria "Contra-ataque rápido" pra
+    # qualquer time.
+    style = (_determine_playing_style(avg_possession, avg_shots, avg_passes)
+             if amostras["possession"] else "Dados insuficientes")
+    pressing = (_determine_pressing_intensity(avg_fouls, avg_possession)
+                if amostras["fouls"] and amostras["possession"] else "Desconhecida")
 
     return {
-        "style": _determine_playing_style(avg_possession, avg_shots, avg_passes),
+        "style": style,
         "avg_possession": round(avg_possession, 1),
         "avg_shots": round(avg_shots, 1),
         "avg_shots_on_target": round(avg_shots_on, 1),
@@ -56,7 +82,10 @@ def tactical_patterns(matches: list, team_id: int) -> dict:
         "avg_pass_accuracy": round(avg_pass_accuracy, 1),
         "avg_corners": round(avg_corners, 1),
         "avg_fouls": round(avg_fouls, 1),
-        "pressing_intensity": _determine_pressing_intensity(avg_fouls, avg_possession),
+        "pressing_intensity": pressing,
+        # Quantos jogos sustentam cada média · o perfil de um time com 10 jogos
+        # e posse publicada em 3 não é o mesmo objeto que o de 10 em 10.
+        "amostra_por_campo": amostras,
     }
 
 

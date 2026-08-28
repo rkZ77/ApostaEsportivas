@@ -1407,6 +1407,42 @@ _BASELINE_KEYS = {
 }
 
 
+#: Familia -> chave dentro de `team_statistics.games_by_stat`. Cartoes le' as
+#: duas contagens porque a metrica e' amarelo + 2*vermelho: a amostra honesta e'
+#: a MENOR das duas, ja' que um jogo so' sustenta o ponto de cartao se tiver os
+#: dois contadores.
+_FAMILIA_NA_AMOSTRA = {
+    "goals":   ("goals",),
+    "corners": ("corners",),
+    "fouls":   ("fouls",),
+    "saves":   ("saves",),
+    "cards":   ("yellow", "red"),
+}
+
+
+def _amostra_da_familia(team_stats: dict, family: str) -> int:
+    """Quantos jogos sustentam ESTA familia na linha de `team_statistics`.
+
+    `games_count` conta os jogos do time no mando, e nao os jogos em que aquele
+    contador foi publicado. Os dois divergem sempre que a folha da partida vem
+    incompleta, e usar o primeiro faz o encolhimento (`shrink_to_baseline`)
+    acreditar numa amostra maior do que a que ele tem -- ou seja, encolher de
+    menos justamente na media que merecia encolher mais.
+
+    `games_by_stat` e' NULL nas linhas gravadas antes de 2026-08-28. Ali o
+    fallback e' `games_count`, que e' o comportamento antigo: linha velha nao
+    fica pior do que ja' era, e a primeira reagregacao do time corrige.
+    """
+    amostra = team_stats.get("games_by_stat")
+    if not isinstance(amostra, dict):
+        return int(team_stats.get("games_count") or 0)
+    chaves = _FAMILIA_NA_AMOSTRA.get(family)
+    if not chaves:
+        return int(team_stats.get("games_count") or 0)
+    valores = [int(amostra.get(c) or 0) for c in chaves]
+    return min(valores) if valores else 0
+
+
 def scored_conceded_from_team_stats(team_stats: dict | None, family: str):
     """(feitos, cedidos, amostra) de uma linha de `team_statistics`, ou
     (None, None, 0) se a familia nao estiver mapeada / a linha nao servir.
@@ -1417,7 +1453,9 @@ def scored_conceded_from_team_stats(team_stats: dict | None, family: str):
     ver _TEAM_STATS_SHRINK_K."""
     if not team_stats or not team_stats.get("games_count"):
         return None, None, 0
-    n = int(team_stats["games_count"])
+    n = _amostra_da_familia(team_stats, family)
+    if not n:
+        return None, None, 0
 
     if family == "cards":
         try:

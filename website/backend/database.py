@@ -134,7 +134,12 @@ def get_direct_connection():
 # NAO SE TROCOU NENHUM DOS 122 CHAMADORES. get_connection() devolve um proxy
 # cujo .close() DEVOLVE ao pool em vez de fechar. E' o retrofit padrao pra isso:
 # a alternativa seria reescrever 122 lugares e depender de ninguem esquecer um.
-_POOL_MIN = int(os.getenv("DB_POOL_MIN", "1"))
+# Conexoes abertas JA NO STARTUP. Era 1, e o custo disso aparece na primeira
+# rajada: abrir conexao custa ~1000ms medidos contra ~150ms da consulta, entao
+# os outros nove slots do pool eram pagos um a um, por requisicoes de
+# visitante. Tres deixa o comeco de uma visita quente sem prender capacidade
+# que o motor tambem usa.
+_POOL_MIN = int(os.getenv("DB_POOL_MIN", "3"))
 # Teto conservador: o Supabase limita conexoes por projeto, e o pool concorre
 # com os scripts do motor, que abrem as proprias. Subir isto sem olhar o limite
 # do plano troca lentidao por "too many connections", que e' pior.
@@ -154,12 +159,20 @@ _FALLBACK_MAX = int(os.getenv("DB_FALLBACK_MAX", "5"))
 #: sempre termina. Sem ele o teto vira laco infinito quando o pool nao vaga.
 _PRAZO_MAXIMO = float(os.getenv("DB_PRAZO_MAXIMO", "8"))
 
+#: Depois de quanto tempo PARADA no pool uma conexao precisa ser testada antes
+#: de ser entregue. Ver `_viva`.
+_PING_APOS = float(os.getenv("DB_PING_APOS", "45"))
+
 _pool = None
 _pool_lock = threading.Lock()
+#: id(conexao) -> instante em que ela voltou pro pool. Chave por id porque
+#: conexao de psycopg2 nao e' hashable de forma estavel entre versoes, e o
+#: dicionario e' limpo quando a conexao e' descartada.
+_ociosas: dict = {}
 _fallback_lock = threading.Lock()
 _pool_stats = {"reusos": 0, "aberturas": 0, "fallback": 0,
                "fallback_em_uso": 0, "fallback_negado": 0,
-               "fallback_acima_do_teto": 0}
+               "fallback_acima_do_teto": 0, "descartadas": 0}
 
 
 def _obter_pool():
@@ -262,6 +275,52 @@ class _ConexaoDireta:
                     0, _pool_stats["fallback_em_uso"] - 1)
 
 
+def _viva(conn) -> bool:
+    """A conexao entregue pelo pool ainda serve?
+
+    O DEFEITO QUE ISTO FECHA (2026-08-28)
+
+    `ThreadedConnectionPool.getconn()` NAO valida nada: devolve o objeto que
+    estiver na pilha. O Supabase, do outro lado, derruba conexao parada. O
+    resultado e' que a primeira visita depois de um periodo de calmaria recebia
+    uma conexao ja' morta e o request quebrava com "server closed the
+    connection unexpectedly" -- nao lento, quebrado.
+
+    `_devolver` ja' descartava conexao quebrada, mas so' na DEVOLUCAO. Uma
+    conexao que morre enquanto espera no pool nunca passa por la' antes de ser
+    entregue.
+
+    O teste e' barato e proporcional: `closed` e' um atributo local, custa
+    zero, e pega o caso comum. O `SELECT 1` custa uma ida ao banco, entao so'
+    roda quando a conexao passou mais de `_PING_APOS` segundos parada -- que e'
+    exatamente quando ela pode ter sido derrubada sem ninguem saber.
+    """
+    if getattr(conn, "closed", 0):
+        return False
+    parada_desde = _ociosas.get(id(conn))
+    if parada_desde is None or (time.monotonic() - parada_desde) < _PING_APOS:
+        return True
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1")
+            cur.fetchone()
+        return True
+    except Exception:
+        return False
+
+
+def _descartar(conn) -> None:
+    """Tira do pool uma conexao que nao serve mais."""
+    _ociosas.pop(id(conn), None)
+    try:
+        _obter_pool().putconn(conn, close=True)
+    except Exception:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
 def _devolver(conn) -> None:
     """Devolve ao pool deixando a sessao limpa.
 
@@ -279,6 +338,9 @@ def _devolver(conn) -> None:
             conn.rollback()
     except Exception:
         quebrada = True
+    _ociosas[id(conn)] = time.monotonic()
+    if quebrada:
+        _ociosas.pop(id(conn), None)
     try:
         _obter_pool().putconn(conn, close=quebrada)
     except Exception:
@@ -323,6 +385,19 @@ def get_connection():
     while True:
         try:
             conn = _obter_pool().getconn()
+            # Conexao morta no pool nao e' erro do request que a pegou · ver
+            # `_viva`. Descarta e tenta a proxima, sem sair do laco.
+            if not _viva(conn):
+                _pool_stats["descartadas"] += 1
+                _descartar(conn)
+                # O laco termina sozinho -- cada descarte encolhe o pool e o
+                # proximo getconn abre conexao nova -- mas o prazo continua
+                # valendo aqui tambem: nenhum caminho desta funcao pode ficar
+                # girando enquanto alguem espera a tela carregar.
+                if time.monotonic() < prazo_maximo:
+                    continue
+                return _ConexaoDireta(get_direct_connection())
+            _ociosas.pop(id(conn), None)
             _pool_stats["reusos"] += 1
             return _ConexaoDoPool(conn)
         except psycopg2.pool.PoolError:
