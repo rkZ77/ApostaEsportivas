@@ -542,7 +542,7 @@ export default function OnboardingTour() {
                 (e melhor ainda do que desenhar um card falso no lugar). */}
             {step.alvos && semDestaque && !procurando && (
               <p className="text-[11px] text-ink-4 leading-relaxed border-l-2 border-line-strong pl-2.5">
-                Esta parte da tela ainda não tem nada para mostrar na sua conta. Ela
+                Esta parte da tela ainda não tem nada para mostrar na sua conta, e
                 aparece aqui assim que houver conteúdo.
               </p>
             )}

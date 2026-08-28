@@ -138,7 +138,7 @@ export function useShareTodayGamesImage() {
       const shareUrl = `${window.location.origin}/${refCode ? `?ref=${refCode}` : ''}`
       const blob = await buildTodayGamesStoryImage({ games, shareUrl, variant })
       const text = variant === 'amanha'
-        ? `A IA da Pick IA vai analisar ${games.length} jogo(s) amanhã. Os picks saem às 7h.`
+        ? `A IA da Pick IA vai analisar ${games.length} jogo(s) amanhã. Os picks saem sem hora marcada, quando passam no corte.`
         : `A IA da Pick IA já analisou ${games.length} jogo(s) de hoje e os picks já estão no ar.`
       const filename = variant === 'amanha' ? 'pick-ia-jogos-amanha.png' : 'pick-ia-jogos-hoje.png'
       const title = variant === 'amanha' ? 'Pick IA · Jogos de amanhã' : 'Pick IA · Jogos de hoje'

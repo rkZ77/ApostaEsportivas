@@ -3591,7 +3591,7 @@ export default function Picks() {
               {boost === null && todayLoading ? (
                 <PickLoading />
               ) : boostFree.length === 0 ? (
-                <SecaoVazia texto="Sem Pick Boost hoje. Ele só publica quando o jogo é forte nas duas pernas ao mesmo tempo, e isso não acontece todo dia." />
+                <SecaoVazia texto="Sem Pick Boost hoje, porque o motor só publica quando o jogo é forte nas duas pernas ao mesmo tempo, e isso não acontece todo dia." />
               ) : (
                 <div className="lista-longa grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                   {boostFree.map(p => (

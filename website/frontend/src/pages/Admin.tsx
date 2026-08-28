@@ -1677,7 +1677,7 @@ export default function Admin() {
             <h2 className="text-xs font-semibold text-ink-3 mb-1">Cadastrar liga</h2>
             <p className="text-xs text-ink-3 mb-3 leading-relaxed">
               O ID é o da API-Football (ex.: 71 = Brasileirão Série A). O nome é
-              buscado automaticamente, só preencha se a validação estiver fora.
+              buscado automaticamente, só preencha se a validação estiver fora do ar.
             </p>
             <div className="grid gap-2 sm:grid-cols-4">
               <input className="input" placeholder="ID da liga" inputMode="numeric"

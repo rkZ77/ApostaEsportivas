@@ -204,8 +204,8 @@ function EmLeituraAgora({ isActive }: { isActive: boolean }) {
       </div>
       <p className="text-[11px] text-ink-4 mb-3 leading-relaxed">
         Os jogos que o motor está acompanhando nesta varredura, com o que ele leu de cada
-        um · os números são o total da partida, os dois times somados. Ele só publica
-        quando ela se afasta do esperado e a odd paga por isso.
+        um · os números são o total da partida, os dois times somados, e ele só publica
+        quando a leitura se afasta do esperado e a odd paga por isso.
       </p>
 
       <div className="grid gap-2 sm:grid-cols-2">

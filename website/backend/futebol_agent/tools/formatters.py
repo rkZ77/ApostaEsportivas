@@ -85,7 +85,7 @@ def _append_eligible_sections(result: str, markets: dict) -> str:
     if eligible:
         result += f"\n\nELEGÍVEIS ANÁLISE ({ODDS_MIN}–{ODDS_MAX}):\n" + "\n".join(eligible)
     else:
-        result += f"\n\nELEGÍVEIS ANÁLISE ({ODDS_MIN}–{ODDS_MAX}): nenhuma odd neste range. Nao sugira entradas."
+        result += f"\n\nELEGÍVEIS ANÁLISE ({ODDS_MIN}–{ODDS_MAX}): nenhuma odd neste range. Não sugira entradas."
     return result
 
 

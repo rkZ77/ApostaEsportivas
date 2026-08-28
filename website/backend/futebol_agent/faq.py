@@ -139,7 +139,7 @@ _FAQ: list[dict] = [
         "resposta": (
             "Não há cobrança recorrente automática: cada plano é um pagamento único com validade "
             "própria (30, 90, 180 ou 365 dias) que expira sozinho ao final do período. Não precisa "
-            "cancelar nada — se quiser continuar VIP depois, é só renovar."
+            "cancelar nada: se quiser continuar VIP depois, é só renovar."
         ),
     },
     {

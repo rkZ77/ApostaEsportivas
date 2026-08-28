@@ -137,7 +137,8 @@ export default function AdminPendencias() {
             <p className="text-[11px] text-ink-4 mt-1 leading-relaxed">
               Havia um bug que, ao fechar uma múltipla no RED, marcava RED em <b>todas</b> as
               pernas dela, inclusive nas que ganharam ou nem tinham jogado. O bilhete estava
-              certo (uma perna perdida mata a múltipla), o detalhe é que estava errado.
+              certo (uma perna perdida mata a múltipla), e o que ficou errado foi o detalhe
+              de cada perna.
               <br /><br />
               Este botão relê cada perna dos bilhetes já fechados e reescreve só o detalhe.
               Ele <b>não</b> mexe no resultado nem no lucro do bilhete, então sua banca não
