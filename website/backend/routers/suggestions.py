@@ -1736,9 +1736,52 @@ def get_multiplas(
         conn.close()
 
 
+#: (chave, tabela). A chave e' a mesma de STAKE_PADRAO e a mesma que
+#: /public/results aceita em `source`, de proposito: dois nomes pro mesmo
+#: recorte e' como duas telas passam a discordar sem ninguem perceber.
+_FONTES_DO_PLACAR = [
+    ("vip",          "picks_vip"),
+    ("free",         "picks_free"),
+    ("multiplas",    "picks_multiplas"),
+    ("alavancagem",  "picks_alavancagem"),
+    ("faltas",       "picks_faltas"),
+    ("goleiros",     "picks_goleiros"),
+    # Player Stats (27/08), sucessor de picks_goleiros. As duas entram:
+    # goleiros parou de crescer, e o passado dela continua valendo no placar.
+    ("player_stats", "picks_player_stats"),
+    # Pick Boost entra com peso 0 em stake_plan -- fase 1 e' so' Admin.
+    ("boost",        "picks_boost"),
+]
+
+#: Apelidos aceitos em `source`. `multipla` no singular e' o nome que
+#: /public/results usa na quebra por fonte, e quem chama de la' nao tem por que
+#: descobrir que aqui o plural manda.
+_APELIDOS_DE_FONTE = {"multipla": "multiplas", "dica": "free", "pick_seguro": "free"}
+
+
+def _fontes(source: str | None) -> list[tuple[str, str]]:
+    """As tabelas que entram no placar. `None`/`all` = todas."""
+    if not source or source == "all":
+        return _FONTES_DO_PLACAR
+    alvo = _APELIDOS_DE_FONTE.get(source, source)
+    return [f for f in _FONTES_DO_PLACAR if f[0] == alvo] or _FONTES_DO_PLACAR
+
+
 @router.get("/stats/quick")
-def get_quick_stats(current_user: dict = Depends(get_current_user)):
-    """Win rate geral, lucro total, sequência atual."""
+def get_quick_stats(
+    source: str | None = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """Win rate, lucro e sequência · de todos os pipelines ou de um só.
+
+    `source` existe desde 28/08 porque a tela de Picks precisava, dentro do
+    "O que é" de cada produto, do numero DAQUELE produto · o bloco do Free
+    anunciava "Diário / 1 por dia / Grátis", tres rotulos que nunca mudam e
+    nao dizem se o pick de ontem entrou ou nao. O recorte sai daqui, e nao de
+    uma conta no front, pelo motivo de sempre: o peso de stake mora em
+    stake_plan.py, e o numero do recorte tem que ser o mesmo numero do total,
+    so' que filtrado.
+    """
     conn = get_connection()
     cur = conn.cursor()
     try:
@@ -1759,6 +1802,12 @@ def get_quick_stats(current_user: dict = Depends(get_current_user)):
         # O peso entra aqui pelo MESMO dicionario que /public/results usa -- com
         # a tabela escrita duas vezes, a tela de Picks e a Home passariam a
         # discordar sobre o lucro da IA sem ninguem perceber.
+        fontes = _fontes(source)
+        uniao = "\n                UNION ALL\n".join(
+            f"                SELECT result, profit * {STAKE_PADRAO[chave]} AS profit"
+            f" FROM {tabela}"
+            for chave, tabela in fontes
+        )
         month_row = _safe_query_one(cur, f"""
             SELECT
                 COUNT(*) FILTER (WHERE result IS NOT NULL)   AS total,
@@ -1766,25 +1815,7 @@ def get_quick_stats(current_user: dict = Depends(get_current_user)):
                 COUNT(*) FILTER (WHERE result = 'RED')       AS reds,
                 COALESCE(SUM(profit) FILTER (WHERE result IS NOT NULL), 0) AS profit
             FROM (
-                SELECT result, profit * {STAKE_PADRAO['vip']} AS profit FROM picks_vip
-                UNION ALL
-                SELECT result, profit * {STAKE_PADRAO['free']} AS profit FROM picks_free
-                UNION ALL
-                SELECT result, profit * {STAKE_PADRAO['multiplas']} AS profit FROM picks_multiplas
-                UNION ALL
-                SELECT result, profit * {STAKE_PADRAO['alavancagem']} AS profit FROM picks_alavancagem
-                UNION ALL
-                SELECT result, profit * {STAKE_PADRAO['faltas']} AS profit FROM picks_faltas
-                UNION ALL
-                SELECT result, profit * {STAKE_PADRAO['goleiros']} AS profit FROM picks_goleiros
-                UNION ALL
-                -- Player Stats (27/08), sucessor de picks_goleiros. As duas
-                -- entram: goleiros parou de crescer, e o passado dela continua
-                -- valendo no placar. Pick Boost NAO entra -- fase 1 e' so'
-                -- Admin (peso 0 em stake_plan, e ausencia aqui).
-                SELECT result, profit * {STAKE_PADRAO['player_stats']} AS profit FROM picks_player_stats
-                UNION ALL
-                SELECT result, profit * {STAKE_PADRAO['boost']} AS profit FROM picks_boost
+{uniao}
             ) AS all_picks
             WHERE result IS NOT NULL
         """)
@@ -1798,23 +1829,13 @@ def get_quick_stats(current_user: dict = Depends(get_current_user)):
         # Lia so' picks_vip, entao "5 greens seguidos" descrevia um pipeline e
         # aparecia colado num total que somava todos. Dois numeros vizinhos
         # falando de conjuntos diferentes e' pior que nao ter o segundo.
-        recent = _safe_query(cur, """
+        uniao_recente = "\n                UNION ALL\n".join(
+            f"                SELECT result, match_date, id FROM {tabela}"
+            for _chave, tabela in fontes
+        )
+        recent = _safe_query(cur, f"""
             SELECT result, match_date, id FROM (
-                SELECT result, match_date, id FROM picks_vip
-                UNION ALL
-                SELECT result, match_date, id FROM picks_free
-                UNION ALL
-                SELECT result, match_date, id FROM picks_multiplas
-                UNION ALL
-                SELECT result, match_date, id FROM picks_alavancagem
-                UNION ALL
-                SELECT result, match_date, id FROM picks_faltas
-                UNION ALL
-                SELECT result, match_date, id FROM picks_goleiros
-                UNION ALL
-                SELECT result, match_date, id FROM picks_player_stats
-                UNION ALL
-                SELECT result, match_date, id FROM picks_boost
+{uniao_recente}
             ) AS todos
             WHERE result IS NOT NULL
             ORDER BY match_date DESC, id DESC
@@ -1839,6 +1860,10 @@ def get_quick_stats(current_user: dict = Depends(get_current_user)):
 
         stats["streak"]      = streak
         stats["streak_type"] = streak_type  # "green" | "red" | None
+        # Ecoado: o servidor descarta fonte desconhecida e volta pro total,
+        # e a tela precisa saber disso pra nao rotular de "Free" um numero
+        # que e' de todo mundo.
+        stats["source"] = fontes[0][0] if len(fontes) == 1 else "all"
         return stats
     finally:
         cur.close()

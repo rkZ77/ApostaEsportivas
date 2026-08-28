@@ -1978,6 +1978,105 @@ const MultiplaCard    = memo(MultiplaCardBase)
 const AlavancagemCard = memo(AlavancagemCardBase)
 
 // Dashboard
+/* O PLACAR DO PRÓPRIO PRODUTO, dentro do "O que é" de cada aba.
+ *
+ * Os três cartões que ficavam aqui eram rótulo, e não número: "Diário",
+ * "1 por dia", "Grátis", "Odd alvo 2.00–4.00". Nenhum deles muda nunca, e
+ * nenhum responde a pergunta que se faz ao abrir a aba · como ESTE produto
+ * vem indo. Esse número existia só na faixa da aba Hoje, e lá ele soma os
+ * oito pipelines: quem abria o Free lia o desempenho de todo mundo.
+ *
+ * A conta é a MESMA da faixa de Hoje, só filtrada · `source` em
+ * /suggestions/stats/quick, com o lucro pesado por stake_plan.py no servidor.
+ * Nada é recalculado aqui de propósito: dois lugares somando unidade por
+ * conta própria é como as telas passam a discordar em silêncio.
+ *
+ * O cache é por fonte e vive no módulo porque trocar de aba desmonta o bloco ·
+ * sem ele, ir e voltar entre Free e VIP repetiria a consulta a cada clique.
+ */
+const cachePlacarDoProduto = new Map<string, any>()
+
+function PlacarDoProduto({ source, tom }: { source: string; tom: string }) {
+  const [dados, setDados] = useState<any>(() => cachePlacarDoProduto.get(source) ?? null)
+  const [pronto, setPronto] = useState(() => cachePlacarDoProduto.has(source))
+
+  useEffect(() => {
+    if (cachePlacarDoProduto.has(source)) {
+      setDados(cachePlacarDoProduto.get(source))
+      setPronto(true)
+      return
+    }
+    let vivo = true
+    api.get('/suggestions/stats/quick', { params: { source } })
+      .then(r => {
+        cachePlacarDoProduto.set(source, r.data)
+        if (vivo) setDados(r.data)
+      })
+      .catch(() => { /* placar é contexto, não conteúdo · falhar em silêncio */ })
+      .finally(() => { if (vivo) setPronto(true) })
+    return () => { vivo = false }
+  }, [source])
+
+  /* Esqueleto com a altura final, e não spinner: o bloco fica no meio de um
+   * texto que já está lido, então qualquer caixa que cresça depois empurra o
+   * primeiro card de pick para baixo com o usuário olhando. */
+  if (!pronto) {
+    return (
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-3" aria-busy="true">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="bg-surface-1 rounded-md h-[4.5rem] animate-pulse" />
+        ))}
+      </div>
+    )
+  }
+
+  const total = Number(dados?.total ?? 0)
+  if (!dados || total === 0) {
+    return (
+      <p className="text-xs text-ink-4 mt-3 leading-relaxed">
+        Nenhum pick deste tipo foi liquidado ainda · o placar aparece aqui assim que o
+        primeiro fechar.
+      </p>
+    )
+  }
+
+  const winRate = Number(dados.win_rate ?? 0)
+  const lucro   = Number(dados.profit ?? 0)
+  const streak  = Number(dados.streak ?? 0)
+  const tiles = [
+    { label: 'Picks', value: String(total),               cor: 'text-ink-1' },
+    { label: 'Green', value: String(dados.greens ?? 0),   cor: 'text-accent-ink' },
+    { label: 'Red',   value: String(dados.reds ?? 0),     cor: 'text-red-400' },
+    { label: 'Win %', value: `${winRate}%`,               cor: winRate >= 55 ? 'text-accent-ink' : 'text-ink-2' },
+    { label: 'Lucro', value: fmtUnits(lucro, 1),          cor: lucro >= 0 ? 'text-accent-ink' : 'text-red-400' },
+  ]
+
+  return (
+    <div className="mt-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        {tiles.map(({ label, value, cor }) => (
+          <div key={label} className="bg-surface-1 border border-line rounded-md p-3 text-center">
+            <div className={`font-mono text-xl font-black tabular-nums ${cor}`}>{value}</div>
+            <div className="text-[10px] text-ink-3 mt-1">{label}</div>
+          </div>
+        ))}
+      </div>
+      {/* A sequência é o "ir avisando": ela muda a cada liquidação, e é a
+        * única linha do bloco que responde "e agora, como está?". */}
+      {streak > 1 && dados.streak_type && (
+        <p className={`text-[11px] mt-2 font-semibold ${
+          dados.streak_type === 'green' ? 'text-accent-ink' : 'text-red-400'}`}>
+          {streak} {dados.streak_type === 'green' ? 'greens' : 'reds'} seguidos
+          <span className={`text-ink-4 font-normal`}> · liquidados neste produto</span>
+        </p>
+      )}
+      <p className={`text-[10px] mt-1.5 ${tom}`}>
+        Todos os picks já liquidados deste produto, com o mesmo plano de stake do placar público.
+      </p>
+    </div>
+  )
+}
+
 export default function Picks() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -2808,18 +2907,7 @@ export default function Picks() {
                   Ideal para quem quer experimentar a qualidade das análises antes de assinar o VIP.
                   Inclui mercado, odd, casa de apostas e raciocínio da IA.
                 </p>
-                <div className="grid grid-cols-3 gap-3 mt-3">
-                  {[
-                    { label: 'Frequência',  value: 'Diário',  color: 'text-green-400' },
-                    { label: 'Picks/dia',   value: '1',       color: 'text-ink-1'     },
-                    { label: 'Custo',       value: 'Grátis',  color: 'text-green-400' },
-                  ].map(({ label, value, color }) => (
-                    <div key={label} className="bg-surface-1 rounded-md p-3 text-center">
-                      <div className={`text-lg font-black ${color}`}>{value}</div>
-                      <div className="text-xs text-ink-4 mt-0.5">{label}</div>
-                    </div>
-                  ))}
-                </div>
+                <PlacarDoProduto source="free" tom="text-green-400/70" />
               </div>
             </div>
 
@@ -2854,18 +2942,7 @@ export default function Picks() {
                   Cada pick inclui análise completa: estatísticas dos times, forma dos últimos jogos, previsão por mercado,
                   odds e casa de apostas recomendada.
                 </p>
-                <div className="grid grid-cols-3 gap-3 mt-3">
-                  {[
-                    { label: 'Picks/dia',    value: '10–20',  color: 'text-yellow-400' },
-                    { label: 'Mercados',     value: '5+',     color: 'text-ink-1'      },
-                    { label: 'Análise IA',   value: 'Completa', color: 'text-green-400' },
-                  ].map(({ label, value, color }) => (
-                    <div key={label} className="bg-surface-1 rounded-md p-3 text-center">
-                      <div className={`text-lg font-black ${color}`}>{value}</div>
-                      <div className="text-xs text-ink-4 mt-0.5">{label}</div>
-                    </div>
-                  ))}
-                </div>
+                <PlacarDoProduto source="vip" tom="text-yellow-400/70" />
               </div>
             </div>
 
@@ -2957,18 +3034,7 @@ export default function Picks() {
                   Cada seleção da múltipla é analisada individualmente antes de compor a aposta.
                   Publicadas diariamente com raciocínio completo da IA para cada perna.
                 </p>
-                <div className="grid grid-cols-3 gap-3 mt-3">
-                  {[
-                    { label: 'Seleções',   value: '2–3',   color: 'text-blue-400'   },
-                    { label: 'Odd alvo',   value: '2.00–4.00', color: 'text-green-400'  },
-                    { label: 'Frequência', value: 'Diário', color: 'text-ink-1'     },
-                  ].map(({ label, value, color }) => (
-                    <div key={label} className="bg-surface-1 rounded-md p-3 text-center">
-                      <div className={`text-lg font-black ${color}`}>{value}</div>
-                      <div className="text-xs text-ink-4 mt-0.5">{label}</div>
-                    </div>
-                  ))}
-                </div>
+                <PlacarDoProduto source="multiplas" tom="text-blue-400/70" />
               </div>
             </div>
 
@@ -3047,6 +3113,11 @@ export default function Picks() {
                     { label: 'Odd por etapa', value: '1.40–1.55', color: 'text-orange-400' },
                     { label: 'Meta',          value: `${userAlavSerie?.meta ?? 6} greens`, color: 'text-green-400' },
                     { label: 'Risco',         value: '1u',        color: 'text-ink-1'      },
+                    /* Sem placar em unidades aqui de propósito: a alavancagem
+                       vale zero no plano de stake (ver stake_plan.py) porque o
+                       composto em andamento não é dinheiro, e um "Lucro 0,0u"
+                       ao lado de "120 picks" seria mentira com cara de número.
+                       O resultado dela vive na banca de quem apostou. */
                   ].map(({ label, value, color }) => (
                     <div key={label} className="bg-surface-1 rounded-md p-3 text-center">
                       <div className={`text-lg font-black ${color}`}>{value}</div>
@@ -3510,18 +3581,7 @@ export default function Picks() {
                   1.5 pagando 1.05 não deixa margem, e pagando 2.40 é o mercado dizendo que o jogo é
                   fraco de gol · contra o que o modelo estaria afirmando.
                 </p>
-                <div className="grid grid-cols-3 gap-3 mt-3">
-                  {[
-                    { label: 'Pernas',    value: '2',         color: 'text-cyan-400'  },
-                    { label: 'Odd alvo',  value: '1.30–2.30', color: 'text-green-400' },
-                    { label: 'Grátis',    value: '1 por dia', color: 'text-ink-1'     },
-                  ].map(({ label, value, color }) => (
-                    <div key={label} className="bg-surface-1 rounded-md p-3 text-center">
-                      <div className={`text-lg font-black ${color}`}>{value}</div>
-                      <div className="text-xs text-ink-4 mt-0.5">{label}</div>
-                    </div>
-                  ))}
-                </div>
+                <PlacarDoProduto source="boost" tom="text-cyan-400/70" />
               </div>
             </div>
 
@@ -3612,6 +3672,7 @@ export default function Picks() {
                       e não de Poisson: contagem de evento por jogador é superdispersa quase sempre,
                       e Poisson infla a cauda justamente onde o pick vive.
                     </p>
+                    <PlacarDoProduto source="player_stats" tom="text-amber-400/70" />
                   </div>
                 </div>
 
