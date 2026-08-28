@@ -88,7 +88,8 @@ def test_todo_tipo_de_pick_entra_no_rodar_tudo(passos):
     `gerar_goleiros` saiu da lista em 28/08 e nao e' regressao: defesas
     continua sendo gerada todo dia, dentro de `gerar_playerstats` (que roda os
     metodos marcados `diario` no catalogo do motor -- defesas, chutes no alvo e
-    chutes). O botao avulso de Defesas continua existindo.
+    chutes). No mesmo dia o botao avulso de Defesas foi APAGADO, e o teste
+    logo abaixo cobra que ele nao volte.
     """
     assert {"gerar_vip", "gerar_free", "gerar_multipla", "gerar_alavancagem",
             "gerar_faltas", "gerar_playerstats", "gerar_pickboost"} <= set(passos)
@@ -121,23 +122,32 @@ def test_nao_ha_rotulo_orfao(passos, rotulos):
     assert not orfaos, f"rotulos sem comando correspondente: {sorted(orfaos)}"
 
 
-def test_defesas_aponta_pro_motor_que_a_rodada_diaria_usa():
-    """O botao "Gerar Defesas" rodava o pipeline ERRADO ate' 27/08.
+def test_o_botao_de_defesas_nao_existe_mais(passos):
+    """APAGADO em 2026-08-28, a pedido do usuario · e o produto NAO saiu junto.
 
-    Na arquitetura de motores, defesa de goleiro deixou de ser motor e virou o
-    metodo `saves` do Player Stats. `main.py tudo` ja' chamava o novo; este
-    botao continuou apontando pro goleiros_pipeline.py, que so' existe no disco
-    como rollback. Os dois gravam em TABELAS DIFERENTES (picks_goleiros contra
-    picks_player_stats), entao clicar no admin produzia um pick que a rodada
-    diaria nao produziria -- e vice-versa.
+    A historia deste botao e o motivo de o teste continuar aqui:
+
+      ate' 27/08  ele rodava o goleiros_pipeline.py, um motor inteiro;
+      27/08       defesas virou o metodo `saves` do Player Stats, mas o botao
+                  continuou apontando pro pipeline antigo · os dois gravam em
+                  TABELAS DIFERENTES (picks_goleiros contra picks_player_stats),
+                  entao clicar no admin produzia um pick que a rodada diaria nao
+                  produziria, e vice-versa;
+      28/08       o botao e o pipeline foram apagados.
+
+    Defesas continua saindo TODO DIA em `gerar_playerstats`. Um botao avulso
+    pra um metodo que ja roda na rodada e' so' uma segunda porta pro mesmo
+    trabalho -- e foi tendo duas portas que elas apontaram pra lugares
+    diferentes por um mes.
     """
     scripts = _literal("_PIPELINE_SCRIPTS")
     args = _literal("_PIPELINE_ARGS")
 
-    assert scripts["gerar_goleiros"].endswith("player_stats_pipeline.py")
-    # E so' o metodo `saves`: sem o argumento, o botao rodaria os seis metodos
-    # e publicaria prop de chute/desarme/passe sem ninguem ter pedido.
-    assert args.get("gerar_goleiros") == ["saves"]
+    assert "gerar_goleiros" not in scripts
+    assert "gerar_goleiros" not in args
+    assert "gerar_goleiros" not in passos
+    # O produto continua no "Rodar Tudo", que e a parte que importa.
+    assert "gerar_playerstats" in passos
 
 
 def test_produto_publicado_e_gerado_todo_dia(passos):
