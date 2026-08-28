@@ -160,13 +160,30 @@ def test_menus_numeram_a_partir_de_1_sem_buraco():
         assert chaves == [str(i) for i in range(1, len(wrapper.COMANDOS) + 1)], wrapper.__name__
 
 
-def test_numeracao_conhecida_dos_menus_nao_mudou():
-    """As nove etapas em 1-9 e o `tudo` no 10, nos dois wrappers -- e' a
-    numeracao que ja estava na mao de quem usa. Comando novo entra no fim."""
+def test_a_ordem_conhecida_dos_menus_nao_mudou():
+    """O que a mao de quem usa decorou e' a SEQUENCIA, e ela continua:
+    `dados` abre, `resultados` fecha as etapas e `tudo` vem logo depois.
+
+    A NUMERACAO ABSOLUTA MUDOU UMA VEZ, em 2026-08-28: `pickboost` virou etapa
+    e entrou ANTES de `resultados` -- tinha que ser antes, senao o pick do dia
+    nasce depois da liquidacao. Com isso `resultados` foi de 9 pra 10 e `tudo`
+    de 10 pra 11.
+
+    O teste passou a cobrar a ordem e nao os numeros de propósito: cravar "9 e'
+    resultados" fazia ele reprovar uma etapa nova legitima, que e' exatamente o
+    tipo de mudanca que a lista existe pra acomodar. A promessa que fica de pe'
+    e' a util: nenhuma etapa se enfia DEPOIS de `resultados`, e `tudo` nunca
+    deixa de ser o proximo item.
+    """
     for wrapper in (run_dev, run_prod):
-        assert wrapper.OPCOES["1"].nome == "dados", wrapper.__name__
-        assert wrapper.OPCOES["9"].nome == "resultados", wrapper.__name__
-        assert wrapper.OPCOES["10"].nome == "tudo", wrapper.__name__
+        nomes = [c.nome for c in wrapper.COMANDOS]
+        assert nomes[0] == "dados", wrapper.__name__
+
+        etapas = [c.nome for c in wrapper.COMANDOS if c.etapa]
+        assert etapas[-1] == "resultados", \
+            f"{wrapper.__name__}: alguma etapa entrou depois da liquidacao"
+
+        assert nomes[nomes.index("resultados") + 1] == "tudo", wrapper.__name__
 
 
 def test_run_prod_nao_oferece_comando_de_outro_ambiente():
