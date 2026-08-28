@@ -39,24 +39,19 @@ from services.pick_engine import context_gate
 
 
 PIPELINES_COM_GATE = ["vip", "dica", "multipla", "alavancagem"]
-# `goleiros` SAIU DESTA LISTA em 2026-08-28, e nao porque o mercado acabou.
+# `goleiros` VIROU `player_stats` NESTA LISTA em 2026-08-28.
 #
-# O goleiros_pipeline foi apagado e defesas passou a ser o metodo `saves` do
-# Player Stats desde 27/08. Ao apontar as assercoes pro sucessor, elas FALHAM:
-# `player_stats_pipeline.py` nao chama `context_gate.build_for_fixture` nem
-# `tie_effect.aplicar_em_analise`.
+# Nao e' renomeacao: e' a correcao de uma regressao que so' ficou visivel
+# quando o arquivo morto saiu do caminho. Defesas passou a ser o metodo `saves`
+# do Player Stats em 27/08, e a chamada do contexto nao veio junto na migracao.
+# O teste continuou verde por um dia inteiro lendo o goleiros_pipeline -- um
+# arquivo que nao rodava mais. Apagar o arquivo derrubou o teste, que era
+# exatamente o servico dele.
 #
-# Ou seja: a camada de contexto de competicao que este arquivo protege existe
-# em faltas, existia no pipeline que gerava defesas, e NAO existe no motor que
-# gera defesas hoje. E' uma lacuna real, aberta na migracao de 27/08, que so'
-# ficou visivel quando o arquivo morto saiu do caminho -- o teste vinha
-# passando por ler um pipeline que nao roda mais.
-#
-# Ela fica registrada no xfail logo abaixo em vez de sumir daqui. Ligar a
-# camada no Player Stats e' decisao de motor (o efeito medido do agregado
-# contraria a intuicao em varios contadores) e nao cabe numa limpeza de
-# comando.
-PIPELINES_SO_OVER = ["faltas"]
+# A licao, que vale pro proximo motor que substituir outro: assercao que le
+# CODIGO tem que apontar pro codigo que roda. Enquanto o antigo fica no disco
+# "como rollback", ele responde por um comportamento que ninguem mais tem.
+PIPELINES_SO_OVER = ["faltas", "player_stats"]
 
 
 def _fonte(nome: str) -> str:
@@ -91,21 +86,26 @@ def test_pipeline_sem_gate_nao_publica_under(nome):
     )
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "lacuna aberta na migracao de 27/08: defesas virou metodo do Player Stats "
-    "e o motor novo nao herdou a camada de contexto de competicao. Quando "
-    "alguem ligar, este teste passa e o strict avisa pra promove-lo a assercao "
-    "normal e devolver 'player_stats' a PIPELINES_SO_OVER."))
-def test_o_motor_de_jogador_deveria_olhar_o_contexto_da_competicao():
-    """O que faltas faz e o Player Stats nao.
+def test_o_contexto_do_jogador_usa_a_familia_que_o_tie_effect_conhece():
+    """A traducao slug -> familia mora no CATALOGO, e nao no pipeline.
 
-    A media de chutes no alvo do adversario sai dos jogos NORMAIS dele, e uma
-    volta de mata-mata com 5 gols de diferenca no agregado nao pertence aquela
-    distribuicao. Valia pro goleiros_pipeline e vale igual pro sucessor.
+    O tie_effect fala "shots_on_target" e o catalogo fala "shots_on". Enquanto
+    defesas foi motor proprio, essa traducao vivia escrita a mao dentro do
+    pipeline dele -- e foi assim que ela se perdeu na migracao, junto com a
+    chamada inteira. Passar familia errada nao levanta erro: cai no teto
+    padrao e o efeito medido daquele mercado simplesmente nao e' aplicado.
     """
-    fonte = _fonte("player_stats")
-    assert "context_gate.build_for_fixture" in fonte
-    assert "tie_effect.aplicar_em_analise" in fonte
+    from services.player_stats_engine import methods as cat
+    from services.pick_engine import tie_effect
+
+    familias = {cat.familia_do_contexto(m) for m in cat.METODOS}
+    # Toda familia MEDIDA que o catalogo declara tem que existir na tabela do
+    # tie_effect · o contrario (familia sem medicao) e' legitimo e fica inerte.
+    conhecidas = set(tie_effect._MEDIDO) | set(tie_effect._MEDIDO_EMPATADO)
+    assert cat.familia_do_contexto(cat.SHOTS_ON) == "shots_on_target"
+    assert cat.familia_do_contexto(cat.SAVES) == "saves"
+    assert "shots" in familias and "fouls" in familias
+    assert {"shots", "fouls"} <= conhecidas
 
 
 def test_gate_e_direcional_e_ignora_over():

@@ -73,6 +73,17 @@ class Metodo:
     depende_do_adversario: bool = False
     #: Coluna de `match_statistics` que mede esse volume do adversario.
     coluna_do_adversario: str | None = None
+    #: Nome da familia em `pick_engine/tie_effect`, quando difere do slug.
+    #:
+    #: Existe porque as duas listas nasceram separadas: o tie_effect fala
+    #: "shots_on_target" e o catalogo fala "shots_on". Enquanto defesas era um
+    #: motor proprio, a traducao vivia escrita a mao no pipeline dele -- e foi
+    #: assim que ela se perdeu na migracao de 27/08, junto com a chamada
+    #: inteira. Aqui ela e' um campo do metodo: acrescentar mercado continua
+    #: sendo acrescentar UM `Metodo`.
+    #:
+    #: Vazio = o slug ja e' o nome da familia.
+    familia_contexto: str = ""
     #: Posicoes elegiveis (vazio = todas). "G" e' goleiro.
     posicoes: frozenset = field(default_factory=frozenset)
     #: Rotulo do mercado em PT, pro texto do pick e da tela.
@@ -99,6 +110,11 @@ class Metodo:
 #: Defesas de goleiro -- o antigo motor de goleiros. Nao tem `phi_congelado`
 #: neutro porque este e' o unico metodo JA' MEDIDO: 3.19 em 01/08, contra 946
 #: jogos, e a recalibragem por rodada continua existindo em saves_calibration.
+def familia_do_contexto(metodo: "Metodo") -> str:
+    """Nome que o `tie_effect` entende pra este metodo."""
+    return metodo.familia_contexto or metodo.slug
+
+
 SAVES = Metodo(
     slug="saves", label="Defesas de goleiro", coluna="saves",
     nomes_mercado=frozenset({"goalkeeper saves", "goalkeeper saves over/under",
@@ -112,6 +128,7 @@ SAVES = Metodo(
 
 SHOTS_ON = Metodo(
     slug="shots_on", label="Chutes no alvo", coluna="shots_on",
+    familia_contexto="shots_on_target",
     nomes_mercado=frozenset({"player shots on target", "shots on target",
                              "player shots on goal", "shots on target by player"}),
     min_atuacoes=4,

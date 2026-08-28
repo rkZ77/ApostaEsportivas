@@ -30,7 +30,9 @@ import textwrap
 import traceback
 
 from services.engine_audit import EngineRun
+from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
+from services.pick_engine import context_gate, tie_effect
 from services.pick_engine.goalkeeper_model import analyze_saves_market
 from services.pick_engine.market_pick_score import pick_score
 from services.pick_engine.saves_calibration import recalibrar as recalibrar_saves
@@ -205,11 +207,32 @@ def _avaliar_generico(oferta: dict, jogador: dict, metodo: cat.Metodo,
 
 
 def _avaliar_fixture(fixture: dict, cur, odds_service: OddsService,
+                     match_stats: MatchStatsService,
                      calibragem: dict, constantes_saves: dict) -> tuple:
     """(candidatos, motivo_se_vazio) de uma partida, em todos os metodos."""
     odds_cruas = odds_service.load_odds_by_fixture(fixture["fixture_id"])
     if not odds_cruas:
         return ([], MOTIVO_SEM_ODDS)
+
+    # CONTEXTO DE COMPETICAO · uma vez por jogo, pros seis metodos.
+    #
+    # REGRESSAO CORRIGIDA EM 2026-08-28. O goleiros_pipeline, que gerava
+    # defesas ate' 27/08, montava este contexto e o aplicava em cada linha. Na
+    # migracao pro Player Stats a chamada nao veio junto, e ninguem percebeu
+    # porque o teste que a cobrava continuou lendo o arquivo antigo -- que ja'
+    # nao rodava. So' apareceu quando o arquivo morto foi apagado.
+    #
+    # O QUE ELE FAZ AQUI e' menos do que o nome sugere, e importa saber: os
+    # deslocamentos POR PAPEL de `saves` e `shots_on_target` foram medidos e
+    # deram nulo (+0.79 ep 1.22 e +0.87 ep 0.96), entao o efeito de contagem
+    # nao age nesses dois. O que age e' o DESCONTO DE REGIME: a media do
+    # jogador sai dos jogos normais dele, e uma volta de mata-mata com o
+    # agregado aberto nao pertence aquela distribuicao. Isso e' incerteza sobre
+    # a estimativa, e vira desconto de probabilidade.
+    #
+    # Nunca levanta: `build_for_fixture` devolve None em qualquer falha, e o
+    # gate inerte deixa o motor igual ao de antes.
+    contexto = context_gate.build_for_fixture(match_stats, fixture)
 
     candidatos = []
     houve_mercado = False
@@ -245,7 +268,21 @@ def _avaliar_fixture(fixture: dict, cur, odds_service: OddsService,
                 continue
 
             acertos, frequencia = _frequencia(avaliado["serie"], oferta["n"])
-            analise = avaliado["analise"]
+
+            # ANTES dos cortes de `_aprovado`, e nao depois: o contexto tem que
+            # poder REPROVAR uma linha, e nao so' enfeitar a explicacao de uma
+            # que ja passou. Mesma ordem do faltas_pipeline.
+            #
+            # `escopo` e' o lado do JOGADOR. O tie_effect inverte sozinho pra
+            # `saves` (defesa e' consequencia do ataque do outro), e essa
+            # inversao mora la' de proposito -- ver `_lado_do_escopo`.
+            analise = tie_effect.aplicar_em_analise(
+                avaliado["analise"], contexto,
+                familia=cat.familia_do_contexto(metodo),
+                escopo=("home" if jogador.get("team_id") == fixture["home_team_id"]
+                        else "away"),
+                direcao="over", linha=oferta["n"] - 0.5,
+                lambda_esperado=avaliado["analise"].get("esperado"))
             candidatos.append({
                 "fixture": fixture, "metodo": metodo, "jogador": jogador,
                 "oferta": oferta, "analise": analise,
@@ -401,6 +438,9 @@ def run_player_stats_engine(metodos: tuple | None = None):
 
     fixtures = _fixtures_de_hoje(cur)
     odds_service = OddsService()
+    # Uma instancia pra rodada inteira · ela e' so' o caminho ate' o h2h que o
+    # contexto le, e abrir uma por jogo seria conexao nova por partida.
+    match_stats = MatchStatsService()
 
     # UMA passada pelos jogos, para todos os metodos. `por_metodo` guarda os
     # candidatos e `sem_candidato` guarda, por jogo, o motivo de nao ter saido
@@ -411,7 +451,8 @@ def run_player_stats_engine(metodos: tuple | None = None):
     for fixture in fixtures:
         try:
             do_jogo, motivo = _avaliar_fixture(
-                fixture, cur, odds_service, calibragem, constantes_saves)
+                fixture, cur, odds_service, match_stats, calibragem,
+                constantes_saves)
         except Exception as e:
             # Guardado e nao registrado agora: o erro pertence a uma execucao,
             # e as execucoes so' abrem no laco de baixo. Registrar aqui exigiria
