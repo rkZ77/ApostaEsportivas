@@ -88,12 +88,53 @@ def test_todo_passo_tem_rotulo(passos, rotulos):
 
 
 def test_nao_ha_rotulo_orfao(passos, rotulos):
-    """Rotulo tem que corresponder a um passo que existe de verdade -- os de
-    _TUDO_STEPS ou os de _DEV_PIPELINE_STEPS (tela de homologacao). Um rotulo
-    solto e' passo que foi renomeado ou removido sem limpar aqui."""
-    conhecidos = set(passos) | set(_literal("_DEV_PIPELINE_STEPS"))
+    """Rotulo tem que corresponder a um COMANDO que existe de verdade.
+
+    Ate' 27/08 o universo eram so' _TUDO_STEPS e _DEV_PIPELINE_STEPS. Passaram
+    a existir comandos com script e rotulo que NAO sao etapa da rodada diaria
+    (gerar_playerstats, gerar_pickboost), pelo mesmo criterio que main.py usa:
+    motor sem historico medido nao vira custo fixo do `tudo`. Eles tem botao
+    proprio no /admin e precisam de rotulo.
+
+    A garantia que importa continua de pe' e ficou ate' mais forte: rotulo sem
+    COMANDO e' passo renomeado ou removido sem limpar aqui, e agora a checagem
+    e' contra _PIPELINE_SCRIPTS, que e' quem de fato define o que existe.
+    """
+    conhecidos = (set(passos)
+                  | set(_literal("_DEV_PIPELINE_STEPS"))
+                  | set(_literal("_PIPELINE_SCRIPTS")))
     orfaos = set(rotulos) - conhecidos
-    assert not orfaos, f"rotulos sem passo correspondente: {sorted(orfaos)}"
+    assert not orfaos, f"rotulos sem comando correspondente: {sorted(orfaos)}"
+
+
+def test_defesas_aponta_pro_motor_que_a_rodada_diaria_usa():
+    """O botao "Gerar Defesas" rodava o pipeline ERRADO ate' 27/08.
+
+    Na arquitetura de motores, defesa de goleiro deixou de ser motor e virou o
+    metodo `saves` do Player Stats. `main.py tudo` ja' chamava o novo; este
+    botao continuou apontando pro goleiros_pipeline.py, que so' existe no disco
+    como rollback. Os dois gravam em TABELAS DIFERENTES (picks_goleiros contra
+    picks_player_stats), entao clicar no admin produzia um pick que a rodada
+    diaria nao produziria -- e vice-versa.
+    """
+    scripts = _literal("_PIPELINE_SCRIPTS")
+    args = _literal("_PIPELINE_ARGS")
+
+    assert scripts["gerar_goleiros"].endswith("player_stats_pipeline.py")
+    # E so' o metodo `saves`: sem o argumento, o botao rodaria os seis metodos
+    # e publicaria prop de chute/desarme/passe sem ninguem ter pedido.
+    assert args.get("gerar_goleiros") == ["saves"]
+
+
+def test_os_motores_novos_tem_botao_e_ficam_fora_do_tudo(passos):
+    """Fora do "Rodar Tudo" e' decisao, nao esquecimento (ver main.py: motor
+    sem historico medido nao vira custo fixo da rodada diaria). Mas sem botao
+    a unica forma de roda-los era a linha de comando."""
+    scripts = _literal("_PIPELINE_SCRIPTS")
+
+    for cmd in ("gerar_playerstats", "gerar_pickboost"):
+        assert cmd in scripts, f"{cmd} sem script"
+        assert cmd not in passos, f"{cmd} nao pode ser etapa do Rodar Tudo"
 
 
 def test_todo_passo_tem_script(passos):
