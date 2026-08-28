@@ -22,6 +22,20 @@ majoritariamente do proprio jogador. A flag diz de qual lado o motor pega o
 volume; errar esse lado inverte a previsao, e por isso ela e' declarada e nao
 inferida.
 
+QUAIS RODAM TODO DIA (2026-08-28)
+---------------------------------
+`saves`, `shots_on` e `shots` -- decisao do usuario. Sao os tres contadores com
+mercado liquido nas casas e frequencia alta o suficiente pra produzir pick:
+chute aparece em toda atuacao, chute no alvo na maioria, e defesa e' o metodo
+ja' medido (correlacao 0.88 com chutes no alvo sofridos).
+
+`fouls`, `tackles` e `passes` ficam de fora ate' gerarem pick real e serem
+medidos. Nao e' esquecimento: e' o mesmo criterio que manteve o Pick Boost fora
+do `tudo` ate' ele ser publicado.
+
+A marca vive no CATALOGO (`Metodo.diario`) e nao numa lista em main.py -- ver o
+comentario do campo.
+
 AMOSTRA E CARGO
 ---------------
 `min_atuacoes` e' por metodo porque as frequencias sao muito diferentes: uma
@@ -63,6 +77,17 @@ class Metodo:
     posicoes: frozenset = field(default_factory=frozenset)
     #: Rotulo do mercado em PT, pro texto do pick e da tela.
     rotulo_linha: str = "{n} ou mais"
+    #: Roda no pipeline diario (`main.py tudo`)?
+    #:
+    #: FICA NO CATALOGO, e nao numa lista solta em main.py, pelo mesmo motivo
+    #: que todo o resto: acrescentar um mercado e' acrescentar UM `Metodo`. Se a
+    #: lista do pipeline vivesse fora, promover um metodo exigiria lembrar de
+    #: dois lugares -- e o segundo e' o que se esquece.
+    #:
+    #: Metodo novo nasce FALSE: ele so' entra na rodada diaria depois de gerar
+    #: pick de verdade e ser medido. Ate' la' roda na mao, com `playerstats
+    #: <slug>`.
+    diario: bool = False
     #: Dispersao congelada, usada so' quando a recalibragem nao tem amostra.
     #: Comeca em 1.0 (= Poisson) de proposito nos metodos que ainda nao foram
     #: medidos: e' o valor neutro, e a calibragem mede na propria base a cada
@@ -82,6 +107,7 @@ SAVES = Metodo(
     depende_do_adversario=True, coluna_do_adversario="shots_on",
     posicoes=frozenset({"G"}),
     rotulo_linha="{n} ou mais defesas", phi_congelado=3.19,
+    diario=True,
 )
 
 SHOTS_ON = Metodo(
@@ -90,6 +116,7 @@ SHOTS_ON = Metodo(
                              "player shots on goal", "shots on target by player"}),
     min_atuacoes=4,
     rotulo_linha="{n} ou mais chutes no alvo",
+    diario=True,
 )
 
 SHOTS = Metodo(
@@ -98,6 +125,7 @@ SHOTS = Metodo(
                              "player total shots", "shots"}),
     min_atuacoes=4,
     rotulo_linha="{n} ou mais chutes",
+    diario=True,
 )
 
 FOULS = Metodo(
@@ -134,6 +162,10 @@ POR_SLUG = {m.slug: m for m in METODOS}
 #: Todas as colunas que o motor le de player_match_stats, numa lista so' --
 #: e' o SELECT do player_history.
 COLUNAS = tuple(dict.fromkeys(m.coluna for m in METODOS))
+
+
+#: Os que rodam no `tudo`. Ver `Metodo.diario`.
+DIARIOS: tuple = tuple(m for m in METODOS if m.diario)
 
 
 def de(slug: str) -> Metodo | None:

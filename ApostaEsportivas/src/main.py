@@ -610,6 +610,16 @@ def cmd_pick_boost():
     run_pick_boost_engine()
 
 
+def _metodos_diarios():
+    """Metodos do Player Stats marcados pra rodar no `tudo`.
+
+    Importado tarde pra o registro de comandos nao puxar o motor inteiro no
+    import do main.py -- mesma razao de todo `cmd_*` importar dentro da funcao.
+    """
+    from services.player_stats_engine import methods as _cat
+    return _cat.DIARIOS
+
+
 def cmd_playerstats(*args):
     """Player Stats -- props de jogador (saves, chutes, faltas, desarmes...).
 
@@ -812,14 +822,28 @@ COMANDOS: tuple = (
     # pick saia do pipeline diario por esquecimento. O que mudou em 27/08 foi
     # POR DENTRO -- ele passou a ser o metodo `saves` do Player Stats, e o
     # goleiros_pipeline antigo ficou no disco como rollback.
-    Comando("goleiros", "Player Stats · defesas de goleiro",
-            "Gera picks de defesas por goleiro (método `saves` do Player Stats)",
-            lambda *a: cmd_playerstats("saves"), etapa="DEFESAS DE GOLEIRO"),
+    # A ETAPA DEIXOU DE SER SO' DEFESAS (2026-08-28, decisao do usuario).
+    #
+    # `goleiros` continuava sendo o unico metodo do Player Stats na rodada
+    # diaria -- heranca de quando defesas era um motor inteiro. Agora a etapa e'
+    # o Player Stats com os metodos marcados `diario=True` no catalogo: defesas,
+    # chutes no alvo e chutes.
+    #
+    # O comando `goleiros` NAO sai (logo abaixo, sem etapa): ele e' o nome que
+    # esta' na mao de quem usa, e continua rodando so' o metodo `saves`.
+    Comando("playerstats-diario", "Player Stats · os metodos do dia",
+            "Gera props de jogador dos métodos que rodam todo dia "
+            "(defesas, chutes no alvo, chutes)",
+            lambda *a: cmd_playerstats(*[m.slug for m in _metodos_diarios()]),
+            etapa="PICKS DE JOGADOR"),
     # Pick Boost e' etapa desde 2026-08-28 (publicado pro assinante, com um pick
     # gratuito por dia). A POSICAO importa: tem que ser antes de `resultados`,
     # senao o pick nasce depois da liquidacao e fica pendente ate' o dia
     # seguinte. Ele estava no fim do registro, na secao "fora do pipeline", e
     # so' declarar `etapa` o colocaria DEPOIS de resultados na ordem do `tudo`.
+    Comando("goleiros", "Player Stats · defesas de goleiro",
+            "Gera picks de defesas por goleiro (método `saves` do Player Stats)",
+            lambda *a: cmd_playerstats("saves")),
     Comando("pickboost", "Pick Boost · Over 1.5 FT + Under 2.5 HT",
             "Escolhe os melhores JOGOS do dia para a combinação fixa",
             lambda *a: cmd_pick_boost(), etapa="PICK BOOST"),

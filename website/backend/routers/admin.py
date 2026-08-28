@@ -290,11 +290,34 @@ _PIPELINE_SCRIPTS = {
 }
 
 #: Argumentos fixos de alguns passos. O /admin roda script por CAMINHO, entao
-#: e' aqui que "so' o metodo saves" e' dito -- ver o comentario de
-#: gerar_goleiros acima e o __main__ de player_stats_pipeline.py.
+#: e' aqui que "quais metodos" e' dito -- ver o comentario de gerar_goleiros
+#: acima e o __main__ de player_stats_pipeline.py.
+#:
+#: OS METODOS DIARIOS SAO LIDOS DO CATALOGO DO MOTOR (2026-08-28), e nao
+#: escritos aqui. `Metodo.diario` e' a fonte, e main.py monta a etapa da mesma
+#: lista -- duas listas escritas na mao dariam um "Rodar Tudo" do site
+#: diferente do `main.py tudo` do CLI, que e' precisamente o defeito que o
+#: botao "Gerar Defesas" tinha ate' ontem.
+def _metodos_diarios_do_motor() -> list:
+    try:
+        _no_path()
+        from services.player_stats_engine.methods import DIARIOS
+        return [m.slug for m in DIARIOS]
+    except Exception:
+        # Motor indisponivel: o passo roda sem argumento e o pipeline decide.
+        # Melhor que travar o "Rodar Tudo" inteiro por causa de um import.
+        logging.getLogger(__name__).warning(
+            "[ADMIN] catalogo do Player Stats indisponivel; rodando sem filtro de metodo")
+        return []
+
+
 _PIPELINE_ARGS = {
     "gerar_goleiros": ["saves"],
 }
+# Preenchido DEPOIS do literal, e nao dentro dele: `_PIPELINE_ARGS` e' lido por
+# teste que faz literal_eval no fonte, e uma chamada de funcao dentro do dict
+# torna o literal impossivel de avaliar sem importar o router inteiro.
+_PIPELINE_ARGS["gerar_playerstats"] = _metodos_diarios_do_motor()
 
 _DEV_PIPELINE_STEPS = [
     "dev_atualizar_jogos", "dev_capturar_odds",
@@ -333,6 +356,12 @@ _TUDO_STEPS = ["atualizar_jogos", "capturar_odds", "gerar_vip", "gerar_free",
                "gerar_pickboost",
                "atualizar_resultados"]
 
+# `gerar_goleiros` saiu do "Rodar Tudo" e virou `gerar_playerstats` (28/08): a
+# etapa deixou de ser so' defesas e passou a ser o Player Stats com os metodos
+# marcados `diario` no catalogo -- defesas, chutes no alvo e chutes. O botao
+# avulso de Defesas continua existindo.
+_TUDO_STEPS[_TUDO_STEPS.index("gerar_goleiros")] = "gerar_playerstats"
+
 _STEP_LABELS = {
     "atualizar_jogos":      "Atualizando jogos",
     "capturar_odds":        "Capturando odds",
@@ -344,7 +373,7 @@ _STEP_LABELS = {
     "gerar_alavancagem":    "Gerando alavancagem",
     "gerar_faltas":         "Gerando picks de faltas",
     "gerar_goleiros":       "Gerando defesas de goleiro",
-    "gerar_playerstats":    "Gerando props de jogador",
+    "gerar_playerstats":    "Gerando picks de jogador",
     "gerar_pickboost":      "Escolhendo jogos do Pick Boost",
     "atualizar_resultados": "Atualizando resultados",
 }

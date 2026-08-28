@@ -71,9 +71,14 @@ def test_tudo_roda_as_etapas_do_pipeline_diario():
     """
     assert [c.etapa for c in main.COMANDOS if c.etapa] == [
         "DADOS", "ODDS", "PICKS VIP", "DICA DO DIA", "MÚLTIPLA",
-        "ALAVANCAGEM", "FALTAS", "DEFESAS DE GOLEIRO", "PICK BOOST", "RESULTADOS",
+        "ALAVANCAGEM", "FALTAS", "PICKS DE JOGADOR", "PICK BOOST", "RESULTADOS",
         # PICK BOOST antes de RESULTADOS nao e' detalhe: gerar depois da
         # liquidacao deixa o pick do dia pendente ate' o dia seguinte.
+        #
+        # "PICKS DE JOGADOR" era "DEFESAS DE GOLEIRO" ate' 28/08 -- heranca de
+        # quando defesas era um motor inteiro. Virou o Player Stats com os
+        # metodos marcados `diario` no catalogo (defesas, chutes no alvo,
+        # chutes), e a etapa passou a chamar `playerstats-diario`.
     ]
 
 
@@ -82,10 +87,36 @@ def test_tudo_nao_e_etapa_de_si_mesmo():
 
 
 def test_geradores_de_pick_estao_todos_no_tudo():
-    """Escopo de picks: VIP, free, multipla, alavancagem, faltas e goleiros.
-    Nenhum tipo pode ficar de fora do pipeline diario por esquecimento."""
+    """Escopo de picks: nenhum tipo PUBLICADO pode ficar de fora do pipeline
+    diario por esquecimento.
+
+    `goleiros` saiu desta lista em 28/08 e NAO e' regressao: defesas continua
+    sendo gerada todo dia, agora como um dos metodos de `playerstats-diario`
+    (ver `Metodo.diario` no catalogo). O comando `goleiros` continua existindo
+    pra rodar so' aquele metodo na mao.
+    """
     etapas = {c.nome for c in main.COMANDOS if c.etapa}
-    assert {"vip", "dica", "multiplas", "alavancagem", "faltas", "goleiros"} <= etapas
+    assert {"vip", "dica", "multiplas", "alavancagem", "faltas",
+            "playerstats-diario", "pickboost"} <= etapas
+
+
+def test_defesas_continua_sendo_gerada_todo_dia():
+    """A etapa mudou de nome, o produto nao · `saves` tem que continuar entre
+    os metodos diarios, senao a aba Jogadores para de receber pick de defesa
+    sem ninguem ter decidido isso."""
+    from services.player_stats_engine import methods as cat
+
+    diarios = {m.slug for m in cat.DIARIOS}
+    assert diarios == {"saves", "shots_on", "shots"}
+
+
+def test_metodo_novo_nasce_fora_do_pipeline_diario():
+    """Mesmo criterio do Pick Boost e do Live: motor sem historico medido nao
+    vira custo fixo da rodada. `fouls`, `tackles` e `passes` nunca geraram pick
+    real."""
+    from services.player_stats_engine import methods as cat
+
+    assert not cat.Metodo.__dataclass_fields__["diario"].default
 
 
 @pytest.mark.parametrize("nome, porque", [
