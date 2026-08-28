@@ -581,7 +581,7 @@ export default function Admin() {
         {overview?.coleta && (
           <div className="card p-4 mb-4">
             <h2 className="text-xs font-semibold text-ink-3 mb-3">Coleta</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
               {[
                 { label: 'Jogos hoje',      value: overview.coleta.jogos_hoje },
                 { label: 'Por começar',     value: overview.coleta.jogos_por_comecar },
@@ -1129,7 +1129,9 @@ export default function Admin() {
         </>)}
 
         {aba === 'picks' && (<>
-        {/* Picks de hoje, os 6 tipos */}
+        {/* Picks de hoje · a grade acompanha quantos tipos o backend mandar.
+            Eram 6 fixos e o motor passou a produzir 8 (Jogadores e Pick Boost
+            entraram em 28/08); `lg:grid-cols-4` cabe os dois sem apertar. */}
         {overview?.picks_hoje && (
           <div className="card p-4 mb-4">
             <h2 className="text-xs font-semibold text-ink-3 mb-3">Picks de hoje</h2>

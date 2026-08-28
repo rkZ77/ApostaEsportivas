@@ -2094,13 +2094,28 @@ def admin_overview(current_user: dict = Depends(require_admin)):
             FROM users
         """, {})
 
-        # Picks de hoje por tipo, ja com faltas e goleiros. Uma subquery por
-        # tabela pra que uma tabela faltando nao zere o bloco inteiro.
+        # Picks de hoje por tipo. Uma subquery por tabela pra que uma tabela
+        # faltando nao zere o bloco inteiro.
+        #
+        # JOGADORES E PICK BOOST ENTRARAM EM 2026-08-28. Eles ja' rodavam no
+        # pipeline diario e ja' apareciam pro assinante, e este bloco -- que e'
+        # a primeira coisa que quem opera olha depois de rodar o dia -- nao os
+        # contava. O painel dizia "0 picks de faltas" e ficava calado sobre dois
+        # produtos inteiros: quem rodasse o pipeline nao tinha como saber se
+        # eles sairam.
+        #
+        # `goleiros` fica: o motor parou de escrever nela (defesas virou metodo
+        # do Player Stats), mas o dia antigo continua no banco e um zero ali e'
+        # informacao, nao ruido -- diferente da tela do assinante, onde a secao
+        # some quando nao ha' pick.
         picks = {}
         for rotulo, tabela in (("vip", "picks_vip"), ("free", "picks_free"),
                                ("multiplas", "picks_multiplas"),
                                ("alavancagem", "picks_alavancagem"),
-                               ("faltas", "picks_faltas"), ("goleiros", "picks_goleiros")):
+                               ("faltas", "picks_faltas"),
+                               ("player_stats", "picks_player_stats"),
+                               ("boost", "picks_boost"),
+                               ("goleiros", "picks_goleiros")):
             picks[rotulo] = uma(
                 f"SELECT COUNT(*) AS n, COUNT(*) FILTER (WHERE result IS NULL) AS pendentes "
                 f"FROM {tabela} WHERE match_date = {HOJE_BR}",
