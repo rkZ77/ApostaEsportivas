@@ -205,8 +205,18 @@ def ler_estatisticas(bruto: list, home_id: int | None, away_id: int | None) -> t
         # como a API escreve "ninguem foi expulso" -- caia fora do dicionario,
         # e com isso o motor ao vivo nao tinha total de cartao em ~90% das
         # partidas.
+        #
+        # `jogo_encerrado=False` (2026-08-28): a regra da folha robusta trata
+        # contador ausente como ZERO, e isso vale pro jogo que ACABOU -- ali a
+        # API nao omite evento que aconteceu. Aqui o jogo esta' rolando, e
+        # contador ausente quer dizer "o provedor ainda nao publicou".
+        #
+        # Sem este `False`, "zero escanteios aos 60'" viraria dado real: o
+        # motor decidiria um Over em cima de numero que nao existe, e a
+        # deteccao de dado atrasado (live_state.DELAYED) pararia de disparar --
+        # porque ela percebe justamente pelo contador que falta.
         d = {chave: int(valor) for chave, valor in ler_folha(
-            time_.get("statistics") or []).items()}
+            time_.get("statistics") or [], jogo_encerrado=False).items()}
         lidos.append(d)
         ids.append((time_.get("team") or {}).get("id"))
 

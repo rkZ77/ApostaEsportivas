@@ -54,6 +54,40 @@ null no vermelho" deixou de ser classificado como ausencia -- porque nao e'.
 
 A regra vale so' pra "Red Cards" -- ver `_VAZIO_E_ZERO`. Em qualquer outro
 tipo, `null` continua sendo ausencia, do mesmo jeito que era antes.
+
+
+FOLHA ROBUSTA: O CONTADOR QUE FALTA NUMA FOLHA CHEIA E' ZERO (2026-08-28)
+
+Pedido do usuario, olhando o diagnostico do /admin: "ele nao coloca 0 quando
+vem da API vazio, ele coloca vazio, onde fode tudo". E o diagnostico dava razao
+a ele -- de 1.809 jogos, 30 sem escanteio, 45 sem falta, 49 sem chute, 51 sem
+defesa. Numeros DIFERENTES por familia, o que descarta "a folha nao veio" (ali
+todos seriam iguais): a folha veio, e um contador especifico faltou.
+
+A regra estreita de 26/08 tratava isso como ausencia, e o custo e' concreto:
+`stats_model._tem_folha_da_familia` derruba o jogo do pool daquela familia, e a
+media do time sai de uma amostra menor sem ninguem saber por que.
+
+O QUE MUDA, E O QUE NAO PODE MUDAR
+
+Nao da' pra generalizar "null vira zero", e o motivo esta' escrito acima: era
+exatamente isso que produzia o bug de 2026-07-25 (folha ausente virando zero em
+tudo, 99 jogos FT com escanteio/falta/chute zerados, 94 deles COM GOL).
+
+A diferenca entre os dois casos e' EVIDENCIA, e da' pra medir. Uma folha com
+quinze contadores preenchidos e um faltando e' uma folha que a API publicou: o
+contador que falta e' zero, porque a API nao omite evento que aconteceu. Uma
+folha vazia, ou com um contador so', nao autoriza conclusao nenhuma.
+
+    folha nao publicada            -> TUDO None                (inalterado)
+    folha publicada mas MAGRA      -> ausencia continua None    (inalterado)
+    folha publicada e ROBUSTA      -> contador de EVENTO ausente = 0   <- novo
+    percentual ausente             -> None, sempre              (novo, explicito)
+
+PERCENTUAL NUNCA VIRA ZERO. Posse de bola 0% e precisao de passe 0% sao
+impossiveis num jogo que aconteceu -- se o campo faltou, faltou mesmo. Zero ali
+nao seria um zero conservador, seria um numero inventado que entra direto na
+media. E' a unica familia em que o erro nao tem lado seguro.
 """
 
 #: Os UNICOS tipos em que `null` dentro de folha publicada significa ZERO.
@@ -69,6 +103,24 @@ tipo, `null` continua sendo ausencia, do mesmo jeito que era antes.
 #: Pra incluir um tipo novo aqui: medir primeiro, como esta' no cabecalho.
 _VAZIO_E_ZERO = {"Red Cards"}
 
+#: Tipos em que ausencia NUNCA pode virar zero, nem em folha robusta.
+#:
+#: Posse 0% e precisao de passe 0% sao impossiveis num jogo que aconteceu. Nas
+#: contagens, zero e' um valor legitimo (o jogo pode ter tido zero impedimento);
+#: aqui nao e', e por isso a folha robusta nao os alcanca.
+_NUNCA_ZERO = {"Ball Possession", "Passes %"}
+
+#: Quantos contadores numericos fazem uma folha ser ROBUSTA.
+#:
+#: Cinco e' o mesmo numero que o /admin ja' usa pra chamar uma folha de completa
+#: (_COLUNAS_DA_FOLHA em routers/admin.py: escanteio, amarelo, vermelho, falta e
+#: chute). Nao e' coincidencia escolhida: e' a definicao que o projeto ja' tinha
+#: e que sobreviveu a duas auditorias.
+#:
+#: Uma folha com cinco contadores de verdade nao e' um stub, e um sexto tipo
+#: faltando nela e' evento que nao aconteceu -- nao coleta pela metade.
+MIN_CONTADORES_ROBUSTA = 5
+
 
 def folha_publicada(stats) -> bool:
     """A API publicou a folha deste time?
@@ -80,6 +132,19 @@ def folha_publicada(stats) -> bool:
     if not stats:
         return False
     return any(item.get("value") is not None for item in stats)
+
+
+def folha_robusta(stats, minimo: int = MIN_CONTADORES_ROBUSTA) -> bool:
+    """A folha tem contador numerico suficiente pra o que FALTA nela ser zero?
+
+    Ver o cabecalho. A pergunta e' de EVIDENCIA: uma folha com quinze
+    contadores e um faltando foi publicada de verdade; uma com um so' nao
+    autoriza conclusao sobre os outros.
+    """
+    if not stats:
+        return False
+    numericos = sum(1 for item in stats if _para_numero(item.get("value")) is not None)
+    return numericos >= minimo
 
 
 def _para_numero(valor):
@@ -99,40 +164,64 @@ def _para_numero(valor):
     return None
 
 
-def ler_valor(stats, tipo: str, publicada: bool | None = None):
+def ler_valor(stats, tipo: str, publicada: bool | None = None,
+              robusta: bool | None = None):
+    # `robusta=False` explicito e' o caminho do jogo EM ANDAMENTO · ver a
+    # docstring de `ler_folha` pro porque a mesma folha significa coisas
+    # opostas antes e depois do apito.
     """Valor do contador `tipo`, ou None quando de fato nao se sabe.
 
-    `publicada` evita re-varrer a folha quando o chamador ja' a classificou
-    (o coletor le ~20 tipos da mesma folha).
+    `publicada` e `robusta` evitam re-varrer a folha quando o chamador ja' a
+    classificou -- o coletor le ~20 tipos da mesma folha, e as duas
+    classificacoes sao sobre a folha inteira, nao sobre o tipo.
     """
     if publicada is None:
         publicada = folha_publicada(stats)
     if not publicada:
         return None
+    if robusta is None:
+        robusta = folha_robusta(stats)
+
+    # Ausencia numa folha ROBUSTA e' zero · menos nos percentuais, onde zero e'
+    # impossivel e portanto seria numero inventado. Ver o cabecalho.
+    ausente = 0 if (robusta and tipo not in _NUNCA_ZERO) else None
 
     for item in stats:
         if item.get("type") != tipo:
             continue
         bruto = item.get("value")
         if bruto is None:
-            # Folha publicada + campo vazio = zero. Ver o cabecalho: e' assim
-            # que a API escreve "ninguem foi expulso".
-            return 0 if tipo in _VAZIO_E_ZERO else None
+            # Vermelho e' zero mesmo em folha magra: foi MEDIDO se comportando
+            # assim (ver o cabecalho). Os outros dependem da folha ser robusta.
+            return 0 if tipo in _VAZIO_E_ZERO else ausente
         return _para_numero(bruto)
 
-    # O tipo nem aparece na folha: esse contador realmente nao veio.
-    return None
+    # O tipo nem aparece na folha.
+    return ausente
 
 
-def ler_folha(stats) -> dict:
+def ler_folha(stats, jogo_encerrado: bool = True) -> dict:
     """A folha inteira como {tipo: numero}, ja' com a regra aplicada.
 
     Diferente de `ler_valor` num laco so' no desempenho: classifica a folha
     uma vez. Tipos ilegiveis ficam de fora do dicionario, e ausencia continua
     representada por ausencia da chave.
+
+    `jogo_encerrado=False` DESLIGA a regra da folha robusta, e essa distincao e'
+    a mais importante deste modulo depois da propria invariante:
+
+        jogo ENCERRADO   contador que falta = evento que nao aconteceu = 0
+        jogo EM ANDAMENTO contador que falta = o provedor ainda nao publicou
+
+    A mesma folha incompleta significa coisas opostas nos dois casos. Ao vivo,
+    tratar ausencia como zero destruiria a deteccao de dado atrasado do motor
+    Live (`live_state.DELAYED`), que existe justamente pra perceber que o
+    provedor parou de atualizar -- e um Over de escanteio decidido em cima de
+    "zero escanteios aos 60'" seria pick tomado com dado que nao existe.
     """
     if not folha_publicada(stats):
         return {}
+    robusta = jogo_encerrado and folha_robusta(stats)
     lida: dict = {}
     for item in stats:
         tipo = item.get("type")
@@ -140,9 +229,9 @@ def ler_folha(stats) -> dict:
             continue
         bruto = item.get("value")
         if bruto is None:
-            if tipo not in _VAZIO_E_ZERO:
-                continue          # ausencia continua sendo ausencia
-            lida[tipo] = 0
+            if tipo in _VAZIO_E_ZERO or (robusta and tipo not in _NUNCA_ZERO):
+                lida[tipo] = 0
+            # senao: ausencia continua sendo ausencia (chave fora do dict)
             continue
         numero = _para_numero(bruto)
         if numero is not None:
