@@ -43,6 +43,40 @@ import { Radio, Timer, CheckCircle2, ChevronDown } from 'lucide-react'
 import api from '../services/api'
 import ApostaModal from './ApostaModal'
 import { Badge, Button, EmptyState, ErrorState, LiveDot, ResultBadge, SkeletonPickGrid, StatTile } from './ui'
+import { PickProbability } from './PickCardParts'
+import { calcVipStake } from '../utils/stakeUtils'
+
+/* Teto de unidades do Live · espelha STAKE_LIMITS["live"] em
+ * backend/routers/banca.py. É o mais baixo de qualquer produto, e a razão está
+ * escrita lá: o motor ainda não tem histórico próprio e a odd pode mudar entre
+ * a publicação e a aposta.
+ *
+ * Sem o teto AQUI, o Kelly pediria 7u num pick de 82% e o modal deixaria
+ * escolher · o erro só apareceria no POST, depois de o usuário confirmar. É o
+ * mesmo defeito que MAX_UNITS_POR_TIPO já corrigiu nos cards pré-jogo. */
+const MAX_UNIDADES_LIVE = 4
+
+/** Unidades sugeridas pra ESTE pick e ESTA banca · a mesma conta do card VIP.
+ *
+ * Fica fora do card porque o MODAL precisa abrir com o mesmo número que o card
+ * mostrou. Enquanto ele calculava por conta própria (`stake_units ?? 1`), o
+ * card dizia "3u" e o modal abria em "1u" · duas respostas pra mesma pergunta,
+ * na mesma batida de dedo. */
+function unidadesSugeridas(
+  pick: Pick<LivePick, 'probability' | 'odd' | 'ev' | 'stake_units'>,
+  banca?: { bankroll_current: number; unit_value: number } | null,
+): number {
+  if (banca?.bankroll_current && banca.unit_value > 0) {
+    const kelly = calcVipStake(
+      Number(pick.probability), Number(pick.odd), Number(pick.ev),
+      banca.bankroll_current, banca.unit_value,
+    )
+    if (kelly) return Math.min(kelly.units, MAX_UNIDADES_LIVE)
+  }
+  // Sem banca configurada, a sugestão do motor · é melhor que nada, e é o
+  // mesmo número que o pick carrega no /admin.
+  return Math.min(pick.stake_units ?? 1, MAX_UNIDADES_LIVE)
+}
 import { PICK_TYPE_BORDER } from '../utils/resultStyle'
 
 const TEAM_LOGO = (id?: number) => (id ? `/api/proxy/team/${id}.png` : null)
@@ -112,6 +146,12 @@ interface LivePick {
   pick_status?: string
   is_followed: boolean
   user_stake_units?: number | null
+  /* O backend manda os três desde sempre (ver routers/live_picks.py::feed) e a
+     interface não os declarava · o card não tinha como mostrar onde apostar
+     nem a odd que o usuário de fato registrou. */
+  bet_house?: string | null
+  user_actual_odd?: number | null
+  user_bet_house?: string | null
 }
 
 /* Cabeçalho de seção na mesma marcação de Picks.tsx (barra colorida + título).
@@ -252,12 +292,38 @@ function Contagem({ segundos }: { segundos: number | null }) {
 const CardLive = forwardRef<HTMLDivElement, {
   pick: LivePick
   onSeguir: (p: LivePick) => void
-}>(function CardLive({ pick, onSeguir }, ref) {
+  /** Banca do usuário · sem ela o card mostra unidades e não reais. */
+  banca?: { bankroll_current: number; unit_value: number } | null
+}>(function CardLive({ pick, onSeguir, banca }, ref) {
   /* Encerrado é só o que tem resultado. `EXPIRED` sem resultado quer dizer que
      a JANELA DA ODD fechou sem ninguém seguir · o jogo continua e o pick
      continua sendo acompanhado (ver o cabeçalho deste arquivo). */
   const encerrado = !!pick.result
   const oddVencida = pick.status === 'EXPIRED' && !pick.result
+
+  /* A odd que vale pra CONTA é a que o usuário registrou, quando registrou.
+     Ao vivo a linha se move mais que em pré-jogo, então usar a do pick pra
+     calcular o lucro de quem já apostou daria um número que ele não vai ver. */
+  const oddEfetiva = pick.user_actual_odd ?? pick.odd
+
+  /* Quanto apostar · CONFORME A BANCA, igual VIP, múltipla e free.
+   *
+   * `picks_live.stake_units` é a sugestão do motor, e ela não conhece a banca
+   * de ninguém: é a mesma para quem tem R$ 200 e para quem tem R$ 20.000. Os
+   * cards pré-jogo resolvem isso há tempo, com o Kelly em cima do bankroll
+   * real do usuário, e não havia razão pro Live ser o único produto a mostrar
+   * uma unidade que não fala da banca de quem está lendo.
+   *
+   * `calcVipStake` é a MESMA função do card VIP · o que muda é só o teto, que
+   * aqui é 4u (ver MAX_UNIDADES_LIVE).
+   *
+   * Sem banca configurada, cai na sugestão do motor: é melhor que nada, e é o
+   * mesmo número que o pick carrega no /admin.
+   *
+   * Quem já apostou vê o que APOSTOU, não o que era sugerido. */
+  const aposta = useMemo(
+    () => ({ unidades: pick.user_stake_units ?? unidadesSugeridas(pick, banca) }),
+    [pick, banca])
   const direcao: 'over' | 'under' = pick.line.toLowerCase().startsWith('under') ? 'under' : 'over'
   const linhaNum = parseFloat(pick.line.replace(/[^\d.]/g, ''))
   const temBarra = pick.current_val != null && !isNaN(linhaNum)
@@ -304,24 +370,70 @@ const CardLive = forwardRef<HTMLDivElement, {
         <div className="min-w-0">
           <p className="text-[10px] text-ink-4 uppercase tracking-wide font-bold">{pick.market}</p>
           <p className="text-base font-black text-ink-1 truncate leading-tight">{pick.line}</p>
+          {(pick.user_bet_house || pick.bet_house) && (
+            <p className="text-[10px] text-ink-4 mt-0.5 truncate">
+              {pick.user_bet_house || pick.bet_house}
+            </p>
+          )}
         </div>
         <div className="text-right shrink-0">
           <p className="text-[10px] text-ink-4 uppercase tracking-wide font-bold">Odd</p>
           <p className="text-xl font-black text-accent-ink tabular-nums leading-tight">
-            {Number(pick.odd).toFixed(2)}
+            {Number(oddEfetiva).toFixed(2)}
           </p>
+          {/* A odd que o usuário registrou pode divergir da do pick: ele segue
+              depois, e a linha se move ao vivo mais que em pré-jogo. Mostrar as
+              duas é o mesmo que o card VIP faz · e aqui importa mais. */}
+          {pick.is_followed && Math.abs(Number(oddEfetiva) - Number(pick.odd)) > 0.001 && (
+            <p className="text-[9px] text-ink-4">pick: {Number(pick.odd).toFixed(2)}</p>
+          )}
         </div>
       </div>
+
+      {/* Quanto apostar e quanto isso paga · faltava no card ao vivo e existia
+          em todos os outros. Sem os dois números o assinante tinha o pick e não
+          tinha a aposta: a unidade sugerida é o que traduz "78% e EV +9%" em
+          uma decisão. Ver PickCardParts, mesma anatomia dos cards pré-jogo. */}
+      {!encerrado && (aposta.unidades > 0) && (
+        <div className="flex divide-x divide-line/60 border-t border-line mt-3 pt-3">
+          <div className="flex-1 text-center">
+            <div className="text-[10px] text-ink-3 mb-0.5">{pick.is_followed ? 'Apostado' : 'Apostar'}</div>
+            <div className="text-lg font-black text-green-400 tabular-nums">{aposta.unidades}u</div>
+            {banca && (
+              <div className="text-[11px] text-ink-4 tabular-nums">
+                R${(aposta.unidades * banca.unit_value).toFixed(0)}
+              </div>
+            )}
+          </div>
+          <div className="flex-1 text-center">
+            <div className="text-[10px] text-ink-3 mb-0.5">Lucro pot.</div>
+            <div className="text-lg font-black text-ink-1 tabular-nums">
+              +{((Number(oddEfetiva) - 1) * aposta.unidades).toFixed(2)}u
+            </div>
+            {banca && (
+              <div className="text-[11px] text-green-600 font-semibold tabular-nums">
+                +R${((Number(oddEfetiva) - 1) * aposta.unidades * banca.unit_value).toFixed(0)}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {temBarra && (
         <BarraDaLinha atual={Number(pick.current_val)} linha={linhaNum} direcao={direcao}
           rotulo={pick.stat_label?.toLowerCase()} />
       )}
 
-      {/* números do motor · ladrilhos do sistema, não caixas próprias */}
-      <div className="grid grid-cols-3 gap-2 mt-3">
-        <StatTile className="p-2" label="Probabilidade"
-          value={<span className="text-lg">{(pick.probability * 100).toFixed(0)}%</span>} />
+      {/* Probabilidade pela MESMA peça dos cards pré-jogo · era um ladrilho
+          próprio aqui, com outra cor e outro corte, e a mesma porcentagem
+          aparecia diferente dependendo da aba. Ver PickCardParts. */}
+      <PickProbability
+        confidence={pick.confidence}
+        probability={pick.probability}
+        className="mt-3"
+      />
+
+      <div className="grid grid-cols-2 gap-2 mt-2">
         <StatTile className="p-2" label="EV" tone={pick.ev >= 0 ? 'green' : 'red'}
           value={<span className="text-lg">{pick.ev >= 0 ? '+' : ''}{(pick.ev * 100).toFixed(1)}%</span>} />
         <StatTile className="p-2" label="Confiança"
@@ -421,8 +533,11 @@ const CardLive = forwardRef<HTMLDivElement, {
   )
 })
 
-export default function LivePicksFeed({ isActive }: {
+export default function LivePicksFeed({ isActive, banca }: {
   isActive: boolean
+  /* Vem da página, que já a carregou pro resto dos cards · buscar de novo aqui
+     seria uma segunda fonte pro mesmo número. */
+  banca?: { bankroll_current: number; unit_value: number } | null
 }) {
   const [picks, setPicks] = useState<LivePick[] | null>(null)
   const [disponivel, setDisponivel] = useState(true)
@@ -534,7 +649,7 @@ export default function LivePicksFeed({ isActive }: {
           <div className="space-y-4">
             <AnimatePresence mode="popLayout">
               {emAndamento.map(p => (
-                <CardLive key={p.id} pick={p} onSeguir={setAlvo} />
+                <CardLive key={p.id} pick={p} onSeguir={setAlvo} banca={banca} />
               ))}
             </AnimatePresence>
           </div>
@@ -547,7 +662,7 @@ export default function LivePicksFeed({ isActive }: {
           <div className="space-y-4">
             <AnimatePresence mode="popLayout">
               {encerrados.map(p => (
-                <CardLive key={p.id} pick={p} onSeguir={setAlvo} />
+                <CardLive key={p.id} pick={p} onSeguir={setAlvo} banca={banca} />
               ))}
             </AnimatePresence>
           </div>
@@ -558,8 +673,8 @@ export default function LivePicksFeed({ isActive }: {
         {alvo && (
           <ApostaModal
             pickOdd={Number(alvo.odd)}
-            suggestedUnits={alvo.stake_units ?? 1}
-            maxUnits={4}
+            suggestedUnits={unidadesSugeridas(alvo, banca)}
+            maxUnits={MAX_UNIDADES_LIVE}
             loading={salvando}
             error={erroModal}
             onConfirm={confirmar}

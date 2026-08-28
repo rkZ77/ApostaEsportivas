@@ -378,6 +378,32 @@ def feed(
         item["pick_type"] = "live"
         saida.append(item)
 
+    # AVISAR QUE O MOTOR ACHOU PICK NOVO (2026-08-27).
+    #
+    # O produto tem uma janela de minutos: a odd vence, e "abrir o site mais
+    # tarde" -- que e' o que o sino resolve pros picks de pre-jogo -- nao
+    # existe aqui. Sem aviso, o assinante so' encontra o pick por acaso.
+    #
+    # O gatilho e' a VISITA, mesmo padrao do resto do backend desde que o
+    # agendador foi removido em 01/08: quem abrir a aba primeiro cria o item
+    # pra base inteira, e as proximas passadas caem no dedupe por pick_id. Nao
+    # ha' laco nem relogio.
+    #
+    # So' o que esta' DE PE': pick ja' liquidado ou com a odd vencida nao e'
+    # oportunidade, e notificar sobre ele seria mandar o assinante correr atras
+    # de um preco que nao existe mais.
+    try:
+        from routers.notifications import notificar_pick_live_novo
+
+        vivos = [p for p in saida
+                 if not p.get("result") and p.get("status") == STATUS_ATIVO]
+        if vivos:
+            notificar_pick_live_novo(vivos)
+    except Exception as e:
+        # Falha ao notificar nao pode derrubar o feed · o pick esta' na tela de
+        # quem ja' esta' olhando, que e' o mais importante.
+        logger.warning("[LIVE] Falha ao notificar pick novo: %s", e)
+
     return {
         "disponivel": True,
         "picks": saida,

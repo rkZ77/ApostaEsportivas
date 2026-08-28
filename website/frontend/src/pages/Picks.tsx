@@ -3454,7 +3454,8 @@ export default function Picks() {
         {podeVerAoVivo && jaAbriuAoVivo.current && (
           <div className={tab !== 'ao_vivo' ? 'hidden' : ''}>
             <Suspense fallback={<PickLoading />}>
-              <LivePicksFeed isActive={tab === 'ao_vivo'} />
+              <LivePicksFeed isActive={tab === 'ao_vivo'}
+                             banca={bancaSummary?.has_banca ? bancaSummary : null} />
             </Suspense>
           </div>
         )}

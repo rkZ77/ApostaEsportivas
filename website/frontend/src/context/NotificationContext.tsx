@@ -14,7 +14,12 @@ const POLL_INTERVAL = 60_000
    sincronia, senão o sino cai no ícone padrão (resultado de pick) para um tipo
    que não é resultado nenhum. */
 export type NotificationType =
-  | 'monthly_close' | 'new_picks' | 'pick_live' | 'pick_result' | 'plan_expiring'
+  /* `pick_live` e `live_novo` são eventos diferentes e por isso são dois
+   * tipos: o primeiro é "o pick QUE VOCÊ SEGUIU entrou em jogo" (pessoal, só
+   * existe pra quem apostou); o segundo é "o motor achou uma oportunidade
+   * agora" (vale pra toda a base). Um tipo só faria o sino dizer "começou" pra
+   * um pick que ninguém pegou ainda. */
+  | 'monthly_close' | 'new_picks' | 'pick_live' | 'live_novo' | 'pick_result' | 'plan_expiring'
   | 'trial_ended' | 'vip_ended'
   /* Único tipo que NÃO vem do servidor. O convite de plano é um estado
      permanente da conta ("você está no free"), não um evento, então não existe
@@ -100,6 +105,28 @@ function sendBrowserNotification(count: number, teams: string) {
   notif.onclick = () => { window.focus(); notif.close() }
 }
 
+/* Pick NOVO do Motor Live · outro evento e outra urgência.
+ *
+ * A de cima avisa que um pick que o usuário JÁ SEGUIU entrou em jogo. Esta
+ * avisa que o motor acabou de achar uma oportunidade · e o produto tem uma
+ * janela de minutos, porque a odd vence. Por isso `requireInteraction`: a
+ * notificação fica na bandeja até ele olhar, em vez de sumir sozinha em cinco
+ * segundos como a outra.
+ *
+ * `tag` própria pelo mesmo motivo: com a tag da outra, um pick novo SUBSTITUIRIA
+ * o aviso de "seu pick começou" na bandeja do sistema, e o usuário perderia um
+ * dos dois sem nunca saber que existiu. */
+function avisarPickNovoDoMotor(titulo: string, corpo?: string | null) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return
+  const notif = new Notification(titulo, {
+    body: corpo || 'O Motor Ao Vivo achou uma oportunidade. A odd vence em minutos.',
+    icon: '/logo.png',
+    tag: 'live-novo',
+    requireInteraction: true,
+  })
+  notif.onclick = () => { window.focus(); notif.close() }
+}
+
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const { user, isAdmin, daysUntilExpiry } = useAuth()
   const [items, setItems]     = useState<AppNotification[]>([])
@@ -116,7 +143,24 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     try {
       const r = await api.get('/notifications')
-      setItems(r.data.items ?? [])
+      const novos: AppNotification[] = r.data.items ?? []
+
+      /* O aviso de pick novo do Motor Live sai daqui e não de uma quarta
+       * requisição: o item já vem nesta lista, criado no servidor quando
+       * alguém abriu o feed (ver routers/live_picks.py::feed). O que falta é
+       * levá-lo pra bandeja do sistema de quem NÃO está com a aba aberta.
+       *
+       * Só o que ainda não foi lido e ainda não foi avisado nesta sessão ·
+       * `seenLiveIds` já existia pro outro evento e serve igual aqui. */
+      for (const n of novos) {
+        if (n.type !== 'live_novo' || n.read) continue
+        const chave = `novo-${n.id}`
+        if (seenLiveIds.current.has(chave)) continue
+        seenLiveIds.current.add(chave)
+        avisarPickNovoDoMotor(n.title, n.body)
+      }
+
+      setItems(novos)
       setUnread(r.data.unread_count ?? 0)
     } catch {
       // Falha de rede não pode zerar a lista nem "queimar" nada: mantém o que

@@ -251,6 +251,14 @@ def send_push_to_all_vip(title: str, body: str, url: str = "/picks"):
 TYPE_MONTHLY_CLOSE = "monthly_close"
 TYPE_NEW_PICKS     = "new_picks"
 TYPE_PICK_LIVE     = "pick_live"
+#: Pick NOVO publicado pelo Motor Live · é outra coisa que `pick_live`.
+#:
+#: `pick_live` é "o pick QUE VOCÊ SEGUIU entrou em jogo" -- pessoal, e só existe
+#: pra quem apostou. Este é "o motor achou uma oportunidade agora" -- vale pra
+#: toda a base que tem acesso, e é o único aviso possível de um produto cuja
+#: janela de odd dura minutos. Dois nomes porque são dois eventos: juntá-los
+#: faria o sino dizer "começou" pra um pick que ninguém pegou ainda.
+TYPE_LIVE_NOVO     = "live_novo"
 TYPE_PICK_RESULT   = "pick_result"
 TYPE_PLAN_EXPIRING = "plan_expiring"
 TYPE_TRIAL_ENDED   = "trial_ended"
@@ -425,6 +433,45 @@ def notify_picks_went_live(user_id: int, live_items: list[dict]) -> None:
     finally:
         cur.close()
         conn.close()
+
+
+def notificar_pick_live_novo(picks: list) -> int:
+    """Avisa quem tem acesso de que o Motor Live publicou pick novo.
+
+    POR QUE ISTO É BROADCAST E NÃO POR USUÁRIO
+
+    Um pick ao vivo vale enquanto a odd vale · minutos. Não existe "abrir o
+    site mais tarde e aproveitar", que é o que o sino resolve pros picks de
+    pré-jogo. Então o item precisa nascer pra todo mundo no instante em que o
+    motor publica, e não quando cada um passa por aqui.
+
+    O DEDUPE É POR PICK, e é ele que permite chamar isto de dentro de um poll
+    sem encher o sino: o primeiro visitante que vir o pick novo cria o item pra
+    base inteira, e as próximas passadas caem no ON CONFLICT DO NOTHING.
+
+    Devolve quantas linhas foram criadas (0 quando já existiam).
+    """
+    if not picks:
+        return 0
+    criadas = 0
+    for p in picks:
+        pick_id = p.get("id")
+        if pick_id is None:
+            continue
+        home, away = p.get("home_team_name"), p.get("away_team_name")
+        jogo = f"{home} x {away}" if home and away else "Jogo ao vivo"
+        minuto = p.get("minute_at_creation")
+        criadas += notify_all_users(
+            TYPE_LIVE_NOVO,
+            title=f"Pick ao vivo · {jogo}",
+            dedupe_key=f"live_novo:{pick_id}",
+            body=(f"{p.get('market') or 'Mercado'} {p.get('line') or ''} @ "
+                  f"{p.get('odd')}"
+                  + (f" · criado aos {minuto}'" if minuto is not None else "")).strip(),
+            url="/picks#ao_vivo",
+            payload={"pick_id": pick_id, "pick_type": "live"},
+        )
+    return criadas
 
 
 def purge_old_notifications() -> int:
