@@ -768,22 +768,32 @@ def test_um_painel_de_filtro_pro_site_inteiro():
     assert "MercadosControls" not in src
 
 
-def test_a_aba_mercados_nao_existe_mais():
-    """Faltas e Jogadores sao picks VIP: mesmo motor, mesmo card, mesma aba.
+def test_a_aba_mercados_virou_duas_coisas():
+    """`mercados` saiu em 27/08 e o conteudo dela se DIVIDIU.
 
-    A aba gastava um dos oito lugares de uma barra que rola no celular, e o
-    espaco foi pro Picks Ao Vivo. O hash antigo tem que continuar chegando em
-    algum lugar util -- `#mercados` caindo no fallback abriria a aba Hoje, que
-    e' outra tela (mesmo sintoma que `#chat` produziu).
+    FALTAS fundiu no VIP: e' um mercado de PARTIDA como os outros picks VIP (um
+    jogo, um mercado, uma odd).
+
+    JOGADORES ganhou aba propria: prop de jogador nao e' a mesma leitura -- o
+    que decide e' o individuo e nao o confronto, o card fala de uma pessoa e a
+    amostra e' de ATUACOES, nao de partidas.
+
+    O hash antigo tem que continuar chegando em algum lugar util · `#mercados`
+    caindo no fallback abriria a aba Hoje, que e' outra tela (mesmo sintoma que
+    `#chat` produziu). Ele cai em `vip` porque faltas cobre 62% dos jogos e
+    defesa de goleiro 0,86%: quem salvou o link quase sempre queria faltas.
     """
     src = _front_codigo("pages/Picks.tsx")
 
     assert "tab === 'mercados'" not in src, "o bloco da aba ainda esta' desenhado"
     assert "key: 'mercados'" not in src, "a aba ainda esta' na barra"
     assert "mercados: 'vip'" in src, "#mercados precisa de alias pra aba VIP"
-    # E as secoes precisam existir dentro da aba VIP, senao os picks sumiram
-    # junto com a aba.
+
+    # Faltas dentro do VIP, jogadores em aba propria · sem os dois, os picks
+    # sumiram junto com a aba antiga.
     assert 'tipo="faltas"' in src
+    assert "key: 'jogadores'" in src, "a aba de jogadores nao esta' na barra"
+    assert "tab === 'jogadores'" in src, "a aba de jogadores nao tem conteudo"
     assert 'tipo="player_stats"' in src
 
 def test_busca_aparece_no_rastro_de_filtros():

@@ -39,7 +39,8 @@
  */
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Radio, Timer, CheckCircle2, ChevronDown } from 'lucide-react'
+import { Radio, Timer, CheckCircle2, ChevronDown, PowerOff } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import ApostaModal from './ApostaModal'
 import { Badge, Button, EmptyState, ErrorState, LiveDot, ResultBadge, SkeletonPickGrid, StatTile } from './ui'
@@ -55,6 +56,10 @@ import { calcVipStake } from '../utils/stakeUtils'
  * escolher · o erro só apareceria no POST, depois de o usuário confirmar. É o
  * mesmo defeito que MAX_UNITS_POR_TIPO já corrigiu nos cards pré-jogo. */
 const MAX_UNIDADES_LIVE = 4
+
+/** "2026-08-27T21:04:12" -> "21:04". Fatiado e nunca por `new Date`: o
+ *  timestamp do watch não carrega fuso, e o construtor de Date assume um. */
+const horaCurta = (iso?: string | null) => (iso ? iso.slice(11, 16) : '')
 
 /** Unidades sugeridas pra ESTE pick e ESTA banca · a mesma conta do card VIP.
  *
@@ -542,17 +547,22 @@ export default function LivePicksFeed({ isActive, banca }: {
   const [picks, setPicks] = useState<LivePick[] | null>(null)
   const [disponivel, setDisponivel] = useState(true)
   const [motivo, setMotivo] = useState<string | null>(null)
+  /* Estado do motor · só o que o assinante precisa (ligado e última varredura).
+     O diagnóstico completo continua sendo de admin, em /watch-status. */
+  const [motor, setMotor] = useState<{ ligado: boolean; ultima_rodada: string | null } | null>(null)
   const [erro, setErro] = useState(false)
   const [alvo, setAlvo] = useState<LivePick | null>(null)
   const [salvando, setSalvando] = useState(false)
   const [erroModal, setErroModal] = useState<string | null>(null)
   const timer = useRef<number | null>(null)
+  const navigate = useNavigate()
 
   const carregar = useCallback(async () => {
     try {
       const r = await api.get('/live-picks/feed')
       setDisponivel(r.data.disponivel !== false)
       setMotivo(r.data.motivo ?? null)
+      setMotor(r.data.motor ?? null)
       setPicks(r.data.picks ?? [])
       setErro(false)
     } catch {
@@ -591,12 +601,22 @@ export default function LivePicksFeed({ isActive, banca }: {
     }
   }
 
-  /* O corte é pelo RESULTADO, não pelo status. Odd vencida não encerra pick:
-     ele segue sendo acompanhado e liquidado como qualquer outro (ver o
-     cabeçalho deste arquivo). Cortar por status mandava pra "Encerrados" um
-     pick de um jogo que ainda estava no 38'. */
+  /* A ABA É SÓ O QUE ESTÁ DE PÉ (2026-08-27, pedido do usuário).
+   *
+   * Ela tinha uma segunda seção com os encerrados do dia, e isso confundia as
+   * duas perguntas que a tela responde. "Ao vivo" é uma tela de DECISÃO: o
+   * usuário abre com o jogo rolando, e o que ele precisa é do que ainda dá pra
+   * apostar. Pick liquidado é histórico, e histórico já tem duas casas melhores
+   * (Minhas Apostas e Resultados), com filtro, paginação e P&L.
+   *
+   * Pior: encerrado empurrava o pick vivo pra baixo numa noite movimentada, e a
+   * odd ao vivo dura minutos.
+   *
+   * O corte é pelo RESULTADO, não pelo status. Odd vencida não encerra pick:
+   * ele segue sendo acompanhado e liquidado como qualquer outro (ver o
+   * cabeçalho deste arquivo). Cortar por status mandava pra fora um pick de um
+   * jogo que ainda estava no 38'. */
   const emAndamento = useMemo(() => (picks ?? []).filter(p => !p.result), [picks])
-  const encerrados = useMemo(() => (picks ?? []).filter(p => !!p.result), [picks])
 
   if (!isActive) return null
 
@@ -635,17 +655,53 @@ export default function LivePicksFeed({ isActive, banca }: {
         </p>
       </div>
 
-      {emAndamento.length === 0 && encerrados.length === 0 && (
-        <EmptyState
-          Icon={Radio}
-          title="Nenhuma oportunidade ao vivo agora"
-          description="O motor só publica quando o jogo se afasta do esperado e a odd paga por isso. Sem oportunidade, nada é publicado."
-        />
+      {/* O VAZIO PRECISA DIZER SE O MOTOR ESTÁ LIGADO.
+        *
+        * "Nenhuma oportunidade ao vivo agora" dizia a mesma coisa em duas
+        * situações que pedem reações opostas: o motor varreu os jogos e não
+        * achou nada -- que é o caso NORMAL, e uma boa notícia sobre o filtro --
+        * ou o motor simplesmente não está rodando. Na primeira vale esperar; na
+        * segunda, esperar é perder a noite. */}
+      {emAndamento.length === 0 && (
+        motor?.ligado ? (
+          <EmptyState
+            Icon={Radio}
+            title="Nenhuma oportunidade ao vivo agora"
+            description={
+              'O motor está acompanhando os jogos neste momento. Ele só publica quando a partida '
+              + 'se afasta do esperado e a odd paga por isso, então varredura sem oportunidade '
+              + 'não vira pick.'
+              + (motor.ultima_rodada ? ` Última varredura às ${horaCurta(motor.ultima_rodada)}.` : '')
+            }
+          />
+        ) : (
+          <EmptyState
+            Icon={PowerOff}
+            title="O motor não está rodando agora"
+            description={
+              'Ele varre os jogos em andamento apenas quando está ligado · nada será publicado até '
+              + 'lá. Não é falta de oportunidade, é o motor parado.'
+              + (motor?.ultima_rodada ? ` A última varredura foi às ${horaCurta(motor.ultima_rodada)}.` : '')
+            }
+          />
+        )
       )}
 
       {emAndamento.length > 0 && (
         <>
-          <TituloDeSecao cor="bg-red-400" texto={`Em andamento · ${emAndamento.length}`} />
+          <TituloDeSecao
+            cor={motor?.ligado ? 'bg-red-400' : 'bg-line-strong'}
+            texto={`Em andamento · ${emAndamento.length}`}
+          />
+          {/* Motor desligado COM pick na tela é o caso que mais engana: os
+              cards estão lá, parecem novos, e nenhum outro vai chegar. */}
+          {motor && !motor.ligado && (
+            <p className="text-[11px] text-amber-400 mb-3 flex items-center gap-1.5">
+              <PowerOff className="w-3.5 h-3.5 shrink-0" />
+              O motor está parado · estes são os últimos picks publicados, e não virão novos
+              enquanto ele não voltar.
+            </p>
+          )}
           <div className="space-y-4">
             <AnimatePresence mode="popLayout">
               {emAndamento.map(p => (
@@ -656,18 +712,15 @@ export default function LivePicksFeed({ isActive, banca }: {
         </>
       )}
 
-      {encerrados.length > 0 && (
-        <>
-          <TituloDeSecao cor="bg-line-strong" texto={`Encerrados · ${encerrados.length}`} />
-          <div className="space-y-4">
-            <AnimatePresence mode="popLayout">
-              {encerrados.map(p => (
-                <CardLive key={p.id} pick={p} onSeguir={setAlvo} banca={banca} />
-              ))}
-            </AnimatePresence>
-          </div>
-        </>
-      )}
+      {/* Os encerrados do dia saíram daqui · ver o comentário em `emAndamento`.
+          O link existe porque tirar a seção não pode virar "sumiu": o pick
+          liquidado continua em Minhas Apostas, com P&L e filtro. */}
+      <button
+        onClick={() => navigate('/meus-picks')}
+        className="mt-6 w-full text-center text-xs text-ink-3 hover:text-ink-1 transition-colors py-3 border border-line rounded-md hover:border-line-strong"
+      >
+        Ver os picks já encerrados em Minhas Apostas
+      </button>
 
       <AnimatePresence>
         {alvo && (

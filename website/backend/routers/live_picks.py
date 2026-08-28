@@ -415,6 +415,22 @@ def feed(
         "picks": saida,
         "expirados_agora": expirados,
         "liquidados_agora": liquidacao["liquidados"],
+        # ESTADO DO MOTOR, no minimo que o assinante precisa (2026-08-27).
+        #
+        # "Nenhuma oportunidade ao vivo agora" e' ambiguo e o usuario apontou:
+        # ela diz a mesma coisa quando o motor varreu os jogos e nao achou nada
+        # (que e' o caso NORMAL, e uma boa noticia sobre o filtro) e quando ele
+        # simplesmente nao esta' rodando. As duas leituras pedem reacoes
+        # opostas -- esperar, ou parar de esperar.
+        #
+        # So' `ligado` e `ultima_rodada`. O diagnostico completo (falhas
+        # seguidas, motivo da parada, intervalo, dry run, cota) continua sendo
+        # de admin, em /watch-status e /diagnostico: o assinante precisa saber
+        # SE esta' ligado, nao por que parou.
+        "motor": {
+            "ligado": bool(_watch_state["ativo"]),
+            "ultima_rodada": _watch_state["ultima_rodada"],
+        },
     }
 
 

@@ -101,12 +101,16 @@ function LeagueLogo({ id, name, size = 18 }: { id?: number; name?: string; size?
  *
  * Links antigos (#aovivo) continuam abrindo Minhas Apostas · ver ALIAS_ABA.
  */
-/* `mercados` saiu em 2026-08-27. Faltas e Jogadores viraram seções DENTRO da
-   aba VIP: são picks VIP, saem do mesmo motor e usam o mesmo card, e uma aba
-   só pra eles gastava um dos oito lugares de uma barra que rola no celular ·
-   espaço que o Picks Ao Vivo precisava mais. Ver `#mercados` no roteamento por
-   hash, que continua sendo destino válido e cai em `vip`. */
-type Tab = 'hoje' | 'pick_seguro' | 'vip' | 'multiplas' | 'alavancagem' | 'ao_vivo' | 'minhas_apostas'
+/* `mercados` saiu em 2026-08-27 e virou DUAS coisas, nao uma.
+ *
+ * FALTAS fundiu na aba VIP: e' um mercado de PARTIDA, igual aos outros picks
+ * VIP (um jogo, um mercado, uma odd), e ler junto com eles e' o natural.
+ *
+ * JOGADORES ganhou aba propria. Prop de jogador nao e' a mesma leitura: o que
+ * decide nao e' o confronto, e' o individuo · o card fala de uma pessoa, a
+ * busca e' por nome, e a amostra e' de atuacoes e nao de partidas. Empilhar
+ * isso embaixo da grade VIP misturava duas perguntas. */
+type Tab = 'hoje' | 'pick_seguro' | 'vip' | 'multiplas' | 'alavancagem' | 'jogadores' | 'ao_vivo' | 'minhas_apostas'
 
 /** Chave antiga na URL -> aba atual.
  *
@@ -115,6 +119,10 @@ type Tab = 'hoje' | 'pick_seguro' | 'vip' | 'multiplas' | 'alavancagem' | 'ao_vi
  * e eles estao na aba VIP agora. Sem o alias o hash caia no fallback e abria a
  * aba Hoje, que e' outra tela -- o mesmo sintoma que #chat produziu. */
 const ALIAS_ABA: Record<string, Tab> = { aovivo: 'minhas_apostas', mercados: 'vip' }
+/* `mercados` cai em `vip` e nao em `jogadores` porque o conteudo dela se
+   dividiu: faltas cobre 62% dos jogos e defesa de goleiro 0,86% (ver
+   fouls_model / goalkeeper_model), entao quem salvou o link quase sempre
+   queria faltas. */
 
 const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
 
@@ -186,6 +194,12 @@ function TabBar({ tab, setTab, canSeeVip, verAoVivo, counts, liveCount, onPrefet
     { key: 'vip',          label: 'Picks VIP',       premiumOnly: true },
     { key: 'multiplas',    label: 'Múltiplas',       premiumOnly: true },
     { key: 'alavancagem',  label: 'Alavancagem',      premiumOnly: true },
+    {
+      /* Prop de jogador · chutes, chutes no alvo, gols, defesas, faltas,
+         desarmes e passes. Aba própria e não uma seção do VIP: o que decide
+         aqui é o indivíduo e não o confronto. */
+      key: 'jogadores' as Tab, label: 'Jogadores', premiumOnly: true,
+    },
     {
       /* O produto novo: oportunidades que o motor achou durante o jogo.
          "Picks Ao Vivo" e não "Ao Vivo" porque a barra já tem Picks Free e
@@ -1759,6 +1773,9 @@ const LOCK_CLS = {
   blue:   { icon: 'text-blue-400',   ring: 'bg-blue-400/10 border-blue-400/20',     btn: 'bg-blue-500 hover:bg-blue-400 text-ink-1',     borda: 'border-blue-400/25'   },
   orange: { icon: 'text-orange-400', ring: 'bg-orange-400/10 border-orange-400/20', btn: 'bg-orange-500 hover:bg-orange-400 text-ink-1', borda: 'border-orange-400/25' },
   purple: { icon: 'text-purple-400', ring: 'bg-purple-400/10 border-purple-400/20', btn: 'bg-purple-500 hover:bg-purple-400 text-ink-1', borda: 'border-purple-400/25' },
+  /* Âmbar é a cor do Player Stats no site inteiro (PICK_TYPE_HEX.player_stats) ·
+     o cadeado da aba Jogadores tem que ser reconhecível como o mesmo produto. */
+  amber:  { icon: 'text-amber-400',  ring: 'bg-amber-400/10 border-amber-400/20',   btn: 'bg-amber-500 hover:bg-amber-400 text-on-fill',  borda: 'border-amber-400/25'  },
 } as const
 
 type LockCls = typeof LOCK_CLS[keyof typeof LOCK_CLS]
@@ -1984,7 +2001,7 @@ export default function Picks() {
     // nem tem bloco de conteúdo, então /picks#chat abria a página com NENHUMA
     // aba ativa e a área vazia -- exatamente o sintoma que o comentário acima
     // descreve pro #ao_vivo. O chat vive no botão do Agente e em /agente.
-    const valid: Tab[] = ['hoje','pick_seguro','vip','multiplas','alavancagem','minhas_apostas',
+    const valid: Tab[] = ['hoje','pick_seguro','vip','multiplas','alavancagem','jogadores','minhas_apostas',
                           ...(podeVerAoVivo ? ['ao_vivo' as Tab] : [])]
     setTab(valid.includes(hash) ? hash : 'hoje')
   }, [location.hash, podeVerAoVivo])
@@ -2491,11 +2508,12 @@ export default function Picks() {
           liveCount={liveCount}
           counts={{
             pick_seguro: today?.dica_do_dia && !today.dica_do_dia.result ? 1 : undefined,
-            /* Faltas, Jogadores e Defesas entram na contagem do VIP: desde
-               27/08 eles são seções DENTRO desta aba, e um contador que os
-               ignorasse diria "3" numa aba com 7 picks. */
-            vip:         ([...(today?.vip ?? []), ...(today?.faltas ?? []),
-                           ...(today?.player_stats ?? []), ...(today?.goleiros ?? [])]
+            /* Faltas entra na contagem do VIP: desde 27/08 ela é uma seção
+               DENTRO desta aba, e um contador que a ignorasse diria "3" numa
+               aba com 5 picks. Jogadores tem aba própria e contador próprio. */
+            vip:         ([...(today?.vip ?? []), ...(today?.faltas ?? [])]
+                            .filter((s: any) => !s.result).length) || undefined,
+            jogadores:   ([...(today?.player_stats ?? []), ...(today?.goleiros ?? [])]
                             .filter((s: any) => !s.result).length) || undefined,
             multiplas:   (today?.multiplas ?? []).filter((m: any) => !m.result).length || undefined,
             alavancagem: today?.alavancagem && !today.alavancagem.result ? 1 : undefined,
@@ -2711,10 +2729,16 @@ export default function Picks() {
                       />
                     ))}
                   </div>
-                  <button onClick={() => setTab('vip')}
-                    className="mt-3 w-full text-center text-xs text-purple-400 hover:text-purple-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong">
-                    Ver todos os mercados
-                  </button>
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    <button onClick={() => setTab('vip')}
+                      className="flex-1 min-w-[10rem] text-center text-xs text-purple-400 hover:text-purple-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong">
+                      Ver faltas no VIP
+                    </button>
+                    <button onClick={() => setTab('jogadores')}
+                      className="flex-1 min-w-[10rem] text-center text-xs text-amber-400 hover:text-amber-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong">
+                      Ver picks de jogador
+                    </button>
+                  </div>
                 </section>
               )}
 
@@ -2844,14 +2868,17 @@ export default function Picks() {
               })()}
             </div>
 
-            {/* Os mercados de modelo próprio, que até 27/08 moravam numa aba
-                separada. São picks VIP, saem do mesmo motor e usam o mesmo
-                card · o que a aba dava era distância, não organização.
+            {/* Faltas · até 27/08 morava numa aba separada.
+                É um mercado de PARTIDA como os outros picks VIP (um jogo, um
+                mercado, uma odd), sai do mesmo motor e usa o mesmo card · o que
+                a aba dava era distância, não organização.
 
-                Ficam DEPOIS da lista VIP e não misturados nela de propósito: a
-                grade de cima é a que o assinante abre esperando ("os picks do
-                dia"), e um pick de jogador no meio dela mudaria a leitura sem
-                avisar. Cada seção tem cabeçalho próprio. */}
+                Fica DEPOIS da grade e não misturada nela de propósito: a grade
+                de cima é a que o assinante abre esperando ("os picks do dia"),
+                e um pick de faltas no meio dela mudaria a leitura sem avisar.
+
+                Prop de JOGADOR não vem junto: ela tem aba própria, porque o que
+                decide lá é o indivíduo e não o confronto. */}
             <MercadoSecao
               tipo="faltas"
               titulo="Faltas"
@@ -2861,32 +2888,6 @@ export default function Picks() {
               carregando={todayLoading}
               banca={bancaSummary?.has_banca ? bancaSummary : null}
             />
-
-            <MercadoSecao
-              tipo="player_stats"
-              titulo="Jogadores"
-              cor="bg-amber-400"
-              explicacao="Estatística de um jogador específico: chutes, chutes no alvo, faltas, desarmes, passes e defesas. A média sai das atuações dele na mesma competição, só contando jogo em que ele foi titular efetivo, e a probabilidade vem de uma Binomial Negativa com a dispersão medida na própria base."
-              picks={playerStatsOrdenados}
-              carregando={todayLoading}
-              banca={bancaSummary?.has_banca ? bancaSummary : null}
-            />
-
-            {/* Defesas parou de crescer em 27/08 (virou o método `saves` do
-                Player Stats). A seção existe pro dia antigo e some quando não
-                tem conteúdo · desenhar todo dia um bloco que nunca mais vai
-                receber pick é ruído. */}
-            {temGoleiros && (
-              <MercadoSecao
-                tipo="goleiros"
-                titulo="Defesas de goleiro"
-                cor="bg-sky-400"
-                explicacao="Quantas defesas um goleiro específico faz no jogo. O sinal principal é o volume de chutes no alvo que o adversário costuma produzir. Este mercado passou a sair pelo Player Stats, na seção Jogadores."
-                picks={goleirosOrdenados}
-                carregando={todayLoading}
-                banca={bancaSummary?.has_banca ? bancaSummary : null}
-              />
-            )}
 
             <button onClick={() => navigate('/resultados')}
               className="w-full text-center text-xs text-yellow-400 hover:text-yellow-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong font-semibold">
@@ -3440,6 +3441,80 @@ export default function Picks() {
               className="w-full text-center text-xs text-orange-400 hover:text-orange-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong font-semibold">
               Ver todos os resultados
             </button>
+          </motion.div>
+        )}
+
+        {/* Prop de JOGADOR · aba própria desde 27/08.
+            O que decide aqui é o indivíduo e não o confronto, então a leitura é
+            outra: o card fala de uma pessoa, e a média que sustenta o pick é de
+            ATUAÇÕES dele, não de partidas entre dois times. */}
+        {tab === 'jogadores' && (
+          <motion.div key="jogadores" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6">
+            {!canSeeVip ? (
+              <div>
+                <SectionHeader color="bg-amber-400" label="Jogadores" />
+                <VipLockOverlay color="amber" picks={today?.bloqueados?.mercados} rotulo="picks de jogador" />
+              </div>
+            ) : (
+              <>
+                <div className="card p-5 border-amber-400/20 bg-amber-400/5">
+                  <p className="font-display text-sm font-bold text-amber-400 mb-3">
+                    O que são os Picks de Jogador?
+                  </p>
+                  <div className="space-y-2 text-sm text-ink-2 leading-relaxed">
+                    <p>
+                      Estatística de um jogador específico numa partida:{' '}
+                      <span className="text-ink-1 font-bold">
+                        chutes, chutes no alvo, gols, defesas, faltas, desarmes e passes
+                      </span>.
+                    </p>
+                    <p>
+                      A média sai das atuações dele{' '}
+                      <span className="text-ink-1 font-bold">na mesma competição</span>, contando só
+                      jogo em que ele foi titular efetivo · atuação de doze minutos e jogo inteiro
+                      não são a mesma observação, e misturar as duas derruba toda média.
+                    </p>
+                    <p>
+                      A probabilidade vem de uma Binomial Negativa com a{' '}
+                      <span className="text-ink-1 font-bold">dispersão medida na própria base</span>,
+                      e não de Poisson: contagem de evento por jogador é superdispersa quase sempre,
+                      e Poisson infla a cauda justamente onde o pick vive.
+                    </p>
+                  </div>
+                </div>
+
+                <MercadoSecao
+                  tipo="player_stats"
+                  titulo="Jogadores"
+                  cor="bg-amber-400"
+                  explicacao="Cada pick é sobre uma pessoa, num jogo. A linha traz o nome junto porque o jogador faz parte da aposta."
+                  picks={playerStatsOrdenados}
+                  carregando={todayLoading}
+                  banca={bancaSummary?.has_banca ? bancaSummary : null}
+                />
+
+                {/* Defesas parou de crescer em 27/08 · virou o método `saves`
+                    do Player Stats, e por isso mora nesta aba e não no VIP: já
+                    era prop de jogador antes de a arquitetura dizer isso. A
+                    seção existe pro dia antigo e some quando não tem conteúdo. */}
+                {temGoleiros && (
+                  <MercadoSecao
+                    tipo="goleiros"
+                    titulo="Defesas de goleiro"
+                    cor="bg-sky-400"
+                    explicacao="Quantas defesas um goleiro específico faz no jogo. O sinal principal é o volume de chutes no alvo que o adversário costuma produzir. Este mercado passou a sair pelo mesmo motor dos outros picks de jogador."
+                    picks={goleirosOrdenados}
+                    carregando={todayLoading}
+                    banca={bancaSummary?.has_banca ? bancaSummary : null}
+                  />
+                )}
+
+                <button onClick={() => navigate('/resultados')}
+                  className="w-full text-center text-xs text-amber-400 hover:text-amber-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong font-semibold">
+                  Ver todos os resultados
+                </button>
+              </>
+            )}
           </motion.div>
         )}
 
