@@ -422,11 +422,19 @@ _PASSO_DO_COMANDO = {
 #: Agora a ORDEM e o CONTEUDO saem de `main.COMANDOS` (os que declaram `etapa`),
 #: traduzidos por `_PASSO_DO_COMANDO`. Etapa nova no motor aparece aqui sozinha.
 _TUDO_STEPS_FALLBACK = [
-    "atualizar_jogos", "capturar_odds", "player_stats",
+    # `player_stats` ANTES de `capturar_odds` desde 28/08, por pedido do
+    # usuario · a razao esta' no registro do motor, que e' a fonte.
+    "atualizar_jogos", "player_stats", "capturar_odds",
     "gerar_vip", "gerar_free", "gerar_multipla", "gerar_alavancagem",
     "gerar_faltas", "gerar_playerstats", "gerar_pickboost",
     "atualizar_resultados",
 ]
+
+
+#: True quando `_passos_do_motor` conseguiu ler o registro do motor. Falso
+#: significa que a lista congelada esta' valendo · nao muda o painel, mas quem
+#: depura precisa saber de qual das duas fontes a tela esta' falando.
+_TUDO_STEPS_DERIVADA = False
 
 
 def _passos_do_motor() -> list:
@@ -457,7 +465,11 @@ def _passos_do_motor() -> list:
         if sem_traducao:
             logging.getLogger(__name__).warning(
                 "[ADMIN] etapas do motor sem passo no /admin: %s", sem_traducao)
-        return passos or list(_TUDO_STEPS_FALLBACK)
+        if passos:
+            global _TUDO_STEPS_DERIVADA
+            _TUDO_STEPS_DERIVADA = True
+            return passos
+        return list(_TUDO_STEPS_FALLBACK)
     except Exception as e:
         logging.getLogger(__name__).warning(
             "[ADMIN] registro do motor indisponivel, usando a sequencia congelada: %s",
@@ -714,6 +726,73 @@ def db_pool(current_user: dict = Depends(require_admin)):
     """
     from database import pool_stats
     return pool_stats()
+
+
+#: Rotulo CURTO de cada passo · o titulo do cartao no /admin#pipeline.
+#:
+#: Separado de `_STEP_LABELS` porque sao duas frases diferentes: aquele e' o
+#: gerundio do que esta' acontecendo AGORA ("Capturando odds", lido na barra de
+#: progresso), este e' o nome do botao ("Capturar Odds"). Usar um no lugar do
+#: outro deixava o cartao parado escrito no gerundio.
+_PASSO_LABEL_CURTO = {
+    "atualizar_jogos":      "Atualizar Jogos",
+    "player_stats":         "Estatística de Jogador",
+    "capturar_odds":        "Capturar Odds",
+    "gerar_vip":            "Gerar VIP",
+    "gerar_free":           "Gerar Free",
+    "gerar_multipla":       "Gerar Múltipla",
+    "gerar_alavancagem":    "Gerar Alavancagem",
+    "gerar_faltas":         "Gerar Faltas",
+    "gerar_goleiros":       "Gerar Defesas",
+    "gerar_playerstats":    "Gerar Jogadores",
+    "gerar_pickboost":      "Gerar Pick Boost",
+    "atualizar_resultados": "Atualizar Resultados",
+}
+
+#: Passos que o painel mostra FORA da sequencia do "Rodar Tudo".
+#:
+#: Sao os que o motor deixa sem `etapa` de proposito (motor sem historico
+#: medido nao vira custo fixo da rodada diaria), mas que precisam de botao
+#: porque a unica alternativa era a linha de comando.
+_PASSOS_AVULSOS = ["gerar_goleiros"]
+
+
+@router.get("/pipeline-etapas")
+def pipeline_etapas(current_user: dict = Depends(require_admin)):
+    """A sequencia do "Rodar Tudo", com rotulo, pro painel desenhar os cartoes.
+
+    POR QUE ESTA ROTA EXISTE (2026-08-28)
+    -------------------------------------
+    O grid do /admin#pipeline era uma lista literal no Admin.tsx, e ela era a
+    TERCEIRA copia da mesma sequencia -- depois do registro `COMANDOS` do motor
+    e da lista deste router (que ja' foi derivada, justamente por isso). A
+    terceira copia divergiu do mesmo jeito que as duas primeiras: a coleta de
+    estatistica de jogador entrou no `tudo` do motor e no `_TUDO_STEPS` daqui, e
+    o painel continuou mostrando onze cartoes sem ela · o botao nao existia pra
+    uma etapa que rodava.
+
+    Agora o painel pergunta, e a ordem que ele desenha e' a ordem em que o
+    "Rodar Tudo" executa. Etapa nova no motor aparece no painel sozinha.
+
+    `avulsos` sao os passos com botao proprio e fora da sequencia · o painel
+    precisa distingui-los pra nao sugerir que eles rodam no "Rodar Tudo".
+    """
+    return {
+        "etapas": [
+            {"command": passo,
+             "label": _PASSO_LABEL_CURTO.get(passo, passo.replace("_", " ").title())}
+            for passo in _TUDO_STEPS
+        ],
+        "avulsos": [
+            {"command": passo,
+             "label": _PASSO_LABEL_CURTO.get(passo, passo.replace("_", " ").title())}
+            for passo in _PASSOS_AVULSOS
+        ],
+        # Falso quando o motor nao esta' no path e a lista congelada foi usada ·
+        # o painel nao muda por causa disso, mas o log do servidor ja' avisou e
+        # aqui fica visivel pra quem for depurar.
+        "derivada": _TUDO_STEPS_DERIVADA,
+    }
 
 
 @router.get("/pipeline-status")

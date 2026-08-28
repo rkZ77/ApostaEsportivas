@@ -189,11 +189,15 @@ def test_a_coleta_de_jogador_entrou_no_rodar_tudo(passos):
     quando alguem lembra de clicar -- com o pior sintoma possivel: aba vazia,
     sem erro, indistinguivel de "hoje nao teve oportunidade".
 
-    DEPOIS DAS ODDS: odd alimenta todos os motores, estatistica de jogador
-    alimenta um. Se a cota apertar, quem fica sem e' o segundo.
+    ANTES DAS ODDS desde 28/08, por pedido do usuario. Ela nasceu depois, com o
+    argumento de que odd alimenta TODOS os motores e estatistica de jogador
+    alimenta um. A inversao tem razao propria: esta etapa e' a UNICA com teto
+    fixo (50 fixtures) e fila que so' cresce, enquanto a coleta de odds pede o
+    que o dia tiver -- com o teto na frente, o custo de jogador e' conhecido
+    antes de a coleta grande comecar.
     """
     assert "player_stats" in passos
-    assert passos.index("capturar_odds") < passos.index("player_stats")
+    assert passos.index("player_stats") < passos.index("capturar_odds")
     assert passos.index("player_stats") < passos.index("gerar_playerstats")
 
 

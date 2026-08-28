@@ -798,9 +798,6 @@ COMANDOS: tuple = (
             "Atualiza jogos, stats, classificação",
             lambda *a: cmd_dados(mode="full" if _tem(a, "full") else "fast"),
             etapa="DADOS", uso="dados [full]"),
-    Comando("odds", "Capturar odds",
-            "Coleta odds pré-jogo",
-            lambda *a: cmd_odds(), etapa="ODDS"),
     # COLETA DE ESTATISTICA DE JOGADOR · entrou no `tudo` em 2026-08-28.
     #
     # A razao que a mantinha fora se inverteu. O comentario antigo dizia "1
@@ -818,12 +815,28 @@ COMANDOS: tuple = (
     # rodizio por liga reparte esse teto entre as ligas com fila em vez de
     # gastar tudo nas duas que jogaram ontem (ver coletar_pendentes).
     #
-    # DEPOIS DAS ODDS de proposito: odd alimenta TODOS os motores, estatistica
-    # de jogador alimenta um. Se a cota apertar, quem fica sem e' o segundo.
+    # ANTES DAS ODDS (28/08, ordem pedida pelo usuario).
+    #
+    # Nasceu depois, com a justificativa de que odd alimenta TODOS os motores e
+    # estatistica de jogador alimenta um, entao quem devia ficar sem cota era o
+    # segundo. O usuario inverteu, e a inversao tem uma razao propria: esta
+    # etapa e' a UNICA com teto fixo (50 fixtures) e fila que so' cresce. A
+    # coleta de odds nao tem teto -- ela pede o que o dia tiver -- entao numa
+    # ordem ela cede um pedaco previsivel, e na outra ela toma um pedaco que
+    # varia com o tamanho da rodada. Com o teto na frente, o custo de jogador e'
+    # conhecido antes de a coleta grande comecar.
+    #
+    # A ordem tambem casa com a dependencia: a estatistica coletada aqui e' o
+    # historico que o motor de jogador vai ler algumas etapas abaixo, e ela e'
+    # de jogo JA ENCERRADO. Odd e' do jogo de hoje. Sao filas diferentes, e
+    # nenhuma delas espera pela outra.
     Comando("player_stats", "Estatistica de jogador (API)",
             "Coleta estatística por jogador dos jogos encerrados (limite: 50)",
             lambda *a: cmd_player_stats(a[0] if a else "50"),
             uso="player_stats [limite]", etapa="ESTATISTICA DE JOGADOR"),
+    Comando("odds", "Capturar odds",
+            "Coleta odds pré-jogo",
+            lambda *a: cmd_odds(), etapa="ODDS"),
     Comando("vip", "Gerar picks VIP (motor)",
             "Gera picks VIP do dia",
             lambda *a: cmd_vip(), etapa="PICKS VIP"),

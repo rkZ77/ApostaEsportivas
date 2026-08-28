@@ -70,12 +70,14 @@ def test_tudo_roda_as_etapas_do_pipeline_diario():
     Live) fica fora pra nao virar custo fixo da rodada.
     """
     assert [c.etapa for c in main.COMANDOS if c.etapa] == [
-        "DADOS", "ODDS", "ESTATISTICA DE JOGADOR", "PICKS VIP", "DICA DO DIA",
+        "DADOS", "ESTATISTICA DE JOGADOR", "ODDS", "PICKS VIP", "DICA DO DIA",
         "MÚLTIPLA", "ALAVANCAGEM", "FALTAS", "PICKS DE JOGADOR", "PICK BOOST",
         "RESULTADOS",
-        # ESTATISTICA DE JOGADOR entrou em 28/08, DEPOIS das odds: odd alimenta
-        # TODOS os motores e estatistica de jogador alimenta um. Se a cota
-        # apertar, quem fica sem e' o segundo.
+        # ESTATISTICA DE JOGADOR entrou em 28/08 e, no mesmo dia, foi movida
+        # pra ANTES das odds por pedido do usuario. Ela e' a UNICA etapa com
+        # teto fixo (50 fixtures); a coleta de odds pede o que o dia tiver.
+        # Com o teto na frente, o custo de jogador e' conhecido antes de a
+        # coleta grande comecar.
         # PICK BOOST antes de RESULTADOS nao e' detalhe: gerar depois da
         # liquidacao deixa o pick do dia pendente ate' o dia seguinte.
         #
@@ -145,13 +147,17 @@ def test_a_coleta_de_jogador_entrou_no_tudo():
     erro nenhum, indistinguivel de "hoje nao teve oportunidade".
 
     O custo continua limitado: teto de 50 fixtures por rodada, repartido entre
-    as ligas com fila pelo rodizio de `coletar_pendentes`.
+    as ligas com fila pelo rodizio de `coletar_pendentes`. E' justamente por ter
+    teto que ela ficou ANTES das odds (28/08): a coleta de odds nao tem teto,
+    entao nesta ordem o custo de jogador e' conhecido antes de a coleta grande
+    comecar.
     """
     etapas = [c.nome for c in main.COMANDOS if c.etapa]
 
     assert "player_stats" in etapas
-    # Depois das odds e antes do motor que consome o que ela coleta.
-    assert etapas.index("odds") < etapas.index("player_stats")
+    # Antes das odds (pedido do usuario) e antes do motor que consome o que ela
+    # coleta. Ver o comentario de test_tudo_roda_as_etapas_do_pipeline_diario.
+    assert etapas.index("player_stats") < etapas.index("odds")
     assert etapas.index("player_stats") < etapas.index("playerstats-diario")
 
 

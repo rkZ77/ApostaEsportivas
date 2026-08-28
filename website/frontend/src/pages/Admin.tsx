@@ -225,23 +225,51 @@ export default function Admin() {
     setTimeout(() => setToast(null), 3000)
   }
 
-  const PIPELINE_ACTIONS = [
+  /* A SEQUÊNCIA VEM DO SERVIDOR, que a deriva do registro do motor.
+   *
+   * Ela era uma lista escrita aqui, e era a TERCEIRA cópia da mesma coisa ·
+   * depois do registro `COMANDOS` do main.py e da lista do router (que já foi
+   * derivada em 27/08, justamente por ter divergido). A terceira divergiu
+   * igual: a coleta de estatística de jogador entrou no `tudo` do motor e no
+   * `_TUDO_STEPS` do backend, e este grid seguiu com onze cartões sem ela ·
+   * uma etapa que rodava, sem botão pra rodar sozinha.
+   *
+   * A lista abaixo é só o desenho inicial, pra o grid não nascer vazio no
+   * primeiro quadro. Ela é substituída pela resposta de /admin/pipeline-etapas
+   * e NÃO deve ser mantida em dia na mão · é fallback de renderização, não
+   * fonte. */
+  const PIPELINE_FALLBACK = [
     { command: 'atualizar_jogos',      label: 'Atualizar Jogos'      },
+    { command: 'player_stats',         label: 'Estatística de Jogador' },
     { command: 'capturar_odds',        label: 'Capturar Odds'        },
     { command: 'gerar_vip',            label: 'Gerar VIP'            },
     { command: 'gerar_free',           label: 'Gerar Free'           },
     { command: 'gerar_multipla',       label: 'Gerar Múltipla'       },
     { command: 'gerar_alavancagem',    label: 'Gerar Alavancagem'    },
     { command: 'gerar_faltas',         label: 'Gerar Faltas'         },
-    { command: 'gerar_goleiros',       label: 'Gerar Defesas'        },
-    /* Fora do "Rodar Tudo", pelo mesmo critério do main.py: motor sem
-       histórico medido não vira custo fixo da rodada diária. Ficam aqui como
-       botão próprio porque a única forma de rodá-los era pela linha de
-       comando. */
     { command: 'gerar_playerstats',    label: 'Gerar Jogadores'      },
     { command: 'gerar_pickboost',      label: 'Gerar Pick Boost'     },
     { command: 'atualizar_resultados', label: 'Atualizar Resultados' },
-  ] as const
+  ]
+
+  type EtapaDoPipeline = { command: string; label: string }
+  const [pipelineEtapas, setPipelineEtapas] = useState<EtapaDoPipeline[]>(PIPELINE_FALLBACK)
+  /* Passos com botão próprio e FORA do "Rodar Tudo" · o motor os deixa sem
+   * `etapa` de propósito (motor sem histórico medido não vira custo fixo da
+   * rodada diária), e sem essa separação o grid dizia que eles rodavam junto. */
+  const [pipelineAvulsos, setPipelineAvulsos] = useState<EtapaDoPipeline[]>([])
+
+  useEffect(() => {
+    api.get('/admin/pipeline-etapas')
+      .then(r => {
+        if (r.data?.etapas?.length) setPipelineEtapas(r.data.etapas)
+        setPipelineAvulsos(r.data?.avulsos ?? [])
+      })
+      .catch(() => { /* fica o desenho inicial · o grid nunca some */ })
+  }, [])
+
+  /** Tudo que tem botão · usado só pra achar o rótulo de um comando no log. */
+  const PIPELINE_ACTIONS = [...pipelineEtapas, ...pipelineAvulsos]
 
   /* ── Motor Ao Vivo ──────────────────────────────────────────────────────
      Mudou de casa (16/08): virou aba própria em components/AdminMotorLive.
@@ -653,7 +681,7 @@ export default function Admin() {
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
-            {PIPELINE_ACTIONS.map(({ command, label }, idx) => {
+            {pipelineEtapas.map(({ command, label }, idx) => {
               const s = pipelineStatus[command]
               const isRunning = runningCmd === command || s?.status === 'running'
               const borderCls = !s ? 'border-line'
@@ -711,6 +739,42 @@ export default function Admin() {
             })}
           </div>
 
+          {/* FORA DA SEQUÊNCIA · botão próprio, e o "Rodar tudo" não os chama.
+              Ficam separados e rotulados porque, misturados no grid numerado,
+              eles pareciam etapas que rodam junto · e não rodam. O critério é
+              o do motor: pipeline sem histórico medido não vira custo fixo da
+              rodada diária. */}
+          {pipelineAvulsos.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-line/60">
+              <p className="text-[10px] text-ink-4 mb-2">
+                Fora do "Rodar tudo" · rodam só no clique
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+                {pipelineAvulsos.map(({ command, label }) => {
+                  const s = pipelineStatus[command]
+                  const isRunning = runningCmd === command || s?.status === 'running'
+                  return (
+                    <div key={command} className="rounded-md border border-line border-dashed p-3 flex flex-col gap-2">
+                      <p className="text-xs font-semibold text-ink-2 leading-tight">{label}</p>
+                      {s && !isRunning && s.finished_at && (
+                        <p className="text-[10px] text-ink-4 truncate">{s.finished_at}</p>
+                      )}
+                      <button
+                        onClick={() => runPipeline(command)}
+                        disabled={runningCmd !== null || isRunning}
+                        className="mt-auto text-[10px] px-2 py-1 rounded-md border border-line-strong text-ink-2 hover:border-ink-4 hover:text-ink-1 transition-colors duration-1 ease-smooth disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+                      >
+                        {isRunning
+                          ? <><Spinner size="sm" className="w-2.5 h-2.5" tone="ink" /> rodando</>
+                          : <><Play className="w-2.5 h-2.5" /> rodar</>}
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {/* ── Log ao vivo ──────────────────────────────────────────────
               Só admin: a saída crua dos scripts carrega host de banco, liga em
               coleta, contagem de requisição de API e traceback inteiro quando
@@ -767,41 +831,6 @@ export default function Admin() {
         </div>
 
 
-        {/* Revisão IA · contadores ao vivo enquanto o pipeline roda. A leitura
-            de desempenho por modelo (e a lista de pareceres) mora na aba IA,
-            que é onde ela é analisada com calma. */}
-        <div className="card p-4 mb-6">
-          <div className="flex items-center justify-between mb-3 gap-3">
-            <div className="min-w-0">
-              <h2 className="text-xs font-semibold text-ink-3">Revisão por IA</h2>
-              <p className="text-[11px] text-ink-4 mt-1">
-                {aiReviewStatus?.migration_pending ? 'Aguardando a primeira migração do pipeline.' :
-                  `${aiReviewStatus?.config?.mode ?? 'off'} · ${aiReviewStatus?.config?.environment ?? 'prod'} · limite ${aiReviewStatus?.config?.daily_limit ?? 0}/dia`}
-              </p>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                onClick={() => { setAba('ia'); window.location.hash = 'ia' }}
-                className="text-[10px] px-2 py-1 rounded-md border border-line-strong text-ink-2 hover:border-ink-4 hover:text-ink-1 transition-colors"
-              >
-                analisar por modelo
-              </button>
-              <span className={`text-xs font-bold px-2 py-1 rounded ${aiReviewStatus?.config?.mode === 'enforce' ? 'bg-orange-500/15 text-orange-300' : 'bg-blue-500/15 text-blue-300'}`}>
-                {aiReviewStatus?.config?.mode === 'enforce' ? 'VETO ATIVO' : 'SOMBRA'}
-              </span>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {[
-              ['Hoje', aiReviewStatus?.summary?.reviews_today ?? 0],
-              ['24h', aiReviewStatus?.summary?.reviews_24h ?? 0],
-              ['Vetos 24h', aiReviewStatus?.summary?.rejected_24h ?? 0],
-              ['Cache 24h', aiReviewStatus?.summary?.cache_hits_24h ?? 0],
-            ].map(([label, value]) => <div key={String(label)} className="rounded bg-surface-1 px-3 py-2">
-              <p className="text-[10px] text-ink-4">{label}</p><p className="text-lg font-bold text-ink-1">{value}</p>
-            </div>)}
-          </div>
-        </div>
         </>)}
 
         {aba === 'live' && <AdminMotorLive />}
@@ -815,7 +844,47 @@ export default function Admin() {
           </div>
         )}
 
-        {aba === 'ia' && <AdminIAPerformance status={aiReviewStatus} />}
+        {aba === 'ia' && (
+          <div className="space-y-6">
+
+            {/* Revisão por IA · o cabeçalho da aba.
+              *
+              * Ficava na aba Pipeline até 28/08, e era a única coisa de IA lá
+              * dentro: a aba responde "o motor rodou?" e este cartão responde
+              * "o revisor vetou?". São perguntas de dois assuntos, e o botão
+              * que ele mesmo tinha ("analisar por modelo") mandava pra cá ·
+              * sinal de que a casa dele já era esta.
+              *
+              * O contador é o mesmo de antes, e continua ao vivo: quem está
+              * acompanhando uma rodada troca de aba, não perde o número. */}
+            <div className="card p-4">
+          <div className="flex items-center justify-between mb-3 gap-3">
+            <div className="min-w-0">
+              <h2 className="text-xs font-semibold text-ink-3">Revisão por IA</h2>
+              <p className="text-[11px] text-ink-4 mt-1">
+                {aiReviewStatus?.migration_pending ? 'Aguardando a primeira migração do pipeline.' :
+                  `${aiReviewStatus?.config?.mode ?? 'off'} · ${aiReviewStatus?.config?.environment ?? 'prod'} · limite ${aiReviewStatus?.config?.daily_limit ?? 0}/dia`}
+              </p>
+            </div>
+            {/* Sem o selo de modo aqui: o cartão logo abaixo carrega o mesmo
+              * VETO ATIVO/SOMBRA, e empilhados os dois viravam dois avisos do
+              * mesmo fato a dez centímetros um do outro. A linha de cima já
+              * escreve o modo por extenso. */}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {[
+              ['Hoje', aiReviewStatus?.summary?.reviews_today ?? 0],
+              ['24h', aiReviewStatus?.summary?.reviews_24h ?? 0],
+              ['Vetos 24h', aiReviewStatus?.summary?.rejected_24h ?? 0],
+              ['Cache 24h', aiReviewStatus?.summary?.cache_hits_24h ?? 0],
+            ].map(([label, value]) => <div key={String(label)} className="rounded bg-surface-1 px-3 py-2">
+              <p className="text-[10px] text-ink-4">{label}</p><p className="text-lg font-bold text-ink-1">{value}</p>
+            </div>)}
+          </div>
+        </div>
+            <AdminIAPerformance status={aiReviewStatus} />
+          </div>
+        )}
 
         {aba === 'financeiro' && (<>
         {/* Receita do mês · era o único número financeiro que morava fora

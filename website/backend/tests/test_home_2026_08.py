@@ -907,17 +907,32 @@ def test_performance_da_ia_conta_todos_os_pipelines():
     dois, contava os dois na banca do usuario e no historico publico -- so' a
     porcentagem do topo os ignorava. O percentual anunciado nao descrevia o
     produto vendido logo abaixo dele.
+
+    A assercao mudou de forma em 28/08 e nao de intencao. O UNION deixou de ser
+    literal no corpo da funcao -- ele passou a ser MONTADO a partir de
+    `_FONTES_DO_PLACAR`, pra a mesma rota poder devolver um pipeline so' quando
+    a tela pede `source`. Ler a constante e' ler a mesma coisa que a regex lia,
+    e sem ela o teste passaria a nao ver nada e a acusar ausencia onde ha' oito.
     """
+    import routers.suggestions as sug
+
+    tabelas = {tabela for _chave, tabela in sug._FONTES_DO_PLACAR}
+    assert tabelas == _SEIS, "stats/quick nao soma todas as fontes do placar"
+    # E o UNION continua sendo montado desta lista, e nao de outra.
     corpo = _codigo("routers/suggestions.py", "get_quick_stats")
-    assert _uniao_de_picks(corpo) == _SEIS, "stats/quick nao soma todas as fontes do placar"
+    assert "fontes" in corpo and "STAKE_PADRAO[chave]" in corpo
 
 
 def test_sequencia_atual_usa_a_mesma_base_do_total():
     """Lia so' picks_vip: "5 greens seguidos" descrevia um pipeline e aparecia
-    colado num total que somava todos."""
+    colado num total que somava todos.
+
+    Hoje as duas consultas saem da MESMA variavel `fontes`, entao a garantia e'
+    estrutural: nao ha' como uma somar oito tabelas e a outra uma so'.
+    """
     corpo = _codigo("routers/suggestions.py", "get_quick_stats")
     trecho = corpo[corpo.index("Sequ"):]
-    assert _uniao_de_picks(trecho) == _SEIS
+    assert "for _chave, tabela in fontes" in trecho
 
 
 def test_ranking_conta_aposta_em_faltas_e_defesas():

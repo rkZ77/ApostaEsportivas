@@ -375,7 +375,14 @@ export default function AdminIAPerformance({ status }: { status: AIReviewStatus 
         <EmptyState Icon={Brain} title="Aguardando a migração do ledger" compact
           description={'As colunas de autoria da revisão entram em picks_ledger na próxima execução de '
             + '"Atualizar Resultados". Rode uma vez e esta tela passa a ter dado.'} />
-      ) : !data?.modelos.length ? (
+      /* `?.` nos TRÊS arrays daqui pra baixo (28/08).
+       *
+       * `data` era opcional e o array não: bastava a rota devolver um corpo
+       * sem `modelos` -- um shape de erro, um banco sem a tabela do ledger --
+       * pra ser um TypeError no meio do render, e um TypeError no render
+       * derruba a árvore inteira. O painel do /admin virava "Algo deu errado"
+       * por causa de uma tabela vazia numa aba. */
+      ) : !data?.modelos?.length ? (
         <EmptyState Icon={Brain} title="Nenhuma revisão registrada no período" compact
           description="Assim que os pipelines rodarem com o gate ligado, a comparação aparece aqui." />
       ) : (
@@ -408,7 +415,7 @@ export default function AdminIAPerformance({ status }: { status: AIReviewStatus 
                 total mistura mercados diferentes; a leitura honesta é dentro da mesma linha.
               </p>
             </div>
-            {data.por_pipeline.length ? (
+            {data.por_pipeline?.length ? (
               <Table columns={colsPipeline} rows={data.por_pipeline}
                 rowKey={(r, i) => `${r.pick_type}-${r.model}-${i}`} minWidth={520} />
             ) : (
@@ -434,7 +441,7 @@ export default function AdminIAPerformance({ status }: { status: AIReviewStatus 
                 fora das contas acima em vez de entrar num modelo por chute.
               </p>
             )}
-            {data.falhas.length > 0 && (
+            {(data.falhas?.length ?? 0) > 0 && (
               <div className="px-4 pb-4">
                 <p className="text-[11px] text-ink-3 font-semibold mb-2">Por que ficou sem parecer</p>
                 <div className="flex flex-wrap gap-2">
