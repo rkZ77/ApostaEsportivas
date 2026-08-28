@@ -45,7 +45,11 @@ export const MAX_PASSOS = 8
  * então todas as áreas do roteiro valem para todo mundo que o vê. Espelha
  * `VIP_TOUR_TOTAL_STEPS` no backend.
  */
-export const TOTAL_PASSOS_VIP = 6
+/* 8 desde 2026-08-28 · Pick Boost e Picks Ao Vivo ganharam passo proprio, e o
+   de "Mercados" virou o de picks de jogador (a aba Mercados deixou de existir).
+   O numero e' literal e nao derivado do array de proposito: ele aparece no
+   rodape do tour ("passo 3 de 8") e a lista e' montada em outro arquivo. */
+export const TOTAL_PASSOS_VIP = 8
 
 /**
  * O passo "Confirme seu e-mail" entra?

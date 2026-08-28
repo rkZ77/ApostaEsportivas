@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import {
-  BarChart2, Bot, CircleCheck, Crown, Layers, ShieldQuestion, Sparkles, Trophy,
+  BarChart2, Bot, CircleCheck, Crown, Layers, Radio, Rocket, ShieldQuestion, Sparkles, Trophy,
   TrendingUp, Zap,
 } from 'lucide-react'
 import type { TourStep } from './steps'
@@ -57,7 +57,9 @@ export const TOUR_STEPS_VIP: TourStep[] = [
             [Zap, 'Picks VIP do dia'],
             [Layers, 'Múltiplas'],
             [TrendingUp, 'Alavancagem'],
-            [ShieldQuestion, 'Faltas e defesas'],
+            [ShieldQuestion, 'Faltas e picks de jogador'],
+            [Rocket, 'Pick Boost'],
+            [Radio, 'Picks Ao Vivo'],
             [Trophy, 'Estatísticas de cada jogo'],
             [Bot, 'Agente IA'],
           ]}
@@ -115,20 +117,67 @@ export const TOUR_STEPS_VIP: TourStep[] = [
     ),
   },
   {
-    id: 'vip-mercados',
-    titulo: 'Faltas e defesas de goleiro',
+    /* Este passo apontava pra `[data-aba="mercados"]`, e a aba Mercados deixou
+       de existir em 27/08 · o destaque caía no fallback (`picks-area`) e o
+       texto descrevia uma tela que ninguém mais ia encontrar.
+       Faltas virou seção da aba VIP e Jogadores ganhou aba própria. */
+    id: 'vip-jogadores',
+    titulo: 'Picks de jogador',
     Icon: ShieldQuestion,
     rota: '/picks',
-    alvos: ['[data-aba="mercados"]', '[data-tour="picks-area"]'],
-    resumo: 'A aba Mercados traz dois mercados que o motor calcula separado dos gols: total de faltas e defesas do goleiro.',
+    alvos: ['[data-aba="jogadores"]', '[data-tour="picks-area"]'],
+    resumo: 'Uma aba só para estatística individual: chutes, chutes no alvo, gols, defesas, faltas, desarmes e passes de um jogador específico.',
     corpo: (
       <div className="space-y-3">
         <p className="text-xs text-ink-2 leading-relaxed">
-          Eles aparecem com menos frequência que os picks de gols, porque dependem de
-          estatística que nem todo jogo tem. Quando aparecem, vêm com a mesma análise
-          completa.
+          A média sai das atuações dele na mesma competição, contando só jogo em que ele foi
+          titular efetivo · entrada de doze minutos e jogo inteiro não são a mesma coisa.
+        </p>
+        <p className="text-[11px] text-ink-3 leading-relaxed">
+          Faltas continua existindo e agora fica dentro da própria aba VIP, logo abaixo da
+          grade de picks.
         </p>
         {AVISO_ATRASO}
+      </div>
+    ),
+  },
+  {
+    id: 'vip-boost',
+    titulo: 'Pick Boost',
+    Icon: Rocket,
+    rota: '/picks',
+    alvos: ['[data-aba="boost"]', '[data-tour="picks-area"]'],
+    resumo: 'Uma combinação fixa no mesmo jogo: mais de 1.5 gols no jogo inteiro e menos de 2.5 no primeiro tempo.',
+    corpo: (
+      <div className="space-y-3">
+        <p className="text-xs text-ink-2 leading-relaxed">
+          Nos outros produtos o motor olha um jogo e escolhe o melhor mercado dele. Aqui é o
+          contrário: o mercado já está definido e o que se escolhe são os jogos · por isso o
+          dia costuma ter mais de um.
+        </p>
+        <p className="text-[11px] text-ink-3 leading-relaxed">
+          Um deles é gratuito todo dia, mesmo para quem não é assinante. O resto é seu.
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: 'vip-ao-vivo',
+    titulo: 'Picks Ao Vivo',
+    Icon: Radio,
+    rota: '/picks',
+    alvos: ['[data-aba="ao_vivo"]', '[data-tour="picks-area"]'],
+    resumo: 'Oportunidades que o motor encontra com o jogo rolando, lendo placar, ritmo e pressão em tempo real.',
+    corpo: (
+      <div className="space-y-3">
+        <p className="text-xs text-ink-2 leading-relaxed">
+          A odd ao vivo vale minutos, então o card mostra uma contagem regressiva · o preço
+          é o do instante da análise, e vale conferir na casa antes de apostar.
+        </p>
+        <p className="text-[11px] text-ink-3 leading-relaxed">
+          Você recebe um aviso quando o motor publica um pick novo. Quando não há nada, a
+          aba diz se o motor está ligado ou parado · são coisas diferentes.
+        </p>
       </div>
     ),
   },

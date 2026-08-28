@@ -289,7 +289,16 @@ def list_achievements(current_user: dict = Depends(get_current_user)):
 # mostra varia entre 7 e 8, entao o que o backend valida e' o maximo.
 TUTORIAL_TOTAL_STEPS = 8
 # Roteiro do VIP: o que a assinatura abriu.
-VIP_TOUR_TOTAL_STEPS = 6
+#
+# 8 desde 2026-08-28. Eram 6 ate' o passo de "Mercados" (aba que deixou de
+# existir) virar tres: picks de jogador, Pick Boost e Picks Ao Vivo.
+#
+# O numero vive nos DOIS lados e ha' teste comparando os arquivos, e a
+# duplicacao e' deliberada: o backend valida o `step` que a tela manda, entao
+# ele precisa saber o teto sem baixar o roteiro (que e' TSX). Sem o teste, subir
+# um lado e esquecer o outro faria o backend recusar o ultimo passo do tour --
+# e o tour reabriria do zero na visita seguinte, que foi um bug real aqui.
+VIP_TOUR_TOTAL_STEPS = 8
 
 TUTORIAL_STATUS = ("pending", "completed", "skipped")
 
