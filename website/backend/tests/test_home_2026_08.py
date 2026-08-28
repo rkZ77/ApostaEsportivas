@@ -743,9 +743,20 @@ def test_painel_de_filtro_diz_quantos_sobraram():
 
 
 def test_um_painel_de_filtro_pro_site_inteiro():
-    """A aba Mercados tinha controles proprios (busca inline, tres filas de
-    pill, um select de ordenacao) e parecia outra ferramenta dentro da mesma
-    pagina · a aba VIP, logo acima, filtrava com o painel dobravel."""
+    """Nao existe um segundo jeito de filtrar.
+
+    A aba Mercados tinha controles proprios (busca inline, tres filas de pill,
+    um select de ordenacao) e parecia outra ferramenta dentro da mesma pagina --
+    a aba VIP, logo acima, filtrava com o painel dobravel. Os controles viraram
+    FilterPanel em 2026-08-15.
+
+    EM 27/08 A ABA INTEIRA SAIU: faltas e jogadores viraram secoes DENTRO da aba
+    VIP, que ja' tem o painel em cima. O que este teste protege continua sendo o
+    mesmo -- nenhum componente de filtro paralelo -- e ganhou a metade que
+    faltava: o modulo de regra sobreviveu porque a ORDENACAO ainda importa
+    (Player Stats ordena por Score, faltas por edge), e ele nao pode voltar a
+    carregar casca.
+    """
     assert not os.path.exists(os.path.join(_FRONT, "components/MercadosControls.tsx")), \
         "os controles proprios deviam ter sumido"
     # o modulo que sobrou e' so' regra, sem casca
@@ -755,10 +766,25 @@ def test_um_painel_de_filtro_pro_site_inteiro():
 
     src = _front_codigo("pages/Picks.tsx")
     assert "MercadosControls" not in src
-    # e a aba passa a usar o mesmo painel, com busca e ordenacao
-    assert "busca={{" in src
-    assert "ordem={{" in src
 
+
+def test_a_aba_mercados_nao_existe_mais():
+    """Faltas e Jogadores sao picks VIP: mesmo motor, mesmo card, mesma aba.
+
+    A aba gastava um dos oito lugares de uma barra que rola no celular, e o
+    espaco foi pro Picks Ao Vivo. O hash antigo tem que continuar chegando em
+    algum lugar util -- `#mercados` caindo no fallback abriria a aba Hoje, que
+    e' outra tela (mesmo sintoma que `#chat` produziu).
+    """
+    src = _front_codigo("pages/Picks.tsx")
+
+    assert "tab === 'mercados'" not in src, "o bloco da aba ainda esta' desenhado"
+    assert "key: 'mercados'" not in src, "a aba ainda esta' na barra"
+    assert "mercados: 'vip'" in src, "#mercados precisa de alias pra aba VIP"
+    # E as secoes precisam existir dentro da aba VIP, senao os picks sumiram
+    # junto com a aba.
+    assert 'tipo="faltas"' in src
+    assert 'tipo="player_stats"' in src
 
 def test_busca_aparece_no_rastro_de_filtros():
     """Digitada e painel fechado, ela sumia da vista e o usuario ficava sem

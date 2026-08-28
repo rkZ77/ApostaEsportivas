@@ -15,7 +15,7 @@ import {
   LiveDot, Spinner, EmptyState, SkeletonPickGrid, Badge, PickTypeBadge, ResultBadge,
   rotuloDoPlano,
 } from '../components/ui'
-import { aplicarFiltro, FILTRO_INICIAL, type MercadoFiltro } from '../lib/mercadoFiltro'
+import { aplicarFiltro, FILTRO_INICIAL } from '../lib/mercadoFiltro'
 import EngineStatus from '../components/EngineStatus'
 import AnalysisModal from '../components/AnalysisModal'
 import {
@@ -38,7 +38,7 @@ const LivePicks     = lazy(() => import('../components/LivePicks'))
 const LivePicksFeed = lazy(() => import('../components/LivePicksFeed'))
 import PicksPendingCard from '../components/PicksPendingCard'
 import { LIVE_PICKS_ENABLED } from '../config'
-import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2, SearchX, TrendingUp, X as XIcon, Lock, Ticket } from 'lucide-react'
+import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2, TrendingUp, X as XIcon, Lock, Ticket } from 'lucide-react'
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import { stakeDe } from '../utils/stakePlan'
 import {fmtUnits, pctProb, capitalizarFrase } from '../utils/format'
@@ -101,10 +101,20 @@ function LeagueLogo({ id, name, size = 18 }: { id?: number; name?: string; size?
  *
  * Links antigos (#aovivo) continuam abrindo Minhas Apostas · ver ALIAS_ABA.
  */
-type Tab = 'hoje' | 'pick_seguro' | 'vip' | 'multiplas' | 'alavancagem' | 'mercados' | 'ao_vivo' | 'minhas_apostas'
+/* `mercados` saiu em 2026-08-27. Faltas e Jogadores viraram seções DENTRO da
+   aba VIP: são picks VIP, saem do mesmo motor e usam o mesmo card, e uma aba
+   só pra eles gastava um dos oito lugares de uma barra que rola no celular ·
+   espaço que o Picks Ao Vivo precisava mais. Ver `#mercados` no roteamento por
+   hash, que continua sendo destino válido e cai em `vip`. */
+type Tab = 'hoje' | 'pick_seguro' | 'vip' | 'multiplas' | 'alavancagem' | 'ao_vivo' | 'minhas_apostas'
 
-/** Chave antiga na URL -> aba atual. */
-const ALIAS_ABA: Record<string, Tab> = { aovivo: 'minhas_apostas' }
+/** Chave antiga na URL -> aba atual.
+ *
+ * `mercados` cai em `vip` porque foi pra la' que o conteudo foi (27/08), e nao
+ * em `hoje`: quem salvou /picks#mercados quer os picks de faltas e jogadores,
+ * e eles estao na aba VIP agora. Sem o alias o hash caia no fallback e abria a
+ * aba Hoje, que e' outra tela -- o mesmo sintoma que #chat produziu. */
+const ALIAS_ABA: Record<string, Tab> = { aovivo: 'minhas_apostas', mercados: 'vip' }
 
 const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
 
@@ -176,7 +186,6 @@ function TabBar({ tab, setTab, canSeeVip, verAoVivo, counts, liveCount, onPrefet
     { key: 'vip',          label: 'Picks VIP',       premiumOnly: true },
     { key: 'multiplas',    label: 'Múltiplas',       premiumOnly: true },
     { key: 'alavancagem',  label: 'Alavancagem',      premiumOnly: true },
-    { key: 'mercados',     label: 'Mercados',         premiumOnly: true },
     {
       /* O produto novo: oportunidades que o motor achou durante o jogo.
          "Picks Ao Vivo" e não "Ao Vivo" porque a barra já tem Picks Free e
@@ -1972,7 +1981,7 @@ export default function Picks() {
     // nem tem bloco de conteúdo, então /picks#chat abria a página com NENHUMA
     // aba ativa e a área vazia -- exatamente o sintoma que o comentário acima
     // descreve pro #ao_vivo. O chat vive no botão do Agente e em /agente.
-    const valid: Tab[] = ['hoje','pick_seguro','vip','multiplas','alavancagem','mercados','minhas_apostas',
+    const valid: Tab[] = ['hoje','pick_seguro','vip','multiplas','alavancagem','minhas_apostas',
                           ...(podeVerAoVivo ? ['ao_vivo' as Tab] : [])]
     setTab(valid.includes(hash) ? hash : 'hoje')
   }, [location.hash, podeVerAoVivo])
@@ -2005,7 +2014,12 @@ export default function Picks() {
   // null = ainda nao buscou (a aba carrega sob demanda, ver o efeito por aba)
   // Busca, categoria, ordem e estado da aba Mercados. Filtragem é local: a aba
   // já baixa os dois conjuntos inteiros, são poucas dezenas de picks por dia.
-  const [mercadoFiltro, setMercadoFiltro] = useState<MercadoFiltro>(FILTRO_INICIAL)
+  /* O filtro da antiga aba Mercados saiu junto com a aba. O que fica de
+   * `aplicarFiltro` é a ORDENAÇÃO, que continua importando: Player Stats
+   * ordena por Score (0-100) e faltas por edge, e `FILTRO_INICIAL` já é
+   * "nenhum filtro, maior margem primeiro". Filtrar essas listas voltou a não
+   * fazer sentido: são uma mão-cheia de picks por dia, dentro de uma aba que
+   * já tem o painel de filtro do VIP em cima. */
   /*
    * A aba Mercados é a aba do DIA, igual à de picks VIP.
    *
@@ -2022,10 +2036,12 @@ export default function Picks() {
      dizer o MÉTODO, e "Chutes no alvo" dentro de um bloco chamado "Defesas"
      seria pior que duas listas. */
   const playerStats = (today?.player_stats ?? null) as MercadoPick[] | null
-  const faltasFiltradas   = useMemo(() => aplicarFiltro(faltas ?? [], mercadoFiltro), [faltas, mercadoFiltro])
-  const goleirosFiltrados = useMemo(() => aplicarFiltro(goleiros ?? [], mercadoFiltro), [goleiros, mercadoFiltro])
-  const playerStatsFiltrados = useMemo(
-    () => aplicarFiltro(playerStats ?? [], mercadoFiltro), [playerStats, mercadoFiltro])
+  const faltasOrdenadas = useMemo(
+    () => (faltas === null ? null : aplicarFiltro(faltas, FILTRO_INICIAL)), [faltas])
+  const goleirosOrdenados = useMemo(
+    () => (goleiros === null ? null : aplicarFiltro(goleiros, FILTRO_INICIAL)), [goleiros])
+  const playerStatsOrdenados = useMemo(
+    () => (playerStats === null ? null : aplicarFiltro(playerStats, FILTRO_INICIAL)), [playerStats])
   /* Defesas parou de crescer em 27/08 (virou o método `saves` do Player
      Stats). A seção continua existindo pro dia antigo, mas desenhar todo dia
      um bloco que nunca mais vai ter pick é ruído · ela só aparece quando tem
@@ -2472,11 +2488,14 @@ export default function Picks() {
           liveCount={liveCount}
           counts={{
             pick_seguro: today?.dica_do_dia && !today.dica_do_dia.result ? 1 : undefined,
-            vip:         (today?.vip ?? []).filter((s: any) => !s.result).length || undefined,
+            /* Faltas, Jogadores e Defesas entram na contagem do VIP: desde
+               27/08 eles são seções DENTRO desta aba, e um contador que os
+               ignorasse diria "3" numa aba com 7 picks. */
+            vip:         ([...(today?.vip ?? []), ...(today?.faltas ?? []),
+                           ...(today?.player_stats ?? []), ...(today?.goleiros ?? [])]
+                            .filter((s: any) => !s.result).length) || undefined,
             multiplas:   (today?.multiplas ?? []).filter((m: any) => !m.result).length || undefined,
             alavancagem: today?.alavancagem && !today.alavancagem.result ? 1 : undefined,
-            mercados:    ([...(today?.faltas ?? []), ...(today?.goleiros ?? [])]
-                            .filter((p: any) => !p.result).length) || undefined,
           }}
         />
 
@@ -2689,7 +2708,7 @@ export default function Picks() {
                       />
                     ))}
                   </div>
-                  <button onClick={() => setTab('mercados')}
+                  <button onClick={() => setTab('vip')}
                     className="mt-3 w-full text-center text-xs text-purple-400 hover:text-purple-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong">
                     Ver todos os mercados
                   </button>
@@ -2822,6 +2841,49 @@ export default function Picks() {
               })()}
             </div>
 
+            {/* Os mercados de modelo próprio, que até 27/08 moravam numa aba
+                separada. São picks VIP, saem do mesmo motor e usam o mesmo
+                card · o que a aba dava era distância, não organização.
+
+                Ficam DEPOIS da lista VIP e não misturados nela de propósito: a
+                grade de cima é a que o assinante abre esperando ("os picks do
+                dia"), e um pick de jogador no meio dela mudaria a leitura sem
+                avisar. Cada seção tem cabeçalho próprio. */}
+            <MercadoSecao
+              tipo="faltas"
+              titulo="Faltas"
+              cor="bg-purple-400"
+              explicacao="Total de faltas do jogo. A previsão combina o histórico de faltas dos dois times com o do árbitro, e a probabilidade sai da taxa medida em jogos reais nessa faixa de previsão."
+              picks={faltasOrdenadas}
+              carregando={todayLoading}
+              banca={bancaSummary?.has_banca ? bancaSummary : null}
+            />
+
+            <MercadoSecao
+              tipo="player_stats"
+              titulo="Jogadores"
+              cor="bg-amber-400"
+              explicacao="Estatística de um jogador específico: chutes, chutes no alvo, faltas, desarmes, passes e defesas. A média sai das atuações dele na mesma competição, só contando jogo em que ele foi titular efetivo, e a probabilidade vem de uma Binomial Negativa com a dispersão medida na própria base."
+              picks={playerStatsOrdenados}
+              carregando={todayLoading}
+              banca={bancaSummary?.has_banca ? bancaSummary : null}
+            />
+
+            {/* Defesas parou de crescer em 27/08 (virou o método `saves` do
+                Player Stats). A seção existe pro dia antigo e some quando não
+                tem conteúdo · desenhar todo dia um bloco que nunca mais vai
+                receber pick é ruído. */}
+            {temGoleiros && (
+              <MercadoSecao
+                tipo="goleiros"
+                titulo="Defesas de goleiro"
+                cor="bg-sky-400"
+                explicacao="Quantas defesas um goleiro específico faz no jogo. O sinal principal é o volume de chutes no alvo que o adversário costuma produzir. Este mercado passou a sair pelo Player Stats, na seção Jogadores."
+                picks={goleirosOrdenados}
+                carregando={todayLoading}
+                banca={bancaSummary?.has_banca ? bancaSummary : null}
+              />
+            )}
 
             <button onClick={() => navigate('/resultados')}
               className="w-full text-center text-xs text-yellow-400 hover:text-yellow-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong font-semibold">
@@ -3378,119 +3440,6 @@ export default function Picks() {
           </motion.div>
         )}
 
-        {tab === 'mercados' && (
-          <motion.div key="mercados" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-8">
-            {!canSeeVip ? (
-              <div>
-                <SectionHeader color="bg-purple-400" label="Mercados" />
-                <VipLockOverlay color="purple" picks={today?.bloqueados?.mercados} rotulo="mercados" />
-              </div>
-            ) : (
-              <>
-                {/* Mesmo painel da aba VIP, logo acima · a aba tinha controles
-                    próprios (busca inline, três filas de pill, um select de
-                    ordenação) e parecia outra ferramenta dentro da mesma
-                    página. A contagem de cada categoria fica no rótulo, que é
-                    onde ela responde "tem quantos de faltas hoje?". */}
-                <FilterPanel
-                  accent="green"
-                  busca={{
-                    value: mercadoFiltro.busca,
-                    onChange: v => setMercadoFiltro({ ...mercadoFiltro, busca: v }),
-                    placeholder: 'Buscar time, jogador ou linha',
-                  }}
-                  groups={[
-                    {
-                      key: 'categoria', label: 'Mercado',
-                      options: [
-                        { value: 'todos', label: `Todos (${(faltas?.length ?? 0) + (goleiros?.length ?? 0) + (playerStats?.length ?? 0)})` },
-                        { value: 'faltas', label: `Faltas (${faltas?.length ?? 0})` },
-                        { value: 'player_stats', label: `Jogadores (${playerStats?.length ?? 0})` },
-                        // Só enquanto houver pick antigo · ver `temGoleiros`.
-                        ...(temGoleiros
-                          ? [{ value: 'goleiros', label: `Defesas (${goleiros?.length ?? 0})` }]
-                          : []),
-                      ],
-                      value: mercadoFiltro.categoria,
-                      onChange: v => setMercadoFiltro({ ...mercadoFiltro, categoria: v as MercadoFiltro['categoria'] }),
-                    },
-                    {
-                      key: 'estado', label: 'Situação',
-                      options: [
-                        { value: 'todos',      label: 'Todos' },
-                        { value: 'pendentes',  label: 'Pendentes' },
-                        { value: 'resolvidos', label: 'Resolvidos' },
-                      ],
-                      value: mercadoFiltro.estado,
-                      onChange: v => setMercadoFiltro({ ...mercadoFiltro, estado: v as MercadoFiltro['estado'] }),
-                    },
-                  ]}
-                  ordem={{
-                    options: [
-                      { value: 'margem', label: 'Maior margem' },
-                      { value: 'odd',    label: 'Maior odd' },
-                      { value: 'data',   label: 'Data do jogo' },
-                    ],
-                    value: mercadoFiltro.ordem,
-                    onChange: v => setMercadoFiltro({ ...mercadoFiltro, ordem: v as MercadoFiltro['ordem'] }),
-                  }}
-                  resultado={faltasFiltradas.length + goleirosFiltrados.length + playerStatsFiltrados.length}
-                />
-
-                {/* Nada bateu o filtro. Sem isso as duas seções apareciam com o
-                    vazio genérico de "nenhum pick ainda", que é outra coisa:
-                    ali não existe pick, aqui existe e o filtro escondeu. */}
-                {faltasFiltradas.length === 0 && goleirosFiltrados.length === 0
-                  && playerStatsFiltrados.length === 0 && !todayLoading
-                  && (faltas?.length || goleiros?.length || playerStats?.length) ? (
-                  <EmptyState
-                    Icon={SearchX}
-                    title="Nenhum mercado com esses filtros"
-                    description="Tente outro time, outra linha, ou volte para todos os mercados do dia."
-                    action={{ children: 'Limpar filtros', variant: 'ghost', onClick: () => setMercadoFiltro(FILTRO_INICIAL) }}
-                    compact
-                  />
-                ) : (
-                  <>
-                    {['todos', 'faltas'].includes(mercadoFiltro.categoria) && (
-                      <MercadoSecao
-                        tipo="faltas"
-                        titulo="Faltas"
-                        cor="bg-purple-400"
-                        explicacao="Total de faltas do jogo. A previsão combina o histórico de faltas dos dois times com o do árbitro, e a probabilidade sai da taxa medida em jogos reais nessa faixa de previsão."
-                        picks={faltas === null ? null : faltasFiltradas}
-                        carregando={todayLoading}
-                        banca={bancaSummary?.has_banca ? bancaSummary : null}
-                      />
-                    )}
-                    {['todos', 'player_stats'].includes(mercadoFiltro.categoria) && (
-                      <MercadoSecao
-                        tipo="player_stats"
-                        titulo="Jogadores"
-                        cor="bg-amber-400"
-                        explicacao="Estatística de um jogador específico: chutes, chutes no alvo, faltas, desarmes, passes e defesas. A média sai das atuações dele na mesma competição, só contando jogo em que ele foi titular efetivo, e a probabilidade vem de uma Binomial Negativa com a dispersão medida na própria base."
-                        picks={playerStats === null ? null : playerStatsFiltrados}
-                        carregando={todayLoading}
-                        banca={bancaSummary?.has_banca ? bancaSummary : null}
-                      />
-                    )}
-                    {temGoleiros && ['todos', 'goleiros'].includes(mercadoFiltro.categoria) && (
-                      <MercadoSecao
-                        tipo="goleiros"
-                        titulo="Defesas de goleiro"
-                        cor="bg-sky-400"
-                        explicacao="Quantas defesas um goleiro específico faz no jogo. O sinal principal é o volume de chutes no alvo que o adversário costuma produzir. Este mercado passou a sair pelo Player Stats, na seção Jogadores."
-                        picks={goleiros === null ? null : goleirosFiltrados}
-                        carregando={todayLoading}
-                        banca={bancaSummary?.has_banca ? bancaSummary : null}
-                      />
-                    )}
-                  </>
-                )}
-              </>
-            )}
-          </motion.div>
-        )}
         </AnimatePresence>
         {/* Ao Vivo · o produto novo (oportunidades do Motor Live).
             Fora do AnimatePresence acima pelo mesmo motivo de Minhas Apostas:

@@ -61,6 +61,10 @@ export interface RespostaHoje {
   multiplas?: unknown[]
   alavancagem?: unknown | null
   faltas?: Pick[]
+  /* Player Stats · chave própria e não misturada com `goleiros`, porque o card
+     precisa dizer o MÉTODO ("Chutes no alvo" não é "Defesas"). Mesma decisão
+     do backend, que devolve as duas separadas desde 27/08. */
+  player_stats?: Pick[]
   goleiros?: Pick[]
 }
 
@@ -144,6 +148,7 @@ export interface ResumoDeHoje {
   multiplas: number
   alavancagem: number
   faltas: number
+  player_stats: number
   goleiros: number
   total: number
 }

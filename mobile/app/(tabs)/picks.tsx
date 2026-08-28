@@ -1,10 +1,20 @@
 /**
  * Picks pré-jogo do dia, com filtro por tipo.
  *
- * Os tipos (VIP, dica gratuita, faltas, defesas) já vêm separados por
- * `/suggestions/today` -- aqui eles só viram abas de filtro, porque no
- * celular não cabe mostrar as quatro listas empilhadas de uma vez. Quem
- * decide o que cada plano enxerga continua sendo o backend.
+ * Os tipos (VIP, dica gratuita, faltas, jogadores, defesas) já vêm separados
+ * por `/suggestions/today` -- aqui eles só viram abas de filtro, porque no
+ * celular não cabe mostrar as listas empilhadas de uma vez. Quem decide o que
+ * cada plano enxerga continua sendo o backend.
+ *
+ * JOGADORES (Player Stats) entrou em 2026-08-27, junto com o site. O motor
+ * escrevia em `picks_player_stats` desde a arquitetura de motores e nenhuma
+ * das duas telas lia a chave · o site ganhou a seção na aba VIP, e aqui ela
+ * vira mais um filtro. Mesmo produto, mesma origem, mesmo card.
+ *
+ * DEFESAS deixou de crescer no mesmo dia: virou o método `saves` do Player
+ * Stats. O filtro continua porque os picks antigos continuam no banco, mas
+ * ele só aparece quando o dia tem algum · uma pill que nunca mais vai
+ * devolver nada é ruído numa barra que já rola de lado.
  */
 import { useMemo, useState } from 'react'
 import { FlatList, Pressable, RefreshControl, ScrollView, View } from 'react-native'
@@ -18,15 +28,7 @@ import { PickCard } from '../../src/components/PickCard'
 import { cores, espaco, raio } from '../../src/theme/tokens'
 import type { Pick } from '../../src/api/types'
 
-type Filtro = 'todos' | 'vip' | 'gratuito' | 'faltas' | 'goleiros'
-
-const FILTROS: { chave: Filtro; rotulo: string }[] = [
-  { chave: 'todos', rotulo: 'Todos' },
-  { chave: 'vip', rotulo: 'VIP' },
-  { chave: 'gratuito', rotulo: 'Gratuito' },
-  { chave: 'faltas', rotulo: 'Faltas' },
-  { chave: 'goleiros', rotulo: 'Defesas' },
-]
+type Filtro = 'todos' | 'vip' | 'gratuito' | 'faltas' | 'player_stats' | 'goleiros'
 
 export default function Picks() {
   const router = useRouter()
@@ -34,6 +36,19 @@ export default function Picks() {
   const [filtro, setFiltro] = useState<Filtro>('todos')
 
   const { dados, carregando, atualizando, erro, atualizar } = useDados(() => apiPicks.hoje(), [])
+
+  /* Defesas só entra na barra quando o dia tem pick dela · ver o cabeçalho. */
+  const filtros = useMemo(() => {
+    const base: { chave: Filtro; rotulo: string }[] = [
+      { chave: 'todos', rotulo: 'Todos' },
+      { chave: 'vip', rotulo: 'VIP' },
+      { chave: 'gratuito', rotulo: 'Gratuito' },
+      { chave: 'faltas', rotulo: 'Faltas' },
+      { chave: 'player_stats', rotulo: 'Jogadores' },
+    ]
+    if ((dados?.goleiros?.length ?? 0) > 0) base.push({ chave: 'goleiros', rotulo: 'Defesas' })
+    return base
+  }, [dados?.goleiros])
 
   /* Cada tipo carrega o rótulo de origem porque a rota de detalhe precisa
      saber de qual tabela o pick veio. */
@@ -45,13 +60,15 @@ export default function Picks() {
     const vip = marcar(dados.vip, 'vip')
     const gratuito = dados.dica_do_dia ? marcar([dados.dica_do_dia], 'free') : []
     const faltas = marcar(dados.faltas, 'faltas')
+    const playerStats = marcar(dados.player_stats, 'player_stats')
     const goleiros = marcar(dados.goleiros, 'goleiros')
 
     if (filtro === 'vip') return vip
     if (filtro === 'gratuito') return gratuito
     if (filtro === 'faltas') return faltas
+    if (filtro === 'player_stats') return playerStats
     if (filtro === 'goleiros') return goleiros
-    return [...gratuito, ...vip, ...faltas, ...goleiros]
+    return [...gratuito, ...vip, ...faltas, ...playerStats, ...goleiros]
   }, [dados, filtro])
 
   return (
@@ -63,7 +80,7 @@ export default function Picks() {
         contentContainerStyle={{ paddingHorizontal: espaco.lg, paddingVertical: espaco.md, gap: espaco.sm }}
         style={{ flexGrow: 0 }}
       >
-        {FILTROS.map(({ chave, rotulo }) => {
+        {filtros.map(({ chave, rotulo }) => {
           const ativo = filtro === chave
           return (
             <Pressable
