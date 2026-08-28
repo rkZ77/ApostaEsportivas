@@ -39,13 +39,15 @@
  */
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Radio, Timer, CheckCircle2, ChevronDown, PowerOff, Eye } from 'lucide-react'
+import { Radio, Timer, CheckCircle2, ChevronDown, PowerOff, Eye,
+         Goal, Flag, Target, Crosshair } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import ApostaModal from './ApostaModal'
 import { Badge, Button, EmptyState, ErrorState, LiveDot, ResultBadge, Skeleton,
          SkeletonPickGrid, StatTile } from './ui'
 import { PickProbability } from './PickCardParts'
+import { LeagueLogo } from './TeamLogo'
 import { calcVipStake } from '../utils/stakeUtils'
 
 /* Teto de unidades do Live · espelha STAKE_LIMITS["live"] em
@@ -67,6 +69,9 @@ const horaCurta = (iso?: string | null) => (iso ? iso.slice(11, 16) : '')
 /** Uma linha de `live_match_observations` · o que o motor leu daquele jogo. */
 interface EmLeitura {
   fixture_id: number
+  home_team_id: number | null
+  away_team_id: number | null
+  league_id: number | null
   minuto: number | null
   status: string | null
   goals_observado: number | null
@@ -211,7 +216,13 @@ function EmLeituraAgora({ isActive }: { isActive: boolean }) {
               p.tem_pick ? 'border-red-400/40 bg-red-500/5' : 'border-line bg-surface-1'}`}
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[10px] text-ink-4 truncate">{p.liga ?? 'liga ?'}</span>
+              {/* Escudo da liga, do mesmo jeito que o resto do site · o nome
+                * fica junto porque uma competição não se reconhece só pelo
+                * brasão a 16px, mas o brasão é o que a olhada rápida pega. */}
+              <span className="flex items-center gap-1.5 min-w-0">
+                <LeagueLogo id={p.league_id ?? undefined} name={p.liga ?? ''} />
+                <span className="text-[10px] text-ink-4 truncate">{p.liga ?? 'liga ?'}</span>
+              </span>
               <span className="flex items-center gap-1.5 shrink-0">
                 {/* O minuto é o que faz a linha parecer viva · sem ele o
                   * cartão descreve um jogo sem dizer em que ponto ele está. */}
@@ -222,27 +233,53 @@ function EmLeituraAgora({ isActive }: { isActive: boolean }) {
               </span>
             </div>
 
-            {/* Nomes sem número no meio: `live_match_observations` guarda o
-              * TOTAL da partida, e não o placar por lado · um número único
-              * entre os dois times seria lido como placar e mentiria em todo
-              * jogo que não está 0 a 0. O gol entra na fila de contadores
+            {/* Nomes com escudo e sem número no meio: `live_match_observations`
+              * guarda o TOTAL da partida, e não o placar por lado · um número
+              * único entre os dois times seria lido como placar e mentiria em
+              * todo jogo que não está 0 a 0. O gol entra na fila de contadores
               * abaixo, onde "total" é a leitura certa. */}
-            <p className="text-sm text-ink-2 mt-1 truncate">
-              {p.home_team ?? 'Time ?'}
-              <span className="text-ink-4 mx-1.5">x</span>
-              {p.away_team ?? 'Time ?'}
-            </p>
+            <div className="flex items-center gap-1.5 mt-1.5 min-w-0">
+              <TeamLogo id={p.home_team_id ?? undefined} name={p.home_team ?? ''} />
+              <span className="text-sm text-ink-2 truncate">{p.home_team ?? 'Time ?'}</span>
+              <span className="text-ink-4 text-xs shrink-0">x</span>
+              <TeamLogo id={p.away_team_id ?? undefined} name={p.away_team ?? ''} />
+              <span className="text-sm text-ink-2 truncate">{p.away_team ?? 'Time ?'}</span>
+            </div>
 
-            {/* Os contadores que o motor de fato usa pra decidir, todos como
-              * TOTAL da partida. Escanteio e chute no alvo primeiro porque são
-              * os dois mercados que ele publica. */}
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-[10px] text-ink-4">
-              <span>gols <span className="font-mono text-ink-1 tabular-nums">{p.goals_observado ?? '·'}</span></span>
-              <span>escanteios <span className="font-mono text-ink-2 tabular-nums">{p.corners_observado ?? '·'}</span></span>
-              <span>no alvo <span className="font-mono text-ink-2 tabular-nums">{p.shots_on_target_observado ?? '·'}</span></span>
-              <span>chutes <span className="font-mono text-ink-2 tabular-nums">{p.shots_observado ?? '·'}</span></span>
+            {/* ÍCONE NO LUGAR DO RÓTULO.
+              *
+              * Eram quatro palavras ("gols", "escanteios", "no alvo",
+              * "chutes") na frente de quatro números de um dígito: mais texto
+              * que dado, e num celular a fila quebrava em duas linhas. O ícone
+              * ocupa 12px, cabe tudo numa linha só e o número volta a ser o
+              * que se lê primeiro. O `title` mantém o nome pra quem passar o
+              * mouse, e o `aria-label` pro leitor de tela.
+              *
+              * Todos são TOTAL da partida, os dois times somados. */}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-[10px]">
+              {([
+                [Goal,      'Gols',          p.goals_observado,            'text-ink-1'],
+                [Flag,      'Escanteios',    p.corners_observado,          'text-ink-2'],
+                [Target,    'Chutes no alvo', p.shots_on_target_observado, 'text-ink-2'],
+                [Crosshair, 'Chutes',        p.shots_observado,            'text-ink-2'],
+              ] as const).map(([Icone, rotulo, valor, cor]) => (
+                <span key={rotulo} className="flex items-center gap-1" title={rotulo}>
+                  <Icone className="w-3 h-3 text-ink-4 shrink-0" aria-hidden="true" />
+                  <span className={`font-mono tabular-nums ${cor}`} aria-label={rotulo}>
+                    {valor ?? '·'}
+                  </span>
+                </span>
+              ))}
               {!!p.red_cards_observado && (
-                <span className="text-red-400 font-semibold">{p.red_cards_observado} vermelho(s)</span>
+                /* Cartão vermelho é o próprio ícone · um retângulo vermelho diz
+                 * isso melhor que a palavra, e é como ele aparece em campo. */
+                <span className="flex items-center gap-1" title="Cartões vermelhos">
+                  <span className="w-2 h-3 rounded-[1px] bg-red-500 shrink-0" aria-hidden="true" />
+                  <span className="font-mono tabular-nums text-red-400"
+                        aria-label="Cartões vermelhos">
+                    {p.red_cards_observado}
+                  </span>
+                </span>
               )}
               {p.tem_pick && (
                 <span className="text-red-300 font-semibold ml-auto">já virou pick</span>

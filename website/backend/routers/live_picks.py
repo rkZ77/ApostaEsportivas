@@ -478,6 +478,11 @@ def em_leitura(current_user: dict = Depends(require_live_reader), limit: int = Q
                        u.shots_observado, u.shots_on_target_observado,
                        u.red_cards_observado, u.observed_at::text AS lido_em,
                        f.home_team, f.away_team,
+                       -- Os ids viajam junto porque a tela desenha escudo, e o
+                       -- escudo sai do proxy por id (/api/proxy/team/<id>.png).
+                       -- Sem eles a linha teria que casar por NOME, que e'
+                       -- justamente o casamento que o resto do projeto evita.
+                       f.home_team_id, f.away_team_id, f.league_id,
                        COALESCE(l.name, 'Liga ' || f.league_id::text) AS liga,
                        -- Se o motor já publicou pick desta partida hoje. É o
                        -- que separa "está olhando" de "já achou": sem isso, um
