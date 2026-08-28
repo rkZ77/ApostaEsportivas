@@ -30,7 +30,7 @@ from services.standings_service import StandingsService
 from services.pick_engine import competition_rules_store
 from engine_pipelines.decision_log import (
     MOTIVO_HISTORICO_REPROVADO, MOTIVO_SEM_HISTORICO, MOTIVO_SEM_ODDS,
-    log_decision, log_run, log_skip,
+    log_decision, log_run, log_skip, registrar_selecao,
 )
 from services.engine_audit import amostra, auditar
 
@@ -583,6 +583,10 @@ def run_dica_engine():
                 "o VIP publicou este mesmo pick enquanto a Free rodava")
         return
 
+    # As contagens da aba de Auditoria: `contabilizar` ja' somou este jogo
+    # como analisado/descartado quando o decision_log gravou a linha dele;
+    # aqui a pick salva move a contagem pro lado certo.
+    registrar_selecao("DICA_ENGINE", 1)
     print(f"[DICA_ENGINE] Salvo: fixture {fixture['fixture_id']} · "
           f"{pick['market_name']} {pick['value_label']} @ {pick['odd']} "
           f"(confidence={pick['confidence']*100:.0f}%, ev={pick['ev']*100:+.1f}%)")

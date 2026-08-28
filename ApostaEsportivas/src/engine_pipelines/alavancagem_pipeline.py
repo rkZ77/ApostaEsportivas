@@ -44,7 +44,7 @@ from services.pick_engine import ranking
 from services.pick_engine import competition_rules_store
 from engine_pipelines.decision_log import (
     MOTIVO_HISTORICO_REPROVADO, MOTIVO_SEM_HISTORICO, MOTIVO_SEM_ODDS,
-    log_decision, log_run, log_skip,
+    log_decision, log_run, log_skip, registrar_selecao,
 )
 from services.engine_audit import auditar
 
@@ -528,6 +528,9 @@ def run_alavancagem_engine():
         return
     combo = tuple(reviewed)
     tipo = _save_pick(cur, combo, confidence_media, odd_combined)
+    # Aba de Auditoria: o decision_log ja' somou os jogos como
+    # analisados/descartados, aqui a pick salva move a contagem.
+    registrar_selecao("ALAVANCAGEM_ENGINE", 1)
     conn.commit()
     cur.close()
     conn.close()

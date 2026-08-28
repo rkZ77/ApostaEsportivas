@@ -125,6 +125,43 @@ def _carimbo_da_execucao(pipeline: str) -> tuple:
         return (None, None, None, None)
 
 
+def _contabilizar_na_execucao(pipeline: str, status: str) -> None:
+    """Soma este jogo nas contagens da execucao auditada, se houver uma.
+
+    Mesmo raciocinio do carimbo de run_id logo acima: o pipeline nao passa
+    nada, quem sabe da execucao e' o ContextVar. Sem isto, a aba de Auditoria
+    lia zero em analisados/descartados pra todo motor de pre-jogo -- eles
+    gravam a linha por jogo por aqui, nunca por EngineRun.analisado().
+    """
+    try:
+        from services.engine_audit import audit as _audit
+
+        run = _audit.run_atual()
+        if run is not None and run.pipeline == pipeline:
+            run.contabilizar(status)
+    except Exception:
+        # Auditoria nunca derruba log, que nunca derruba motor.
+        pass
+
+
+def registrar_selecao(pipeline: str, quantos: int = 1) -> None:
+    """`quantos` jogos desta execucao viraram pick. Chamar DEPOIS de gravar.
+
+    Mora aqui, e nao no proprio Engine Audit, pra o pipeline nao precisar
+    importar nem conhecer o EngineRun -- e' a mesma porta por onde ele ja'
+    fala com a auditoria (log_decision/log_skip). Fora de uma execucao
+    auditada, no-op.
+    """
+    try:
+        from services.engine_audit import audit as _audit
+
+        run = _audit.run_atual()
+        if run is not None and run.pipeline == pipeline:
+            run.selecionou(quantos)
+    except Exception:
+        pass
+
+
 def _gravar(pipeline: str, fixture: dict | None, status: str, reason: str | None,
             candidates: list, matchup: dict | None, context_data: dict | None) -> None:
     """Um INSERT por chamada. Conexao propria de proposito: log_decision e'
@@ -133,6 +170,7 @@ def _gravar(pipeline: str, fixture: dict | None, status: str, reason: str | None
     por parametro ate' la' acoplaria o motor ao log."""
     fixture = fixture or {}
     run_id, engine, method, versao = _carimbo_da_execucao(pipeline)
+    _contabilizar_na_execucao(pipeline, status)
     try:
         _ensure_table()
         conn = get_connection()

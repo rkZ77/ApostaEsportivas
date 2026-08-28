@@ -44,7 +44,7 @@ from services.pick_engine.staking import calculate_stake
 from services.pick_engine.ai_review import review_gate
 from engine_pipelines.decision_log import (
     MOTIVO_ERRO, MOTIVO_SEM_CANDIDATO,
-    log_decision, log_run, log_skip,
+    log_decision, log_run, log_skip, registrar_selecao,
 )
 from services.engine_audit import amostra, auditar
 
@@ -520,6 +520,9 @@ def run_faltas_engine():
         _salvar(cur, {**c, "ai_review": aprovado[0].get("ai_review"),
                       "calibragem": calibragem})
         salvos += 1
+        # Aba de Auditoria: o decision_log ja' somou este jogo como
+        # analisado/descartado, aqui a pick salva move a contagem.
+        registrar_selecao("FALTAS_ENGINE", 1)
         print(f"[FALTAS_ENGINE] Salvo: {c['fixture']['home_team']} x {c['fixture']['away_team']} "
               f"· Over {c['line']} faltas @ {c['odd']} "
               f"(prob={c['probability'] * 100:.1f}%, margem={c['edge'] * 100:+.1f}%)")

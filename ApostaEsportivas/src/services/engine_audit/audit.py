@@ -375,6 +375,39 @@ class EngineRun:
         except Exception as e:
             print(f"[ENGINE_AUDIT] Aviso: falha ao gravar jogo analisado: {e}")
 
+    def contabilizar(self, status: str) -> None:
+        """So' as contagens, sem gravar linha -- pro caso em que a linha de
+        `engine_decisions` ja' vai ser gravada por outro caminho.
+
+        Existe pelo `decision_log` (2026-08-28). Os motores de pre-jogo nao
+        chamam `analisado()`: eles ja' gravavam a linha por jogo antes da
+        auditoria existir, e o decorador `@auditar` so' carimba run_id no que
+        eles ja' faziam. O efeito colateral era a aba de Auditoria mostrar
+        "0 analisados, 0 selecionados, 0 descartados" numa execucao que tinha
+        lido tres jogos e salvo uma pick -- numeros que faziam o motor
+        PARECER quebrado.
+
+        `sem_pick` nao conta jogo nenhum: a linha tem fixture NULL, e' um
+        recado da execucao, nao uma partida.
+        """
+        if status == "descartado":
+            self.analisados += 1
+            self.descartados += 1
+        elif status == "avaliado":
+            self.analisados += 1
+            self.descartados += 1  # vira selecionado se a pick for salva
+
+    def selecionou(self, quantos: int = 1) -> None:
+        """`quantos` jogos analisados viraram pick nesta execucao.
+
+        Move a contagem de descartado pra selecionado, em vez de somar num
+        terceiro balde: analisados = selecionados + descartados e' a relacao
+        que a aba de Auditoria exibe, e ela tem que fechar.
+        """
+        movidos = min(quantos, self.descartados)
+        self.selecionados += movidos
+        self.descartados -= movidos
+
     def erro(self, exc: BaseException | str, contexto: str = "",
              fixture_id: int | None = None) -> None:
         self.erros += 1

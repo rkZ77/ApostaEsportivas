@@ -28,7 +28,7 @@ from services.pick_engine import stats_model
 from services.pick_engine import competition_rules_store
 from engine_pipelines.decision_log import (
     MOTIVO_HISTORICO_REPROVADO, MOTIVO_SEM_HISTORICO, MOTIVO_SEM_ODDS,
-    log_decision, log_run, log_skip,
+    log_decision, log_run, log_skip, registrar_selecao,
 )
 from services.engine_audit import amostra, auditar
 
@@ -280,6 +280,10 @@ def run_vip_engine():
 
     cur.close()
     conn.close()
+    # As contagens da aba de Auditoria: `contabilizar` ja' somou este jogo
+    # como analisado/descartado quando o decision_log gravou a linha dele;
+    # aqui a pick salva move a contagem pro lado certo.
+    registrar_selecao("VIP_ENGINE", saved)
     print(f"[VIP_ENGINE] {saved} picks salvos.")
 
 
