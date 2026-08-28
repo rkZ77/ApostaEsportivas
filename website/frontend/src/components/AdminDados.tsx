@@ -1429,7 +1429,7 @@ export default function AdminDados() {
         <div className="card p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <h3 className="text-sm font-bold text-ink-1">Médias de time</h3>
+              <h3 className="text-sm font-bold text-ink-1">Recalcular médias</h3>
               <p className="text-[11px] text-ink-4 mt-0.5 leading-relaxed">
                 {medias.total > 0
                   ? <>
