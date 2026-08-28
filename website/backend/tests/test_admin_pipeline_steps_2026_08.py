@@ -35,16 +35,24 @@ def _avaliar(no):
 
 
 def _literal(nome: str):
-    """Valor de uma atribuicao de modulo em admin.py, sem importar o router
-    (que puxaria FastAPI, banco e o resto do backend)."""
-    with open(ADMIN, encoding="utf-8") as fh:
-        arvore = ast.parse(fh.read())
-    for no in arvore.body:
-        if isinstance(no, ast.Assign) and any(
-            isinstance(a, ast.Name) and a.id == nome for a in no.targets
-        ):
-            return _avaliar(no.value)
-    raise AssertionError(f"{nome} nao encontrado em admin.py")
+    """Valor de uma constante de modulo do admin.py.
+
+    LE O MODULO IMPORTADO desde 2026-08-28, e nao mais o fonte por AST.
+
+    A leitura por AST existia pra nao puxar FastAPI e banco no import -- um
+    cuidado que deixou de valer (o resto da suite importa `routers.admin` sem
+    problema) e que passou a MENTIR: `_TUDO_STEPS` deixou de ser literal e
+    virou derivacao do registro do motor, entao "avaliar a atribuicao" nao
+    responde mais qual sequencia o botao roda de verdade.
+
+    Ler o valor real e' o que o teste sempre quis dizer.
+    """
+    import routers.admin as admin
+
+    try:
+        return getattr(admin, nome)
+    except AttributeError:
+        raise AssertionError(f"{nome} nao encontrado em admin.py")
 
 
 @pytest.fixture(scope="module")
@@ -75,9 +83,15 @@ def test_coleta_vem_antes_da_geracao(passos):
 
 
 def test_todo_tipo_de_pick_entra_no_rodar_tudo(passos):
-    """VIP, free, multipla, alavancagem, faltas e defesas de goleiro."""
-    assert {"gerar_vip", "gerar_free", "gerar_multipla",
-            "gerar_alavancagem", "gerar_faltas", "gerar_goleiros"} <= set(passos)
+    """Nenhum produto PUBLICADO pode ficar de fora do "Rodar Tudo".
+
+    `gerar_goleiros` saiu da lista em 28/08 e nao e' regressao: defesas
+    continua sendo gerada todo dia, dentro de `gerar_playerstats` (que roda os
+    metodos marcados `diario` no catalogo do motor -- defesas, chutes no alvo e
+    chutes). O botao avulso de Defesas continua existindo.
+    """
+    assert {"gerar_vip", "gerar_free", "gerar_multipla", "gerar_alavancagem",
+            "gerar_faltas", "gerar_playerstats", "gerar_pickboost"} <= set(passos)
 
 
 def test_todo_passo_tem_rotulo(passos, rotulos):
@@ -141,14 +155,21 @@ def test_produto_publicado_e_gerado_todo_dia(passos):
     assert "gerar_pickboost" in passos, "produto publicado tem que rodar no dia"
 
 
-def test_o_player_stats_completo_continua_sob_demanda(passos):
-    """Cinco dos seis metodos nunca geraram um pick real · `saves` roda todo
-    dia (como etapa `gerar_goleiros`), e o resto espera medicao. Botao existe;
-    custo fixo da rodada, nao."""
-    scripts = _literal("_PIPELINE_SCRIPTS")
+def test_o_passo_de_jogador_roda_so_os_metodos_diarios(passos):
+    """Tres dos seis metodos rodam todo dia (defesas, chutes no alvo, chutes).
 
-    assert "gerar_playerstats" in scripts, "sem botao, so' resta a linha de comando"
-    assert "gerar_playerstats" not in passos
+    `fouls`, `tackles` e `passes` nunca geraram pick real e continuam de fora --
+    mesmo criterio que segurou o Pick Boost ate' ele ser publicado. Sem o
+    argumento, o passo rodaria os SEIS e publicaria prop de desarme e passe sem
+    ninguem ter pedido.
+
+    A lista sai do CATALOGO do motor (`Metodo.diario`), e nao de uma copia
+    aqui: promover um metodo tem que ser uma linha so'.
+    """
+    args = _literal("_PIPELINE_ARGS")
+
+    assert "gerar_playerstats" in passos
+    assert set(args["gerar_playerstats"]) == {"saves", "shots_on", "shots"}
 
 
 def test_todo_passo_tem_script(passos):
@@ -157,10 +178,69 @@ def test_todo_passo_tem_script(passos):
     assert not faltando, f"passos sem script em _PIPELINE_SCRIPTS: {faltando}"
 
 
-def test_player_stats_fica_fora_do_rodar_tudo(passos):
-    """1 requisicao da API por fixture, disputando a cota diaria da coleta de
-    odds. Botao separado, sob demanda."""
-    assert "player_stats" not in passos
+def test_a_coleta_de_jogador_entrou_no_rodar_tudo(passos):
+    """ENTROU em 2026-08-28, e a razao que a mantinha fora se inverteu.
+
+    O motivo antigo -- "1 requisicao por fixture, disputa a cota das odds" --
+    continua verdade sobre o CUSTO. O que mudou e' o que o custo compra:
+    enquanto nada lia `player_match_stats`, coletar era gasto puro. Agora o
+    motor de jogador roda todo dia e a aba Jogadores esta' publicada, entao
+    deixar o coletor de fora seria rodar o motor sobre uma tabela que so' enche
+    quando alguem lembra de clicar -- com o pior sintoma possivel: aba vazia,
+    sem erro, indistinguivel de "hoje nao teve oportunidade".
+
+    DEPOIS DAS ODDS: odd alimenta todos os motores, estatistica de jogador
+    alimenta um. Se a cota apertar, quem fica sem e' o segundo.
+    """
+    assert "player_stats" in passos
+    assert passos.index("capturar_odds") < passos.index("player_stats")
+    assert passos.index("player_stats") < passos.index("gerar_playerstats")
+
+
+def test_a_sequencia_do_site_e_a_MESMA_do_motor():
+    """E' o que o usuario pediu: "um unico modo onde roda uma coisa e ele roda
+    todos os motores, e espelha na aba pipeline".
+
+    `_TUDO_STEPS` era uma lista literal aqui, paralela ao registro do main.py, e
+    as duas divergiram DUAS vezes so' nesta semana -- o botao "Gerar Defesas"
+    chamando o pipeline de rollback, e a coleta de jogador entrando no `tudo` do
+    motor sem entrar no do site.
+
+    Agora ela e' DERIVADA. Este teste compara com a fonte.
+    """
+    import importlib.util
+    import os as _os
+
+    import routers.admin as admin
+
+    if not admin._PIPELINE_DIR:
+        pytest.skip("motor fora do path neste ambiente")
+
+    # Carregado por CAMINHO, com nome proprio · `import main` resolveria pro
+    # main.py do SITE, que ja' esta' em sys.modules quando a suite roda. Foi
+    # exatamente essa colisao que derrubou 30 testes de outros arquivos.
+    with admin._motor_no_path():
+        spec = importlib.util.spec_from_file_location(
+            "_motor_main_teste", _os.path.join(admin._PIPELINE_DIR, "main.py"))
+        motor = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(motor)
+
+    do_motor = [admin._PASSO_DO_COMANDO[c.nome] for c in motor.COMANDOS
+                if c.etapa and c.nome in admin._PASSO_DO_COMANDO]
+    assert admin._TUDO_STEPS == do_motor
+
+    # E nenhuma etapa do motor pode ficar SEM traducao · ela sumiria do botao.
+    sem_traducao = [c.nome for c in motor.COMANDOS
+                    if c.etapa and c.nome not in admin._PASSO_DO_COMANDO]
+    assert not sem_traducao, f"etapas do motor que o /admin nao sabe rodar: {sem_traducao}"
+
+
+def test_a_lista_congelada_descreve_o_mesmo_que_o_motor():
+    """O fallback existe pra o painel nao ficar sem passo nenhum num ambiente
+    sem PIPELINE_SRC_PATH · nao pra ser mantido em paralelo."""
+    import routers.admin as admin
+
+    assert admin._TUDO_STEPS_FALLBACK == admin._TUDO_STEPS
 
 
 def test_rodar_tudo_nao_dispara_passo_de_homologacao(passos):

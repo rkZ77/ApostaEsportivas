@@ -70,8 +70,12 @@ def test_tudo_roda_as_etapas_do_pipeline_diario():
     Live) fica fora pra nao virar custo fixo da rodada.
     """
     assert [c.etapa for c in main.COMANDOS if c.etapa] == [
-        "DADOS", "ODDS", "PICKS VIP", "DICA DO DIA", "MÚLTIPLA",
-        "ALAVANCAGEM", "FALTAS", "PICKS DE JOGADOR", "PICK BOOST", "RESULTADOS",
+        "DADOS", "ODDS", "ESTATISTICA DE JOGADOR", "PICKS VIP", "DICA DO DIA",
+        "MÚLTIPLA", "ALAVANCAGEM", "FALTAS", "PICKS DE JOGADOR", "PICK BOOST",
+        "RESULTADOS",
+        # ESTATISTICA DE JOGADOR entrou em 28/08, DEPOIS das odds: odd alimenta
+        # TODOS os motores e estatistica de jogador alimenta um. Se a cota
+        # apertar, quem fica sem e' o segundo.
         # PICK BOOST antes de RESULTADOS nao e' detalhe: gerar depois da
         # liquidacao deixa o pick do dia pendente ate' o dia seguinte.
         #
@@ -120,13 +124,35 @@ def test_metodo_novo_nasce_fora_do_pipeline_diario():
 
 
 @pytest.mark.parametrize("nome, porque", [
-    ("player_stats", "gasta 1 requisicao da API por fixture, disputa a cota das odds"),
     ("live", "motor em validacao, so' faz sentido durante os jogos"),
     ("ligas", "chama a Anthropic, custo real por rodada"),
     ("shadow", "so' registra comparacao, nao gera pick"),
 ])
 def test_comandos_caros_ficam_fora_do_tudo(nome, porque):
     assert main.COMANDOS_POR_NOME[nome].etapa == "", porque
+
+
+def test_a_coleta_de_jogador_entrou_no_tudo():
+    """`player_stats` saiu da lista de "caros que ficam de fora" em 28/08.
+
+    O CUSTO nao mudou -- continua 1 requisicao por fixture, disputando a cota
+    das odds. O que mudou e' o que o custo COMPRA: enquanto nada lia
+    `player_match_stats`, coletar era gasto puro; agora o motor de jogador roda
+    todo dia e a aba Jogadores esta' publicada pro assinante.
+
+    Deixar o coletor de fora era rodar o motor sobre uma tabela que so' enche
+    quando alguem lembra de clicar, com o pior sintoma possivel: aba vazia, sem
+    erro nenhum, indistinguivel de "hoje nao teve oportunidade".
+
+    O custo continua limitado: teto de 50 fixtures por rodada, repartido entre
+    as ligas com fila pelo rodizio de `coletar_pendentes`.
+    """
+    etapas = [c.nome for c in main.COMANDOS if c.etapa]
+
+    assert "player_stats" in etapas
+    # Depois das odds e antes do motor que consome o que ela coleta.
+    assert etapas.index("odds") < etapas.index("player_stats")
+    assert etapas.index("player_stats") < etapas.index("playerstats-diario")
 
 
 # ── Live: dev-only e sem migracao ─────────────────────────────────────────

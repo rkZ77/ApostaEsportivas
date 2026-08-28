@@ -164,12 +164,33 @@ class DataCollectorMain:
 
 
     def run_stage_5(self, mode="recent", days=3):
+        """Refaz `team_statistics` · a media que o motor de fato le.
+
+        SO' O QUE MUDOU (2026-08-28). Ate' aqui o modo `recent` chamava
+        `update_recent_teams_statistics(days)`: todo time que TEVE JOGO nos
+        ultimos N dias, tivesse a coleta acabado de mexer nele ou nao. Numa
+        janela cheia sao dezenas de times, cada um custando duas leituras da
+        temporada inteira e dois upserts com conexao propria -- e quase tudo
+        produzindo exatamente o mesmo numero que ja' estava la'.
+
+        A varredura automatica do site ja' tinha trocado pra pergunta exata
+        (existe partida gravada DEPOIS da ultima vez que a media foi escrita?);
+        o "Atualizar Jogos" tinha ficado pra tras, e ele e' justamente quem roda
+        logo depois do Stage 4 ter gravado a estatistica nova.
+
+        `full` continua sendo o rebuild que APAGA a tabela e reprocessa todo
+        time. Ele nao sai: e' a saida pra quando a derivada e' que esta' errada,
+        e nao a origem. So' nao pode mais ser o caminho normal.
+        """
         print("[STAGE 5] Calculando medias agregadas...")
         aggregator = self._get_team_aggregator()
         if mode == "full":
             aggregator.update_full_season_statistics()
         else:
-            aggregator.update_recent_teams_statistics(days=days)
+            resultado = aggregator.update_stale_teams_statistics()
+            print(f"[STAGE 5] {resultado['feitos']} de {resultado['total']} "
+                  f"time(s) com media desatualizada · "
+                  f"{resultado['falhas']} falha(s).")
 
     # POR QUE ISTO NAO E' A COLETA DE AMISTOSOS DA COPA DE NOVO
     # ---------------------------------------------------------

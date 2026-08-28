@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import threading
+from contextlib import contextmanager
 from collections import deque
 from datetime import datetime, timezone
 
@@ -79,6 +80,43 @@ def _find_pipeline_dir() -> str:
     return candidate  # retorna mesmo sem existir; o endpoint vai dar erro claro
 
 _PIPELINE_DIR = _find_pipeline_dir()
+
+
+def _no_path() -> None:
+    """Poe o motor no sys.path · mesmo caminho que o settlement_bridge usa.
+
+    DEFINIDO AQUI EM CIMA, e nao no meio do arquivo, porque duas constantes de
+    modulo o chamam durante o IMPORT (`_PIPELINE_ARGS` e `_TUDO_STEPS`, que
+    derivam do registro do motor). Definido depois, ele nao existe na hora em
+    que elas rodam e as duas caem no fallback em silencio -- que foi
+    exatamente o que aconteceu.
+    """
+    if _PIPELINE_DIR and _PIPELINE_DIR not in sys.path:
+        sys.path.insert(0, _PIPELINE_DIR)
+
+
+@contextmanager
+def _motor_no_path():
+    """`_no_path()` que DESFAZ o que fez ao sair.
+
+    O motor tem um `main.py` e o backend tambem. Deixar `src/` no `sys.path`
+    depois do import faz o `main` do motor sombrear o do site em qualquer
+    `import main` posterior -- foi assim que importar este router derrubou 30
+    testes de outros arquivos de uma vez.
+
+    Os chamadores de runtime (`_no_path` puro) continuam podendo deixar o path
+    montado: eles rodam num processo que ja' importou o `main` do site. Quem
+    precisa desfazer e' quem importa DURANTE o import deste modulo, que e' cedo
+    demais pra assumir qualquer coisa sobre o processo.
+    """
+    ja_estava = (not _PIPELINE_DIR) or (_PIPELINE_DIR in sys.path)
+    if not ja_estava:
+        sys.path.insert(0, _PIPELINE_DIR)
+    try:
+        yield
+    finally:
+        if not ja_estava and _PIPELINE_DIR in sys.path:
+            sys.path.remove(_PIPELINE_DIR)
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -300,8 +338,8 @@ _PIPELINE_SCRIPTS = {
 #: botao "Gerar Defesas" tinha ate' ontem.
 def _metodos_diarios_do_motor() -> list:
     try:
-        _no_path()
-        from services.player_stats_engine.methods import DIARIOS
+        with _motor_no_path():
+            from services.player_stats_engine.methods import DIARIOS
         return [m.slug for m in DIARIOS]
     except Exception:
         # Motor indisponivel: o passo roda sem argumento e o pipeline decide.
@@ -348,19 +386,86 @@ _PIPELINE_TIMEOUTS = {
 # o botao avulso faziam isso. Hoje a varredura por visita (routers/live.py::
 # maybe_resolve_pending) cobre o caso comum, entao a etapa aqui e' rede: quem
 # clica "Rodar Tudo" espera o dia inteiro resolvido, e ela e' idempotente.
-_TUDO_STEPS = ["atualizar_jogos", "capturar_odds", "gerar_vip", "gerar_free",
-               "gerar_multipla", "gerar_alavancagem", "gerar_faltas", "gerar_goleiros",
-               # Pick Boost entrou em 2026-08-28, junto com a publicacao dele
-               # pro assinante · produto publicado tem que ser gerado todo dia,
-               # senao a aba abre vazia sem ninguem saber por que.
-               "gerar_pickboost",
-               "atualizar_resultados"]
+#: Nome do comando NO MOTOR -> nome do passo AQUI.
+#:
+#: Os dois vocabularios sao diferentes porque nasceram separados: o motor chama
+#: de `dados` o que o botao chama de `atualizar_jogos`. Este mapa e' a unica
+#: peca que precisa saber disso.
+_PASSO_DO_COMANDO = {
+    "dados":              "atualizar_jogos",
+    "odds":               "capturar_odds",
+    "player_stats":       "player_stats",
+    "vip":                "gerar_vip",
+    "dica":               "gerar_free",
+    "multiplas":          "gerar_multipla",
+    "alavancagem":        "gerar_alavancagem",
+    "faltas":             "gerar_faltas",
+    "playerstats-diario": "gerar_playerstats",
+    "pickboost":          "gerar_pickboost",
+    "resultados":         "atualizar_resultados",
+}
 
-# `gerar_goleiros` saiu do "Rodar Tudo" e virou `gerar_playerstats` (28/08): a
-# etapa deixou de ser so' defesas e passou a ser o Player Stats com os metodos
-# marcados `diario` no catalogo -- defesas, chutes no alvo e chutes. O botao
-# avulso de Defesas continua existindo.
-_TUDO_STEPS[_TUDO_STEPS.index("gerar_goleiros")] = "gerar_playerstats"
+#: A sequencia do "Rodar Tudo", quando o motor esta' no path.
+#:
+#: DERIVADA, E NAO ESCRITA A MAO (2026-08-28, pedido do usuario: "um unico modo
+#: onde roda uma coisa e ele roda todos os motores, e espelha na aba pipeline").
+#:
+#: Ela era uma lista literal aqui, paralela ao registro `COMANDOS` do main.py, e
+#: as duas ja' divergiram DUAS vezes so' esta semana: o botao "Gerar Defesas"
+#: chamando o pipeline de rollback enquanto o CLI chamava o metodo novo, e a
+#: coleta de estatistica de jogador entrando no `tudo` do motor sem entrar aqui.
+#:
+#: O defeito nunca e' a copia errada -- e' a copia ESQUECIDA, exatamente como
+#: descreve o cabecalho de test_registro_de_comandos.py, que resolveu o mesmo
+#: problema entre main.py e os wrappers run_dev/run_prod.
+#:
+#: Agora a ORDEM e o CONTEUDO saem de `main.COMANDOS` (os que declaram `etapa`),
+#: traduzidos por `_PASSO_DO_COMANDO`. Etapa nova no motor aparece aqui sozinha.
+_TUDO_STEPS_FALLBACK = [
+    "atualizar_jogos", "capturar_odds", "player_stats",
+    "gerar_vip", "gerar_free", "gerar_multipla", "gerar_alavancagem",
+    "gerar_faltas", "gerar_playerstats", "gerar_pickboost",
+    "atualizar_resultados",
+]
+
+
+def _passos_do_motor() -> list:
+    """Etapas do `main.py tudo`, na ordem, com o nome que este router usa.
+
+    Fallback quando o motor nao esta' no path: a lista congelada acima. Ela
+    existe pra o painel nao ficar SEM passo nenhum num ambiente sem
+    PIPELINE_SRC_PATH -- e nao pra ser mantida em paralelo. Ha' teste cobrando
+    que as duas descrevam a mesma coisa.
+    """
+    try:
+        with _motor_no_path():
+            # Nome proprio: `import main` resolveria pro main.py do SITE em
+            # qualquer processo que ja' o tenha importado -- e pro do motor em
+            # qualquer outro. Carregar por caminho tira a ambiguidade.
+            import importlib.util
+            spec = importlib.util.spec_from_file_location(
+                "_motor_main", os.path.join(_PIPELINE_DIR, "main.py"))
+            _motor = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(_motor)
+
+        passos = [_PASSO_DO_COMANDO[c.nome] for c in _motor.COMANDOS
+                  if c.etapa and c.nome in _PASSO_DO_COMANDO]
+        # Etapa do motor sem traducao aqui e' passo que o botao NAO sabe rodar ·
+        # avisar e' melhor que rodar uma sequencia incompleta em silencio.
+        sem_traducao = [c.nome for c in _motor.COMANDOS
+                        if c.etapa and c.nome not in _PASSO_DO_COMANDO]
+        if sem_traducao:
+            logging.getLogger(__name__).warning(
+                "[ADMIN] etapas do motor sem passo no /admin: %s", sem_traducao)
+        return passos or list(_TUDO_STEPS_FALLBACK)
+    except Exception as e:
+        logging.getLogger(__name__).warning(
+            "[ADMIN] registro do motor indisponivel, usando a sequencia congelada: %s",
+            str(e)[:200])
+        return list(_TUDO_STEPS_FALLBACK)
+
+
+_TUDO_STEPS = _passos_do_motor()
 
 _STEP_LABELS = {
     "atualizar_jogos":      "Atualizando jogos",
@@ -373,6 +478,7 @@ _STEP_LABELS = {
     "gerar_alavancagem":    "Gerando alavancagem",
     "gerar_faltas":         "Gerando picks de faltas",
     "gerar_goleiros":       "Gerando defesas de goleiro",
+    "player_stats":         "Coletando estatística de jogador",
     "gerar_playerstats":    "Gerando picks de jogador",
     "gerar_pickboost":      "Escolhendo jogos do Pick Boost",
     "atualizar_resultados": "Atualizando resultados",
@@ -2757,12 +2863,6 @@ class EstatisticaManualBody(BaseModel):
                 if lado < 0 or lado > teto:
                     raise ValueError(f"{chave}: fora da faixa 0 a {teto}.")
         return v
-
-
-def _no_path() -> None:
-    """Poe o motor no sys.path · mesmo caminho que o settlement_bridge usa."""
-    if _PIPELINE_DIR and _PIPELINE_DIR not in sys.path:
-        sys.path.insert(0, _PIPELINE_DIR)
 
 
 def _recalcular_medias(home_team_id, away_team_id, league_id, season) -> bool:

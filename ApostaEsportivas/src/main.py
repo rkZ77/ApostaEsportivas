@@ -798,6 +798,29 @@ COMANDOS: tuple = (
     Comando("odds", "Capturar odds",
             "Coleta odds pré-jogo",
             lambda *a: cmd_odds(), etapa="ODDS"),
+    # COLETA DE ESTATISTICA DE JOGADOR · entrou no `tudo` em 2026-08-28.
+    #
+    # A razao que a mantinha fora se inverteu. O comentario antigo dizia "1
+    # requisicao por fixture, disputa a cota das odds, por isso roda sob
+    # demanda" -- e continua verdade sobre o CUSTO. O que mudou e' o que o
+    # custo compra: enquanto nada lia `player_match_stats`, coletar era gasto
+    # puro. Agora o motor de jogador roda TODO DIA (etapa PICKS DE JOGADOR) e a
+    # aba Jogadores esta' publicada pro assinante.
+    #
+    # Deixar o coletor de fora era rodar o motor sobre uma tabela que so' enche
+    # quando alguem lembra de clicar -- e o sintoma seria o pior tipo: aba
+    # vazia, sem erro nenhum, indistinguivel de "hoje nao teve oportunidade".
+    #
+    # O CUSTO E' LIMITADO E PREVISIVEL: teto de 50 fixtures por rodada, e o
+    # rodizio por liga reparte esse teto entre as ligas com fila em vez de
+    # gastar tudo nas duas que jogaram ontem (ver coletar_pendentes).
+    #
+    # DEPOIS DAS ODDS de proposito: odd alimenta TODOS os motores, estatistica
+    # de jogador alimenta um. Se a cota apertar, quem fica sem e' o segundo.
+    Comando("player_stats", "Estatistica de jogador (API)",
+            "Coleta estatística por jogador dos jogos encerrados (limite: 50)",
+            lambda *a: cmd_player_stats(a[0] if a else "50"),
+            uso="player_stats [limite]", etapa="ESTATISTICA DE JOGADOR"),
     Comando("vip", "Gerar picks VIP (motor)",
             "Gera picks VIP do dia",
             lambda *a: cmd_vip(), etapa="PICKS VIP"),
@@ -885,12 +908,6 @@ COMANDOS: tuple = (
     Comando("shadow", "Modo sombra (log IA vs motor)",
             "Motor de picks em modo sombra (só log, não afeta picks)",
             lambda *a: cmd_shadow(), ambientes=("dev",)),
-    # Cota: 1 requisição da API por fixture, disputando a mesma cota diária da
-    # coleta de odds. Por isso fica fora do `tudo` e roda sob demanda.
-    Comando("player_stats", "Estatistica de jogador (API)",
-            "Coleta estatística por jogador dos jogos encerrados (limite: 50)",
-            lambda *a: cmd_player_stats(a[0] if a else "50"),
-            uso="player_stats [limite]"),
     # Roda sozinho dentro do `dados` (Stage 6). Aqui é a versão sob demanda,
     # para forçar um limiar maior ou liberar mais cota num dia de mata-mata.
     Comando("historico", "Historico por time (API)",
