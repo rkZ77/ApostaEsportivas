@@ -31,6 +31,7 @@ from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
 from services.referee_stats_service import RefereeStatsService
 from services.pick_engine import competition_profile as cp
+from services.pick_engine import context_gate, tie_effect
 from services.pick_engine.config import DEFAULT_CONFIG
 from services.pick_engine.fouls_model import (
     LINHAS_SUPORTADAS,
