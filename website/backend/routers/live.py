@@ -2210,7 +2210,10 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
                       # Motores de 27/08. A chave `goleiros` continua acima
                       # porque a tabela antiga ainda tem pendencia historica a
                       # resolver -- ela parou de CRESCER, nao de existir.
-                      "player_stats": 0, "boost": 0}
+                      "player_stats": 0, "boost": 0,
+                      # Ao Vivo entrou na varredura em 28/08. Ate' aqui ele so'
+                      # era liquidado pelo caminho das picks SEGUIDAS.
+                      "live": 0}
     today_br = datetime.now(_BR_TZ).date()
     agora_br = datetime.now(_BR_TZ).replace(tzinfo=None)
     desde = today_br - timedelta(days=max_age_days) if max_age_days is not None else None
@@ -2296,6 +2299,55 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
                     logger.error("[AUTO-RESULT] free #%s erro: %s", p["id"], e)
         except Exception as e:
             logger.error("[AUTO-RESULT] free query erro: %s", e)
+
+        # ── AO VIVO ──────────────────────────────────────────────────────────
+        # Mesma forma do VIP/Free acima. Faltava aqui, e o buraco era so' de
+        # ALCANCE, nao de matematica: o Ao Vivo ja' era liquidado -- mas so'
+        # dentro da lista de picks SEGUIDAS (o caminho que monta a banca do
+        # usuario). Pick ao vivo publicada que ninguem seguiu nunca passava
+        # por aquele codigo e ficava pendente pra sempre, sem resultado na
+        # aba e fora de toda estatistica publica.
+        #
+        # Dois desvios obrigatorios em relacao ao bloco do VIP, os mesmos que
+        # _save_live_pick_result ja' documenta: a tabela e' picks_live (mandar
+        # 'live' pro _save_single_result gravaria em picks_free, porque la'
+        # tudo que nao e' 'vip' cai no else) e o resultado tambem fecha o
+        # `status` do ciclo de vida, senao um pick liquidado seguiria
+        # aparecendo como ACTIVE.
+        try:
+            cur.execute(f"""
+                SELECT id, fixture_id, market, market_type, line, odd,
+                       home_team_name AS home_team, away_team_name AS away_team,
+                       home_team_id, away_team_id
+                FROM picks_live
+                WHERE result IS NULL AND fixture_id IS NOT NULL AND match_date <= %s
+                {_janela}
+            """, _args())
+            pendentes_live = [p for p in cur.fetchall()
+                              if p["fixture_id"] not in nao_iniciados]
+            _fetch_fixtures_bulk([p["fixture_id"] for p in pendentes_live])
+            for p in pendentes_live:
+                try:
+                    odd = float(p["odd"] or 1)
+                    leg = _enrich_leg(p["fixture_id"], p["market"], p["line"],
+                                      p["home_team"], p["away_team"],
+                                      p["home_team_id"], p["away_team_id"], odd,
+                                      market_type=p.get("market_type"))
+                    if leg["is_ft"] or leg["is_locked"]:
+                        res = _calc_result(p["market"], p["line"],
+                                           leg["current_val"], leg["home_goals"], leg["away_goals"],
+                                           market_type=p.get("market_type"),
+                                           home_team=p["home_team"], away_team=p["away_team"],
+                                           home_stats=leg.get("home_stats"), away_stats=leg.get("away_stats"),
+                                           went_to_extra_time=leg.get("went_to_extra_time", False))
+                        res = res or _anulacao_sem_estatistica(leg)
+                        if res:
+                            _save_live_pick_result(p["id"], res, odd, conn)
+                            resolved["live"] += 1
+                except Exception as e:
+                    logger.error("[AUTO-RESULT] live #%s erro: %s", p["id"], e)
+        except Exception as e:
+            logger.error("[AUTO-RESULT] live query erro: %s", e)
 
         # ── MÚLTIPLA ─────────────────────────────────────────────────────────
         try:

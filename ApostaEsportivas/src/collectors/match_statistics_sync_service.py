@@ -606,7 +606,17 @@ class MatchStatisticsSyncService:
 
         filtro = "" if include_resolved else "AND result IS NULL"
 
-        for table in ("picks_vip", "picks_free", "picks_faltas", "picks_goleiros"):
+        # picks_boost e picks_live entraram em 28/08. Os dois liquidam pela
+        # FOLHA DA PARTIDA, igual VIP/Free, entao dependiam desta coleta e nao
+        # estavam nela -- ficavam esperando que outro produto pedisse a mesma
+        # fixture por acaso.
+        #
+        # picks_player_stats fica FORA de proposito: prop de jogador liquida
+        # por player_match_stats, que vem do PlayerStatsCollectorService
+        # (`python main.py player_stats`), nao daqui. Incluir a tabela aqui
+        # gastaria requisicao buscando a folha do time, que aquele pick nao le.
+        for table in ("picks_vip", "picks_free", "picks_faltas", "picks_goleiros",
+                      "picks_boost", "picks_live"):
             try:
                 self.cur.execute(
                     f"SELECT DISTINCT fixture_id FROM {table} "

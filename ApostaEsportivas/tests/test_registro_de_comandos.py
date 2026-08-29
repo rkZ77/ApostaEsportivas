@@ -17,6 +17,7 @@ leem o codigo-fonte dos wrappers e cobram a derivacao.
 Nenhum teste aqui toca banco nem executa comando: so' le o registro e o fonte.
 """
 
+import io
 import ast
 import os
 
@@ -170,15 +171,24 @@ def test_live_e_shadow_sao_so_de_dev():
     assert main.COMANDOS_POR_NOME["shadow"].ambientes == ("dev",)
 
 
-def test_live_nao_dispara_as_migracoes_do_pre_jogo():
-    """O motor Live provisiona o proprio esquema (live_pipeline.criar_tabelas).
-    Rodar a lista de ALTER TABLE do pre-jogo a cada rodada de teste aproximaria
-    o produto novo de escrever no esquema do que esta em producao."""
-    assert main.COMANDOS_POR_NOME["live"].migrar is False
+def test_so_o_setup_dispara_as_migracoes():
+    """Nenhum comando roda a lista de ALTER TABLE antes de trabalhar (28/08).
 
+    O `live` ja' era a unica excecao, pelo motivo que agora vale pra todos: o
+    esquema esta criado ha' meses e reaplicar dezenas de DDL a cada `vip` /
+    `dados` / `pickboost` so' custa. O campo `migrar` do registro saiu junto,
+    que era o unico jeito de declarar a excecao.
 
-def test_so_o_live_pula_migracao():
-    assert [c.nome for c in main.COMANDOS if not c.migrar] == ["live"]
+    O preco esta assumido: coluna nova exige `python main.py setup` na mao,
+    PROD inclusive.
+    """
+    assert not hasattr(main.Comando, "migrar")
+
+    # O despacho e' de nivel de modulo (`if __name__ == "__main__":`), entao
+    # nao ha funcao pra inspecionar -- le o arquivo.
+    fonte = io.open(main.__file__, encoding="utf-8").read()
+    assert 'if cmd == "setup":' in fonte
+    assert "alvo.migrar" not in fonte
 
 
 def test_live_chega_no_menu_do_run_dev():
