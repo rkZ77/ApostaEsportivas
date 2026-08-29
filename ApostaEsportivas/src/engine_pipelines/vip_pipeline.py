@@ -155,6 +155,7 @@ def run_vip_engine():
     # de antes -- nada quebra, so' se sabe menos.
     competition_rules_store.carregar(cur)
     saved = 0
+    fixtures_salvos: list = []
 
     for fixture in fixtures:
         try:
@@ -264,6 +265,7 @@ def run_vip_engine():
             if _save_pick(cur, fixture, best, quality["score"]):
                 conn.commit()
                 saved += 1
+                fixtures_salvos.append(fixture["fixture_id"])
                 print(f"[VIP_ENGINE] Fixture {fixture['fixture_id']}: "
                       f"{best['market_name']} {best['value_label']} @ {best['odd']} "
                       f"(confidence={best['confidence']*100:.0f}%, ev={best['ev']*100:+.1f}%)")
@@ -283,7 +285,7 @@ def run_vip_engine():
     # As contagens da aba de Auditoria: `contabilizar` ja' somou este jogo
     # como analisado/descartado quando o decision_log gravou a linha dele;
     # aqui a pick salva move a contagem pro lado certo.
-    registrar_selecao("VIP_ENGINE", saved)
+    registrar_selecao("VIP_ENGINE", fixtures_salvos)
     print(f"[VIP_ENGINE] {saved} picks salvos.")
 
 

@@ -86,12 +86,15 @@ def _create_table_if_needed(cur):
             match_date      DATE UNIQUE,
             tipo            TEXT NOT NULL DEFAULT 'simples',
             fixture_id_1    INTEGER, home_team_1 TEXT, away_team_1 TEXT,
+            home_team_id_1  INTEGER, away_team_id_1 INTEGER,
             market_1        TEXT, market_type_1 TEXT, line_1 TEXT, odd_1 NUMERIC,
             bet_house_1     TEXT, confidence_1 NUMERIC, prob_real_1 NUMERIC, reasoning_1 TEXT,
             fixture_id_2    INTEGER, home_team_2 TEXT, away_team_2 TEXT,
+            home_team_id_2  INTEGER, away_team_id_2 INTEGER,
             market_2        TEXT, market_type_2 TEXT, line_2 TEXT, odd_2 NUMERIC,
             bet_house_2     TEXT, confidence_2 NUMERIC, prob_real_2 NUMERIC, reasoning_2 TEXT,
             fixture_id_3    INTEGER, home_team_3 TEXT, away_team_3 TEXT,
+            home_team_id_3  INTEGER, away_team_id_3 INTEGER,
             market_3        TEXT, market_type_3 TEXT, line_3 TEXT, odd_3 NUMERIC,
             bet_house_3     TEXT, confidence_3 NUMERIC, prob_real_3 NUMERIC, reasoning_3 TEXT,
             odd_combined    NUMERIC,
@@ -111,6 +114,13 @@ def _create_table_if_needed(cur):
     # nao adiciona coluna em tabela criada antes; mesmo gap de migracao ja'
     # documentado em multipla_pipeline.py).
     cur.execute("ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS ai_review JSONB;")
+    # Mesmo gap: a tabela ja' existe em PROD, e o CREATE acima nao adiciona
+    # coluna nova nela. Sem estes ALTERs o INSERT de _save_pick quebra na
+    # primeira rodada depois do deploy. Ver a migracao equivalente do site em
+    # website/backend/migrations.py, que tambem faz o backfill do historico.
+    for _n in (1, 2, 3):
+        cur.execute(f"ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS home_team_id_{_n} INTEGER;")
+        cur.execute(f"ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS away_team_id_{_n} INTEGER;")
 
 
 def _has_today_pick(cur) -> bool:
@@ -403,12 +413,26 @@ def _save_pick(cur, legs: tuple, confidence_media: float, odd_combined: float):
 
     for i, p in enumerate(legs, start=1):
         fx = p["_fixture"]
+        # O ID DO TIME GRAVA JUNTO COM O NOME (2026-08-28), igual picks_free e
+        # picks_vip ja' faziam.
+        #
+        # So' o nome era guardado, e o site descobria o escudo relendo
+        # `fixtures` na hora de desenhar o card. Duas falhas vinham dai:
+        # `fixtures` guarda so' a janela corrente, entao o escudo sumia quando
+        # o pick era liquidado; e o plano B, que casava o nome solto, trazia
+        # time errado onde ha homonimo · "Athletic Club" e' o mineiro e
+        # tambem o Bilbao, e as duas ligas sao acompanhadas.
+        #
+        # `fx` ja' tem os dois ids em maos aqui, no instante da decisao. Nao
+        # ha' motivo pra jogar fora e reconsultar depois.
         cols += [f"fixture_id_{i}", f"home_team_{i}", f"away_team_{i}",
+                 f"home_team_id_{i}", f"away_team_id_{i}",
                  f"market_{i}", f"market_type_{i}", f"line_{i}", f"odd_{i}",
                  f"bet_house_{i}", f"confidence_{i}", f"prob_real_{i}", f"reasoning_{i}"]
-        vals += ["%s"] * 11
+        vals += ["%s"] * 13
         params += [
             fx["fixture_id"], fx["home_team"], fx["away_team"],
+            fx.get("home_team_id"), fx.get("away_team_id"),
             p["market_name"], p["market_type"], p["value_label"], p["odd"],
             p["best_bookmaker"], p["confidence"], p["taxa_real"], explain(p),
         ]
@@ -442,8 +466,14 @@ def _save_pick(cur, legs: tuple, confidence_media: float, odd_combined: float):
     vals += ["%s"]
     params += [json.dumps(ai_review, ensure_ascii=False, default=str) if ai_review else None]
 
-    cur.execute(f"INSERT INTO picks_alavancagem ({', '.join(cols)}) VALUES ({', '.join(vals)})", params)
-    return tipo
+    # RETURNING id: e' o que permite a aba de Auditoria ligar as pernas ao
+    # BILHETE. Sem ele o vinculo teria que ser adivinhado por partida, e um
+    # jogo pode virar perna aqui e pick no VIP no mesmo dia.
+    cur.execute(
+        f"INSERT INTO picks_alavancagem ({', '.join(cols)}) VALUES ({', '.join(vals)}) "
+        f"RETURNING id", params)
+    linha = cur.fetchone()
+    return tipo, (linha[0] if linha else None)
 
 
 # AUDITORIA (2026-08-27). Duas linhas, e nenhuma no corpo da funcao: o Pre
@@ -527,10 +557,12 @@ def run_alavancagem_engine():
         conn.close()
         return
     combo = tuple(reviewed)
-    tipo = _save_pick(cur, combo, confidence_media, odd_combined)
-    # Aba de Auditoria: o decision_log ja' somou os jogos como
-    # analisados/descartados, aqui a pick salva move a contagem.
-    registrar_selecao("ALAVANCAGEM_ENGINE", 1)
+    tipo, pick_id = _save_pick(cur, combo, confidence_media, odd_combined)
+    # Aba de Auditoria: fecha a contagem e liga TODAS as pernas ao bilhete --
+    # e' o caminho de volta de um RED ate' o que o motor viu em cada jogo.
+    registrar_selecao("ALAVANCAGEM_ENGINE",
+                      [p["_fixture"]["fixture_id"] for p in combo],
+                      pick_id=pick_id)
     conn.commit()
     cur.close()
     conn.close()

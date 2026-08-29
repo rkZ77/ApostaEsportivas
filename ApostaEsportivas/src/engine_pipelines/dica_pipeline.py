@@ -586,7 +586,7 @@ def run_dica_engine():
     # As contagens da aba de Auditoria: `contabilizar` ja' somou este jogo
     # como analisado/descartado quando o decision_log gravou a linha dele;
     # aqui a pick salva move a contagem pro lado certo.
-    registrar_selecao("DICA_ENGINE", 1)
+    registrar_selecao("DICA_ENGINE", [fixture["fixture_id"]])
     print(f"[DICA_ENGINE] Salvo: fixture {fixture['fixture_id']} · "
           f"{pick['market_name']} {pick['value_label']} @ {pick['odd']} "
           f"(confidence={pick['confidence']*100:.0f}%, ev={pick['ev']*100:+.1f}%)")

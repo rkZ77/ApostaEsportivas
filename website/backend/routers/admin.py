@@ -5413,6 +5413,153 @@ _TABELAS_EXPLICAVEIS = {
 }
 
 
+#: De onde os RED saem, e como o resultado de CADA produto se chama na tabela
+#: dele. Não é a mesma lista de `_TABELAS_EXPLICAVEIS`: aqui entram também os
+#: bilhetes combinados (múltipla e alavancagem), que são justamente os que mais
+#: dão RED e os que a tela de decisão não sabia abrir.
+_TABELAS_COM_RESULTADO = {
+    "picks_vip":          ("VIP",          "home_team_name", "away_team_name"),
+    "picks_free":         ("Free",         "home_team",      "away_team"),
+    "picks_multiplas":    ("Múltipla",     None,             None),
+    "picks_alavancagem":  ("Alavancagem",  "home_team_1",    "away_team_1"),
+    "picks_faltas":       ("Faltas",       "home_team",      "away_team"),
+    "picks_goleiros":     ("Defesas",      "home_team",      "away_team"),
+    "picks_player_stats": ("Player Stats", "home_team",      "away_team"),
+    "picks_boost":        ("Pick Boost",   "home_team",      "away_team"),
+    "picks_live":         ("Ao vivo",      "home_team_name", "away_team_name"),
+}
+
+
+@router.get("/motor/reds")
+def motor_reds(
+    dias: int = 7,
+    tabela: str | None = None,
+    limite: int = 50,
+    current_user: dict = Depends(require_admin),
+):
+    """Os RED do período, cada um com a decisão que o produziu.
+
+    É PRA ISTO QUE A ABA EXISTE. As outras rotas respondem "o que o motor viu
+    naquele dia", que é uma pergunta de arqueologia -- só serve se você já
+    souber onde olhar. A pergunta que se faz de verdade é a inversa: PEGUEI UM
+    RED, POR QUE O MOTOR ESCOLHEU ISSO. Aqui a lista já vem pelo resultado, e
+    cada linha carrega o run_id, a versão do motor, o score e a probabilidade
+    ANUNCIADA no instante da escolha -- que confrontada com o RED é o que
+    mostra se o erro foi de calibração ou de azar.
+
+    `mercados_perdedores` é o outro lado: o que o motor tinha na mão e passou
+    por cima. Um RED cujo segundo colocado teria dado GREEN é um problema de
+    critério; um RED em que tudo perderia é um problema de leitura do jogo, e
+    os dois pedem correções diferentes.
+
+    Não recalcula nada -- é a mesma regra do Engine Audit. Tudo já foi gravado
+    no instante da decisão.
+    """
+    dias = max(1, min(dias, 90))
+    limite = max(1, min(limite, 200))
+    alvos = ([tabela] if tabela else list(_TABELAS_COM_RESULTADO))
+    if any(t not in _TABELAS_COM_RESULTADO for t in alvos):
+        raise HTTPException(400, "Tabela de pick desconhecida")
+
+    conn = get_connection()
+    cur = conn.cursor()
+    linhas: list = []
+    try:
+        for nome in alvos:
+            rotulo, col_casa, col_fora = _TABELAS_COM_RESULTADO[nome]
+            # Múltipla não tem coluna de time: as pernas moram no JSON. O nome
+            # do confronto sai da decisão, que tem uma linha por perna.
+            times = (f"p.{col_casa} AS home_team, p.{col_fora} AS away_team"
+                     if col_casa else "NULL AS home_team, NULL AS away_team")
+            try:
+                cur.execute(f"""
+                    SELECT p.id, p.match_date::text AS dia, p.odd, p.profit,
+                           {times},
+                           d.run_id, d.engine, d.method, d.engine_version,
+                           d.score, d.probability, d.reason, d.candidates
+                      FROM {nome} p
+                      LEFT JOIN engine_decisions d
+                             ON d.pick_table = %s AND d.pick_id = p.id
+                     WHERE p.result = 'RED'
+                       AND p.match_date >= CURRENT_DATE - %s
+                     ORDER BY p.match_date DESC, p.id DESC
+                     LIMIT %s
+                """, (nome, dias, limite))
+            except Exception as e:
+                # Produto que ainda não existe neste banco não derruba a tela:
+                # o motor cria as tabelas dele, o site não.
+                conn.rollback()
+                logging.getLogger(__name__).info("[ADMIN/MOTOR] reds %s: %s", nome, e)
+                continue
+
+            for r in cur.fetchall():
+                r = dict(r)
+                candidatos = r.pop("candidates", None) or []
+                if isinstance(candidatos, str):
+                    try:
+                        candidatos = json.loads(candidatos)
+                    except Exception:
+                        candidatos = []
+                # `is_best_pick` é a marca que o motor grava no candidato
+                # vencedor daquela partida. Nos produtos de perna única ele é
+                # o pick. No bilhete combinado é o melhor DAQUELE JOGO, que
+                # nem sempre é a perna que entrou -- a múltipla escolhe pela
+                # combinação, não jogo a jogo. Por isso o campo se chama
+                # `melhor_do_jogo` e não "o que você apostou".
+                melhor = next((c for c in candidatos if c.get("is_best_pick")), None)
+                linhas.append({
+                    "tabela": nome,
+                    "produto": rotulo,
+                    "pick_id": r["id"],
+                    "dia": r["dia"],
+                    "odd": r["odd"],
+                    "profit": r["profit"],
+                    "home_team": r["home_team"],
+                    "away_team": r["away_team"],
+                    # Do lado da decisão. `vinculada` diz se a linha veio do
+                    # elo direto ou se não há decisão gravada -- pick anterior
+                    # à auditoria não tem, e mostrar isso é mais honesto do
+                    # que casar por partida e arriscar mostrar a decisão de
+                    # outro produto no mesmo jogo.
+                    "vinculada": r["run_id"] is not None,
+                    "run_id": r["run_id"],
+                    "motor": r["engine"],
+                    "metodo": r["method"],
+                    "versao": r["engine_version"],
+                    "score": r["score"],
+                    "probabilidade_anunciada": r["probability"],
+                    "melhor_do_jogo": melhor,
+                    "mercados_perdedores": [
+                        c for c in candidatos
+                        if c is not melhor and c.get("eligible")
+                    ][:8],
+                })
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        if _sem_tabela(e):
+            return {"disponivel": False, "motivo": "nenhuma decisão registrada ainda"}
+        logging.getLogger(__name__).warning("[ADMIN/MOTOR] reds: %s", e)
+        return {"disponivel": False, "erro": str(e)[:200]}
+    finally:
+        cur.close()
+        conn.close()
+
+    linhas.sort(key=lambda l: (l["dia"], l["pick_id"]), reverse=True)
+    linhas = linhas[:limite]
+    return {
+        "disponivel": True,
+        "dias": dias,
+        "total": len(linhas),
+        # Quantos RED ainda não têm decisão ligada. É o número que diz se dá
+        # pra confiar na tela: alto significa que o elo é novo e o histórico
+        # anterior a ele não responde "por quê".
+        "sem_decisao": sum(1 for l in linhas if not l["vinculada"]),
+        "reds": linhas,
+    }
+
+
 @router.get("/motor/pick/porque")
 def motor_pick_porque(
     tabela: str,

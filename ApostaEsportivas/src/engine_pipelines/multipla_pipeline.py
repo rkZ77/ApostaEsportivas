@@ -368,7 +368,12 @@ def _find_combo(legs: list) -> tuple | None:
     return best[1], best[2], best[3]
 
 
-def _save_multipla(cur, legs: tuple, score_combo: float, odd_total: float):
+def _save_multipla(cur, legs: tuple, score_combo: float, odd_total: float) -> int | None:
+    """Grava o bilhete e devolve o id · None quando o ON CONFLICT nao gravou.
+
+    O id e' o que liga TODAS as pernas ao bilhete na aba de Auditoria: e' o
+    caminho de volta de um RED ate' o que o motor viu em cada jogo.
+    """
     games_info = []
     for p in legs:
         fx = p["_fixture"]
@@ -470,6 +475,7 @@ def _save_multipla(cur, legs: tuple, score_combo: float, odd_total: float):
          prob_combinada, ev_combined, match_date, reasoning)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (match_date) WHERE multipla_name = 'MULTIPLA_ENGINE' DO NOTHING
+        RETURNING id
     """, (
         "MULTIPLA_ENGINE",
         json.dumps(games_info, default=str),
@@ -482,6 +488,8 @@ def _save_multipla(cur, legs: tuple, score_combo: float, odd_total: float):
         match_date,
         reasoning,
     ))
+    linha = cur.fetchone()
+    return linha[0] if linha else None
 
 
 # AUDITORIA (2026-08-27). Duas linhas, e nenhuma no corpo da funcao: o Pre
@@ -538,7 +546,7 @@ def run_multipla_engine():
         conn.close()
         return
     combo = tuple(reviewed)
-    _save_multipla(cur, combo, score_combo, odd_total)
+    pick_id = _save_multipla(cur, combo, score_combo, odd_total)
     conn.commit()
     cur.close()
     conn.close()
@@ -550,7 +558,9 @@ def run_multipla_engine():
     # As contagens da aba de Auditoria: `contabilizar` ja' somou este jogo
     # como analisado/descartado quando o decision_log gravou a linha dele;
     # aqui a pick salva move a contagem pro lado certo.
-    registrar_selecao("MULTIPLA_ENGINE", 1)
+    registrar_selecao("MULTIPLA_ENGINE",
+                      [p["_fixture"]["fixture_id"] for p in combo],
+                      pick_id=pick_id)
     print(f"[MULTIPLA_ENGINE] Salva: {pernas} | odd_total={odd_total} | score_combo={score_combo}")
 
 

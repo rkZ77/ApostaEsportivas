@@ -523,7 +523,7 @@ def run_faltas_engine():
         salvos += 1
         # Aba de Auditoria: o decision_log ja' somou este jogo como
         # analisado/descartado, aqui a pick salva move a contagem.
-        registrar_selecao("FALTAS_ENGINE", 1)
+        registrar_selecao("FALTAS_ENGINE", [c["fixture"]["fixture_id"]])
         print(f"[FALTAS_ENGINE] Salvo: {c['fixture']['home_team']} x {c['fixture']['away_team']} "
               f"· Over {c['line']} faltas @ {c['odd']} "
               f"(prob={c['probability'] * 100:.1f}%, margem={c['edge'] * 100:+.1f}%)")

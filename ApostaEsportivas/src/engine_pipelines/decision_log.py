@@ -144,22 +144,80 @@ def _contabilizar_na_execucao(pipeline: str, status: str) -> None:
         pass
 
 
-def registrar_selecao(pipeline: str, quantos: int = 1) -> None:
-    """`quantos` jogos desta execucao viraram pick. Chamar DEPOIS de gravar.
+def registrar_selecao(pipeline: str, fixtures, pick_id: int | None = None) -> None:
+    """Os jogos desta execucao que viraram pick. Chamar DEPOIS de gravar.
 
-    Mora aqui, e nao no proprio Engine Audit, pra o pipeline nao precisar
-    importar nem conhecer o EngineRun -- e' a mesma porta por onde ele ja'
-    fala com a auditoria (log_decision/log_skip). Fora de uma execucao
-    auditada, no-op.
+    `fixtures` e' a lista de fixture_id que entraram no pick (uma so' nos
+    produtos de perna unica, as pernas todas na multipla e na alavancagem).
+
+    FAZ DUAS COISAS, e a segunda e' a que importa
+    ---------------------------------------------
+    Alem de mover a contagem da aba de Auditoria, carimba na linha de
+    `engine_decisions` daquele jogo o vinculo com o pick gerado: status
+    'selecionado', `pick_table` e `pick_id`.
+
+    Sem esse vinculo a aba responde "o que o motor viu naquele dia", que e'
+    uma pergunta de arqueologia. Com ele responde a pergunta que se faz de
+    verdade: PEGUEI UM RED, POR QUE O MOTOR ESCOLHEU ISSO -- a linha do pick
+    leva direto ao candidato escolhido, aos que perderam, aos scores parciais
+    e ao contexto do instante da decisao. Ate' aqui so' o Pick Boost e o
+    Player Stats gravavam esse vinculo (eles chamam EngineRun.analisado com
+    pick_id); todo produto de pre-jogo dependia de casar por partida, que
+    erra sempre que o mesmo jogo produz pick em dois produtos.
+
+    `pick_id` explicito e' pra o bilhete combinado: multipla e alavancagem tem
+    UM pick pra varias pernas, entao todas as pernas apontam pro mesmo id. Nos
+    produtos de perna unica ele sai de uma busca por (fixture_id, match_date)
+    na tabela do proprio produto -- evita fazer cada pipeline devolver o id do
+    INSERT, que em tres deles e' um INSERT ... SELECT com guarda de duplicata.
+
+    Fora de uma execucao auditada, no-op. Nada aqui pode derrubar o motor.
     """
+    fixtures = [f for f in (fixtures if isinstance(fixtures, (list, tuple, set))
+                            else [fixtures]) if f]
     try:
         from services.engine_audit import audit as _audit
 
         run = _audit.run_atual()
-        if run is not None and run.pipeline == pipeline:
-            run.selecionou(quantos)
-    except Exception:
-        pass
+        if run is None or run.pipeline != pipeline:
+            return
+        run.selecionou(len(fixtures) or 1)
+        if not run.run_id or not fixtures or not run.tabela_picks:
+            return
+        _vincular_pick(run, fixtures, pick_id)
+    except Exception as e:
+        print(f"[DECISION_LOG] Aviso: falha ao vincular pick (não afeta o pick): {e}")
+
+
+def _vincular_pick(run, fixtures: list, pick_id: int | None) -> None:
+    """UPDATE nas linhas desta execucao · status, pick_table e pick_id."""
+    tabela = run.tabela_picks
+    if pick_id is not None:
+        # Bilhete combinado: todas as pernas apontam pro mesmo pick.
+        alvo, params = "%s", [tabela, pick_id]
+    else:
+        # Perna unica: o id sai da propria tabela do produto. `ORDER BY id
+        # DESC` porque um jogo pode ter pick antigo do mesmo dia (re-execucao);
+        # o vinculo e' com o mais recente, que e' o que acabou de ser gravado.
+        alvo = (f"(SELECT p.id FROM {tabela} p "
+                " WHERE p.fixture_id = d.fixture_id AND p.match_date = d.match_date"
+                " ORDER BY p.id DESC LIMIT 1)")
+        params = [tabela]
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"""
+            UPDATE engine_decisions d
+               SET status = 'selecionado',
+                   pick_table = %s,
+                   pick_id = {alvo}
+             WHERE d.run_id = %s AND d.fixture_id = ANY(%s)
+        """, (*params, run.run_id, list(fixtures)))
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
 
 
 def _gravar(pipeline: str, fixture: dict | None, status: str, reason: str | None,
