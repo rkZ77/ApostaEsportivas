@@ -148,6 +148,55 @@ def extrair_linhas(odds_brutas: list, familias: tuple = FAMILIAS_V1) -> list[dic
     return saida
 
 
+#: Mercado que o motor NUNCA vai cotar, e por isso nao interessa listar como
+#: "possivel". Nao e' falta de modelo: e' outro tipo de aposta. Over/Under de
+#: TEMPO (1o/2o) tem contador proprio que a folha nao separa -- e' o mesmo
+#: corte que o pre-jogo faz --, e resultado/handicap/placar nao sao contagem,
+#: entao o modelo de residual deste motor nao os descreve nem em principio.
+_FORA_DO_ESCOPO = (
+    "half", "1st", "2nd", "handicap", "correct score", "result", "winner",
+    "double chance", "draw no bet", "to score", "to win", "odd/even",
+    "asian", "method", "penalty", "htft", "ht/ft",
+)
+
+
+def mercados_nao_lidos(odds_brutas: list) -> list[dict]:
+    """Os mercados de CONTAGEM que a casa esta' cotando e o motor ignora.
+
+    Existe porque a pergunta "que mercado ao vivo da' pra abrir?" nunca teve
+    resposta baseada em dado: NOMES_POR_FAMILIA foi levantado uma vez, contra
+    uma amostra, e desde entao a unica forma de saber o que a API oferece de
+    verdade seria ler um payload na mao. Aqui a propria rodada responde --
+    de graca, porque as odds JA' foram baixadas pra cotar as familias triadas.
+
+    Filtra o que nunca sera' cotado (`_FORA_DO_ESCOPO`) pra a lista nao virar
+    ruido: sobra mercado de contagem com linha Over/Under, que e' exatamente
+    a forma que este motor sabe precificar assim que tiver baseline pro
+    contador. Nao decide nada, nao gasta requisicao -- so' relata.
+    """
+    achados: dict[str, dict] = {}
+    for mercado in odds_brutas or []:
+        nome = (mercado.get("name") or "").strip()
+        limpo = nome.lower()
+        if not limpo or _familia_do_mercado(nome) is not None:
+            continue
+        if any(termo in limpo for termo in _FORA_DO_ESCOPO):
+            continue
+        linhas = {
+            _decimal(v.get("handicap"))
+            for v in (mercado.get("values") or [])
+            if not v.get("suspended")
+            and (v.get("value") or "").strip().lower() in ("over", "under")
+            and _decimal(v.get("handicap")) is not None
+        }
+        if not linhas:
+            continue  # sem par Over/Under nao e' mercado de contagem
+        registro = achados.setdefault(nome, {"mercado": nome, "linhas": set()})
+        registro["linhas"] |= linhas
+    return [{"mercado": r["mercado"], "linhas": sorted(r["linhas"])}
+            for r in sorted(achados.values(), key=lambda r: r["mercado"])]
+
+
 def ha_mercado_para(odds_brutas: list, familia: str) -> bool:
     """Se a casa esta' cotando aquela familia agora. Usado no log pra separar
     'nao ha oportunidade' de 'nao ha mercado', que sao diagnosticos

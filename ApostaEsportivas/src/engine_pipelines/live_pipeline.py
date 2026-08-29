@@ -1054,6 +1054,28 @@ def run_live_engine(fixture_id: int | None = None,
         except Exception:
             pass
     finally:
+        # Catalogo da RODADA: junta o que cada partida viu, com em quantas
+        # partidas o mercado apareceu. Uma partida sozinha nao diz se um
+        # mercado e' comum ou excecao daquela casa; a rodada diz.
+        catalogo: dict = {}
+        for p in relatorio["partidas"]:
+            for m in (p.get("mercados_nao_lidos") or []):
+                registro = catalogo.setdefault(m["mercado"],
+                                               {"mercado": m["mercado"],
+                                                "partidas": 0, "linhas": set()})
+                registro["partidas"] += 1
+                registro["linhas"] |= set(m["linhas"])
+        relatorio["mercados_nao_lidos"] = [
+            {"mercado": r["mercado"], "partidas": r["partidas"],
+             "linhas": sorted(r["linhas"])}
+            for r in sorted(catalogo.values(), key=lambda r: -r["partidas"])
+        ]
+        if relatorio["mercados_nao_lidos"]:
+            print("\n[LIVE] Mercados de contagem cotados que o motor nao le:")
+            for r in relatorio["mercados_nao_lidos"]:
+                linhas = ", ".join(f"{l:g}" for l in r["linhas"][:8])
+                print(f"  {r['mercado']}  ·  {r['partidas']} partida(s)  ·  linhas: {linhas}")
+
         relatorio["requisicoes"] = feed.usadas
         relatorio["trilha_api"] = feed.trilha()
         relatorio["ok"] = not relatorio["erros"]
@@ -1315,6 +1337,18 @@ def _processar_partida(indice: int, bruto: dict, cur, conn, feed: LiveFeed,
     resumo["odd_consultada"] = True
     cotacoes = live_odds.extrair_linhas(odds_brutas, tuple(tri["familias"]))
     print(f"Odd consultada: SIM ({len(cotacoes)} linha(s) ativa(s))")
+
+    # O que a casa esta' cotando e o motor nao le. Nao muda decisao nenhuma:
+    # e' a unica forma de responder "que outro mercado ao vivo da' pra abrir?"
+    # com dado em vez de palpite, e sai de graca -- as odds ja' foram baixadas.
+    # Vai pro resumo da rodada e pro log da partida, que e' o que a aba de
+    # Auditoria le.
+    nao_lidos = live_odds.mercados_nao_lidos(odds_brutas)
+    if nao_lidos:
+        resumo["mercados_nao_lidos"] = nao_lidos
+        print("Mercados de contagem cotados que o motor ainda nao le: "
+              + ", ".join(f"{m['mercado']} ({len(m['linhas'])} linha(s))"
+                          for m in nao_lidos[:6]))
     if not cotacoes:
         print("DECISAO: NO PICK (mercado suspenso ou nao cotado)")
         resumo.update({"decisao": "NO PICK", "motivo": "sem linha ativa nas familias triadas"})
