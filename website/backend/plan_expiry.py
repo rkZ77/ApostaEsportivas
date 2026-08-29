@@ -54,9 +54,15 @@ plano, senão ela nasce vencida.
 O usuário pediu explicitamente o aviso de 1 dia no teste (28/08). São dois
 eventos ali: um dia inteiro antes, e as últimas horas.
 """
+import logging
+import os
+import threading
+import time
 from datetime import datetime, timezone
 
 from email_templates import NOTA_PLANO_ENCERRADO, aviso_de_plano_html, url_logo
+
+logger = logging.getLogger(__name__)
 
 # Rótulo do plano na mensagem. O nome importa: "seu VIP vence" e "seu teste
 # grátis acaba" pedem ações diferentes de quem lê, e o mesmo texto genérico
@@ -359,3 +365,181 @@ def expirar_plano_vencido(cur, user: dict, agora: datetime | None = None,
     user["plan"] = "free"
     user["expires_at"] = None
     return True
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# VARREDURA · quem NÃO volta também precisa ser rebaixado
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Tudo acima é preguiçoso: `expirar_plano_vencido` só roda quando a pessoa
+# aparece (login, refresh, /auth/me). Isso funciona pra quem volta, e falha
+# exatamente pra quem interessa · em 2026-08-29 o banco de produção tinha três
+# testes vencidos há dois dias ainda com `plan = 'trial'`, um deles de uma
+# conta que nunca fez login. Nenhum aviso de encerramento havia sido criado na
+# vida do site (`notifications` tinha 10 `plan_expiring` e zero `trial_ended`).
+#
+# Duas consequências, e a segunda é a cara:
+#
+#   · o relatório mente. O /admin lista a pessoa como "trial" e a contagem de
+#     testes ativos soma gente que já perdeu o acesso (o acesso em si nunca
+#     vazou: `auth_utils.get_current_user` derruba pra free pela data antes de
+#     qualquer rota VIP responder · o defeito é de ESTADO e de AVISO, não de
+#     permissão);
+#   · o e-mail "seu teste acabou" nunca sai. Ele é o único canal que alcança
+#     quem parou de abrir o site, e é a hora exata de oferecer a assinatura ·
+#     o momento em que a conversão vale mais é justamente o que o gatilho
+#     preguiçoso não cobre.
+#
+# Nada de agendador aqui (removido em 2026-08-01 e a decisão vale): a
+# varredura pega carona numa VISITA qualquer ao site, no mesmo formato de
+# stats_sweep.py e de routers/live.py::maybe_resolve_pending. Site parado não
+# gasta nada, e o freio de banco é uma consulta que na maior parte do tempo
+# responde "não tem ninguém".
+_VARREDURA_INTERVALO = int(os.getenv("PLAN_SWEEP_INTERVAL_SECONDS", "900"))
+
+#: Teto por passada. Não é performance: é raio de explosão. Se algum dia uma
+#: alteração de coluna deixar meia base "vencida", a primeira passada mexe em
+#: 200 contas e as próximas continuam · o log mostra o número e dá tempo de
+#: parar antes de mandar e-mail pra base inteira.
+_VARREDURA_LIMITE = int(os.getenv("PLAN_SWEEP_LIMIT", "200"))
+
+_estado = {"ultima": 0.0, "rodando": False, "ultimo_resultado": None}
+_lock = threading.Lock()
+
+
+def _vencidos(cur, limite: int) -> list[dict]:
+    cur.execute(
+        """
+        SELECT id, name, email, plan, expires_at
+          FROM users
+         WHERE plan = ANY(%s) AND expires_at IS NOT NULL AND expires_at < NOW()
+         ORDER BY expires_at
+         LIMIT %s
+        """,
+        (list(PLANOS_COM_VALIDADE), limite),
+    )
+    return [dict(r) for r in cur.fetchall()]
+
+
+def varrer_planos_vencidos(cur, enviar_email=None, site_url: str = "",
+                           limite: int = _VARREDURA_LIMITE) -> dict:
+    """Rebaixa e avisa TODO mundo com plano vencido. Não commita.
+
+    Reusa `expirar_plano_vencido` conta a conta em vez de fazer um UPDATE em
+    massa: é a mesma função dos três caminhos de requisição, então não existe
+    um segundo jeito de rebaixar alguém que possa divergir do primeiro (e é
+    ela que cria a notificação e dispara o e-mail).
+
+    A comparação de vencimento fica no SQL, e não no Python, porque
+    `expires_at` é TIMESTAMP sem fuso: no banco ele e o NOW() vivem no mesmo
+    referencial. `expirar_plano_vencido` reconfere em Python assumindo UTC, o
+    que no máximo deixa passar quem venceu há pouco · esse volta na próxima.
+    """
+    resumo = {"rebaixados": 0, "trial": 0, "vip": 0, "ids": []}
+    for user in _vencidos(cur, limite):
+        plano = user["plan"]
+        if expirar_plano_vencido(cur, user, enviar_email=enviar_email,
+                                 site_url=site_url):
+            resumo["rebaixados"] += 1
+            resumo[plano] = resumo.get(plano, 0) + 1
+            resumo["ids"].append(user["id"])
+    return resumo
+
+
+def _ha_plano_vencido(cur) -> bool:
+    """Freio de banco: uma consulta, e quase sempre a resposta é não."""
+    cur.execute(
+        "SELECT 1 FROM users WHERE plan = ANY(%s) AND expires_at IS NOT NULL "
+        "AND expires_at < NOW() LIMIT 1",
+        (list(PLANOS_COM_VALIDADE),),
+    )
+    return cur.fetchone() is not None
+
+
+def _passada(enviar_email, site_url: str) -> None:
+    from database import get_connection
+
+    conn = None
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        try:
+            resumo = varrer_planos_vencidos(cur, enviar_email=enviar_email,
+                                            site_url=site_url)
+            conn.commit()
+            _estado["ultimo_resultado"] = resumo
+            if resumo["rebaixados"]:
+                logger.info("[PLAN-SWEEP] %s", resumo)
+        finally:
+            cur.close()
+    except Exception as e:
+        if conn is not None:
+            conn.rollback()
+        _estado["ultimo_resultado"] = {"erro": str(e)[:200]}
+        logger.error("[PLAN-SWEEP] falhou: %s", e, exc_info=True)
+    finally:
+        if conn is not None:
+            conn.close()
+        with _lock:
+            _estado["rodando"] = False
+
+
+def maybe_expirar_vencidos(enviar_email=None, site_url: str = "") -> bool:
+    """Chamada de dentro de rotas de leitura. NUNCA bloqueia quem chamou.
+
+    O rebaixamento em si é barato (um UPDATE por conta), mas o e-mail não: ele
+    fala com um servidor de SMTP, uma vez por pessoa. O visitante que por acaso
+    disparou a varredura não pode esperar por isso, então a passada vai pra
+    thread de fundo · igual à varredura de estatística.
+
+    Retorna True quando disparou a passada agora. Diferente do stats_sweep,
+    não exige produção: rebaixar não gasta cota de API nenhuma, e o freio que
+    importa (não mandar e-mail de verdade pro assinante real a partir do
+    staging) já mora em quem injeta o `enviar_email`.
+    """
+    agora = time.time()
+    with _lock:
+        if _estado["rodando"] or agora - _estado["ultima"] < _VARREDURA_INTERVALO:
+            return False
+        _estado["ultima"] = agora
+        _estado["rodando"] = True
+
+    from database import get_connection
+
+    conn = None
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        try:
+            tem = _ha_plano_vencido(cur)
+        finally:
+            cur.close()
+    except Exception as e:
+        logger.warning("[PLAN-SWEEP] freio de banco falhou: %s", e)
+        with _lock:
+            _estado["rodando"] = False
+        return False
+    finally:
+        if conn is not None:
+            conn.close()
+
+    if not tem:
+        with _lock:
+            _estado["rodando"] = False
+        return False
+
+    threading.Thread(target=_passada, args=(enviar_email, site_url),
+                     name="plan-sweep", daemon=True).start()
+    return True
+
+
+def estado_da_varredura() -> dict:
+    """Retrato pro /admin. Só leitura."""
+    return {
+        "intervalo_s": _VARREDURA_INTERVALO,
+        "limite": _VARREDURA_LIMITE,
+        "rodando": _estado["rodando"],
+        "ultima_passada_ha_s": (round(time.time() - _estado["ultima"])
+                                if _estado["ultima"] else None),
+        "ultimo_resultado": _estado["ultimo_resultado"],
+    }

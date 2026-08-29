@@ -14,6 +14,7 @@ import AdminMotorDecisoes from '../components/AdminMotorDecisoes'
 import AdminAuditoriaMotores from '../components/AdminAuditoriaMotores'
 import AdminPendencias from '../components/AdminPendencias'
 import AdminEngajamento from '../components/AdminEngajamento'
+import AdminPlanosVencidos from '../components/AdminPlanosVencidos'
 import { fmtBRL } from '../utils/format'
 
 interface User {
@@ -44,7 +45,12 @@ interface Stats {
     vip_picks: number
     alavancagem: number
     dica: number
+    faltas: number
+    goleiros: number
+    player_stats: number
+    boost: number
     multiplas: number
+    live: number
   }
 }
 
@@ -95,7 +101,7 @@ interface Liga {
 const PICK_LABEL: Record<string, string> = {
   vip: 'VIP', free: 'Dica do Dia', multiplas: 'Múltiplas',
   alavancagem: 'Alavancagem', faltas: 'Faltas', goleiros: 'Defesas',
-  player_stats: 'Jogadores', boost: 'Pick Boost',
+  player_stats: 'Jogadores', boost: 'Pick Boost', live: 'Ao Vivo',
 }
 
 // Sub-paginas do /admin.
@@ -1199,8 +1205,9 @@ export default function Admin() {
 
         {aba === 'picks' && (<>
         {/* Picks de hoje · a grade acompanha quantos tipos o backend mandar.
-            Eram 6 fixos e o motor passou a produzir 8 (Jogadores e Pick Boost
-            entraram em 28/08); `lg:grid-cols-4` cabe os dois sem apertar. */}
+            Eram 6 fixos e o motor passou a produzir 9 (Jogadores e Pick Boost
+            em 28/08, Ao Vivo em 29/08); a grade cresce sozinha porque a lista
+            vem do backend, não de cards escritos aqui. */}
         {overview?.picks_hoje && (
           <div className="card p-4 mb-4">
             <h2 className="text-xs font-semibold text-ink-3 mb-3">Picks de hoje</h2>
@@ -1441,6 +1448,7 @@ export default function Admin() {
           </div>
         )}
         <AdminEngajamento />
+        <AdminPlanosVencidos />
         {/* Criar usuário */}
         {creating && (
           <form onSubmit={handleCreate} className="card p-5 mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">

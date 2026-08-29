@@ -1374,6 +1374,61 @@ _ODD_COL = {
 _PICK_TABLES_UMA_FIXTURE = ("vip", "free", "faltas", "goleiros", "player_stats", "boost")
 
 
+@router.get("/users/planos-vencidos")
+def admin_planos_vencidos(current_user: dict = Depends(require_admin)):
+    """Quem esta com VIP/trial vencido e ainda nao foi rebaixado.
+
+    E' o numero que o botao abaixo resolve · a tela mostra antes de agir pra
+    que "rodar a varredura" nunca seja um clique no escuro.
+    """
+    from plan_expiry import PLANOS_COM_VALIDADE, estado_da_varredura
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT id, name, email, plan, expires_at, last_login_at
+              FROM users
+             WHERE plan = ANY(%s) AND expires_at IS NOT NULL AND expires_at < NOW()
+             ORDER BY expires_at
+        """, (list(PLANOS_COM_VALIDADE),))
+        pendentes = [dict(r) for r in cur.fetchall()]
+    finally:
+        cur.close()
+        conn.close()
+
+    return {"total": len(pendentes), "pendentes": pendentes,
+            "varredura": estado_da_varredura()}
+
+
+@router.post("/users/expirar-planos")
+def admin_expirar_planos(current_user: dict = Depends(require_admin)):
+    """Roda a varredura de planos vencidos AGORA, sem esperar visita.
+
+    A varredura automatica pega carona numa visita ao site (ver plan_expiry.py)
+    e ja' resolve o caso comum. Este botao e' rede: serve pra rodar na hora
+    depois de mexer em vencimento na mao, e pra ver o resumo do que mudou.
+
+    Sincrono de proposito, ao contrario da versao automatica: quem clicou quer
+    o numero de volta, e sao poucas contas.
+    """
+    from plan_expiry import varrer_planos_vencidos
+    from routers.auth import _avisos_de_plano
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        resumo = varrer_planos_vencidos(cur, **_avisos_de_plano())
+        conn.commit()
+        return resumo
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(500, f"Falha na varredura: {e}")
+    finally:
+        cur.close()
+        conn.close()
+
+
 @router.get("/users/engajamento")
 def admin_users_engajamento(current_user: dict = Depends(require_admin)):
     """Quem ainda aparece, quem sumiu, e quem o WhatsApp alcançaria.
@@ -2036,6 +2091,9 @@ def admin_stats(current_user: dict = Depends(require_admin)):
         """)
         users_row = dict(cur.fetchone())
 
+        # Contava quatro produtos de nove: faltas, defesas, Player Stats, Pick
+        # Boost e ao vivo saiam do painel do dia, entao o admin publicava e nao
+        # tinha como conferir se o motor daquele produto rodou.
         cur.execute(f"""
             SELECT
                 (SELECT COUNT(*) FROM picks_vip
@@ -2044,10 +2102,28 @@ def admin_stats(current_user: dict = Depends(require_admin)):
                  WHERE match_date = {HOJE_BR})                               AS alavancagem,
                 (SELECT COUNT(*) FROM picks_free
                  WHERE match_date = {HOJE_BR})                               AS dica,
+                (SELECT COUNT(*) FROM picks_faltas
+                 WHERE match_date = {HOJE_BR})                               AS faltas,
+                (SELECT COUNT(*) FROM picks_goleiros
+                 WHERE match_date = {HOJE_BR})                               AS goleiros,
+                (SELECT COUNT(*) FROM picks_player_stats
+                 WHERE match_date = {HOJE_BR})                               AS player_stats,
+                (SELECT COUNT(*) FROM picks_boost
+                 WHERE match_date = {HOJE_BR})                               AS boost,
                 (SELECT COUNT(*) FROM picks_multiplas
                  WHERE DATE(created_at AT TIME ZONE 'UTC') = CURRENT_DATE)  AS multiplas
         """)
         picks_row = dict(cur.fetchone())
+        # Fora do SELECT acima porque `picks_live` vem do motor: uma sub-query
+        # nela derrubaria o dashboard inteiro onde a tabela nao existe.
+        picks_row["live"] = 0
+        try:
+            cur.execute("SELECT to_regclass('public.picks_live') IS NOT NULL AS existe")
+            if cur.fetchone()["existe"]:
+                cur.execute(f"SELECT COUNT(*) AS n FROM picks_live WHERE match_date = {HOJE_BR}")
+                picks_row["live"] = int(cur.fetchone()["n"] or 0)
+        except Exception:
+            conn.rollback()
 
         return {**users_row, "picks_hoje": picks_row}
     finally:
@@ -2195,7 +2271,12 @@ def admin_overview(current_user: dict = Depends(require_admin)):
                                ("faltas", "picks_faltas"),
                                ("player_stats", "picks_player_stats"),
                                ("boost", "picks_boost"),
-                               ("goleiros", "picks_goleiros")):
+                               ("goleiros", "picks_goleiros"),
+                               # Ao vivo (29/08). `uma()` ja' devolve o default
+                               # quando a consulta falha, entao a tabela que so'
+                               # existe onde o motor rodou entra sem guarda
+                               # extra -- vira zero, nao erro.
+                               ("live", "picks_live")):
             picks[rotulo] = uma(
                 f"SELECT COUNT(*) AS n, COUNT(*) FILTER (WHERE result IS NULL) AS pendentes "
                 f"FROM {tabela} WHERE match_date = {HOJE_BR}",

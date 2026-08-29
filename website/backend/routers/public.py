@@ -6,6 +6,7 @@ from auth_utils import get_current_user_optional
 from database import get_connection
 from data_br import HOJE_BR, TZ_BR, data_br
 from stake_plan import STAKE_PADRAO, stake_de, rotulo_curto
+from pick_sources import fontes, joins_sql, case_sql, tabela_existe
 
 # Peso de cada pipeline em unidades, lido uma vez · os SELECTs sao f-strings
 # e interpolar `STAKE_PADRAO['vip']` la dentro exigiria aspas aninhadas.
@@ -219,6 +220,28 @@ def _sub_mercado(tabela: str, source: str, rotulo: str):
     return builder
 
 
+def _sub_live(date_cond: str) -> str:
+    """Ao vivo. Nao reusa `_sub_mercado` porque `picks_live` segue a familia de
+    nomes de `picks_vip` (home_team_name/away_team_name) e nao a de
+    `picks_free` -- e porque ela ja' guarda `league_name`, entao nem precisa do
+    JOIN em `leagues` pra ter o rotulo."""
+    peso = stake_de("live")
+    return f"""
+        SELECT p.match_date,
+               p.home_team_name, p.away_team_name,
+               p.home_team_id, p.away_team_id,
+               p.market, p.line, p.odd,
+               p.result, p.profit * {peso} AS profit,
+               {peso}::numeric AS stake,
+               'live' AS source,
+               p.league_id AS league_id,
+               COALESCE(p.league_name, l.name, 'Ao Vivo') AS league_name
+        FROM picks_live p
+        LEFT JOIN leagues l ON l.league_id = p.league_id
+        WHERE p.result IS NOT NULL {_qualificar(date_cond, "p")}
+    """
+
+
 _SUB_BUILDERS = {
     "vip":        _sub_vip,
     "free":       _sub_free,
@@ -237,14 +260,43 @@ _SUB_BUILDERS = {
     # contaria unidade, e o percentual descreveria um produto que o lucro
     # ignora.
     "boost":      _sub_mercado("picks_boost", "boost", "Pick Boost"),
+    # Ao vivo (29/08). Entra por decisao explicita: ate' aqui o produto era
+    # liquidado, notificado e seguido na banca, mas nao existia em nenhum
+    # numero publico -- o site vendia um motor que o placar dele ignorava.
+    #
+    # E' a UNICA fonte opcional do catalogo: `picks_live` nasce do motor
+    # (engine_pipelines/live_pipeline.py), nao das migracoes do site, entao
+    # ambiente que nunca rodou o motor ao vivo nao a tem. Por isso quem monta
+    # o UNION passa por `_builders`, e nao por este dicionario direto.
+    "live":       _sub_live,
 }
 
-def _build_union(date_cond: str, source: Optional[str]) -> str:
-    """Monta UNION ALL das tabelas de picks (_SUB_BUILDERS) com colunas
+#: Fontes cuja tabela pode nao existir nesta instancia -> checar antes de
+#: entrar no UNION. Um UNION nao tem a resiliencia do laco por fonte: se uma
+#: perna quebra, quebra tudo, e o historico publico inteiro sumia por causa de
+#: um produto que aquele ambiente nem publica.
+_FONTES_OPCIONAIS = {"live": "picks_live"}
+
+
+def _builders(cur) -> dict:
+    """`_SUB_BUILDERS` menos as fontes cuja tabela nao existe aqui.
+
+    Toda consulta do placar passa por aqui em vez de ler `_SUB_BUILDERS`
+    direto -- inclusive a contagem de placeholders, que precisa bater com o
+    numero de sub-queries que de fato entraram no UNION.
+    """
+    ativos = dict(_SUB_BUILDERS)
+    for chave, tabela in _FONTES_OPCIONAIS.items():
+        if not tabela_existe(cur, tabela):
+            ativos.pop(chave, None)
+    return ativos
+
+def _build_union(builders: dict, date_cond: str, source: Optional[str]) -> str:
+    """Monta UNION ALL das tabelas de picks (ver `_builders`) com colunas
     normalizadas."""
-    if source and source in _SUB_BUILDERS:
-        return _SUB_BUILDERS[source](date_cond)
-    return " UNION ALL ".join(fn(date_cond) for fn in _SUB_BUILDERS.values())
+    if source and source in builders:
+        return builders[source](date_cond)
+    return " UNION ALL ".join(fn(date_cond) for fn in builders.values())
 
 
 def _pagina_de_resultados(cur, date_cond: str, date_params: tuple, source: Optional[str],
@@ -268,8 +320,9 @@ def _pagina_de_resultados(cur, date_cond: str, date_params: tuple, source: Optio
     UNION e' tentado primeiro e, se levantar, cai no laco antigo -- rapido no
     caso normal, resiliente no caso ruim.
     """
-    union = _build_union(date_cond, source if source in _SUB_BUILDERS else None)
-    p = date_params if source in _SUB_BUILDERS else date_params * len(_SUB_BUILDERS)
+    builders = _builders(cur)
+    union = _build_union(builders, date_cond, source if source in builders else None)
+    p = date_params if source in builders else date_params * len(builders)
     # ORDEM TOTAL, e nao so' "bonita". Paginar sem criterio de desempate deixa
     # o Postgres livre pra devolver empates em ordem diferente a cada consulta,
     # e ai a pagina 2 repete linha da 1 e pula outra. Foi o que a comparacao
@@ -281,7 +334,7 @@ def _pagina_de_resultados(cur, date_cond: str, date_params: tuple, source: Optio
     # sort estavel, entao empate de data+resultado caia nessa ordem. Deriva da
     # constante, nunca de lista escrita a mao -- registrar um mercado novo nao
     # pode exigir lembrar deste lugar.
-    ordem_fontes = list(_SUB_BUILDERS.keys())
+    ordem_fontes = list(builders.keys())
     try:
         linhas = _q(cur, f"""
             SELECT *, COUNT(*) OVER () AS _total
@@ -311,7 +364,8 @@ def _collect_results(cur, date_cond: str, date_params: tuple, source: Optional[s
 
     Caminho de FALLBACK desde 2026-08-13 (ver _pagina_de_resultados): custa 6
     idas ao banco, entao so' roda quando o UNION falha."""
-    builders = [_SUB_BUILDERS[source]] if (source and source in _SUB_BUILDERS) else list(_SUB_BUILDERS.values())
+    ativos = _builders(cur)
+    builders = [ativos[source]] if (source and source in ativos) else list(ativos.values())
     fetch_n = offset + limit
     rows: list = []
     for fn in builders:
@@ -332,7 +386,8 @@ def _collect_results(cur, date_cond: str, date_params: tuple, source: Optional[s
 def _count_recent(cur, date_cond: str, date_params: tuple, source: Optional[str]) -> int:
     """Total de linhas pra paginação de 'recent' -- mesma defesa por sub-query
     de _collect_results (uma fonte com erro conta 0 em vez de derrubar o total)."""
-    builders = [_SUB_BUILDERS[source]] if (source and source in _SUB_BUILDERS) else list(_SUB_BUILDERS.values())
+    ativos = _builders(cur)
+    builders = [ativos[source]] if (source and source in ativos) else list(ativos.values())
     total = 0
     for fn in builders:
         sub = fn(date_cond)
@@ -386,27 +441,38 @@ def public_results(
     except Exception:
         logger.warning("[STATS-SWEEP] gatilho em /results falhou", exc_info=True)
 
+    # Terceira carona: planos vencidos. As outras duas olham o jogo, esta olha
+    # a conta. `expirar_plano_vencido` roda no login, no refresh e no /auth/me,
+    # o que cobre quem VOLTA -- e deixa de fora exatamente quem parou de abrir
+    # o site: essa pessoa fica marcada como VIP/trial pra sempre no /admin e
+    # nunca recebe o e-mail de que o acesso acabou. Freios proprios em
+    # plan_expiry.py (relogio + uma consulta que quase sempre diz "ninguem").
+    try:
+        from plan_expiry import maybe_expirar_vencidos
+        from routers.auth import _avisos_de_plano
+        maybe_expirar_vencidos(**_avisos_de_plano())
+    except Exception:
+        logger.warning("[PLAN-SWEEP] gatilho em /results falhou", exc_info=True)
+
     conn = get_connection()
     cur  = conn.cursor()
     try:
-        # ── Meses disponíveis (todas as tabelas) ─────────────────────────────
-        months_rows = [] if slim else _q(cur, """
-            SELECT month, SUM(cnt) AS total FROM (
-                SELECT TO_CHAR(match_date, 'YYYY-MM') AS month, COUNT(*) AS cnt
-                FROM picks_vip WHERE result IS NOT NULL GROUP BY 1
-                UNION ALL
-                SELECT TO_CHAR(match_date, 'YYYY-MM'), COUNT(*)
-                FROM picks_free WHERE result IS NOT NULL GROUP BY 1
-                UNION ALL
-                SELECT TO_CHAR(match_date, 'YYYY-MM'), COUNT(*)
-                FROM picks_multiplas WHERE result IS NOT NULL GROUP BY 1
-                UNION ALL
-                SELECT TO_CHAR(match_date, 'YYYY-MM'), COUNT(*)
-                FROM picks_alavancagem WHERE result IS NOT NULL GROUP BY 1
-            ) t
-            GROUP BY month
-            HAVING SUM(cnt) > 0
-            ORDER BY month DESC
+        # ── Meses disponíveis ────────────────────────────────────────────────
+        #
+        # Sai do MESMO union que preenche a tela, e nao de uma lista de tabelas
+        # escrita a mao. A lista a mao parou nas quatro primeiras: um mes em
+        # que so' houve pick de mercado proprio, de Player Stats, de Pick Boost
+        # ou ao vivo nao aparecia no seletor, e os picks daquele mes ficavam
+        # inalcancaveis por uma tela que os TINHA. Derivar do union faz o
+        # seletor e o conteudo nascerem juntos.
+        meses_union = _build_union(_builders(cur), "", None)
+        months_rows = [] if slim else _q(cur, f"""
+            SELECT TO_CHAR(match_date, 'YYYY-MM') AS month, COUNT(*) AS total
+            FROM ({meses_union}) t
+            WHERE match_date IS NOT NULL
+            GROUP BY 1
+            HAVING COUNT(*) > 0
+            ORDER BY 1 DESC
             LIMIT 24
         """)
         available_months = [r["month"] for r in months_rows]
@@ -424,10 +490,19 @@ def public_results(
         # deixava o numero de placeholders defasado e o filtro por mes
         # quebrava -- erro de contagem de parametro, nao de logica, o tipo que
         # so aparece quando alguem filtra.
-        single = source in _SUB_BUILDERS
-        union_sql = _build_union(date_cond, source if single else None)
+        builders = _builders(cur)
+        # A contagem por tipo (mais abaixo) le' as tabelas cruas, entao a perna
+        # do ao vivo so' entra quando a tabela existe -- mesma guarda de
+        # `_builders`, escrita aqui porque aquela consulta nao passa por ele.
+        sql_live_resolvido = (
+            "UNION ALL SELECT 'live' AS source FROM picks_live"
+            " WHERE result IS NOT NULL"
+            if "live" in builders else ""
+        )
+        single = source in builders
+        union_sql = _build_union(builders, date_cond, source if single else None)
         # cada sub-query tem 1 placeholder; o UNION precisa de um por builder
-        p = date_params if single else date_params * len(_SUB_BUILDERS)
+        p = date_params if single else date_params * len(builders)
 
         # ── Sumário ───────────────────────────────────────────────────────────
         summary = _q1(cur, f"""
@@ -553,7 +628,7 @@ def public_results(
         by_source.sort(key=lambda a: a["profit"], reverse=True)
 
         # ── Recentes (por sub-query para não quebrar tudo se uma coluna faltar) ──
-        single_source = source if source in _SUB_BUILDERS else None
+        single_source = source if source in builders else None
         recent, recent_total = _pagina_de_resultados(
             cur, date_cond, date_params, single_source,
             limit=recent_limit, offset=recent_offset)
@@ -568,7 +643,8 @@ def public_results(
                 COUNT(*) FILTER (WHERE source = 'faltas')     AS faltas_total,
                 COUNT(*) FILTER (WHERE source = 'goleiros')   AS goleiros_total,
                 COUNT(*) FILTER (WHERE source = 'player_stats') AS player_stats_total,
-                COUNT(*) FILTER (WHERE source = 'boost')        AS boost_total
+                COUNT(*) FILTER (WHERE source = 'boost')        AS boost_total,
+                COUNT(*) FILTER (WHERE source = 'live')         AS live_total
             FROM (
                 SELECT 'vip'        AS source FROM picks_vip        WHERE result IS NOT NULL
                 UNION ALL
@@ -585,6 +661,7 @@ def public_results(
                 SELECT 'player_stats' AS source FROM picks_player_stats WHERE result IS NOT NULL
                 UNION ALL
                 SELECT 'boost'      AS source FROM picks_boost      WHERE result IS NOT NULL
+                {sql_live_resolvido}
             ) AS t
         """)
 
@@ -724,6 +801,12 @@ def public_today_summary():
     conn = get_connection()
     cur  = conn.cursor()
     try:
+        # `picks_live` vem do motor, nao das migracoes do site: sem a guarda,
+        # um ambiente que nunca rodou o motor ao vivo perderia o resumo do dia
+        # INTEIRO por causa de uma tabela que ele nem deveria ter.
+        live_hoje = (f"UNION ALL SELECT 'live' AS source FROM picks_live"
+                     f" WHERE match_date = {HOJE_BR}"
+                     if tabela_existe(cur, "picks_live") else "")
         row = _q1(cur, f"""
             SELECT
                 COUNT(*) FILTER (WHERE t.source = 'vip')         AS vip,
@@ -734,6 +817,7 @@ def public_today_summary():
                 COUNT(*) FILTER (WHERE t.source = 'goleiros')    AS goleiros,
                 COUNT(*) FILTER (WHERE t.source = 'player_stats') AS player_stats,
                 COUNT(*) FILTER (WHERE t.source = 'boost')        AS boost,
+                COUNT(*) FILTER (WHERE t.source = 'live')         AS live,
                 COUNT(*)                                         AS total
             FROM (
                 SELECT 'vip'         AS source FROM picks_vip         WHERE match_date = {HOJE_BR}
@@ -751,11 +835,13 @@ def public_today_summary():
                 SELECT 'player_stats' AS source FROM picks_player_stats WHERE match_date = {HOJE_BR}
                 UNION ALL
                 SELECT 'boost'      AS source FROM picks_boost      WHERE match_date = {HOJE_BR}
+                {live_hoje}
             ) t
         """)
         return dict(row) if row else {"vip": 0, "free": 0, "multiplas": 0,
                                       "alavancagem": 0, "faltas": 0, "goleiros": 0,
-                                      "player_stats": 0, "boost": 0, "total": 0}
+                                      "player_stats": 0, "boost": 0, "live": 0,
+                                      "total": 0}
     finally:
         cur.close()
         conn.close()
@@ -813,8 +899,9 @@ def public_profit_curve(days: int = Query(180, ge=7, le=1095)):
     conn = get_connection()
     cur  = conn.cursor()
     try:
-        union_sql = _build_union("AND match_date >= CURRENT_DATE - (%s * INTERVAL '1 day')", None)
-        p = (days,) * len(_SUB_BUILDERS)
+        builders = _builders(cur)
+        union_sql = _build_union(builders, "AND match_date >= CURRENT_DATE - (%s * INTERVAL '1 day')", None)
+        p = (days,) * len(builders)
         rows = _q(cur, f"""
             SELECT match_date, source, COALESCE(SUM(profit), 0) AS profit
             FROM ({union_sql}) AS t
@@ -1072,49 +1159,27 @@ def public_leaderboard():
     conn = get_connection()
     cur  = conn.cursor()
     try:
-        cur.execute("""
+        # JOINs e CASEs vem de pick_sources (fonte unica). Escritos a mao, eles
+        # ja' ficaram tres vezes para tras do que a banca contava: faltas e
+        # defesas em 2026-08, Player Stats em 27/08, ao vivo em 29/08. O modo
+        # de falhar e' sempre o mesmo -- tipo fora do CASE vira NULL, o
+        # FILTER (WHERE result IS NOT NULL) descarta a aposta, ela conta na
+        # banca do usuario e some do ranking. Quem apostou so' no tipo
+        # esquecido nem aparece na lista.
+        fontes_ativas = fontes(cur)
+        caso_result = case_sql(fontes_ativas, "result")
+        caso_profit = case_sql(fontes_ativas, "profit",
+                               envolver="COALESCE({expr}, 0)", senao="0")
+        joins = joins_sql(fontes_ativas)
+        cur.execute(f"""
             WITH resolved AS (
                 SELECT
                     uf.user_id,
                     uf.stake_units,
-                    CASE uf.pick_type
-                        WHEN 'vip'         THEN pv.result
-                        WHEN 'free'        THEN pf.result
-                        WHEN 'multipla'    THEN pm.result
-                        WHEN 'alavancagem' THEN pa.result
-                        WHEN 'faltas'      THEN pfa.result
-                        WHEN 'goleiros'    THEN pg.result
-                        WHEN 'player_stats' THEN pps.result
-                        WHEN 'boost'       THEN pbo.result
-                    END AS result,
-                    CASE uf.pick_type
-                        WHEN 'vip'         THEN COALESCE(pv.profit, 0)
-                        WHEN 'free'        THEN COALESCE(pf.profit, 0)
-                        WHEN 'multipla'    THEN COALESCE(pm.profit, 0)
-                        WHEN 'alavancagem' THEN COALESCE(pa.profit, 0)
-                        WHEN 'faltas'      THEN COALESCE(pfa.profit, 0)
-                        WHEN 'goleiros'    THEN COALESCE(pg.profit, 0)
-                        WHEN 'player_stats' THEN COALESCE(pps.profit, 0)
-                        WHEN 'boost'       THEN COALESCE(pbo.profit, 0)
-                        ELSE 0
-                    END AS profit
+                    {caso_result} AS result,
+                    {caso_profit} AS profit
                 FROM user_followed_picks uf
-                LEFT JOIN picks_vip pv         ON pv.id = uf.pick_id AND uf.pick_type = 'vip'
-                LEFT JOIN picks_free pf        ON pf.id = uf.pick_id AND uf.pick_type = 'free'
-                LEFT JOIN picks_multiplas pm   ON pm.id = uf.pick_id AND uf.pick_type = 'multipla'
-                LEFT JOIN picks_alavancagem pa ON pa.id = uf.pick_id AND uf.pick_type = 'alavancagem'
-                -- Faltas e defesas entravam no CASE como NULL, entao a aposta
-                -- do usuario nesses dois mercados era descartada pelo
-                -- FILTER (WHERE result IS NOT NULL) logo abaixo: ela contava
-                -- na banca dele e sumia do ranking. Quem apostasse so' nesses
-                -- dois nem aparecia na lista.
-                LEFT JOIN picks_faltas pfa     ON pfa.id = uf.pick_id AND uf.pick_type = 'faltas'
-                LEFT JOIN picks_goleiros pg    ON pg.id = uf.pick_id AND uf.pick_type = 'goleiros'
-                -- Player Stats (27/08). Mesma armadilha das duas linhas acima:
-                -- sem o JOIN e o CASE, a aposta do usuario num pick de jogador
-                -- conta na banca dele e some do ranking publico.
-                LEFT JOIN picks_player_stats pps ON pps.id = uf.pick_id AND uf.pick_type = 'player_stats'
-                LEFT JOIN picks_boost pbo ON pbo.id = uf.pick_id AND uf.pick_type = 'boost'
+                {joins}
             ),
             user_stats AS (
                 SELECT
