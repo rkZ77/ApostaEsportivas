@@ -617,9 +617,19 @@ def _stat_for_market(market: str, line: str, home_stats: dict, away_stats: dict,
     # RED errado (pick #114, fixture 1520774: 4 chutes no alvo vs 13
     # chutes totais numa linha Under 9.5).
     m_nospace = m.replace(" ", "")
+    # "Finalizações no Gol" e' como a casa escreve chute NO ALVO em PT, e
+    # nenhuma das chaves acima pegava esse nome -- ele caia na regra generica
+    # de `is_shots` logo abaixo (por conter "finaliza") e era liquidado contra
+    # o total de chutes, ~25 por jogo contra ~8,5 no alvo. Toda linha Under
+    # estourava por construcao: 13 RED em 18 picks desse mercado em PROD
+    # (-11,26u), e NOVE deles tinham ganhado na folha. O `mtype` gravado ja'
+    # salvava o caso aqui -- este bloco protege quem nao tem market_type.
     is_shots_on_target = mtype == "shots_on_target" or any(
         k in m_nospace for k in ["shotontarget", "shotongoal", "shotsontarget"]
-    ) or any(k in m for k in ["chute no alvo", "chute a gol", "finalizacao no alvo", "finalização no alvo"])
+    ) or any(k in m for k in ["chute no alvo", "chute a gol", "chutes a gol",
+                              "finalizacao no alvo", "finalização no alvo",
+                              "ção no gol", "ções no gol",
+                              "cao no gol", "coes no gol"])
     is_shots = not is_shots_on_target and (
         mtype == "shots" or any(k in m for k in ["chute", "shot", "finaliza"])
     )

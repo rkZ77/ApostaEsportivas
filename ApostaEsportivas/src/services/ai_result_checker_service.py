@@ -211,12 +211,39 @@ class AIResultCheckerService:
             return "fouls"
         if any(w in name for w in ["defesa", "save", "goleiro", "goalkeeper"]):
             return "saves"
+        # ESTE PAR SE RESOLVE PELO market_type, NAO PELO TEXTO (2026-08-29).
+        #
+        # `shots` (~25 por jogo) e `shots_on_target` (~8,5) sao familias com
+        # uma ordem de grandeza de diferenca, e os nomes que a casa publica
+        # pra elas se sobrepoem: "Finalizacoes no Gol Mais/Menos" e' chute NO
+        # ALVO, mas contem "finaliza" e caia na regra generica logo abaixo --
+        # entao era liquidado contra o total de chutes. Toda linha Under
+        # estourava por construcao.
+        #
+        # O estrago medido em PROD: 13 RED em 18 picks desse mercado
+        # (-11,26u), e ao conferir contra a folha, NOVE deles tinham ganhado.
+        # Ex.: Goias x Juventude (fx 1520825), Under 8.5 com 7 chutes no alvo
+        # -- e 25 chutes totais.
+        #
+        # O market_type gravado estava CERTO nos 18. Ele so' era consultado
+        # depois de o texto ja' ter decidido errado. Aqui ele passa na frente,
+        # que e' a regra que live.py::_stat_for_market ja' seguia -- os dois
+        # deviam concordar e nao concordavam.
+        mtype_gravado = (market_type or "").lower()
+        if mtype_gravado in ("shots_on_target", "shots"):
+            return mtype_gravado
+
         no_space = name.replace(" ", "")
         if any(w in no_space for w in ["shotontarget", "shotsontarget",
                                         "shotongoal", "shotsongoal"]) \
                 or any(w in name for w in ["chute no alvo", "chutes no alvo",
                                             "finalizacao no alvo", "finalização no alvo",
-                                            "chute a gol"]):
+                                            "chute a gol", "chutes a gol",
+                                            # Como a casa escreve em PT. Sem
+                                            # isto, pick sem market_type
+                                            # gravado repete o erro acima.
+                                            "ção no gol", "ções no gol",
+                                            "cao no gol", "coes no gol"]):
             return "shots_on_target"
         if any(w in name for w in ["chute", "shot", "finaliza"]):
             return "shots"
