@@ -154,6 +154,7 @@ def _com_banco_falso(monkeypatch, cur):
 
     import database
     monkeypatch.setattr(database, "get_connection", lambda *a, **k: ConnFalsa())
+    monkeypatch.setattr(plan_expiry, "varredura_habilitada", lambda: True)
     plan_expiry._estado.update(ultima=0.0, rodando=False, ultimo_resultado=None)
 
 
@@ -173,3 +174,16 @@ def test_sem_vencido_nao_abre_thread(monkeypatch):
 
     assert plan_expiry.maybe_expirar_vencidos() is False
     assert plan_expiry._estado["rodando"] is False
+
+
+def test_staging_nao_varre(monkeypatch):
+    """O noprod aponta pro banco de PRODUCAO com SIDE_EFFECTS=off: varrer ali
+    gravaria a notificacao do assinante real sem o e-mail, e a dedupe_key
+    impediria o e-mail de sair depois · o aviso morreria numa aba de teste."""
+    cur = CursorFalso([_user(71)])
+    _com_banco_falso(monkeypatch, cur)
+    monkeypatch.setattr(plan_expiry, "varredura_habilitada", lambda: False)
+
+    assert plan_expiry.maybe_expirar_vencidos() is False
+    assert cur.usuarios[71]["plan"] == "trial"
+    assert cur.notificacoes == []

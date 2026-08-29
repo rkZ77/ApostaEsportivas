@@ -484,6 +484,23 @@ def _passada(enviar_email, site_url: str) -> None:
             _estado["rodando"] = False
 
 
+def varredura_habilitada() -> bool:
+    """Só onde o efeito é pra valer · o staging não pode gastar o aviso.
+
+    O noprod aponta pro banco de PRODUÇÃO e roda com `SIDE_EFFECTS=off`. Sem
+    este freio, uma janela aberta ali rebaixaria o assinante real e gravaria a
+    notificação de fim de acesso SEM mandar o e-mail · e a `dedupe_key` é
+    justamente o que impede o e-mail de sair depois. O aviso mais importante
+    do funil morreria numa aba de teste, em silêncio.
+
+    Vale só pra varredura em lote. O rebaixamento preguiçoso de quem entra
+    continua rodando em todo ambiente: ali a pessoa está na frente da tela, e
+    deixar a conta marcada como VIP pra ela seria mentir na cara dela.
+    """
+    from runtime_env import side_effects_enabled
+    return side_effects_enabled()
+
+
 def maybe_expirar_vencidos(enviar_email=None, site_url: str = "") -> bool:
     """Chamada de dentro de rotas de leitura. NUNCA bloqueia quem chamou.
 
@@ -492,11 +509,11 @@ def maybe_expirar_vencidos(enviar_email=None, site_url: str = "") -> bool:
     disparou a varredura não pode esperar por isso, então a passada vai pra
     thread de fundo · igual à varredura de estatística.
 
-    Retorna True quando disparou a passada agora. Diferente do stats_sweep,
-    não exige produção: rebaixar não gasta cota de API nenhuma, e o freio que
-    importa (não mandar e-mail de verdade pro assinante real a partir do
-    staging) já mora em quem injeta o `enviar_email`.
+    Retorna True quando disparou a passada agora.
     """
+    if not varredura_habilitada():
+        return False
+
     agora = time.time()
     with _lock:
         if _estado["rodando"] or agora - _estado["ultima"] < _VARREDURA_INTERVALO:
@@ -536,6 +553,7 @@ def maybe_expirar_vencidos(enviar_email=None, site_url: str = "") -> bool:
 def estado_da_varredura() -> dict:
     """Retrato pro /admin. Só leitura."""
     return {
+        "habilitada": varredura_habilitada(),
         "intervalo_s": _VARREDURA_INTERVALO,
         "limite": _VARREDURA_LIMITE,
         "rodando": _estado["rodando"],

@@ -33,6 +33,7 @@ interface Pendente {
 interface Dados {
   total: number
   pendentes: Pendente[]
+  varredura: { habilitada: boolean }
 }
 
 interface Resumo {
@@ -84,7 +85,7 @@ export default function AdminPlanosVencidos() {
         </h3>
         <button
           onClick={varrer}
-          disabled={rodando || d.total === 0}
+          disabled={rodando || d.total === 0 || !d.varredura.habilitada}
           className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-line-strong text-ink-2 hover:text-ink-1 hover:border-ink-4 disabled:opacity-30 transition-colors flex items-center gap-1.5"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${rodando ? 'animate-spin' : ''}`} />
@@ -117,8 +118,9 @@ export default function AdminPlanosVencidos() {
             ))}
           </div>
           <p className="text-[11px] text-ink-4 mt-3 leading-relaxed">
-            A varredura volta essas contas pro free, cria o aviso no sino e manda
-            o e-mail de fim de acesso · um por pessoa.
+            {d.varredura.habilitada
+              ? 'A varredura volta essas contas pro free, cria o aviso no sino e manda o e-mail de fim de acesso · um por pessoa.'
+              : 'Varredura desligada neste ambiente. O aviso e o e-mail saem juntos, e aqui o e-mail não sai · rodar só queimaria o aviso da pessoa.'}
           </p>
         </>
       )}

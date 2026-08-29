@@ -1412,8 +1412,19 @@ def admin_expirar_planos(current_user: dict = Depends(require_admin)):
     Sincrono de proposito, ao contrario da versao automatica: quem clicou quer
     o numero de volta, e sao poucas contas.
     """
-    from plan_expiry import varrer_planos_vencidos
+    from plan_expiry import varredura_habilitada, varrer_planos_vencidos
     from routers.auth import _avisos_de_plano
+
+    # Mesmo freio da versao automatica, e pelo mesmo motivo: o noprod aponta
+    # pro banco de PRODUCAO com SIDE_EFFECTS=off, entao um clique ali gravaria
+    # a notificacao de fim de acesso do assinante real sem o e-mail -- e a
+    # dedupe_key e' o que impede o e-mail de sair depois.
+    if not varredura_habilitada():
+        raise HTTPException(
+            409,
+            "Varredura desligada neste ambiente. Ela grava a notificacao e o "
+            "e-mail juntos, e aqui o e-mail nao sai · rodar so' queimaria o aviso.",
+        )
 
     conn = get_connection()
     cur = conn.cursor()
@@ -5556,6 +5567,7 @@ def motor_reds(
                 cur.execute(f"""
                     SELECT p.id, p.match_date::text AS dia, p.odd, p.profit,
                            {times},
+                           d.id AS decisao_id,
                            d.run_id, d.engine, d.method, d.engine_version,
                            d.score, d.probability, d.reason, d.candidates
                       FROM {nome} p
@@ -5597,12 +5609,14 @@ def motor_reds(
                     "profit": r["profit"],
                     "home_team": r["home_team"],
                     "away_team": r["away_team"],
-                    # Do lado da decisão. `vinculada` diz se a linha veio do
-                    # elo direto ou se não há decisão gravada -- pick anterior
-                    # à auditoria não tem, e mostrar isso é mais honesto do
-                    # que casar por partida e arriscar mostrar a decisão de
-                    # outro produto no mesmo jogo.
-                    "vinculada": r["run_id"] is not None,
+                    # Do lado da decisão. `vinculada` é sobre EXISTIR a
+                    # decisão, não sobre ter `run_id`: as linhas anteriores a
+                    # 27/08 são de quando o Engine Audit não existia, e elas
+                    # têm o candidato inteiro gravado -- que é o que responde
+                    # "por quê" -- só não têm execução a que se referir.
+                    # Amarrar a flag ao run_id escondia 3 semanas de decisão
+                    # perfeitamente utilizável.
+                    "vinculada": r["decisao_id"] is not None,
                     "run_id": r["run_id"],
                     "motor": r["engine"],
                     "metodo": r["method"],
