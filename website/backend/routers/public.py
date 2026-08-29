@@ -676,9 +676,16 @@ def public_pick(pick_type: str, pick_id: int):
                 FROM {tabela} WHERE id = %s
             """, (pick_id,))
         else:  # alavancagem
+            # Os ids dos times entram aqui pelo mesmo motivo que ja' estao no
+            # ramo do VIP e do free: e' esta rota que alimenta a pagina do link
+            # compartilhado, e sem eles o card publico da alavancagem era o
+            # unico que aparecia sem escudo nenhum. A coluna existe desde
+            # 2026-08-28 (ver migrations.py); pick antigo devolve NULL e o
+            # componente ja' trata isso desenhando so' o nome.
             cur.execute("""
                 SELECT id, match_date,
                        home_team_1 AS home_team_name, away_team_1 AS away_team_name,
+                       home_team_id_1 AS home_team_id, away_team_id_1 AS away_team_id,
                        odd_combined AS odd, result, profit
                 FROM picks_alavancagem WHERE id = %s
             """, (pick_id,))

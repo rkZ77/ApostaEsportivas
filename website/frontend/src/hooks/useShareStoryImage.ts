@@ -35,12 +35,31 @@ async function dispatchShare(blob: Blob, filename: string, title: string, text: 
 
   if (canShareFiles) {
     await navigator.share({ title, text, url: shareUrl, files: [file] })
-  } else if (navigator.share) {
-    downloadBlob(blob, filename)
-    await navigator.share({ title, text, url: shareUrl })
-  } else {
-    downloadBlob(blob, filename)
-    await navigator.clipboard.writeText(shareUrl)
+    return
+  }
+
+  /*
+   * SEM SHARE NATIVO, A IMAGEM BAIXADA É A ENTREGA · e ela vem primeiro.
+   *
+   * O caminho de desktop era `downloadBlob(...)` seguido de
+   * `await navigator.clipboard.writeText(...)`, com o await propagando a
+   * falha pro `catch` de quem chamou · que exibe "Não foi possível gerar a
+   * imagem. Tente novamente.". A imagem tinha sido gerada e baixada; quem
+   * falhou foi a área de transferência, que nega escrita fora de contexto
+   * seguro, sem permissão ou com a aba em segundo plano. O usuário lia que o
+   * compartilhamento não funcionou enquanto o PNG estava na pasta de
+   * downloads.
+   *
+   * Copiar o link é conveniência, então nunca derruba o share.
+   */
+  downloadBlob(blob, filename)
+  try {
+    if (navigator.share) await navigator.share({ title, text, url: shareUrl })
+    else await navigator.clipboard?.writeText(shareUrl)
+  } catch (err: any) {
+    // Cancelar a folha de compartilhamento é escolha do usuário · sobe pra
+    // quem chamou não marcar "compartilhado". Falha de clipboard, não.
+    if (err?.name === 'AbortError') throw err
   }
 }
 

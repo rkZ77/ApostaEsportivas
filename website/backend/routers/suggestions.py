@@ -246,6 +246,110 @@ def _compute_suggested_stake_units(
     return max(1, min(max_units, units))
 
 
+def _sql_escudo(lado: str, perna: int, fx_alias: str | None, home_col: str, away_col: str,
+                date_col: str = "pa.match_date") -> str:
+    """Expressao SQL que resolve o team_id de uma perna de alavancagem.
+
+    A FONTE E' A COLUNA DO PICK · o resto e' resgate do historico.
+
+    Desde 2026-08-28 `picks_alavancagem` guarda `home_team_id_N` e
+    `away_team_id_N`, gravados pelo motor no instante da decisao, igual
+    `picks_free` e `picks_vip` sempre fizeram. Pick novo responde na primeira
+    parte do COALESCE e nao encosta em mais nada.
+
+    Os passos seguintes existem pros picks gravados ANTES dessa coluna, e pro
+    que a migracao de backfill nao conseguiu reconstruir.
+
+    POR QUE ISTO EXISTE (2026-08-28, pick Nautico x Athletic Club)
+    -------------------------------------------------------------
+    Antes da coluna, o escudo vinha do JOIN com `fixtures` pelo
+    `fixture_id_N`, e quando esse JOIN falhava havia um plano B:
+
+        (SELECT fx.away_team_id FROM fixtures fx
+          WHERE fx.away_team = pa.away_team_1 LIMIT 1)
+
+    Casar por NOME solto, em toda a tabela, sem data e sem ORDER BY. E
+    "Athletic Club" e' o nome de dois clubes diferentes na API-Football: o de
+    Minas Gerais (13975) e o Athletic Bilbao (531). O `LIMIT 1` pegava
+    qualquer um · foi assim que um pick da Serie B apareceu com o escudo
+    vermelho e branco do Bilbao no card e na imagem de compartilhamento.
+
+    E o JOIN falhava justamente DEPOIS de o pick ser liquidado: `fixtures` so'
+    guarda a janela corrente (ver o coletor), entao o jogo de ontem some da
+    tabela e o pick de ontem perde o id. Por isso o usuario via o escudo
+    enquanto o pick estava pendente e o via sumir · ou trocar de time · quando
+    saia o GREEN.
+
+    A CADEIA AGORA, do mais especifico pro mais geral:
+
+    0. A coluna `{lado}_team_id_N` do proprio pick · fato gravado, nao
+       reconsulta. E' a unica que responde pra pick novo.
+    1. `fixtures` pelo `fixture_id` da perna · so' existe pras pernas 1 e 2, e
+       so' enquanto o jogo esta na janela.
+    2. `fixtures` pelo PAR de nomes mais a data. Identifica a partida, nao um
+       time: dois clubes homonimos nao jogam contra o mesmo adversario no
+       mesmo dia. E' o unico caminho que a perna 3 tem, porque ela nao guarda
+       fixture_id nenhum.
+    3. `teams` DESEMPATADA PELO ADVERSARIO. `teams` nao e' podada por data ·
+       e' ela que devolve o escudo do pick de ontem. Mas o nome sozinho nao
+       basta, e "Athletic Club" e a prova: La Liga esta entre as ligas
+       acompanhadas, entao o Bilbao mora nessa tabela ao lado do mineiro.
+       O desempate vem de graca do proprio pick · os dois times de uma
+       partida disputam a mesma competicao, entao basta exigir que o time
+       procurado apareca em alguma liga onde o ADVERSARIO tambem aparece.
+       "Nautico Recife" e' unico, esta na liga 72, e so' um dos dois Athletic
+       Club esta la.
+    4. `teams` pelo nome apenas, quando o adversario tambem e' ambiguo ou nao
+       esta cadastrado.
+
+    Os passos 3 e 4 so' respondem quando sobra UM time: o
+    `HAVING COUNT(DISTINCT t.team_id) = 1` faz o homonimo irredutivel devolver
+    NULL. NULL desenha o card sem escudo, e sem escudo e' melhor que com o
+    escudo errado: o card sem imagem diz "nao sei"; o card com o brasao do
+    Bilbao num jogo da Serie B diz uma coisa falsa com toda a confianca.
+    """
+    col = f"{lado}_team_id"
+    pick_col = f"pa.{lado}_team_id_{perna}"
+    nome_col = home_col if lado == "home" else away_col
+    adversario_col = away_col if lado == "home" else home_col
+
+    partes = [pick_col]
+    if fx_alias:
+        partes.append(f"{fx_alias}.{col}")
+    partes.append(
+        f"(SELECT fx.{col} FROM fixtures fx"
+        f"  WHERE fx.home_team = {home_col} AND fx.away_team = {away_col}"
+        f"    AND fx.match_datetime::date = {date_col} LIMIT 1)"
+    )
+    partes.append(
+        f"(SELECT MIN(t.team_id) FROM teams t"
+        f"  WHERE t.name = {nome_col}"
+        f"    AND t.league_id IN (SELECT adv.league_id FROM teams adv"
+        f"                         WHERE adv.name = {adversario_col})"
+        f" HAVING COUNT(DISTINCT t.team_id) = 1)"
+    )
+    partes.append(
+        f"(SELECT MIN(t.team_id) FROM teams t WHERE t.name = {nome_col}"
+        f" HAVING COUNT(DISTINCT t.team_id) = 1)"
+    )
+    return "COALESCE(" + ", ".join(partes) + ")"
+
+
+def _sql_escudos_alav(pernas: int, com_fixture: int = 2, date_col: str = "pa.match_date") -> str:
+    """As colunas home_team_id_N / away_team_id_N de N pernas, prontas pro SELECT.
+
+    `com_fixture` diz quantas pernas tem coluna `fixture_id_N` na tabela (hoje
+    duas) e portanto quantas tem alias de JOIN pra tentar primeiro.
+    """
+    linhas = []
+    for n in range(1, pernas + 1):
+        alias = f"f{n}" if n <= com_fixture else None
+        home, away = f"pa.home_team_{n}", f"pa.away_team_{n}"
+        linhas.append(f"{_sql_escudo('home', n, alias, home, away, date_col)} AS home_team_id_{n}")
+        linhas.append(f"{_sql_escudo('away', n, alias, home, away, date_col)} AS away_team_id_{n}")
+    return ",\n                   ".join(linhas)
+
+
 def _enrich_multipla_legs(cur, rows: list) -> list:
     """Enriquece o JSONB de legs das múltiplas com home/away team IDs e nomes via fixtures.
 
@@ -480,12 +584,7 @@ def get_today_suggestions(
                        pa.confidence_3, pa.reasoning_3,
                        pa.odd_combined, pa.confidence_media,
                        pa.result, pa.profit, pa.created_at,
-                       COALESCE(f1.home_team_id, (SELECT fx.home_team_id FROM fixtures fx WHERE fx.home_team = pa.home_team_1 AND fx.home_team_id IS NOT NULL LIMIT 1)) AS home_team_id_1,
-                       COALESCE(f1.away_team_id, (SELECT fx.away_team_id FROM fixtures fx WHERE fx.away_team = pa.away_team_1 AND fx.away_team_id IS NOT NULL LIMIT 1)) AS away_team_id_1,
-                       COALESCE(f2.home_team_id, (SELECT fx.home_team_id FROM fixtures fx WHERE fx.home_team = pa.home_team_2 AND fx.home_team_id IS NOT NULL LIMIT 1)) AS home_team_id_2,
-                       COALESCE(f2.away_team_id, (SELECT fx.away_team_id FROM fixtures fx WHERE fx.away_team = pa.away_team_2 AND fx.away_team_id IS NOT NULL LIMIT 1)) AS away_team_id_2,
-                       COALESCE((SELECT fx.home_team_id FROM fixtures fx WHERE fx.home_team = pa.home_team_3 AND fx.home_team_id IS NOT NULL LIMIT 1)) AS home_team_id_3,
-                       COALESCE((SELECT fx.away_team_id FROM fixtures fx WHERE fx.away_team = pa.away_team_3 AND fx.away_team_id IS NOT NULL LIMIT 1)) AS away_team_id_3
+                       {_sql_escudos_alav(3)}
                 FROM picks_alavancagem pa
                 LEFT JOIN fixtures f1 ON f1.fixture_id = pa.fixture_id_1
                 LEFT JOIN fixtures f2 ON f2.fixture_id = pa.fixture_id_2
@@ -2219,22 +2318,7 @@ def get_alavancagem(
                    pa.confidence_2, pa.reasoning_2,
                    pa.odd_combined, pa.confidence_media,
                    pa.result, pa.profit, pa.created_at,
-                   COALESCE(
-                       f1.home_team_id,
-                       (SELECT fx.home_team_id FROM fixtures fx WHERE fx.home_team = pa.home_team_1 AND fx.home_team_id IS NOT NULL LIMIT 1)
-                   ) AS home_team_id_1,
-                   COALESCE(
-                       f1.away_team_id,
-                       (SELECT fx.away_team_id FROM fixtures fx WHERE fx.away_team = pa.away_team_1 AND fx.away_team_id IS NOT NULL LIMIT 1)
-                   ) AS away_team_id_1,
-                   COALESCE(
-                       f2.home_team_id,
-                       (SELECT fx.home_team_id FROM fixtures fx WHERE fx.home_team = pa.home_team_2 AND fx.home_team_id IS NOT NULL LIMIT 1)
-                   ) AS home_team_id_2,
-                   COALESCE(
-                       f2.away_team_id,
-                       (SELECT fx.away_team_id FROM fixtures fx WHERE fx.away_team = pa.away_team_2 AND fx.away_team_id IS NOT NULL LIMIT 1)
-                   ) AS away_team_id_2
+                   {_sql_escudos_alav(2)}
             FROM picks_alavancagem pa
             LEFT JOIN fixtures f1 ON f1.fixture_id = pa.fixture_id_1
             LEFT JOIN fixtures f2 ON f2.fixture_id = pa.fixture_id_2
@@ -2287,7 +2371,7 @@ def get_alavancagem_today(current_user: dict = Depends(require_vip)):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        row = _safe_query_one(cur, """
+        row = _safe_query_one(cur, f"""
             SELECT pa.id, pa.match_date, pa.tipo,
                    pa.home_team_1, pa.away_team_1, pa.market_1, pa.line_1, pa.odd_1, pa.bet_house_1,
                    pa.confidence_1, pa.reasoning_1,
@@ -2295,22 +2379,7 @@ def get_alavancagem_today(current_user: dict = Depends(require_vip)):
                    pa.confidence_2, pa.reasoning_2,
                    pa.odd_combined, pa.confidence_media,
                    pa.result, pa.profit, pa.created_at,
-                   COALESCE(
-                       f1.home_team_id,
-                       (SELECT fx.home_team_id FROM fixtures fx WHERE fx.home_team = pa.home_team_1 AND fx.home_team_id IS NOT NULL LIMIT 1)
-                   ) AS home_team_id_1,
-                   COALESCE(
-                       f1.away_team_id,
-                       (SELECT fx.away_team_id FROM fixtures fx WHERE fx.away_team = pa.away_team_1 AND fx.away_team_id IS NOT NULL LIMIT 1)
-                   ) AS away_team_id_1,
-                   COALESCE(
-                       f2.home_team_id,
-                       (SELECT fx.home_team_id FROM fixtures fx WHERE fx.home_team = pa.home_team_2 AND fx.home_team_id IS NOT NULL LIMIT 1)
-                   ) AS home_team_id_2,
-                   COALESCE(
-                       f2.away_team_id,
-                       (SELECT fx.away_team_id FROM fixtures fx WHERE fx.away_team = pa.away_team_2 AND fx.away_team_id IS NOT NULL LIMIT 1)
-                   ) AS away_team_id_2
+                   {_sql_escudos_alav(2)}
             FROM picks_alavancagem pa
             LEFT JOIN fixtures f1 ON f1.fixture_id = pa.fixture_id_1
             LEFT JOIN fixtures f2 ON f2.fixture_id = pa.fixture_id_2

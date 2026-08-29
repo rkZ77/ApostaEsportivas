@@ -127,6 +127,83 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS vip_tour_step SMALLINT NOT NULL DEFAULT 0;")
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS vip_tour_finished_at TIMESTAMP;")
         cur.execute("ALTER TABLE picks_alavancagem DROP COLUMN IF EXISTS bankroll_after;")
+
+        # O ID DO TIME NA TABELA DO PICK, igual `picks_free` e `picks_vip`
+        # (2026-08-28).
+        #
+        # A alavancagem era a unica que guardava so' o NOME dos times, e o
+        # escudo era descoberto na hora da leitura: JOIN com `fixtures` pelo
+        # fixture_id, e um plano B que casava `fixtures.away_team` pelo nome
+        # solto, sem data, com LIMIT 1.
+        #
+        # As duas pontas falhavam. `fixtures` guarda so' a janela corrente,
+        # entao o jogo some da tabela depois de liquidado e o pick de ontem
+        # perdia o id · era por isso que o escudo sumia justamente quando saia
+        # o GREEN. E o plano B por nome trazia o time ERRADO: "Athletic Club"
+        # e' o mineiro (13975) e tambem o Bilbao (531), e La Liga esta entre as
+        # ligas acompanhadas, entao os dois moram no banco. Um pick de Serie B
+        # apareceu com o brasao do Bilbao no card e na imagem de story.
+        #
+        # Guardado na linha do pick, o escudo passa a ser um FATO GRAVADO no
+        # momento em que o pick nasceu, e nao uma reconsulta que depende do que
+        # sobrou em `fixtures` · mesma decisao que a amostra do motor.
+        for _n in (1, 2, 3):
+            cur.execute(f"ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS home_team_id_{_n} INTEGER;")
+            cur.execute(f"ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS away_team_id_{_n} INTEGER;")
+
+        # Backfill 1 · pelo fixture_id, que so' as pernas 1 e 2 guardam e so'
+        # enquanto o jogo esta na janela. E' a fonte exata; as outras duas sao
+        # reconstrucao.
+        for _n in (1, 2):
+            cur.execute(f"""
+                UPDATE picks_alavancagem pa
+                SET home_team_id_{_n} = f.home_team_id,
+                    away_team_id_{_n} = f.away_team_id
+                FROM fixtures f
+                WHERE f.fixture_id = pa.fixture_id_{_n}
+                  AND pa.home_team_id_{_n} IS NULL
+                  AND f.home_team_id IS NOT NULL;
+            """)
+
+        # Backfill 2 · pelo PAR de nomes mais a data. Identifica a PARTIDA e
+        # nao um time: dois clubes homonimos nao enfrentam o mesmo adversario
+        # no mesmo dia. E' o unico caminho da perna 3, que nao tem fixture_id.
+        for _n in (1, 2, 3):
+            cur.execute(f"""
+                UPDATE picks_alavancagem pa
+                SET home_team_id_{_n} = f.home_team_id,
+                    away_team_id_{_n} = f.away_team_id
+                FROM fixtures f
+                WHERE f.home_team = pa.home_team_{_n}
+                  AND f.away_team = pa.away_team_{_n}
+                  AND f.match_datetime::date = pa.match_date
+                  AND pa.home_team_id_{_n} IS NULL
+                  AND f.home_team_id IS NOT NULL;
+            """)
+
+        # Backfill 3 · `teams`, que nao e' podada por data, DESEMPATADA PELO
+        # ADVERSARIO: os dois times de uma partida disputam a mesma
+        # competicao, entao o time procurado tem que aparecer em alguma liga
+        # onde o adversario tambem aparece. "Nautico Recife" e' unico e esta na
+        # liga 72; so' um dos dois "Athletic Club" esta la.
+        #
+        # O HAVING recusa o que continua ambiguo depois do desempate: NULL
+        # desenha o card sem escudo, e sem escudo e' melhor que com o escudo
+        # errado.
+        for _n in (1, 2, 3):
+            for _lado, _outro in (("home", "away"), ("away", "home")):
+                cur.execute(f"""
+                    UPDATE picks_alavancagem pa
+                    SET {_lado}_team_id_{_n} = (
+                        SELECT MIN(t.team_id) FROM teams t
+                        WHERE t.name = pa.{_lado}_team_{_n}
+                          AND t.league_id IN (SELECT adv.league_id FROM teams adv
+                                               WHERE adv.name = pa.{_outro}_team_{_n})
+                        HAVING COUNT(DISTINCT t.team_id) = 1
+                    )
+                    WHERE pa.{_lado}_team_id_{_n} IS NULL
+                      AND pa.{_lado}_team_{_n} IS NOT NULL;
+                """)
         cur.execute("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;")
         cur.execute("ALTER TABLE user_followed_picks ADD COLUMN IF NOT EXISTS actual_odd DECIMAL(6,2);")
         cur.execute("ALTER TABLE user_followed_picks ADD COLUMN IF NOT EXISTS bet_house VARCHAR(100);")
