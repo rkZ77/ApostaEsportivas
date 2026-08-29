@@ -54,6 +54,10 @@ interface NotificationCtx {
       cópia do modal. O "uma vez só" é do servidor (dedupe_key), e a regra muda
       entre os dois de propósito · fixa no teste, por ciclo no VIP. */
   pendingAccessEnded: AppNotification | null
+  /** Pick ao vivo recém-publicado, para o aviso em tela. Null quando não há
+      nada novo ou depois de dispensado. Ver components/LivePickToast. */
+  livePickNovo: AppNotification | null
+  dismissLivePickNovo: () => void
   /** Abertura do fechamento mensal · usada pelo sino e pelo card da Banca. */
   monthlyCloseOpen: boolean
   openMonthlyClose: () => void
@@ -76,6 +80,8 @@ const NotificationContext = createContext<NotificationCtx>({
   markAllRead: async () => {},
   pendingMonthlyClose: null,
   pendingAccessEnded: null,
+  livePickNovo: null,
+  dismissLivePickNovo: () => {},
   monthlyCloseOpen: false,
   openMonthlyClose: () => {},
   closeMonthlyClose: () => {},
@@ -138,6 +144,13 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const latestIdRef = useRef(0)
   // IDs dos picks ao vivo já notificados nesta sessão
   const seenLiveIds = useRef<Set<string>>(new Set())
+  /* Pick ao vivo novo, para o aviso EM TELA (LivePickToast).
+   *
+   * A notificação do navegador só chega a quem deu permissão, e ela é
+   * justamente a que a maioria nega · quem está com o site aberto ficava sem
+   * saber de um pick que vence em minutos, enquanto olhava outra aba do
+   * próprio site. Este estado é o mesmo evento, entregue por dentro. */
+  const [livePickNovo, setLivePickNovo] = useState<AppNotification | null>(null)
 
   // Lista do sino
   const refresh = useCallback(async () => {
@@ -158,6 +171,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         if (seenLiveIds.current.has(chave)) continue
         seenLiveIds.current.add(chave)
         avisarPickNovoDoMotor(n.title, n.body)
+        // O mais recente ganha a tela: são picks de janela curta, e empilhar
+        // avisos de oportunidade que já venceram não ajuda ninguém.
+        setLivePickNovo(n)
       }
 
       setItems(novos)
@@ -213,6 +229,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       setHasNew(false)
       setLiveCount(0)
       setHasLive(false)
+      setLivePickNovo(null)
       seenLiveIds.current = new Set()
       return
     }
@@ -306,6 +323,11 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   const clearLive = () => setHasLive(false)
 
+  /* Dispensar o aviso em tela NÃO marca a notificação como lida: ela continua
+     no sino, que é o outro pedido. Fechar o toast é "vi o aviso", não "resolvi
+     o assunto". */
+  const dismissLivePickNovo = useCallback(() => setLivePickNovo(null), [])
+
   const pendingMonthlyClose = items.find(n => n.type === 'monthly_close' && !n.read) ?? null
   /* Os dois finais concorrem pelo mesmo popup, mas nunca coexistem numa conta
      no mesmo instante: o teste acaba uma vez na vida, e depois dele a pessoa
@@ -325,6 +347,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       pendingAccessEnded,
       monthlyCloseOpen, openMonthlyClose, closeMonthlyClose,
       hasNew, markSeen, liveCount, hasLive, clearLive,
+      livePickNovo, dismissLivePickNovo,
     }}>
       {children}
     </NotificationContext.Provider>

@@ -474,6 +474,69 @@ def notificar_pick_live_novo(picks: list) -> int:
     return criadas
 
 
+#: Idade máxima de um pick ao vivo pra ainda valer aviso.
+#:
+#: A odd ao vivo vence em minutos, mas o PICK continua de pé até o apito (ver
+#: routers/live_picks.py). O aviso, porém, é sobre a oportunidade: passados 25
+#: minutos, mandar alguém correr atrás de um preço da criação é convidar a
+#: entrar num número que a casa já não mostra. É folgado o bastante pra cobrir
+#: dois ciclos do motor (8 min) mais o poll do sino (60s).
+LIVE_NOVO_JANELA_MIN = 25
+
+
+def sync_live_pick_notifications() -> int:
+    """Cria no sino o aviso de pick ao vivo que o motor acabou de publicar.
+
+    POR QUE ISTO NÃO PODE MORAR SÓ NO FEED (2026-08-29, pedido do usuário)
+
+    `routers/live_picks.py::feed` já chamava `notificar_pick_live_novo`, e
+    funcionava · para quem estivesse com a aba "Ao Vivo" ABERTA. O gatilho era
+    a visita àquele endpoint, então quem estava na Home, na Banca ou em Meus
+    Picks não criava o item e, o que é pior, não recebia: se ninguém abrisse a
+    aba, o sino não tocava para ninguém. O aviso existia justamente para quem
+    NÃO está olhando a aba.
+
+    Aqui o gatilho passa a ser o poll do sino, que roda em toda página para
+    todo usuário logado. Continua sem agendador e sem laço: quem passar
+    primeiro cria o item para a base inteira, e as próximas passadas caem no
+    dedupe por pick_id (ON CONFLICT DO NOTHING).
+
+    O CUSTO É UM SELECT, e é por isso que ele pode entrar no caminho do poll:
+    lê só `picks_live`, sem tocar na API-Football. O feed precisa do
+    enriquecimento (placar, minuto corrente, estatística) porque desenha o
+    card; o sino só precisa saber que o pick existe.
+
+    Só o que está DE PÉ: pick liquidado ou já expirado não é oportunidade.
+    """
+    conn = get_connection()
+    cur  = conn.cursor()
+    try:
+        cur.execute("SELECT to_regclass('public.picks_live') IS NOT NULL AS existe")
+        row = cur.fetchone()
+        if not row or not row["existe"]:
+            return 0
+
+        cur.execute(f"""
+            SELECT id, home_team_name, away_team_name, market, line, odd,
+                   minute_at_creation
+            FROM picks_live
+            WHERE result IS NULL
+              AND status = 'ACTIVE'
+              AND created_at >= NOW() - INTERVAL '{LIVE_NOVO_JANELA_MIN} minutes'
+            ORDER BY created_at DESC
+            LIMIT 10
+        """)
+        picks = [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        logger.warning("[NOTIF] Falha ao ler picks ao vivo pendentes: %s", e)
+        return 0
+    finally:
+        cur.close()
+        conn.close()
+
+    return notificar_pick_live_novo(picks)
+
+
 def purge_old_notifications() -> int:
     """Descarta notificações já lidas com mais de PURGE_DAYS. Chamado no fim do
     pipeline manual (routers.admin::_notificar_picks_publicados)."""
@@ -514,6 +577,16 @@ def list_notifications(
         except Exception as e:
             conn.rollback()
             logger.warning("[NOTIF] Falha no sync do fechamento mensal (user %s): %s", user_id, e)
+
+        # Pick ao vivo publicado agora · mesmo padrão do fechamento acima: o
+        # poll do sino é o gatilho. Antes o item só nascia quando alguém abria
+        # a aba Ao Vivo, e o aviso serve exatamente pra quem não está nela.
+        # Conexão própria (ver a função), então roda fora desta transação e
+        # nunca derruba a listagem.
+        try:
+            sync_live_pick_notifications()
+        except Exception as e:
+            logger.warning("[NOTIF] Falha no sync de pick ao vivo: %s", e)
 
         cur.execute("""
             SELECT id, type, title, body, url, payload, read_at, created_at

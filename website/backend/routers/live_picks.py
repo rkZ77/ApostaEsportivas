@@ -321,7 +321,37 @@ def feed(
         expirados = expirar_vencidos(cur, conn)
         liquidacao = liquidar_pendentes(cur, conn)
 
+        # PICK QUE A PESSOA PEGOU NÃO SAI DA LISTA ANTES DO APITO (2026-08-29,
+        # pedido do usuário).
+        #
+        # A lista era só uma janela: `match_date >= hoje - N dias` cortado por
+        # `LIMIT`. Isso descreve bem "o que está acontecendo agora", que é a
+        # pergunta da aba · mas é a regra errada pra quem JÁ APOSTOU. Numa noite
+        # movimentada, o pick seguido às 21h era empurrado pra fora do LIMIT
+        # pelos que nasceram depois, e um jogo que virava o dia (criado 23h50,
+        # apito 00:40) caía fora da janela de data no meio da partida. Nos dois
+        # casos a aposta sumia da tela com o jogo rolando, que é justamente
+        # quando ela precisa ser acompanhada.
+        #
+        # O UNION garante o piso: tudo que este usuário segue e ainda não foi
+        # liquidado volta, custe o que custar à janela. Sai sozinho quando o
+        # `liquidar_pendentes` acima grava o resultado · e ele só grava com o
+        # jogo em FT, então "até acabar a partida" é literal.
         cur.execute("""
+            WITH escopo AS (
+                SELECT id FROM picks_live
+                WHERE match_date >= (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
+                                    - (%s * INTERVAL '1 day')
+                ORDER BY (result IS NOT NULL), created_at DESC
+                LIMIT %s
+            ),
+            seguidos_vivos AS (
+                SELECT pl.id
+                FROM picks_live pl
+                JOIN user_followed_picks uf
+                  ON uf.pick_id = pl.id AND uf.pick_type = 'live'
+                WHERE uf.user_id = %s AND pl.result IS NULL
+            )
             SELECT id, fixture_id, match_date, league_id, league_name,
                    home_team_id, away_team_id, home_team_name, away_team_name,
                    market, market_type, line, line_value, odd, bet_house,
@@ -337,11 +367,9 @@ def feed(
                    odd_at_creation, odd_timestamp, odd_valid_until, status,
                    expiration_reason, engine_version, result, profit, created_at
             FROM picks_live
-            WHERE match_date >= (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
-                                - (%s * INTERVAL '1 day')
+            WHERE id IN (SELECT id FROM escopo UNION SELECT id FROM seguidos_vivos)
             ORDER BY (result IS NOT NULL), created_at DESC
-            LIMIT %s
-        """, (dias, limit))
+        """, (dias, limit, current_user["id"]))
         linhas = [dict(r) for r in cur.fetchall()]
 
         if not incluir_encerrados:

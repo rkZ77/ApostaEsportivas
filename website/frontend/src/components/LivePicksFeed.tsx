@@ -848,6 +848,19 @@ export default function LivePicksFeed({ isActive, banca }: {
    * jogo que ainda estava no 38'. */
   const emAndamento = useMemo(() => (picks ?? []).filter(p => !p.result), [picks])
 
+  /* SUAS APOSTAS PRIMEIRO, E SEPARADAS (2026-08-29, pedido do usuário).
+   *
+   * A aba misturava numa lista só o que a pessoa já pegou e o que o motor
+   * acabou de publicar · são duas perguntas diferentes. "Já apostei, como está
+   * indo?" é acompanhamento e dura até o apito. "Vale entrar?" é decisão e
+   * dura o que a odd durar. Juntas, numa noite com cinco picks, a aposta em
+   * andamento descia a tela conforme chegavam oportunidades novas.
+   *
+   * O backend garante que ela ESTÁ na resposta até o jogo acabar (ver o UNION
+   * em routers/live_picks.py::feed); aqui ela ganha o topo. */
+  const minhas = useMemo(() => emAndamento.filter(p => p.is_followed), [emAndamento])
+  const oportunidades = useMemo(() => emAndamento.filter(p => !p.is_followed), [emAndamento])
+
   if (!isActive) return null
 
   if (picks === null) return <SkeletonPickGrid />
@@ -920,11 +933,30 @@ export default function LivePicksFeed({ isActive, banca }: {
         )
       )}
 
-      {emAndamento.length > 0 && (
+      {minhas.length > 0 && (
+        <>
+          <TituloDeSecao cor="bg-accent" texto={`Suas apostas ao vivo · ${minhas.length}`} />
+          <p className="text-[11px] text-ink-4 mb-3 leading-relaxed">
+            Ficam aqui até o jogo acabar, mesmo depois de a odd vencer. O resultado entra
+            sozinho no apito final e o pick passa pra Minhas Apostas.
+          </p>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <AnimatePresence mode="popLayout">
+              {minhas.map(p => (
+                <CardLive key={p.id} pick={p} onSeguir={setAlvo} banca={banca} />
+              ))}
+            </AnimatePresence>
+          </div>
+        </>
+      )}
+
+      {oportunidades.length > 0 && (
         <>
           <TituloDeSecao
             cor={motor?.ligado ? 'bg-red-400' : 'bg-line-strong'}
-            texto={`Em andamento · ${emAndamento.length}`}
+            texto={minhas.length > 0
+              ? `Outras oportunidades · ${oportunidades.length}`
+              : `Em andamento · ${oportunidades.length}`}
           />
           {/* Motor desligado COM pick na tela é o caso que mais engana: os
               cards estão lá, parecem novos, e nenhum outro vai chegar. */}
@@ -941,7 +973,7 @@ export default function LivePicksFeed({ isActive, banca }: {
               mais alto (barra da linha) e uma quarta coluna aperta o placar. */}
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <AnimatePresence mode="popLayout">
-              {emAndamento.map(p => (
+              {oportunidades.map(p => (
                 <CardLive key={p.id} pick={p} onSeguir={setAlvo} banca={banca} />
               ))}
             </AnimatePresence>

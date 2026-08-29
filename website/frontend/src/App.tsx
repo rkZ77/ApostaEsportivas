@@ -32,6 +32,7 @@ const ErrorToast       = lazy(() => import('./components/ErrorToast'))
 const PushPromptBanner = lazy(() => import('./components/PushPromptBanner'))
 const VerifyEmailBanner = lazy(() => import('./components/VerifyEmailBanner'))
 const PlanUpsellToast  = lazy(() => import('./components/PlanUpsellToast'))
+const LivePickToast    = lazy(() => import('./components/LivePickToast'))
 const GlobalModals     = lazy(() => import('./components/GlobalModals'))
 /*
  * Mesmo motivo dos de cima, e mais um: o tour é visto UMA vez na vida da conta.
@@ -205,6 +206,11 @@ export default function App() {
             <PushPromptBanner />
             <VerifyEmailBanner />
             <PlanUpsellToast />
+            {/* Pick ao vivo publicado agora · precisa estar fora do <Routes>
+                pelo mesmo motivo dos outros avisos: o evento chega pelo poll do
+                sino, que roda em qualquer página, e a pessoa quase nunca está
+                na aba Ao Vivo quando ele acontece. */}
+            <LivePickToast />
             <GlobalModals />
             {/* Precisa ficar fora do <Routes>: o tour troca de rota entre os
                 passos (banca, picks, banca de novo) e ali dentro ele seria

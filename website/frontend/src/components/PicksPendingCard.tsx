@@ -1,8 +1,58 @@
 import { useEffect, useState } from 'react'
 import { Spinner } from './ui'
-import { CalendarClock, BrainCircuit, DatabaseZap, CircleCheck, CircleSlash } from 'lucide-react'
+import { CalendarClock, BrainCircuit, ChevronDown, DatabaseZap, CircleCheck,
+         CircleSlash } from 'lucide-react'
 import api from '../services/api'
 import { TeamLogo, LeagueLogo } from './TeamLogo'
+
+/** Quantos jogos a lista mostra antes de pedir pra expandir.
+ *
+ * Cinco porque é o que cabe numa tela de celular sem empurrar pra fora o que
+ * vem depois · e o que vem depois é a explicação de por que não saiu pick,
+ * que é a razão de a pessoa estar nesta tela.
+ */
+const JOGOS_VISIVEIS = 5
+
+/**
+ * Lista de jogos que não vira parede.
+ *
+ * Numa manhã de sábado o card despejava as trinta e poucas partidas do dia,
+ * uma linha cada, e o rodapé do site ficava a três telas de rolagem do topo ·
+ * no celular, pior. E a lista inteira responde a mesma pergunta que as cinco
+ * primeiras já respondem ("tem jogo, e o motor olhou"): quem quer conferir
+ * time por time abre; quem só queria saber por que não tem pick, não rola.
+ *
+ * Expandida, o botão vira "Mostrar menos" e fica NO FIM da lista: sem isso,
+ * recolher exigia rolar de volta os trinta jogos que a pessoa acabou de abrir.
+ */
+function ListaDeJogos({ jogos, render, rotulo }: {
+  jogos: Fixture[]
+  render: (g: Fixture) => React.ReactNode
+  /** Plural do que está sendo listado, pro rótulo do botão ("jogos"). */
+  rotulo: string
+}) {
+  const [aberta, setAberta] = useState(false)
+  const cabeInteira = jogos.length <= JOGOS_VISIVEIS
+  const visiveis = aberta || cabeInteira ? jogos : jogos.slice(0, JOGOS_VISIVEIS)
+  const ocultos = jogos.length - JOGOS_VISIVEIS
+
+  return (
+    <>
+      <div className="space-y-1.5">{visiveis.map(render)}</div>
+      {!cabeInteira && (
+        <button
+          onClick={() => setAberta(a => !a)}
+          className="mt-2 w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold
+                     text-ink-3 hover:text-ink-1 border border-line hover:border-line-strong
+                     rounded-md py-2.5 min-h-[36px] transition-colors"
+        >
+          <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform ${aberta ? 'rotate-180' : ''}`} />
+          {aberta ? 'Mostrar menos' : `Ver os outros ${ocultos} ${rotulo}`}
+        </button>
+      )}
+    </>
+  )
+}
 
 /**
  * Estado da aba de picks quando ainda não há pick publicado hoje.
@@ -309,7 +359,7 @@ export default function PicksPendingCard() {
           <p className="text-[10px] text-ink-4 mt-0.5 mb-2 ml-5">
             Têm o histórico que o motor precisa.
           </p>
-          <div className="space-y-1.5">{analisaveis.map(g => linhaJogo(g))}</div>
+          <ListaDeJogos jogos={analisaveis} rotulo="jogos" render={g => linhaJogo(g)} />
         </div>
       )}
 
@@ -334,7 +384,7 @@ export default function PicksPendingCard() {
           <p className="text-[10px] text-ink-4 mt-0.5 mb-2 ml-5">
             O número à direita é do time com menos jogos, sobre as {minJogos} exigidas.
           </p>
-          <div className="space-y-1.5">{semHistorico.map(g => linhaJogo(g, true))}</div>
+          <ListaDeJogos jogos={semHistorico} rotulo="jogos" render={g => linhaJogo(g, true)} />
         </div>
       )}
 

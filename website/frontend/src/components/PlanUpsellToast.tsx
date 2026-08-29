@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Crown, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { useNotifications } from '../context/NotificationContext'
 import { useOnboarding } from '../context/OnboardingContext'
 import { toastUp } from '../lib/motion'
 import { adiarPlano, convitePlano, planoAdiado } from '../lib/planoUpsell'
@@ -35,13 +36,18 @@ export default function PlanUpsellToast() {
      não viu o produto funcionar é o pior momento possível. */
   const { aberto: tourAberto, pendente: tourPendente, carregado: tourCarregado } = useOnboarding()
   const tourNaFrente = tourAberto || !tourCarregado || tourPendente
+  /* Pick ao vivo publicado agora ocupa esta mesma faixa (bottom-24) e tem
+     prazo · o convite de plano não. Dois cards empilhados no mesmo lugar
+     viram um em cima do outro, então aqui o permanente espera. Ver
+     components/LivePickToast. */
+  const { livePickNovo } = useNotifications()
 
   const [visivel, setVisivel] = useState(false)
   const convite = convitePlano(user, daysUntilExpiry, isAdmin)
   const bloqueado = FORA_DE.some(r => pathname.startsWith(r))
 
   useEffect(() => {
-    if (!convite || bloqueado || tourNaFrente || planoAdiado()) {
+    if (!convite || bloqueado || tourNaFrente || livePickNovo || planoAdiado()) {
       setVisivel(false)
       return
     }
@@ -49,7 +55,7 @@ export default function PlanUpsellToast() {
        antes de a pessoa ter olhado o conteúdo, e é lido como pop-up. */
     const t = setTimeout(() => setVisivel(true), 1400)
     return () => clearTimeout(t)
-  }, [convite?.titulo, bloqueado, tourNaFrente])
+  }, [convite?.titulo, bloqueado, tourNaFrente, livePickNovo?.id])
 
   const dispensar = () => {
     adiarPlano()
