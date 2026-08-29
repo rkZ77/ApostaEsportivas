@@ -115,6 +115,44 @@ def test_chutes_no_alvo_nao_e_chutes_totais(checker):
     assert checker.evaluate_pick("Total de Chutes", "Under 9.5", 1.8, stats())[0] == "RED"
 
 
+def test_finalizacoes_no_gol_e_chute_no_alvo(checker):
+    """O nome em PT que a casa usa · custou -11,26u antes de ser visto.
+
+    "Finalizações no Gol Mais/Menos" e' chute NO ALVO, mas contem "finaliza" e
+    caia na regra generica de `shots` -- liquidado contra ~28 chutes totais em
+    vez de ~8 no alvo, estourando toda linha Under por construcao. Foram 13 RED
+    em 18 picks desse mercado em PROD, e NOVE deles tinham ganhado na folha.
+    """
+    assert checker.detect_market_type("Finalizações no Gol Mais/Menos") == "shots_on_target"
+    assert checker.evaluate_pick("Finalizações no Gol Mais/Menos", "Under 8.5",
+                                 1.75, stats())[0] == "GREEN"
+
+
+def test_finalizacoes_sem_gol_continua_sendo_chute_total(checker):
+    """O outro lado do par nao pode ser arrastado junto · sem "no Gol" E' total,
+    e puxar os dois pra "no alvo" so' trocaria a direcao do mesmo erro."""
+    assert checker.detect_market_type("Finalizações Mais/Menos") == "shots"
+    assert checker.evaluate_pick("Finalizações Mais/Menos", "Under 8.5",
+                                 1.75, stats())[0] == "RED"
+
+
+@pytest.mark.parametrize("market_type, esperado", [
+    ("shots_on_target", "GREEN"),   # 8 no alvo, sob a linha 8.5
+    ("shots",           "RED"),     # 28 totais, muito acima
+])
+def test_market_type_gravado_vence_o_texto(checker, market_type, esperado):
+    """A coluna estruturada decide o par shots/shots_on_target ANTES do nome.
+
+    Era o inverso: `detect_market_type` so' consultava o market_type depois de
+    o texto ja' ter decidido, entao um nome ambiguo mandava no pick mesmo com a
+    familia certa gravada ao lado. live.py::_stat_for_market ja' seguia esta
+    regra -- os dois motores de liquidacao deviam concordar e nao concordavam.
+    """
+    assert checker.evaluate_pick("Mercado Com Nome Ambiguo de Finalização",
+                                 "Under 8.5", 1.75, stats(),
+                                 market_type=market_type)[0] == esperado
+
+
 def test_cartao_vermelho_vale_dois(checker):
     """Mesma convencao de stats_model._cards_points: gradear com uma regra e
     prever com outra deixa a confidence sem relacao com o resultado."""

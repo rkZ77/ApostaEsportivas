@@ -151,7 +151,22 @@ def _resolve_leg_result(checker: AIResultCheckerService, cur, leg: dict):
     stats = checker.get_fixture_result(leg["fixture_id"], cur)
     if not stats:
         return None, None
-    result, factor = checker.evaluate_pick(leg["market"], leg["line"] or "", leg.get("odd") or 1.5, stats)
+    # `market_type` E' OBRIGATORIO AQUI (2026-08-29). A perna ja' carrega a
+    # coluna estruturada -- ela vai inteira pro INSERT logo abaixo -- e mesmo
+    # assim a liquidacao era feita so' pelo NOME do mercado, que e' texto da
+    # casa e e' ambiguo. O ledger recalculava com MENOS informacao do que o
+    # pick tem.
+    #
+    # Custou dinheiro visivel: "Finalizações no Gol Mais/Menos" e' chute NO
+    # ALVO, mas contem "finaliza" e o classificador por texto o mandava pra
+    # chutes TOTAIS (~25 por jogo contra ~8,5 no alvo), estourando toda linha
+    # Under. As tabelas de origem estavam certas -- o caminho ao vivo sempre
+    # olhou o market_type primeiro -- e o ledger, que e' o que alimenta a
+    # pagina publica de resultados, discordava delas em 79 linhas, 13 das
+    # quais mostravam RED num pick que tinha GANHADO.
+    result, factor = checker.evaluate_pick(
+        leg["market"], leg["line"] or "", leg.get("odd") or 1.5, stats,
+        market_type=leg.get("market_type"))
     if result is None:
         return None, None
     odd = leg.get("odd") or 0
