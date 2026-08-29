@@ -893,9 +893,14 @@ def _uniao_de_picks(sql: str) -> set:
 # A regra continua valendo pro proximo motor: fonte no placar com peso 0
 # contaria acerto e nao contaria unidade, e o percentual descreveria um produto
 # que o lucro ignora.
+#
+# Ao vivo entrou em 29/08 pelo mesmo raciocinio: o produto ja' era liquidado,
+# notificado e seguido na banca, e nao existia em nenhum numero publico -- o
+# site vendia um motor que o placar dele ignorava. Peso 3 em stake_plan.py, na
+# mesma mudanca.
 _FONTES_DO_PLACAR = {"picks_vip", "picks_free", "picks_multiplas",
                      "picks_alavancagem", "picks_faltas", "picks_goleiros",
-                     "picks_player_stats", "picks_boost"}
+                     "picks_player_stats", "picks_boost", "picks_live"}
 #: Nome antigo, mantido pra nao reescrever as asserts uma a uma.
 _SEIS = _FONTES_DO_PLACAR
 
@@ -939,10 +944,29 @@ def test_ranking_conta_aposta_em_faltas_e_defesas():
     """Os dois entravam no CASE como NULL, entao a aposta era descartada pelo
     FILTER (WHERE result IS NOT NULL): contava na banca do usuario e sumia do
     ranking. Quem apostasse so' nesses dois nem aparecia na lista."""
+    # Os JOINs e os CASEs deixaram de ser literais em 29/08: eles sao MONTADOS
+    # a partir de `pick_sources._FONTES`, que e' a lista unica que a banca, o
+    # ranking do /api e o ranking publico passaram a compartilhar. Escritos a
+    # mao em tres lugares, os tres ja' divergiram -- em 29/08 o ranking do /api
+    # contava 4 tipos, o publico 8 e a banca 9.
+    #
+    # Entao o teste passou a olhar a constante e o SQL que ela gera, que e'
+    # exatamente o que as tres consultas usam.
+    import pick_sources
+
+    tipos = {f[0] for f in pick_sources._FONTES}
+    assert {"faltas", "goleiros"} <= tipos
+    ativas = list(pick_sources._FONTES)
+    joins = pick_sources.joins_sql(ativas)
+    for tabela in ("picks_faltas", "picks_goleiros"):
+        assert tabela in joins
+    for coluna in ("result", "profit"):
+        gerado = pick_sources.case_sql(ativas, coluna)
+        for tipo in ("'faltas'", "'goleiros'"):
+            assert tipo in gerado, f"{tipo} fora do CASE de {coluna}"
+
     corpo = _codigo("routers/public.py", "public_leaderboard")
-    assert "picks_faltas" in corpo and "picks_goleiros" in corpo
-    for tipo in ("'faltas'", "'goleiros'"):
-        assert corpo.count(tipo) >= 2, f"{tipo} precisa do CASE de result E de profit"
+    assert "joins_sql" in corpo and "case_sql" in corpo
 
 
 def test_banca_do_usuario_conta_os_dois_mercados():
@@ -958,12 +982,19 @@ def test_banca_do_usuario_conta_os_dois_mercados():
     """
     import routers.banca as banca
 
-    assert set(banca._TABELAS_MERCADO) == {"faltas", "goleiros", "player_stats", "boost"}
-    assert banca._TABELAS_MERCADO["player_stats"] == "picks_player_stats"
+    assert set(banca._TABELAS_MERCADO) == {"faltas", "goleiros", "player_stats",
+                                           "boost", "live"}
+    assert banca._TABELAS_MERCADO["player_stats"][0] == "picks_player_stats"
+    # Ao vivo entrou em 29/08 e trouxe junto o motivo de o mapa guardar as
+    # colunas de time: picks_live segue a familia de picks_vip
+    # (home_team_name), nao a de picks_free. Com o alias fixo no SQL do
+    # chamador, ela nao tinha como entrar.
+    assert banca._TABELAS_MERCADO["live"] == ("picks_live", "home_team_name",
+                                              "away_team_name")
     # Pick Boost entra aqui e nao no ramo de bilhete: apesar de combinar dois
     # mercados, e' UM jogo, UMA odd e UMA linha em `picks_boost` -- o formato
     # de picks_free, que e' o que este mapa exige.
-    assert banca._TABELAS_MERCADO["boost"] == "picks_boost"
+    assert banca._TABELAS_MERCADO["boost"][0] == "picks_boost"
     for fn in ("_compute_bankroll_current", "_compute_month_stats"):
         assert "_mercado_maps(cur, followed)" in _codigo("routers/banca.py", fn), \
             f"{fn} ignora os mercados"

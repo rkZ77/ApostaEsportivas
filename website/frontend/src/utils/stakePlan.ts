@@ -25,6 +25,10 @@ export const STAKE_PADRAO: Record<string, number> = {
   // Player Stats herda o peso de goleiros · é o mesmo produto, o mesmo formato
   // de entrada e o mesmo lugar na vitrine. Ver o comentário no Python.
   player_stats: 3,
+  // Ao vivo (29/08) · entrada simples, um jogo e um mercado, então herda o
+  // peso do free e dos mercados próprios. O peso descreve a FORMA da aposta,
+  // não a confiança no motor. Ver o comentário no Python, que é a fonte.
+  live:        3,
   // Pick Boost publicado em 28/08 · peso 2, entre a múltipla (1) e os mercados
   // próprios (3). É um COMBINADO e quebra inteiro quando uma perna erra, mas as
   // duas pernas são do mesmo jogo e do mesmo evento, com probabilidade

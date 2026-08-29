@@ -74,23 +74,45 @@ class CashoutBody(BaseModel):
 # seguiu um pick de defesa antes disso continua com a aposta na banca. Tirar a
 # chave zeraria o P&L daquele usuario em silencio -- que e' exatamente o modo de
 # falhar descrito no comentario acima.
-_TABELAS_MERCADO = {"faltas": "picks_faltas", "goleiros": "picks_goleiros",
-                    "player_stats": "picks_player_stats",
+#
+# O VALOR e' (tabela, coluna_do_time_da_casa, coluna_do_time_de_fora). As duas
+# colunas existem porque as tabelas NAO concordam no nome: picks_free e os
+# mercados proprios guardam `home_team`, picks_live guarda `home_team_name`
+# (segue a familia de picks_vip). Ate' 28/08 o mapa era so' tipo -> tabela e o
+# alias vinha escrito no SQL do chamador, o que travava a entrada de qualquer
+# tabela do outro estilo.
+_TABELAS_MERCADO = {"faltas":  ("picks_faltas",   "home_team", "away_team"),
+                    "goleiros": ("picks_goleiros", "home_team", "away_team"),
+                    "player_stats": ("picks_player_stats", "home_team", "away_team"),
                     # Pick Boost (28/08). Entra aqui e nao no ramo de bilhete:
                     # apesar de combinar dois mercados, e' UM jogo, UMA odd e
                     # UMA linha em `picks_boost` -- o formato de picks_free, que
                     # e' o que este mapa exige.
-                    "boost": "picks_boost"}
+                    "boost":   ("picks_boost",    "home_team", "away_team"),
+                    # Ao vivo (29/08). O pick JA' era seguivel desde que o feed
+                    # ganhou o botao Apostar (LivePicksFeed manda
+                    # pick_type='live' pro POST /follow) e `_resolve_pick`
+                    # sempre soube abrir a linha -- o que faltava era esta
+                    # chave. Sem ela o `type_map.get` devolvia {}, o laco fazia
+                    # `continue` e a aposta sumia do saldo, da lista de Meus
+                    # Picks, da quebra por pipeline (que ja' tem a linha "Ao
+                    # Vivo" pronta) e do fechamento do mes. Sem erro nenhum:
+                    # exatamente o modo de falhar descrito acima.
+                    "live":    ("picks_live", "home_team_name", "away_team_name")}
 
 
 def _mercado_maps(cur, followed: list, colunas: str = "id, result, odd") -> dict:
+    """`colunas` e' um TEMPLATE: `{home}` e `{away}` sao trocados pelo nome
+    real da coluna de time daquela tabela. Quem so' precisa de resultado e odd
+    passa o default, que nao tem placeholder nenhum e atravessa intacto."""
     maps: dict = {}
-    for tipo, tabela in _TABELAS_MERCADO.items():
+    for tipo, (tabela, col_casa, col_fora) in _TABELAS_MERCADO.items():
         ids = [f["pick_id"] for f in followed if f["pick_type"] == tipo]
         m: dict = {}
         if ids:
             try:
-                cur.execute(f"SELECT {colunas} FROM {tabela} WHERE id = ANY(%s)", (ids,))
+                sql = colunas.format(home=col_casa, away=col_fora)
+                cur.execute(f"SELECT {sql} FROM {tabela} WHERE id = ANY(%s)", (ids,))
                 for r in cur.fetchall():
                     m[r["id"]] = dict(r)
             except Exception:
@@ -763,8 +785,8 @@ def get_banca(
             type_map = {"vip": vip_map, "free": free_map, "multipla": multipla_map,
                         **_mercado_maps(cur, followed,
                                         "id, result, profit, "
-                                        "home_team AS home_team_name, "
-                                        "away_team AS away_team_name, "
+                                        "{home} AS home_team_name, "
+                                        "{away} AS away_team_name, "
                                         "home_team_id, away_team_id, "
                                         "market, line, odd")}
 
@@ -1983,6 +2005,11 @@ def get_fechamentos_resumo(current_user: dict = Depends(get_current_user)):
             ("faltas", "picks_faltas", "odd"), ("goleiros", "picks_goleiros", "odd"),
             ("player_stats", "picks_player_stats", "odd"),
             ("boost", "picks_boost", "odd"),
+            # Ao vivo (29/08). Pick de UM jogo, entao entra no recorte por
+            # tipo E no de liga, igual aos outros. O `except` abaixo ja' cobre
+            # a instancia sem a tabela: aquele tipo fica vazio, os outros
+            # continuam.
+            ("live", "picks_live", "odd"),
         ):
             ids = _ids(tipo)
             m: dict = {}

@@ -51,7 +51,7 @@ const COR: Record<string, string> = {
 const NOME: Record<string, string> = {
   vip: 'VIP', free: 'Free', multiplas: 'Múltiplas',
   alavancagem: 'Alavancagem', faltas: 'Faltas', goleiros: 'Defesas',
-  player_stats: 'Jogadores', boost: 'Pick Boost',
+  player_stats: 'Jogadores', boost: 'Pick Boost', live: 'Ao Vivo',
 }
 
 const fmtDia = (s: string) =>

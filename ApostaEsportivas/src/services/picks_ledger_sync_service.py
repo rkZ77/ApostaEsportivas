@@ -34,6 +34,11 @@ _PICK_TYPE_BY_TABLE = {
     # em qualquer analise do ledger: `WHERE pick_type = 'live'` de um lado,
     # `WHERE pick_type <> 'live'` do outro. Sem coluna nova.
     "picks_live": "live",
+    # Player Stats e Pick Boost (2026-08-29). Sem estas duas linhas o
+    # `fetch_all_legs` podia ate' trazer as pernas: `_PICK_TYPE_BY_TABLE` e' o
+    # que da' nome ao produto no ledger, e tabela sem nome aqui nao entra.
+    "picks_player_stats": "player_stats",
+    "picks_boost": "boost",
 }
 
 

@@ -157,10 +157,14 @@ def test_espelho_do_plano_no_front_bate_com_o_backend():
 def test_peso_multiplica_lucro_e_stake_juntos():
     """Se so' o lucro fosse pesado, o ROI (lucro/stake) saltaria pelo mesmo
     fator e o site anunciaria um retorno que nunca existiu."""
-    from routers.public import _build_union
+    from routers.public import _build_union, _SUB_BUILDERS
     import re
 
-    sql = _build_union("", None)
+    # `_build_union` passou a receber os builders ATIVOS (a fonte ao vivo sai
+    # do UNION onde `picks_live` nao existe). O teste passa o catalogo inteiro
+    # de proposito: o que ele verifica e' o peso de CADA fonte declarada, nao
+    # o que uma instancia especifica tem.
+    sql = _build_union(_SUB_BUILDERS, "", None)
     for bloco in sql.split("UNION ALL"):
         fonte = re.search(r"'(\w+)' AS source", bloco)
         lucro = re.search(r"profit \* (\d+) AS profit", bloco)

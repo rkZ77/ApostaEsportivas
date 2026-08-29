@@ -152,6 +152,11 @@ PICK_TABLES = {
     # conta pra conquista · o laco abaixo so' visita o que esta' neste mapa.
     "player_stats": "picks_player_stats",
     "boost":        "picks_boost",
+    # Ao vivo (29/08). Sem esta linha o GREEN de um pick ao vivo nao contava
+    # pra conquista: o laco abaixo so' visita o que esta' neste mapa, e a
+    # aposta ja' era seguivel havia semanas. Tabela que nao existe custa so'
+    # aquela metrica (o laco engole por tabela), entao ela entra sem guarda.
+    "live":         "picks_live",
 }
 
 

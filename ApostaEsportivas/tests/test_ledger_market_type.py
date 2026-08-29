@@ -38,3 +38,51 @@ def test_a_perna_grava_o_mesmo_market_type_que_usou_pra_liquidar():
     total na linha de chute no alvo."""
     fonte = inspect.getsource(ledger.sync)
     assert "leg.get(\"market_type\")" in fonte
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# COBERTURA DE PRODUTOS (2026-08-29)
+# ──────────────────────────────────────────────────────────────────────────
+#
+# O ledger e' o unico lugar que responde CLV, atribuicao por liga/arbitro/faixa
+# de odd e desempenho por modelo de IA. Player Stats e Pick Boost ficaram FORA
+# dele desde que nasceram: liquidavam, entravam na banca do usuario e no placar
+# publico, e a auditoria era cega justamente nos dois motores mais novos.
+#
+# Nao ha' erro quando um produto falta -- a tabela simplesmente nao aparece nas
+# consultas, e quem le' o painel conclui que aquele motor nao tem historico.
+def test_o_ledger_conhece_toda_tabela_de_pick():
+    from services.picks_ledger_sync_service import _PICK_TYPE_BY_TABLE
+
+    esperado = {
+        "picks_vip", "picks_free", "picks_multiplas", "picks_alavancagem",
+        "picks_faltas", "picks_goleiros", "picks_live",
+        "picks_player_stats", "picks_boost",
+    }
+    assert esperado <= set(_PICK_TYPE_BY_TABLE), esperado - set(_PICK_TYPE_BY_TABLE)
+
+
+def test_o_extractor_visita_as_tabelas_novas():
+    """`fetch_all_legs` so' visita o que esta' escrito nele · tabela ausente da
+    lista nao gera perna nenhuma, e o ledger fica sem o produto inteiro."""
+    import inspect
+
+    from services import pick_legs_extractor
+
+    corpo = inspect.getsource(pick_legs_extractor.fetch_all_legs)
+    for tabela in ("picks_faltas", "picks_goleiros", "picks_live",
+                   "picks_player_stats", "picks_boost"):
+        assert tabela in corpo, f"{tabela} fora de fetch_all_legs"
+
+
+def test_picks_boost_entra_apesar_das_colunas_com_sufixo_de_perna():
+    """picks_boost nao tem `bet_house` nem `market_id` (tem _ft/_ht, porque e'
+    um combinado). O SELECT pedia as duas colunas cruas, levantava "column does
+    not exist" e o `except` de fetch_all_legs engolia a tabela INTEIRA."""
+    import inspect
+
+    from services import pick_legs_extractor
+
+    corpo = inspect.getsource(pick_legs_extractor.fetch_vip_free_legs)
+    assert "bet_house_ft AS bet_house" in corpo
+    assert "market_id_ft AS market_id" in corpo

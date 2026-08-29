@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from auth_utils import get_current_user
 from database import get_connection
 from routers.banca import _compute_follow_pnl
+from pick_sources import fontes, joins_sql, case_sql
 
 router = APIRouter(prefix="/api/leaderboard", tags=["leaderboard"])
 
@@ -56,28 +57,20 @@ def get_leaderboard(
         # banco tem actual_odd preenchido, entao o ranking (ROI/yield/total_pnl)
         # estava errado pra maioria das entradas sempre que a odd real divergia
         # da oficial.
+        # As fontes vem de pick_sources: a lista escrita a mao aqui parava em
+        # vip/free/multipla/alavancagem, entao faltas, defesas, Player Stats,
+        # Pick Boost e ao vivo caiam no CASE como NULL e a aposta era
+        # descartada. Contava na banca do usuario e sumia do ranking.
+        fontes_ativas = fontes(cur)
         cur.execute(f"""
             SELECT
                 uf.user_id, uf.stake_units, uf.actual_odd, uf.cashout_amount,
-                CASE uf.pick_type
-                    WHEN 'vip'         THEN pv.result
-                    WHEN 'free'        THEN pf.result
-                    WHEN 'multipla'    THEN pm.result
-                    WHEN 'alavancagem' THEN pa.result
-                END AS result,
-                CASE uf.pick_type
-                    WHEN 'vip'         THEN pv.odd
-                    WHEN 'free'        THEN pf.odd
-                    WHEN 'multipla'    THEN pm.total_odd
-                    WHEN 'alavancagem' THEN pa.odd_combined
-                END AS odd,
+                {case_sql(fontes_ativas, "result")} AS result,
+                {case_sql(fontes_ativas, "odd")} AS odd,
                 COALESCE(ub.unit_value, 1)       AS unit_value,
                 COALESCE(ub.bankroll_start, 100) AS bankroll_start
             FROM user_followed_picks uf
-            LEFT JOIN picks_vip pv         ON pv.id = uf.pick_id AND uf.pick_type = 'vip'
-            LEFT JOIN picks_free pf        ON pf.id = uf.pick_id AND uf.pick_type = 'free'
-            LEFT JOIN picks_multiplas pm   ON pm.id = uf.pick_id AND uf.pick_type = 'multipla'
-            LEFT JOIN picks_alavancagem pa ON pa.id = uf.pick_id AND uf.pick_type = 'alavancagem'
+            {joins_sql(fontes_ativas)}
             LEFT JOIN user_banca ub        ON ub.user_id = uf.user_id
             WHERE 1=1 {date_cond}
         """, date_params)
@@ -146,21 +139,13 @@ def get_leaderboard(
             FROM (
                 SELECT
                     uf.user_id,
-                    CASE uf.pick_type
-                        WHEN 'vip'         THEN pv.result
-                        WHEN 'free'        THEN pf.result
-                        WHEN 'multipla'    THEN pm.result
-                        WHEN 'alavancagem' THEN pa.result
-                    END AS result,
+                    {case_sql(fontes_ativas, "result")} AS result,
                     ROW_NUMBER() OVER (
                         PARTITION BY uf.user_id
                         ORDER BY uf.followed_at DESC
                     ) AS rn
                 FROM user_followed_picks uf
-                LEFT JOIN picks_vip pv         ON pv.id = uf.pick_id AND uf.pick_type = 'vip'
-                LEFT JOIN picks_free pf        ON pf.id = uf.pick_id AND uf.pick_type = 'free'
-                LEFT JOIN picks_multiplas pm   ON pm.id = uf.pick_id AND uf.pick_type = 'multipla'
-                LEFT JOIN picks_alavancagem pa ON pa.id = uf.pick_id AND uf.pick_type = 'alavancagem'
+                {joins_sql(fontes_ativas)}
                 WHERE uf.user_id IN ({placeholders}) {streak_date_cond}
             ) t
             WHERE t.result IS NOT NULL AND t.rn <= 20

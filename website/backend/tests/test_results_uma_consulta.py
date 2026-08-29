@@ -82,7 +82,9 @@ def test_desempate_deriva_da_constante_e_nao_de_lista_na_mao(fonte):
     """Registrar um mercado novo (faltas/goleiros ja custou isso uma vez) nao
     pode exigir lembrar de atualizar uma lista escrita aqui."""
     corpo = ast.unparse(_funcao(fonte, "_pagina_de_resultados"))
-    assert "_SUB_BUILDERS.keys()" in corpo
+    # `builders` e' `_builders(cur)`, que e' `_SUB_BUILDERS` menos a fonte
+    # opcional ausente · continua derivado da constante, nunca de lista na mao.
+    assert "builders.keys()" in corpo and "_builders(cur)" in corpo
 
 
 # ── Resiliencia preservada ────────────────────────────────────────────────

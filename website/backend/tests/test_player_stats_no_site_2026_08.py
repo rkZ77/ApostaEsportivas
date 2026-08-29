@@ -55,7 +55,7 @@ def test_o_follow_aceita_pick_de_jogador():
 def test_a_banca_soma_o_pick_de_jogador():
     import routers.banca as banca
 
-    assert banca._TABELAS_MERCADO.get("player_stats") == "picks_player_stats"
+    assert banca._TABELAS_MERCADO.get("player_stats", (None,))[0] == "picks_player_stats"
 
 
 def test_o_resolve_pick_sabe_ler_a_tabela():
@@ -67,11 +67,16 @@ def test_o_resolve_pick_sabe_ler_a_tabela():
 
 
 def test_o_ranking_publico_nao_descarta_a_aposta():
-    src = _ler(_BACKEND, "routers", "public.py")
-    assert "LEFT JOIN picks_player_stats pps" in src
+    # JOIN e CASE saem de `pick_sources` desde 29/08 (ver o teste irmao em
+    # test_home_2026_08.py) · a assercao segue a fonte em vez do literal.
+    import pick_sources
+
+    ativas = list(pick_sources._FONTES)
+    assert "picks_player_stats" in pick_sources.joins_sql(ativas)
     # Precisa do CASE de result E do de profit · so' um dos dois zera o lucro
     # sem zerar a contagem, que e' pior que ficar de fora.
-    assert src.count("WHEN 'player_stats'") >= 2
+    for coluna in ("result", "profit"):
+        assert "'player_stats'" in pick_sources.case_sql(ativas, coluna)
 
 
 def test_o_placar_publico_conta_a_fonte():

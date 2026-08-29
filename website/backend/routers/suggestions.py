@@ -20,6 +20,7 @@ try:
 except Exception:  # pragma: no cover
     _competicao = None
 from stake_plan import STAKE_PADRAO
+from pick_sources import tabela_existe
 
 logger = logging.getLogger(__name__)
 
@@ -1848,9 +1849,20 @@ _FONTES_DO_PLACAR = [
     # Player Stats (27/08), sucessor de picks_goleiros. As duas entram:
     # goleiros parou de crescer, e o passado dela continua valendo no placar.
     ("player_stats", "picks_player_stats"),
-    # Pick Boost entra com peso 0 em stake_plan -- fase 1 e' so' Admin.
+    # Pick Boost publicado em 28/08 · entrou no placar junto com o peso 2 em
+    # stake_plan.py (ate' 27/08 o peso era 0, fase 1 so' Admin).
     ("boost",        "picks_boost"),
+    # Ao vivo (29/08). O produto era liquidado, notificado e seguido na banca
+    # sem existir em nenhum numero publico -- a tela de Picks anunciava a
+    # "Performance da IA" de um site que ignorava um dos motores dele.
+    #
+    # UNICA fonte cuja tabela pode nao existir: `picks_live` nasce do motor,
+    # nao das migracoes do site. Por isso `_fontes` recebe o cursor e filtra.
+    ("live",         "picks_live"),
 ]
+
+#: Fontes cuja tabela pode faltar nesta instancia. Ver `_fontes`.
+_FONTES_OPCIONAIS = {"live"}
 
 #: Apelidos aceitos em `source`. `multipla` no singular e' o nome que
 #: /public/results usa na quebra por fonte, e quem chama de la' nao tem por que
@@ -1858,12 +1870,23 @@ _FONTES_DO_PLACAR = [
 _APELIDOS_DE_FONTE = {"multipla": "multiplas", "dica": "free", "pick_seguro": "free"}
 
 
-def _fontes(source: str | None) -> list[tuple[str, str]]:
-    """As tabelas que entram no placar. `None`/`all` = todas."""
+def _fontes(source: str | None, cur=None) -> list[tuple[str, str]]:
+    """As tabelas que entram no placar. `None`/`all` = todas.
+
+    `cur` serve so' pra derrubar fonte opcional que nao existe aqui. O placar
+    e' UM union: uma tabela ausente nao devolve "aquela fonte com zero", ela
+    faz a consulta inteira levantar e o `_safe_query_one` responde None --
+    win rate, lucro e sequencia zerados na tela por causa de um produto que
+    aquele ambiente nem publica.
+    """
+    disponiveis = _FONTES_DO_PLACAR
+    if cur is not None:
+        disponiveis = [f for f in disponiveis
+                       if f[0] not in _FONTES_OPCIONAIS or tabela_existe(cur, f[1])]
     if not source or source == "all":
-        return _FONTES_DO_PLACAR
+        return disponiveis
     alvo = _APELIDOS_DE_FONTE.get(source, source)
-    return [f for f in _FONTES_DO_PLACAR if f[0] == alvo] or _FONTES_DO_PLACAR
+    return [f for f in disponiveis if f[0] == alvo] or disponiveis
 
 
 @router.get("/stats/quick")
@@ -1901,7 +1924,7 @@ def get_quick_stats(
         # O peso entra aqui pelo MESMO dicionario que /public/results usa -- com
         # a tabela escrita duas vezes, a tela de Picks e a Home passariam a
         # discordar sobre o lucro da IA sem ninguem perceber.
-        fontes = _fontes(source)
+        fontes = _fontes(source, cur)
         uniao = "\n                UNION ALL\n".join(
             f"                SELECT result, profit * {STAKE_PADRAO[chave]} AS profit"
             f" FROM {tabela}"
@@ -2828,6 +2851,12 @@ _PICK_FONTE = {
     # destino de prop de jogador. picks_goleiros continua aqui porque o
     # historico dela nao migrou: ela parou de CRESCER, nao de existir.
     "player_stats": ("picks_player_stats", "home_team", "away_team"),
+    # Pick Boost e ao vivo (29/08). Faltavam aqui, entao a aba de serie
+    # respondia "tipo sem serie" pros dois -- o card mostrava a amostra que
+    # decidiu em todos os outros produtos e ficava mudo justamente nos dois
+    # mais novos. picks_live segue a familia de nomes de picks_vip.
+    "boost":        ("picks_boost", "home_team", "away_team"),
+    "live":         ("picks_live",  "home_team_name", "away_team_name"),
 }
 
 

@@ -2844,6 +2844,30 @@ def _ha_pendente_em_jogo() -> bool:
                   AND ms.total_goals IS NOT NULL
                 LIMIT 1
             """)
+            if cur.fetchone():
+                return True
+            # Ao vivo (29/08), pela MESMA razao das duas perguntas acima: o
+            # pick ao vivo era liquidado por `resolve_all_pending`, mas nada
+            # aqui perguntava por ele. Num dia so' com pendencia ao vivo o
+            # freio respondia "nao ha' o que resolver" e a varredura nunca
+            # disparava · ficava mascarado porque quase sempre havia pick de
+            # pre-jogo pendente junto.
+            #
+            # A guarda de existencia e' a mesma que o resto do modulo ja' usa
+            # com picks_live: a tabela vem do motor, nao das migracoes do site.
+            cur.execute("SELECT to_regclass('public.picks_live') IS NOT NULL AS existe")
+            if not cur.fetchone()["existe"]:
+                return False
+            cur.execute("""
+                SELECT 1
+                FROM picks_live p
+                LEFT JOIN fixtures f ON f.fixture_id = p.fixture_id
+                WHERE p.result IS NULL
+                  AND p.fixture_id IS NOT NULL
+                  AND p.match_date BETWEEN %s AND %s
+                  AND (f.match_datetime IS NULL OR f.match_datetime <= %s)
+                LIMIT 1
+            """, (desde, datetime.now(_BR_TZ).date(), agora_br))
             return cur.fetchone() is not None
         finally:
             cur.close()

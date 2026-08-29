@@ -1,4 +1,4 @@
-"""Extrai pernas individuais das 4 tabelas de picks (picks_vip/picks_free
+"""Extrai pernas individuais das tabelas de picks (picks_vip/picks_free
 sao 1 linha = 1 perna; picks_multiplas/picks_alavancagem tem 2-3 pernas
 por linha, em formatos diferentes -- JSON array vs colunas _1/_2/_3).
 Usado por scripts/backtest_pick_engine.py e services/picks_ledger_sync_service.py
@@ -27,12 +27,24 @@ def fetch_vip_free_legs(cur, table: str) -> list:
     # linha pega um mercado qualquer -- ver o defeito documentado em
     # picks_ledger_sync_service._closing_odd_for. picks_live nao tem a coluna,
     # entao a selecao e' condicional.
+    #
+    # picks_boost (28/08) tem as duas colunas com sufixo de perna
+    # (market_id_ft/market_id_ht, bet_house_ft/bet_house_ht) porque e' um
+    # combinado de dois mercados numa linha so'. Pega-se a perna FT: e' a que
+    # define o bilhete (Over 1.5 FT), e uma coluna NULL apagaria o pick do
+    # recorte por casa e do CLV. Sem estes dois condicionais o SELECT
+    # levantava "column bet_house does not exist" e o `except` de
+    # `fetch_all_legs` engolia a tabela INTEIRA em silencio.
     market_id_col = ("market_id" if _tem_coluna(cur, table, "market_id")
+                     else "market_id_ft AS market_id" if _tem_coluna(cur, table, "market_id_ft")
                      else "NULL::int AS market_id")
+    bet_house_col = ("bet_house" if _tem_coluna(cur, table, "bet_house")
+                     else "bet_house_ft AS bet_house" if _tem_coluna(cur, table, "bet_house_ft")
+                     else "NULL::text AS bet_house")
     cur.execute(f"""
         SELECT id, fixture_id, match_date, home_team_id, away_team_id,
                {market_id_col},
-               {team_cols}, market, market_type, line, odd, bet_house,
+               {team_cols}, market, market_type, line, odd, {bet_house_col},
                confidence, {"probability" if estilo_vip else "prob_real AS probability"},
                {"ev" if estilo_vip else "edge AS ev"},
                reasoning, stake_pct, stake_units, result, profit, created_at,
@@ -151,7 +163,15 @@ def fetch_all_legs(cur) -> list:
     # existe onde o motor Live rodou, e em producao ela nao existe -- o
     # except aqui e' o que garante que a sincronizacao do ledger do pre-jogo
     # continua funcionando identica onde o Live nao foi implantado.
-    for tabela in ("picks_faltas", "picks_goleiros", "picks_live"):
+    #
+    # picks_player_stats e picks_boost (2026-08-29). Os dois motores mais novos
+    # ficaram FORA do ledger desde que nasceram: liquidavam, entravam na banca
+    # e no placar publico, e nao existiam no unico lugar que responde CLV,
+    # atribuicao por liga/arbitro/faixa de odd e desempenho por modelo de IA.
+    # A auditoria era cega justamente nos dois produtos que ninguem tinha
+    # historico pra defender.
+    for tabela in ("picks_faltas", "picks_goleiros", "picks_live",
+                   "picks_player_stats", "picks_boost"):
         try:
             legs += fetch_vip_free_legs(cur, tabela)
         except Exception:

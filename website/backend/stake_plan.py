@@ -9,7 +9,8 @@ O placar publico entao anuncia um plano fixo, declarado aqui e em nenhum outro
 lugar:
 
     VIP ................................................ 4u
-    free, faltas, defesas de goleiro .................... 3u
+    free, faltas, defesas, player stats, ao vivo ........ 3u
+    pick boost ......................................... 2u
     multipla ........................................... 1u
     alavancagem ........................................ nao entra
 
@@ -67,6 +68,17 @@ STAKE_PADRAO: dict[str, int] = {
     # na vitrine. Peso diferente pro sucessor faria o placar dar um degrau no
     # dia da troca, sem nada ter mudado na aposta.
     "player_stats": 3,
+    # Ao vivo (29/08). Herda o peso da entrada simples pelo mesmo criterio que
+    # rege a tabela inteira: o peso descreve a FORMA da aposta, nao a
+    # confianca no motor. Um pick ao vivo e' um jogo, um mercado, uma odd --
+    # igual ao free e aos mercados proprios. O VIP fica acima por ser o
+    # produto pago, nao por ser o motor melhor.
+    #
+    # Ate' 28/08 a chave nem existia, e isso era pior do que qualquer peso:
+    # `stake_de("live")` caia no STAKE_FALLBACK de 1u, entao o ao vivo teria
+    # entrado no placar com um peso que ninguem escolheu, no dia em que
+    # aparecesse na primeira consulta.
+    "live":        3,
     # Pick Boost publicado em 2026-08-28. Peso 2, entre a multipla (1) e os
     # mercados proprios (3), e o meio nao e' indecisao:
     #
