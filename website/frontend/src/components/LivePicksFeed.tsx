@@ -83,6 +83,8 @@ interface EmLeitura {
   shots_on_target_observado: number | null
   red_cards_observado: number | null
   lido_em: string | null
+  /** Segundos desde a leitura, calculado no banco - ver live_picks.py. */
+  idade_seg: number | null
   home_team: string | null
   away_team: string | null
   liga: string | null
@@ -172,14 +174,69 @@ function PlacarDoLive() {
  * O número não custa requisição de API: sai de `live_match_observations`, que
  * o próprio motor grava a cada partida processada. É literalmente o que ele
  * leu · não uma segunda consulta que poderia divergir dele.
+ *
+ * TRÊS MUDANÇAS EM 29/08 (pedido do usuário)
+ * ------------------------------------------
+ * 1. DESCEU PRA DEPOIS DOS PICKS. O bloco abria a aba, e a aba é uma tela de
+ *    DECISÃO: quem entra quer ver o que dá pra apostar, não a lista do que
+ *    está sendo observado. Observação é contexto, e contexto vem depois.
+ *
+ * 2. O RELÓGIO ANDA SOZINHO. O minuto vinha da última varredura e ficava
+ *    parado nela · num motor que varre de minutos em minutos, o cartão dizia
+ *    18' durante muito tempo depois de o jogo estar no 24', e isso se lê como
+ *    tela travada, não como leitura periódica. Agora o minuto avança a cada
+ *    60s a partir da idade da leitura (`idade_seg`, calculada no banco), e o
+ *    cartão diz de quando é o dado. O minuto derivado é marcado com til: ele é
+ *    projeção do relógio, não leitura nova.
+ *
+ * 3. O CARTÃO VIROU PARTIDA, NÃO LINHA DE TABELA. O confronto com escudo, a
+ *    barra do tempo de jogo no topo e os contadores em ladrilhos · a lista
+ *    antiga era uma fileira de quatro números que só quem já sabia o que
+ *    procurar conseguia ler.
  */
-function EmLeituraAgora({ isActive }: { isActive: boolean }) {
+
+/** Segundos para "agora", "há 12s", "há 3min". Curto de propósito: o rótulo
+ *  fica dentro do cartão e concorre com o dado. */
+const idadeCurta = (seg: number): string => {
+  if (seg < 5) return 'agora'
+  if (seg < 60) return `há ${Math.floor(seg)}s`
+  const min = Math.floor(seg / 60)
+  return min < 60 ? `há ${min}min` : `há ${Math.floor(min / 60)}h`
+}
+
+/** Minuto de jogo projetado a partir da leitura mais o tempo que passou.
+ *
+ * Só projeta com a bola rolando: no intervalo o relógio para, e somar minuto
+ * ali inventaria um jogo que não está acontecendo. Devolve também se o número
+ * é projetado, porque a tela precisa dizer isso em vez de fingir leitura
+ * nova. */
+function minutoVivo(p: EmLeitura, segundosExtras: number): { minuto: number | null; projetado: boolean } {
+  if (p.minuto == null) return { minuto: null, projetado: false }
+  const rolando = p.status === '1H' || p.status === '2H' || p.status === 'ET'
+  const idade = (p.idade_seg ?? 0) + segundosExtras
+  if (!rolando || idade < 60) return { minuto: p.minuto, projetado: false }
+  // Teto no fim de cada tempo: o acréscimo existe, mas projetar além dele é
+  // inventar. Sem o corte, um jogo parado num HT mal detectado subiria pra 130'.
+  const teto = p.status === '1H' ? 45 : p.status === '2H' ? 90 : 120
+  const projetado = Math.min(teto, p.minuto + Math.floor(idade / 60))
+  return { minuto: projetado, projetado: projetado > p.minuto }
+}
+
+function EmLeituraAgora({ isActive, motor }: {
+  isActive: boolean
+  motor?: { ligado: boolean; ultima_rodada: string | null } | null
+}) {
   const [dados, setDados] = useState<{ partidas: EmLeitura[]; disponivel: boolean } | null>(null)
+  /* Segundos desde o último fetch. É o que faz o bloco andar SEM pedir nada ao
+   * servidor: o relógio do jogo e o "lido há" avançam de segundo em segundo, e
+   * o poll de 15s só corrige a deriva com o número de verdade. Poll mais
+   * rápido não traria dado novo · quem publica é o motor, na varredura dele. */
+  const [tick, setTick] = useState(0)
   const timer = useRef<number | null>(null)
 
   const carregar = useCallback(() => {
     api.get('/live-picks/em-leitura')
-      .then(r => setDados(r.data))
+      .then(r => { setDados(r.data); setTick(0) })
       .catch(() => setDados({ partidas: [], disponivel: false }))
   }, [])
 
@@ -193,103 +250,149 @@ function EmLeituraAgora({ isActive }: { isActive: boolean }) {
     return () => { if (timer.current) clearInterval(timer.current) }
   }, [isActive, carregar])
 
+  useEffect(() => {
+    if (!isActive) return
+    const t = window.setInterval(() => setTick(v => v + 1), 1000)
+    return () => clearInterval(t)
+  }, [isActive])
+
   const partidas = dados?.partidas ?? []
   if (!dados?.disponivel || partidas.length === 0) return null
 
+  const comPick = partidas.filter(p => p.tem_pick).length
+
   return (
-    <div className="mb-6">
-      <div className="flex items-center gap-2 mb-2">
-        <span className="w-1 h-4 rounded-full bg-red-400" />
-        <h3 className="text-sm font-bold text-ink-1 flex items-center gap-1.5">
-          <Eye className="w-3.5 h-3.5 text-red-400" />
-          Em leitura agora · {partidas.length}
-        </h3>
+    <div className="mt-8">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+        <div className="flex items-center gap-2">
+          <span className="w-1 h-4 rounded-full bg-red-400" />
+          <h3 className="text-sm font-bold text-ink-1 flex items-center gap-1.5">
+            <Eye className="w-3.5 h-3.5 text-red-400" />
+            O motor está lendo · {partidas.length}
+          </h3>
+        </div>
+        {/* O SINAL DE VIDA. Antes o estado do motor só aparecia no vazio da
+          * aba, ou seja: exatamente quando NÃO havia o que olhar. Aqui ele
+          * fica ao lado do que está sendo lido, que é onde a pergunta nasce. */}
+        <span className={`flex items-center gap-1.5 text-[10px] font-semibold px-2 py-1 rounded-full border ${
+          motor?.ligado
+            ? 'border-red-400/40 bg-red-500/10 text-red-300'
+            : 'border-line-strong bg-surface-2 text-ink-3'}`}>
+          {motor?.ligado
+            ? <><LiveDot tone="red" /> varrendo</>
+            : <><PowerOff className="w-3 h-3" /> motor parado</>}
+          {motor?.ultima_rodada && (
+            <span className="font-mono text-ink-4">{horaCurta(motor.ultima_rodada)}</span>
+          )}
+        </span>
       </div>
       <p className="text-[11px] text-ink-4 mb-3 leading-relaxed">
-        Os jogos que o motor está acompanhando nesta varredura, com o que ele leu de cada
-        um · os números são o total da partida, os dois times somados, e ele só publica
-        quando a leitura se afasta do esperado e a odd paga por isso.
+        Os jogos que o motor está acompanhando, com o que ele leu de cada um · os números são
+        o total da partida, os dois times somados. Ele só publica quando a leitura se afasta do
+        esperado e a odd paga por isso, então{' '}
+        <span className="text-ink-3">{partidas.length} em leitura e {comPick} com pick</span>{' '}
+        é o funcionamento normal, não falha.
       </p>
 
-      <div className="grid gap-2 sm:grid-cols-2">
-        {partidas.map(p => (
-          <div
-            key={p.fixture_id}
-            className={`rounded-lg border p-3 ${
-              p.tem_pick ? 'border-red-400/40 bg-red-500/5' : 'border-line bg-surface-1'}`}
-          >
-            <div className="flex items-center justify-between gap-2">
-              {/* Escudo da liga, do mesmo jeito que o resto do site · o nome
-                * fica junto porque uma competição não se reconhece só pelo
-                * brasão a 16px, mas o brasão é o que a olhada rápida pega. */}
-              <span className="flex items-center gap-1.5 min-w-0">
-                <LeagueLogo id={p.league_id ?? undefined} name={p.liga ?? ''} />
-                <span className="text-[10px] text-ink-4 truncate">{p.liga ?? 'liga ?'}</span>
-              </span>
-              <span className="flex items-center gap-1.5 shrink-0">
-                {/* O minuto é o que faz a linha parecer viva · sem ele o
-                  * cartão descreve um jogo sem dizer em que ponto ele está. */}
-                <LiveDot tone="red" />
-                <span className="font-mono text-[11px] font-bold text-red-300 tabular-nums">
-                  {p.minuto != null ? `${p.minuto}'` : (p.status ?? '·')}
-                </span>
-              </span>
-            </div>
+      <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+        {partidas.map(p => {
+          const { minuto, projetado } = minutoVivo(p, tick)
+          const idade = (p.idade_seg ?? 0) + tick
+          // A barra é o tempo de jogo, não uma métrica · é o que dá noção de
+          // "ainda dá tempo de sair pick aqui" sem precisar de número nenhum.
+          const andamento = minuto != null ? Math.min(100, (minuto / 90) * 100) : 0
+          return (
+            <div
+              key={p.fixture_id}
+              className={`relative overflow-hidden rounded-xl border transition-colors duration-1 ${
+                p.tem_pick
+                  ? 'border-red-400/50 bg-red-500/[0.07]'
+                  : 'border-line bg-surface-1 hover:border-line-strong'}`}
+            >
+              {/* Faixa do tempo de jogo, colada no topo do cartão. */}
+              <div className="absolute inset-x-0 top-0 h-[3px] bg-surface-3/60">
+                <div
+                  className={`h-full transition-all duration-1000 ease-linear ${
+                    p.tem_pick ? 'bg-red-400' : 'bg-ink-4/60'}`}
+                  style={{ width: `${andamento}%` }}
+                />
+              </div>
 
-            {/* Nomes com escudo e sem número no meio: `live_match_observations`
-              * guarda o TOTAL da partida, e não o placar por lado · um número
-              * único entre os dois times seria lido como placar e mentiria em
-              * todo jogo que não está 0 a 0. O gol entra na fila de contadores
-              * abaixo, onde "total" é a leitura certa. */}
-            <div className="flex items-center gap-1.5 mt-1.5 min-w-0">
-              <TeamLogo id={p.home_team_id ?? undefined} name={p.home_team ?? ''} />
-              <span className="text-sm text-ink-2 truncate">{p.home_team ?? 'Time ?'}</span>
-              <span className="text-ink-4 text-xs shrink-0">x</span>
-              <TeamLogo id={p.away_team_id ?? undefined} name={p.away_team ?? ''} />
-              <span className="text-sm text-ink-2 truncate">{p.away_team ?? 'Time ?'}</span>
-            </div>
+              <div className="p-3 pt-3.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    <LeagueLogo id={p.league_id ?? undefined} name={p.liga ?? ''} />
+                    <span className="text-[10px] text-ink-4 truncate">{p.liga ?? 'liga ?'}</span>
+                  </span>
+                  <span className="flex items-center gap-1.5 shrink-0">
+                    <LiveDot tone="red" />
+                    <span className="font-mono text-[11px] font-bold text-red-300 tabular-nums"
+                          title={projetado ? 'Minuto projetado desde a última leitura' : undefined}>
+                      {minuto != null
+                        ? `${projetado ? '~' : ''}${minuto}'`
+                        : (STATUS_LABEL[p.status ?? ''] ?? p.status ?? '·')}
+                    </span>
+                  </span>
+                </div>
 
-            {/* ÍCONE NO LUGAR DO RÓTULO.
-              *
-              * Eram quatro palavras ("gols", "escanteios", "no alvo",
-              * "chutes") na frente de quatro números de um dígito: mais texto
-              * que dado, e num celular a fila quebrava em duas linhas. O ícone
-              * ocupa 12px, cabe tudo numa linha só e o número volta a ser o
-              * que se lê primeiro. O `title` mantém o nome pra quem passar o
-              * mouse, e o `aria-label` pro leitor de tela.
-              *
-              * Todos são TOTAL da partida, os dois times somados. */}
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-[10px]">
-              {([
-                [Goal,      'Gols',          p.goals_observado,            'text-ink-1'],
-                [Flag,      'Escanteios',    p.corners_observado,          'text-ink-2'],
-                [Target,    'Chutes no alvo', p.shots_on_target_observado, 'text-ink-2'],
-                [Crosshair, 'Chutes',        p.shots_observado,            'text-ink-2'],
-              ] as const).map(([Icone, rotulo, valor, cor]) => (
-                <span key={rotulo} className="flex items-center gap-1" title={rotulo}>
-                  <Icone className="w-3 h-3 text-ink-4 shrink-0" aria-hidden="true" />
-                  <span className={`font-mono tabular-nums ${cor}`} aria-label={rotulo}>
-                    {valor ?? '·'}
+                {/* O CONFRONTO EM DUAS LINHAS.
+                  *
+                  * `live_match_observations` guarda o TOTAL da partida, não o
+                  * placar por lado · por isso o gol aparece como UM número no
+                  * ladrilho abaixo, e não entre os nomes: um número entre os
+                  * dois times é lido como placar e mentiria em todo jogo que
+                  * não está empatado. */}
+                <div className="mt-2 space-y-1">
+                  {([[p.home_team_id, p.home_team], [p.away_team_id, p.away_team]] as const).map(
+                    ([id, nome], i) => (
+                      <div key={i} className="flex items-center gap-1.5 min-w-0">
+                        <TeamLogo id={id ?? undefined} name={nome ?? ''} />
+                        <span className="text-sm text-ink-1 truncate">{nome ?? 'Time ?'}</span>
+                      </div>
+                    ))}
+                </div>
+
+                <div className="grid grid-cols-4 gap-1 mt-2.5">
+                  {([
+                    [Goal,      'Gols',           p.goals_observado],
+                    [Flag,      'Escanteios',     p.corners_observado],
+                    [Target,    'Chutes no alvo', p.shots_on_target_observado],
+                    [Crosshair, 'Chutes',         p.shots_observado],
+                  ] as const).map(([Icone, rotulo, valor]) => (
+                    <div key={rotulo}
+                         className="rounded-md bg-surface-2/70 border border-line/60 py-1.5 text-center"
+                         title={rotulo}>
+                      <Icone className="w-3 h-3 text-ink-4 mx-auto" aria-hidden="true" />
+                      <div className="font-mono text-sm font-bold tabular-nums text-ink-1 leading-tight mt-0.5"
+                           aria-label={rotulo}>
+                        {valor ?? '·'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-between gap-2 mt-2 text-[10px]">
+                  <span className="flex items-center gap-2 text-ink-4">
+                    {/* "Lido há" é o que separa dado fresco de tela travada, e
+                      * ele anda a cada segundo sem pedir nada ao servidor. */}
+                    <span className="font-mono tabular-nums">lido {idadeCurta(idade)}</span>
+                    {!!p.red_cards_observado && (
+                      <span className="flex items-center gap-1" title="Cartões vermelhos">
+                        <span className="w-2 h-3 rounded-[1px] bg-red-500 shrink-0" aria-hidden="true" />
+                        <span className="font-mono tabular-nums text-red-400">
+                          {p.red_cards_observado}
+                        </span>
+                      </span>
+                    )}
                   </span>
-                </span>
-              ))}
-              {!!p.red_cards_observado && (
-                /* Cartão vermelho é o próprio ícone · um retângulo vermelho diz
-                 * isso melhor que a palavra, e é como ele aparece em campo. */
-                <span className="flex items-center gap-1" title="Cartões vermelhos">
-                  <span className="w-2 h-3 rounded-[1px] bg-red-500 shrink-0" aria-hidden="true" />
-                  <span className="font-mono tabular-nums text-red-400"
-                        aria-label="Cartões vermelhos">
-                    {p.red_cards_observado}
-                  </span>
-                </span>
-              )}
-              {p.tem_pick && (
-                <span className="text-red-300 font-semibold ml-auto">já virou pick</span>
-              )}
+                  {p.tem_pick
+                    ? <span className="text-red-300 font-bold">já virou pick</span>
+                    : <span className="text-ink-4">sem oportunidade ainda</span>}
+                </div>
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
@@ -302,9 +405,16 @@ function EmLeituraAgora({ isActive }: { isActive: boolean }) {
  * card dizia "3u" e o modal abria em "1u" · duas respostas pra mesma pergunta,
  * na mesma batida de dedo. */
 function unidadesSugeridas(
-  pick: Pick<LivePick, 'probability' | 'odd' | 'ev' | 'stake_units'>,
+  pick: Pick<LivePick, 'probability' | 'odd' | 'ev' | 'stake_units' | 'suggested_stake_units'>,
   banca?: { bankroll_current: number; unit_value: number } | null,
 ): number {
+  // O backend calcula a mesma coisa desde 29/08 (live_picks.py), e ele é a
+  // resposta preferida pelo mesmo motivo que vale no SuggestionCard: é o
+  // número que o APP recebe, e duas implementações do mesmo Kelly divergem no
+  // dia em que uma das duas mudar.
+  if (pick.suggested_stake_units != null && pick.suggested_stake_units > 0) {
+    return Math.min(pick.suggested_stake_units, MAX_UNIDADES_LIVE)
+  }
   if (banca?.bankroll_current && banca.unit_value > 0) {
     const kelly = calcVipStake(
       Number(pick.probability), Number(pick.odd), Number(pick.ev),
@@ -389,6 +499,8 @@ interface LivePick {
   pick_status?: string
   is_followed: boolean
   user_stake_units?: number | null
+  /** Kelly do backend sobre a banca de quem está lendo · null sem banca. */
+  suggested_stake_units?: number | null
   /* O backend manda os três desde sempre (ver routers/live_picks.py::feed) e a
      interface não os declarava · o card não tinha como mostrar onde apostar
      nem a odd que o usuário de fato registrou. */
@@ -882,10 +994,37 @@ export default function LivePicksFeed({ isActive, banca }: {
       {/* Painel de abertura na cor do produto, como o das outras abas · o Live
           é vermelho no site inteiro (PICK_TYPE_HEX.live). */}
       <div className="bg-red-500/5 border border-red-400/25 rounded-lg p-4 mb-6">
-        <h3 className="text-sm font-bold text-red-300 mb-2 flex items-center gap-2">
-          <LiveDot tone="red" />
-          O que são os Picks Ao Vivo?
-        </h3>
+        {/* O ESTADO DO MOTOR NO TOPO, SEMPRE (29/08, pedido do usuário).
+          *
+          * Ele existia em dois lugares e nenhum dos dois era o topo: no vazio
+          * da aba -- ou seja, só quando NÃO havia pick -- e num aviso âmbar que
+          * aparecia apenas com o motor parado. Em noite movimentada, com cards
+          * na tela, não havia como saber se o motor seguia varrendo ou se
+          * aqueles eram os últimos picks de um motor que já tinha parado.
+          *
+          * Agora é a primeira coisa da aba, e diz as duas metades da resposta:
+          * se está varrendo, e de quando foi a última passada. */}
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+          <h3 className="text-sm font-bold text-red-300 flex items-center gap-2">
+            <LiveDot tone="red" />
+            O que são os Picks Ao Vivo?
+          </h3>
+          {motor && (
+            <span className={`flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full border ${
+              motor.ligado
+                ? 'border-red-400/40 bg-red-500/10 text-red-300'
+                : 'border-amber-500/40 bg-amber-500/10 text-amber-400'}`}>
+              {motor.ligado
+                ? <><LiveDot tone="red" /> MOTOR VARRENDO</>
+                : <><PowerOff className="w-3 h-3" /> MOTOR PARADO</>}
+              {motor.ultima_rodada && (
+                <span className="font-mono font-normal opacity-80">
+                  {motor.ligado ? 'última' : 'parou'} {horaCurta(motor.ultima_rodada)}
+                </span>
+              )}
+            </span>
+          )}
+        </div>
         <p className="text-[13px] text-ink-3 leading-relaxed">
           O motor lê o placar, o ritmo e as estatísticas da partida{' '}
           <span className="font-bold text-ink-2">em andamento</span> e compara com a odd do momento.
@@ -898,8 +1037,6 @@ export default function LivePicksFeed({ isActive, banca }: {
         </p>
         <PlacarDoLive />
       </div>
-
-      <EmLeituraAgora isActive={isActive} />
 
       {/* O VAZIO PRECISA DIZER SE O MOTOR ESTÁ LIGADO.
         *
@@ -980,6 +1117,12 @@ export default function LivePicksFeed({ isActive, banca }: {
           </div>
         </>
       )}
+
+      {/* O QUE O MOTOR ESTÁ LENDO fica DEPOIS dos picks (29/08, pedido do
+          usuário). A aba é tela de decisão: primeiro o que dá pra apostar,
+          depois o contexto de onde ele pode sair. Ver o cabeçalho do
+          componente. */}
+      <EmLeituraAgora isActive={isActive} motor={motor} />
 
       {/* Os encerrados do dia saíram daqui · ver o comentário em `emAndamento`.
           O link existe porque tirar a seção não pode virar "sumiu": o pick

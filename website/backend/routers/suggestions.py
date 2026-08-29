@@ -207,8 +207,16 @@ def _compute_suggested_stake_units(
         # picks de perna única com amostra histórica menor que a do VIP, que é
         # exatamente o critério que já definiu o teto de UNIDADES deles em
         # banca.STAKE_LIMITS. Boost fica um degrau abaixo por ser combinado.
+        #
+        # `live` entra com o teto do free (2%) e nao com o default de 3%: o
+        # produto e' entrada simples, mas a odd pode mudar entre a publicacao e
+        # a aposta -- e' o mesmo motivo que da' ao ao vivo o teto de UNIDADES
+        # mais baixo do site (banca.STAKE_LIMITS['live'] = 4). Sem a chave ele
+        # caia no default, que e' mais frouxo que o do free num produto mais
+        # volatil que o free.
         MAX_PCT = {'free': 0.02, 'multipla': 0.025,
                    'faltas': 0.02, 'goleiros': 0.02, 'player_stats': 0.02,
+                   'live': 0.02,
                    'boost': 0.015}
         max_pct = MAX_PCT.get(pick_type, 0.03)
 

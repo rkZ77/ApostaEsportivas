@@ -8,9 +8,9 @@ aposta a mesma coisa numa entrada simples e num bilhete de quatro pernas.
 O placar publico entao anuncia um plano fixo, declarado aqui e em nenhum outro
 lugar:
 
+    ao vivo ............................................ 4u
     VIP ................................................ 4u
-    free, faltas, defesas, player stats, ao vivo ........ 3u
-    pick boost ......................................... 2u
+    free, faltas, defesas, player stats, pick boost .... 3u
     multipla ........................................... 1u
     alavancagem ........................................ nao entra
 
@@ -68,17 +68,18 @@ STAKE_PADRAO: dict[str, int] = {
     # na vitrine. Peso diferente pro sucessor faria o placar dar um degrau no
     # dia da troca, sem nada ter mudado na aposta.
     "player_stats": 3,
-    # Ao vivo (29/08). Herda o peso da entrada simples pelo mesmo criterio que
-    # rege a tabela inteira: o peso descreve a FORMA da aposta, nao a
-    # confianca no motor. Um pick ao vivo e' um jogo, um mercado, uma odd --
-    # igual ao free e aos mercados proprios. O VIP fica acima por ser o
-    # produto pago, nao por ser o motor melhor.
+    # Ao vivo: 4u desde 29/08, no mesmo degrau do VIP (decisao do usuario).
     #
-    # Ate' 28/08 a chave nem existia, e isso era pior do que qualquer peso:
-    # `stake_de("live")` caia no STAKE_FALLBACK de 1u, entao o ao vivo teria
-    # entrado no placar com um peso que ninguem escolheu, no dia em que
-    # aparecesse na primeira consulta.
-    "live":        3,
+    # A regra anterior era "o peso descreve a FORMA da aposta", e por ela o ao
+    # vivo entrou com 3 -- um jogo, um mercado, uma odd, igual ao free. O
+    # criterio agora e' o do PRODUTO: o ao vivo e' exclusivo de assinante, e
+    # entra no placar publico com o peso do produto pago.
+    #
+    # Peso do PLACAR, nao da aposta de ninguem. O que o assinante ve' no card
+    # continua saindo da banca dele (suggestions::_compute_suggested_stake_
+    # units), com o teto de 4u de banca.STAKE_LIMITS -- que por coincidencia
+    # e' o mesmo numero, e coincidencia e' tudo o que e'.
+    "live":        4,
     # Pick Boost publicado em 2026-08-28. Peso 2, entre a multipla (1) e os
     # mercados proprios (3), e o meio nao e' indecisao:
     #
@@ -94,7 +95,12 @@ STAKE_PADRAO: dict[str, int] = {
     # Ate' 27/08 era 0, e o zero era explicito: fase 1 do produto era so' Admin,
     # e sem a chave ele cairia no STAKE_FALLBACK de 1u no dia em que entrasse
     # numa consulta -- entrando no placar por descuido em vez de por decisao.
-    "boost":       2,
+    #
+    # 29/08: subiu de 2 pra 3, igualando os mercados proprios (decisao do
+    # usuario). O argumento do combinado continua de pe' e continua escrito
+    # acima -- ele e' o que mantem o boost ABAIXO do VIP e do ao vivo, nao
+    # abaixo do free.
+    "boost":       3,
     "multiplas":   1,
     # Zero = fora do placar de unidades. Ver o bloco no topo deste arquivo.
     "alavancagem": 0,
@@ -128,5 +134,5 @@ def rotulo_curto() -> str:
     legenda explica -- citar "0u" convidaria a leitura errada de que ela deu
     zero de lucro.
     """
-    return (f"VIP {STAKE_PADRAO['vip']}u · free e mercados {STAKE_PADRAO['free']}u"
-            f" · múltipla {STAKE_PADRAO['multiplas']}u")
+    return (f"VIP e ao vivo {STAKE_PADRAO['vip']}u · free e mercados "
+            f"{STAKE_PADRAO['free']}u · múltipla {STAKE_PADRAO['multiplas']}u")

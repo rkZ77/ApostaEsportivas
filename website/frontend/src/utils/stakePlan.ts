@@ -25,15 +25,14 @@ export const STAKE_PADRAO: Record<string, number> = {
   // Player Stats herda o peso de goleiros · é o mesmo produto, o mesmo formato
   // de entrada e o mesmo lugar na vitrine. Ver o comentário no Python.
   player_stats: 3,
-  // Ao vivo (29/08) · entrada simples, um jogo e um mercado, então herda o
-  // peso do free e dos mercados próprios. O peso descreve a FORMA da aposta,
-  // não a confiança no motor. Ver o comentário no Python, que é a fonte.
-  live:        3,
-  // Pick Boost publicado em 28/08 · peso 2, entre a múltipla (1) e os mercados
-  // próprios (3). É um COMBINADO e quebra inteiro quando uma perna erra, mas as
-  // duas pernas são do mesmo jogo e do mesmo evento, com probabilidade
-  // individual alta. Ver o comentário no Python, que é a fonte.
-  boost:       2,
+  // Ao vivo · 4u desde 29/08, no mesmo degrau do VIP: é produto exclusivo de
+  // assinante, e o placar público pesa pelo produto. Ver o comentário no
+  // Python, que é a fonte.
+  live:        4,
+  // Pick Boost · 3u desde 29/08, igualando os mercados próprios. É um
+  // COMBINADO e quebra inteiro quando uma perna erra, o que o mantém abaixo do
+  // VIP e do ao vivo. Ver o comentário no Python, que é a fonte.
+  boost:       3,
   multiplas:   1,
   // O front usa a forma de rota ('multipla'); o backend, o nome da tabela
   // ('multiplas'). As duas chaves apontam pro mesmo peso pra que nenhum

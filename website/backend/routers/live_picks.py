@@ -419,6 +419,7 @@ def feed(
             linhas = [p for p in linhas if p["result"] is None]
 
         seguidos: dict = {}
+        banca = None
         if linhas:
             cur.execute("""
                 SELECT pick_id, stake_units, actual_odd, bet_house
@@ -426,6 +427,19 @@ def feed(
                 WHERE user_id = %s AND pick_type = 'live' AND pick_id = ANY(%s)
             """, (current_user["id"], [p["id"] for p in linhas]))
             seguidos = {r["pick_id"]: dict(r) for r in cur.fetchall()}
+
+            # A UNIDADE SUGERIDA VEM DA BANCA DE QUEM ESTA LENDO (29/08).
+            #
+            # O site ja' fazia essa conta, mas do lado dele: LivePicksFeed.tsx
+            # roda o mesmo Kelly do card VIP em cima da banca carregada na
+            # tela. O APP nao tem Kelly nenhum de proposito -- justamente pra
+            # nao existir uma segunda implementacao da mesma conta -- entao o
+            # card ao vivo dele nao sabia dizer quanto apostar.
+            #
+            # E' o mesmo buraco que /suggestions/today ja' fechou pra faltas,
+            # jogadores e Pick Boost em 28/08, e a correcao e' a mesma funcao.
+            from routers.suggestions import _compute_suggested_stake_units, _get_user_banca
+            banca = _get_user_banca(cur, current_user["id"])
     finally:
         cur.close()
         conn.close()
@@ -441,6 +455,14 @@ def feed(
         validade = p.get("odd_valid_until")
         item["is_followed"] = seguido is not None
         item["user_stake_units"] = float(seguido["stake_units"]) if seguido else None
+        # So' pra quem ainda nao apostou · quem apostou tem o numero dele, e
+        # sugerir outro por cima seria discutir uma aposta ja' feita.
+        item["suggested_stake_units"] = (
+            _compute_suggested_stake_units(
+                "live", None, p.get("confidence"), p.get("odd"), p.get("ev"),
+                banca[0], banca[1],
+            ) if banca and not seguido else None
+        )
         item["user_actual_odd"] = float(seguido["actual_odd"]) if seguido and seguido["actual_odd"] else None
         item["user_bet_house"] = seguido["bet_house"] if seguido else None
         item["segundos_de_validade"] = (
@@ -548,6 +570,21 @@ def em_leitura(current_user: dict = Depends(require_live_reader), limit: int = Q
                        u.goals_observado, u.corners_observado,
                        u.shots_observado, u.shots_on_target_observado,
                        u.red_cards_observado, u.observed_at::text AS lido_em,
+                       -- HA QUANTO TEMPO ESSA LEITURA FOI FEITA, em segundos,
+                       -- calculado NO BANCO (29/08).
+                       --
+                       -- `observed_at` e' TIMESTAMP sem fuso, gravado pelo
+                       -- relogio do motor · a tela nao tem como transformar
+                       -- isso em idade sem adivinhar de que fuso ele veio, e
+                       -- adivinhar erra por horas. Aqui a subtracao acontece
+                       -- do lado de quem gravou, e o que viaja e' um numero
+                       -- sem fuso nenhum.
+                       --
+                       -- E' o que faz o cartao envelhecer sozinho entre duas
+                       -- varreduras, em vez de estampar um minuto congelado
+                       -- que parecia dado velho travado.
+                       GREATEST(0, EXTRACT(EPOCH FROM (NOW() - u.observed_at)))::int
+                           AS idade_seg,
                        f.home_team, f.away_team,
                        -- Os ids viajam junto porque a tela desenha escudo, e o
                        -- escudo sai do proxy por id (/api/proxy/team/<id>.png).
