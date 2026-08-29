@@ -681,12 +681,19 @@ export default function AdminDados() {
     }
   }
 
-  const dispararRecoleta = async () => {
+  /* `filtro` é o recorte que a tela está mostrando · sem ele o lote sempre
+   * atacou "as mais recentes furadas", que raramente é o que quem clicou
+   * acabou de escolher. Com filtro a janela também muda: o recorte de família
+   * vive no diagnóstico, e o buraco que ele aponta costuma ser mais velho que
+   * os 3 meses do lote solto. */
+  const dispararRecoleta = async (filtro?: string) => {
     setPedindoLote(true)
     setAviso(null)
     try {
       const r = await api.post('/admin/dados/recoletar', null,
-        { params: { limite: lote, meses: 3 } })
+        { params: filtro
+            ? { limite: lote, meses: diagnostico?.meses ?? 12, filtro }
+            : { limite: lote, meses: 3 } })
       setAviso({ fixture: -2, texto: r.data?.mensagem ?? 'Lote iniciado.', ok: true })
       buscarRecoleta()
     } catch (e) {
@@ -1321,7 +1328,7 @@ export default function AdminDados() {
                     ))}
                   </select>
                   <Button size="sm" variant="ghost" loading={pedindoLote}
-                          onClick={dispararRecoleta}>
+                          onClick={() => dispararRecoleta()}>
                     <PlayCircle className="w-3.5 h-3.5" />
                     Recoletar as mais recentes
                   </Button>
@@ -1809,6 +1816,77 @@ export default function AdminDados() {
               </button>
             ))}
           </div>
+
+          {/* RODAR EM TODAS · o que faltava pra esta tela deixar de ser manual.
+            *
+            * Rodar e Preencher à mão são individuais por natureza, e isso está
+            * certo pra folha que a API não publica mais -- digitar olhando a
+            * súmula não tem versão em lote. Mas o caso comum não é esse: é
+            * partida recente cuja folha a API TEM e a coleta perdeu, e aí
+            * clicar 45 vezes no mesmo botão não é cuidado, é trabalho braçal.
+            *
+            * O lote daqui ataca EXATAMENTE o filtro em cima, na janela do
+            * diagnóstico · o do bloco de Cobertura continua existindo pro
+            * recorte fixo de "mais recentes furadas". O que sobrar depois dele
+            * é justamente o que só a mão resolve, e aí a lista fica com o
+            * tamanho real do trabalho manual em vez de escondê-lo. */}
+          {filtroPartidas && (
+            <div className="mt-2.5 border-t border-line/60 pt-2.5">
+              {recoleta?.rodando ? (
+                <>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className="text-[11px] font-semibold text-ink-2">
+                      Recoletando {recoleta.feitas} de {recoleta.total}
+                    </p>
+                    <p className="text-[10px] font-mono text-ink-4">
+                      {recoleta.gravadas} gravada(s) · {recoleta.falhas} falha(s)
+                    </p>
+                  </div>
+                  <div className="h-1.5 bg-surface-2 rounded-full overflow-hidden mt-2">
+                    <div
+                      className="h-full bg-green-500 transition-all duration-1"
+                      style={{ width: `${Math.round((recoleta.feitas / Math.max(1, recoleta.total)) * 100)}%` }}
+                    />
+                  </div>
+                  <p className="text-[10px] text-ink-4 mt-1.5">
+                    Duas requisições por partida. Dá pra sair da aba · o lote continua no servidor.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select
+                      value={lote}
+                      onChange={e => setLote(Number(e.target.value))}
+                      className="bg-surface-1 border border-line-strong rounded-md text-xs text-ink-2 px-2 py-2 min-h-[36px] focus:border-ink-4 focus:outline-none"
+                      aria-label="Quantas partidas deste filtro recoletar"
+                    >
+                      {[10, 20, 50, 100].map(n => (
+                        <option key={n} value={n}>{n} partidas · {n * 2} requisições</option>
+                      ))}
+                    </select>
+                    <Button size="sm" loading={pedindoLote}
+                            onClick={() => dispararRecoleta(filtroPartidas.chave)}>
+                      <PlayCircle className="w-3.5 h-3.5" />
+                      Rodar nestas {Math.min(lote, historico?.total ?? lote)}
+                    </Button>
+                  </div>
+                  <p className="text-[10px] text-ink-4 mt-2 leading-relaxed">
+                    Roda a coleta nas {Math.min(lote, historico?.total ?? lote)} partidas mais
+                    recentes <span className="font-semibold">deste filtro</span>, da janela de{' '}
+                    {diagnostico?.meses ?? 12} meses · é o botão Rodar de cada linha, aplicado à
+                    lista. Quem continuar sem o número depois é folha que a API não publica mais:
+                    essa só sai preenchendo à mão.
+                  </p>
+                  {aviso?.fixture === -2 && (
+                    <p className={`text-[11px] mt-1.5 ${aviso.ok ? 'text-green-400' : 'text-red-400'}`}>
+                      {aviso.texto}
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* O jogo coletado vazio é o erro que nenhuma contagem pega: zero não é

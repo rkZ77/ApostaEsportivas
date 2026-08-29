@@ -423,9 +423,27 @@ class TestRecoletaEmLote:
         self._limpar()
         pedidos = []
         monkeypatch.setattr(admin, "_ids_para_recoletar",
-                            lambda limite, meses: pedidos.append((limite, meses)) or [])
+                            lambda limite, meses, filtro=None:
+                                pedidos.append((limite, meses, filtro)) or [])
         asyncio.run(admin.recoletar_em_lote(limite=99999, meses=999, current_user=ADMIN))
-        assert pedidos == [(admin._RECOLETA_TETO, 24)]
+        assert pedidos == [(admin._RECOLETA_TETO, 24, None)]
+
+    def test_lote_repassa_o_filtro_da_tela(self, monkeypatch):
+        """O botao de lote da lista filtrada tem que atacar A LISTA FILTRADA.
+
+        Enquanto `filtro` nao chegava ate' `_ids_para_recoletar`, clicar "rodar
+        em todas" dentro de "45 jogos sem faltas" saia recoletando as mais
+        recentes com folha furada · outro recorte, escolhido por ninguem, e
+        gastando as mesmas duas requisicoes por partida.
+        """
+        self._limpar()
+        pedidos = []
+        monkeypatch.setattr(admin, "_ids_para_recoletar",
+                            lambda limite, meses, filtro=None:
+                                pedidos.append((limite, meses, filtro)) or [])
+        asyncio.run(admin.recoletar_em_lote(limite=20, meses=12, filtro="faltas",
+                                            current_user=ADMIN))
+        assert pedidos == [(20, 12, "faltas")]
 
     def test_lista_vazia_nao_abre_thread(self, monkeypatch):
         self._limpar()

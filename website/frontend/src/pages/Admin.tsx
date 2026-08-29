@@ -13,7 +13,6 @@ import AdminDados from '../components/AdminDados'
 import AdminMotorDecisoes from '../components/AdminMotorDecisoes'
 import AdminAuditoriaMotores from '../components/AdminAuditoriaMotores'
 import AdminPendencias from '../components/AdminPendencias'
-import AdminEngajamento from '../components/AdminEngajamento'
 import AdminPlanosVencidos from '../components/AdminPlanosVencidos'
 import { fmtBRL } from '../utils/format'
 
@@ -1343,6 +1342,8 @@ export default function Admin() {
                 <option value="alavancagem">Alavancagem</option>
                 <option value="faltas">Faltas</option>
                 <option value="player_stats">Jogadores</option>
+                <option value="boost">Pick Boost</option>
+                <option value="live">Ao Vivo</option>
                 <option value="goleiros">Defesas (legado)</option>
               </select>
             </div>
@@ -1377,6 +1378,7 @@ export default function Admin() {
                   multipla: 'text-blue-400 bg-blue-400/10', alavancagem: 'text-orange-400 bg-orange-400/10',
                   faltas: 'text-purple-400 bg-purple-400/10', goleiros: 'text-sky-400 bg-sky-400/10',
                   player_stats: 'text-amber-400 bg-amber-400/10',
+                  boost: 'text-pink-400 bg-pink-400/10', live: 'text-red-400 bg-red-400/10',
                 }
                 const resCls = p.result ? (resultCls[p.result] ?? 'text-ink-2 bg-surface-3/40 border-line-strong/30') : 'text-ink-4 bg-surface-1 border-line'
                 return (
@@ -1447,7 +1449,12 @@ export default function Admin() {
             ))}
           </div>
         )}
-        <AdminEngajamento />
+        {/* AdminEngajamento saiu daqui em 29/08 · o bloco inteiro (atividade da
+          * base + Audiência do WhatsApp) foi removido a pedido. A audiência
+          * media um envio que não existe: o disparo nunca foi implementado e
+          * ninguém deu opt-in, então os quatro cartões eram zero permanente
+          * com um aviso explicando por que eram zero. O arquivo do componente
+          * fica no disco pra voltar quando o WhatsApp de fato disparar. */}
         <AdminPlanosVencidos />
         {/* Criar usuário */}
         {creating && (

@@ -73,6 +73,64 @@ TZ_BR = ZoneInfo("America/Sao_Paulo")
 # ─────────────────────────────────────────────────────────────────────────
 # ESQUEMA
 # ─────────────────────────────────────────────────────────────────────────
+def _reparar_id_de_picks_live(cur) -> None:
+    """Devolve a `picks_live.id` a sequencia e a chave primaria.
+
+    ACHADO EM PRODUCAO (2026-08-29). O CREATE TABLE abaixo declara
+    `id SERIAL PRIMARY KEY` e em DEV e' isso que existe. Em PROD a coluna
+    estava como `bigint` NULA, sem default, sem sequencia e sem constraint
+    nenhuma -- as 28 linhas gravadas tinham `id = NULL`. `CREATE TABLE IF NOT
+    EXISTS` nao conserta tabela que ja' existe, entao o desvio sobreviveu a
+    todo deploy desde que o Live foi implantado.
+
+    O QUE ISSO QUEBRAVA, e nao era pouco:
+
+      · o pick ao vivo nunca entrava no `picks_ledger` -- o extractor lia `id`
+        NULO e o INSERT batia no NOT NULL de `source_id` (28 pernas puladas na
+        ultima sincronizacao). Ficava fora do placar publico, do CLV e de toda
+        atribuicao por liga/arbitro/faixa de odd.
+      · a liquidacao automatica grava com `WHERE id = %s`. Com id NULO nao
+        casa linha nenhuma: o codigo roda e nao liquida nada, em silencio.
+      · qualquer coisa que enderece um pick ao vivo por id.
+
+    Idempotente e silencioso onde o esquema ja' esta correto. Nao pode derrubar
+    a rodada -- o motor gerar pick vale mais do que a auditoria estar completa,
+    entao falha aqui so' avisa.
+    """
+    try:
+        cur.execute("""
+            SELECT column_default IS NOT NULL AS tem_default
+              FROM information_schema.columns
+             WHERE table_name = 'picks_live' AND column_name = 'id'
+        """)
+        linha = cur.fetchone()
+        if not linha or linha[0]:
+            return  # coluna ainda nao existe, ou ja' esta correta
+
+        print("[LIVE] Reparando picks_live.id · coluna sem sequencia nem chave.")
+        cur.execute("CREATE SEQUENCE IF NOT EXISTS picks_live_id_seq OWNED BY picks_live.id;")
+        # Backfill ANTES do NOT NULL: com linha nula a alteracao e' recusada.
+        cur.execute("UPDATE picks_live SET id = nextval('picks_live_id_seq') WHERE id IS NULL;")
+        cur.execute("SELECT setval('picks_live_id_seq', "
+                    "COALESCE((SELECT MAX(id) FROM picks_live), 1));")
+        cur.execute("ALTER TABLE picks_live ALTER COLUMN id "
+                    "SET DEFAULT nextval('picks_live_id_seq');")
+        cur.execute("ALTER TABLE picks_live ALTER COLUMN id SET NOT NULL;")
+        cur.execute("""
+            DO $do$ BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_constraint
+                                WHERE conrelid = 'picks_live'::regclass
+                                  AND contype = 'p') THEN
+                    ALTER TABLE picks_live ADD PRIMARY KEY (id);
+                END IF;
+            END $do$;
+        """)
+        print("[LIVE] picks_live.id reparada.")
+    except Exception as e:
+        print(f"[LIVE] Aviso: nao consegui reparar picks_live.id "
+              f"(nao afeta o pick): {e}")
+
+
 def criar_tabelas(cur) -> None:
     """Auto-provisiona o esquema do Live.
 
@@ -184,6 +242,8 @@ def criar_tabelas(cur) -> None:
     cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_live_mercado ON picks_live (market_type);")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_live_pendentes "
                 "ON picks_live (match_date) WHERE result IS NULL;")
+
+    _reparar_id_de_picks_live(cur)
 
     # Leitura anterior de cada partida. E' o que da' JANELA e TENDENCIA: sem
     # duas leituras nao existe "escanteios nos ultimos 10 minutos", porque

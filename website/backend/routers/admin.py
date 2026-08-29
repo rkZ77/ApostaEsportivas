@@ -1352,6 +1352,17 @@ _PICK_TABLES = {
     # mais novo, o que mais precisa de correcao manual enquanto e' medido.
     "player_stats": ("picks_player_stats", "home_team",     "away_team"),
     "boost":        ("picks_boost",        "home_team",     "away_team"),
+    # AO VIVO (29/08). A tabela existia em todo lugar MENOS aqui: a contagem do
+    # dia contava, o ledger liquidava, a Auditoria abria -- e a busca da aba
+    # Picks nao achava nenhum, porque este mapa e' quem diz quais tabelas ela
+    # varre. Pick ao vivo era o unico produto sem tela pra marcar resultado na
+    # mao, justo o que mais precisa (a odd expira e a folha demora).
+    #
+    # `picks_live` nasce do motor, nao do site: onde o motor nunca rodou a
+    # tabela nao existe. Quem varre em lote ja' engole isso pick_type a
+    # pick_type (o `except` com log em /picks/search), entao nao precisa de
+    # guarda extra -- o tipo some da busca em vez de derrubar a busca.
+    "live":         ("picks_live",         "home_team_name", "away_team_name"),
 }
 _VALID_RESULTS = {"GREEN", "RED", "PUSH", "HALF-WIN", "HALF-LOSS", None}
 
@@ -1364,7 +1375,7 @@ _VALID_RESULTS = {"GREEN", "RED", "PUSH", "HALF-WIN", "HALF-LOSS", None}
 #: existir uma terceira vez.
 _ODD_COL = {
     "vip": "odd", "free": "odd", "faltas": "odd", "goleiros": "odd",
-    "player_stats": "odd", "boost": "odd",
+    "player_stats": "odd", "boost": "odd", "live": "odd",
     "multipla": "total_odd", "alavancagem": "odd_combined",
 }
 
@@ -2782,6 +2793,34 @@ AND COALESCE(home_fouls, 0) + COALESCE(away_fouls, 0) = 0
 """
 
 
+def _onde_do_filtro(filtro: str | None) -> str:
+    """Traduz a chave do diagnostico no predicado SQL correspondente.
+
+    Chave desconhecida vira "sem filtro" em vez de erro: o filtro chega da URL
+    da tela, e um typo nao pode virar 500.
+
+    Mora fora das rotas porque tem DOIS leitores desde 29/08: a lista de
+    partidas e a recoleta em lote. Enquanto a traducao vivia inline em
+    /dados/partidas, o botao de lote so' sabia recoletar "as mais recentes
+    furadas" -- ou seja, ele ignorava o recorte que a pessoa tinha acabado de
+    escolher na tela, e quem filtrava "sem faltas" via o lote sair consertando
+    outra coisa. Uma fonte so' e' o que garante que o botao age sobre
+    exatamente a lista que esta' na frente de quem clicou.
+
+    So' devolve nome de coluna vindo de STATS_DA_PARTIDA ou constante do
+    modulo · nunca texto da query string, que entra em SQL por f-string.
+    """
+    por_familia = {chave: (casa, fora) for chave, _r, casa, fora, _m in STATS_DA_PARTIDA}
+    if filtro == "folha_incompleta":
+        return _FOLHA_INCOMPLETA
+    if filtro == "zeradas":
+        return f"({_SQL_SUSPEITA})"
+    if filtro in por_familia:
+        casa, fora = por_familia[filtro]
+        return f"({casa} IS NULL OR {fora} IS NULL)"
+    return ""
+
+
 @router.get("/dados/partidas")
 def partidas_coletadas(
     pagina: int = 0,
@@ -2824,17 +2863,7 @@ def partidas_coletadas(
     limite     = max(0, min(por_pagina, HISTORICO_TETO - offset))
     meses      = min(max(1, meses), 60)
 
-    # Traduz o filtro em predicado. Chave desconhecida vira "sem filtro" em vez
-    # de erro: o filtro chega da URL da tela, e um typo nao pode virar 500.
-    por_familia = {chave: (casa, fora) for chave, _r, casa, fora, _m in STATS_DA_PARTIDA}
-    onde_filtro = ""
-    if filtro == "folha_incompleta":
-        onde_filtro = _FOLHA_INCOMPLETA
-    elif filtro == "zeradas":
-        onde_filtro = f"({_SQL_SUSPEITA})"
-    elif filtro in por_familia:
-        casa, fora = por_familia[filtro]
-        onde_filtro = f"({casa} IS NULL OR {fora} IS NULL)"
+    onde_filtro = _onde_do_filtro(filtro)
 
     conn = get_connection()
     cur  = conn.cursor()
@@ -3625,12 +3654,20 @@ def diagnostico_da_folha(meses: int = 12, current_user: dict = Depends(require_a
         # recoleta tratam as duas coisas juntas de propósito: pra quem opera,
         # "o motor não viu esse jogo" é o mesmo problema, tenha a linha nascido
         # incompleta ou não tenha nascido.
+        #
+        # A JANELA VALE AQUI TAMBÉM (29/08). Este COUNT ignorava `meses` e
+        # varria `fixtures` inteira, então "Sem linha nenhuma" era o único
+        # cartão do bloco numa escala diferente da dos outros três: trocar de
+        # 3 pra 24 meses mudava tudo menos ele, e o número parecia travado.
+        # Pior, ele contava jogo de 2023 que ninguém vai recoletar -- que é
+        # exatamente o que a janela existe pra tirar da frente.
         cur.execute("""
             SELECT COUNT(*) AS n
               FROM fixtures f
          LEFT JOIN match_statistics ms ON ms.fixture_id = f.fixture_id
              WHERE f.status IN ('FT','AET','PEN') AND ms.fixture_id IS NULL
-        """)
+               AND f.match_datetime >= (CURRENT_DATE - (%s || ' months')::interval)
+        """, (meses,))
         sem_linha = (cur.fetchone() or {}).get("n") or 0
     except Exception as e:
         conn.rollback()
@@ -3672,17 +3709,45 @@ _recoleta_lock = threading.Lock()
 _RECOLETA_TETO = 100
 
 
-def _ids_para_recoletar(limite: int, meses: int) -> list:
+def _ids_para_recoletar(limite: int, meses: int, filtro: str | None = None) -> list:
     """As partidas que valem uma requisição, mais recentes primeiro.
 
     Duas fontes na mesma lista: linha existente com a folha incompleta, e
     partida encerrada sem linha nenhuma. Mais recente primeiro porque a API
     publica folha de jogo velho cada vez menos · gastar as 20 requisições do
     lote em agosto rende mais que gastá-las em março.
+
+    COM `filtro`, O LOTE PASSA A SER A LISTA DA TELA (29/08)
+    -------------------------------------------------------
+    Sem ele o alvo era fixo: "folha incompleta ou sem linha, mais recentes".
+    Só que o caminho real de quem opera é o contrário · a pessoa toca em "45
+    jogos sem faltas" no diagnóstico, cai na lista já filtrada, e ali o único
+    conserto era clicar Rodar em cada uma das 45. O botão de lote existia ao
+    lado e resolvia OUTRO recorte, o que é pior que não ter botão.
+
+    Com `filtro`, o alvo do lote é exatamente o predicado que a tela está
+    mostrando. A perna de "partida sem linha nenhuma" sai nesse caso: partida
+    sem linha não tem coluna pra estar nula, então ela não pertence ao recorte
+    de família nenhuma · deixá-la entrar faria o lote gastar requisição fora do
+    que foi pedido. A exceção é `folha_incompleta`, que é o recorte antigo e
+    continua carregando as duas pernas.
     """
+    onde = _onde_do_filtro(filtro)
     conn = get_connection()
     cur = conn.cursor()
     try:
+        if onde and filtro != "folha_incompleta":
+            cur.execute(f"""
+                SELECT fixture_id, match_date
+                  FROM match_statistics
+                 WHERE status IN ('FT','AET','PEN')
+                   AND {onde}
+                   AND match_date >= (CURRENT_DATE - (%s || ' months')::interval)
+                 ORDER BY match_date DESC
+                 LIMIT %s
+            """, (meses, limite))
+            return [r["fixture_id"] for r in cur.fetchall()]
+
         cur.execute(f"""
             SELECT fixture_id, match_date FROM (
                 SELECT ms.fixture_id, ms.match_date
@@ -3777,6 +3842,7 @@ def _recoletar_em_lote(ids: list) -> None:
 async def recoletar_em_lote(
     limite: int = 20,
     meses: int = 3,
+    filtro: str | None = None,
     current_user: dict = Depends(require_admin),
 ):
     """Roda a coleta em cima de todas as partidas furadas da janela, de uma vez.
@@ -3788,6 +3854,10 @@ async def recoletar_em_lote(
     A janela padrão é curta (3 meses) pelo mesmo motivo que a varredura
     automática só olha 3 dias: folha que não apareceu há muito tempo quase
     nunca aparece, e cada tentativa custa cota.
+
+    `filtro` aceita as MESMAS chaves de /dados/partidas · é o que faz o botão
+    de lote agir sobre a lista que a pessoa está vendo, em vez de sobre um
+    recorte fixo que ela não escolheu. Ver `_ids_para_recoletar`.
     """
     limite = min(max(1, limite), _RECOLETA_TETO)
     meses = min(max(1, meses), 24)
@@ -3796,7 +3866,7 @@ async def recoletar_em_lote(
         if _recoleta["rodando"]:
             raise HTTPException(409, "Já há uma recoleta em andamento.")
 
-    ids = await run_in_threadpool(_ids_para_recoletar, limite, meses)
+    ids = await run_in_threadpool(_ids_para_recoletar, limite, meses, filtro)
     if not ids:
         return {"ok": True, "total": 0,
                 "mensagem": "Nenhuma partida furada na janela · nada a recoletar."}

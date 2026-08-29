@@ -448,6 +448,8 @@ def sync() -> dict:
     inserted = updated = skipped = 0
 
     for leg in legs:
+        # Um savepoint por perna · ver o `except` no fim do laco.
+        plain_cur.execute("SAVEPOINT perna")
         try:
             home_id, away_id = leg.get("home_team_id"), leg.get("away_team_id")
             league_id = None
@@ -537,8 +539,27 @@ def sync() -> dict:
             skipped += 1
             print(f"[PICKS_LEDGER] Aviso: pulando perna {leg.get('source_table')}#{leg.get('source_id')}"
                   f"/{leg.get('leg_number')}: {e}")
-            conn.rollback()
+            # ROLLBACK ATE O SAVEPOINT, nunca a transacao inteira (2026-08-29).
+            #
+            # Aqui era `conn.rollback()`, e isso descartava TUDO que tinha dado
+            # certo desde o ultimo commit -- e so' existe um commit, no fim.
+            # Uma perna ruim no meio da lista apagava todas as anteriores.
+            #
+            # Nao era hipotetico: `picks_live` gravava `id` NULO (ver
+            # live_pipeline._reparar_id_de_picks_live) e falhava 28 vezes no
+            # meio da fila. Como a ordem de `fetch_all_legs` e' vip -> free ->
+            # faltas -> goleiros -> LIVE -> player_stats -> boost -> multipla ->
+            # alavancagem, todo o pre-jogo era desfeito e so' o que vinha depois
+            # do ultimo erro sobrevivia. O resumo seguia anunciando "476
+            # atualizadas" -- as linhas de VIP no ledger de PROD estavam
+            # congeladas em 25/08, com o resultado errado de chute no alvo
+            # dentro delas, enquanto o motor ja' tinha corrigido a origem.
+            #
+            # O savepoint isola a perna: a falha dela nao alcanca as outras.
+            plain_cur.execute("ROLLBACK TO SAVEPOINT perna")
             continue
+        finally:
+            plain_cur.execute("RELEASE SAVEPOINT perna")
 
     conn.commit()
     dict_cur.close()
