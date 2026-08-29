@@ -181,6 +181,13 @@ def registrar_selecao(pipeline: str, fixtures, pick_id: int | None = None) -> No
         run = _audit.run_atual()
         if run is None or run.pipeline != pipeline:
             return
+        # Lista vazia com pick_id vazio = nao salvou nada. Chamar assim mesmo e'
+        # o caso normal do VIP, que avisa uma vez depois do laco -- inclusive
+        # nos dias em que o laco nao salvou pick nenhum. O `or 1` que estava
+        # aqui transformava esse dia em "1 selecionado" e a aba de Auditoria
+        # contradizia a propria saida do motor ("0 picks salvos").
+        if not fixtures and pick_id is None:
+            return
         run.selecionou(len(fixtures) or 1)
         if not run.run_id or not fixtures or not run.tabela_picks:
             return
