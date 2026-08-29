@@ -527,7 +527,7 @@ export default function Profile() {
                   </button>
                 </div>
                 <button type="button" onClick={() => navigate('/forgot-password')}
-                  className="text-xs text-ink-4 hover:text-ink-2 transition-colors underline">
+                  className="w-full text-xs font-semibold text-ink-3 hover:text-ink-1 border border-line hover:border-line-strong rounded-md py-2.5 min-h-[36px] transition-colors">
                   Esqueceu a senha atual? Redefinir por e-mail
                 </button>
               </div>
@@ -561,7 +561,7 @@ export default function Profile() {
                   </button>
                 </div>
                 <button type="button" onClick={() => setPwStep('form')}
-                  className="text-xs text-ink-4 hover:text-ink-2 transition-colors underline">
+                  className="text-xs font-semibold text-ink-3 hover:text-ink-1 border border-line hover:border-line-strong rounded-md px-4 py-2 min-h-[36px] transition-colors">
                   Voltar
                 </button>
               </div>

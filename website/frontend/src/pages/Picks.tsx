@@ -2248,6 +2248,15 @@ export default function Picks() {
   const [selectedOffset, setSelectedOffset] = useState(0)
   const [leagueFilter, setLeagueFilter] = useState<string>('')
   const [vipResultFilter, setVipResultFilter] = useState<string>('')
+  /* Busca e ordem da grade VIP.
+   *
+   * A grade só tinha dois recortes por lista fechada (liga e resultado), e num
+   * dia de 18 picks encontrar "o do Palmeiras" era rolar a tela. Busca por
+   * texto é o atalho que o painel de filtro não dá · e a ordem existe porque
+   * "mostre primeiro o de maior probabilidade" é a pergunta que o assinante
+   * faz depois de já ter visto a lista uma vez. Ver components/FilterPanel. */
+  const [vipBusca, setVipBusca] = useState<string>('')
+  const [vipOrdem, setVipOrdem] = useState<string>('rank')
 
   function getBrasiliaDate(offset: number): Date {
     const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
@@ -2874,16 +2883,10 @@ export default function Picks() {
                       />
                     ))}
                   </div>
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    <button onClick={() => setTab('vip')}
-                      className="flex-1 min-w-[10rem] text-center text-xs text-purple-400 hover:text-purple-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong">
-                      Ver faltas no VIP
-                    </button>
-                    <button onClick={() => setTab('jogadores')}
-                      className="flex-1 min-w-[10rem] text-center text-xs text-amber-400 hover:text-amber-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong">
-                      Ver picks de jogador
-                    </button>
-                  </div>
+                  {/* Os dois atalhos ("Ver faltas no VIP" / "Ver picks de
+                      jogador") saíram em 28/08: os cards que eles prometiam
+                      já estão nesta mesma grade, então o clique levava a outra
+                      aba pra ver o que a pessoa acabou de ler. */}
                 </section>
               )}
 
@@ -2956,9 +2959,34 @@ export default function Picks() {
                 const vips = today?.vip ?? []
                 const leagues = Array.from(new Set(vips.map((s: any) => s.league_name).filter(Boolean))) as string[]
                 const byLeague = leagueFilter ? vips.filter((s: any) => s.league_name === leagueFilter) : vips
-                const filteredVips = vipResultFilter
+                const byResult = vipResultFilter
                   ? byLeague.filter((s: any) => vipResultFilter === 'pending' ? !s.result : s.result === vipResultFilter)
                   : byLeague
+                /* Busca casa em time, liga e mercado · são os três jeitos de a
+                   pessoa lembrar de um pick ("o do Palmeiras", "o da Serie B",
+                   "o de escanteios"). Sem acento e sem caixa, porque ninguém
+                   digita "Brasileirão" com til numa caixa de busca. */
+                const alvo = vipBusca.trim().toLowerCase()
+                  .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                const byBusca = alvo
+                  ? byResult.filter((s: any) => [
+                      s.home_team_name, s.away_team_name, s.league_name,
+                      translateMarket(s.market), translateLine(s.line),
+                    ].filter(Boolean).join(' ').toLowerCase()
+                      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                      .includes(alvo))
+                  : byResult
+                /* `rank` é a ordem que o motor entregou · é o default porque é
+                   a única que carrega julgamento do motor. As outras três
+                   reordenam a MESMA lista, nunca filtram. */
+                const filteredVips = vipOrdem === 'rank' ? byBusca : [...byBusca].sort((a: any, b: any) => {
+                  if (vipOrdem === 'prob') return (Number(b.probability ?? b.confidence ?? 0)) - (Number(a.probability ?? a.confidence ?? 0))
+                  if (vipOrdem === 'odd') return Number(b.odd ?? 0) - Number(a.odd ?? 0)
+                  // horário: sem match_datetime o pick vai pro fim, não pro topo.
+                  const ha = a.match_datetime ? String(a.match_datetime).slice(11, 16) : '99:99'
+                  const hb = b.match_datetime ? String(b.match_datetime).slice(11, 16) : '99:99'
+                  return ha.localeCompare(hb)
+                })
                 const filterGroups: FilterGroup[] = [
                   ...(leagues.length > 1 ? [{
                     key: 'league', label: 'Liga',
@@ -2973,7 +3001,26 @@ export default function Picks() {
                 ]
                 return (
                   <>
-                    {filterGroups.length > 0 && <FilterPanel accent="yellow" groups={filterGroups} resultado={filteredVips.length} />}
+                    {vips.length > 1 && (
+                      <FilterPanel
+                        accent="yellow"
+                        groups={filterGroups}
+                        resultado={filteredVips.length}
+                        busca={{
+                          value: vipBusca, onChange: setVipBusca,
+                          placeholder: 'Buscar time, liga ou mercado',
+                        }}
+                        ordem={{
+                          value: vipOrdem, onChange: setVipOrdem,
+                          options: [
+                            { value: 'rank', label: 'Ordem do motor' },
+                            { value: 'prob', label: 'Maior probabilidade' },
+                            { value: 'odd', label: 'Maior odd' },
+                            { value: 'hora', label: 'Horário do jogo' },
+                          ],
+                        }}
+                      />
+                    )}
                     {filteredVips.length > 0 ? (
                       <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                         {filteredVips.map((s: any) => (
@@ -2982,7 +3029,7 @@ export default function Picks() {
                       </motion.div>
                     ) : (
                       <SecaoVazia texto={
-                        leagueFilter || vipResultFilter
+                        leagueFilter || vipResultFilter || vipBusca.trim()
                           ? 'Nenhum pick VIP com esses filtros. Limpe o filtro para ver o dia inteiro.'
                           : 'Sem pick VIP hoje. Não há horário fixo de publicação: eles saem quando o motor encontra jogo que passa nos cortes.'
                       } />

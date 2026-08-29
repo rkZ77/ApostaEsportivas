@@ -24,8 +24,17 @@ const VARIANT = {
   danger: 'border border-red-500/40 hover:border-red-500/70 hover:bg-red-500/10 text-red-400 font-semibold',
   /** VIP. Mesma convenção de cor do badge-vip. */
   vip: 'bg-yellow-400/10 border border-yellow-400/30 hover:bg-yellow-400/20 text-yellow-400 font-bold',
-  /** Parece link, comporta como botão. */
-  link: 'text-ink-2 hover:text-ink-1 font-medium underline-offset-4 hover:underline',
+  /**
+   * Ação de baixa ênfase · SEM sublinhado.
+   *
+   * Chamava-se "parece link, comporta como botão", e o sublinhado no hover
+   * cumpria essa promessa cedo demais: numa mesma tela conviviam ação de
+   * verdade sublinhada e texto de apoio, e o usuário não tinha como saber
+   * onde clicar sem passar o mouse · o que no celular, que é o grosso do
+   * público, nunca acontece. Agora o afordance vem do fundo que acende, como
+   * nos outros quatro variantes.
+   */
+  link: 'text-ink-2 hover:text-ink-1 hover:bg-surface-2 font-semibold',
 } as const
 
 /*

@@ -122,13 +122,18 @@ function SetupModal({ current, locked, onSave, onClose, onWithdraw }: {
               placeholder="Ex: 5"
             />
             {startNum > 0 && (
-              <p className="text-ink-4 text-xs mt-1">
-                Sugerido: <button type="button" onClick={() => setUnitValue(suggested)}
-                  className="text-accent-ink underline hover:text-green-400">
-                  {fmtBRL(parseFloat(suggested) || 0)}
+              /* O valor sugerido era um número sublinhado no meio da frase ·
+                 parecia link e preenchia campo. Virou botão de verdade, com
+                 alvo de toque, e a frase virou legenda. */
+              <div className="mt-1.5">
+                <button
+                  type="button" onClick={() => setUnitValue(suggested)}
+                  className="text-xs font-bold text-accent-ink bg-accent/10 border border-accent/30 hover:bg-accent/20 rounded-md px-3 py-1.5 min-h-[32px] transition-colors"
+                >
+                  Usar {fmtBRL(parseFloat(suggested) || 0)}
                 </button>
-                {' '}(1% da banca, gestão conservadora)
-              </p>
+                <p className="text-ink-4 text-[11px] mt-1">Sugerido · 1% da banca, gestão conservadora</p>
+              </div>
             )}
 
             {/* Indicador de saúde da banca */}
@@ -139,10 +144,12 @@ function SetupModal({ current, locked, onSave, onClose, onWithdraw }: {
                   Com R${fmtBRL(uvNum)} por unidade sua banca teria apenas <strong>{Math.floor(totalUnits)} unidades</strong>.
                   Menos de 20 unidades é alto risco de ruína total.
                 </p>
-                <p className="text-red-400 mt-1 font-semibold">
-                  Máximo permitido: <button type="button" onClick={() => setUnitValue(maxUnitSafe ?? '')}
-                    className="underline hover:text-red-300">{fmtBRL(parseFloat(maxUnitSafe ?? '0'))}</button> por unidade
-                </p>
+                <button
+                  type="button" onClick={() => setUnitValue(maxUnitSafe ?? '')}
+                  className="mt-2 text-xs font-bold text-red-300 bg-red-500/10 border border-red-500/40 hover:bg-red-500/20 rounded-md px-3 py-1.5 min-h-[32px] transition-colors"
+                >
+                  Usar o máximo permitido · {fmtBRL(parseFloat(maxUnitSafe ?? '0'))} por unidade
+                </button>
               </div>
             )}
             {bancaStatus === 'warning' && totalUnits !== null && unitPct !== null && (
@@ -152,10 +159,12 @@ function SetupModal({ current, locked, onSave, onClose, onWithdraw }: {
                   Sua banca teria <strong>{Math.floor(totalUnits)} unidades</strong> ({unitPct.toFixed(1)}% por unidade).
                   Recomendado: mínimo 50 unidades (≤ 2% por unidade).
                 </p>
-                <p className="text-yellow-400 mt-1 font-semibold">
-                  Ideal: <button type="button" onClick={() => setUnitValue(suggested)}
-                    className="underline hover:text-yellow-300">{fmtBRL(parseFloat(suggested) || 0)}</button> por unidade
-                </p>
+                <button
+                  type="button" onClick={() => setUnitValue(suggested)}
+                  className="mt-2 text-xs font-bold text-yellow-300 bg-yellow-500/10 border border-yellow-500/40 hover:bg-yellow-500/20 rounded-md px-3 py-1.5 min-h-[32px] transition-colors"
+                >
+                  Usar o ideal · {fmtBRL(parseFloat(suggested) || 0)} por unidade
+                </button>
               </div>
             )}
             {bancaStatus === 'ok' && totalUnits !== null && (

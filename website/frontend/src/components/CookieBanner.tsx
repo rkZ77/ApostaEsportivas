@@ -28,11 +28,17 @@ export default function CookieBanner() {
           <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-6">
             <p className="text-xs text-ink-2 flex-1 leading-relaxed">
               Usamos cookies essenciais para autenticação e funcionamento do site.
-              Ao continuar, você concorda com nossa{' '}
-              <a href="/privacidade" className="underline text-ink-2 hover:text-ink-1 transition-colors">
-                Política de Privacidade
-              </a>.
+              Ao continuar, você concorda com nossa Política de Privacidade.
             </p>
+            {/* A política saiu de dentro da frase e virou botão ao lado do
+                "Entendi": ler antes de aceitar é uma escolha, não uma nota de
+                rodapé sublinhada. */}
+            <a
+              href="/privacidade"
+              className="shrink-0 inline-flex items-center justify-center text-xs font-bold text-ink-2 hover:text-ink-1 border border-line-strong hover:border-ink-4 px-4 py-2 rounded-lg min-h-[36px] transition-colors"
+            >
+              Ler a política
+            </a>
             <motion.button
               whileTap={{ scale: 0.96 }}
               onClick={accept}

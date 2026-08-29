@@ -24,6 +24,15 @@ export interface FilterSort {
   options: FilterOption[]
   value: string
   onChange: (v: string) => void
+  /**
+   * Ordem "natural" da lista · default: primeira opção.
+   *
+   * Existe pelo mesmo motivo que `defaultValue` nos grupos: com o painel
+   * fechado, uma lista reordenada ficava indistinguível de uma lista normal.
+   * Quem escolheu "maior odd" e voltou dez minutos depois via os picks fora da
+   * ordem do motor sem nada na tela explicando por quê.
+   */
+  defaultValue?: string
 }
 export interface FilterGroup {
   key: string
@@ -75,14 +84,28 @@ export default function FilterPanel({
     .filter(g => g.value !== neutral(g))
     .map(g => ({ key: g.key, label: g.options.find(o => o.value === g.value)?.label ?? g.value, onClear: () => g.onChange(neutral(g)) }))
 
+  const ordemNeutra = ordem ? (ordem.defaultValue ?? ordem.options[0]?.value ?? '') : ''
+  const ordemAtiva = ordem && ordem.value !== ordemNeutra
+    ? [{
+        key: '__ordem',
+        label: ordem.options.find(o => o.value === ordem.value)?.label ?? ordem.value,
+        onClear: () => ordem.onChange(ordemNeutra),
+      }]
+    : []
+
   // A busca entra no rastro de chips: digitada e painel fechado, ela some da
   // vista e o usuario fica sem entender por que a lista esta curta.
-  const chips = busca?.value.trim()
-    ? [{ key: '__busca', label: `"${busca.value.trim()}"`, onClear: () => busca.onChange('') }, ...activeChips]
-    : activeChips
+  const chips = [
+    ...(busca?.value.trim()
+      ? [{ key: '__busca', label: `"${busca.value.trim()}"`, onClear: () => busca.onChange('') }]
+      : []),
+    ...activeChips,
+    ...ordemAtiva,
+  ]
 
   const clearAll = () => {
     groups.forEach(g => { if (g.value !== neutral(g)) g.onChange(neutral(g)) })
+    if (ordem && ordem.value !== ordemNeutra) ordem.onChange(ordemNeutra)
     busca?.onChange('')
   }
 
@@ -131,6 +154,18 @@ export default function FilterPanel({
             </button>
           </motion.span>
         ))}
+
+        {/* Limpar tudo SEM abrir o painel. Com três chips na tela, voltar à
+            lista inteira custava abrir o painel e caçar o "Limpar filtros" lá
+            dentro · ou tirar chip por chip. */}
+        {!open && chips.length > 1 && (
+          <button
+            onClick={clearAll}
+            className="text-[11px] font-semibold text-ink-3 hover:text-ink-1 px-2.5 py-1.5 rounded-lg border border-line-strong hover:border-ink-4 transition-colors"
+          >
+            Limpar tudo
+          </button>
+        )}
       </div>
 
       <AnimatePresence initial={false}>

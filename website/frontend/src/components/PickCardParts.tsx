@@ -204,11 +204,17 @@ export function PickProbability({
  * lado, os botões ficavam em quatro alturas diferentes, e o alinhamento passava
  * a depender do tamanho do nome do time e da análise.
  */
-export function PickReasoning({ text, className }: { text?: string | null; className?: string }) {
+export function PickReasoning({ text, label = 'Fato', className }: {
+  text?: string | null
+  /** Rótulo do trecho. O card ao vivo diz "Leitura": ali o motor não relata um
+   *  fato do histórico, e sim o que está acontecendo em campo agora. */
+  label?: string
+  className?: string
+}) {
   if (!text) return null
   return (
     <div className={cn('mx-5 mb-3 px-3 py-2 bg-surface-1 border border-line rounded-md flex-1', className)}>
-      <span className="label-micro">Fato · </span>
+      <span className="label-micro">{label} · </span>
       <span className="text-[11px] text-ink-2 leading-relaxed line-clamp-3">{text}</span>
     </div>
   )

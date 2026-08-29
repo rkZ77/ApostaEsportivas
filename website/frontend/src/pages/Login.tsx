@@ -283,12 +283,15 @@ export default function Login() {
               <p className="text-ink-2">
                 Um acesso foi feito de <strong className="text-ink-1">{kickedDevice}</strong> e sua sessão foi encerrada.
               </p>
-              <p className="text-ink-2 mt-2">
-                Se não foi você,{' '}
-                <Link to="/forgot-password" className="text-yellow-400 underline hover:text-yellow-300">
-                  redefina sua senha
-                </Link>.
-              </p>
+              <p className="text-ink-2 mt-2">Se não foi você, redefina sua senha agora.</p>
+              {/* Era um link sublinhado no fim da frase, do tamanho de duas
+                  palavras · a ação mais urgente da tela com o menor alvo dela. */}
+              <Link
+                to="/forgot-password"
+                className="inline-flex items-center justify-center mt-2 text-xs font-bold text-yellow-300 bg-yellow-500/10 border border-yellow-500/40 hover:bg-yellow-500/20 rounded-md px-3 py-2 min-h-[36px] transition-colors"
+              >
+                Redefinir senha
+              </Link>
             </div>
           )}
 
@@ -509,23 +512,27 @@ export default function Login() {
             </button>
           </form>
 
-          <div className="mt-5 text-center space-y-3">
+          {/* As duas saídas da tela eram frases com uma palavra clicável no
+              fim ("Clique aqui", "Criar conta grátis"). No celular o alvo tinha
+              a altura de uma linha de texto, e a mais usada das duas · criar
+              conta · ficava indistinguível da legenda que a antecede. Viraram
+              botões de largura cheia, na hierarquia certa: a secundária com
+              borda, a primária com fundo. */}
+          <div className="mt-5 space-y-2">
+            <button
+              onClick={switchMode}
+              className="w-full text-sm font-bold text-accent-ink bg-accent/10 border border-accent/30 hover:bg-accent/20 rounded-lg py-3 min-h-[44px] transition-colors"
+            >
+              {mode === 'login' ? 'Criar conta grátis' : 'Entrar na minha conta'}
+            </button>
             {mode === 'login' && (
-              <Link to="/forgot-password" className="block text-ink-3 text-sm hover:text-ink-2 transition-colors">
-                Esqueceu sua senha? <span className="text-accent-ink font-semibold">Clique aqui</span>
+              <Link
+                to="/forgot-password"
+                className="flex items-center justify-center w-full text-sm font-semibold text-ink-3 hover:text-ink-1 border border-line hover:border-line-strong rounded-lg py-3 min-h-[44px] transition-colors"
+              >
+                Esqueci minha senha
               </Link>
             )}
-            <div>
-              <span className="text-ink-3 text-sm">
-                {mode === 'login' ? 'Não tem conta? ' : 'Já tem conta? '}
-              </span>
-              <button
-                onClick={switchMode}
-                className="text-accent-ink text-sm font-semibold hover:text-green-400 transition-colors"
-              >
-                {mode === 'login' ? 'Criar conta grátis' : 'Entrar'}
-              </button>
-            </div>
           </div>
 
         </div>

@@ -39,14 +39,17 @@
  */
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Radio, Timer, CheckCircle2, ChevronDown, PowerOff, Eye,
+import { Radio, Timer, CheckCircle2, Clock, PowerOff, Eye,
          Goal, Flag, Target, Crosshair } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import ApostaModal from './ApostaModal'
-import { Badge, Button, EmptyState, ErrorState, LiveDot, ResultBadge, Skeleton,
-         SkeletonPickGrid, StatTile } from './ui'
-import { PickProbability } from './PickCardParts'
+import { Badge, Button, EmptyState, ErrorState, LiveDot, PickTypeBadge, ResultBadge,
+         Skeleton, SkeletonPickGrid } from './ui'
+import { PickExplainButton, PickProbability, PickReasoning } from './PickCardParts'
+import InfoTip from './InfoTip'
+import LiveAnalysisModal from './LiveAnalysisModal'
+import { explainMarket, translateLine, translateMarket } from '../utils/marketTranslate'
 import { LeagueLogo } from './TeamLogo'
 import { calcVipStake } from '../utils/stakeUtils'
 
@@ -330,6 +333,10 @@ const STATUS_LABEL: Record<string, string> = {
 interface LivePick {
   id: number
   fixture_id: number
+  /* O feed já mandava o id da liga e a interface não o declarava · sem ele o
+     cabeçalho do card mostrava o nome da competição sem o escudo, que é a
+     única peça do cabeçalho VIP que faltava aqui. */
+  league_id?: number
   league_name?: string
   home_team_name: string
   away_team_name: string
@@ -450,57 +457,10 @@ function BarraDaLinha({ atual, linha, direcao, rotulo }: {
   )
 }
 
-const RITMO_LABEL: Record<string, string> = {
-  BAIXO: 'baixo', MEDIO: 'médio', ALTO: 'alto', MUITO_ALTO: 'muito alto',
-}
-const TENDENCIA_LABEL: Record<string, string> = {
-  ACELERANDO: 'acelerando', DESACELERANDO: 'desacelerando',
-  ESTAVEL: 'estável', INDEFINIDA: 'sem leitura',
-}
-const PRESSAO_LABEL: Record<string, string> = {
-  BAIXA: 'baixa', MEDIA: 'média', ALTA: 'alta', MUITO_ALTA: 'muito alta',
-}
-
-/* Nível da pressão a partir do score. Os cortes são os mesmos de
-   pressure_model.py (escala centrada em 0.5 = time médio) · duplicar o número
-   aqui é aceitável porque é só rótulo de exibição, mas se o corte mudar lá,
-   muda aqui. */
-function nivelPressao(score?: number | null): string | null {
-  if (score == null) return null
-  if (score < 0.35) return 'BAIXA'
-  if (score < 0.50) return 'MEDIA'
-  if (score < 0.68) return 'ALTA'
-  return 'MUITO_ALTA'
-}
-
-/* Barra de pressão dos dois lados. Mostra domínio, que é a pergunta que o
-   número responde: quem está empurrando o jogo. */
-function BarraPressao({ casa, fora, nomeCasa, nomeFora }: {
-  casa: number; fora: number; nomeCasa: string; nomeFora: string
-}) {
-  const soma = casa + fora
-  const fatiaCasa = soma > 0 ? (casa / soma) * 100 : 50
-  return (
-    <div className="mt-3">
-      <div className="flex items-baseline justify-between text-[10px] text-ink-4 mb-1.5">
-        <span>Pressão ofensiva</span>
-        <span className="tabular-nums">
-          {casa.toFixed(2)} {PRESSAO_LABEL[nivelPressao(casa) ?? ''] ?? ''}
-          {' · '}
-          {fora.toFixed(2)} {PRESSAO_LABEL[nivelPressao(fora) ?? ''] ?? ''}
-        </span>
-      </div>
-      <div className="flex h-1.5 rounded-full overflow-hidden bg-surface-3/60">
-        <div className="bg-accent/70 transition-all duration-700" style={{ width: `${fatiaCasa}%` }} />
-        <div className="bg-ink-4/40 transition-all duration-700" style={{ width: `${100 - fatiaCasa}%` }} />
-      </div>
-      <div className="flex items-center justify-between text-[10px] text-ink-4 mt-1">
-        <span className="truncate max-w-[45%]">{nomeCasa}</span>
-        <span className="truncate max-w-[45%] text-right">{nomeFora}</span>
-      </div>
-    </div>
-  )
-}
+/* Ritmo, tendência, pressão e o nível de cada um saíram daqui em 28/08.
+   Eles descrevem o INSTANTE DA CRIAÇÃO do pick, e no card viravam uma faixa de
+   micro-rótulos de 10px embaixo de tudo · agora moram no "Entenda esta
+   análise" (LiveAnalysisModal), ao lado do snapshot que explicam. */
 
 function Contagem({ segundos }: { segundos: number | null }) {
   const [restante, setRestante] = useState(segundos ?? 0)
@@ -525,12 +485,37 @@ function Contagem({ segundos }: { segundos: number | null }) {
   )
 }
 
+/*
+ * Card de pick AO VIVO · mesma anatomia do card VIP (SuggestionCard).
+ *
+ * Até 28/08 este card era outro produto visual: cabeçalho próprio, dois
+ * ladrilhos de EV/confiança que nenhum outro card tem, oito micro-rótulos de
+ * 11px no rodapé (criado aos, ritmo, sinais, projeção, dado) e a prosa do
+ * motor dentro de um `<details>` nativo chamado "Por que este pick". Lado a
+ * lado com um pick VIP na mesma página, parecia vir de outro site.
+ *
+ * Agora segue a ordem canônica das peças em PickCardParts:
+ *   cabeçalho -> faixa Odd/Aposta/Lucro -> times e mercado -> probabilidade
+ *   -> leitura curta -> "Entenda esta análise" -> rodapé de ação.
+ *
+ * O QUE CONTINUA DIFERENTE, E POR QUÊ: a barra da linha (onde o jogo está em
+ * relação ao número apostado) fica no corpo, porque ao vivo ela é a leitura
+ * que decide entrar ou não · e a contagem regressiva da odd fica no rodapé,
+ * colada na ação, porque é o prazo dela.
+ *
+ * O que saiu do corpo não sumiu: ritmo, pressão, sinais, projeção, posse e o
+ * snapshot da criação foram para o "Entenda esta análise" (LiveAnalysisModal),
+ * que é a versão ao vivo do modal do pré-jogo · lá eles ganham rótulo inteiro
+ * e a comparação "antes e agora" que no rodapé do card não cabia.
+ */
 const CardLive = forwardRef<HTMLDivElement, {
   pick: LivePick
   onSeguir: (p: LivePick) => void
   /** Banca do usuário · sem ela o card mostra unidades e não reais. */
   banca?: { bankroll_current: number; unit_value: number } | null
 }>(function CardLive({ pick, onSeguir, banca }, ref) {
+  const [verAnalise, setVerAnalise] = useState(false)
+
   /* Encerrado é só o que tem resultado. `EXPIRED` sem resultado quer dizer que
      a JANELA DA ODD fechou sem ninguém seguir · o jogo continua e o pick
      continua sendo acompanhado (ver o cabeçalho deste arquivo). */
@@ -564,36 +549,46 @@ const CardLive = forwardRef<HTMLDivElement, {
   const linhaNum = parseFloat(pick.line.replace(/[^\d.]/g, ''))
   const temBarra = pick.current_val != null && !isNaN(linhaNum)
   const podeSeguir = !pick.is_followed && !encerrado && !oddVencida
+  const temAposta = !encerrado && aposta.unidades > 0
+  const lucroPot = (Number(oddEfetiva) - 1) * aposta.unidades
 
   return (
+  <>
     <motion.div
       ref={ref}
       layout
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`pick-card p-3.5 ${PICK_TYPE_BORDER.live} ${encerrado ? 'opacity-75' : ''}`}
+      className={`pick-card ${PICK_TYPE_BORDER.live} ${encerrado ? 'opacity-75' : ''}`}
     >
-      {/* cabeçalho: liga, jogo e minuto */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          {pick.league_name && (
-            <p className="text-[11px] text-ink-4 truncate mb-1">{pick.league_name}</p>
+      {/* Cabeçalho · tipo, liga e minuto à esquerda; estado à direita. Mesma
+          divisão do card VIP, e o minuto ocupa ali o lugar do horário do jogo:
+          é o "quando" deste pick. */}
+      <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-3 border-b border-line/60">
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
+          <PickTypeBadge type="live" />
+          {(pick.league_id || pick.league_name) && (
+            <div className="flex items-center gap-1 min-w-0">
+              <LeagueLogo id={pick.league_id} name={pick.league_name} />
+              {pick.league_name && (
+                <span className="text-[10px] text-ink-4 truncate max-w-[90px]">{pick.league_name}</span>
+              )}
+            </div>
           )}
-          <div className="flex items-center gap-2 text-sm font-bold text-ink-1">
-            <TeamLogo id={pick.home_team_id} name={pick.home_team_name} />
-            <span className="truncate">{pick.home_team_name}</span>
-            <span className="text-ink-3 font-black tabular-nums px-0.5">
-              {pick.home_goals ?? '-'}<span className="text-ink-4">x</span>{pick.away_goals ?? '-'}
+          {pick.elapsed != null && (
+            <span className="flex items-center gap-1 text-[10px] text-ink-4 shrink-0 tabular-nums">
+              <Clock className="w-3 h-3" />
+              {pick.elapsed}&#39;
             </span>
-            <span className="truncate">{pick.away_team_name}</span>
-            <TeamLogo id={pick.away_team_id} name={pick.away_team_name} />
-          </div>
+          )}
         </div>
         <div className="shrink-0">
-          {pick.is_live ? (
+          {encerrado ? (
+            <ResultBadge result={pick.result} />
+          ) : pick.is_live ? (
             <Badge tone="red" className="gap-1.5">
               <LiveDot tone="red" className="w-1.5 h-1.5" />
-              {pick.elapsed != null ? `${pick.elapsed}'` : STATUS_LABEL[pick.live_status] ?? pick.live_status}
+              {STATUS_LABEL[pick.live_status] ?? 'Ao vivo'}
             </Badge>
           ) : (
             <Badge tone="neutral">{STATUS_LABEL[pick.live_status] ?? pick.live_status}</Badge>
@@ -601,160 +596,118 @@ const CardLive = forwardRef<HTMLDivElement, {
         </div>
       </div>
 
-      {/* a aposta */}
-      <div className="flex items-end justify-between gap-3 mt-3 pt-3 border-t border-line">
-        <div className="min-w-0">
-          <p className="text-[10px] text-ink-4 uppercase tracking-wide font-bold">{pick.market}</p>
-          <p className="text-base font-black text-ink-1 truncate leading-tight">{pick.line}</p>
-          {(pick.user_bet_house || pick.bet_house) && (
-            <p className="text-[10px] text-ink-4 mt-0.5 truncate">
-              {pick.user_bet_house || pick.bet_house}
-            </p>
-          )}
-        </div>
-        <div className="text-right shrink-0">
-          <p className="text-[10px] text-ink-4 uppercase tracking-wide font-bold">Odd</p>
-          <p className="text-xl font-black text-accent-ink tabular-nums leading-tight">
+      {/* Faixa de números · Odd | Apostar | Lucro pot., exatamente as colunas
+          do card VIP. Antes a odd morava numa linha própria e a unidade em
+          outra faixa mais abaixo, então o mesmo dado aparecia em dois pesos
+          tipográficos diferentes conforme a aba. */}
+      <div className="font-mono flex items-stretch divide-x divide-line/60 border-b border-line/60">
+        <div className="flex-1 px-5 py-3 text-center">
+          <div className="text-[10px] text-ink-3 mb-0.5">Odd</div>
+          <div className="text-3xl font-black text-green-400 tabular-nums">
             {Number(oddEfetiva).toFixed(2)}
-          </p>
+          </div>
           {/* A odd que o usuário registrou pode divergir da do pick: ele segue
-              depois, e a linha se move ao vivo mais que em pré-jogo. Mostrar as
-              duas é o mesmo que o card VIP faz · e aqui importa mais. */}
+              depois, e a linha se move ao vivo mais que em pré-jogo. */}
           {pick.is_followed && Math.abs(Number(oddEfetiva) - Number(pick.odd)) > 0.001 && (
-            <p className="text-[9px] text-ink-4">pick: {Number(pick.odd).toFixed(2)}</p>
+            <div className="text-[9px] text-ink-4 mt-0.5">pick: {Number(pick.odd).toFixed(2)}</div>
+          )}
+          {(pick.user_bet_house || pick.bet_house) && (
+            <div className="text-[10px] text-ink-4 mt-0.5 truncate">
+              {pick.user_bet_house || pick.bet_house}
+            </div>
           )}
         </div>
+
+        {encerrado ? (
+          <div className="flex-1 px-4 py-3 text-center">
+            <div className="text-[10px] text-ink-3 mb-0.5">Resultado</div>
+            {pick.profit != null ? (
+              <>
+                <div className={`text-xl font-black tabular-nums ${
+                  Number(pick.profit) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {Number(pick.profit) >= 0 ? '+' : ''}{Number(pick.profit).toFixed(2)}u
+                </div>
+                {banca && (
+                  <div className="text-[11px] text-ink-4 tabular-nums">
+                    {Number(pick.profit) >= 0 ? '+' : '-'}R$
+                    {Math.abs(Number(pick.profit) * banca.unit_value).toFixed(0)}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="text-xl font-black text-ink-3">-</div>
+            )}
+          </div>
+        ) : temAposta ? (
+          <>
+            <div className="flex-1 px-4 py-3 text-center">
+              <div className="text-[10px] text-ink-3 mb-0.5">{pick.is_followed ? 'Apostado' : 'Apostar'}</div>
+              <div className="text-xl font-black text-green-400 tabular-nums">{aposta.unidades}u</div>
+              {banca && (
+                <div className="text-[11px] text-ink-4 tabular-nums">
+                  R${(aposta.unidades * banca.unit_value).toFixed(0)}
+                </div>
+              )}
+            </div>
+            <div className="flex-1 px-4 py-3 text-center">
+              <div className="text-[10px] text-ink-3 mb-0.5">Lucro pot.</div>
+              <div className="text-xl font-black text-ink-1 tabular-nums">+{lucroPot.toFixed(2)}u</div>
+              {banca && (
+                <div className="text-[11px] text-green-600 font-semibold tabular-nums">
+                  +R${(lucroPot * banca.unit_value).toFixed(0)}
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="flex-1 px-4 py-3 text-center">
+            <div className="text-[10px] text-ink-3 mb-0.5">EV</div>
+            <div className={`text-xl font-black tabular-nums ${
+              pick.ev >= 0 ? 'text-green-400' : 'text-ink-3'}`}>
+              {pick.ev >= 0 ? '+' : ''}{(pick.ev * 100).toFixed(1)}%
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Quanto apostar e quanto isso paga · faltava no card ao vivo e existia
-          em todos os outros. Sem os dois números o assinante tinha o pick e não
-          tinha a aposta: a unidade sugerida é o que traduz "78% e EV +9%" em
-          uma decisão. Ver PickCardParts, mesma anatomia dos cards pré-jogo. */}
-      {!encerrado && (aposta.unidades > 0) && (
-        <div className="flex divide-x divide-line/60 border-t border-line mt-3 pt-3">
-          <div className="flex-1 text-center">
-            <div className="text-[10px] text-ink-3 mb-0.5">{pick.is_followed ? 'Apostado' : 'Apostar'}</div>
-            <div className="text-lg font-black text-green-400 tabular-nums">{aposta.unidades}u</div>
-            {banca && (
-              <div className="text-[11px] text-ink-4 tabular-nums">
-                R${(aposta.unidades * banca.unit_value).toFixed(0)}
-              </div>
-            )}
-          </div>
-          <div className="flex-1 text-center">
-            <div className="text-[10px] text-ink-3 mb-0.5">Lucro pot.</div>
-            <div className="text-lg font-black text-ink-1 tabular-nums">
-              +{((Number(oddEfetiva) - 1) * aposta.unidades).toFixed(2)}u
-            </div>
-            {banca && (
-              <div className="text-[11px] text-green-600 font-semibold tabular-nums">
-                +R${((Number(oddEfetiva) - 1) * aposta.unidades * banca.unit_value).toFixed(0)}
-              </div>
-            )}
-          </div>
+      {/* Times, placar e mercado · o placar entra no lugar do "vs" porque ao
+          vivo ele é parte da identificação do jogo, não um detalhe. */}
+      <div className="px-5 py-3 space-y-2">
+        <div className="flex items-center gap-2">
+          <TeamLogo id={pick.home_team_id} name={pick.home_team_name} />
+          <span className="text-sm font-bold text-ink-1 truncate">{pick.home_team_name}</span>
+          <span className={`text-xs font-black tabular-nums shrink-0 px-1 ${
+            pick.is_live ? 'text-green-400' : 'text-ink-3'}`}>
+            {pick.home_goals ?? '-'}<span className="text-ink-4">x</span>{pick.away_goals ?? '-'}
+          </span>
+          <span className="text-sm font-bold text-ink-1 truncate">{pick.away_team_name}</span>
+          <TeamLogo id={pick.away_team_id} name={pick.away_team_name} />
+        </div>
+        <div className="flex items-center gap-2 text-xs text-ink-3">
+          <span className="font-semibold text-ink-2">{translateMarket(pick.market)}</span>
+          {pick.line && <><span>·</span><span>{translateLine(pick.line)}</span></>}
+          <InfoTip text={explainMarket(pick.market, pick.line)} />
+        </div>
+      </div>
+
+      <PickProbability confidence={pick.confidence} probability={pick.probability} />
+
+      {/* A barra da linha continua no corpo: ao vivo, "onde o jogo está em
+          relação ao número" é a leitura que decide entrar. */}
+      {temBarra && (
+        <div className="px-5 pb-3">
+          <BarraDaLinha atual={Number(pick.current_val)} linha={linhaNum} direcao={direcao}
+            rotulo={pick.stat_label?.toLowerCase()} />
         </div>
       )}
 
-      {temBarra && (
-        <BarraDaLinha atual={Number(pick.current_val)} linha={linhaNum} direcao={direcao}
-          rotulo={pick.stat_label?.toLowerCase()} />
-      )}
+      <PickReasoning text={pick.reasoning} label="Leitura" />
 
-      {/* Probabilidade pela MESMA peça dos cards pré-jogo · era um ladrilho
-          próprio aqui, com outra cor e outro corte, e a mesma porcentagem
-          aparecia diferente dependendo da aba. Ver PickCardParts. */}
-      <PickProbability
-        confidence={pick.confidence}
-        probability={pick.probability}
-        className="mt-3"
-      />
+      <PickExplainButton onClick={() => setVerAnalise(true)} />
 
-      <div className="grid grid-cols-2 gap-2 mt-2">
-        <StatTile className="p-2" label="EV" tone={pick.ev >= 0 ? 'green' : 'red'}
-          value={<span className="text-lg">{pick.ev >= 0 ? '+' : ''}{(pick.ev * 100).toFixed(1)}%</span>} />
-        <StatTile className="p-2" label="Confiança"
-          value={<span className="text-lg">{(pick.confidence * 100).toFixed(0)}%</span>} />
-      </div>
-
-      {/* Pressão e ritmo · é o que separa este card de um card pré-jogo.
-          Fica no corpo, não escondido no detalhe: é a leitura que justifica
-          o pick ter nascido neste minuto e não em outro. */}
-      {pick.pressure_home != null && pick.pressure_away != null && (
-        <BarraPressao
-          casa={Number(pick.pressure_home)} fora={Number(pick.pressure_away)}
-          nomeCasa={pick.home_team_name} nomeFora={pick.away_team_name}
-        />
-      )}
-
-      <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-[11px] text-ink-4">
-        <span>
-          Criado aos <span className="font-bold text-ink-2 tabular-nums">{pick.minute_at_creation}&#39;</span>
-          {' · '}{pick.home_goals_at_creation}x{pick.away_goals_at_creation}
-          {' · '}<span className="tabular-nums">{pick.observed_at_creation}</span>{' '}
-          {pick.stat_label?.toLowerCase() ?? 'no mercado'}
-        </span>
-        {pick.rhythm_level && (
-          <span>
-            Ritmo <span className="font-bold text-ink-2">
-              {RITMO_LABEL[pick.rhythm_level] ?? pick.rhythm_level.toLowerCase()}
-            </span>
-            {pick.rhythm_trend && pick.rhythm_trend !== 'INDEFINIDA' && (
-              <span className={
-                pick.rhythm_trend === 'ACELERANDO' ? ' text-green-400'
-                  : pick.rhythm_trend === 'DESACELERANDO' ? ' text-amber-400' : ''}>
-                {' '}{TENDENCIA_LABEL[pick.rhythm_trend] ?? pick.rhythm_trend.toLowerCase()}
-              </span>
-            )}
-          </span>
-        )}
-        {pick.live_signal_score != null && (
-          <span>
-            Sinais <span className="font-bold text-ink-2 tabular-nums">
-              {(Number(pick.live_signal_score) * 100).toFixed(0)}%
-            </span>
-          </span>
-        )}
-        {pick.projected_total != null && (
-          <span>
-            Projeção <span className="font-bold text-ink-2 tabular-nums">
-              {Number(pick.projected_total).toFixed(1)}
-            </span>
-          </span>
-        )}
-        {pick.data_freshness && pick.data_freshness !== 'FRESH' && (
-          <span className="text-amber-400">dado {pick.data_freshness.toLowerCase()}</span>
-        )}
-      </div>
-
-      {/* A prosa do motor repete os números acima · fica atrás de um toque, em
-          vez de dobrar a altura do card com o que já está na tela. */}
-      {pick.reasoning && (
-        <details className="group mt-3">
-          <summary className="flex items-center gap-1 text-[11px] font-bold text-ink-3 cursor-pointer
-                              list-none hover:text-ink-2 transition-colors">
-            <ChevronDown size={12} className="transition-transform group-open:rotate-180" />
-            Por que este pick
-          </summary>
-          <p className="mt-2 text-[11px] text-ink-3 leading-relaxed">{pick.reasoning}</p>
-        </details>
-      )}
-
-      {/* rodapé: validade e ação */}
-      <div className="flex items-center justify-between gap-3 mt-3 pt-3 border-t border-line">
-        {encerrado ? (
-          <span className="inline-flex items-center gap-2">
-            <ResultBadge result={pick.result} />
-            {pick.profit != null && (
-              <span className={`text-[11px] font-bold tabular-nums ${
-                Number(pick.profit) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {Number(pick.profit) >= 0 ? '+' : ''}{Number(pick.profit).toFixed(2)}u
-              </span>
-            )}
-          </span>
-        ) : (
-          <Contagem segundos={pick.segundos_de_validade} />
-        )}
-
+      {/* Rodapé · ação à esquerda e prazo da odd à direita, no lugar onde o
+          card VIP põe compartilhar. */}
+      <div className="flex items-center gap-2 px-5 py-3 border-t border-line/60 mt-auto">
         {pick.is_followed ? (
           <span className="inline-flex items-center gap-1 text-[11px] font-bold text-green-400">
             <CheckCircle2 size={12} />
@@ -764,8 +717,54 @@ const CardLive = forwardRef<HTMLDivElement, {
         ) : podeSeguir ? (
           <Button size="sm" onClick={() => onSeguir(pick)}>Apostar</Button>
         ) : null}
+
+        <div className="ml-auto shrink-0">
+          {!encerrado && <Contagem segundos={pick.segundos_de_validade} />}
+        </div>
       </div>
     </motion.div>
+
+    <AnimatePresence>
+    {verAnalise && (
+      <LiveAnalysisModal
+        onClose={() => setVerAnalise(false)}
+        data={{
+          market: pick.market,
+          line: pick.line,
+          odd: Number(pick.odd),
+          probability: pick.probability,
+          confidence: pick.confidence,
+          ev: pick.ev,
+          reasoning: pick.reasoning,
+          homeTeam: pick.home_team_name,
+          awayTeam: pick.away_team_name,
+          minuteAtCreation: pick.minute_at_creation,
+          homeGoalsAtCreation: pick.home_goals_at_creation,
+          awayGoalsAtCreation: pick.away_goals_at_creation,
+          observedAtCreation: pick.observed_at_creation,
+          cornersAtCreation: pick.corners_at_creation,
+          shotsAtCreation: pick.shots_at_creation,
+          shotsOnTargetAtCreation: pick.shots_on_target_at_creation,
+          possessionHomeAtCreation: pick.possession_home_at_creation,
+          remainingMinutes: pick.remaining_minutes,
+          pressureHome: pick.pressure_home,
+          pressureAway: pick.pressure_away,
+          rhythmLevel: pick.rhythm_level,
+          rhythmTrend: pick.rhythm_trend,
+          liveSignalScore: pick.live_signal_score,
+          projectedTotal: pick.projected_total,
+          dataFreshness: pick.data_freshness,
+          elapsed: pick.elapsed,
+          homeGoals: pick.home_goals,
+          awayGoals: pick.away_goals,
+          currentVal: pick.current_val,
+          statLabel: pick.stat_label,
+          isLive: pick.is_live,
+        }}
+      />
+    )}
+    </AnimatePresence>
+  </>
   )
 })
 
@@ -936,7 +935,11 @@ export default function LivePicksFeed({ isActive, banca }: {
               enquanto ele não voltar.
             </p>
           )}
-          <div className="space-y-4">
+          {/* Grade igual à do VIP · o card ao vivo virou o mesmo objeto, e uma
+              coluna só o esticava até 1400px numa noite com dois picks. Os
+              cortes são os mesmos de Picks.tsx, e param em 3: ao vivo o card é
+              mais alto (barra da linha) e uma quarta coluna aperta o placar. */}
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <AnimatePresence mode="popLayout">
               {emAndamento.map(p => (
                 <CardLive key={p.id} pick={p} onSeguir={setAlvo} banca={banca} />

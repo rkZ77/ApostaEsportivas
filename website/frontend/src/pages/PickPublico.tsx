@@ -65,7 +65,12 @@ export default function PickPublico() {
       <div className="min-h-screen bg-surface-0 flex flex-col items-center justify-center p-6 text-center">
         <p className="text-ink-2 text-lg font-semibold mb-2">Pick não encontrado</p>
         <p className="text-ink-4 text-sm mb-6">O link pode ter expirado ou sido removido.</p>
-        <Link to="/" className="text-green-400 text-sm underline">Ir para o Pick IA</Link>
+        <Link
+          to="/"
+          className="inline-flex items-center justify-center text-sm font-bold text-accent-ink bg-accent/10 border border-accent/30 hover:bg-accent/20 rounded-md px-5 py-2.5 min-h-[40px] transition-colors"
+        >
+          Ir para o Pick IA
+        </Link>
       </div>
     )
   }
