@@ -1318,6 +1318,44 @@ def test_liquidacao_alcanca_o_pick_expirado():
     assert "STATUS_ATIVO, STATUS_EXPIRADO" in fonte
 
 
+def test_pick_ao_vivo_sem_folha_do_provedor_e_anulado():
+    """A fila de liquidacao precisa ter SAIDA pra quem nunca vai resolver.
+
+    `_calc_result` devolve None quando o provedor nao publica a estatistica do
+    jogo, e isso esta certo -- sem o numero, inventar resultado e' pior que nao
+    ter. O que estava errado era o `continue` seco depois disso: o pick ficava
+    Pendente pra sempre.
+
+    E como a consulta pega 30 por passada, os irresolviveis viravam tampao:
+    trinta zumbis na frente da fila e NENHUM pick novo chegava a ser tentado.
+    Foi assim que a aba inteira apareceu "tudo pendente" em 29/08, com jogos
+    encerrados ha' horas e resultado obvio.
+
+    A rede e' a MESMA do pre-jogo (`_anulacao_sem_estatistica`): PUSH depois de
+    12h do apito e so' com causa nomeada. Se este assert cair, verifique se a
+    saida foi removida -- e nao apenas renomeada.
+    """
+    import inspect
+    import routers.live_picks as lp
+
+    fonte = inspect.getsource(lp.liquidar_pendentes)
+    assert "_anulacao_sem_estatistica" in fonte,         "liquidacao do Live sem rede de anulacao: pick sem folha trava a fila"
+
+
+def test_liquidacao_comeca_pelo_pick_mais_recente():
+    """A passada gasta cota de API, entao ela tem que gastar no jogo que acabou
+    agora -- o que a pessoa esta olhando -- e nao num pick de tres dias atras.
+
+    Com `ORDER BY created_at` (o mais velho primeiro) qualquer cauda parada na
+    frente adiava indefinidamente o que importa. Ver o teste acima: as duas
+    metades sao do mesmo defeito."""
+    import inspect
+    import routers.live_picks as lp
+
+    fonte = inspect.getsource(lp.liquidar_pendentes)
+    assert "ORDER BY created_at DESC" in fonte
+
+
 def test_vocabulario_de_resultado_e_o_do_settlement():
     """Nao inventar VOID nem CANCELLED: `status` fala de ciclo de vida e
     `result` fala a lingua do settlement."""

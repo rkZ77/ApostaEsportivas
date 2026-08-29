@@ -42,9 +42,9 @@ from settlement_bridge import settlement
 # convencao dentro daquele modulo, mas sao exatamente a fronteira que este
 # produto precisa -- a alternativa seria duplicar a leitura da API-Football.
 from routers.live import (  # noqa: F401
-    FT_STATUSES, LIVE_STATUSES, _calc_result, _fetch_fixture,
-    _fetch_fixtures_bulk, _fetch_stats, _leg_needs_stats, _parse_stats,
-    _pick_status, _profit_for_result, _stat_for_market,
+    FT_STATUSES, LIVE_STATUSES, _anulacao_sem_estatistica, _calc_result,
+    _fetch_fixture, _fetch_fixtures_bulk, _fetch_stats, _leg_needs_stats,
+    _parse_stats, _pick_status, _profit_for_result, _stat_for_market,
 )
 
 logger = logging.getLogger(__name__)
@@ -155,6 +155,32 @@ def liquidar_pendentes(cur, conn, limite: int = 30) -> dict:
     criado aos 60' com 1x0 no placar e' GREEN se o jogo terminar 2x1, porque
     o total foi 3. E' assim que a casa liquida, e e' por isso que
     residual_model soma o ja-observado antes de perguntar a probabilidade.
+
+    POR QUE ESTAVA "TUDO PENDENTE" (2026-08-29)
+    -------------------------------------------
+    Faltavam as duas metades da mesma coisa.
+
+    a) NAO HAVIA SAIDA PRA QUEM NUNCA VAI RESOLVER. `_calc_result` devolve None
+       quando o provedor nao publica a folha do jogo -- e isso e' correto, sem
+       o numero inventar resultado e' pior que nao ter. Mas aqui o codigo so'
+       fazia `continue`, e o pick ficava Pendente pra sempre. O pre-jogo ja
+       tinha a rede: `_anulacao_sem_estatistica` (routers/live.py) anula como
+       PUSH depois de 12h, com motivo nomeado, so' nas duas causas que sabemos
+       ser definitivas. O Live nao a chamava. E o Live e' o produto que MAIS
+       depende de folha: escanteios, chutes e faltas sao quase todo o cardapio
+       dele.
+
+    b) A FILA TRAVAVA. Sao 30 por passada, `ORDER BY created_at` -- do mais
+       velho pro mais novo. Como os irresolviveis do item (a) nunca saiam da
+       fila, bastava acumular 30 deles pra que NENHUM pick novo chegasse a ser
+       tentado. Dai o sintoma que o usuario viu: tudo pendente, inclusive jogos
+       que acabaram ha' horas e tinham resultado obvio.
+
+    A ordem virou DESC pelo mesmo motivo: cada pendente custa de uma a duas
+    chamadas a' API-Football, entao a passada tem que gastar o orcamento no
+    jogo que acabou agora -- que e' o que a pessoa esta olhando na tela -- e
+    nao num pick de tres dias atras. Com a anulacao do item (a) a cauda velha
+    se esvazia sozinha em vez de crescer.
     """
     resumo = {"liquidados": 0, "erros": 0}
     try:
@@ -164,7 +190,7 @@ def liquidar_pendentes(cur, conn, limite: int = 30) -> dict:
             FROM picks_live
             WHERE result IS NULL
               AND status IN (%s, %s)
-            ORDER BY created_at
+            ORDER BY created_at DESC
             LIMIT %s
         """, (STATUS_ATIVO, STATUS_EXPIRADO, limite))
         pendentes = cur.fetchall()
@@ -214,6 +240,23 @@ def liquidar_pendentes(cur, conn, limite: int = 30) -> dict:
                 home_stats=home_stats, away_stats=away_stats,
                 went_to_extra_time=prorrogacao,
             )
+            if not resultado:
+                # MESMA rede do pre-jogo, e nao uma regra propria do Live: PUSH
+                # depois de 12h do apito, so' quando a causa e' nomeavel (folha
+                # que o provedor nao publicou, ou prorrogacao sem o recorte de
+                # 90). Qualquer outro pick que nao resolveu continua Pendente e
+                # visivel de proposito · isso e' bug pra investigar, nao pick
+                # pra anular em silencio. Ver _anulacao_sem_estatistica.
+                resultado = _anulacao_sem_estatistica({
+                    "status": status,
+                    "precisa_stats": _leg_needs_stats(p["market"], p["market_type"]),
+                    "current_val": valor,
+                    "went_to_extra_time": prorrogacao,
+                    "kickoff_ts": fixture.get("timestamp"),
+                    "fixture_id": p["fixture_id"],
+                    "market": p["market"],
+                    "line": p["line"],
+                })
             if not resultado:
                 continue
 
