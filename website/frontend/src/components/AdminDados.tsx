@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import api from '../services/api'
 import AdminAmostra, { type AlvoAmostra } from './AdminAmostra'
+import { sinalizarNavegacao } from '../services/progressBus'
 import {
   Button, EmptyState, ErrorState, Pagination, Skeleton, SkeletonRows, SpinnerBlock, StatTile,
 } from './ui'
@@ -897,7 +898,7 @@ export default function AdminDados() {
           <button
             key={chave}
             type="button"
-            onClick={() => setSecao(chave)}
+            onClick={() => { if (chave !== secao) sinalizarNavegacao(); setSecao(chave) }}
             className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 min-h-[36px] rounded-lg border shrink-0 transition-colors duration-1 ${
               secao === chave
                 ? 'border-line-strong bg-surface-2 text-ink-1'

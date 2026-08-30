@@ -18,6 +18,7 @@ import ResetMonthModal from '../components/ResetMonthModal'
 import PipelinesBreakdown from '../components/PipelinesBreakdown'
 import AlavancagemPanel from '../components/AlavancagemPanel'
 import { PAGE_WIDTH } from '../lib/pageWidth'
+import { sinalizarNavegacao } from '../services/progressBus'
 
 const SOURCE_LBL: Record<string, string> = {
   vip: 'VIP', free: 'Free', multipla: 'Múlt.', alavancagem: 'Alav.',
@@ -142,6 +143,7 @@ export default function MeusPicks() {
   const PAGE_SIZE = 15
 
   const changeTab = (t: 'pendentes' | 'resolvidos') => {
+    if (t !== tab) sinalizarNavegacao()
     setTab(t)
     setDayOffset(0)
     setDaysBack(PERIODO_PADRAO)
@@ -265,7 +267,10 @@ export default function MeusPicks() {
                 <motion.button
                   key={a.key}
                   whileTap={{ scale: 0.95 }}
-                  onClick={() => { setAba(a.key); window.location.hash = a.key }}
+                  onClick={() => {
+                    if (aba !== a.key) sinalizarNavegacao()
+                    setAba(a.key); window.location.hash = a.key
+                  }}
                   className={`relative px-4 py-2.5 text-sm font-semibold transition-colors ${
                     aba === a.key ? 'text-ink-1' : 'text-ink-3 hover:text-ink-2'
                   }`}

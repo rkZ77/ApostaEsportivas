@@ -16,6 +16,7 @@ import PublicNav from '../components/PublicNav'
 import DailyGreensChart from '../components/DailyGreensChart'
 import PipelineProfitChart from '../components/PipelineProfitChart'
 import LucroBarChart from '../components/LucroBarChart'
+import { sinalizarNavegacao } from '../services/progressBus'
 
 const RESULTADO_OPTIONS = [
   { value: 'all', label: 'Todos' }, { value: 'GREEN', label: 'Green' }, { value: 'RED', label: 'Red' },
@@ -382,7 +383,7 @@ export default function ResultadosPublicos() {
               ['resumo', 'Resumo'], ['por_liga', 'Por Liga'],
               ['por_jogo', 'Por Jogo'], ['por_mes', 'Por Mês'],
             ] as [typeof tab, string][]).map(([k, l]) => (
-              <button key={k} onClick={() => setTab(k)}
+              <button key={k} onClick={() => { if (k !== tab) sinalizarNavegacao(); setTab(k) }}
                 className={`tab px-5 py-3 text-sm font-semibold ${tab === k ? 'tab-active' : ''}`}>{l}</button>
             ))}
           </div>

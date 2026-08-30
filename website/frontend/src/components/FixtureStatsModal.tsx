@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { X } from 'lucide-react'
 import api from '../services/api'
 import { backdropFade, sheetUp } from '../lib/motion'
+import { sinalizarNavegacao } from '../services/progressBus'
 
 type Tab = 'geral' | 'gols' | 'escanteios' | 'cartoes'
 type Ctx = 'all' | 'home' | 'away'
@@ -420,7 +421,7 @@ export default function FixtureStatsModal({ fixture, onClose, inline = false }: 
             {TABS.map(t => (
               <button
                 key={t.key}
-                onClick={() => setTab(t.key)}
+                onClick={() => { if (t.key !== tab) sinalizarNavegacao(); setTab(t.key) }}
                 className={`tab flex-1 py-2.5 text-xs font-semibold ${
                   tab === t.key ? 'tab-active' : ''
                 }`}

@@ -15,6 +15,7 @@ import AdminAuditoriaMotores from '../components/AdminAuditoriaMotores'
 import AdminPendencias from '../components/AdminPendencias'
 import AdminPlanosVencidos from '../components/AdminPlanosVencidos'
 import { fmtBRL } from '../utils/format'
+import { sinalizarNavegacao } from '../services/progressBus'
 
 interface User {
   id: number
@@ -559,7 +560,10 @@ export default function Admin() {
             {ABAS.map(a => (
               <button
                 key={a.key}
-                onClick={() => { setAba(a.key); window.location.hash = a.key }}
+                onClick={() => {
+                  if (aba !== a.key) sinalizarNavegacao()
+                  setAba(a.key); window.location.hash = a.key
+                }}
                 className={`relative px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold mr-1 whitespace-nowrap flex-shrink-0 transition-colors ${
                   aba === a.key ? 'text-ink-1' : 'text-ink-3 hover:text-ink-2'
                 }`}
