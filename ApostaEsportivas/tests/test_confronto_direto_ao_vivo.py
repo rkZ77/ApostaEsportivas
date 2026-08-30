@@ -119,10 +119,27 @@ class TestOrdemDaMistura:
         return inspect.getsource(lp._processar_partida)
 
     def test_h2h_recebe_o_baseline_ja_montado_como_referencia(self):
-        assert "baselines.update(baseline_do_h2h(cur, estado, baselines))" in self.fonte
+        assert "baseline_do_h2h(cur, estado, baselines)" in self.fonte
 
     def test_o_arbitro_entra_antes_e_nao_e_desfeito_pelo_h2h(self):
         """Se o h2h mexesse em cards, ele desfaria a media do arbitro · o teste
         de cima (cartao fica de fora) e' o que garante, este fixa a ordem."""
         fonte = self.fonte
-        assert fonte.index("**do_arbitro}") < fonte.index("baseline_do_h2h")
+        assert fonte.index("baseline_do_arbitro") < fonte.index("baseline_do_h2h")
+
+    def test_o_mando_entra_depois_da_media_misturada(self):
+        """A ordem E' a precedencia (29/08).
+
+        `baseline_do_confronto` soma os jogos do time em casa e fora no mesmo
+        saco; `baseline_do_mando` separa. Onde os dois tem o que dizer, o
+        recorte melhor tem que ser o ultimo a escrever -- invertido, o mando
+        seria calculado e jogado fora.
+        """
+        fonte = self.fonte
+        assert fonte.index("baseline_do_confronto") < fonte.index("baseline_do_mando")
+
+    def test_o_arbitro_ainda_manda_no_cartao_depois_do_mando(self):
+        """O mando produz baseline de cartao tambem, e quem apita continua
+        acima dele: e' a regra que ja valia pra media dos times."""
+        fonte = self.fonte
+        assert fonte.index("baseline_do_mando") < fonte.index("baseline_do_arbitro")

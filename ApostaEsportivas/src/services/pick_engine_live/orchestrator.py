@@ -58,7 +58,8 @@ def _dados_completos(estado: dict, familia: str) -> bool:
 # ─────────────────────────────────────────────────────────────────────────
 def analisar(estado: dict, observacoes: list, config: LiveEngineConfig = DEFAULT_LIVE_CONFIG,
              baselines: dict | None = None, eventos: dict | None = None,
-             fresh: dict | None = None, contexto_pre_jogo: dict | None = None) -> dict:
+             fresh: dict | None = None, contexto_pre_jogo: dict | None = None,
+             baseline_origens: dict | None = None) -> dict:
     """Le a partida inteira: pressao, ritmo, tendencia, janelas, necessidade do
     resultado e projecao por familia. Nenhuma chamada de API acontece aqui.
 
@@ -74,6 +75,11 @@ def analisar(estado: dict, observacoes: list, config: LiveEngineConfig = DEFAULT
     agora. Ausente, o motor roda como antes, so' sem esse sinal.
     """
     baselines = baselines or {}
+    #: Quem escreveu o baseline de cada familia (liga, times, mando, arbitro,
+    #: h2h). Quem monta as camadas e' o pipeline, e sem este mapa este modulo
+    #: so' conseguia dizer "veio de fora" ou "e' a constante" -- que era o que
+    #: ele dizia, chamando de "liga" tudo que chegava.
+    baseline_origens = baseline_origens or {}
     minuto = estado.get("minuto")
     fresh = fresh or live_state.freshness(estado, observacoes, config)
 
@@ -112,7 +118,8 @@ def analisar(estado: dict, observacoes: list, config: LiveEngineConfig = DEFAULT
             "disponivel": lam is not None,
             "observado": observado,
             "baseline": round(baseline, 2) if baseline else None,
-            "baseline_origem": "liga" if baselines.get(familia) else "padrao",
+            "baseline_origem": baseline_origens.get(
+                familia, "liga" if baselines.get(familia) else "padrao"),
             "taxa": taxa,
             "janelas": janelas,
             "tendencia": tendencia,

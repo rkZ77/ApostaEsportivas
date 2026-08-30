@@ -290,6 +290,17 @@ def ligas_cadastradas(cur) -> set:
     return {r[0] for r in cur.fetchall()}
 
 
+#: Jogos MINIMOS no mando pra a media daquele lado valer como baseline.
+#:
+#: 5 e' pouco pra descrever um time e e' de proposito: o numero nao decide pick
+#: sozinho, ele so' desloca o ponto de partida do lambda residual, que aos 60
+#: minutos ja' pesa menos que o proprio jogo (MEIA_CONFIANCA em
+#: residual_model). Exigir 10 deixaria metade das ligas sem mando ate' o meio
+#: da temporada, e a alternativa nao e' um baseline melhor · e' o mesmo numero
+#: sem recorte de mando.
+MIN_JOGOS_MANDO = 5
+
+
 def baselines_por_liga(cur, league_id: int | None) -> dict:
     """Media real de escanteios e gols da liga, de `match_statistics`.
 
@@ -435,6 +446,98 @@ def baseline_do_arbitro(cur, estado: dict, config: LiveEngineConfig) -> dict:
     pontos = float(linha[0] or 0) + 2 * float(linha[1] or 0)
     return {"cards": stats_model.shrink_to_baseline(
         pontos, jogos, referee_model._REFEREE_CARD_POINTS_BASELINE)}
+
+
+def baseline_do_mando(cur, estado: dict) -> dict:
+    """A media do MANDANTE EM CASA e a do VISITANTE FORA.
+
+    POR QUE ISTO EXISTE (2026-08-29, pedido do usuario)
+    ---------------------------------------------------
+    `baseline_do_confronto`, logo abaixo, calculava a media de cada time
+    somando os jogos dele em casa e fora no mesmo saco -- um UNION ALL sobre
+    `match_statistics` sem olhar de que lado ele jogou. Isso apaga a diferenca
+    que o motor de pre-jogo trata como principal desde 08/08: o mesmo time
+    produz e cede quantidades diferentes conforme o mando, e um Over de
+    escanteios de um mandante que ataca em casa nao e' o mesmo pick do mesmo
+    time visitando.
+
+    A fonte NAO e' uma consulta nova sobre partidas: e' `team_statistics`, que
+    ja' guarda a media separada por `context_type` HOME/AWAY (ver
+    services/match_stats_service_media.py::_aggregate_games). O agregador ja
+    escreve as duas linhas por time desde sempre; o Live simplesmente nunca as
+    leu. Custo: uma consulta, zero requisicao de API.
+
+    `avg_total_*` e' o TOTAL DA PARTIDA (os dois times somados) naquele
+    contexto, que e' exatamente a unidade que o modelo residual quer -- o pick
+    e' liquidado pelo total do jogo. Combinar o total-em-casa do mandante com o
+    total-fora do visitante e' a expectativa deste confronto neste mando.
+
+    CADA FAMILIA CAI SOZINHA. Se so' escanteio tem amostra nos dois lados, so'
+    escanteio sai daqui e o resto continua vindo de quem vinha. Amostra curta
+    (< MIN_JOGOS_MANDO em qualquer um dos lados) devolve nada pra aquela
+    familia, e a media sem mando de `baseline_do_confronto` segue valendo --
+    ela e' pior recorte, mas com mais jogos, e trocar 12 jogos misturados por 2
+    do mando certo seria trocar vies por ruido.
+    """
+    home_id, away_id = estado.get("home_team_id"), estado.get("away_team_id")
+    league_id = estado.get("league_id")
+    if not (home_id and away_id and league_id):
+        return {}
+    try:
+        # A temporada nao vem no estado (ele descreve a partida em andamento,
+        # nao o calendario), entao a linha mais recente de cada lado manda ·
+        # DISTINCT ON garante uma por time mesmo com varias temporadas na
+        # tabela.
+        cur.execute("""
+            SELECT DISTINCT ON (team_id)
+                   team_id, context_type, games_count,
+                   avg_total_corners, avg_total_goals,
+                   avg_total_yellow, avg_total_red
+              FROM team_statistics
+             WHERE league_id = %s
+               AND ((team_id = %s AND context_type = 'HOME')
+                 OR (team_id = %s AND context_type = 'AWAY'))
+             ORDER BY team_id, season DESC, last_updated DESC
+        """, (league_id, home_id, away_id))
+        linhas = cur.fetchall()
+    except Exception:
+        return {}
+
+    lados = {}
+    for linha in linhas:
+        team_id, contexto, jogos = linha[0], linha[1], linha[2] or 0
+        if int(jogos) < MIN_JOGOS_MANDO:
+            continue
+        lados[contexto] = {
+            "corners": linha[3], "goals": linha[4],
+            "yellow": linha[5], "red": linha[6],
+        }
+
+    casa, fora = lados.get("HOME"), lados.get("AWAY")
+    if not (casa and fora):
+        return {}
+
+    saida = {}
+    for familia, chave in (("corners", "corners"), ("goals", "goals")):
+        a, b = casa.get(chave), fora.get(chave)
+        if a is not None and b is not None:
+            saida[familia] = (float(a) + float(b)) / 2
+
+    # Cartao em PONTOS (amarelo=1, vermelho=2), que e' a unidade do mercado no
+    # resto do projeto. So' entra quando as duas familias existem nos dois
+    # lados · meio numero aqui viraria um baseline de cartao baixo demais, e o
+    # baseline do arbitro (que roda depois) so' cobre quem apita conhecido.
+    pontos = []
+    for lado in (casa, fora):
+        amarelo, vermelho = lado.get("yellow"), lado.get("red")
+        if amarelo is None or vermelho is None:
+            pontos = []
+            break
+        pontos.append(float(amarelo) + 2 * float(vermelho))
+    if pontos:
+        saida["cards"] = sum(pontos) / len(pontos)
+
+    return saida
 
 
 def baseline_do_confronto(cur, estado: dict) -> dict:
@@ -1300,16 +1403,36 @@ def _processar_partida(indice: int, bruto: dict, cur, conn, feed: LiveFeed,
     print(f"Dados: {fresh['nivel']}"
           + (f" ({'; '.join(fresh['motivos'])})" if fresh.get("motivos") else ""))
 
-    do_arbitro = baseline_do_arbitro(cur, estado, config)
-    baselines = {**baselines_por_liga(cur, estado.get("league_id")),
-                 **baseline_do_confronto(cur, estado),
-                 # Por ultimo de proposito: em cartao, quem apita manda mais
-                 # que a media da liga e a dos times. Nas outras familias esta
-                 # chamada devolve vazio e nao sobrescreve nada.
-                 **do_arbitro}
+    # A ORDEM E' A PRECEDENCIA, e agora ela fica registrada.
+    #
+    # Cada camada sobrescreve a anterior na familia em que tem o que dizer, e
+    # `origens` guarda quem escreveu por ultimo. Ate' 29/08 a auditoria
+    # rotulava tudo como "liga" ou "padrao" (orchestrator.py), o que ja' era
+    # falso -- confronto, arbitro e h2h entravam sem aparecer -- e ficou
+    # insustentavel com o mando: a pergunta "o motor olhou o mando?" nao tinha
+    # resposta na tela.
+    baselines: dict = {}
+    origens: dict = {}
+
+    def camada(valores: dict, rotulo: str) -> None:
+        for familia, valor in (valores or {}).items():
+            baselines[familia] = valor
+            origens[familia] = rotulo
+
+    camada(baselines_por_liga(cur, estado.get("league_id")), "liga")
+    camada(baseline_do_confronto(cur, estado), "times")
+    # DEPOIS do confronto sem mando, porque e' o mesmo dado com recorte melhor:
+    # quando ha' amostra nos dois lados, o mando manda. Familia sem amostra no
+    # mando nao aparece aqui e a media misturada continua valendo.
+    camada(baseline_do_mando(cur, estado), "mando")
+    # Por ultimo de proposito: em cartao, quem apita manda mais que a media da
+    # liga e a dos times. Nas outras familias esta chamada devolve vazio e nao
+    # sobrescreve nada.
+    camada(baseline_do_arbitro(cur, estado, config), "arbitro")
+    do_arbitro = {f: v for f, v in baselines.items() if origens.get(f) == "arbitro"}
     # O confronto direto refina o que sobrou · precisa do baseline ja' montado
     # como referencia do encolhimento, por isso vem depois e nao no literal.
-    baselines.update(baseline_do_h2h(cur, estado, baselines))
+    camada(baseline_do_h2h(cur, estado, baselines), "h2h")
 
     # CARTAO SO' COM ARBITRO CONHECIDO · a outra metade da regra do pre-jogo.
     #
@@ -1332,6 +1455,7 @@ def _processar_partida(indice: int, bruto: dict, cur, conn, feed: LiveFeed,
                                   if arbitro else "a partida nao publicou o arbitro"))
     pre_jogo = contexto_pre_jogo(cur, estado)
     analise = orchestrator.analisar(estado, observacoes, config, baselines, eventos, fresh,
+                                    baseline_origens=origens,
                                     contexto_pre_jogo=pre_jogo)
     _observar(cur, conn, estado)
 
