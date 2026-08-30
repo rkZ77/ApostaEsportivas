@@ -11,7 +11,7 @@ import SuggestionCard from '../components/SuggestionCard'
 import ApostaModal from '../components/ApostaModal'
 import PageShell from '../components/PageShell'
 import Avatar from '../components/Avatar'
-import {
+import { ComoFunciona,
   LiveDot, Spinner, EmptyState, SkeletonPickGrid, Badge, PickTypeBadge, ResultBadge,
   rotuloDoPlano,
 } from '../components/ui'
@@ -2993,10 +2993,10 @@ export default function Picks() {
 
         {tab === 'pick_seguro' && (
           <motion.div key="pick_seguro" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6">
-            {/* O que é */}
-            <div className="card p-5 border-green-500/20 bg-green-500/5">
-              <p className="font-display text-sm font-bold text-green-400 mb-3">O que é o Pick do Dia Free?</p>
-              <div className="space-y-2 text-sm text-ink-2 leading-relaxed">
+            {/* Fechado por padrão · ver ComoFunciona. */}
+            <ComoFunciona titulo="O que é o Pick do Dia Free?" cor="text-green-400"
+                          borda="border-green-500/20" fundo="bg-green-500/5">
+              <>
                 <p>
                   Um pick gratuito publicado diariamente pela <span className="text-ink-1 font-bold">IA</span>. Analisamos centenas de
                   jogos e selecionamos o <span className="text-green-400 font-bold">1 pick com maior confiança</span> para disponibilizar para todos os usuários.
@@ -3006,8 +3006,8 @@ export default function Picks() {
                   Inclui mercado, odd, casa de apostas e raciocínio da IA.
                 </p>
                 <PlacarDoProduto source="free" tom="text-green-400/70" />
-              </div>
-            </div>
+              </>
+            </ComoFunciona>
 
             {/* Pick de hoje */}
             {todayLoading ? <PickLoading /> : (
@@ -3027,10 +3027,9 @@ export default function Picks() {
 
         {tab === 'vip' && (
           <motion.div key="vip" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6">
-            {/* O que é */}
-            <div className="card p-5 border-yellow-400/20 bg-yellow-400/5">
-              <p className="font-display text-sm font-bold text-yellow-400 mb-3">O que são os Picks VIP?</p>
-              <div className="space-y-2 text-sm text-ink-2 leading-relaxed">
+            <ComoFunciona titulo="O que são os Picks VIP?" cor="text-yellow-400"
+                          borda="border-yellow-400/20" fundo="bg-yellow-400/5">
+              <>
                 <p>
                   Picks exclusivos gerados pela <span className="text-ink-1 font-bold">IA</span> com análise estatística avançada.
                   A cada dia a IA processa forma recente, confrontos diretos, odds de mercado e gera
@@ -3041,8 +3040,8 @@ export default function Picks() {
                   odds e casa de apostas recomendada.
                 </p>
                 <PlacarDoProduto source="vip" tom="text-yellow-400/70" />
-              </div>
-            </div>
+              </>
+            </ComoFunciona>
 
             {/* Picks do dia */}
             <div>
@@ -3164,10 +3163,9 @@ export default function Picks() {
 
         {tab === 'multiplas' && (
           <motion.div key="multiplas" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6">
-            {/* O que é */}
-            <div className="card p-5 border-blue-400/20 bg-blue-400/5">
-              <p className="font-display text-sm font-bold text-blue-400 mb-3">O que são as Múltiplas VIP?</p>
-              <div className="space-y-2 text-sm text-ink-2 leading-relaxed">
+            <ComoFunciona titulo="O que são as Múltiplas VIP?" cor="text-blue-400"
+                          borda="border-blue-400/20" fundo="bg-blue-400/5">
+              <>
                 <p>
                   A IA combina <span className="text-ink-1 font-bold">2 a 3 seleções</span> de alta confiança em uma única aposta múltipla,
                   gerando odds combinadas entre <span className="text-blue-400 font-bold">2.00 e 4.00</span> com risco controlado.
@@ -3177,8 +3175,8 @@ export default function Picks() {
                   Publicadas diariamente com raciocínio completo da IA para cada perna.
                 </p>
                 <PlacarDoProduto source="multiplas" tom="text-blue-400/70" />
-              </div>
-            </div>
+              </>
+            </ComoFunciona>
 
             {/* Múltiplas de hoje */}
             <div>
@@ -3222,11 +3220,9 @@ export default function Picks() {
               * Fica no formato dos outros produtos (card colorido, "O que é",
               * três números), que é o padrão que a página usa em VIP,
               * Múltiplas, Jogadores e Boost. */}
-            <div className="card p-5 border-orange-500/20 bg-orange-500/5">
-              <p className="font-display text-sm font-bold text-orange-400 mb-3">
-                O que é a Alavancagem?
-              </p>
-              <div className="space-y-2 text-sm text-ink-2 leading-relaxed">
+            <ComoFunciona titulo="O que é a Alavancagem?" cor="text-orange-400"
+                          borda="border-orange-500/20" fundo="bg-orange-500/5">
+              <>
                 <p>
                   Não é uma aposta por dia, é um{' '}
                   <span className="text-ink-1 font-bold">caminho</span>. Você define o valor de
@@ -3267,8 +3263,8 @@ export default function Picks() {
                     </div>
                   ))}
                 </div>
-              </div>
-            </div>
+              </>
+            </ComoFunciona>
 
             {/* Stats da série + Pick de hoje (bloqueado para free) */}
             {!canSeeVip ? (
@@ -3701,11 +3697,9 @@ export default function Picks() {
             vários jogos na mesma rodada, dar um não esvazia o resto. */}
         {tab === 'boost' && (
           <motion.div key="boost" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6">
-            <div className="card p-5 border-cyan-400/20 bg-cyan-400/5">
-              <p className="font-display text-sm font-bold text-cyan-400 mb-3">
-                O que é o Pick Boost?
-              </p>
-              <div className="space-y-2 text-sm text-ink-2 leading-relaxed">
+            <ComoFunciona titulo="O que é o Pick Boost?" cor="text-cyan-400"
+                          borda="border-cyan-400/20" fundo="bg-cyan-400/5">
+              <>
                 <p>
                   Uma combinação <span className="text-ink-1 font-bold">fixa</span>, no mesmo jogo:{' '}
                   <span className="text-ink-1 font-bold">Mais de 1.5 gols no jogo inteiro</span> e{' '}
@@ -3714,8 +3708,8 @@ export default function Picks() {
                   costuma ter mais de um.
                 </p>
                 <PlacarDoProduto source="boost" tom="text-cyan-400/70" />
-              </div>
-            </div>
+              </>
+            </ComoFunciona>
 
             {/* O gratuito do dia · fora do bloqueio, com selo próprio. */}
             <div>
@@ -3781,11 +3775,9 @@ export default function Picks() {
               </div>
             ) : (
               <>
-                <div className="card p-5 border-amber-400/20 bg-amber-400/5">
-                  <p className="font-display text-sm font-bold text-amber-400 mb-3">
-                    O que são os Picks de Jogador?
-                  </p>
-                  <div className="space-y-2 text-sm text-ink-2 leading-relaxed">
+                <ComoFunciona titulo="O que são os Picks de Jogador?" cor="text-amber-400"
+                              borda="border-amber-400/20" fundo="bg-amber-400/5">
+                  <>
                     <p>
                       Estatística de um jogador específico numa partida:{' '}
                       <span className="text-ink-1 font-bold">
@@ -3805,8 +3797,8 @@ export default function Picks() {
                       e Poisson infla a cauda justamente onde o pick vive.
                     </p>
                     <PlacarDoProduto source="player_stats" tom="text-amber-400/70" />
-                  </div>
-                </div>
+                  </>
+                </ComoFunciona>
 
                 <MercadoSecao
                   tipo="player_stats"

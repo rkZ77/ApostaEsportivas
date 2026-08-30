@@ -59,7 +59,36 @@ NOMES_MERCADO_HT = frozenset({
 
 # -- Faixa de odd (sanidade, nao selecao) ------------------------------------
 ODD_MIN_FT, ODD_MAX_FT = 1.12, 1.55
-ODD_MIN_HT, ODD_MAX_HT = 1.10, 1.60
+
+#: O PISO DO HT ERA MAIOR QUE O QUE O MERCADO PAGA (medido em 2026-08-29).
+#:
+#: Era 1.10, e o produto quase nao publicava. A leitura de `engine_decisions`
+#: mostrou o mesmo motivo repetido em quase todo jogo -- "odd fora da faixa de
+#: sanidade" -- sempre com a perna do HT em 1.07 ou 1.08:
+#:
+#:     FT 1.35, HT 1.08, par 1.458
+#:     FT 1.38, HT 1.08, par 1.49
+#:     FT 1.42, HT 1.07, par 1.519
+#:
+#: E' o mercado, nao a coleta. Menos de 2.5 gols no PRIMEIRO TEMPO e' um evento
+#: quase certo (a media de gols no HT fica perto de 1), entao a casa paga
+#: 1.05-1.10 nele. Medido nas odds coletadas: mediana 1.09, minimo 1.05, p90
+#: 1.39. Um piso de 1.10 reprovava mais da metade dos jogos por nao alcancar um
+#: numero que o mercado raramente produz.
+#:
+#: O ERRO CONCEITUAL, e ele importa mais que o numero: o piso existe pra
+#: garantir que sobre margem, e essa garantia nao e' desta perna. O Under 2.5
+#: HT e' ANCORA -- ele nao carrega o bilhete, ele reduz a variancia do que o
+#: Over 1.5 afirma. Quem garante margem no Pick Boost e' a odd COMBINADA, que
+#: tem piso proprio (ODD_MIN_COMBINADA) e ja estava sendo aplicada: os pares
+#: reprovados acima estavam em 1.458, 1.49 e 1.519, ou seja, DENTRO da faixa
+#: que de fato protege o produto.
+#:
+#: O TETO NAO MUDA, e ele continua sendo a metade util da regra aqui: Under 2.5
+#: HT pagando mais de 1.60 e' o mercado dizendo que espera gol cedo -- contra o
+#: que o modelo estaria afirmando -- e ai a resposta certa continua sendo nao
+#: apostar.
+ODD_MIN_HT, ODD_MAX_HT = 1.03, 1.60
 #: A combinacao dos dois mercados. Existe porque o produto e' o par, e o par
 #: e' o que o usuario vai apostar.
 ODD_MIN_COMBINADA, ODD_MAX_COMBINADA = 1.30, 2.30

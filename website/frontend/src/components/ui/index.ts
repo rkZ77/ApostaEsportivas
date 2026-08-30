@@ -30,6 +30,7 @@ export type { Column } from './Table'
 export { Input, SearchInput, Select, Textarea } from './Field'
 export { default as Tooltip } from './Tooltip'
 
+export { default as ComoFunciona } from './ComoFunciona'
 export { default as Marquee } from './Marquee'
 export { default as NumberTicker } from './NumberTicker'
 export { default as ShimmerButton } from './ShimmerButton'
