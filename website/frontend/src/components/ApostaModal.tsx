@@ -135,7 +135,7 @@ export default function ApostaModal({
                   sentidos: odd que subiu é boa notícia e some se não for dita. */}
               {variacao !== 0 && (
                 <p className={`text-[11px] mt-1.5 ${variacao > 0 ? 'text-green-400' : 'text-yellow-400'}`}>
-                  Odd atualizada agora · {variacao > 0 ? 'subiu' : 'caiu'} de {oddPick.toFixed(2)} para {pickOdd.toFixed(2)}
+                  Odd atualizada agora, {variacao > 0 ? 'subiu' : 'caiu'} de {oddPick.toFixed(2)} para {pickOdd.toFixed(2)}
                 </p>
               )}
               {oddChanged && (

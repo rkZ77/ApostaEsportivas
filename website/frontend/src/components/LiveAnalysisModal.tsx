@@ -190,7 +190,7 @@ export default function LiveAnalysisModal({
       width="lg"
       acimaDeTudo
       title="Entenda esta análise"
-      description={`${data.homeTeam} x ${data.awayTeam} · ${translateMarket(data.market)}${data.line ? ` · ${translateLine(data.line)}` : ''}`}
+      description={`${data.homeTeam} x ${data.awayTeam}, ${translateMarket(data.market)}${data.line ? ` ${translateLine(data.line)}` : ''}`}
     >
       <div className="p-5 space-y-5">
 
@@ -398,7 +398,7 @@ export default function LiveAnalysisModal({
                     <span>Pressão ofensiva</span>
                     <span className="tabular-nums">
                       {pressaoCasa.toFixed(2)} {PRESSAO_LABEL[nivelPressao(pressaoCasa) ?? ''] ?? ''}
-                      {' · '}
+                      {' / '}
                       {pressaoFora.toFixed(2)} {PRESSAO_LABEL[nivelPressao(pressaoFora) ?? ''] ?? ''}
                     </span>
                   </div>
@@ -443,7 +443,7 @@ export default function LiveAnalysisModal({
           <Gauge className="w-3 h-3 mt-0.5 shrink-0" />
           <span>
             Ao vivo a linha e a odd se movem a cada minuto. A odd mostrada é a do instante da
-            publicação · confira o preço na casa antes de entrar. O histórico de acertos e erros
+            publicação. Confira o preço na casa antes de entrar. O histórico de acertos e erros
             do motor ao vivo fica na página de Resultados.
           </span>
         </p>

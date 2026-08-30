@@ -214,7 +214,7 @@ export function PickReasoning({ text, label = 'Fato', className }: {
   if (!text) return null
   return (
     <div className={cn('mx-5 mb-3 px-3 py-2 bg-surface-1 border border-line rounded-md flex-1', className)}>
-      <span className="label-micro">{label} · </span>
+      <span className="label-micro">{label}: </span>
       <span className="text-[11px] text-ink-2 leading-relaxed line-clamp-3">{text}</span>
     </div>
   )

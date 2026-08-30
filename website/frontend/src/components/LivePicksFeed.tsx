@@ -268,7 +268,11 @@ function EmLeituraAgora({ isActive, motor }: {
           <span className="w-1 h-4 rounded-full bg-accent" />
           <h3 className="text-sm font-bold text-ink-1 flex items-center gap-1.5">
             <Eye className="w-3.5 h-3.5 text-accent-ink" />
-            O motor está lendo · {partidas.length}
+            O motor está lendo
+            <span className="font-mono text-[11px] font-bold tabular-nums text-ink-3
+                             bg-surface-2 border border-line rounded-full px-2 py-0.5 ml-0.5">
+              {partidas.length}
+            </span>
           </h3>
         </div>
         {/* O SINAL DE VIDA. Antes o estado do motor só aparecia no vazio da
@@ -330,7 +334,7 @@ function EmLeituraAgora({ isActive, motor }: {
                           title={projetado ? 'Minuto projetado desde a última leitura' : undefined}>
                       {minuto != null
                         ? `${projetado ? '~' : ''}${minuto}'`
-                        : (STATUS_LABEL[p.status ?? ''] ?? p.status ?? '·')}
+                        : (STATUS_LABEL[p.status ?? ''] ?? p.status ?? '-')}
                     </span>
                   </span>
                 </div>
@@ -365,7 +369,7 @@ function EmLeituraAgora({ isActive, motor }: {
                       <Icone className="w-3 h-3 text-ink-4 mx-auto" aria-hidden="true" />
                       <div className="font-mono text-sm font-bold tabular-nums text-ink-1 leading-tight mt-0.5"
                            aria-label={rotulo}>
-                        {valor ?? '·'}
+                        {valor ?? '-'}
                       </div>
                     </div>
                   ))}
@@ -513,11 +517,27 @@ interface LivePick {
    Duplicado aqui, e não importado, porque lá ele é interno da página · são dez
    linhas de marcação, e transformar em primitivo compartilhado mexeria nas 14
    chamadas daquele arquivo por um ganho que não é deste trabalho. */
-function TituloDeSecao({ cor, texto }: { cor: string; texto: string }) {
+function TituloDeSecao({ cor, texto, contagem }: {
+  cor: string
+  texto: string
+  /* A CONTAGEM É ELEMENTO, NÃO TEXTO (29/08, pedido do usuário).
+   *
+   * Ela vinha colada no título por um ponto médio ("Suas apostas ao vivo · 3"),
+   * e o ponto saiu da aba inteira. Passar o número por prop, e não dentro da
+   * string, é o que impede o separador de voltar na próxima seção que alguém
+   * escrever. */
+  contagem?: number
+}) {
   return (
     <div className="flex items-center gap-3 mb-4 mt-6 first:mt-0">
       <span className={`w-0.5 h-5 ${cor} rounded-full block`} />
       <h2 className="text-sm font-bold text-ink-2">{texto}</h2>
+      {contagem != null && (
+        <span className="font-mono text-[11px] font-bold tabular-nums text-ink-3
+                         bg-surface-2 border border-line rounded-full px-2 py-0.5">
+          {contagem}
+        </span>
+      )}
     </div>
   )
 }
@@ -591,7 +611,7 @@ function Contagem({ segundos }: { segundos: number | null }) {
       expirou ? 'text-ink-4' : apertado ? 'text-amber-400' : 'text-ink-3'}`}>
       <Timer size={11} />
       {expirou
-        ? 'preço da criação · confira na casa'
+        ? 'preço da criação, confira na casa'
         : `odd válida por ${Math.floor(restante / 60)}:${String(restante % 60).padStart(2, '0')}`}
     </span>
   )
@@ -810,7 +830,7 @@ const CardLive = forwardRef<HTMLDivElement, {
         </div>
         <div className="flex items-center gap-2 text-xs text-ink-3">
           <span className="font-semibold text-ink-2">{translateMarket(pick.market)}</span>
-          {pick.line && <><span>·</span><span>{translateLine(pick.line)}</span></>}
+          {pick.line && <span>{translateLine(pick.line)}</span>}
           <InfoTip text={explainMarket(pick.market, pick.line)} />
         </div>
       </div>
@@ -837,7 +857,7 @@ const CardLive = forwardRef<HTMLDivElement, {
           <span className="inline-flex items-center gap-1 text-[11px] font-bold text-green-400">
             <CheckCircle2 size={12} />
             Em Minhas Apostas
-            {pick.user_stake_units ? ` · ${pick.user_stake_units}u` : ''}
+            {pick.user_stake_units ? ` com ${pick.user_stake_units}u` : ''}
           </span>
         ) : podeSeguir ? (
           <Button size="sm" onClick={() => onSeguir(pick)}>Apostar</Button>
@@ -1096,7 +1116,7 @@ export default function LivePicksFeed({ isActive, banca }: {
 
       {minhas.length > 0 && (
         <>
-          <TituloDeSecao cor="bg-accent" texto={`Suas apostas ao vivo · ${minhas.length}`} />
+          <TituloDeSecao cor="bg-accent" texto="Suas apostas ao vivo" contagem={minhas.length} />
           <p className="text-[11px] text-ink-4 mb-3 leading-relaxed">
             Ficam aqui até o jogo acabar, mesmo depois de a odd vencer. O resultado entra
             sozinho no apito final e o pick passa pra Minhas Apostas.
@@ -1115,9 +1135,8 @@ export default function LivePicksFeed({ isActive, banca }: {
         <>
           <TituloDeSecao
             cor={motor?.ligado ? 'bg-accent' : 'bg-line-strong'}
-            texto={minhas.length > 0
-              ? `Outras oportunidades · ${oportunidades.length}`
-              : `Em andamento · ${oportunidades.length}`}
+            texto={minhas.length > 0 ? 'Outras oportunidades' : 'Em andamento'}
+            contagem={oportunidades.length}
           />
           {/* Motor desligado COM pick na tela é o caso que mais engana: os
               cards estão lá, parecem novos, e nenhum outro vai chegar. */}

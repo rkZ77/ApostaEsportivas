@@ -45,6 +45,7 @@ from routers.live import (  # noqa: F401
     FT_STATUSES, LIVE_STATUSES, _anulacao_sem_estatistica, _calc_result,
     _fetch_fixture, _fetch_fixtures_bulk, _fetch_stats, _leg_needs_stats,
     _parse_stats, _pick_status, _profit_for_result, _stat_for_market,
+    _sync_followed_result,
 )
 
 logger = logging.getLogger(__name__)
@@ -267,10 +268,23 @@ def liquidar_pendentes(cur, conn, limite: int = 30) -> dict:
                 SET result = %s, profit = %s, status = %s, settled_at = NOW()
                 WHERE id = %s AND result IS NULL
             """, (resultado, profit, STATUS_LIQUIDADO, p["id"]))
-            cur.execute(
-                "UPDATE user_followed_picks SET result=%s WHERE pick_id=%s AND pick_type='live'",
-                (resultado, p["id"]),
-            )
+            # QUEM SEGUIU PRECISA SER AVISADO (2026-08-29).
+            #
+            # Aqui havia um UPDATE cru em `user_followed_picks`, e ele pulava
+            # `_sync_followed_result` -- que e' o PONTO UNICO por onde todo
+            # resultado do site passa justamente pra alimentar o sino (ver o
+            # docstring dele em routers/live.py). O efeito pro assinante era o
+            # pior possivel e o mesmo que o /admin ja tinha corrigido: o
+            # dinheiro mudava na banca dele sem nenhum aviso de que o pick
+            # tinha sido resolvido.
+            #
+            # E' pior no Ao Vivo que em qualquer outro produto: o pick nasce e
+            # morre dentro de uma partida, entao ninguem esta com a aba aberta
+            # esperando o apito -- o sino e' a unica forma de ficar sabendo.
+            #
+            # A funcao faz o mesmo UPDATE e mais a notificacao, entao nao ha
+            # escrita a mais: o que muda e' que o aviso deixa de faltar.
+            _sync_followed_result(p["id"], "live", resultado, cur)
             conn.commit()
             resumo["liquidados"] += 1
             logger.info("[LIVE-PICKS] #%s -> %s (%+.4fu)", p["id"], resultado, profit)
