@@ -14,7 +14,11 @@ let _refreshing: Promise<unknown> | null = null
 // daqui fazia a checagem periódica de sessão (AuthContext) nunca perceber
 // nem um token expirado nem uma sessão derrubada por login em outro
 // dispositivo enquanto o usuário ficava parado numa tela sem outras chamadas.
-const AUTH_NO_RETRY = ['/auth/login', '/auth/register', '/auth/refresh', '/auth/forgot-password', '/auth/reset-password']
+// `/auth/google` entra na lista pelo mesmo motivo do login: um 401 ali é
+// "este token do Google não vale", não "sua sessão expirou" · mandar isso pro
+// fluxo de refresh só trocaria a mensagem de erro por um kick de sessão em
+// quem nem estava logado.
+const AUTH_NO_RETRY = ['/auth/login', '/auth/register', '/auth/google', '/auth/refresh', '/auth/forgot-password', '/auth/reset-password']
 
 // Sessão deslizante: renova o access token silenciosamente via refresh cookie.
 // O refresh token dura 7 dias a partir do login e NÃO é renovado · após 7 dias, precisa logar de novo.
