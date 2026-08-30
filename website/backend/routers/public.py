@@ -119,7 +119,11 @@ def _sub_vip(date_cond: str) -> str:
                -- que saber viver com isso. E' melhor que a alternativa: gravar
                -- hora nova em seis tabelas de pick pra preencher retroativo o
                -- que nao existe mais em lugar nenhum.
-               fx.match_datetime,
+               -- DUAS FONTES, nessa ordem. `fixtures` tem a hora do jogo que
+               -- ainda esta na fila; `match_statistics` guarda a do que ja
+               -- aconteceu e nunca e apagada (coluna nova em 30/08). Sem a
+               -- segunda, so' o jogo mais recente do historico mostrava hora.
+               COALESCE(fx.match_datetime, ms.match_datetime) AS match_datetime,
                pv.home_team_name, pv.away_team_name,
                pv.home_team_id,   pv.away_team_id,
                pv.market, pv.line, pv.odd,
@@ -138,7 +142,7 @@ def _sub_vip(date_cond: str) -> str:
 def _sub_free(date_cond: str) -> str:
     return f"""
         SELECT pf.match_date,
-               f.match_datetime,
+               COALESCE(f.match_datetime, ms.match_datetime) AS match_datetime,
                pf.home_team AS home_team_name, pf.away_team AS away_team_name,
                COALESCE(pf.home_team_id, f.home_team_id,
                    (SELECT fx.home_team_id FROM fixtures fx
@@ -190,7 +194,7 @@ def _sub_alav(date_cond: str) -> str:
     # pra ilustrar.
     return f"""
         SELECT pa.match_date,
-               fx.match_datetime,
+               COALESCE(fx.match_datetime, ms.match_datetime) AS match_datetime,
                pa.home_team_1 AS home_team_name, pa.away_team_1 AS away_team_name,
                COALESCE(pa.home_team_id_1, fx.home_team_id) AS home_team_id,
                COALESCE(pa.away_team_id_1, fx.away_team_id) AS away_team_id,
@@ -202,6 +206,7 @@ def _sub_alav(date_cond: str) -> str:
                'Alavancagem' AS league_name
         FROM picks_alavancagem pa
         LEFT JOIN fixtures fx ON fx.fixture_id = pa.fixture_id_1
+        LEFT JOIN match_statistics ms ON ms.fixture_id = pa.fixture_id_1
         WHERE pa.result IS NOT NULL {_qualificar(date_cond, "pa")}
     """
 
@@ -229,7 +234,7 @@ def _sub_mercado(tabela: str, source: str, rotulo: str):
         # historico quando alguem filtrava por mes.
         return f"""
         SELECT p.match_date,
-               f.match_datetime,
+               COALESCE(f.match_datetime, ms.match_datetime) AS match_datetime,
                p.home_team AS home_team_name, p.away_team AS away_team_name,
                COALESCE(p.home_team_id, f.home_team_id) AS home_team_id,
                COALESCE(p.away_team_id, f.away_team_id) AS away_team_id,
@@ -241,6 +246,7 @@ def _sub_mercado(tabela: str, source: str, rotulo: str):
                COALESCE(l.name, '{rotulo}') AS league_name
         FROM {tabela} p
         LEFT JOIN fixtures f ON f.fixture_id = p.fixture_id
+        LEFT JOIN match_statistics ms ON ms.fixture_id = p.fixture_id
         LEFT JOIN leagues l ON l.league_id = p.league_id
         WHERE p.result IS NOT NULL {_qualificar(date_cond, "p")}
     """
@@ -255,7 +261,7 @@ def _sub_live(date_cond: str) -> str:
     peso = stake_de("live")
     return f"""
         SELECT p.match_date,
-               fx.match_datetime,
+               COALESCE(fx.match_datetime, ms.match_datetime) AS match_datetime,
                p.home_team_name, p.away_team_name,
                p.home_team_id, p.away_team_id,
                p.market, p.line, p.odd,
@@ -266,6 +272,7 @@ def _sub_live(date_cond: str) -> str:
                COALESCE(p.league_name, l.name, 'Ao Vivo') AS league_name
         FROM picks_live p
         LEFT JOIN fixtures fx ON fx.fixture_id = p.fixture_id
+        LEFT JOIN match_statistics ms ON ms.fixture_id = p.fixture_id
         LEFT JOIN leagues l ON l.league_id = p.league_id
         WHERE p.result IS NOT NULL {_qualificar(date_cond, "p")}
     """

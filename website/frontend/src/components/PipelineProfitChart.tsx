@@ -47,6 +47,16 @@ const COR: Record<string, string> = {
      produto é reconhecido, e ela tem que ser a mesma em toda tela. */
   player_stats:'rgb(var(--c-amber-400))',
   boost:       'rgb(var(--c-sky-400))',
+  /* AO VIVO ESTAVA SEM COR, e por isso sumia do gráfico (2026-08-30).
+     O backend mandava a série dele desde sempre e `NOME` já tinha o rótulo --
+     faltava só a linha aqui. Sem cor, `stroke` sai `undefined`, o SVG desenha
+     em preto sobre fundo preto e a legenda pinta um traço invisível: o produto
+     não sumia da conta, sumia da vista, que é pior.
+
+     Verde-limão pra separar do verde da marca (VIP) sem sair da família: os
+     dois são os produtos de assinante, e no site inteiro o ao vivo é verde
+     desde 29/08. */
+  live:        'rgb(var(--c-lime-400))',
 }
 const NOME: Record<string, string> = {
   vip: 'VIP', free: 'Free', multiplas: 'Múltiplas',

@@ -64,6 +64,22 @@ from utils.db_utils import get_connection
 def run_migrations():
     """Aplica ALTER TABLE seguros (IF NOT EXISTS) para colunas novas."""
     migrations = [
+        # HORA DO JOGO NA TABELA QUE NAO SOME (2026-08-30, pedido do usuario).
+        #
+        # `fixtures` era a unica tabela com hora, e ela e' EFEMERA: carrega a
+        # fila operacional e a linha some depois que o jogo passa. Resultado, no
+        # historico publico: so' o jogo mais recente mostrava horario, o resto
+        # so' a data.
+        #
+        # `match_statistics` e' o registro permanente (sem FK, nunca deletado),
+        # entao e' onde a hora tem que morar pra sobreviver.
+        #
+        # EM BRASILIA SEM FUSO, igual `fixtures.match_datetime` -- e ao
+        # contrario de `match_statistics.match_date`, que este mesmo collector
+        # grava em UTC (ver o aviso das duas convencoes em utils/data_br.py).
+        # A escolha e' pela coluna com que ela vai ser comparada e exibida, nao
+        # pela vizinha de tabela.
+        "ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS match_datetime TIMESTAMP;",
         "ALTER TABLE picks_vip   ADD COLUMN IF NOT EXISTS market_id INTEGER;",
         "ALTER TABLE picks_free  ADD COLUMN IF NOT EXISTS market_id INTEGER;",
         "ALTER TABLE picks_vip   ADD COLUMN IF NOT EXISTS stake_units INTEGER;",

@@ -2,6 +2,7 @@
 import sys
 import psycopg2
 import requests
+from zoneinfo import ZoneInfo
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv, find_dotenv
 
@@ -57,6 +58,36 @@ def extract_stat(stats, stat_name, publicada=None):
 def _sum_stats(*parts):
     """Total que respeita ausencia: parcela desconhecida -> total desconhecido."""
     return somar(*parts)
+
+
+#: Fuso de Brasilia · o mesmo de collectors/fixture_collector_service.py.
+_TZ_BR = ZoneInfo("America/Sao_Paulo")
+
+
+def _br_naive(dt):
+    """Datetime da API em horario de Brasilia SEM fuso, ou None.
+
+    E' a convencao de `fixtures.match_datetime`, e agora tambem a de
+    `match_statistics.match_datetime`.
+
+    ACEITA STRING de proposito. `fx["match_date"]` chega como datetime pelo
+    caminho do lote e como ISO cru por outros -- e um `AttributeError` aqui
+    derrubaria a gravacao inteira da partida por causa de uma coluna
+    acessoria. Nao dar pra ler vira None: fica sem hora, que e' exatamente o
+    estado de antes desta coluna existir.
+    """
+    if dt is None:
+        return None
+    if isinstance(dt, str):
+        try:
+            dt = datetime.fromisoformat(dt.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    if not hasattr(dt, "tzinfo"):
+        return None
+    if dt.tzinfo is None:
+        return dt
+    return dt.astimezone(_TZ_BR).replace(tzinfo=None)
 
 
 class MatchStatisticsSyncService:
@@ -380,7 +411,7 @@ class MatchStatisticsSyncService:
                 home_corners, away_corners, total_corners,
                 home_yellow_cards, away_yellow_cards, total_yellow_cards,
                 home_red_cards, away_red_cards, total_red_cards,
-                status, match_date,
+                status, match_date, match_datetime,
 
                 home_shots_on, away_shots_on,
                 home_shots_off, away_shots_off,
@@ -405,7 +436,7 @@ class MatchStatisticsSyncService:
                 %s,%s,%s,
                 %s,%s,%s,
                 %s,%s,%s,
-                %s,%s,
+                %s,%s,%s,
 
                 %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
                 %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
@@ -446,6 +477,10 @@ class MatchStatisticsSyncService:
 
                 status = EXCLUDED.status,
                 match_date = EXCLUDED.match_date,
+                -- COALESCE porque recoleta que volte sem a hora nao pode
+                -- apagar a que ja' estava gravada · mesma regra do resto.
+                match_datetime = COALESCE(EXCLUDED.match_datetime,
+                                          match_statistics.match_datetime),
 
                 home_shots_on = COALESCE(EXCLUDED.home_shots_on, match_statistics.home_shots_on),
                 away_shots_on = COALESCE(EXCLUDED.away_shots_on, match_statistics.away_shots_on),
@@ -480,6 +515,12 @@ class MatchStatisticsSyncService:
             home_yellow, away_yellow, _sum_stats(home_yellow, away_yellow),
             home_red, away_red, _sum_stats(home_red, away_red),
             fx["status"], fx["match_date"],
+            # EM BRASILIA SEM FUSO, igual `fixtures.match_datetime` -- e ao
+            # contrario de `match_date`, na linha de cima, que vai em UTC (ver
+            # o aviso das duas convencoes em utils/data_br.py). A escolha e'
+            # pela coluna com que ela sera comparada e exibida, nao pela
+            # vizinha de tabela.
+            _br_naive(fx["match_date"]),
 
             home_shots_on, away_shots_on,
             home_shots_off, away_shots_off,
