@@ -1101,13 +1101,18 @@ def test_coleta_de_liga_nao_roda_duas_de_uma_vez():
     assert "409" in corpo
 
 
-def test_timeout_de_script_e_de_30_minutos():
+def test_timeout_de_script_e_de_uma_hora():
     """Era 5 min no padrao e matava coleta no meio -- capturar_odds em dia cheio
     passa disso (uma requisicao por fixture), e o sintoma nao era "demorou": era
-    script morto na metade, com odd faltando e sem erro obvio."""
+    script morto na metade, com odd faltando e sem erro obvio.
+
+    Foi pra 30 min em 11/08 e pra 1 HORA em 30/08, pedido do usuario. O teto
+    tem que caber no pior dia, nao no comum · e o de coletar liga continua
+    acima dele, porque backfill e' uma requisicao por jogo da temporada
+    inteira."""
     src = _fonte("routers/admin.py")
-    assert '"default":         1800.0' in src
-    assert '"coletar_liga":    2700.0' in src
+    assert '"default":         3600.0' in src
+    assert '"coletar_liga":    5400.0' in src
 
 
 # ───────── Liga sai da coleta sem sair da tabela (2026-08-11) ─────────

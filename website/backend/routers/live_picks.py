@@ -322,6 +322,116 @@ def liquidar_pendentes(cur, conn, limite: int = 30) -> dict:
     return resumo
 
 
+#: Coluna de `match_statistics` que responde cada familia de mercado do Live.
+#:
+#: O TOTAL DA PARTIDA, os dois times somados · e' assim que a casa liquida e e'
+#: assim que o settlement do projeto conta. Cartao sai em PONTOS (amarelo=1,
+#: vermelho=2), a mesma unidade do mercado no resto do sistema.
+_COLUNA_DA_FOLHA = {
+    "corners": "COALESCE(ms.total_corners, ms.home_corners + ms.away_corners)",
+    "goals":   "COALESCE(ms.total_goals, ms.home_goals + ms.away_goals)",
+    "cards":   "(COALESCE(ms.total_yellow_cards, 0) + 2 * COALESCE(ms.total_red_cards, 0))",
+}
+
+
+def reconferir_liquidados(cur, conn, dias: int = 7) -> dict:
+    """Corrige pick ao vivo cujo resultado nao bate com a folha final.
+
+    POR QUE ISTO EXISTE (2026-08-30, apontado pelo usuario)
+    -------------------------------------------------------
+    A liquidacao acontece uma vez, com o numero que a API tem NAQUELE momento,
+    e nunca era revista. Sao dois jeitos de errar, os dois medidos em producao:
+
+      #40  Over 16 escanteios, liquidado 20:51 como PUSH. A folha final chegou
+           as 00:26 com 17 escanteios · era GREEN, e ficou PUSH.
+
+      #27  Under 3.0 gols, liquidado 15:25 como RED. A folha final tem 3 gols
+           exatos · era PUSH, e ficou RED. O pick #14, o mesmo mercado e a
+           mesma linha, saiu PUSH corretamente no mesmo minuto -- a diferenca
+           nao estava na regra, estava em QUANDO cada um foi lido.
+
+    O provedor completa e corrige folha por horas depois do apito. Quem liquida
+    durante esse periodo esta lendo um numero provisorio, e nao ha como saber
+    disso na hora: um total incompleto e' indistinguivel de um total baixo.
+
+    A FOLHA FINAL E' A FONTE, e nao a API: `match_statistics` e' de onde o site
+    inteiro conta resultado (a pagina publica, o placar dos produtos, a
+    Auditoria). Se o pick do Live discorda dela, e' o pick que esta errado --
+    ele e' o unico numero do sistema que vinha de outro lugar.
+
+    NAO CUSTA REQUISICAO NENHUMA: le a folha que a coleta ja gravou.
+
+    So' mexe onde ha folha COMPLETA (status FT/AET/PEN e o contador presente).
+    Folha ausente nao desfaz liquidacao: seria trocar um resultado por um
+    palpite, que e' pior que o resultado errado.
+    """
+    resumo = {"conferidos": 0, "corrigidos": 0, "correcoes": []}
+    for familia, coluna in _COLUNA_DA_FOLHA.items():
+        try:
+            cur.execute(f"""
+                SELECT pl.id, pl.market, pl.market_type, pl.line, pl.odd, pl.result,
+                       {coluna} AS observado,
+                       ms.home_goals, ms.away_goals,
+                       pl.home_team_name, pl.away_team_name
+                  FROM picks_live pl
+                  JOIN match_statistics ms ON ms.fixture_id = pl.fixture_id
+                 WHERE pl.result IS NOT NULL
+                   AND pl.market_type = %s
+                   AND ms.status IN ('FT','AET','PEN')
+                   AND {coluna} IS NOT NULL
+                   AND pl.match_date >= CURRENT_DATE - %s
+            """, (familia, dias))
+            linhas = cur.fetchall()
+        except Exception as e:
+            conn.rollback()
+            logger.warning("[LIVE-RECONF] %s: %s", familia, str(e)[:200])
+            continue
+
+        for linha in linhas:
+            resumo["conferidos"] += 1
+            # `_calc_result` E NAO `_travado_antes_do_apito`, e a diferenca
+            # custou uma correcao errada antes de eu perceber.
+            #
+            # As duas funcoes respondem perguntas diferentes. O early-lock vale
+            # com a BOLA ROLANDO: la, um Under 3.0 com 3 gols e' RED, porque o
+            # total so' cresce e 3 vira 4 a qualquer momento. Depois do apito o
+            # mesmo 3 e' PUSH -- empatou com a linha, aposta devolvida.
+            #
+            # Aqui o jogo acabou. Quem manda e' a regra de liquidacao, a mesma
+            # de services/settlement.py que grada os outros oito produtos.
+            correto = _calc_result(
+                linha["market"], linha["line"], linha["observado"],
+                int(linha["home_goals"] or 0), int(linha["away_goals"] or 0),
+                market_type=linha["market_type"],
+                home_team=linha["home_team_name"], away_team=linha["away_team_name"],
+            )
+            if not correto or correto == linha["result"]:
+                continue
+
+            odd = float(linha["odd"] or 1)
+            profit = _profit_for_result(correto, odd)
+            cur.execute("""
+                UPDATE picks_live
+                   SET result = %s, profit = %s, settled_at = NOW()
+                 WHERE id = %s
+            """, (correto, profit, linha["id"]))
+            # Quem seguiu tem que ver a correcao no saldo E no sino · e' o
+            # mesmo ponto unico da liquidacao normal.
+            _sync_followed_result(linha["id"], "live", correto, cur)
+            conn.commit()
+            resumo["corrigidos"] += 1
+            resumo["correcoes"].append({
+                "id": linha["id"],
+                "jogo": f"{linha['home_team_name']} x {linha['away_team_name']}",
+                "linha": linha["line"], "observado": linha["observado"],
+                "de": linha["result"], "para": correto,
+            })
+            logger.info("[LIVE-RECONF] #%s %s: %s -> %s (folha=%s)",
+                        linha["id"], linha["line"], linha["result"], correto,
+                        linha["observado"])
+    return resumo
+
+
 # ─────────────────────────────────────────────────────────────────────────
 # LEITURA
 # ─────────────────────────────────────────────────────────────────────────
@@ -434,6 +544,12 @@ def feed(
 
         expirados = expirar_vencidos(cur, conn)
         liquidacao = liquidar_pendentes(cur, conn)
+        # A reconferencia anda junto da liquidacao, no mesmo gatilho de visita:
+        # e' a mesma pergunta ("este pick esta com o resultado certo?") feita
+        # sobre quem ja foi liquidado. Custo zero de API, e sem ela a correcao
+        # dependeria de alguem clicar em algum lugar -- que e' como o defeito
+        # ficou de pe.
+        reconferir_liquidados(cur, conn)
 
         # PICK QUE A PESSOA PEGOU NÃO SAI DA LISTA ANTES DO APITO (2026-08-29,
         # pedido do usuário).

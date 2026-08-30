@@ -108,7 +108,14 @@ class LiveEngineConfig:
     # ── Gates de aprovacao ───────────────────────────────────────────────
     ev_minimo: float = 0.05
     confianca_minima: float = 0.58
-    odd_minima: float = 1.40
+    #: PISO DE ODD 1.49 desde 2026-08-30 (decisao do usuario). Era 1.40.
+    #:
+    #: Nao e' calibragem: e' escolha de produto. Abaixo de 1.49 o pick precisa
+    #: acertar quase sempre pra pagar a variancia -- e o motor Live ainda tem
+    #: historico curto, entao a margem que ele afirma ter e' menos confiavel
+    #: que a do pre-jogo. Um piso mais alto compra menos picks e cada um deles
+    #: paga mais quando entra.
+    odd_minima: float = 1.49
     odd_maxima: float = 4.00
     #: PISO DE PROBABILIDADE (2026-08-20). Nao existia, e a ausencia dele e' o
     #: que deixou passar os dois piores picks dos 7 gravados em DEV:
@@ -247,7 +254,7 @@ class LiveEngineConfig:
             ev_minimo=_decimal("LIVE_MIN_EV", 0.05),
             confianca_minima=_decimal("LIVE_MIN_CONFIDENCE", 0.58),
             probabilidade_minima=_decimal("LIVE_MIN_PROBABILITY", 0.55),
-            odd_minima=_decimal("LIVE_MIN_ODD", 1.40),
+            odd_minima=_decimal("LIVE_MIN_ODD", 1.49),
             odd_maxima=_decimal("LIVE_MAX_ODD", 4.00),
             max_picks_por_partida=_inteiro("LIVE_MAX_PICKS_PER_FIXTURE", 2),
             minutos_entre_picks=_inteiro("LIVE_MINUTES_BETWEEN_PICKS", 20),
