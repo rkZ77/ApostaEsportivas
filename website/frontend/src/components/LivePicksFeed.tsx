@@ -1117,18 +1117,11 @@ export default function LivePicksFeed({ isActive, banca }: {
             * Ele puxa as três fontes da aba de uma vez -- picks, leitura e
             * placar -- porque atualizar só uma deixaria a tela meio nova e
             * meio velha, que é pior que velha inteira. */}
-          <button
-            type="button"
-            onClick={atualizarTudo}
-            disabled={atualizando}
-            aria-label="Atualizar os dados da aba"
-            className="flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full
-                       border border-line-strong text-ink-3 hover:text-ink-1 hover:border-ink-4
-                       disabled:opacity-50 transition-colors min-h-[28px] touch-manipulation"
-          >
-            <RefreshCw className={`w-3 h-3 ${atualizando ? 'animate-spin' : ''}`} />
-            {atualizando ? 'atualizando' : 'atualizar'}
-          </button>
+          <Button size="sm" variant="ghost" onClick={atualizarTudo} disabled={atualizando}
+                  aria-label="Atualizar os dados da aba">
+            <RefreshCw className={`w-3.5 h-3.5 ${atualizando ? 'animate-spin' : ''}`} />
+            Atualizar
+          </Button>
           {motor && (
             <span className={`flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full border ${
               motor.ligado

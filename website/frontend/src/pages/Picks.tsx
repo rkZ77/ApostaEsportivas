@@ -1634,15 +1634,23 @@ function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando, banca 
   )
 }
 
-function SectionHeader({ color, label, badge, action }: {
+function SectionHeader({ color, label, badge, action, contagem }: {
   color: string; label: string; badge?: string
   /** Ação opcional alinhada à direita. */
   action?: React.ReactNode
+  /** Quantos itens a seção tem. Elemento, não texto colado no título. */
+  contagem?: number
 }) {
   return (
     <div className="flex items-center gap-3 mb-4">
       <span className={`w-0.5 h-5 ${color} rounded-full block`} />
       <h2 className="text-sm font-bold text-ink-2">{label}</h2>
+      {contagem != null && (
+        <span className="font-mono text-[11px] font-bold tabular-nums text-ink-3
+                         bg-surface-2 border border-line rounded-full px-2 py-0.5">
+          {contagem}
+        </span>
+      )}
       {badge && <span className="badge-vip">{badge}</span>}
       {action && <div className="ml-auto shrink-0">{action}</div>}
     </div>
@@ -3615,18 +3623,8 @@ export default function Picks() {
                   Uma combinação <span className="text-ink-1 font-bold">fixa</span>, no mesmo jogo:{' '}
                   <span className="text-ink-1 font-bold">Mais de 1.5 gols no jogo inteiro</span> e{' '}
                   <span className="text-ink-1 font-bold">Menos de 2.5 gols no primeiro tempo</span>.
-                </p>
-                <p>
-                  Nos outros produtos o motor olha um jogo e escolhe o melhor mercado dele. Aqui é o
-                  contrário: <span className="text-ink-1 font-bold">o mercado já está definido e o
-                  que se escolhe são os jogos</span> · por isso o dia costuma ter mais de um, e isso
-                  é o esperado, não anomalia.
-                </p>
-                <p>
-                  A ordem é pelo <span className="text-ink-1 font-bold">Score Estatístico</span>, não
-                  pela odd. No Boost a odd não seleciona: ela é faixa de sanidade, porque um Mais de
-                  1.5 pagando 1.05 não deixa margem, e pagando 2.40 é o mercado dizendo que o jogo é
-                  fraco de gol · contra o que o modelo estaria afirmando.
+                  O mercado já está definido, e o que a IA escolhe são os jogos, por isso o dia
+                  costuma ter mais de um.
                 </p>
                 <PlacarDoProduto source="boost" tom="text-cyan-400/70" />
               </div>
@@ -3638,7 +3636,7 @@ export default function Picks() {
               {boost === null && todayLoading ? (
                 <PickLoading />
               ) : boostFree.length === 0 ? (
-                <SecaoVazia texto="Sem Pick Boost hoje, porque o motor só publica quando o jogo é forte nas duas pernas ao mesmo tempo, e isso não acontece todo dia." />
+                <SecaoVazia texto="Sem Pick Boost hoje. A IA só publica quando o jogo é forte nas duas pernas ao mesmo tempo." />
               ) : (
                 <div className="lista-longa grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                   {boostFree.map(p => (
@@ -3663,7 +3661,7 @@ export default function Picks() {
               )
             ) : boostVip.length > 0 && (
               <div>
-                <SectionHeader color="bg-cyan-400" label={`Os outros do dia · ${boostVip.length}`} badge="VIP" />
+                <SectionHeader color="bg-cyan-400" label="Os outros do dia" contagem={boostVip.length} badge="VIP" />
                 <div className="lista-longa grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                   {boostVip.map(p => (
                     <SuggestionCard
