@@ -85,3 +85,4 @@ Thumbs.db
 
 # Uploads locais
 website/backend/static/avatars/
+FETCH_HEAD
