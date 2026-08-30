@@ -109,6 +109,17 @@ def _sub_vip(date_cond: str) -> str:
     # la; match_statistics e' o registro permanente (sem FK, nunca deletado).
     return f"""
         SELECT pv.match_date,
+               -- HORA DO JOGO (2026-08-30, pedido do usuario). Sai de
+               -- `fixtures`, que e a UNICA tabela do projeto com hora: os picks
+               -- guardam `match_date`, que e DATE pura.
+               --
+               -- E `fixtures` e' EFEMERA -- ela carrega a fila operacional e a
+               -- linha some depois que o jogo passa. Entao a hora aparece no
+               -- que e' recente e vem NULL no historico antigo, e a tela tem
+               -- que saber viver com isso. E' melhor que a alternativa: gravar
+               -- hora nova em seis tabelas de pick pra preencher retroativo o
+               -- que nao existe mais em lugar nenhum.
+               fx.match_datetime,
                pv.home_team_name, pv.away_team_name,
                pv.home_team_id,   pv.away_team_id,
                pv.market, pv.line, pv.odd,
@@ -119,6 +130,7 @@ def _sub_vip(date_cond: str) -> str:
                COALESCE(l.name, 'Liga ' || ms.league_id) AS league_name
         FROM picks_vip pv
         LEFT JOIN match_statistics ms ON ms.fixture_id = pv.fixture_id
+        LEFT JOIN fixtures fx ON fx.fixture_id = pv.fixture_id
         LEFT JOIN leagues l ON l.league_id = ms.league_id
         WHERE pv.result IS NOT NULL {_qualificar(date_cond, "pv")}
     """
@@ -126,6 +138,7 @@ def _sub_vip(date_cond: str) -> str:
 def _sub_free(date_cond: str) -> str:
     return f"""
         SELECT pf.match_date,
+               f.match_datetime,
                pf.home_team AS home_team_name, pf.away_team AS away_team_name,
                COALESCE(pf.home_team_id, f.home_team_id,
                    (SELECT fx.home_team_id FROM fixtures fx
@@ -151,6 +164,9 @@ def _sub_free(date_cond: str) -> str:
 def _sub_mult(date_cond: str) -> str:
     return f"""
         SELECT match_date,
+               -- Bilhete de varias pernas nao tem UM horario. NULL e' a
+               -- resposta certa, e a tela mostra so' a data.
+               NULL::TIMESTAMP AS match_datetime,
                CONCAT('Múltipla · ', JSONB_ARRAY_LENGTH(games::jsonb), ' sel.') AS home_team_name,
                NULL AS away_team_name,
                NULL::INTEGER AS home_team_id, NULL::INTEGER AS away_team_id,
@@ -165,18 +181,28 @@ def _sub_mult(date_cond: str) -> str:
     """
 
 def _sub_alav(date_cond: str) -> str:
+    # O ESCUDO DA ALAVANCAGEM ERA NULL A TOA. A tela mostra o confronto da
+    # primeira perna ("home_team_1 x away_team_1") e mandava id nulo junto, o
+    # que deixava esses cards sem escudo no historico inteiro -- e a coluna
+    # existe em `picks_alavancagem` desde 28/08 (`home_team_id_1`).
+    #
+    # Multipla continua com id nulo, e ali e' o certo: ela nao tem UM confronto
+    # pra ilustrar.
     return f"""
-        SELECT match_date,
-               home_team_1 AS home_team_name, away_team_1 AS away_team_name,
-               NULL::INTEGER AS home_team_id, NULL::INTEGER AS away_team_id,
-               market_1 AS market, line_1 AS line, odd_combined AS odd,
-               result, profit * {_P_ALAV} AS profit,
+        SELECT pa.match_date,
+               fx.match_datetime,
+               pa.home_team_1 AS home_team_name, pa.away_team_1 AS away_team_name,
+               COALESCE(pa.home_team_id_1, fx.home_team_id) AS home_team_id,
+               COALESCE(pa.away_team_id_1, fx.away_team_id) AS away_team_id,
+               pa.market_1 AS market, pa.line_1 AS line, pa.odd_combined AS odd,
+               pa.result, pa.profit * {_P_ALAV} AS profit,
                {_P_ALAV}::numeric AS stake,
                'alavancagem' AS source,
                NULL::INTEGER AS league_id,
                'Alavancagem' AS league_name
-        FROM picks_alavancagem
-        WHERE result IS NOT NULL {date_cond}
+        FROM picks_alavancagem pa
+        LEFT JOIN fixtures fx ON fx.fixture_id = pa.fixture_id_1
+        WHERE pa.result IS NOT NULL {_qualificar(date_cond, "pa")}
     """
 
 def _sub_mercado(tabela: str, source: str, rotulo: str):
@@ -203,6 +229,7 @@ def _sub_mercado(tabela: str, source: str, rotulo: str):
         # historico quando alguem filtrava por mes.
         return f"""
         SELECT p.match_date,
+               f.match_datetime,
                p.home_team AS home_team_name, p.away_team AS away_team_name,
                COALESCE(p.home_team_id, f.home_team_id) AS home_team_id,
                COALESCE(p.away_team_id, f.away_team_id) AS away_team_id,
@@ -228,6 +255,7 @@ def _sub_live(date_cond: str) -> str:
     peso = stake_de("live")
     return f"""
         SELECT p.match_date,
+               fx.match_datetime,
                p.home_team_name, p.away_team_name,
                p.home_team_id, p.away_team_id,
                p.market, p.line, p.odd,
@@ -237,6 +265,7 @@ def _sub_live(date_cond: str) -> str:
                p.league_id AS league_id,
                COALESCE(p.league_name, l.name, 'Ao Vivo') AS league_name
         FROM picks_live p
+        LEFT JOIN fixtures fx ON fx.fixture_id = p.fixture_id
         LEFT JOIN leagues l ON l.league_id = p.league_id
         WHERE p.result IS NOT NULL {_qualificar(date_cond, "p")}
     """

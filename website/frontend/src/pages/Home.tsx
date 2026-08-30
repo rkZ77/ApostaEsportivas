@@ -40,6 +40,8 @@ import NextGames from '../home/NextGames'
 
 interface RecentTip {
   match_date: string
+  /** Horário do jogo · só existe enquanto a partida está em `fixtures`. */
+  match_datetime?: string | null
   home_team_name: string
   away_team_name?: string
   home_team_id?: number
@@ -183,8 +185,27 @@ function RecentResults({ data, loading }: { data: PublicData | null; loading: bo
               <div className="divide-y divide-line/50">
                 {recent.map((tip, i) => (
                   <div key={i} className="flex items-center gap-2 px-4 py-3">
-                    <span className="font-mono text-[10px] text-ink-4 tabular-nums shrink-0 w-10">
-                      {new Date(tip.match_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                    {/* DIA E HORA (2026-08-30, pedido do usuário).
+                      *
+                      * A hora vem de `fixtures`, a única tabela do projeto que
+                      * a tem -- os picks guardam `match_date`, que é DATE pura.
+                      * E `fixtures` é efêmera: a linha some depois que o jogo
+                      * passa. Então a hora aparece no que é recente e falta no
+                      * histórico antigo, e a coluna encolhe pra data sozinha
+                      * em vez de mostrar um vazio alinhado.
+                      *
+                      * Fatiado da string, nunca `new Date` no datetime: o
+                      * backend grava o horário do jogo em Brasília sem fuso, e
+                      * qualquer parse aplicaria o fuso do navegador por cima.
+                      * A data pura pode ir por `new Date` porque leva T12:00
+                      * fixo, longe da virada do dia. */}
+                    <span className="font-mono text-[10px] text-ink-4 tabular-nums shrink-0 w-10 leading-tight">
+                      <span className="block">
+                        {new Date(tip.match_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                      </span>
+                      {tip.match_datetime && (
+                        <span className="block text-ink-3">{tip.match_datetime.slice(11, 16)}</span>
+                      )}
                     </span>
 
                     <PickTypeBadge type={tip.source} short />

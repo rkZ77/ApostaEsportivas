@@ -171,14 +171,22 @@ def test_tela_trata_a_dica_anterior_como_historico():
 # ──────────────────────── Peso da pagina ───────────────────────────────
 
 
-def test_home_nao_pede_mais_recentes_do_que_mostra():
+def test_home_pede_o_suficiente_pra_escolher_e_nao_mais():
     """Pedia 50 e renderizava 10: o backend roda uma sub-query por tipo de
-    pick, entao o excesso multiplicava por seis do lado do banco."""
+    pick, entao o excesso multiplicava por seis do lado do banco.
+
+    Em 30/08 a Home passou a ESCOLHER as dez com teto por produto -- sem isso,
+    um dia cheio do motor ao vivo ocupava a lista inteira. Escolher exige ter
+    de onde: pedir dez e mostrar dez volta ao problema antigo.
+
+    A folga tem limite: 40 cobre o teto por produto com sobra e continua longe
+    do teto de 50 da rota."""
     src = _front("pages/Home.tsx")
     pedido = re.search(r"recent_limit:\s*(\d+)", src)
-    mostrado = re.search(r"\.recent\s*\?\?\s*\[\]\)\.slice\(0,\s*(\d+)\)", src)
-    assert pedido and mostrado
-    assert int(pedido.group(1)) == int(mostrado.group(1))
+    assert pedido
+    assert 10 <= int(pedido.group(1)) <= 40
+    # E a lista renderizada continua sendo dez.
+    assert re.search(r"ultimasPorProduto\(data\?\.recent \?\? \[\], 10\)", src)
 
 
 def test_resposta_da_api_sai_comprimida():

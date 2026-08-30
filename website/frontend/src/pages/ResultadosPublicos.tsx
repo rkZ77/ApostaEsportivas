@@ -36,6 +36,8 @@ interface LeagueResult {
 }
 interface RecentTip {
   match_date: string
+  /** Horário do jogo · só existe enquanto a partida está em `fixtures`. */
+  match_datetime?: string | null
   home_team_name: string; away_team_name?: string
   home_team_id?: number; away_team_id?: number
   market?: string; line?: string; odd: number
@@ -537,8 +539,18 @@ export default function ResultadosPublicos() {
                   <div className="divide-y divide-line/50">
                     {filteredRecent.map((tip, i) => (
                       <div key={i} className="flex items-center gap-2 px-4 py-3">
-                        <span className="text-[10px] text-ink-4 shrink-0 w-12">
-                          {new Date(tip.match_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                        {/* Dia e hora · a hora vem de `fixtures` e falta no
+                            histórico antigo, então a coluna encolhe pra data
+                            sozinha em vez de deixar um vazio alinhado. Fatiada
+                            da string: o horário é gravado em Brasília sem fuso
+                            e `new Date` aplicaria o do navegador por cima. */}
+                        <span className="text-[10px] text-ink-4 shrink-0 w-12 leading-tight">
+                          <span className="block">
+                            {new Date(tip.match_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                          </span>
+                          {tip.match_datetime && (
+                            <span className="block font-mono text-ink-3">{tip.match_datetime.slice(11, 16)}</span>
+                          )}
                         </span>
                         <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shrink-0 ${PICK_TYPE_CLS[tip.source] ?? ''}`}>
                           {SRC_LBL[tip.source] ?? tip.source}
