@@ -3541,6 +3541,13 @@ def get_market_form(
        Card e pick contando historias diferentes sobre o mesmo numero e' pior
        que nao mostrar serie nenhuma.
     """
+    # Paywall: a serie do mercado devolve `market` e `line` da perna · o
+    # conteudo que se paga. So' `free` e' publico; todo o resto exige plano
+    # ativo, igual ao /detail. Sem esta trava, um free pegava o id do pick VIP
+    # no teaser de /today (result["bloqueados"]) e lia mercado+linha aqui.
+    if pick_type != "free" and not is_vip_active(current_user):
+        raise HTTPException(403, "Acesso VIP necessário para ver a análise completa")
+
     conn = get_connection()
     cur = conn.cursor()
     try:
@@ -3614,6 +3621,12 @@ def get_amostra(
     tabela = _TABELA_ENGINE_DEBUG.get(pick_type)
     if not tabela:
         return {"available": False, "reason": "tipo de pick sem amostra"}
+
+    # Paywall: a amostra e' a analise interna que decidiu o pick pago. So'
+    # `free` e' publico; o resto segue a mesma regra do /detail e do
+    # /market-form. Ver o comentario la'.
+    if pick_type != "free" and not is_vip_active(current_user):
+        raise HTTPException(403, "Acesso VIP necessário para ver a análise completa")
 
     conn = get_connection()
     cur = conn.cursor()
