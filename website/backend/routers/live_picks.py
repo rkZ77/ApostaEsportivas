@@ -784,7 +784,11 @@ def em_leitura(current_user: dict = Depends(require_live_reader), limit: int = Q
 
 
 @router.get("/stats")
-def estatisticas(current_user: dict = Depends(require_live_reader)):
+def estatisticas(
+    date: str | None = Query(None, description="YYYY-MM-DD · só este dia"),
+    month: str | None = Query(None, description="YYYY-MM · só este mês"),
+    current_user: dict = Depends(require_live_reader),
+):
     """Performance do Live, SEPARADA da do pre-jogo.
 
     Nenhuma consulta daqui toca picks_vip, picks_free ou as outras quatro
@@ -813,7 +817,31 @@ def estatisticas(current_user: dict = Depends(require_live_reader)):
     try:
         if not _tabela_existe(cur):
             return {"disponivel": False}
-        cur.execute("""
+        # RECORTE DE PERIODO (2026-08-30).
+        #
+        # O placar do Live nasceu como numero unico "desde sempre", que e o que
+        # a aba do produto mostra. Os cards de divulgacao precisam do dia e do
+        # mes -- os outros produtos ja tinham isso em /public/results, e o Live
+        # e medido a parte de proposito (ver a docstring abaixo), entao o
+        # recorte tem que existir aqui tambem.
+        #
+        # Corta por `match_date` e nao por `created_at`: o pick nasce durante a
+        # partida, entao os dois quase sempre coincidem -- mas quando um jogo
+        # vira o dia, o resultado pertence ao dia da PARTIDA, que e como o
+        # placar dos outros produtos ja conta.
+        #
+        # Data invalida vira "sem recorte" em vez de erro: isto alimenta card
+        # de divulgacao, e um 422 na tela do admin seria pior que um numero
+        # mais largo do que o pedido.
+        onde, params = "", []
+        if date:
+            onde = "WHERE match_date = %s"
+            params = [date]
+        elif month:
+            onde = "WHERE to_char(match_date, 'YYYY-MM') = %s"
+            params = [month]
+
+        cur.execute(f"""
             SELECT
                 COUNT(*)                                          AS total_gerados,
                 COUNT(*) FILTER (WHERE expiration_reason IS NOT NULL) AS expirados,
@@ -828,18 +856,20 @@ def estatisticas(current_user: dict = Depends(require_live_reader)):
                 AVG(confidence) FILTER (WHERE result IS NOT NULL) AS confianca_media,
                 AVG(minute_at_creation)                           AS minuto_medio
             FROM picks_live
-        """)
+            {onde}
+        """, params)
         linha = dict(cur.fetchone() or {})
 
-        cur.execute("""
+        cur.execute(f"""
             SELECT market_type,
                    COUNT(*) FILTER (WHERE result IS NOT NULL) AS resolvidos,
                    COUNT(*) FILTER (WHERE result = 'GREEN')   AS greens,
                    COALESCE(SUM(profit) FILTER (WHERE result IS NOT NULL), 0) AS profit
             FROM picks_live
+            {onde}
             GROUP BY market_type
             ORDER BY resolvidos DESC
-        """)
+        """, params)
         por_mercado = [dict(r) for r in cur.fetchall()]
     finally:
         cur.close()
@@ -850,6 +880,11 @@ def estatisticas(current_user: dict = Depends(require_live_reader)):
     lucro = float(linha.get("profit") or 0)
     return {
         "disponivel": True,
+        # Vai na resposta pra o card de divulgacao nao ter que reconstruir o
+        # rotulo do periodo por conta dele -- e pra a tela poder dizer de que
+        # recorte o numero e', que e' a diferenca entre "5 picks" e "5 picks
+        # hoje".
+        "periodo": {"date": date, "month": month} if (date or month) else None,
         "escopo": "somente picks_live · nao inclui pre-jogo",
         "base": "todo pick gerado pelo motor, seguido ou nao",
         "total_gerados": int(linha.get("total_gerados") or 0),
