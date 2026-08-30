@@ -1378,7 +1378,7 @@ export default function Admin() {
                   multipla: 'text-blue-400 bg-blue-400/10', alavancagem: 'text-orange-400 bg-orange-400/10',
                   faltas: 'text-purple-400 bg-purple-400/10', goleiros: 'text-sky-400 bg-sky-400/10',
                   player_stats: 'text-amber-400 bg-amber-400/10',
-                  boost: 'text-pink-400 bg-pink-400/10', live: 'text-red-400 bg-red-400/10',
+                  boost: 'text-pink-400 bg-pink-400/10', live: 'text-accent-ink bg-accent/10',
                 }
                 const resCls = p.result ? (resultCls[p.result] ?? 'text-ink-2 bg-surface-3/40 border-line-strong/30') : 'text-ink-4 bg-surface-1 border-line'
                 return (

@@ -56,10 +56,15 @@ export const PICK_TYPE_HEX: Record<string, string> = {
   /* Ciano · o Boost é combinado e precisa se distinguir do âmbar do
      Player Stats e do verde do VIP numa lista misturada. */
   boost: '#22d3ee',
-  /* Vermelho é a cor de "ao vivo" no site (badge pulsante da barra de abas),
-     e por isso é ela que identifica o produto Live nos cards. Não colide com
-     o vermelho de RED, que só aparece no selo de resultado. */
-  live: '#f87171',
+  /* VERDE DA MARCA (#00CC00), e não o vermelho de "ao vivo" (29/08, decisão
+     do usuário). O vermelho vinha do badge pulsante da barra de abas, mas
+     dentro do card ele disputava leitura com o vermelho de RED: numa lista
+     misturada, um card inteiro contornado de vermelho parece pick perdido
+     antes de qualquer um ler o selo de resultado.
+
+     É o verde da marca, e não o #4ade80 do Free: os dois convivem na mesma
+     tela e precisam continuar distinguíveis. */
+  live: '#00CC00',
 }
 
 /**
@@ -78,7 +83,7 @@ export const PICK_TYPE_BORDER: Record<string, string> = {
   goleiros:    'border-sky-400/20 hover:border-sky-400/40',
   player_stats:'border-amber-400/20 hover:border-amber-400/40',
   boost:       'border-cyan-400/20 hover:border-cyan-400/40',
-  live:        'border-red-400/25 hover:border-red-400/50',
+  live:        'border-accent/25 hover:border-accent/50',
 }
 
 /** Classes Tailwind pro badge de tipo de pick (VIP/Free/Múltipla/Alavancagem). */
@@ -94,5 +99,5 @@ export const PICK_TYPE_CLS: Record<string, string> = {
   goleiros:    'text-sky-400 bg-sky-400/10 border-sky-400/20',
   player_stats:'text-amber-400 bg-amber-400/10 border-amber-400/20',
   boost:       'text-cyan-400 bg-cyan-400/10 border-cyan-400/20',
-  live:        'text-red-300 bg-red-500/10 border-red-400/25',
+  live:        'text-accent-ink bg-accent/10 border-accent/25',
 }

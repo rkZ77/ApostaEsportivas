@@ -127,7 +127,7 @@ function PlacarDoLive() {
   if (!d?.disponivel || resolvidos === 0) {
     return (
       <p className="text-[11px] text-ink-4 mt-3 leading-relaxed">
-        Nenhum pick ao vivo foi liquidado ainda · o placar aparece aqui assim que o
+        Nenhum pick ao vivo foi liquidado ainda. O placar aparece aqui assim que o
         primeiro fechar.
       </p>
     )
@@ -154,8 +154,8 @@ function PlacarDoLive() {
           </div>
         ))}
       </div>
-      <p className="text-[10px] text-red-400/70 mt-1.5 leading-relaxed">
-        Só do Ao Vivo · o placar do pré-jogo é medido à parte. Entra todo pick que o motor
+      <p className="text-[10px] text-accent-ink/70 mt-1.5 leading-relaxed">
+        Só do Ao Vivo. O placar do pré-jogo é medido à parte. Entra todo pick que o motor
         gerou, seguido ou não: a taxa descreve o motor, não o que deu tempo de pegar.
         {typeof d.minuto_medio === 'number' && ` Minuto médio de entrada: ${d.minuto_medio}'.`}
       </p>
@@ -265,9 +265,9 @@ function EmLeituraAgora({ isActive, motor }: {
     <div className="mt-8">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
         <div className="flex items-center gap-2">
-          <span className="w-1 h-4 rounded-full bg-red-400" />
+          <span className="w-1 h-4 rounded-full bg-accent" />
           <h3 className="text-sm font-bold text-ink-1 flex items-center gap-1.5">
-            <Eye className="w-3.5 h-3.5 text-red-400" />
+            <Eye className="w-3.5 h-3.5 text-accent-ink" />
             O motor está lendo · {partidas.length}
           </h3>
         </div>
@@ -276,10 +276,10 @@ function EmLeituraAgora({ isActive, motor }: {
           * fica ao lado do que está sendo lido, que é onde a pergunta nasce. */}
         <span className={`flex items-center gap-1.5 text-[10px] font-semibold px-2 py-1 rounded-full border ${
           motor?.ligado
-            ? 'border-red-400/40 bg-red-500/10 text-red-300'
+            ? 'border-accent/40 bg-accent/10 text-accent-ink'
             : 'border-line-strong bg-surface-2 text-ink-3'}`}>
           {motor?.ligado
-            ? <><LiveDot tone="red" /> varrendo</>
+            ? <><LiveDot /> varrendo</>
             : <><PowerOff className="w-3 h-3" /> motor parado</>}
           {motor?.ultima_rodada && (
             <span className="font-mono text-ink-4">{horaCurta(motor.ultima_rodada)}</span>
@@ -287,7 +287,7 @@ function EmLeituraAgora({ isActive, motor }: {
         </span>
       </div>
       <p className="text-[11px] text-ink-4 mb-3 leading-relaxed">
-        Os jogos que o motor está acompanhando, com o que ele leu de cada um · os números são
+        Os jogos que o motor está acompanhando, com o que ele leu de cada um. Os números são
         o total da partida, os dois times somados. Ele só publica quando a leitura se afasta do
         esperado e a odd paga por isso, então{' '}
         <span className="text-ink-3">{partidas.length} em leitura e {comPick} com pick</span>{' '}
@@ -306,14 +306,14 @@ function EmLeituraAgora({ isActive, motor }: {
               key={p.fixture_id}
               className={`relative overflow-hidden rounded-xl border transition-colors duration-1 ${
                 p.tem_pick
-                  ? 'border-red-400/50 bg-red-500/[0.07]'
+                  ? 'border-accent/50 bg-accent/[0.07]'
                   : 'border-line bg-surface-1 hover:border-line-strong'}`}
             >
               {/* Faixa do tempo de jogo, colada no topo do cartão. */}
               <div className="absolute inset-x-0 top-0 h-[3px] bg-surface-3/60">
                 <div
                   className={`h-full transition-all duration-1000 ease-linear ${
-                    p.tem_pick ? 'bg-red-400' : 'bg-ink-4/60'}`}
+                    p.tem_pick ? 'bg-accent' : 'bg-ink-4/60'}`}
                   style={{ width: `${andamento}%` }}
                 />
               </div>
@@ -325,8 +325,8 @@ function EmLeituraAgora({ isActive, motor }: {
                     <span className="text-[10px] text-ink-4 truncate">{p.liga ?? 'liga ?'}</span>
                   </span>
                   <span className="flex items-center gap-1.5 shrink-0">
-                    <LiveDot tone="red" />
-                    <span className="font-mono text-[11px] font-bold text-red-300 tabular-nums"
+                    <LiveDot />
+                    <span className="font-mono text-[11px] font-bold text-accent-ink tabular-nums"
                           title={projetado ? 'Minuto projetado desde a última leitura' : undefined}>
                       {minuto != null
                         ? `${projetado ? '~' : ''}${minuto}'`
@@ -386,7 +386,7 @@ function EmLeituraAgora({ isActive, motor }: {
                     )}
                   </span>
                   {p.tem_pick
-                    ? <span className="text-red-300 font-bold">já virou pick</span>
+                    ? <span className="text-accent-ink font-bold">já virou pick</span>
                     : <span className="text-ink-4">sem oportunidade ainda</span>}
                 </div>
               </div>
@@ -660,7 +660,20 @@ const CardLive = forwardRef<HTMLDivElement, {
   const direcao: 'over' | 'under' = pick.line.toLowerCase().startsWith('under') ? 'under' : 'over'
   const linhaNum = parseFloat(pick.line.replace(/[^\d.]/g, ''))
   const temBarra = pick.current_val != null && !isNaN(linhaNum)
-  const podeSeguir = !pick.is_followed && !encerrado && !oddVencida
+  /* O QUE FECHA O BOTÃO É O RESULTADO, NÃO O RELÓGIO (29/08, decisão do
+   * usuário).
+   *
+   * A odd vencida tirava o botão da tela, e isso confundia prazo com fim: o
+   * `EXPIRED` diz que o PREÇO daquele instante caducou, não que o pick
+   * acabou. O jogo segue, o pick segue sendo acompanhado e liquidado, e quem
+   * quiser entrar pela odd que a casa mostra AGORA está tomando uma decisão
+   * legítima -- é o mesmo caso que o backend já aceitava desde 17/07
+   * (banca.follow_pick só recusa depois do resultado; a odd real vai no
+   * `actual_odd`, e é ela que entra na banca).
+   *
+   * O prazo continua visível na contagem ao lado, que é onde ele informa sem
+   * decidir pela pessoa. */
+  const podeSeguir = !pick.is_followed && !encerrado
   const temAposta = !encerrado && aposta.unidades > 0
   const lucroPot = (Number(oddEfetiva) - 1) * aposta.unidades
 
@@ -698,8 +711,8 @@ const CardLive = forwardRef<HTMLDivElement, {
           {encerrado ? (
             <ResultBadge result={pick.result} />
           ) : pick.is_live ? (
-            <Badge tone="red" className="gap-1.5">
-              <LiveDot tone="red" className="w-1.5 h-1.5" />
+            <Badge tone="green" className="gap-1.5">
+              <LiveDot className="w-1.5 h-1.5" />
               {STATUS_LABEL[pick.live_status] ?? 'Ao vivo'}
             </Badge>
           ) : (
@@ -831,7 +844,18 @@ const CardLive = forwardRef<HTMLDivElement, {
         ) : null}
 
         <div className="ml-auto shrink-0">
-          {!encerrado && <Contagem segundos={pick.segundos_de_validade} />}
+          {/* Com a odd vencida o botão continua ali (ver `podeSeguir`), então o
+              lugar do prazo passa a dizer o que mudou: o preço da tela é
+              histórico, e o que vale é o da casa agora. Some o relógio, entra
+              o aviso -- oferecer o botão sem essa linha seria oferecer um
+              número que já não existe. */}
+          {encerrado ? null : oddVencida ? (
+            <span className="text-[10px] text-amber-400 font-semibold">
+              odd vencida, confira o preço atual
+            </span>
+          ) : (
+            <Contagem segundos={pick.segundos_de_validade} />
+          )}
         </div>
       </div>
     </motion.div>
@@ -993,7 +1017,7 @@ export default function LivePicksFeed({ isActive, banca }: {
     <div>
       {/* Painel de abertura na cor do produto, como o das outras abas · o Live
           é vermelho no site inteiro (PICK_TYPE_HEX.live). */}
-      <div className="bg-red-500/5 border border-red-400/25 rounded-lg p-4 mb-6">
+      <div className="bg-accent/5 border border-accent/25 rounded-lg p-4 mb-6">
         {/* O ESTADO DO MOTOR NO TOPO, SEMPRE (29/08, pedido do usuário).
           *
           * Ele existia em dois lugares e nenhum dos dois era o topo: no vazio
@@ -1005,17 +1029,17 @@ export default function LivePicksFeed({ isActive, banca }: {
           * Agora é a primeira coisa da aba, e diz as duas metades da resposta:
           * se está varrendo, e de quando foi a última passada. */}
         <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-          <h3 className="text-sm font-bold text-red-300 flex items-center gap-2">
-            <LiveDot tone="red" />
+          <h3 className="text-sm font-bold text-accent-ink flex items-center gap-2">
+            <LiveDot />
             O que são os Picks Ao Vivo?
           </h3>
           {motor && (
             <span className={`flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full border ${
               motor.ligado
-                ? 'border-red-400/40 bg-red-500/10 text-red-300'
+                ? 'border-accent/40 bg-accent/10 text-accent-ink'
                 : 'border-amber-500/40 bg-amber-500/10 text-amber-400'}`}>
               {motor.ligado
-                ? <><LiveDot tone="red" /> MOTOR VARRENDO</>
+                ? <><LiveDot /> MOTOR VARRENDO</>
                 : <><PowerOff className="w-3 h-3" /> MOTOR PARADO</>}
               {motor.ultima_rodada && (
                 <span className="font-mono font-normal opacity-80">
@@ -1062,8 +1086,8 @@ export default function LivePicksFeed({ isActive, banca }: {
             Icon={PowerOff}
             title="O motor não está rodando agora"
             description={
-              'Ele varre os jogos em andamento apenas quando está ligado · nada será publicado até '
-              + 'lá. Não é falta de oportunidade, é o motor parado.'
+              'Ele varre os jogos em andamento apenas quando está ligado. Nada será publicado '
+              + 'até lá. Não é falta de oportunidade, é o motor parado.'
               + (motor?.ultima_rodada ? ` A última varredura foi às ${horaCurta(motor.ultima_rodada)}.` : '')
             }
           />
@@ -1090,7 +1114,7 @@ export default function LivePicksFeed({ isActive, banca }: {
       {oportunidades.length > 0 && (
         <>
           <TituloDeSecao
-            cor={motor?.ligado ? 'bg-red-400' : 'bg-line-strong'}
+            cor={motor?.ligado ? 'bg-accent' : 'bg-line-strong'}
             texto={minhas.length > 0
               ? `Outras oportunidades · ${oportunidades.length}`
               : `Em andamento · ${oportunidades.length}`}
@@ -1100,7 +1124,7 @@ export default function LivePicksFeed({ isActive, banca }: {
           {motor && !motor.ligado && (
             <p className="text-[11px] text-amber-400 mb-3 flex items-center gap-1.5">
               <PowerOff className="w-3.5 h-3.5 shrink-0" />
-              O motor está parado · estes são os últimos picks publicados, e não virão novos
+              O motor está parado. Estes são os últimos picks publicados, e não virão novos
               enquanto ele não voltar.
             </p>
           )}

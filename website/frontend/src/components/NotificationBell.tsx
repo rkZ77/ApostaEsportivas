@@ -29,11 +29,11 @@ function NotificationIcon({ n }: { n: AppNotification }) {
      vocabulário visual do produto que ele vende. */
   if (n.type === 'plan_upsell')   return <Crown className={`${base} text-yellow-400`} />
   if (n.type === 'new_picks')     return <Zap className={`${base} text-green-400`} />
-  if (n.type === 'pick_live')     return <Radio className={`${base} text-red-400`} />
+  if (n.type === 'pick_live')     return <Radio className={`${base} text-accent-ink`} />
   /* Mesmo ícone e mesma cor do `pick_live`: pro usuário os dois são "ao vivo",
      e o que os separa está no título, não no símbolo. Vermelho é a cor do Live
      no site inteiro (ver PICK_TYPE_HEX). */
-  if (n.type === 'live_novo')     return <Radio className={`${base} text-red-400`} />
+  if (n.type === 'live_novo')     return <Radio className={`${base} text-accent-ink`} />
   /* Âmbar e não vermelho: vencimento é prazo, não perda. O vermelho aqui já
      significa RED de pick e confundiria as duas leituras. */
   if (n.type === 'plan_expiring') return <TimerReset className={`${base} text-yellow-400`} />

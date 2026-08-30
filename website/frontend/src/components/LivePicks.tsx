@@ -23,7 +23,7 @@ const TYPE_CLS: Record<string, string> = {
   // Aposta que veio de um pick Ao Vivo. Sem isso o card aparecia aqui sem
   // rótulo nenhum e o usuário não distinguia de uma aposta pré-jogo · são
   // produtos com risco diferente e a origem precisa ficar visível.
-  live: 'text-red-300 bg-red-500/10',
+  live: 'text-accent-ink bg-accent/10',
 }
 const TYPE_LABEL: Record<string, string> = {
   vip: 'VIP', free: 'FREE', multipla: 'MÚLT.', alavancagem: 'ALAV.',
