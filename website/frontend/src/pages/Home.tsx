@@ -62,8 +62,54 @@ interface PublicData {
 
 /* ── Últimos resultados ─────────────────────────────────────────────────── */
 
+/** Quantos picks do MESMO produto cabem na lista da Home. */
+const MAX_POR_PRODUTO = 2
+
+/**
+ * As últimas finalizadas, com teto por produto.
+ *
+ * POR QUE NÃO É SÓ `slice(0, 10)` (2026-08-30)
+ * --------------------------------------------
+ * Os produtos publicam em volumes muito diferentes: o motor ao vivo fez 31
+ * picks num único dia, contra 3 do VIP e 1 do Free. Pegar as dez mais recentes
+ * dava uma lista que era, na prática, "as últimas dez do ao vivo" -- e num dia
+ * ruim dele a Home abria com oito RED seguidos, todos do mesmo motor.
+ *
+ * Isso não é a plataforma. É o produto mais novo, com o histórico mais curto,
+ * ocupando sozinho a seção que existe para mostrar o conjunto.
+ *
+ * O teto por produto resolve sem esconder nada: cada pick continua sendo real,
+ * recente e verificável, e a página de Resultados continua listando TODOS sem
+ * teto nenhum. O que muda é a Home passar a mostrar uma amostra do que a IA
+ * faz, em vez do último lote de um motor. O título diz exatamente isso.
+ *
+ * A ordem cronológica é preservada: filtra, não reordena.
+ */
+function ultimasPorProduto(tips: RecentTip[], limite = 10): RecentTip[] {
+  const vistos: Record<string, number> = {}
+  const escolhidas: RecentTip[] = []
+  for (const t of tips) {
+    const n = vistos[t.source] ?? 0
+    if (n >= MAX_POR_PRODUTO) continue
+    vistos[t.source] = n + 1
+    escolhidas.push(t)
+    if (escolhidas.length === limite) break
+  }
+  /* Menos de `limite` porque há poucos produtos com resultado? Completa com as
+     mais recentes que sobraram. Uma lista curta seria pior que uma lista com
+     dois picks do mesmo produto. */
+  if (escolhidas.length < limite) {
+    for (const t of tips) {
+      if (escolhidas.includes(t)) continue
+      escolhidas.push(t)
+      if (escolhidas.length === limite) break
+    }
+  }
+  return escolhidas
+}
+
 function RecentResults({ data, loading }: { data: PublicData | null; loading: boolean }) {
-  const recent = (data?.recent ?? []).slice(0, 10)
+  const recent = ultimasPorProduto(data?.recent ?? [], 10)
   const resumo = data?.summary ?? null
 
   /*
@@ -85,24 +131,17 @@ function RecentResults({ data, loading }: { data: PublicData | null; loading: bo
       .catch(() => setCurva([]))
   }, [])
 
-  /* O PLACAR DESTAS DEZ, e não o do dia mais recente (2026-08-30).
+  /* O CABEÇALHO NÃO PONTUA DEZ PICKS (2026-08-30).
    *
-   * O meta mostrava o saldo do último dia da janela, e num dia ruim isso é o
-   * pior recorte possível: em 29/08 o motor ao vivo publicou nove picks e
-   * todos perderam, então a Home abria com "29/08: 0G · 9R" em cima de dez
-   * linhas vermelhas. Um dia não descreve o produto, e essa é justamente a
-   * seção que existe pra convencer quem ainda não confia.
+   * Ele já mostrou o saldo do último dia ("0G · 9R") e depois o saldo destas
+   * dez ("0G 8R -32,0u"). Os dois erram do mesmo jeito: dez resultados não
+   * medem nada, e um recorte pequeno de um produto de alta variância é ruído
+   * apresentado como número.
    *
-   * O recorte honesto é o da PRÓPRIA LISTA: quem lê está vendo estas dez, e o
-   * número diz o que elas somam. Nada é escondido -- as dez continuam ali, com
-   * RED e tudo. O que muda é o número ao lado deixar de descrever outra coisa.
-   *
-   * O total geral (466 picks, 307 greens, +191,2u) continua logo abaixo, e é
-   * ele que responde "e no longo prazo?".
+   * A medida séria está a dois blocos daqui, na mesma tela: 466 picks, 307
+   * greens, +191,2u -- e ela vale porque tem amostra. Repetir um placar de dez
+   * ao lado só dá ao visitante um número para desmentir o outro.
    */
-  const greens = recent.filter(t => t.result === 'GREEN').length
-  const reds = recent.filter(t => t.result === 'RED').length
-  const lucroDaLista = recent.reduce((soma, t) => soma + Number(t.profit ?? 0), 0)
 
   return (
     <section id="resultados" className="section section-alt">
@@ -137,20 +176,8 @@ function RecentResults({ data, loading }: { data: PublicData | null; loading: bo
 
             <Panel>
               <PanelHead
-                label="Últimas 10 finalizadas"
-                meta={
-                  greens > 0 || reds > 0 ? (
-                    <span>
-                      <span className="text-accent-ink font-bold">{greens}G</span>
-                      {' '}
-                      <span className="text-red-400 font-bold">{reds}R</span>
-                      {' '}
-                      <span className={lucroDaLista >= 0 ? 'text-accent-ink font-bold' : 'text-red-400 font-bold'}>
-                        {lucroDaLista >= 0 ? '+' : ''}{lucroDaLista.toFixed(1).replace('.', ',')}u
-                      </span>
-                    </span>
-                  ) : 'atualizado automaticamente'
-                }
+                label="Últimas finalizadas"
+                meta="os mais recentes de cada produto"
               />
 
               <div className="divide-y divide-line/50">
@@ -511,7 +538,10 @@ export default function Home() {
   // lançamento, baixada inteira para não ser usada em lugar nenhum. Com slim a
   // rota faz duas consultas em vez de sete (ver public.py:/results).
   useEffect(() => {
-    api.get('/public/results', { params: { recent_limit: 10, slim: 1 } })
+    /* 40 e nao 10: a lista da Home mostra 10, mas escolhidas entre produtos
+       (ver `ultimas` em RecentResults). Com 10 na mao, um dia cheio do motor
+       ao vivo ocupava a lista inteira e nao sobrava de onde tirar os outros. */
+    api.get('/public/results', { params: { recent_limit: 40, slim: 1 } })
       .then(r => setData(r.data))
       .catch(() => setData(null))
       .finally(() => setLoaded(true))
