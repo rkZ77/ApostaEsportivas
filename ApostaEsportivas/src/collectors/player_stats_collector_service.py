@@ -320,10 +320,22 @@ class PlayerStatsCollectorService:
 
         # Quantas ligas tem fila AGORA · e' o divisor do rodizio, e ele muda a
         # cada execucao (liga que zerou sai, liga que jogou ontem entra).
+        # SO' LIGA LIGADA (29/08, decisao do usuario).
+        #
+        # Este era o ultimo coletor que ainda varria `match_statistics` sem
+        # olhar `leagues.ativa`. A tabela guarda tudo que ja' foi coletado,
+        # entao liga desativada continuava na fila e gastava requisicao pra
+        # preencher jogador de partida que o motor nao le mais.
+        #
+        # O rodizio por liga piorava: a liga morta entrava no divisor e tirava
+        # vaga das vivas na mesma passada.
         cur.execute("""
             SELECT COUNT(DISTINCT ms.league_id)
             FROM match_statistics ms
             LEFT JOIN player_match_stats p ON p.fixture_id = ms.fixture_id
+            JOIN leagues l ON l.league_id = ms.league_id
+                          AND l.season = ms.season
+                          AND COALESCE(l.ativa, TRUE)
             WHERE p.fixture_id IS NULL AND ms.league_id IS NOT NULL
         """)
         ligas_com_fila = (cur.fetchone() or [0])[0] or 0
@@ -338,6 +350,12 @@ class PlayerStatsCollectorService:
                                           ORDER BY ms.match_date DESC) AS ordem
                   FROM match_statistics ms
              LEFT JOIN player_match_stats p ON p.fixture_id = ms.fixture_id
+                  -- Mesmo recorte do contador acima. Os dois precisam andar
+                  -- juntos: divisor de um universo e fila de outro dariam um
+                  -- `por_liga` calculado sobre ligas que nao entram na fila.
+                  JOIN leagues l ON l.league_id = ms.league_id
+                                AND l.season = ms.season
+                                AND COALESCE(l.ativa, TRUE)
                  WHERE p.fixture_id IS NULL
             ) t
             WHERE t.ordem <= %s
