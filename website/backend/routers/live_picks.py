@@ -33,6 +33,7 @@ import sys
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from auth_utils import get_current_user, require_admin, require_vip
@@ -324,6 +325,37 @@ def liquidar_pendentes(cur, conn, limite: int = 30) -> dict:
 # ─────────────────────────────────────────────────────────────────────────
 # LEITURA
 # ─────────────────────────────────────────────────────────────────────────
+def _sem_enriquecer(pick: dict) -> dict:
+    """O pick como esta gravado, sem tocar na API.
+
+    Mesmas CHAVES que `_enriquecer` devolve, porque quem consome e o mesmo card
+    -- faltar chave aqui quebraria a tela em vez de mostra-la mais simples.
+
+    O que muda e a origem: em vez do estado de agora, o snapshot do instante da
+    criacao. `is_live` sai False de proposito, e e' isso que faz o card se
+    desenhar como leitura registrada em vez de fingir acompanhamento em tempo
+    real de uma partida que ninguem esta olhando.
+    """
+    home = pick.get("home_goals_at_creation")
+    away = pick.get("away_goals_at_creation")
+    return {
+        **pick,
+        "live_status": None,
+        "elapsed": pick.get("minute_at_creation"),
+        "home_goals": home,
+        "away_goals": away,
+        # O contador do mercado no instante da decisao. Nao e' o total de agora
+        # e a tela nao promete que seja: sem motor em campo, o "agora" nao esta
+        # sendo lido por ninguem.
+        "current_val": pick.get("observed_at_creation"),
+        "stat_label": None,
+        "direction": None,
+        "is_live": False,
+        "is_ft": pick.get("result") is not None,
+        "pick_status": "neutral",
+    }
+
+
 def _enriquecer(pick: dict) -> dict:
     """Acrescenta o estado ATUAL do jogo ao pick gravado.
 
@@ -483,13 +515,26 @@ def feed(
         cur.close()
         conn.close()
 
-    if linhas:
+    # SEM MOTOR EM CAMPO, A PAGINA NAO PERGUNTA NADA A API (2026-08-30, pedido
+    # do usuario).
+    #
+    # `_enriquecer` traz o ESTADO ATUAL de cada partida, e ele custa requisicao
+    # -- e' o que faz o card mostrar o placar de agora e a barra da linha se
+    # mexer. Isso vale com jogo rolando. Fora disso e' pagar pra confirmar que
+    # nada mudou: o motor hibernando ja disse que nao ha partida em campo, e
+    # todo pick na tela ou ja liquidou ou espera um jogo que ainda nao comecou.
+    #
+    # A tela nao fica vazia: o pick continua com o snapshot da criacao, que e'
+    # justamente o que o motor viu quando decidiu -- o mesmo dado que a aba
+    # mostra quando a partida acabou.
+    ao_vivo = _watch_state["ativo"] and not _watch_state.get("hibernando")
+    if linhas and ao_vivo:
         _fetch_fixtures_bulk([p["fixture_id"] for p in linhas if p["fixture_id"]])
 
     agora = _agora_naive()
     saida = []
     for p in linhas:
-        item = _enriquecer(p)
+        item = _enriquecer(p) if ao_vivo else _sem_enriquecer(p)
         seguido = seguidos.get(p["id"])
         validade = p.get("odd_valid_until")
         item["is_followed"] = seguido is not None
@@ -555,6 +600,9 @@ def feed(
         # SE esta' ligado, nao por que parou.
         "motor": {
             "ligado": bool(_watch_state["ativo"]),
+            # Ligado E com jogo em campo. A tela usa os dois pra dizer
+            # "buscando" x "aguardando jogo" x "pausada".
+            "hibernando": bool(_watch_state.get("hibernando")),
             "ultima_rodada": _watch_state["ultima_rodada"],
         },
     }
@@ -639,6 +687,14 @@ def _atualizar_leitura(linhas: list) -> None:
     """
     ids = [l["fixture_id"] for l in linhas if l.get("fixture_id")]
     if not ids:
+        return
+    # Mesma regra do feed: motor fora de campo nao atualiza nada, porque nao ha
+    # nada acontecendo pra atualizar. As linhas continuam sendo a ultima
+    # leitura do motor, e o front ja esconde o bloco inteiro quando a busca
+    # esta parada.
+    if not (_watch_state["ativo"] and not _watch_state.get("hibernando")):
+        for linha in linhas:
+            linha["fresco"] = False
         return
     _fetch_fixtures_bulk(ids)
 
@@ -778,6 +834,9 @@ def em_leitura(current_user: dict = Depends(require_live_reader), limit: int = Q
         # duas chamadas trariam dois retratos de instantes diferentes.
         "motor": {
             "ligado": bool(_watch_state["ativo"]),
+            # Ligado E com jogo em campo. A tela usa os dois pra dizer
+            # "buscando" x "aguardando jogo" x "pausada".
+            "hibernando": bool(_watch_state.get("hibernando")),
             "ultima_rodada": _watch_state["ultima_rodada"],
         },
     }
@@ -1230,6 +1289,11 @@ _watch_state: dict = {
     "ativo": False, "iniciado_em": None, "rodadas": 0, "falhas_seguidas": 0,
     "ultima_rodada": None, "proxima_rodada_em": None, "motivo_parada": None,
     "intervalo_min": None, "dry_run": None, "max_partidas": None,
+    # LIGADO mas sem jogo em campo. Nao e' "desligado": o laco esta de pe e
+    # volta sozinho. A tela precisa dos dois estados separados, senao
+    # "aguardando o primeiro jogo do dia" e "alguem desligou o motor" viram a
+    # mesma frase -- e sao situacoes opostas pra quem esta esperando pick.
+    "hibernando": False,
 }
 
 #: Referência forte pra tarefa. Sem isto o event loop pode coletar o laço no
@@ -1245,6 +1309,69 @@ class WatchBody(BaseModel):
     max_partidas: int | None = None
 
 
+#: Quanto tempo depois do apito inicial uma partida ainda pode estar rolando.
+#:
+#: 150 minutos cobre 90 de bola rolando + intervalo + acrescimo + atraso de
+#: inicio com folga. Nao precisa ser justo: errar pra mais so' faz o motor
+#: acordar um pouco antes da hora, e errar pra menos faz ele dormir com jogo
+#: em campo -- que e' o unico erro que custa pick.
+_JANELA_DE_JOGO_MIN = 150
+
+#: Espera entre duas checagens quando nao ha jogo nenhum. Ela e' longa porque
+#: nao ha nada acontecendo: o pior caso e' um jogo comecar logo depois de uma
+#: checagem e o motor so' perceber 20 minutos depois -- e a janela do motor
+#: comeca aos 15' de partida, entao ele nao perdeu nada que ja pudesse usar.
+_INTERVALO_HIBERNANDO_MIN = 20
+
+
+def _ha_jogo_na_janela() -> bool:
+    """Existe partida das nossas ligas que pode estar em campo AGORA?
+
+    POR QUE ISTO EXISTE (2026-08-30, pedido do usuario)
+    ---------------------------------------------------
+    O laco rodava a passada completa de 8 em 8 minutos o tempo todo, inclusive
+    de madrugada, sem jogo nenhum. Cada passada dessas custa pelo menos a
+    varredura `/fixtures?live=all` -- barata sozinha, cara repetida 180 vezes
+    por dia pra receber "nenhuma partida elegivel". Foi consumo assim que
+    estourou a cota em 01/08 e custou o agendador do projeto.
+
+    A PERGUNTA E' RESPONDIDA NO BANCO, e por isso custa ZERO requisicao. A
+    tabela `fixtures` ja sabe o horario de cada partida das ligas ativas: se
+    nenhuma comecou dentro da janela de um jogo, nao ha o que a API pudesse
+    dizer de diferente.
+
+    Falha aberta de proposito: erro de banco devolve True, ou seja, o motor
+    roda. Um SELECT que falhou nao e' prova de que nao ha jogo, e dormir por
+    engano custa pick -- enquanto acordar por engano custa uma varredura.
+    """
+    conn = None
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT EXISTS (
+                SELECT 1
+                  FROM fixtures f
+                  JOIN leagues l ON l.league_id = f.league_id
+                                AND COALESCE(l.ativa, TRUE)
+                 WHERE f.match_datetime BETWEEN
+                       (NOW() AT TIME ZONE 'America/Sao_Paulo') - (%s * INTERVAL '1 minute')
+                   AND (NOW() AT TIME ZONE 'America/Sao_Paulo')
+                   AND COALESCE(f.status, 'NS') NOT IN ('FT','AET','PEN','PST','CANC','ABD','AWD','WO')
+            ) AS tem
+        """, (_JANELA_DE_JOGO_MIN,))
+        return bool((cur.fetchone() or {}).get("tem"))
+    except Exception as e:
+        logger.warning("[LIVE-WATCH] checagem de janela falhou (%s) · seguindo com a rodada", e)
+        return True
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
 async def _laco_de_acompanhamento(intervalo_min: int, dry_run: bool,
                                   max_partidas: int | None) -> None:
     """Roda rodadas sucessivas até alguém desligar."""
@@ -1254,6 +1381,22 @@ async def _laco_de_acompanhamento(intervalo_min: int, dry_run: bool,
 
     try:
         while _watch_state["ativo"]:
+            # HIBERNACAO. Sem jogo em campo a rodada nao acontece -- nem a
+            # varredura. O laco continua vivo e volta ao ritmo normal sozinho
+            # na primeira checagem que encontrar partida, que e' o "liga
+            # automaticamente" pedido: nao ha nada pra alguem religar.
+            hibernando = not await run_in_threadpool(_ha_jogo_na_janela)
+            _watch_state["hibernando"] = hibernando
+            if hibernando:
+                _watch_state["proxima_rodada_em"] = _INTERVALO_HIBERNANDO_MIN * 60
+                _salvar_watch()
+                restante = _INTERVALO_HIBERNANDO_MIN * 60
+                while restante > 0 and _watch_state["ativo"]:
+                    _watch_state["proxima_rodada_em"] = restante
+                    await asyncio.sleep(min(5, restante))
+                    restante -= 5
+                continue
+
             await _rodar(body)
             _watch_state["rodadas"] += 1
             _watch_state["ultima_rodada"] = agora()

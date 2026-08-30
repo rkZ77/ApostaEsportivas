@@ -70,6 +70,20 @@ const MAX_UNIDADES_LIVE = 4
  *  fuso que essa escolha existe pra evitar. */
 const horaCurta = (iso?: string | null) => (iso ? iso.slice(11, 16) : '')
 
+/** Estado do motor, como as rotas do Live o devolvem.
+ *
+ * TRÊS ESTADOS, NÃO DOIS (30/08). `hibernando` é ligado E sem jogo em campo:
+ * o laço está de pé e volta sozinho quando uma partida começa. Sem essa
+ * distinção, "aguardando o primeiro jogo do dia" e "alguém desligou o motor"
+ * virariam a mesma frase na tela · e são situações opostas para quem está
+ * esperando pick.
+ */
+type EstadoDoMotor = {
+  ligado: boolean
+  hibernando?: boolean
+  ultima_rodada: string | null
+} | null
+
 /** Uma linha de `live_match_observations` · o que o motor leu daquele jogo. */
 interface EmLeitura {
   fixture_id: number
@@ -339,7 +353,7 @@ function EmLeituraAgora({ partidas, tick, disponivel, motor }: {
   partidas: EmLeitura[]
   tick: number
   disponivel: boolean
-  motor?: { ligado: boolean; ultima_rodada: string | null } | null
+  motor?: EstadoDoMotor
 }) {
   if (!disponivel || partidas.length === 0) return null
   /* BUSCA PAUSADA NÃO MOSTRA PARTIDA (29/08, pedido do usuário).
@@ -350,7 +364,7 @@ function EmLeituraAgora({ partidas, tick, disponivel, motor }: {
    * diz "busca pausada" no topo e mostra "a IA está lendo" logo abaixo.
    *
    * Quem manda é o estado do motor, não o que sobrou na tabela. */
-  if (!motor?.ligado) return null
+  if (!motor?.ligado || motor.hibernando) return null
 
   const comPick = partidas.filter(p => p.tem_pick).length
 
@@ -1032,7 +1046,7 @@ export default function LivePicksFeed({ isActive, banca }: {
   const [motivo, setMotivo] = useState<string | null>(null)
   /* Estado do motor · só o que o assinante precisa (ligado e última varredura).
      O diagnóstico completo continua sendo de admin, em /watch-status. */
-  const [motor, setMotor] = useState<{ ligado: boolean; ultima_rodada: string | null } | null>(null)
+  const [motor, setMotor] = useState<EstadoDoMotor>(null)
   const [erro, setErro] = useState(false)
   const [alvo, setAlvo] = useState<LivePick | null>(null)
   const [salvando, setSalvando] = useState(false)
@@ -1197,25 +1211,34 @@ export default function LivePicksFeed({ isActive, banca }: {
             <RefreshCw className={`w-3.5 h-3.5 ${atualizando ? 'animate-spin' : ''}`} />
             Atualizar
           </Button>
-          {motor && (
-            <span className={`flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full border ${
-              motor.ligado
-                ? 'border-accent/40 bg-accent/10 text-accent-ink'
-                : 'border-amber-500/40 bg-amber-500/10 text-amber-400'}`}>
-              {motor.ligado
-                ? <><LiveDot /> IA buscando entradas</>
-                : <><PowerOff className="w-3 h-3" /> busca pausada</>}
-              {motor.ultima_rodada && (
-                <span className="font-mono font-normal opacity-80">
-                  {horaCurta(motor.ultima_rodada)}
-                </span>
-              )}
-            </span>
-          )}
+          {motor && (() => {
+            /* Hibernando NÃO é pausado, e a cor diz isso: continua no verde do
+               produto, porque nada está errado -- só não há jogo em campo. O
+               âmbar fica reservado pro caso em que alguém desligou, que é o
+               único dos três que pede ação de alguém. */
+            const dormindo = motor.ligado && motor.hibernando
+            return (
+              <span className={`flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full border ${
+                motor.ligado
+                  ? 'border-accent/40 bg-accent/10 text-accent-ink'
+                  : 'border-amber-500/40 bg-amber-500/10 text-amber-400'}`}>
+                {!motor.ligado
+                  ? <><PowerOff className="w-3 h-3" /> busca pausada</>
+                  : dormindo
+                  ? <><Clock className="w-3 h-3" /> aguardando jogo</>
+                  : <><LiveDot /> IA buscando entradas</>}
+                {motor.ultima_rodada && (
+                  <span className="font-mono font-normal opacity-80">
+                    {horaCurta(motor.ultima_rodada)}
+                  </span>
+                )}
+              </span>
+            )
+          })()}
         </div>
       </div>
 
-      <FitaDeBusca partidas={motor?.ligado ? emLeitura : []} />
+      <FitaDeBusca partidas={motor?.ligado && !motor.hibernando ? emLeitura : []} />
 
       {/* O VAZIO PRECISA DIZER SE O MOTOR ESTÁ LIGADO.
         *
@@ -1225,7 +1248,16 @@ export default function LivePicksFeed({ isActive, banca }: {
         * ou o motor simplesmente não está rodando. Na primeira vale esperar; na
         * segunda, esperar é perder a noite. */}
       {emAndamento.length === 0 && (
-        motor?.ligado ? (
+        motor?.ligado && motor.hibernando ? (
+          <EmptyState
+            Icon={Clock}
+            title="Nenhum jogo em campo agora"
+            description={
+              'A IA acompanha partida em andamento, então ela espera o próximo jogo começar '
+              + 'para voltar a buscar. Nada é publicado até lá, e nada está errado.'
+            }
+          />
+        ) : motor?.ligado ? (
           <EmptyState
             Icon={Radio}
             title="Nenhuma entrada agora"
@@ -1276,6 +1308,15 @@ export default function LivePicksFeed({ isActive, banca }: {
             <p className="text-[11px] text-amber-400 mb-3 flex items-center gap-1.5">
               <PowerOff className="w-3.5 h-3.5 shrink-0" />
               Busca pausada. Estes são os últimos publicados.
+            </p>
+          )}
+          {/* Hibernando com card na tela: o pick continua valendo, mas o placar
+              dele não está sendo acompanhado enquanto não há jogo em campo. Sem
+              esta linha, um card parado parece card travado. */}
+          {motor?.ligado && motor.hibernando && (
+            <p className="text-[11px] text-ink-4 mb-3 flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 shrink-0" />
+              Sem jogo em campo agora. O placar volta a andar quando a próxima partida começar.
             </p>
           )}
           {/* Grade igual à do VIP · o card ao vivo virou o mesmo objeto, e uma
