@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { CheckCircle, XCircle, Check, Clock } from 'lucide-react'
+import { CheckCircle, XCircle, Clock, ShieldCheck } from 'lucide-react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import PageShell from '../components/PageShell'
 import { useAuth } from '../context/AuthContext'
@@ -8,6 +8,8 @@ import { usePlans, fmtPlanPrice } from '../hooks/usePlans'
 import api from '../services/api'
 import { WA_SUPPORT } from '../lib/support'
 import { iniciouCheckout } from '../lib/analytics'
+import ProvaPublica from '../components/ProvaPublica'
+import { MODULOS_VIP, SEM_RENOVACAO_AUTOMATICA } from '../lib/oferta'
 
 /* O plano em destaque é escolha de venda, não vem do backend: o resto (preço,
    período, desconto) vem de usePlans. */
@@ -233,24 +235,42 @@ export default function Checkout() {
       bar={{ back: true, title: 'Assinar VIP', sub: 'Acesso completo a todos os picks' }}
       mainClassName="space-y-6"
     >
+        {/*
+          A PROVA VEM ANTES DA LISTA.
+
+          Esta é a última tela antes de pagar e era a única do funil sem um
+          número sequer: a Home mostra o histórico, a página de Resultados
+          mostra o histórico, e aqui, com o dedo no botão, não havia nada.
+          Os números saem de /public/results, os mesmos das outras duas telas.
+        */}
+        <ProvaPublica compacta />
+
         {/* Benefícios */}
         <div className="card p-5">
           <h2 className="text-ink-1 font-bold mb-4">O que você ganha no VIP</h2>
+          {/*
+            A LISTA ERA ESCRITA À MÃO AQUI, e subvendia o produto na pior hora
+            possível. Eram seis frases genéricas · "Análise de probabilidades",
+            "Suporte ao Agente de IA" · que não citavam múltipla, alavancagem,
+            ao vivo, Pick Boost, estatística de jogador, faltas nem defesas.
+            Sete módulos que a assinatura abre e que a tela de pagar não
+            mencionava, enquanto a vitrine da Home listava todos.
+
+            Agora as duas leem de lib/oferta. `MODULOS_VIP` é o que a assinatura
+            destrava, então esta lista é exatamente o que está sendo comprado.
+          */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {[
-              'Todos os picks do dia',
-              'Análise de probabilidades',
-              'Gestão de banca inteligente',
-              'Histórico completo de resultados',
-              'Suporte ao Agente de IA',
-              'Notificações de novos picks',
-            ].map(benefit => (
-              <div key={benefit} className="flex items-center gap-2 text-sm text-ink-2">
-                <Check className="w-4 h-4 text-accent-ink shrink-0" />
-                {benefit}
+            {MODULOS_VIP.map(({ Icon, titulo }) => (
+              <div key={titulo} className="flex items-center gap-2 text-sm text-ink-2">
+                <Icon className="w-4 h-4 text-accent-ink shrink-0" aria-hidden="true" />
+                {titulo}
               </div>
             ))}
           </div>
+          <p className="text-ink-4 text-xs mt-4 pt-3 border-t border-line">
+            Mais a gestão de banca, a agenda de jogos e o histórico completo, que a conta
+            já tem.
+          </p>
         </div>
 
         {/* Seletor de plano */}
@@ -269,14 +289,36 @@ export default function Checkout() {
                     ? 'border-green-500 bg-green-500/5'
                     : 'border-line bg-surface-1 hover:border-line-strong'}`}
               >
-                {plan.id === POPULAR_PLAN && (
-                  <span className="absolute -top-2.5 left-3 font-mono text-xs bg-green-600 text-white px-2 py-0.5 rounded-sm font-semibold">
-                    Popular
-                  </span>
-                )}
-                {plan.save_pct > 0 && (
-                  <span className="absolute -top-2.5 right-3 font-mono text-xs bg-yellow-500 text-on-fill px-2 py-0.5 rounded-sm font-semibold">
-                    Economize {plan.save_pct}%
+                {/*
+                  OS DOIS SELOS NUMA LINHA SÓ.
+
+                  Eram dois `absolute` independentes, um preso em `left-3` e o
+                  outro em `right-3`. No trimestral, que é o único plano que
+                  carrega os dois, eles se encontravam no meio: numa tela de
+                  390px o resultado era "Popu" com "Economize 17%" impresso por
+                  cima · e isso na tela em que a pessoa escolhe quanto vai
+                  pagar.
+
+                  Numa linha flex com `justify-between` eles dividem a largura
+                  em vez de disputá-la, e o `truncate` garante que o encontro,
+                  se voltar a acontecer, corte o texto em vez de empilhar.
+                */}
+                {(plan.id === POPULAR_PLAN || plan.save_pct > 0) && (
+                  <span className="absolute -top-2.5 inset-x-2 flex items-center justify-between gap-1 pointer-events-none">
+                    {plan.id === POPULAR_PLAN ? (
+                      <span className="font-mono text-[10px] bg-green-600 text-white px-1.5 py-0.5 rounded-sm font-semibold truncate">
+                        Popular
+                      </span>
+                    ) : <span />}
+                    {plan.save_pct > 0 && (
+                      <span className="font-mono text-[10px] bg-yellow-500 text-on-fill px-1.5 py-0.5 rounded-sm font-semibold shrink-0">
+                        {/* Sozinho no topo do card cabe a palavra inteira.
+                            Dividindo a linha com o "Popular", num card de 168px,
+                            não cabe · e "Economize" cortado no meio não vende
+                            nada. O número é a informação; o verbo é enfeite. */}
+                        {plan.id === POPULAR_PLAN ? `−${plan.save_pct}%` : `Economize ${plan.save_pct}%`}
+                      </span>
+                    )}
                   </span>
                 )}
                 <div className="text-ink-1 font-bold text-sm">{plan.label}</div>
@@ -309,6 +351,15 @@ export default function Checkout() {
               {fmtPlanPrice(selected.price)}
             </span>
           </div>
+          {/* "Vai cobrar sozinho no mês que vem?" é a objeção mais comum de
+              quem assina qualquer coisa aqui, e a resposta é favorável ao
+              produto: o backend cria uma `preference` do MercadoPago, que cobra
+              uma vez só · não existe `preapproval`, não existe recorrência. O
+              texto vem de lib/oferta pra sair junto caso isso mude. */}
+          <p className="flex items-start gap-2 text-xs text-ink-2 pt-1">
+            <ShieldCheck className="w-4 h-4 text-accent-ink shrink-0 mt-px" aria-hidden="true" />
+            <span>{SEM_RENOVACAO_AUTOMATICA}</span>
+          </p>
           <p className="text-ink-4 text-xs">
             Pagamento processado com segurança via MercadoPago. Aceita cartão, Pix e boleto.
           </p>

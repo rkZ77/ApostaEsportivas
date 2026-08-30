@@ -186,7 +186,16 @@ def test_home_pede_o_suficiente_pra_escolher_e_nao_mais():
     assert pedido
     assert 10 <= int(pedido.group(1)) <= 40
     # E a lista renderizada continua sendo dez.
-    assert re.search(r"ultimasPorProduto\(data\?\.recent \?\? \[\], 10\)", src)
+    #
+    # A chamada era `ultimasPorProduto(data?.recent ?? [], 10)`, casada aqui
+    # literalmente. Com o filtro por produto (30/08) a lista passou por uma
+    # variavel (`todas`) e o argumento deixou de ser a expressao inteira, entao
+    # a asserção literal quebrou sem nada de errado ter acontecido no produto.
+    #
+    # O que este teste precisa garantir e' o TETO -- que a Home escolhe dez de
+    # uma janela maior, e nao que a expressao esteja escrita de um jeito. O
+    # argumento 10 continua sendo checado; a origem da lista, nao.
+    assert re.search(r"ultimasPorProduto\([^)]*,\s*10\)", src)
 
 
 def test_resposta_da_api_sai_comprimida():

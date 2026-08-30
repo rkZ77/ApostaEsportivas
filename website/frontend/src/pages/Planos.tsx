@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Lightbulb, Crown, User } from 'lucide-react'
+import { Lightbulb, Crown, User, Check } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import PageShell from '../components/PageShell'
@@ -11,6 +11,8 @@ import { usePlans, fmtPlanPrice } from '../hooks/usePlans'
 import { viuOsPlanos } from '../lib/analytics'
 import NumberTicker from '../components/ui/NumberTicker'
 import { rotuloDoPlano } from '../components/ui'
+import ProvaPublica from '../components/ProvaPublica'
+import { MODULOS_FREE, MODULOS_VIP, SEM_RENOVACAO_AUTOMATICA } from '../lib/oferta'
 
 const PLAN_DAYS: Record<string, number> = {
   trial: 2, mensal: 30, trimestral: 90, semestral: 180, anual: 365,
@@ -43,6 +45,10 @@ export default function Planos() {
   const [referralCopied, setReferralCopied] = useState(false)
 
   const isTrial = user?.plan === 'trial'
+
+  /* Qual período rende mais desconto · lido da grade, nunca fixado no anual.
+     Um reajuste que mudasse a ordem deixaria o selo no plano errado. */
+  const maiorEconomia = plans.reduce((m, p) => Math.max(m, p.save_pct ?? 0), 0)
 
   /*
    * view_item_list só depois que /payments/plans respondeu. Disparar antes
@@ -178,54 +184,161 @@ export default function Planos() {
           * "Planos" que não mostrava plano nenhum. Quem chega aqui pelo menu ou
           * por busca está justamente decidindo se assina.
           *
-          * Os preços saem de usePlans (mesma fonte da Home e do checkout), não
-          * de texto escrito à mão.
+          * REESCRITA EM 2026-08-30. A primeira correção resolveu o vazio mas
+          * parou em dois cartões de texto corrido com uma grade de preço: nenhum
+          * número de desempenho, nenhuma quebra do que a assinatura abre, nada
+          * sobre como se paga. E esta é a página que o menu aponta, que tem
+          * canonical próprio e que ranqueia na busca por "planos" · quem chegava
+          * direto nela via a versão pobre da oferta, enquanto a Home, ao lado,
+          * tinha a seção de vendas inteira com histórico real.
+          *
+          * A ordem agora é a de uma decisão, não a de um catálogo: o que é, a
+          * prova, o que vem em cada plano, quanto custa, como se paga.
+          *
+          * Nada aqui é digitado à mão. Preço sai de /payments/plans (usePlans),
+          * desempenho sai de /public/results (ProvaPublica) e a lista de módulos
+          * sai de lib/oferta, a mesma da vitrine da Home e do checkout.
           */}
         {!user && (
-          <div className="space-y-4">
-            <div className="bg-surface-1 border border-line rounded-lg p-6">
-              <p className="text-ink-1 font-bold text-base mb-1">Free</p>
-              <p className="text-ink-3 text-sm mb-4">
-                1 pick por dia, sem expiração. O histórico completo da IA fica aberto,
-                com ou sem conta.
+          <div className="space-y-5">
+            <div>
+              <h2 className="font-display text-xl font-bold text-ink-1 mb-1.5">
+                A IA analisa o dia inteiro. Você recebe só o que passou no corte.
+              </h2>
+              <p className="text-ink-3 text-sm leading-relaxed">
+                Cada mercado é calculado contra a estatística real dos dois times e comparado
+                com a odd que a casa está pagando. Só vira pick o que tem valor esperado
+                positivo · o resto é descartado, e o descarte é a maior parte.
               </p>
-              <Link to="/login?mode=register" className="btn-primary inline-block text-sm">
+            </div>
+
+            <ProvaPublica />
+
+            {/* Free */}
+            <div className="bg-surface-1 border border-line rounded-lg p-6">
+              <div className="flex items-center justify-between gap-3 mb-1">
+                <p className="text-ink-1 font-bold text-base">Free</p>
+                <span className="font-mono text-lg font-black text-ink-1">R$ 0</span>
+              </div>
+              <p className="text-ink-3 text-sm mb-4">Para conferir o método antes de assinar.</p>
+
+              {/* Duas colunas a partir de sm: com nove modulos, a coluna
+                  unica virava uma rolagem longa no desktop e empurrava a grade
+                  de preco pra fora da tela. No celular continua em uma. */}
+              <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-2.5 mb-5">
+                {MODULOS_FREE.map(({ Icon, titulo, desc }) => (
+                  <li key={titulo} className="flex items-start gap-2.5">
+                    <Icon className="w-4 h-4 text-ink-3 shrink-0 mt-0.5" aria-hidden="true" />
+                    <span className="min-w-0">
+                      <span className="text-ink-1 text-sm font-semibold">{titulo}</span>
+                      <span className="block text-ink-4 text-xs leading-relaxed">{desc}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+
+              <Link
+                to="/login?mode=register"
+                className="btn-ghost inline-flex items-center justify-center w-full text-sm min-h-[44px]"
+              >
                 Criar conta grátis
               </Link>
             </div>
 
+            {/* VIP */}
             <div className="bg-surface-1 border border-yellow-400/25 rounded-lg p-6">
               <div className="flex items-center gap-2 mb-1">
-                <Crown className="w-4 h-4 text-yellow-400" />
+                <Crown className="w-4 h-4 text-yellow-400" aria-hidden="true" />
                 <p className="text-ink-1 font-bold text-base">VIP</p>
               </div>
               <p className="text-ink-3 text-sm mb-4">
-                Todos os picks do dia, múltiplas, alavancagem, mercados de faltas e
-                defesas, gestão de banca e o agente de IA.
+                Tudo do Free, mais os {MODULOS_VIP.length} módulos que a assinatura abre.
               </p>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-5">
-                {plans.map(pl => (
-                  <div key={pl.id} className="bg-surface-0 border border-line rounded-md p-3 text-center">
-                    <p className="text-[11px] text-ink-3">{pl.label}</p>
-                    <p className="font-mono text-lg font-black text-ink-1 tabular-nums mt-0.5">
-                      {fmtPlanPrice(pl.price)}
-                    </p>
-                    <p className="text-[10px] text-ink-4">
-                      {fmtPlanPrice(pl.price_per_month)}/mês
-                    </p>
-                    {pl.save_pct > 0 && (
-                      <p className="text-[10px] text-accent-ink font-semibold mt-0.5">
-                        economiza {pl.save_pct}%
-                      </p>
-                    )}
-                  </div>
+              {/* Módulo a módulo, e não uma frase de marketing: o que a pessoa
+                  precisa saber é O QUE cada um faz, senão "análise completa"
+                  vira a mesma promessa de qualquer site do ramo. */}
+              {/* Duas colunas a partir de sm: com nove modulos, a coluna
+                  unica virava uma rolagem longa no desktop e empurrava a grade
+                  de preco pra fora da tela. No celular continua em uma. */}
+              <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-2.5 mb-5">
+                {MODULOS_VIP.map(({ Icon, titulo, desc }) => (
+                  <li key={titulo} className="flex items-start gap-2.5">
+                    <Icon className="w-4 h-4 text-yellow-400 shrink-0 mt-0.5" aria-hidden="true" />
+                    <span className="min-w-0">
+                      <span className="text-ink-1 text-sm font-semibold">{titulo}</span>
+                      <span className="block text-ink-4 text-xs leading-relaxed">{desc}</span>
+                    </span>
+                  </li>
                 ))}
+              </ul>
+
+              <p className="text-ink-2 text-xs font-bold mb-2.5">Escolha o período</p>
+              {/* O preço POR MÊS é o número grande, e o total do período fica na
+                  linha de apoio. Estava ao contrário: entre quatro totais de
+                  períodos diferentes, o anual é o maior da grade justamente por
+                  ser o mais barato por mês, e era assim que ele aparecia. */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4">
+                {plans.map(pl => {
+                  const melhor = pl.save_pct > 0 && pl.save_pct === maiorEconomia
+                  return (
+                    <div
+                      key={pl.id}
+                      className={`relative bg-surface-0 border rounded-md p-3 text-center ${melhor ? 'border-accent/40' : 'border-line'}`}
+                    >
+                      {melhor && (
+                        <span className="absolute -top-2 inset-x-0 mx-auto w-fit font-mono text-[9px] bg-accent text-black px-1.5 py-0.5 rounded-sm font-bold">
+                          melhor preço
+                        </span>
+                      )}
+                      <p className="text-[11px] text-ink-3">{pl.label}</p>
+                      <p className="font-mono text-lg font-black text-ink-1 tabular-nums mt-0.5">
+                        {fmtPlanPrice(pl.price_per_month)}
+                      </p>
+                      <p className="text-[10px] text-ink-4">por mês</p>
+                      {/* No mensal os dois valores são o mesmo número, e repetir
+                          "R$ 39,90 no total" logo abaixo de "R$ 39,90 por mês"
+                          faz o cartão parecer errado. */}
+                      {pl.months > 1 && (
+                        <p className="text-[10px] text-ink-4 mt-1 pt-1 border-t border-line">
+                          {fmtPlanPrice(pl.price)} no total
+                        </p>
+                      )}
+                      {pl.save_pct > 0 && (
+                        <p className="text-[10px] text-accent-ink font-semibold mt-0.5">
+                          economiza {pl.save_pct}%
+                        </p>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
 
-              <Link to="/login?mode=register" className="btn-primary inline-block text-sm">
+              <Link
+                to="/login?mode=register"
+                className="btn-primary inline-flex items-center justify-center w-full text-sm min-h-[44px]"
+              >
                 Testar o VIP grátis por 2 dias
               </Link>
+              <p className="text-ink-4 text-[11px] text-center mt-2">
+                2 dias com tudo aberto. Não pedimos cartão para testar.
+              </p>
+            </div>
+
+            {/* Como se paga. Estava só dentro do checkout, ou seja, depois de a
+                pessoa já ter criado conta · e "vai cobrar sozinho todo mês?" é
+                uma objeção que decide a compra bem antes disso. A resposta aqui
+                é favorável ao produto: a cobrança é avulsa. */}
+            <div className="bg-surface-1 border border-line rounded-lg p-5 space-y-2.5">
+              <p className="text-ink-2 text-xs font-bold">Como funciona o pagamento</p>
+              <p className="flex items-start gap-2 text-xs text-ink-3">
+                <Check className="w-3.5 h-3.5 text-accent-ink shrink-0 mt-0.5" aria-hidden="true" />
+                <span>{SEM_RENOVACAO_AUTOMATICA}</span>
+              </p>
+              <p className="flex items-start gap-2 text-xs text-ink-3">
+                <Check className="w-3.5 h-3.5 text-accent-ink shrink-0 mt-0.5" aria-hidden="true" />
+                <span>Pix, cartão ou boleto pelo MercadoPago. No Pix o acesso abre em até 5 minutos.</span>
+              </p>
             </div>
           </div>
         )}
