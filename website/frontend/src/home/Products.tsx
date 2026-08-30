@@ -1,88 +1,22 @@
 import { useCallback, useEffect, useState } from 'react'
 import useEmblaCarousel from 'embla-carousel-react'
-import {
-  ChevronLeft, ChevronRight, Crown, Gift, Layers, Rocket,
-  Wallet, BarChart3, Bot, CalendarDays, ShieldHalf, Flag,
-} from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { SectionHead, IconButton, Badge } from '../components/ui'
+import { MODULOS } from '../lib/oferta'
 import { cn } from '../lib/cn'
 
 /*
  * Vitrine do que a plataforma entrega.
+ *
+ * A LISTA NÃO MORA MAIS AQUI. Ela era escrita à mão neste arquivo e de novo,
+ * diferente, no Checkout · a vitrine anunciava dez módulos e a tela de pagar
+ * prometia seis frases genéricas. Agora as duas leem de lib/oferta.
  *
  * Embla em vez de scroll-snap puro porque aqui o arraste com o mouse importa:
  * no desktop a maior parte do público não pensa em rolar uma faixa na
  * horizontal, e as setas mais o arraste resolvem isso. A rolagem nativa
  * continua funcionando por baixo, então sem JS a faixa ainda navega.
  */
-
-interface Product {
-  Icon: LucideIcon
-  title: string
-  desc: string
-  tag?: { label: string; tone: 'yellow' | 'green' | 'blue' | 'orange' | 'purple' | 'sky' }
-}
-
-const PRODUCTS: Product[] = [
-  {
-    Icon: Crown,
-    title: 'Picks VIP',
-    desc: 'Os picks de maior confiança do dia, com mercado, odd, stake sugerida e a análise que sustenta cada um.',
-    tag: { label: 'VIP', tone: 'yellow' },
-  },
-  {
-    Icon: Gift,
-    title: 'Dica do dia',
-    desc: 'Um pick gratuito por dia, aberto para qualquer conta. Serve para conferir o método antes de assinar.',
-    tag: { label: 'Free', tone: 'green' },
-  },
-  {
-    Icon: Layers,
-    title: 'Múltiplas',
-    desc: 'Combinações montadas pela IA só quando todas as seleções passam no critério estatístico.',
-    tag: { label: 'VIP', tone: 'blue' },
-  },
-  {
-    Icon: Rocket,
-    title: 'Alavancagem',
-    desc: 'Sequência de odds curtas com reinvestimento do lucro, para crescimento de banca com risco controlado.',
-    tag: { label: 'VIP', tone: 'orange' },
-  },
-  {
-    Icon: Flag,
-    title: 'Mercado de faltas',
-    desc: 'Modelo próprio para linhas de faltas, um mercado que a maioria das casas precifica com folga.',
-    tag: { label: 'VIP', tone: 'purple' },
-  },
-  {
-    Icon: ShieldHalf,
-    title: 'Defesas de goleiro',
-    desc: 'Projeção de defesas por goleiro a partir do volume de finalização esperado dos dois lados.',
-    tag: { label: 'VIP', tone: 'sky' },
-  },
-  {
-    Icon: Wallet,
-    title: 'Gestão de banca',
-    desc: 'Stake sugerida por Kelly, controle de unidade, histórico de saques e fechamento mensal automático.',
-  },
-  {
-    Icon: BarChart3,
-    title: 'Resultados auditáveis',
-    desc: 'Todo pick publicado entra no histórico público, com win rate por liga, por jogo e por mês.',
-  },
-  {
-    Icon: Bot,
-    title: 'Agente de futebol',
-    desc: 'Uma IA que responde sobre qualquer jogo, mercado ou estratégia usando os dados reais do sistema.',
-    tag: { label: 'VIP', tone: 'green' },
-  },
-  {
-    Icon: CalendarDays,
-    title: 'Agenda de jogos',
-    desc: 'Todos os jogos das ligas cobertas, marcando quais já foram analisados e quais têm pick.',
-  },
-]
 
 export default function Products() {
   const [emblaRef, embla] = useEmblaCarousel({
@@ -138,9 +72,9 @@ export default function Products() {
           grade que simplesmente acabou. */}
       <div className="overflow-hidden" ref={emblaRef}>
         <div className="flex gap-4 px-4 md:px-[max(1rem,calc((100vw-64rem)/2))]">
-          {PRODUCTS.map(({ Icon, title, desc, tag }) => (
+          {MODULOS.map(({ Icon, titulo, desc, tag }) => (
             <article
-              key={title}
+              key={titulo}
               className={cn(
                 'shrink-0 w-[248px] sm:w-[268px] p-5 rounded-lg select-none',
                 'bg-surface-0 border border-line hover:border-line-strong',
@@ -153,7 +87,7 @@ export default function Products() {
                 </div>
                 {tag && <Badge tone={tag.tone}>{tag.label}</Badge>}
               </div>
-              <h3 className="font-display text-sm font-semibold text-ink-1 mb-2">{title}</h3>
+              <h3 className="font-display text-sm font-semibold text-ink-1 mb-2">{titulo}</h3>
               <p className="text-xs text-ink-3 leading-relaxed">{desc}</p>
             </article>
           ))}

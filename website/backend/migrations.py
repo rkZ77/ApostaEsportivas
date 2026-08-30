@@ -242,6 +242,19 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         # sair). Junto com email_verified e' o que paga o trial desde que o
         # CPF saiu do cadastro -- ver _ativar_trial_se_elegivel em auth.py.
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_verified BOOLEAN DEFAULT FALSE;")
+        # Identidade Google (claim `sub` do ID token). Guarda-se o `sub`, e nao
+        # o e-mail, porque o e-mail de uma conta Google pode mudar e o `sub`
+        # nao -- amarrar pelo e-mail perderia o vinculo no dia da troca.
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub VARCHAR(40);")
+        cur.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS users_google_sub_uniq
+            ON users (google_sub) WHERE google_sub IS NOT NULL
+        """)
+        # Conta criada pelo Google nao tem senha, e nunca precisa ter: quem
+        # quiser uma passa pelo /forgot-password. Sem soltar o NOT NULL o
+        # INSERT do login com Google estoura. Rodar isto num banco onde a
+        # coluna ja' e' anulavel e' no-op.
+        cur.execute("ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;")
         # Numero unico = 1 conta por chip, que e' o que substituiu o "1 conta
         # por CPF". Vem DEPOIS da normalizacao E.164 acima, senao o mesmo
         # numero em dois formatos passaria batido pelo indice.

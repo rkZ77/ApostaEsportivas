@@ -430,16 +430,20 @@ def test_notificacao_ja_existente_nao_remanda_o_email():
 def test_as_tres_rotas_usam_a_funcao_unica():
     """Login, refresh e /auth/me tinham três cópias do mesmo if. A terceira a
     ganhar responsabilidade nova seria a que ficaria pra trás em silêncio · e
-    a que ficasse rebaixaria a conta sem nunca oferecer a assinatura."""
+    a que ficasse rebaixaria a conta sem nunca oferecer a assinatura.
+
+    Viraram QUATRO em 30/08/2026, com a entrada pelo Google. O nome do teste
+    ficou: o que ele guarda não é o número, é que toda porta de entrada passe
+    pela mesma função em vez de rebaixar plano na mão."""
     import re
     from tests.test_home_2026_08 import _fonte
 
     fonte = _fonte("routers/auth.py")
-    assert len(re.findall(r"expirar_plano_vencido\(cur, ", fonte)) == 3
+    assert len(re.findall(r"expirar_plano_vencido\(cur, ", fonte)) == 4
     assert "UPDATE users SET plan='free', expires_at=NULL" not in fonte, \
         "voltou a rebaixar na mao em routers/auth.py"
-    # E as tres passam o e-mail: sem isso o encerramento so' existe no sino.
-    assert fonte.count("expirar_plano_vencido(cur, user, **_avisos_de_plano())") == 2
+    # E todas passam o e-mail: sem isso o encerramento so' existe no sino.
+    assert fonte.count("expirar_plano_vencido(cur, user, **_avisos_de_plano())") == 3
     assert "expirar_plano_vencido(cur, d, **_avisos_de_plano())" in fonte
 
 
@@ -452,7 +456,8 @@ def test_aviso_de_vencimento_alcanca_quem_nunca_desloga():
     from tests.test_home_2026_08 import _fonte
 
     fonte = _fonte("routers/auth.py")
-    assert fonte.count("avisar_plano_expirando(cur, ") == 2, \
+    # Tres desde 30/08/2026: login, /auth/me e a entrada pelo Google.
+    assert fonte.count("avisar_plano_expirando(cur, ") == 3, \
         "o aviso de vencimento voltou a existir so' no login"
 
 

@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext'
 import { maskPhone } from '../utils/format'
 import api from '../services/api'
 import Turnstile, { TurnstileHandle } from '../components/Turnstile'
+import GoogleSignInButton from '../components/GoogleSignInButton'
 import { getPasswordStrength } from '../utils/passwordStrength'
 import { tabFade } from '../lib/motion'
 import { useRevelacao, classesRevelacao, FADE_REVELACAO_MS } from '../hooks/useRevelacao'
@@ -42,13 +43,13 @@ function RealWinRate({ className = 'mt-5' }: { className?: string }) {
   )
 }
 
-type LoginMethod = 'username' | 'email'
+type LoginMethod = 'username' | 'email' | 'phone'
 
 export default function Login() {
   /* Portão de revelação · o mesmo das telas com PageShell. Também é quem
      encerra a barra verde do index.html. Ver hooks/useRevelacao. */
   const revelado = useRevelacao()
-  const { login, register } = useAuth()
+  const { login, register, loginComGoogle } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
 
@@ -59,6 +60,7 @@ export default function Login() {
   // Login fields
   const [loginUsername, setLoginUsername] = useState('')
   const [loginEmail, setLoginEmail]       = useState('')
+  const [loginPhone, setLoginPhone]       = useState('')
 
   // Register fields
   const [name, setName]         = useState('')
@@ -77,6 +79,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirm, setShowConfirm]   = useState(false)
   const [captchaToken, setCaptchaToken] = useState('')
+  const [googleDisponivel, setGoogleDisponivel] = useState(false)
   const turnstileRef = useRef<TurnstileHandle>(null)
 
   const redirectTo = (() => {
@@ -105,8 +108,11 @@ export default function Login() {
     }
   }, [])
 
-  const getIdentifier = () =>
-    loginMethod === 'username' ? loginUsername.trim() : loginEmail.trim()
+  const getIdentifier = () => {
+    if (loginMethod === 'username') return loginUsername.trim()
+    if (loginMethod === 'phone')    return loginPhone.replace(/\D/g, '')
+    return loginEmail.trim()
+  }
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -116,6 +122,10 @@ export default function Login() {
       const id = getIdentifier()
       if (!id) { setError('Preencha o campo de identificação.'); return }
       if (loginMethod === 'email' && !validateEmail(id)) { setError('Email inválido.'); return }
+      if (loginMethod === 'phone' && (id.length < 10 || id.length > 11)) {
+        setError('Telefone inválido. Use o formato (DDD) 9XXXX-XXXX.')
+        return
+      }
     } else if (regStep === 1) {
       // Passo 1: só dados de acesso -- o telefone fica pro passo 2, que desde
       // a saída do CPF (18/08/2026) tem 3 campos em vez de 4.
@@ -178,12 +188,34 @@ export default function Login() {
     }
   }
 
+  /* O Google resolve login e cadastro no mesmo clique, então este caminho
+     ignora o modo da tela · quem decide se cria ou entra é o backend. O código
+     de indicação segue junto para não perder o crédito de quem indicou. */
+  const entrarComGoogle = async (credential: string) => {
+    setError('')
+    setLoading(true)
+    try {
+      await loginComGoogle(credential, refCode || undefined)
+      localStorage.removeItem('ref_code')
+      navigate(redirectTo ?? '/picks')
+    } catch (err: any) {
+      const detail = err.response?.data?.detail
+      setError(
+        typeof detail === 'string'
+          ? detail
+          : 'Não foi possível entrar com o Google. Tente de novo ou use e-mail e senha.',
+      )
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const switchMode = () => {
     setMode(m => m === 'login' ? 'register' : 'login')
     setError('')
     setRegStep(1)
     setCaptchaToken('')
-    setLoginUsername(''); setLoginEmail('')
+    setLoginUsername(''); setLoginEmail(''); setLoginPhone('')
     setName(''); setUsername(''); setPhone(''); setConfirm('')
   }
 
@@ -191,6 +223,10 @@ export default function Login() {
   const loginTabs: { key: LoginMethod; label: string }[] = [
     { key: 'username', label: 'Usuário' },
     { key: 'email',    label: 'E-mail'  },
+    // O telefone já era único por conta (1 chip = 1 cadastro) desde a saída do
+    // CPF; faltava só poder entrar por ele, que é o dado que quem usa celular
+    // lembra sem pensar.
+    { key: 'phone',    label: 'Telefone' },
   ]
 
   return (
@@ -299,6 +335,25 @@ export default function Login() {
             </div>
           )}
 
+          {/* O Google vem ANTES do formulário de propósito: é o caminho mais
+              curto dos dois, e enterrá-lo embaixo de cinco campos faz a pessoa
+              preencher tudo antes de descobrir que não precisava. */}
+          <div className="mb-5">
+            <GoogleSignInButton
+              modo={mode}
+              onCredential={entrarComGoogle}
+              onDisponivel={setGoogleDisponivel}
+              onError={setError}
+            />
+            {googleDisponivel && (
+              <div className="flex items-center gap-3 mt-5">
+                <div className="h-px flex-1 bg-line" />
+                <span className="text-[11px] text-ink-4 font-semibold uppercase tracking-wide">ou</span>
+                <div className="h-px flex-1 bg-line" />
+              </div>
+            )}
+          </div>
+
           <form onSubmit={submit} className="space-y-4">
 
             {mode === 'login' && (
@@ -337,6 +392,13 @@ export default function Login() {
                       onChange={e => setLoginEmail(e.target.value)}
                       required className="input w-full" placeholder="seu@email.com"
                       autoComplete="email" autoFocus />
+                  )}
+                  {loginMethod === 'phone' && (
+                    <motion.input key="phone" variants={tabFade} initial="hidden" animate="visible" exit="exit"
+                      id="login-identifier" type="tel" inputMode="numeric" value={loginPhone}
+                      onChange={e => setLoginPhone(maskPhone(e.target.value))}
+                      required className="input w-full" placeholder="(11) 99999-9999"
+                      autoComplete="tel-national" maxLength={15} autoFocus />
                   )}
                   </AnimatePresence>
                 </div>

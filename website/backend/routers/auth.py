@@ -280,7 +280,104 @@ def _resolve_identifier(identifier: str) -> tuple[str, str]:
     stripped = identifier.strip()
     if "@" in stripped:
         return "email", stripped.lower()
+    # Telefone virou o terceiro tipo em 30/08/2026. Ele ja e' unico por conta
+    # desde a saida do CPF, e e' o dado que o usuario de celular tem na ponta
+    # da lingua -- username e' o que ele esquece.
+    #
+    # A deteccao e' conservadora de proposito: so' entra aqui o que sobrevive a
+    # `_validate_phone_br` (11 digitos, DDD real, nono digito). Um username
+    # todo numerico nao e' proibido pelo `_USERNAME_RE`, entao o login por
+    # telefone consulta as DUAS colunas -- ver a query em `login`.
+    if not re.search(r"[a-zA-Z_]", stripped):
+        try:
+            return "phone", _validate_phone_br(stripped)
+        except HTTPException:
+            pass
     return "username", stripped.lower()
+
+
+
+# ── Login com Google ────────────────────────────────────────────────────────
+#
+# O fluxo e' o "Sign in with Google" do lado do navegador (Google Identity
+# Services): o Google devolve um ID token assinado, o front manda esse token
+# pra ca', e QUEM VALIDA E' O BACKEND. Nada do que o front diz sobre a pessoa
+# (e-mail, nome, foto) e' aceito -- tudo sai das claims do token verificado,
+# senao qualquer um logaria como qualquer um mandando um JSON.
+#
+# Nao ha' `client_secret` aqui de proposito: no fluxo de ID token ele nao
+# existe, o que se confere e' assinatura + `aud` == nosso client_id. Isso
+# tambem evita guardar mais um segredo de OAuth num servico que ja' guarda o
+# JWT_SECRET.
+
+_GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs"
+_GOOGLE_ISSUERS = {"accounts.google.com", "https://accounts.google.com"}
+# O Google rotaciona as chaves; cache curto com refetch forcado no primeiro
+# erro cobre a janela da troca sem bater na rede a cada login.
+_google_jwks_cache: dict = {"chaves": None, "expira": 0.0}
+
+
+def _google_client_id() -> str:
+    return (os.getenv("GOOGLE_CLIENT_ID") or "").strip()
+
+
+def _google_jwks(forcar: bool = False) -> dict:
+    agora = time.time()
+    if not forcar and _google_jwks_cache["chaves"] and _google_jwks_cache["expira"] > agora:
+        return _google_jwks_cache["chaves"]
+    r = httpx.get(_GOOGLE_JWKS_URL, timeout=6.0)
+    r.raise_for_status()
+    chaves = r.json()
+    _google_jwks_cache["chaves"] = chaves
+    _google_jwks_cache["expira"] = agora + 3600
+    return chaves
+
+
+def _verificar_id_token_google(credential: str) -> dict:
+    """Valida o ID token e devolve as claims. Levanta HTTPException se algo nao bate."""
+    from jose import jwt as jose_jwt
+    from jose.exceptions import JWTError
+
+    client_id = _google_client_id()
+    if not client_id:
+        raise HTTPException(503, "Login com Google nao esta configurado neste ambiente.")
+    if not credential:
+        raise HTTPException(400, "Token do Google ausente.")
+
+    ultima_falha = None
+    for forcar in (False, True):
+        try:
+            chaves = _google_jwks(forcar=forcar)
+        except Exception as e:
+            logger.error("[GOOGLE] JWKS indisponivel: %s", e)
+            raise HTTPException(503, "Nao foi possivel falar com o Google agora. Tente de novo em instantes.")
+        try:
+            claims = jose_jwt.decode(
+                credential,
+                chaves,
+                algorithms=["RS256"],
+                audience=client_id,
+                # `at_hash` so' existe quando vem access_token junto; aqui nao vem.
+                options={"verify_at_hash": False},
+            )
+        except JWTError as e:
+            ultima_falha = e
+            continue
+
+        if claims.get("iss") not in _GOOGLE_ISSUERS:
+            raise HTTPException(401, "Token do Google com emissor inesperado.")
+        email = (claims.get("email") or "").strip().lower()
+        if not email:
+            raise HTTPException(400, "Sua conta Google nao liberou o e-mail. Autorize o acesso ao e-mail e tente de novo.")
+        # E-mail nao verificado no proprio Google nao serve de prova de contato
+        # -- e' ele quem paga o trial aqui.
+        if claims.get("email_verified") not in (True, "true"):
+            raise HTTPException(403, "O e-mail desta conta Google nao esta verificado.")
+        claims["email"] = email
+        return claims
+
+    logger.warning("[GOOGLE] id_token rejeitado: %s", ultima_falha)
+    raise HTTPException(401, "Nao foi possivel validar sua conta Google. Tente entrar de novo.")
 
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -403,6 +500,11 @@ class LoginBody(BaseModel):
     identifier: str  # e-mail ou username
     password: str
     captcha_token: Optional[str] = None
+
+class GoogleAuthBody(BaseModel):
+    credential: str
+    ref_code: Optional[str] = None
+
 
 class ForgotPasswordBody(BaseModel):
     email: EmailStr
@@ -638,6 +740,14 @@ def login(body: LoginBody, response: Response, request: Request, background_task
         )
         if id_type == "email":
             cur.execute(f"SELECT {_LOGIN_COLS} FROM users WHERE email = %s", (id_value,))
+        elif id_type == "phone":
+            # As duas colunas na mesma consulta: um username so' de digitos
+            # passa pela deteccao de telefone, e cair no `OR` custa menos que
+            # trancar essa pessoa do lado de fora.
+            cur.execute(
+                f"SELECT {_LOGIN_COLS} FROM users WHERE phone = %s OR username = %s",
+                (id_value, body.identifier.strip().lower()),
+            )
         else:
             cur.execute(f"SELECT {_LOGIN_COLS} FROM users WHERE username = %s", (id_value,))
         row = cur.fetchone()
@@ -648,6 +758,15 @@ def login(body: LoginBody, response: Response, request: Request, background_task
         user = dict(row)
         if not user["active"]:
             raise HTTPException(status_code=403, detail="Conta desativada")
+        # Conta nascida no Google nao tem hash -- `verify_password` receberia
+        # None e estouraria 500 no lugar de um erro que a pessoa entende. O
+        # caminho de saida existe: /forgot-password define uma senha e a conta
+        # passa a aceitar os dois jeitos de entrar.
+        if not user["password_hash"]:
+            raise HTTPException(
+                status_code=403,
+                detail='Esta conta entra pelo Google. Use o botão "Continuar com Google" ou defina uma senha em "Esqueci minha senha".',
+            )
         if not verify_password(body.password, user["password_hash"]):
             _record_account_failure(lockout_key)
             raise HTTPException(status_code=401, detail="Credenciais inválidas")
@@ -852,6 +971,179 @@ def _ativar_trial_se_elegivel(cur, user_id: int) -> Optional[datetime]:
         (expira, user_id),
     )
     return expira
+
+
+@router.get("/google/config")
+def google_config():
+    """O front pergunta ao backend qual e' o client_id.
+
+    Podia ser uma `VITE_` embutida no build, mas ai' ligar o Google exigiria
+    rebuild do front alem da variavel no servidor -- duas metades que
+    dessincronizam. Client_id nao e' segredo: ele aparece inteiro na
+    requisicao que o proprio navegador faz pro Google.
+    """
+    return {"client_id": _google_client_id()}
+
+
+@router.post("/google")
+def login_com_google(body: GoogleAuthBody, response: Response, request: Request, background_tasks: BackgroundTasks):
+    """Entra OU cria conta a partir de uma conta Google.
+
+    E' um endpoint so' porque, do lado de quem clica, "criar conta" e "entrar"
+    com Google sao o mesmo gesto -- mandar a pessoa de volta pra escolher a
+    aba certa depois de ela ja' ter se autenticado seria absurdo.
+
+    Tres estados possiveis: conta ja' ligada ao Google (entra), conta com o
+    mesmo e-mail e senha (LIGA as duas -- o e-mail vem verificado pelo proprio
+    Google, entao isso nao e' sequestro de conta), ou ninguem (cria).
+
+    O que a conta nova NAO tem: senha e telefone. Senha e' opcional pra sempre
+    (/forgot-password define uma se a pessoa quiser). Telefone fica pro perfil:
+    exigir numero aqui apagaria o unico motivo de existir deste botao, que e'
+    cadastro em um toque. O trial sai mesmo assim, porque `email_verified`
+    sozinho ja' basta em `_ativar_trial_se_elegivel`.
+    """
+    claims = _verificar_id_token_google(body.credential.strip())
+    google_sub = str(claims["sub"])
+    email = claims["email"]
+    nome_google = (claims.get("name") or email.split("@")[0]).strip()
+    foto = (claims.get("picture") or "").strip() or None
+
+    _COLS = ("id, name, email, phone, username, plan, active, expires_at, "
+             "email_verified, avatar_url, google_sub")
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"SELECT {_COLS} FROM users WHERE google_sub = %s", (google_sub,))
+        row = cur.fetchone()
+        conta_nova = False
+
+        if not row:
+            cur.execute(f"SELECT {_COLS} FROM users WHERE email = %s", (email,))
+            row = cur.fetchone()
+            if row:
+                # Vinculo: a conta antiga passa a aceitar o Google tambem, e o
+                # e-mail fica verificado (o Google acabou de provar isso).
+                cur.execute(
+                    "UPDATE users SET google_sub = %s, email_verified = TRUE WHERE id = %s",
+                    (google_sub, row["id"]),
+                )
+                conn.commit()
+
+        if not row:
+            conta_nova = True
+            nome_formatado = " ".join(w.capitalize() for w in nome_google.split()) or "Usuario"
+            username = _generate_username(nome_formatado, cur)
+
+            referrer_id: Optional[int] = None
+            if body.ref_code:
+                cur.execute("SELECT id FROM users WHERE referral_code = %s", (body.ref_code.upper(),))
+                ref_row = cur.fetchone()
+                if ref_row:
+                    referrer_id = ref_row["id"]
+
+            new_ref_code: Optional[str] = None
+            for _ in range(10):
+                candidate = secrets.token_hex(3).upper()
+                cur.execute("SELECT id FROM users WHERE referral_code = %s", (candidate,))
+                if not cur.fetchone():
+                    new_ref_code = candidate
+                    break
+
+            client_ip = request.headers.get("x-forwarded-for", request.client.host if request.client else None)
+            cur.execute(
+                f"""
+                INSERT INTO users
+                    (name, email, password_hash, username, google_sub, email_verified,
+                     avatar_url, referred_by, referral_code, terms_accepted_at, terms_ip)
+                VALUES (%s, %s, NULL, %s, %s, TRUE, %s, %s, %s, NOW(), %s)
+                RETURNING {_COLS}
+                """,
+                (nome_formatado, email, username, google_sub, foto, referrer_id, new_ref_code, client_ip),
+            )
+            row = cur.fetchone()
+
+            if referrer_id:
+                cur.execute(
+                    """
+                    UPDATE users
+                    SET plan      = CASE WHEN plan IN ('free', 'trial') THEN 'vip' ELSE plan END,
+                        expires_at = GREATEST(COALESCE(expires_at, NOW()), NOW()) + INTERVAL '1 day'
+                    WHERE id = %s
+                    """,
+                    (referrer_id,),
+                )
+            conn.commit()
+
+        user = dict(row)
+        if not user["active"]:
+            raise HTTPException(status_code=403, detail="Conta desativada")
+
+        # Foto do Google so' entra quando nao ha' avatar -- quem subiu o proprio
+        # nao pode ve-lo trocado por ter entrado pelo Google.
+        if foto and not user.get("avatar_url"):
+            cur.execute("UPDATE users SET avatar_url = %s WHERE id = %s", (foto, user["id"]))
+            user["avatar_url"] = foto
+            conn.commit()
+
+        if expirar_plano_vencido(cur, user, **_avisos_de_plano()):
+            conn.commit()
+
+        # O trial sai aqui pelo mesmo caminho do link de e-mail. Vale tambem
+        # pro vinculo: quem tinha conta antiga sem confirmar o e-mail acabou de
+        # confirma-lo pelo Google.
+        trial_expira = _ativar_trial_se_elegivel(cur, user["id"])
+        if trial_expira:
+            user["plan"] = "trial"
+            user["expires_at"] = trial_expira
+        conn.commit()
+
+        # Nao ha' gate de e-mail neste caminho: o e-mail e' verificado por
+        # definicao. Sessao unica, igual ao /login.
+        device = _detect_device(request.headers.get("user-agent", ""))
+        session_id = secrets.token_hex(32)
+        cur.execute(
+            "UPDATE users SET session_token=%s, last_login_device=%s, last_login_at=NOW() WHERE id=%s",
+            (hashlib.sha256(session_id.encode()).hexdigest(), device, user["id"]),
+        )
+        conn.commit()
+        invalidar_cache_usuario(user["id"])
+
+        try:
+            avisar_plano_expirando(cur, user, **_avisos_de_plano())
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            logger.warning("[GOOGLE] Falha ao avisar plano expirando (user %s): %s", user["id"], e)
+
+        plan_expires_at = user["expires_at"].isoformat() if user.get("expires_at") else None
+        token_data = {
+            "sub": str(user["id"]), "id": user["id"],
+            "name": user["name"], "email": user["email"],
+            "plan": user["plan"], "plan_expires_at": plan_expires_at,
+            "avatar_url": user.get("avatar_url"),
+            "session_id": session_id,
+        }
+        access_token  = create_access_token(token_data)
+        refresh_token = create_refresh_token(token_data)
+        set_auth_cookies(response, access_token, refresh_token)
+
+        if conta_nova:
+            from runtime_env import side_effects_enabled
+            if side_effects_enabled():
+                background_tasks.add_task(_send_welcome_email, user["email"], user["name"], _site_url())
+
+        user["expires_at"] = plan_expires_at
+        user["email_verified"] = True
+        user.pop("google_sub", None)
+        return {
+            "user": user,
+            "conta_nova": conta_nova,
+            **_tokens_no_corpo(request, access_token, refresh_token),
+        }
+    finally:
+        cur.close(); conn.close()
 
 
 @router.post("/verify-email")
@@ -1378,6 +1670,14 @@ def request_password_change(body: RequestPasswordChangeBody, background_tasks: B
         row = cur.fetchone()
         if not row:
             raise HTTPException(404, "Usuário não encontrado")
+        # Conta criada pelo Google não tem senha atual pra conferir -- sem este
+        # desvio, `verify_password` receberia None e a tela levaria 500 no
+        # lugar de uma instrução.
+        if not row["password_hash"]:
+            raise HTTPException(
+                400,
+                'Sua conta entra pelo Google e ainda não tem senha. Use "Esqueci minha senha" na tela de login para criar uma.',
+            )
         if not verify_password(body.current_password, row["password_hash"]):
             raise HTTPException(400, "Senha atual incorreta")
         _validate_password(body.new_password)
