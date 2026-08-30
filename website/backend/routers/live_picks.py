@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 import os
 import uuid
 import sys
@@ -544,6 +545,116 @@ def feed(
 _JANELA_EM_LEITURA_MIN = 60
 
 
+#: Cache proprio das estatisticas do bloco "em leitura", com TTL LONGO.
+#:
+#: POR QUE NAO USAR O TTL DE 20s DO RESTO DO LIVE. `_fetch_stats` custa UMA
+#: requisicao POR PARTIDA, e este bloco olha ate' 12 jogos ao mesmo tempo. Com o
+#: TTL de 20s e a tela pesquisando de 15 em 15 segundos, uma unica aba aberta
+#: geraria ~36 requisicoes por minuto -- que e' a ordem de grandeza que estourou
+#: a cota em 01/08 e custou o agendador.
+#:
+#: 90 segundos e' o ponto onde as duas coisas cabem: escanteio e chute mudam de
+#: minuto em minuto, nao de segundo em segundo, entao a tela deixa de mentir sem
+#: que a conta exploda. O placar e o minuto NAO passam por aqui: eles vem do
+#: bulk de fixtures, que custa uma requisicao pra vinte jogos.
+_LEITURA_STATS_TTL = 90
+_LEITURA_STATS_MAX = 12
+_leitura_stats: dict = {}
+
+
+def _stats_do_jogo(fixture_id: int, status: str, home_id, away_id) -> dict:
+    """Escanteios, chutes e chutes no alvo AGORA, somando os dois times.
+
+    Devolve {} quando a folha nao esta publicada · e o chamador mantem o que o
+    motor leu, porque numero velho identificado e' melhor que numero ausente.
+    """
+    agora = time.time()
+    cacheado = _leitura_stats.get(fixture_id)
+    if cacheado and agora - cacheado[0] < _LEITURA_STATS_TTL:
+        return cacheado[1]
+
+    casa, fora = _parse_stats(_fetch_stats(fixture_id, status), home_id, away_id)
+    if not casa and not fora:
+        _leitura_stats[fixture_id] = (agora, {})
+        return {}
+
+    def soma(chave):
+        a, b = casa.get(chave), fora.get(chave)
+        if a is None and b is None:
+            return None
+        return int(a or 0) + int(b or 0)
+
+    lido = {
+        "corners_observado": soma("Corner Kicks"),
+        "shots_observado": soma("Total Shots"),
+        "shots_on_target_observado": soma("Shots on Goal"),
+        "red_cards_observado": soma("Red Cards"),
+    }
+    _leitura_stats[fixture_id] = (agora, lido)
+    return lido
+
+
+def _atualizar_leitura(linhas: list) -> None:
+    """Poe o JOGO DE AGORA por cima do que o motor leu na ultima varredura.
+
+    POR QUE ISTO EXISTE (2026-08-29, pedido do usuario)
+    ---------------------------------------------------
+    O bloco mostrava `live_match_observations` cru, e essa e' a leitura do
+    MOTOR: ela so' muda quando ele varre. Entre duas varreduras -- e o usuario
+    viu 46 minutos entre elas -- o cartao ficava com o minuto e os contadores
+    congelados enquanto os cards de pick logo acima, que leem a API, mostravam
+    o jogo andando. Duas partes da mesma tela discordando sobre o mesmo jogo.
+
+    O minuto projetado (`idade_seg` no front) disfarcava metade do problema e
+    piorava a outra: o relogio andava e os numeros nao, entao o cartao dizia
+    "45 minutos de jogo, 3 escanteios" com a partida em outro ponto.
+
+    A fonte agora e a mesma dos cards: `_fetch_fixture` pro minuto e o placar,
+    `_fetch_stats` pros contadores. `fresco` diz de qual das duas veio cada
+    linha, pra a tela nao prometer atualidade que nao tem.
+    """
+    ids = [l["fixture_id"] for l in linhas if l.get("fixture_id")]
+    if not ids:
+        return
+    _fetch_fixtures_bulk(ids)
+
+    orcamento = _LEITURA_STATS_MAX
+    for linha in linhas:
+        linha["fresco"] = False
+        try:
+            dados = _fetch_fixture(linha["fixture_id"])
+        except Exception:
+            continue
+        fixture = dados.get("fixture") or {}
+        status = (fixture.get("status") or {}).get("short")
+        if not status:
+            continue
+
+        minuto = (fixture.get("status") or {}).get("elapsed")
+        if minuto is not None:
+            linha["minuto"] = minuto
+        linha["status"] = status
+        gols = dados.get("goals") or {}
+        if gols.get("home") is not None and gols.get("away") is not None:
+            linha["goals_observado"] = int(gols["home"]) + int(gols["away"])
+        linha["fresco"] = True
+
+        # A folha so' e' pedida com a bola rolando: jogo em FT ja' nao e' o que
+        # o motor esta lendo, e pedir a folha dele gastaria cota pra atualizar
+        # um cartao que sai da lista na proxima passada.
+        if status not in LIVE_STATUSES or orcamento <= 0:
+            continue
+        times = dados.get("teams") or {}
+        atual = _stats_do_jogo(
+            linha["fixture_id"], status,
+            linha.get("home_team_id") or (times.get("home") or {}).get("id"),
+            linha.get("away_team_id") or (times.get("away") or {}).get("id"))
+        orcamento -= 1
+        for chave, valor in atual.items():
+            if valor is not None:
+                linha[chave] = valor
+
+
 @router.get("/em-leitura")
 def em_leitura(current_user: dict = Depends(require_live_reader), limit: int = Query(12, ge=1, le=40)):
     """As partidas que o motor Live LEU na última varredura, com o placar.
@@ -631,6 +742,8 @@ def em_leitura(current_user: dict = Depends(require_live_reader), limit: int = Q
     finally:
         cur.close()
         conn.close()
+
+    _atualizar_leitura(linhas)
 
     return {
         "disponivel": True,

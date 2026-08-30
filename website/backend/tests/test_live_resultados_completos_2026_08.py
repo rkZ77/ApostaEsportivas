@@ -93,3 +93,42 @@ class TestAvisoDeResultado:
             "a liquidacao do Live precisa passar pelo ponto unico do sino")
         assert "UPDATE user_followed_picks" not in fonte, (
             "UPDATE cru em user_followed_picks pula a notificacao de resultado")
+
+
+class TestLeituraAtualizada:
+    """O bloco "a IA esta lendo" mostra o JOGO DE AGORA, sem estourar a cota.
+
+    Ele nasceu lendo `live_match_observations` cru, que e a leitura do motor e
+    so muda quando ele varre. Com 46 minutos entre duas varreduras -- numero
+    real, visto pelo usuario -- o cartao ficava congelado ao lado de cards de
+    pick que mostravam o jogo andando.
+
+    A correcao tem um limite que nao pode se perder: `_fetch_stats` custa UMA
+    requisicao por partida, e a tela pesquisa de 15 em 15 segundos.
+    """
+
+    def test_o_cache_das_estatisticas_e_bem_mais_longo_que_o_do_resto(self):
+        """20s x 12 jogos x 4 leituras por minuto e como a cota morre.
+
+        O TTL daqui e proposital e precisa continuar folgado em relacao ao TTL
+        de jogo ao vivo do resto do modulo.
+        """
+        from routers import live, live_picks
+
+        assert live_picks._LEITURA_STATS_TTL >= 4 * live._TTL_LIVE
+
+    def test_existe_teto_de_partidas_com_folha_por_passada(self):
+        from routers import live_picks
+
+        assert 1 <= live_picks._LEITURA_STATS_MAX <= 20
+
+    def test_o_placar_nao_passa_pelo_caminho_caro(self):
+        """Minuto e placar saem do bulk (uma requisicao pra vinte jogos), e a
+        folha e' o unico custo por partida. Trocar o bulk por `_fetch_fixture`
+        num laco multiplicaria a conta por doze sem mudar uma linha da tela."""
+        import inspect
+
+        from routers import live_picks
+
+        fonte = inspect.getsource(live_picks._atualizar_leitura)
+        assert "_fetch_fixtures_bulk" in fonte

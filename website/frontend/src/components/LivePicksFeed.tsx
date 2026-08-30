@@ -83,8 +83,10 @@ interface EmLeitura {
   shots_on_target_observado: number | null
   red_cards_observado: number | null
   lido_em: string | null
-  /** Segundos desde a leitura, calculado no banco - ver live_picks.py. */
+  /** Segundos desde a leitura do motor, calculado no banco. */
   idade_seg: number | null
+  /** true = minuto, placar e contadores vieram da API agora, não da varredura. */
+  fresco?: boolean
   home_team: string | null
   away_team: string | null
   liga: string | null
@@ -212,6 +214,10 @@ const idadeCurta = (seg: number): string => {
  * nova. */
 function minutoVivo(p: EmLeitura, segundosExtras: number): { minuto: number | null; projetado: boolean } {
   if (p.minuto == null) return { minuto: null, projetado: false }
+  // Dado fresco não se projeta: o minuto JÁ é o de agora, veio da mesma fonte
+  // que os cards de pick usam. Projetar em cima dele somaria duas vezes o mesmo
+  // tempo e o cartão passaria o jogo na frente.
+  if (p.fresco) return { minuto: p.minuto, projetado: false }
   const rolando = p.status === '1H' || p.status === '2H' || p.status === 'ET'
   const idade = (p.idade_seg ?? 0) + segundosExtras
   if (!rolando || idade < 60) return { minuto: p.minuto, projetado: false }
@@ -268,7 +274,7 @@ function EmLeituraAgora({ isActive, motor }: {
           <span className="w-1 h-4 rounded-full bg-accent" />
           <h3 className="text-sm font-bold text-ink-1 flex items-center gap-1.5">
             <Eye className="w-3.5 h-3.5 text-accent-ink" />
-            O motor está lendo
+            A IA está lendo
             <span className="font-mono text-[11px] font-bold tabular-nums text-ink-3
                              bg-surface-2 border border-line rounded-full px-2 py-0.5 ml-0.5">
               {partidas.length}
@@ -283,19 +289,16 @@ function EmLeituraAgora({ isActive, motor }: {
             ? 'border-accent/40 bg-accent/10 text-accent-ink'
             : 'border-line-strong bg-surface-2 text-ink-3'}`}>
           {motor?.ligado
-            ? <><LiveDot /> varrendo</>
-            : <><PowerOff className="w-3 h-3" /> motor parado</>}
+            ? <><LiveDot /> buscando</>
+            : <><PowerOff className="w-3 h-3" /> pausada</>}
           {motor?.ultima_rodada && (
             <span className="font-mono text-ink-4">{horaCurta(motor.ultima_rodada)}</span>
           )}
         </span>
       </div>
       <p className="text-[11px] text-ink-4 mb-3 leading-relaxed">
-        Os jogos que o motor está acompanhando, com o que ele leu de cada um. Os números são
-        o total da partida, os dois times somados. Ele só publica quando a leitura se afasta do
-        esperado e a odd paga por isso, então{' '}
-        <span className="text-ink-3">{partidas.length} em leitura e {comPick} com pick</span>{' '}
-        é o funcionamento normal, não falha.
+        Os jogos que a IA acompanha agora, com o total da partida somando os dois times.
+        {comPick === 0 && ' Nenhum virou pick ainda, e isso é o normal.'}
       </p>
 
       <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
@@ -377,9 +380,16 @@ function EmLeituraAgora({ isActive, motor }: {
 
                 <div className="flex items-center justify-between gap-2 mt-2 text-[10px]">
                   <span className="flex items-center gap-2 text-ink-4">
-                    {/* "Lido há" é o que separa dado fresco de tela travada, e
-                      * ele anda a cada segundo sem pedir nada ao servidor. */}
-                    <span className="font-mono tabular-nums">lido {idadeCurta(idade)}</span>
+                    {/* COM DADO FRESCO A FRASE MUDA DE ASSUNTO.
+                      * "lido há 46min" descrevia a última varredura do motor, e
+                      * enquanto os números eram dele isso era a informação
+                      * certa. Agora que minuto, placar e contadores vêm da API,
+                      * dizer "lido há 46min" ao lado de um número atual seria
+                      * desmentir a própria tela. O relógio do motor só aparece
+                      * quando é ele que está mandando no cartão. */}
+                    <span className="font-mono tabular-nums">
+                      {p.fresco ? 'ao vivo' : `lido ${idadeCurta(idade)}`}
+                    </span>
                     {!!p.red_cards_observado && (
                       <span className="flex items-center gap-1" title="Cartões vermelhos">
                         <span className="w-2 h-3 rounded-[1px] bg-red-500 shrink-0" aria-hidden="true" />
@@ -1059,25 +1069,20 @@ export default function LivePicksFeed({ isActive, banca }: {
                 ? 'border-accent/40 bg-accent/10 text-accent-ink'
                 : 'border-amber-500/40 bg-amber-500/10 text-amber-400'}`}>
               {motor.ligado
-                ? <><LiveDot /> MOTOR VARRENDO</>
-                : <><PowerOff className="w-3 h-3" /> MOTOR PARADO</>}
+                ? <><LiveDot /> IA buscando entradas</>
+                : <><PowerOff className="w-3 h-3" /> busca pausada</>}
               {motor.ultima_rodada && (
                 <span className="font-mono font-normal opacity-80">
-                  {motor.ligado ? 'última' : 'parou'} {horaCurta(motor.ultima_rodada)}
+                  {horaCurta(motor.ultima_rodada)}
                 </span>
               )}
             </span>
           )}
         </div>
         <p className="text-[13px] text-ink-3 leading-relaxed">
-          O motor lê o placar, o ritmo e as estatísticas da partida{' '}
-          <span className="font-bold text-ink-2">em andamento</span> e compara com a odd do momento.
-          Ele só publica quando o jogo se afasta do esperado e o preço paga por isso, então
-          varredura sem oportunidade não vira pick.
-        </p>
-        <p className="text-[13px] text-ink-3 leading-relaxed mt-2">
-          A odd ao vivo muda rápido: o preço mostrado é o do instante da análise.{' '}
-          <span className="font-bold text-ink-2">Confira o valor na casa antes de apostar.</span>
+          A IA lê a partida em andamento e compara com a odd do momento. Só publica quando o jogo
+          se afasta do esperado e o preço paga por isso.{' '}
+          <span className="font-bold text-ink-2">Confira a odd na casa antes de apostar.</span>
         </p>
         <PlacarDoLive />
       </div>
@@ -1093,22 +1098,20 @@ export default function LivePicksFeed({ isActive, banca }: {
         motor?.ligado ? (
           <EmptyState
             Icon={Radio}
-            title="Nenhuma oportunidade ao vivo agora"
+            title="Nenhuma entrada agora"
             description={
-              'O motor está acompanhando os jogos neste momento. Ele só publica quando a partida '
-              + 'se afasta do esperado e a odd paga por isso, então varredura sem oportunidade '
-              + 'não vira pick.'
-              + (motor.ultima_rodada ? ` Última varredura às ${horaCurta(motor.ultima_rodada)}.` : '')
+              'A IA está acompanhando os jogos. Ela só publica quando a partida se afasta do '
+              + 'esperado e a odd paga por isso.'
+              + (motor.ultima_rodada ? ` Última busca às ${horaCurta(motor.ultima_rodada)}.` : '')
             }
           />
         ) : (
           <EmptyState
             Icon={PowerOff}
-            title="O motor não está rodando agora"
+            title="A busca está pausada"
             description={
-              'Ele varre os jogos em andamento apenas quando está ligado. Nada será publicado '
-              + 'até lá. Não é falta de oportunidade, é o motor parado.'
-              + (motor?.ultima_rodada ? ` A última varredura foi às ${horaCurta(motor.ultima_rodada)}.` : '')
+              'Nada será publicado até ela voltar. Não é falta de oportunidade.'
+              + (motor?.ultima_rodada ? ` A última busca foi às ${horaCurta(motor.ultima_rodada)}.` : '')
             }
           />
         )
@@ -1117,9 +1120,8 @@ export default function LivePicksFeed({ isActive, banca }: {
       {minhas.length > 0 && (
         <>
           <TituloDeSecao cor="bg-accent" texto="Suas apostas ao vivo" contagem={minhas.length} />
-          <p className="text-[11px] text-ink-4 mb-3 leading-relaxed">
-            Ficam aqui até o jogo acabar, mesmo depois de a odd vencer. O resultado entra
-            sozinho no apito final e o pick passa pra Minhas Apostas.
+          <p className="text-[11px] text-ink-4 mb-3">
+            Ficam aqui até o apito final, com o resultado entrando sozinho.
           </p>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <AnimatePresence mode="popLayout">
@@ -1143,8 +1145,7 @@ export default function LivePicksFeed({ isActive, banca }: {
           {motor && !motor.ligado && (
             <p className="text-[11px] text-amber-400 mb-3 flex items-center gap-1.5">
               <PowerOff className="w-3.5 h-3.5 shrink-0" />
-              O motor está parado. Estes são os últimos picks publicados, e não virão novos
-              enquanto ele não voltar.
+              Busca pausada. Estes são os últimos publicados.
             </p>
           )}
           {/* Grade igual à do VIP · o card ao vivo virou o mesmo objeto, e uma
