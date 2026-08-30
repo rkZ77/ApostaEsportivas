@@ -39,7 +39,7 @@
  */
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Radio, Timer, CheckCircle2, Clock, PowerOff, Eye,
+import { Radio, RefreshCw, Timer, CheckCircle2, Clock, PowerOff, Eye,
          Goal, Flag, Target, Crosshair } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
@@ -52,6 +52,7 @@ import LiveAnalysisModal from './LiveAnalysisModal'
 import { explainMarket, translateLine, translateMarket } from '../utils/marketTranslate'
 import { LeagueLogo } from './TeamLogo'
 import { calcVipStake } from '../utils/stakeUtils'
+import { sinalizarNavegacao } from '../services/progressBus'
 
 /* Teto de unidades do Live · espelha STAKE_LIMITS["live"] em
  * backend/routers/banca.py. É o mais baixo de qualquer produto, e a razão está
@@ -102,7 +103,12 @@ interface EmLeitura {
  * que ainda não foi tomada"). Puxar o número de lá rotularia de "Ao Vivo" um
  * desempenho que não é dele.
  */
-function PlacarDoLive() {
+function PlacarDoLive({ recarregar }: {
+  /* Contador vindo do botão de atualizar · ver EmLeituraAgora. O placar entra
+     junto porque ele muda quando um pick liquida, e liquidação é exatamente o
+     que acontece enquanto a pessoa está com a aba aberta. */
+  recarregar?: number
+}) {
   const [d, setD] = useState<any>(null)
   const [pronto, setPronto] = useState(false)
 
@@ -113,7 +119,7 @@ function PlacarDoLive() {
       .catch(() => { /* placar é contexto, não conteúdo · falha em silêncio */ })
       .finally(() => { if (vivo) setPronto(true) })
     return () => { vivo = false }
-  }, [])
+  }, [recarregar])
 
   if (!pronto) {
     return (
@@ -228,9 +234,13 @@ function minutoVivo(p: EmLeitura, segundosExtras: number): { minuto: number | nu
   return { minuto: projetado, projetado: projetado > p.minuto }
 }
 
-function EmLeituraAgora({ isActive, motor }: {
+function EmLeituraAgora({ isActive, motor, recarregar }: {
   isActive: boolean
   motor?: { ligado: boolean; ultima_rodada: string | null } | null
+  /* Contador, não booleano: dois toques seguidos no botão de atualizar
+     precisam disparar duas buscas, e um booleano que já está `true` não
+     dispara a segunda. Mesma razão do `gatilhoManual` na barra do topo. */
+  recarregar?: number
 }) {
   const [dados, setDados] = useState<{ partidas: EmLeitura[]; disponivel: boolean } | null>(null)
   /* Segundos desde o último fetch. É o que faz o bloco andar SEM pedir nada ao
@@ -261,6 +271,16 @@ function EmLeituraAgora({ isActive, motor }: {
     const t = window.setInterval(() => setTick(v => v + 1), 1000)
     return () => clearInterval(t)
   }, [isActive])
+
+  /* O botão de atualizar da aba puxa este bloco junto. Sem isto ele
+     atualizaria os picks e deixaria a leitura para trás -- e é justamente
+     aqui que o minuto e os contadores da partida aparecem, ou seja: a metade
+     da tela em que "está desatualizado" é visível a olho nu. */
+  const primeiroPedido = useRef(true)
+  useEffect(() => {
+    if (primeiroPedido.current) { primeiroPedido.current = false; return }
+    if (isActive) carregar()
+  }, [recarregar, isActive, carregar])
 
   const partidas = dados?.partidas ?? []
   if (!dados?.disponivel || partidas.length === 0) return null
@@ -950,6 +970,10 @@ export default function LivePicksFeed({ isActive, banca }: {
   const [alvo, setAlvo] = useState<LivePick | null>(null)
   const [salvando, setSalvando] = useState(false)
   const [erroModal, setErroModal] = useState<string | null>(null)
+  const [atualizando, setAtualizando] = useState(false)
+  /* Incrementado pelo botão · é o que faz EmLeituraAgora e o placar buscarem
+     de novo. Ver o comentário do prop `recarregar`. */
+  const [pedidoDeRecarga, setPedidoDeRecarga] = useState(0)
   const timer = useRef<number | null>(null)
   const navigate = useNavigate()
 
@@ -966,6 +990,24 @@ export default function LivePicksFeed({ isActive, banca }: {
       setPicks([])
     }
   }, [])
+
+  /* O botão de atualizar. Puxa a barra do topo junto (sinalizarNavegacao)
+     porque a espera é a mesma de uma troca de aba, e o site inteiro responde a
+     essa espera do mesmo jeito desde 29/08.
+
+     O `finally` solta o botão mesmo com a rede fora: um botão travado em
+     "atualizando" é pior que um que falhou, porque tira da pessoa a
+     possibilidade de tentar de novo. */
+  const atualizarTudo = useCallback(async () => {
+    setAtualizando(true)
+    sinalizarNavegacao()
+    setPedidoDeRecarga(n => n + 1)
+    try {
+      await carregar()
+    } finally {
+      setAtualizando(false)
+    }
+  }, [carregar])
 
   /* Poll só enquanto a aba está visível. Fora dela não há motivo pra manter
      a chamada de pé: o backend consulta a API-Football nesse caminho. */
@@ -1063,6 +1105,30 @@ export default function LivePicksFeed({ isActive, banca }: {
             <LiveDot />
             O que são os Picks Ao Vivo?
           </h3>
+          <div className="flex items-center gap-2">
+          {/* ATUALIZAR NA MÃO (29/08, pedido do usuário).
+            *
+            * A aba já pesquisa sozinha de 15 em 15 segundos, e mesmo assim o
+            * botão faz falta: ao vivo a pessoa está decidindo com o jogo
+            * rolando, e "esperar até 15 segundos pra ver se mudou" é uma
+            * espera sem fim visível. O botão troca isso por uma ação com
+            * resposta imediata.
+            *
+            * Ele puxa as três fontes da aba de uma vez -- picks, leitura e
+            * placar -- porque atualizar só uma deixaria a tela meio nova e
+            * meio velha, que é pior que velha inteira. */}
+          <button
+            type="button"
+            onClick={atualizarTudo}
+            disabled={atualizando}
+            aria-label="Atualizar os dados da aba"
+            className="flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full
+                       border border-line-strong text-ink-3 hover:text-ink-1 hover:border-ink-4
+                       disabled:opacity-50 transition-colors min-h-[28px] touch-manipulation"
+          >
+            <RefreshCw className={`w-3 h-3 ${atualizando ? 'animate-spin' : ''}`} />
+            {atualizando ? 'atualizando' : 'atualizar'}
+          </button>
           {motor && (
             <span className={`flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full border ${
               motor.ligado
@@ -1078,13 +1144,14 @@ export default function LivePicksFeed({ isActive, banca }: {
               )}
             </span>
           )}
+          </div>
         </div>
         <p className="text-[13px] text-ink-3 leading-relaxed">
           A IA lê a partida em andamento e compara com a odd do momento. Só publica quando o jogo
           se afasta do esperado e o preço paga por isso.{' '}
           <span className="font-bold text-ink-2">Confira a odd na casa antes de apostar.</span>
         </p>
-        <PlacarDoLive />
+        <PlacarDoLive recarregar={pedidoDeRecarga} />
       </div>
 
       {/* O VAZIO PRECISA DIZER SE O MOTOR ESTÁ LIGADO.
@@ -1166,7 +1233,7 @@ export default function LivePicksFeed({ isActive, banca }: {
           usuário). A aba é tela de decisão: primeiro o que dá pra apostar,
           depois o contexto de onde ele pode sair. Ver o cabeçalho do
           componente. */}
-      <EmLeituraAgora isActive={isActive} motor={motor} />
+      <EmLeituraAgora isActive={isActive} motor={motor} recarregar={pedidoDeRecarga} />
 
       {/* Os encerrados do dia saíram daqui · ver o comentário em `emAndamento`.
           O link existe porque tirar a seção não pode virar "sumiu": o pick
