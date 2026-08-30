@@ -24,6 +24,10 @@ function avisar() {
 
 export function requisicaoIniciou() {
   pendentes += 1
+  /* Primeira requisição de uma rajada nascida de um toque · ver
+     `nasceuDeUmGesto` no fim deste arquivo. As seguintes da mesma rajada não
+     reiniciam a barra, senão ela voltaria a 8% a cada resposta que chega. */
+  if (pendentes === 1 && nasceuDeUmGesto()) sinalizarNavegacao()
   avisar()
 }
 
@@ -61,4 +65,43 @@ export function sinalizarNavegacao() {
 export function assinarNavegacao(ouvinte: OuvinteNavegacao): () => void {
   ouvintesNavegacao.add(ouvinte)
   return () => { ouvintesNavegacao.delete(ouvinte) }
+}
+
+
+/*
+ * A BARRA COMO PADRÃO DE TUDO.
+ *
+ * Trocar de rota e trocar de aba já puxavam a barra. Faltava o resto do que uma
+ * pessoa faz numa tela e espera: mudar filtro, virar página da lista, escolher
+ * outro período, mandar um formulário. Cada um desses pontos precisaria de uma
+ * chamada explícita a `sinalizarNavegacao()`, e a cada tela nova alguém
+ * esqueceria de uma · foi o que aconteceu, e é por isso que a regra virou
+ * automática.
+ *
+ * O CRITÉRIO É O GESTO, NÃO A REQUISIÇÃO.
+ *
+ * Uma barra por requisição é o erro óbvio aqui: metade das telas faz polling em
+ * segundo plano (LivePicks, o sino, o Admin de 3 em 3 segundos, Fixtures de 30
+ * em 30), e a barra ficaria piscando sozinha enquanto a pessoa lê a tela
+ * parada, dizendo "estou carregando" sem ninguém ter pedido nada.
+ *
+ * Então o que liga a barra é: houve um toque ou uma tecla há pouco, E esta é a
+ * primeira requisição em voo. Poll de timer não tem gesto antes dele e não
+ * acende nada. O `pointerdown` chega antes do `click`, então a marca já está lá
+ * quando o handler dispara a chamada.
+ */
+const JANELA_DO_GESTO_MS = 800
+let ultimoGesto = 0
+
+function nasceuDeUmGesto(): boolean {
+  return Date.now() - ultimoGesto < JANELA_DO_GESTO_MS
+}
+
+if (typeof document !== 'undefined') {
+  const marcar = () => { ultimoGesto = Date.now() }
+  /* Captura: um handler que chama `stopPropagation` não pode esconder o gesto
+     de nós · é justamente em componente com handler próprio que ele acontece. */
+  document.addEventListener('pointerdown', marcar, { capture: true, passive: true })
+  document.addEventListener('keydown', marcar, { capture: true, passive: true })
+  document.addEventListener('submit', marcar, { capture: true, passive: true })
 }

@@ -4,8 +4,12 @@ import { Spinner } from '../components/ui'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
+import { useRevelacao, classesRevelacao, FADE_REVELACAO_MS } from '../hooks/useRevelacao'
 
 export default function VerifyEmail() {
+  /* Portão de revelação · o mesmo das telas com PageShell. Também é quem
+     encerra a barra verde do index.html. Ver hooks/useRevelacao. */
+  const revelado = useRevelacao()
   const [params] = useSearchParams()
   const navigate  = useNavigate()
   const { user, updateUser } = useAuth()
@@ -87,7 +91,7 @@ export default function VerifyEmail() {
   }
 
   return (
-    <div className="min-h-screen bg-surface-0 flex items-center justify-center p-4">
+    <div className={`min-h-screen bg-surface-0 flex items-center justify-center p-4 ${classesRevelacao(revelado)}`} style={{ transitionDuration: `${FADE_REVELACAO_MS}ms` }} aria-busy={!revelado}>
       <Helmet>
         <title>Confirmar e-mail · Pick IA</title>
         <meta name="robots" content="noindex, nofollow" />

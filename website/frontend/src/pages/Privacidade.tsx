@@ -4,6 +4,9 @@ import PageShell from '../components/PageShell'
 export default function Privacidade() {
   return (
     <PageShell
+      /* Texto estático, zero requisição · o portão de revelação só adicionaria
+         um fade em cima de uma tela que já está pronta. Ver useRevelacao. */
+      revelacao={false}
       title="Política de Privacidade · Pick IA"
       description="Política de Privacidade do Pick IA: quais dados coletamos, como usamos e seus direitos."
       width="prose"

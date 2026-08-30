@@ -1,12 +1,12 @@
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
-import { lazy, Suspense, Component, ReactNode, useCallback } from 'react'
-import Spinner from './components/ui/Spinner'
+import { lazy, Suspense, Component, ReactNode, useCallback, useEffect } from 'react'
 import { HelmetProvider } from 'react-helmet-async'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { NotificationProvider } from './context/NotificationContext'
 import { OnboardingProvider, useOnboarding } from './context/OnboardingContext'
 import TopProgressBar from './components/TopProgressBar'
 import { useWebMCP } from './hooks/useWebMCP'
+import { prefetchOcioso, ouvirLinksParaPrefetch } from './lib/prefetch'
 
 /*
  * O QUE PODE SER IMPORTADO NO TOPO DESTE ARQUIVO.
@@ -134,11 +134,20 @@ class RouteErrorBoundary extends Component<{ children: ReactNode }, { error: Err
   }
 }
 
-const PageLoader = () => (
-  <div className="min-h-screen bg-surface-0 flex items-center justify-center">
-    <Spinner size="lg" />
-  </div>
-)
+/*
+ * Espera do chunk da rota.
+ *
+ * Era um spinner de tela cheia, e ele custava uma tela a mais em toda
+ * navegação: saía a página anterior, entrava um fundo vazio com um spinner no
+ * meio, entrava a página nova com os spinners DELA, e só então o conteúdo.
+ * Quatro estados visuais para uma coisa só · "estou carregando".
+ *
+ * Nulo, quem comunica a espera é a barra verde do topo, que já está montada,
+ * não pisca a tela inteira e é a mesma em todas as telas (primeira visita
+ * inclusive, onde ela vem do index.html). Do lado de quem usa: a página atual
+ * fica no lugar com a barra andando em cima, e a próxima entra pronta.
+ */
+const PageLoader = () => null
 
 function PrivateRoute({ children }: { children: JSX.Element }) {
   const { user } = useAuth()
@@ -176,6 +185,18 @@ function PublicRoute({ children }: { children: JSX.Element }) {
  * dependência: o hook inteiro é uma detecção de recurso e quatro funções, e
  * navegador sem `navigator.modelContext` sai dele no primeiro `if`.
  */
+/*
+ * Adianta o chunk do provável próximo passo enquanto o navegador está ocioso.
+ * Fica dentro do AuthProvider porque a lista depende de a pessoa estar logada
+ * ou não · ver lib/prefetch.
+ */
+function PrecarregarRotas() {
+  const { user } = useAuth()
+  useEffect(() => { prefetchOcioso(!!user) }, [!!user])
+  useEffect(() => ouvirLinksParaPrefetch(), [])
+  return null
+}
+
 function FerramentasDeAgente() {
   const navigate = useNavigate()
   useWebMCP(useCallback((rota: string) => navigate(rota), [navigate]))
@@ -194,6 +215,7 @@ export default function App() {
               página que está saindo. */}
           <TopProgressBar />
           <FerramentasDeAgente />
+          <PrecarregarRotas />
 
           {/* Sobreposições · fallback nulo de propósito. Nenhuma delas participa
               da primeira pintura, então não deve existir spinner reservando

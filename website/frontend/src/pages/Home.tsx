@@ -16,6 +16,7 @@ import { usePlans, fmtPlanPrice, type Plan } from '../hooks/usePlans'
 import { fadeInUp, staggerContainer } from '../lib/motion'
 import { fmtUnits } from '../utils/format'
 import { useAuth } from '../context/AuthContext'
+import { encerrarBarraInicial } from '../lib/barraInicial'
 
 import FreePickHero from '../home/FreePickHero'
 import StatsBand, { type PublicSummary } from '../home/StatsBand'
@@ -547,6 +548,17 @@ export default function Home() {
   const [prontos, setProntos] = useState(0)
   const marcarPronto = useCallback(() => setProntos(n => n + 1), [])
   const topoPronto = loaded && prontos >= 2
+
+  /*
+   * A Home não usa o portão de revelação das telas do app, e é de propósito:
+   * o hero é estático e pinta no primeiro quadro, então segurá-lo esperando
+   * dado seria trocar a tela mais rápida do site por uma espera. O que ela tem
+   * é a revelação coletiva do topo, logo acima.
+   *
+   * A barra verde do index.html, essa, fecha aqui · o topo montado com
+   * conteúdo é o mesmo marco que o portão usa nas outras telas.
+   */
+  useEffect(() => { if (topoPronto) encerrarBarraInicial() }, [topoPronto])
 
   // Uma chamada só: alimenta a faixa de indicadores e a lista de resultados.
   //

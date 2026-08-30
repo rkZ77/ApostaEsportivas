@@ -4,6 +4,9 @@ import PageShell from '../components/PageShell'
 export default function Termos() {
   return (
     <PageShell
+      /* Texto estático, zero requisição · o portão de revelação só adicionaria
+         um fade em cima de uma tela que já está pronta. Ver useRevelacao. */
+      revelacao={false}
       title="Termos de Uso · Pick IA"
       description="Termos de Uso do Pick IA: regras de uso da plataforma, assinaturas e responsabilidades."
       width="prose"

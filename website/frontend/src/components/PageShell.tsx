@@ -4,6 +4,7 @@ import Navbar from './Navbar'
 import Footer from './Footer'
 import BackButton from './BackButton'
 import { PAGE_WIDTH, type PageWidth } from '../lib/pageWidth'
+import { useRevelacao, classesRevelacao, FADE_REVELACAO_MS } from '../hooks/useRevelacao'
 
 /*
  * Casca de página.
@@ -51,6 +52,13 @@ export default function PageShell({
   beforeMain,
   className,
   mainClassName,
+  /**
+   * Desliga o portão de revelação · o conteúdo aparece no primeiro quadro.
+   *
+   * Só para tela sem carga inicial nenhuma (Termos, Privacidade). Nas outras o
+   * portão é o padrão de propósito: ver hooks/useRevelacao.
+   */
+  revelacao = true,
 }: {
   children: React.ReactNode
   /** Vira "<title> · Pick IA". Passar já com o sufixo desliga o automático. */
@@ -71,7 +79,9 @@ export default function PageShell({
   beforeMain?: React.ReactNode
   className?: string
   mainClassName?: string
+  revelacao?: boolean
 }) {
+  const revelado = useRevelacao(!revelacao)
   const fullTitle = title
     ? (title.includes('Pick IA') ? title : `${title} · Pick IA`)
     : undefined
@@ -132,7 +142,23 @@ export default function PageShell({
 
       {beforeMain}
 
-      <main className={cn('flex-1 w-full mx-auto py-6 md:py-8', PAGE_WIDTH[width], mainClassName)}>
+      {/*
+        O portão vive NO <main>, e não num <div> em volta dele.
+        Sete telas passam layout por `mainClassName` · `space-y-5`, `grid
+        lg:grid-cols-2`, `flex items-center` · e todas dependem de o conteúdo
+        ser filho direto deste elemento. Um invólucro extra viraria o único
+        filho do grid e achataria a página inteira numa coluna.
+      */}
+      <main
+        className={cn(
+          'flex-1 w-full mx-auto py-6 md:py-8',
+          PAGE_WIDTH[width],
+          classesRevelacao(revelado),
+          mainClassName,
+        )}
+        style={{ transitionDuration: `${FADE_REVELACAO_MS}ms` }}
+        aria-busy={!revelado}
+      >
         {children}
       </main>
 

@@ -7,8 +7,12 @@ import { useAuth } from '../context/AuthContext'
 import api from '../services/api'
 import { getResultStyle, PICK_TYPE_LABEL } from '../utils/resultStyle'
 import { TeamLogo, LeagueLogo } from '../components/TeamLogo'
+import { useRevelacao, classesRevelacao, FADE_REVELACAO_MS } from '../hooks/useRevelacao'
 
 export default function PickPublico() {
+  /* Portão de revelação · o mesmo das telas com PageShell. Também é quem
+     encerra a barra verde do index.html. Ver hooks/useRevelacao. */
+  const revelado = useRevelacao()
   const { pick_type, pick_id } = useParams<{ pick_type: string; pick_id: string }>()
   const [searchParams] = useSearchParams()
   const refCode = searchParams.get('ref') ?? ''
@@ -83,7 +87,7 @@ export default function PickPublico() {
   const pageTitle = `${pick.home_team_name ?? pick.teams_preview?.[0] ?? 'Múltipla'}${pick.away_team_name ? ` x ${pick.away_team_name}` : ''}${resultLabel} · Pick IA`
 
   return (
-    <div className="min-h-screen bg-surface-0 flex flex-col">
+    <div className={`min-h-screen bg-surface-0 flex flex-col ${classesRevelacao(revelado)}`} style={{ transitionDuration: `${FADE_REVELACAO_MS}ms` }} aria-busy={!revelado}>
       <Helmet>
         <title>{pageTitle}</title>
         <meta name="description" content={`Odd ${odd?.toFixed(2) ?? '-'} · ${typeLabel} · Análise de IA para apostas esportivas.`} />

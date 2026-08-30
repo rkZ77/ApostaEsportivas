@@ -9,6 +9,7 @@ import api from '../services/api'
 import Turnstile, { TurnstileHandle } from '../components/Turnstile'
 import { getPasswordStrength } from '../utils/passwordStrength'
 import { tabFade } from '../lib/motion'
+import { useRevelacao, classesRevelacao, FADE_REVELACAO_MS } from '../hooks/useRevelacao'
 
 function validateEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())
@@ -44,6 +45,9 @@ function RealWinRate({ className = 'mt-5' }: { className?: string }) {
 type LoginMethod = 'username' | 'email'
 
 export default function Login() {
+  /* Portão de revelação · o mesmo das telas com PageShell. Também é quem
+     encerra a barra verde do index.html. Ver hooks/useRevelacao. */
+  const revelado = useRevelacao()
   const { login, register } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -190,7 +194,7 @@ export default function Login() {
   ]
 
   return (
-    <div className="min-h-screen bg-surface-0 flex items-stretch">
+    <div className={`min-h-screen bg-surface-0 flex items-stretch ${classesRevelacao(revelado)}`} style={{ transitionDuration: `${FADE_REVELACAO_MS}ms` }} aria-busy={!revelado}>
       <Helmet>
         <title>Entrar · Pick IA</title>
         <meta name="description" content="Acesse sua conta Pick IA para ver os picks da IA do dia, sua banca e seu histórico." />

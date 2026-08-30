@@ -39,6 +39,51 @@
       href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap"
     />
 
+    <!--
+      BARRA DE CARREGAMENTO INICIAL.
+
+      Ela vive aqui, em HTML e CSS puros, e nao no React. O motivo e' o unico
+      pedaco da espera que o React nao consegue cobrir: entre o navegador
+      receber o HTML e o bundle terminar de baixar, parsear e montar, a tela
+      fica parada. Antes esse trecho era uma tela vazia seguida de um spinner
+      centralizado · duas telas de "nada" antes da primeira de verdade.
+
+      A animacao e' CSS, entao ela ja esta andando enquanto o JavaScript baixa,
+      inclusive em conexao ruim, que e' exatamente quando ela importa.
+
+      Ela cresce ate' 90% e para (mesma ilusao da TopProgressBar: o navegador
+      nao sabe a fracao real). Quem a encerra e' o React, pondo `pronto` no
+      <html> quando a primeira tela esta montada · ver src/lib/barraInicial.ts.
+    -->
+    <style>
+      #barra-inicial {
+        position: fixed; inset-inline: 0; top: 0; height: 3px;
+        z-index: 200; pointer-events: none;
+      }
+      #barra-inicial > span {
+        display: block; height: 100%; width: 0;
+        background: #00CC00;
+        animation: barra-inicial-anda 9s cubic-bezier(0.05, 0.8, 0.2, 1) forwards;
+      }
+      @keyframes barra-inicial-anda {
+        0%   { width: 0%; }
+        12%  { width: 32%; }
+        40%  { width: 62%; }
+        100% { width: 90%; }
+      }
+      /* Salta pro fim e some · o salto tem que ser visto antes do fade, senao
+         a barra parece ter desistido no meio. */
+      html.pronto #barra-inicial > span {
+        width: 100%;
+        animation: none;
+        transition: width 180ms ease-out, opacity 200ms ease-out 160ms;
+        opacity: 0;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #barra-inicial > span { animation-duration: 0.01s; width: 90%; }
+      }
+    </style>
+
     <!-- Primary Meta -->
     <title>Pick IA · Picks de Futebol com Inteligência Artificial</title>
     <meta name="description" content="Picks de futebol gerados por IA com análise estatística real. Cobertura diária de Brasileirão, Champions League, Premier League e La Liga. VIP, múltiplas, alavancagem e picks gratuitos. Teste grátis por 2 dias." />
@@ -123,6 +168,7 @@
     <meta name="apple-mobile-web-app-title" content="Pick IA" />
   </head>
   <body class="bg-surface-0 text-ink-2">
+    <div id="barra-inicial"><span></span></div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

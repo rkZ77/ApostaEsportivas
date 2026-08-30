@@ -1,6 +1,7 @@
 import { Helmet } from 'react-helmet-async'
 import { motion, useReducedMotion } from 'framer-motion'
 import { Button } from '../components/ui'
+import { useRevelacao, classesRevelacao, FADE_REVELACAO_MS } from '../hooks/useRevelacao'
 
 /*
  * A bola que faz o "0" do 404.
@@ -87,10 +88,13 @@ function BolaRachada({ className = '' }: { className?: string }) {
 }
 
 export default function NotFound() {
+  /* Portão de revelação · o mesmo das telas com PageShell. Também é quem
+     encerra a barra verde do index.html. Ver hooks/useRevelacao. */
+  const revelado = useRevelacao()
   const semMovimento = useReducedMotion()
 
   return (
-    <div className="min-h-screen bg-surface-0 flex flex-col items-center justify-center px-4 text-center">
+    <div className={`min-h-screen bg-surface-0 flex flex-col items-center justify-center px-4 text-center ${classesRevelacao(revelado)}`} style={{ transitionDuration: `${FADE_REVELACAO_MS}ms` }} aria-busy={!revelado}>
       <Helmet>
         <title>Página não encontrada · Pick IA</title>
         {/* 404 fora do índice: sem isso o Google guarda a URL quebrada. */}

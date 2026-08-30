@@ -4,8 +4,12 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Eye, EyeOff } from 'lucide-react'
 import api from '../services/api'
 import { getPasswordStrength } from '../utils/passwordStrength'
+import { useRevelacao, classesRevelacao, FADE_REVELACAO_MS } from '../hooks/useRevelacao'
 
 export default function ForgotPassword() {
+  /* Portão de revelação · o mesmo das telas com PageShell. Também é quem
+     encerra a barra verde do index.html. Ver hooks/useRevelacao. */
+  const revelado = useRevelacao()
   const navigate = useNavigate()
   // O link do e-mail chega com ?email=... Sem isso, quem clica cai no passo 1
   // e o unico jeito de sair dali e' pedir OUTRO codigo · o que acabou de
@@ -58,7 +62,7 @@ export default function ForgotPassword() {
   }
 
   return (
-    <div className="min-h-screen bg-surface-0 flex items-center justify-center px-4">
+    <div className={`min-h-screen bg-surface-0 flex items-center justify-center px-4 ${classesRevelacao(revelado)}`} style={{ transitionDuration: `${FADE_REVELACAO_MS}ms` }} aria-busy={!revelado}>
       <Helmet>
         <title>Recuperar senha · Pick IA</title>
         <meta name="robots" content="noindex, nofollow" />
