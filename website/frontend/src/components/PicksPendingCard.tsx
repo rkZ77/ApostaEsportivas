@@ -3,6 +3,7 @@ import { Spinner } from './ui'
 import { CalendarClock, BrainCircuit, ChevronDown, DatabaseZap, CircleCheck,
          CircleSlash } from 'lucide-react'
 import api from '../services/api'
+import { sinalizarNavegacao } from '../services/progressBus'
 import { TeamLogo, LeagueLogo } from './TeamLogo'
 
 /** Quantos jogos a lista mostra antes de pedir pra expandir.
@@ -41,7 +42,11 @@ function ListaDeJogos({ jogos, render, rotulo }: {
       <div className="space-y-1.5">{visiveis.map(render)}</div>
       {!cabeInteira && (
         <button
-          onClick={() => setAberta(a => !a)}
+          /* A barra do topo responde a esta espera igual às outras do site
+             (ver services/progressBus): abrir a lista inteira é a mesma troca
+             de contexto que trocar de aba, e desde 29/08 o site inteiro
+             responde a esse tipo de espera do mesmo jeito. */
+          onClick={() => { sinalizarNavegacao(); setAberta(a => !a) }}
           className="mt-2 w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold
                      text-ink-3 hover:text-ink-1 border border-line hover:border-line-strong
                      rounded-md py-2.5 min-h-[36px] transition-colors"

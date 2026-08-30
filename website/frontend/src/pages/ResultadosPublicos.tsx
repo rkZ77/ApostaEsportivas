@@ -481,7 +481,17 @@ export default function ResultadosPublicos() {
                       .sort((a, b) => b.wr - a.wr)
                       .map(lg => (
                         <div key={`bar-${lg.league_id ?? lg.league_name}`} className="flex items-center gap-3">
-                          <span className="text-[11px] text-ink-3 w-28 shrink-0 truncate">{lg.league_name}</span>
+                          {/* Escudo junto do nome · o "Melhor aproveitamento"
+                              logo acima já tem, e a lista inteira não tinha.
+                              Numa lista de 16 competições o brasão é o que a
+                              olhada rápida pega; o nome truncado em 28px
+                              sozinho ("Conmebol Sudameri...") não identifica. */}
+                          <span className="flex items-center gap-2 w-32 shrink-0 min-w-0">
+                            {lg.league_id != null
+                              ? <LeagueLogo id={lg.league_id} name={lg.league_name} />
+                              : <span className="w-4.5 h-4.5 rounded-full bg-surface-2 shrink-0" />}
+                            <span className="text-[11px] text-ink-3 truncate">{lg.league_name}</span>
+                          </span>
                           <div className="flex-1 h-1.5 bg-surface-2 rounded-full overflow-hidden">
                             <div
                               className={`h-full rounded-full ${lg.wr >= 55 ? 'bg-green-500' : 'bg-ink-4'}`}

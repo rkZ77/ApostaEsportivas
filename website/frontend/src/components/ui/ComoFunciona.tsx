@@ -3,29 +3,27 @@ import { ChevronDown, HelpCircle } from 'lucide-react'
 import { cn } from '../../lib/cn'
 
 /**
- * "Como funciona" de um produto · fechado por padrão, a um toque de distância.
+ * "Como funciona" de um produto · aberto, e a um toque de sair da frente.
  *
- * POR QUE ELE NASCE FECHADO (2026-08-29, pedido do usuário)
- * ---------------------------------------------------------
- * Cada aba de Picks abria com um bloco de dois a quatro parágrafos explicando
- * o produto. O texto é bom e a explicação precisa existir · o problema é
- * quando ela aparece: TODA vez, para TODO mundo, acima dos picks.
+ * NASCE ABERTO, E FECHA NUM TOQUE (2026-08-30, decisão do usuário)
+ * ----------------------------------------------------------------
+ * A primeira versão (29/08) nascia fechada, pra o primeiro pick caber na tela
+ * do celular. O usuário inverteu no dia seguinte, e a razão dele vence a
+ * minha: quem chega pela primeira vez precisa saber o que está comprando, e
+ * uma explicação que só existe atrás de um toque é uma explicação que a maior
+ * parte das pessoas nunca vai ler.
  *
- * No celular, que é onde o site vive, isso empurrava o primeiro card para
- * baixo da dobra. Quem entra na aba pela vigésima vez não está lendo aquilo
- * há dezenove visitas, e mesmo assim rola por cima dele todo dia.
- *
- * Fechado, o produto abre no que interessa (o pick) e a explicação continua
- * ali, nomeada, para quem quiser rever · que era o pedido: "conseguir
- * reescolher o como funciona".
+ * O que resolve o problema do espaço é o toque para FECHAR, não o de abrir:
+ * quem já conhece o produto fecha uma vez e segue; quem não conhece lê sem ter
+ * que descobrir que havia algo ali.
  *
  * O PLACAR FICA DENTRO. Ele é a resposta a "e isso funciona?", que é a mesma
  * pergunta que o texto responde · e é o número que muda com o tempo, então
  * quem volta para consultar volta pelos dois juntos.
  *
- * Estado local, e não em localStorage, de propósito: lembrar que a pessoa
- * abriu ontem faria a aba voltar a nascer com a parede de texto, que é
- * justamente o que este componente existe para evitar.
+ * Estado local, e não em localStorage, de propósito: guardar a escolha entre
+ * sessões parece atencioso e transforma a explicação em algo que some pra
+ * sempre depois de um toque acidental.
  */
 export default function ComoFunciona({
   titulo,
@@ -44,7 +42,7 @@ export default function ComoFunciona({
   children: React.ReactNode
   className?: string
 }) {
-  const [aberto, setAberto] = useState(false)
+  const [aberto, setAberto] = useState(true)
   const id = useId()
 
   return (

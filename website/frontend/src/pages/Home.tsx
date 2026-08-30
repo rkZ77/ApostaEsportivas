@@ -85,13 +85,24 @@ function RecentResults({ data, loading }: { data: PublicData | null; loading: bo
       .catch(() => setCurva([]))
   }, [])
 
-  // Saldo do dia mais recente da janela. Sem isso uma sequência de RED (mercados
-  // de escanteio e cartão travam cedo, GREEN só sai no FT) dominava a leitura
-  // mesmo em dia fechado no positivo.
-  const latestDate = recent[0]?.match_date
-  const todayItems = latestDate ? recent.filter(t => t.match_date === latestDate) : []
-  const todayGreens = todayItems.filter(t => t.result === 'GREEN').length
-  const todayReds = todayItems.filter(t => t.result === 'RED').length
+  /* O PLACAR DESTAS DEZ, e não o do dia mais recente (2026-08-30).
+   *
+   * O meta mostrava o saldo do último dia da janela, e num dia ruim isso é o
+   * pior recorte possível: em 29/08 o motor ao vivo publicou nove picks e
+   * todos perderam, então a Home abria com "29/08: 0G · 9R" em cima de dez
+   * linhas vermelhas. Um dia não descreve o produto, e essa é justamente a
+   * seção que existe pra convencer quem ainda não confia.
+   *
+   * O recorte honesto é o da PRÓPRIA LISTA: quem lê está vendo estas dez, e o
+   * número diz o que elas somam. Nada é escondido -- as dez continuam ali, com
+   * RED e tudo. O que muda é o número ao lado deixar de descrever outra coisa.
+   *
+   * O total geral (466 picks, 307 greens, +191,2u) continua logo abaixo, e é
+   * ele que responde "e no longo prazo?".
+   */
+  const greens = recent.filter(t => t.result === 'GREEN').length
+  const reds = recent.filter(t => t.result === 'RED').length
+  const lucroDaLista = recent.reduce((soma, t) => soma + Number(t.profit ?? 0), 0)
 
   return (
     <section id="resultados" className="section section-alt">
@@ -128,13 +139,15 @@ function RecentResults({ data, loading }: { data: PublicData | null; loading: bo
               <PanelHead
                 label="Últimas 10 finalizadas"
                 meta={
-                  todayGreens > 0 || todayReds > 0 ? (
+                  greens > 0 || reds > 0 ? (
                     <span>
-                      {new Date(latestDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
-                      {': '}
-                      <span className="text-accent-ink font-bold">{todayGreens}G</span>
-                      {' · '}
-                      <span className="text-red-400 font-bold">{todayReds}R</span>
+                      <span className="text-accent-ink font-bold">{greens}G</span>
+                      {' '}
+                      <span className="text-red-400 font-bold">{reds}R</span>
+                      {' '}
+                      <span className={lucroDaLista >= 0 ? 'text-accent-ink font-bold' : 'text-red-400 font-bold'}>
+                        {lucroDaLista >= 0 ? '+' : ''}{lucroDaLista.toFixed(1).replace('.', ',')}u
+                      </span>
                     </span>
                   ) : 'atualizado automaticamente'
                 }
