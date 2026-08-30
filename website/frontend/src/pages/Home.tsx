@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { motion } from 'framer-motion'
 import { ArrowRight, Check, X as XIcon } from 'lucide-react'
@@ -15,6 +15,7 @@ import PipelineProfitChart from '../components/PipelineProfitChart'
 import { usePlans, fmtPlanPrice, type Plan } from '../hooks/usePlans'
 import { fadeInUp, staggerContainer } from '../lib/motion'
 import { fmtUnits } from '../utils/format'
+import { PICK_TYPE_LABEL } from '../utils/resultStyle'
 import { useAuth } from '../context/AuthContext'
 import { encerrarBarraInicial } from '../lib/barraInicial'
 
@@ -112,7 +113,33 @@ function ultimasPorProduto(tips: RecentTip[], limite = 10): RecentTip[] {
 }
 
 function RecentResults({ data, loading }: { data: PublicData | null; loading: boolean }) {
-  const recent = ultimasPorProduto(data?.recent ?? [], 10)
+  const todas = data?.recent ?? []
+
+  /* FILTRO POR PRODUTO (2026-08-30, pedido do usuário).
+   *
+   * "Todos" mostra a lista balanceada -- no máximo dois por produto, pra a
+   * seção retratar a plataforma e não o último lote de um motor. Escolhendo
+   * um produto, o teto sai: quem clicou em VIP quer ver VIP, e limitar a dois
+   * ali seria responder outra pergunta.
+   *
+   * Os chips saem do que EXISTE na janela, na ordem em que apareceram (mais
+   * recente primeiro). Chip de produto sem pick seria um caminho para uma
+   * lista vazia -- e um produto que não publicou hoje não precisa ser
+   * anunciado na página de captação.
+   */
+  const [produto, setProduto] = useState<string | null>(null)
+  const produtos = useMemo(() => {
+    const vistos: string[] = []
+    for (const t of todas) if (!vistos.includes(t.source)) vistos.push(t.source)
+    return vistos
+  }, [todas])
+
+  const recent = useMemo(
+    () => (produto
+      ? todas.filter(t => t.source === produto).slice(0, 10)
+      : ultimasPorProduto(todas, 10)),
+    [todas, produto])
+
   const resumo = data?.summary ?? null
 
   /*
@@ -180,8 +207,32 @@ function RecentResults({ data, loading }: { data: PublicData | null; loading: bo
             <Panel>
               <PanelHead
                 label="Últimas finalizadas"
-                meta="os mais recentes de cada produto"
+                meta={produto
+                  ? `só ${PICK_TYPE_LABEL[produto] ?? produto}`
+                  : 'os mais recentes de cada produto'}
               />
+
+              {produtos.length > 1 && (
+                <div className="flex flex-wrap gap-1.5 px-4 pt-3">
+                  {/* "Todos" primeiro e sempre visível: é o estado que mostra a
+                      plataforma inteira, e é pra ele que se volta. */}
+                  {[null, ...produtos].map(chave => {
+                    const ativo = produto === chave
+                    return (
+                      <button
+                        key={chave ?? 'todos'}
+                        onClick={() => setProduto(chave)}
+                        className={`text-[11px] font-semibold px-2.5 py-1.5 min-h-[32px] rounded-md border transition-colors ${
+                          ativo
+                            ? 'border-accent/50 bg-accent/10 text-accent-ink'
+                            : 'border-line text-ink-3 hover:text-ink-2 hover:border-line-strong'}`}
+                      >
+                        {chave === null ? 'Todos' : (PICK_TYPE_LABEL[chave] ?? chave)}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
 
               <div className="divide-y divide-line/50">
                 {recent.map((tip, i) => (
