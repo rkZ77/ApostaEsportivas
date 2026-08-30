@@ -179,7 +179,11 @@ def test_coletor_de_odds_cobre_os_status_que_os_geradores_pedem():
     """A coleta busca NS/TBD; se um gerador aceitasse status fora disso, ele
     pediria odd de um jogo que a coleta nunca baixa."""
     odds = _fonte("capturar_odds.py")
-    m = re.search(r"status\s+IN\s+\(([^)]*)\)", odds)
+    # `f.status`, com o alias, e nao o primeiro `status IN` do arquivo: desde
+    # 30/08 a consulta tem DOIS -- o do historico dos times ('FT','AET','PEN',
+    # que decide se a partida tem base) e o das fixtures a coletar. Pegar o
+    # primeiro fazia o teste comparar o gerador com a lista errada.
+    m = re.search(r"f\.status\s+IN\s+\(([^)]*)\)", odds)
     aceitos_pela_coleta = set(re.findall(r"'([A-Z]+)'", m.group(1)))
     for arquivo in ("dica_pipeline.py", "alavancagem_pipeline.py",
                     "faltas_pipeline.py", "player_stats_pipeline.py"):

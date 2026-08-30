@@ -44,8 +44,8 @@ import { Radio, RefreshCw, Timer, CheckCircle2, Clock, PowerOff, Eye,
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import ApostaModal from './ApostaModal'
-import { Badge, Button, EmptyState, ErrorState, LiveDot, Marquee, PickTypeBadge, ResultBadge,
-         Skeleton, SkeletonPickGrid } from './ui'
+import { Badge, Button, ComoFunciona, EmptyState, ErrorState, LiveDot, Marquee, PickTypeBadge,
+         ResultBadge, Skeleton, SkeletonPickGrid } from './ui'
 import { PickExplainButton, PickProbability, PickReasoning } from './PickCardParts'
 import InfoTip from './InfoTip'
 import LiveAnalysisModal from './LiveAnalysisModal'
@@ -1350,21 +1350,19 @@ export default function LivePicksFeed({ isActive, banca }: {
         Ver os picks já encerrados em Minhas Apostas
       </button>
 
-      {/* Apresentação e placar, no fim. Quem entra na aba quer o pick; quem
-          quer entender o produto rola até aqui, e o fundo separa isso do que
-          é decisão. */}
-      <div className="mt-8 bg-surface-1 border border-line rounded-lg p-4">
-        <h3 className="text-sm font-bold text-accent-ink flex items-center gap-2 mb-2">
-          <LiveDot />
-          O que são os Picks Ao Vivo?
-        </h3>
-        <p className="text-[13px] text-ink-3 leading-relaxed">
+      {/* Apresentação e placar, no fim e FECHADOS · o mesmo ComoFunciona das
+          outras oito abas (30/08). Aqui ele já morava no rodapé desde ontem;
+          o que muda é passar a ser o mesmo componente, com o mesmo ícone e o
+          mesmo toque pra abrir. Nove abas com nove jeitos de explicar o
+          produto é o tipo de diferença que ninguém escolheu. */}
+      <ComoFunciona titulo="O que são os Picks Ao Vivo?" className="mt-8">
+        <p>
           A IA lê a partida em andamento e compara com a odd do momento. Só publica quando o jogo
           se afasta do esperado e o preço paga por isso.{' '}
-          <span className="font-bold text-ink-2">Confira a odd na casa antes de apostar.</span>
+          <span className="font-bold text-ink-1">Confira a odd na casa antes de apostar.</span>
         </p>
         <PlacarDoLive recarregar={pedidoDeRecarga} />
-      </div>
+      </ComoFunciona>
 
       <AnimatePresence>
         {alvo && (

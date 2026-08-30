@@ -4,6 +4,27 @@ from utils.data_br import HOJE_BR
 from collectors.odds_collector_service import OddsCollectorService, prune_odds_snapshots
 
 
+#: Jogos NO MANDO que cada time precisa ter pra a odd da partida valer a
+#: requisicao: 2 em casa pro mandante, 2 fora pro visitante.
+#:
+#: E' o piso de amostra do projeto lido do jeito certo. O piso unico e' 4 jogos
+#: (pick_engine_boost.MIN_JOGOS_FT, pick_engine.fouls_model.MIN_JOGOS_TIME), e
+#: o 4 sempre significou "2 em casa e 2 fora" -- esta escrito na propria razao
+#: dele em config.py: "2 em casa e 2 fora, entao a 5a rodada ja' produz".
+#:
+#: CONTAR O TOTAL ERA O RECORTE ERRADO, e pelo mesmo motivo que fez o motor ao
+#: vivo passar a ler mando em 29/08: um time com 4 jogos, todos fora, nao tem
+#: base nenhuma pra o jogo em que ele e' mandante. `team_statistics` guarda
+#: HOME e AWAY separados justamente porque as duas medias sao diferentes, e o
+#: filtro que decide gastar requisicao tem que perguntar pela media que sera
+#: usada -- nao por uma soma que mistura as duas.
+#:
+#: Escrito aqui e nao importado de proposito: este script roda como processo
+#: solto (o /admin o dispara por caminho), e importar config de motor pra ler
+#: um inteiro traria a cadeia inteira de dependencias do pipeline junto.
+MIN_JOGOS_NO_MANDO = 2
+
+
 class OddsMain:
 
     def __init__(self):
@@ -27,11 +48,58 @@ class OddsMain:
         # sido lida -- e recoletada. Cada jogo tinha as odds baixadas em 3 dias
         # seguidos, 2 requisicoes por vez (Bet365 + Betano): 6 requisicoes onde
         # 2 bastam.
+        # SEM HISTORICO DOS DOIS TIMES, A ODD NAO SERVE PRA NADA (2026-08-30,
+        # pedido do usuario).
+        #
+        # Cada fixture custa uma requisicao POR CASA (Bet365 + Betano = 2), e
+        # num dia cheio sao 50 jogos, 100 requisicoes. Parte deles nunca virou
+        # pick e nunca vai virar: TODO motor do projeto exige um minimo de
+        # partidas por time antes de estimar qualquer coisa
+        # (MIN_JOGOS_FT/MIN_JOGOS_TIME = 4, piso unico decidido em 28/08), e um
+        # time recem-promovido, de copa regional ou de liga que acabou de
+        # entrar simplesmente nao tem esse chao.
+        #
+        # A odd desses jogos era baixada, gravada, nunca lida, e apagada no
+        # TRUNCATE do dia seguinte. Gastar cota nisso significa deixar de gastar
+        # em jogo que produziria pick -- e o limite estoura antes de a coleta
+        # terminar, entao quem fica de fora e' o fim da lista, escolhido por
+        # ordem alfabetica de nada.
+        #
+        # A CONTA E' DO BANCO e nao custa API: `match_statistics` ja sabe
+        # quantos jogos encerrados cada time tem, e de que lado ele jogou. Conta
+        # na COMPETICAO da partida -- e' o mesmo recorte que os motores usam pra
+        # ler media, entao um time com 30 jogos na liga nacional e nenhum na
+        # copa continua sem base pro jogo de copa, que e' a verdade.
+        #
+        # E CONTA NO MANDO CERTO: jogo em casa do mandante contra jogo fora do
+        # visitante. Somar os dois lados diria que um time que so' jogou fora
+        # tem base pra ser mandante, e nao tem.
+        #
+        # Os DOIS lados precisam ter. Um pick e' sobre o confronto: com um lado
+        # cego, nenhuma estimativa do projeto se sustenta.
         cur.execute(f"""
-            SELECT fixture_id
-            FROM fixtures
-            WHERE status IN ('NS', 'TBD')
-              AND match_datetime::date = {HOJE_BR}
+            WITH em_casa AS (
+                SELECT home_team_id AS team_id, league_id, COUNT(*) AS n
+                  FROM match_statistics
+                 WHERE status IN ('FT','AET','PEN') AND home_team_id IS NOT NULL
+                 GROUP BY home_team_id, league_id
+            ),
+            fora AS (
+                SELECT away_team_id AS team_id, league_id, COUNT(*) AS n
+                  FROM match_statistics
+                 WHERE status IN ('FT','AET','PEN') AND away_team_id IS NOT NULL
+                 GROUP BY away_team_id, league_id
+            )
+            SELECT f.fixture_id
+              FROM fixtures f
+              LEFT JOIN em_casa c ON c.team_id = f.home_team_id
+                                 AND c.league_id = f.league_id
+              LEFT JOIN fora    v ON v.team_id = f.away_team_id
+                                 AND v.league_id = f.league_id
+             WHERE f.status IN ('NS', 'TBD')
+               AND f.match_datetime::date = {HOJE_BR}
+               AND COALESCE(c.n, 0) >= {MIN_JOGOS_NO_MANDO}
+               AND COALESCE(v.n, 0) >= {MIN_JOGOS_NO_MANDO}
         """)
 
         fixtures = [row[0] for row in cur.fetchall()]

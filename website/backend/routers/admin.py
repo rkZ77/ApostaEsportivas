@@ -372,9 +372,18 @@ _DEV_PIPELINE_STEPS = [
 #
 # Backfill de liga nova fica maior ainda: e' uma requisicao por jogo ja
 # finalizado da temporada inteira, centenas numa liga de pontos corridos.
+# 1 HORA desde 2026-08-30 (pedido do usuario). Era 30 min, e o sintoma de
+# estourar nao e' "demorou": e' o script morto na metade, com odd de parte dos
+# jogos faltando e nenhum erro obvio na tela. Num dia de 50 partidas a captura
+# passa de 30 min com facilidade -- ainda que o filtro de historico (ver
+# capturar_odds.MIN_JOGOS_NO_MANDO) tenha encurtado a fila, o teto tem que
+# caber no pior dia, nao no comum.
+#
+# `coletar_liga` sobe junto e continua acima: e' uma requisicao por jogo ja
+# finalizado da temporada inteira, centenas numa liga de pontos corridos.
 _PIPELINE_TIMEOUTS = {
-    "coletar_liga":    2700.0,  # 45 min
-    "default":         1800.0,  # 30 min
+    "coletar_liga":    5400.0,  # 90 min
+    "default":         3600.0,  # 60 min
 }
 
 # Mesma sequencia do `main.py tudo` (ver o registro COMANDOS la: as etapas do
