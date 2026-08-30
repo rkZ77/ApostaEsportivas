@@ -1634,6 +1634,49 @@ function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando, banca 
   )
 }
 
+/* Pick ao vivo no formato que o SuggestionCard entende.
+ *
+ * POR QUE O CARD COMUM, E NAO O CardLive (29/08)
+ * ----------------------------------------------
+ * O card da aba Ao Vivo mostra o jogo ACONTECENDO: placar do momento, barra da
+ * linha, contagem regressiva da odd. Isso e' o que se quer com a partida
+ * rolando, e custa uma consulta a API-Football por card.
+ *
+ * Na aba Hoje a pergunta e outra -- "o que a IA publicou hoje e no que deu" --
+ * e a maioria destes picks ja tem resultado. O card comum responde essa
+ * pergunta melhor, e de quebra traz o que o CardLive nao tem: COMPARTILHAR e
+ * "Entenda esta analise", iguais aos outros oito produtos.
+ */
+function liveParaSuggestion(p: any) {
+  return {
+    id: p.id,
+    fixture_id: p.fixture_id,
+    home_team_name: p.home_team_name,
+    away_team_name: p.away_team_name,
+    home_team_id: p.home_team_id,
+    away_team_id: p.away_team_id,
+    league_id: p.league_id,
+    league_name: p.league_name,
+    market: p.market,
+    line: p.line,
+    odd: Number(p.odd),
+    bet_house: p.bet_house ?? '',
+    confidence: p.confidence != null ? Number(p.confidence) : 0,
+    probability: p.probability != null ? Number(p.probability) : null,
+    market_type: p.market_type ?? 'live',
+    ev: p.ev != null ? Number(p.ev) : undefined,
+    match_date: p.match_date,
+    match_datetime: null,
+    reasoning: p.reasoning,
+    result: p.result ?? undefined,
+    profit: p.profit,
+    pick_type: 'live',
+    is_followed: p.is_followed,
+    user_stake_units: p.user_stake_units,
+    suggested_stake_units: p.suggested_stake_units ?? p.stake_units,
+  }
+}
+
 function SectionHeader({ color, label, badge, action, contagem }: {
   color: string; label: string; badge?: string
   /** Ação opcional alinhada à direita. */
@@ -2212,6 +2255,15 @@ export default function Picks() {
      ordenar por margem como nos outros mercados contradiz o critério do motor.
      Ver services/pick_engine_boost/config.py. */
   const boost = (today?.boost ?? null) as MercadoPick[] | null
+  /* Ao vivo do dia selecionado · vem de /suggestions/today, então a seta de
+     dia da aba Hoje já vale pra ele sem nenhuma regra própria. */
+  const liveDoDia = useMemo(() => (today?.live ?? []) as any[], [today])
+  const livePendentes = useMemo(() => liveDoDia.filter(p => !p.result), [liveDoDia])
+  /* Memo pelo mesmo motivo dos mercados: `liveParaSuggestion` monta objeto novo
+     a cada render, e sem isso o memo do SuggestionCard nunca acerta. */
+  const liveCards = useMemo(
+    () => liveDoDia.map(p => ({ id: p.id, s: liveParaSuggestion(p) })),
+    [liveDoDia])
   const boostFree = useMemo(() => (boost ?? []).filter(p => p.plano !== 'vip'), [boost])
   const boostVip = useMemo(() => (boost ?? []).filter(p => p.plano === 'vip'), [boost])
   /* Defesas parou de crescer em 27/08 (virou o método `saves` do Player
@@ -2895,6 +2947,41 @@ export default function Picks() {
                       jogador") saíram em 28/08: os cards que eles prometiam
                       já estão nesta mesma grade, então o clique levava a outra
                       aba pra ver o que a pessoa acabou de ler. */}
+                </section>
+              )}
+
+              {/* AO VIVO NO RESUMO DO DIA (29/08, pedido do usuário).
+                *
+                * Era o único produto que só existia na aba dele. A aba Hoje é
+                * o resumo -- "o que a IA publicou e no que deu" -- e um produto
+                * inteiro fora dela faz o resumo mentir por omissão, ainda mais
+                * no dia em que o ao vivo foi o único a produzir.
+                *
+                * Entram os dois: o que ainda está rolando e o que já fechou. É
+                * a mesma lista da aba do produto, com o recorte de dia que a
+                * seta lá em cima define -- o backend usa o mesmo `match_date`
+                * dos outros produtos, então não há regra de data própria. */}
+              {canSeeVip && liveDoDia.length > 0 && (
+                <section>
+                  <SectionHeader color="bg-accent" label="Ao Vivo" contagem={liveDoDia.length}
+                    badge="VIP"
+                    action={livePendentes.length > 0 ? (
+                      <button onClick={() => setTab('ao_vivo')}
+                        className="text-[11px] font-semibold text-accent-ink hover:text-accent-hover transition-colors">
+                        {livePendentes.length} rolando agora
+                      </button>
+                    ) : undefined}
+                  />
+                  <div className="lista-longa grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                    {liveCards.map(c => (
+                      <SuggestionCard key={`l-${c.id}`} s={c.s}
+                        banca={bancaSummary?.has_banca ? bancaSummary : null} />
+                    ))}
+                  </div>
+                  <button onClick={() => setTab('ao_vivo')}
+                    className="mt-4 w-full text-center text-xs text-accent-ink hover:text-green-400 transition-colors py-3 border border-line rounded-md hover:border-line-strong">
+                    Abrir a aba Ao Vivo
+                  </button>
                 </section>
               )}
 

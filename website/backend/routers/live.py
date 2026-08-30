@@ -978,6 +978,48 @@ def _locked_leg_result(leg: dict) -> str | None:
     return None
 
 
+def _travado_antes_do_apito(market: str, line: str, current_val,
+                            market_type: str | None = None) -> str | None:
+    """Resultado ja irreversivel com o jogo AINDA rolando, ou None.
+
+    Mesma regra de `_locked_leg_result`, sem precisar montar a `leg` inteira ·
+    o motor Live tem o valor observado na mao e nao a estrutura do ticker.
+
+    AS CAUTELAS SAO AS MESMAS, e elas nao sao formalidade:
+
+      Under so' trava pra RED. Um Under 11 com 12 escanteios ja' era; um Under
+      11 com 9 escanteios aos 80' NAO e' GREEN -- ainda cabem dois.
+
+      Linha de quarto so' trava quando o final nao pode ser meia-vitoria. Over
+      11.75 com 12 termina HALF-WIN, nao GREEN, e travar como GREEN pagaria ao
+      seguidor o dobro do que a casa paga.
+
+      Mercado que nao e' de contagem (resultado, BTTS) nao passa por aqui:
+      `_extract_line` devolve direcao diferente de over/under e a funcao cai no
+      None, que e' esperar o apito.
+    """
+    if current_val is None:
+        return None
+    direction, line_val = _extract_line(line)
+    if line_val is None:
+        return None
+    # BTTS trava sozinho: as duas ja marcaram, nao tem como desmarcar.
+    if direction in ("yes", "sim") and current_val >= 1.0:
+        return settlement.GREEN
+    if direction == "under" and current_val >= line_val:
+        return settlement.RED
+    if direction == "over":
+        frac = round(line_val % 1, 2)
+        v = int(current_val)
+        if frac == 0.25 and v > int(line_val):
+            return settlement.GREEN
+        if frac == 0.75 and v > int(line_val) + 1:
+            return settlement.GREEN
+        if frac not in (0.25, 0.75) and current_val > line_val:
+            return settlement.GREEN
+    return None
+
+
 _RESULT_TO_FACTOR = {
     settlement.GREEN: 1, settlement.HALF_WIN: 0.5, settlement.PUSH: 0,
     settlement.HALF_LOSS: -0.5, settlement.RED: -1,

@@ -44,7 +44,7 @@ import { Radio, RefreshCw, Timer, CheckCircle2, Clock, PowerOff, Eye,
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import ApostaModal from './ApostaModal'
-import { Badge, Button, EmptyState, ErrorState, LiveDot, PickTypeBadge, ResultBadge,
+import { Badge, Button, EmptyState, ErrorState, LiveDot, Marquee, PickTypeBadge, ResultBadge,
          Skeleton, SkeletonPickGrid } from './ui'
 import { PickExplainButton, PickProbability, PickReasoning } from './PickCardParts'
 import InfoTip from './InfoTip'
@@ -234,19 +234,64 @@ function minutoVivo(p: EmLeitura, segundosExtras: number): { minuto: number | nu
   return { minuto: projetado, projetado: projetado > p.minuto }
 }
 
-function EmLeituraAgora({ isActive, motor, recarregar }: {
-  isActive: boolean
-  motor?: { ligado: boolean; ultima_rodada: string | null } | null
-  /* Contador, não booleano: dois toques seguidos no botão de atualizar
-     precisam disparar duas buscas, e um booleano que já está `true` não
-     dispara a segunda. Mesma razão do `gatilhoManual` na barra do topo. */
-  recarregar?: number
-}) {
+/* A IA PROCURANDO, EM MOVIMENTO (29/08, pedido do usuário).
+ *
+ * O estado "buscando" era uma pílula parada com um ponto piscando. Diz a
+ * verdade e não mostra nada: quem lê não faz ideia de que há doze jogos sendo
+ * varridos agora, e a aba passa a maior parte do tempo sem pick nenhum na
+ * tela -- ou seja, o tempo todo parecendo que nada acontece.
+ *
+ * A fita põe os jogos que estão sendo lidos passando na horizontal. É o mesmo
+ * dado do bloco de leitura logo abaixo, só que como sinal de atividade em vez
+ * de tabela: o movimento é o que comunica "está trabalhando", e ele é honesto
+ * porque cada item ali é uma partida de verdade sendo observada.
+ *
+ * Ela SÓ aparece com a busca ligada. Fita girando com o motor parado seria
+ * animação decorativa mentindo sobre o estado do produto.
+ */
+function FitaDeBusca({ partidas }: { partidas: EmLeitura[] }) {
+  if (partidas.length === 0) return null
+  const itens = partidas.map(p => (
+    <span key={p.fixture_id}
+          className="inline-flex items-center gap-1.5 text-[11px] whitespace-nowrap">
+      <LeagueLogo id={p.league_id ?? undefined} name={p.liga ?? ''} />
+      <span className="text-ink-2">{p.home_team ?? 'Time'}</span>
+      <span className="text-ink-4">x</span>
+      <span className="text-ink-2">{p.away_team ?? 'Time'}</span>
+      {p.minuto != null && (
+        <span className="font-mono text-accent-ink font-bold">{p.minuto}&apos;</span>
+      )}
+    </span>
+  ))
+  return (
+    <div className="relative overflow-hidden rounded-lg border border-accent/20 bg-accent/[0.04] py-2.5 mb-6">
+      <div className="flex items-center gap-2 px-3 mb-1.5">
+        <LiveDot />
+        <span className="text-[10px] font-bold text-accent-ink uppercase tracking-wide">
+          a IA está lendo estes jogos agora
+        </span>
+      </div>
+      {/* Devagar de propósito: o item é curto, mas quem olha quer LER o nome
+          do jogo que passou, não ver um borrão. */}
+      <Marquee items={itens} spacing="pr-6" speed={28} />
+    </div>
+  )
+}
+
+/* A busca de "o que a IA está lendo", em um lugar só.
+ *
+ * DOIS COMPONENTES LEEM ISTO: a fita de busca no topo da aba e o bloco de
+ * cartões no rodapé. Cada um pedindo por conta própria seria a mesma chamada
+ * duas vezes de 15 em 15 segundos, e duas cópias da mesma lista podendo
+ * divergir na tela por alguns segundos -- a fita mostrando um jogo que o bloco
+ * ainda não tem, ou o contrário.
+ *
+ * `tick` mora aqui pelo mesmo motivo que a busca: ele é o relógio que faz o
+ * minuto e o "lido há" andarem entre duas varreduras, sem pedir nada ao
+ * servidor.
+ */
+function useEmLeitura(isActive: boolean, recarregar?: number) {
   const [dados, setDados] = useState<{ partidas: EmLeitura[]; disponivel: boolean } | null>(null)
-  /* Segundos desde o último fetch. É o que faz o bloco andar SEM pedir nada ao
-   * servidor: o relógio do jogo e o "lido há" avançam de segundo em segundo, e
-   * o poll de 15s só corrige a deriva com o número de verdade. Poll mais
-   * rápido não traria dado novo · quem publica é o motor, na varredura dele. */
   const [tick, setTick] = useState(0)
   const timer = useRef<number | null>(null)
 
@@ -272,18 +317,40 @@ function EmLeituraAgora({ isActive, motor, recarregar }: {
     return () => clearInterval(t)
   }, [isActive])
 
-  /* O botão de atualizar da aba puxa este bloco junto. Sem isto ele
-     atualizaria os picks e deixaria a leitura para trás -- e é justamente
-     aqui que o minuto e os contadores da partida aparecem, ou seja: a metade
-     da tela em que "está desatualizado" é visível a olho nu. */
+  /* O botão de atualizar da aba puxa esta busca junto. Sem isto ele
+     atualizaria os picks e deixaria a leitura para trás -- e é justamente na
+     leitura que o minuto e os contadores da partida aparecem, ou seja: a
+     metade da tela em que "está desatualizado" é visível a olho nu. */
   const primeiroPedido = useRef(true)
   useEffect(() => {
     if (primeiroPedido.current) { primeiroPedido.current = false; return }
     if (isActive) carregar()
   }, [recarregar, isActive, carregar])
 
-  const partidas = dados?.partidas ?? []
-  if (!dados?.disponivel || partidas.length === 0) return null
+  return {
+    partidas: dados?.partidas ?? [],
+    disponivel: dados?.disponivel ?? false,
+    tick,
+  }
+}
+
+
+function EmLeituraAgora({ partidas, tick, disponivel, motor }: {
+  partidas: EmLeitura[]
+  tick: number
+  disponivel: boolean
+  motor?: { ligado: boolean; ultima_rodada: string | null } | null
+}) {
+  if (!disponivel || partidas.length === 0) return null
+  /* BUSCA PAUSADA NÃO MOSTRA PARTIDA (29/08, pedido do usuário).
+   *
+   * A janela de `live_match_observations` é de 60 minutos, então logo depois
+   * de o motor parar a lista continua cheia -- com os jogos da última
+   * varredura, congelados. Na tela isso vira o pior dos dois mundos: a página
+   * diz "busca pausada" no topo e mostra "a IA está lendo" logo abaixo.
+   *
+   * Quem manda é o estado do motor, não o que sobrou na tabela. */
+  if (!motor?.ligado) return null
 
   const comPick = partidas.filter(p => p.tem_pick).length
 
@@ -976,6 +1043,9 @@ export default function LivePicksFeed({ isActive, banca }: {
   const [pedidoDeRecarga, setPedidoDeRecarga] = useState(0)
   const timer = useRef<number | null>(null)
   const navigate = useNavigate()
+  /* Uma busca só, dois leitores: a fita do topo e o bloco do rodapé. */
+  const { partidas: emLeitura, tick: tickLeitura, disponivel: leituraOk } =
+    useEmLeitura(isActive, pedidoDeRecarga)
 
   const carregar = useCallback(async () => {
     try {
@@ -1087,9 +1157,19 @@ export default function LivePicksFeed({ isActive, banca }: {
 
   return (
     <div>
-      {/* Painel de abertura na cor do produto, como o das outras abas · o Live
-          é vermelho no site inteiro (PICK_TYPE_HEX.live). */}
-      <div className="bg-accent/5 border border-accent/25 rounded-lg p-4 mb-6">
+      {/* A BARRA DE ESTADO SUBIU, A EXPLICAÇÃO DESCEU (29/08, pedido do
+          usuário).
+          *
+          * Os dois moravam na mesma caixa, e não é a mesma coisa: o estado do
+          * motor e o botão de atualizar são CONTROLE -- se olham toda hora --
+          * e o "o que são os Picks Ao Vivo" é apresentação, que se lê uma vez.
+          * Juntos, a caixa de texto empurrava os controles pra dentro dela e
+          * os picks pra baixo da dobra no celular.
+          *
+          * Agora o controle abre a aba numa linha só, e a explicação fecha, no
+          * rodapé, onde quem já conhece o produto simplesmente não passa. */}
+      <div className="flex flex-wrap items-center justify-end gap-2 mb-4">
+        <div className="flex items-center gap-2">
         {/* O ESTADO DO MOTOR NO TOPO, SEMPRE (29/08, pedido do usuário).
           *
           * Ele existia em dois lugares e nenhum dos dois era o topo: no vazio
@@ -1100,12 +1180,7 @@ export default function LivePicksFeed({ isActive, banca }: {
           *
           * Agora é a primeira coisa da aba, e diz as duas metades da resposta:
           * se está varrendo, e de quando foi a última passada. */}
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-          <h3 className="text-sm font-bold text-accent-ink flex items-center gap-2">
-            <LiveDot />
-            O que são os Picks Ao Vivo?
-          </h3>
-          <div className="flex items-center gap-2">
+
           {/* ATUALIZAR NA MÃO (29/08, pedido do usuário).
             *
             * A aba já pesquisa sozinha de 15 em 15 segundos, e mesmo assim o
@@ -1137,15 +1212,10 @@ export default function LivePicksFeed({ isActive, banca }: {
               )}
             </span>
           )}
-          </div>
         </div>
-        <p className="text-[13px] text-ink-3 leading-relaxed">
-          A IA lê a partida em andamento e compara com a odd do momento. Só publica quando o jogo
-          se afasta do esperado e o preço paga por isso.{' '}
-          <span className="font-bold text-ink-2">Confira a odd na casa antes de apostar.</span>
-        </p>
-        <PlacarDoLive recarregar={pedidoDeRecarga} />
       </div>
+
+      <FitaDeBusca partidas={motor?.ligado ? emLeitura : []} />
 
       {/* O VAZIO PRECISA DIZER SE O MOTOR ESTÁ LIGADO.
         *
@@ -1226,7 +1296,8 @@ export default function LivePicksFeed({ isActive, banca }: {
           usuário). A aba é tela de decisão: primeiro o que dá pra apostar,
           depois o contexto de onde ele pode sair. Ver o cabeçalho do
           componente. */}
-      <EmLeituraAgora isActive={isActive} motor={motor} recarregar={pedidoDeRecarga} />
+      <EmLeituraAgora partidas={emLeitura} tick={tickLeitura} disponivel={leituraOk}
+                      motor={motor} />
 
       {/* Os encerrados do dia saíram daqui · ver o comentário em `emAndamento`.
           O link existe porque tirar a seção não pode virar "sumiu": o pick
@@ -1237,6 +1308,22 @@ export default function LivePicksFeed({ isActive, banca }: {
       >
         Ver os picks já encerrados em Minhas Apostas
       </button>
+
+      {/* Apresentação e placar, no fim. Quem entra na aba quer o pick; quem
+          quer entender o produto rola até aqui, e o fundo separa isso do que
+          é decisão. */}
+      <div className="mt-8 bg-surface-1 border border-line rounded-lg p-4">
+        <h3 className="text-sm font-bold text-accent-ink flex items-center gap-2 mb-2">
+          <LiveDot />
+          O que são os Picks Ao Vivo?
+        </h3>
+        <p className="text-[13px] text-ink-3 leading-relaxed">
+          A IA lê a partida em andamento e compara com a odd do momento. Só publica quando o jogo
+          se afasta do esperado e o preço paga por isso.{' '}
+          <span className="font-bold text-ink-2">Confira a odd na casa antes de apostar.</span>
+        </p>
+        <PlacarDoLive recarregar={pedidoDeRecarga} />
+      </div>
 
       <AnimatePresence>
         {alvo && (

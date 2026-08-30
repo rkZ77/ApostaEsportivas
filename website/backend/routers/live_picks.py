@@ -46,7 +46,7 @@ from routers.live import (  # noqa: F401
     FT_STATUSES, LIVE_STATUSES, _anulacao_sem_estatistica, _calc_result,
     _fetch_fixture, _fetch_fixtures_bulk, _fetch_stats, _leg_needs_stats,
     _parse_stats, _pick_status, _profit_for_result, _stat_for_market,
-    _sync_followed_result,
+    _sync_followed_result, _travado_antes_do_apito,
 )
 
 logger = logging.getLogger(__name__)
@@ -210,7 +210,21 @@ def liquidar_pendentes(cur, conn, limite: int = 30) -> dict:
             dados = _fetch_fixture(p["fixture_id"])
             fixture = dados.get("fixture", {}) or {}
             status = (fixture.get("status") or {}).get("short", "NS")
-            if status not in FT_STATUSES:
+            # JOGO EM ANDAMENTO TAMBEM LIQUIDA, quando nao ha mais o que
+            # esperar (29/08, caso relatado pelo usuario).
+            #
+            # A regra era "so' em FT", e ela deixava na tela um pick de Mais de
+            # 11 escanteios com 12 escanteios em campo, aos 75', marcado como
+            # Pendente e com a faixa de "odd vencida" -- ou seja, um GREEN
+            # matematicamente fechado sendo mostrado como indefinido por mais
+            # de quinze minutos. Escanteio nao volta.
+            #
+            # Quem decide isso e' `_travado_antes_do_apito`, que e' o mesmo
+            # early-lock do ticker de Minhas Apostas (routers/live.py), com as
+            # mesmas cautelas: linha de quarto so' trava quando o resultado
+            # final nao pode virar meia-vitoria, e Under so' trava pra RED.
+            # Nao ha' regra nova aqui, ha' uma regra que o Live nao usava.
+            if status not in FT_STATUSES and status not in LIVE_STATUSES:
                 continue
 
             gols = dados.get("goals", {}) or {}
@@ -235,13 +249,23 @@ def liquidar_pendentes(cur, conn, limite: int = 30) -> dict:
                 p["market"], p["line"], home_stats, away_stats,
                 home_goals, away_goals, p["market_type"])
 
-            resultado = _calc_result(
-                p["market"], p["line"], valor, home_goals, away_goals,
-                market_type=p["market_type"],
-                home_team=p["home_team_name"], away_team=p["away_team_name"],
-                home_stats=home_stats, away_stats=away_stats,
-                went_to_extra_time=prorrogacao,
-            )
+            if status in FT_STATUSES:
+                resultado = _calc_result(
+                    p["market"], p["line"], valor, home_goals, away_goals,
+                    market_type=p["market_type"],
+                    home_team=p["home_team_name"], away_team=p["away_team_name"],
+                    home_stats=home_stats, away_stats=away_stats,
+                    went_to_extra_time=prorrogacao,
+                )
+            else:
+                # Com a bola rolando so' existe UMA saida: resultado travado.
+                # Nada de anulacao por falta de estatistica aqui -- o jogo nao
+                # acabou, entao "o provedor nao publicou" ainda pode virar
+                # "publicou", e anular agora seria desistir cedo.
+                resultado = _travado_antes_do_apito(
+                    p["market"], p["line"], valor, p["market_type"])
+                if not resultado:
+                    continue
             if not resultado:
                 # MESMA rede do pre-jogo, e nao uma regra propria do Live: PUSH
                 # depois de 12h do apito, so' quando a causa e' nomeavel (folha

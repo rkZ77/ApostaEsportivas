@@ -158,6 +158,50 @@ def _get_user_banca(cur, user_id: int):
     return bankroll, unit_value
 
 
+#: Colunas do pick ao vivo que a aba Hoje precisa.
+#:
+#: E' o mesmo conjunto que o card do produto ja consome em /live-picks/feed,
+#: menos o "estado agora" da partida -- este e' o unico que custa API, e a aba
+#: Hoje nao acompanha jogo em andamento minuto a minuto: ela e' o resumo do
+#: dia. Quem quiser o placar ao vivo tem a aba Ao Vivo ao lado.
+_LIVE_COLUNAS = """
+    pl.id, pl.fixture_id, pl.match_date, pl.league_id, pl.league_name,
+    pl.home_team_id, pl.away_team_id,
+    pl.home_team_name, pl.away_team_name,
+    pl.market, pl.market_type, pl.line, pl.odd, pl.bet_house,
+    pl.minute_at_creation, pl.home_goals_at_creation, pl.away_goals_at_creation,
+    pl.probability, pl.probability AS prob_real, pl.ev, pl.edge, pl.confidence,
+    pl.stake_units, pl.reasoning, pl.status, pl.odd_valid_until,
+    pl.result, pl.profit, pl.created_at
+"""
+
+
+def _picks_live_do_dia(cur, where: str, params: tuple) -> list:
+    """Os picks ao vivo daquele dia, rolando e liquidados.
+
+    POR QUE ELES ENTRAM NA ABA HOJE (2026-08-29, pedido do usuario)
+    ---------------------------------------------------------------
+    O Ao Vivo era o unico produto que so' existia na aba dele. A aba Hoje e' o
+    resumo do dia -- "o que a IA publicou e no que deu" -- e um produto inteiro
+    fora dela faz o resumo mentir por omissao, principalmente no dia em que o
+    ao vivo foi o unico a produzir.
+
+    ORDEM: pendente primeiro, depois o mais recente. E' a mesma leitura da aba
+    do produto, e pelo mesmo motivo -- o que ainda da' pra apostar vale mais
+    que o que ja fechou.
+
+    `picks_live` nasce do MOTOR, nao do site: onde o motor nunca rodou a tabela
+    nao existe. `_safe_query` devolve lista vazia nesse caso, que e' o
+    comportamento certo (o produto some da aba, nao derruba a tela).
+    """
+    return [dict(r) for r in _safe_query(cur, f"""
+        SELECT {_LIVE_COLUNAS}
+          FROM picks_live pl
+         WHERE {where}
+         ORDER BY (pl.result IS NOT NULL), pl.created_at DESC
+    """, params)]
+
+
 def _compute_suggested_stake_units(
     pick_type: str,
     stake_pct,
@@ -711,6 +755,15 @@ def get_today_suggestions(
                 ORDER BY pb.score DESC NULLS LAST
             """, _d)]
             _marcar_boost_free(result["boost"])
+
+            # AO VIVO NA ABA HOJE. O recorte de dia e' o mesmo dos outros
+            # produtos -- vem de `_merc_where`, entao a seta de dia da aba Hoje
+            # move o ao vivo junto sem nenhuma regra propria.
+            result["live"] = _picks_live_do_dia(
+                cur,
+                _merc_where.replace("match_date", "pl.match_date")
+                           .replace("result IS NULL", "pl.result IS NULL"),
+                _d)
         else:
             row = _safe_query_one(cur, _picks_free_sql, _d)
             result["dica_do_dia"] = dict(row) if row else None
@@ -719,6 +772,11 @@ def get_today_suggestions(
             result["faltas"] = []
             result["goleiros"] = []
             result["player_stats"] = []
+            # Ao vivo e' 100% VIP (nao tem free do dia como o Boost), entao aqui
+            # ele e' lista vazia · a chave existe sempre pro front nao precisar
+            # checar `undefined` antes de iterar. O teaser do que esta trancado
+            # continua saindo pelo caminho de sempre, mais abaixo.
+            result["live"] = []
 
             # PICK BOOST TEM UM FREE POR DIA (2026-08-28, decisao do usuario).
             #
