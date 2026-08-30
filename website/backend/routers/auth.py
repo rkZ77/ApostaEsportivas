@@ -180,6 +180,12 @@ def _verify_captcha(token: str | None, request: Request) -> None:
 # separados, um muda e o outro passa a mentir pra quem esta tentando
 # recuperar a conta.
 _CODIGO_SENHA_EXPIRA_MIN = 15
+# Cooldown POR CONTA entre e-mails de reset. O limite por IP (main.py) e' o
+# unico outro freio e e' burlavel · CF-Connecting-IP e' aceito sem validacao,
+# e trocar de IP zera o balde. Sem um teto por conta, da' pra bombardear a
+# caixa da vitima e queimar cota do Resend. Deriva "emitido em" de
+# reset_token_expires_at - EXPIRA, entao nao precisa de coluna nova.
+_RESET_COOLDOWN_MIN = 2
 
 
 def _hash_token(token: str) -> str:
@@ -1479,11 +1485,22 @@ def forgot_password(body: ForgotPasswordBody):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT id, name FROM users WHERE email = %s AND active = true", (body.email,))
+        cur.execute("SELECT id, name, reset_token_expires_at FROM users WHERE email = %s AND active = true", (body.email,))
         row = cur.fetchone()
         # Sempre retorna 200 para não revelar se email existe
         if not row:
             return {"ok": True}
+
+        # Cooldown por conta: se um codigo foi emitido ha menos de
+        # _RESET_COOLDOWN_MIN, nao manda outro (anti email-bombing). Retorna
+        # 200 igual, pra nao revelar nem o cooldown nem a existencia do email.
+        prev_exp = row["reset_token_expires_at"]
+        if prev_exp is not None:
+            if prev_exp.tzinfo is None:
+                prev_exp = prev_exp.replace(tzinfo=timezone.utc)
+            emitido_em = prev_exp - timedelta(minutes=_CODIGO_SENHA_EXPIRA_MIN)
+            if datetime.now(timezone.utc) - emitido_em < timedelta(minutes=_RESET_COOLDOWN_MIN):
+                return {"ok": True}
 
         code    = str(secrets.randbelow(900000) + 100000)  # 100000–999999
         expires = datetime.now(timezone.utc) + timedelta(minutes=_CODIGO_SENHA_EXPIRA_MIN)
