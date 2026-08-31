@@ -124,7 +124,7 @@ export default function ResultadosPublicos() {
   const [tab, setTab] = useState<'resumo' | 'por_liga' | 'por_jogo' | 'por_mes'>('resumo')
 
   // "Picks recentes" · paginação (server-side, ver recent_limit/recent_offset em /public/results)
-  const RECENT_PAGE_SIZE = 10
+  const RECENT_PAGE_SIZE = 30
   const [recentPage, setRecentPage] = useState(0)
   const handleSourceChange = (v: string) => { setSource(v); setRecentPage(0); setRecentLeagueFilter('') }
   const handleMonthChange = (v: string) => { setMonth(v); setRecentPage(0); setRecentLeagueFilter('') }
@@ -184,7 +184,7 @@ export default function ResultadosPublicos() {
     setLoading(true)
     setError(false)
     const params: Record<string, string | number> = {
-      recent_limit: RECENT_PAGE_SIZE,
+      recent_limit:  RECENT_PAGE_SIZE,
       recent_offset: recentPage * RECENT_PAGE_SIZE,
     }
     if (source !== 'all') params.source = source
@@ -511,11 +511,12 @@ export default function ResultadosPublicos() {
               {recent.length > 0 && (() => {
                 const recentLeagues = Array.from(new Set(recent.map(t => t.league_name).filter(Boolean))) as string[]
                 const filteredRecent = recentLeagueFilter ? recent.filter(t => t.league_name === recentLeagueFilter) : recent
+                const totalPages = Math.ceil(recentTotal / RECENT_PAGE_SIZE)
                 return (
                 <div className="panel">
                   <div className="panel-head">
                     <span className="panel-label">Picks recentes</span>
-                    <span className="panel-meta">{recentTotal} resultados</span>
+                    <span className="panel-meta">{recentTotal} picks · ordenados por data e hora</span>
                   </div>
                   {recentLeagues.length > 1 && (
                     <div className="flex gap-2 flex-wrap px-4 pt-3">
@@ -539,11 +540,9 @@ export default function ResultadosPublicos() {
                   <div className="divide-y divide-line/50">
                     {filteredRecent.map((tip, i) => (
                       <div key={i} className="flex items-center gap-2 px-4 py-3">
-                        {/* Dia e hora · a hora vem de `fixtures` e falta no
-                            histórico antigo, então a coluna encolhe pra data
-                            sozinha em vez de deixar um vazio alinhado. Fatiada
-                            da string: o horário é gravado em Brasília sem fuso
-                            e `new Date` aplicaria o do navegador por cima. */}
+                        {/* Data e hora da partida: ordenados cronologicamente,
+                            mais recente no topo. Hora vem de `fixtures`
+                            (efêmera), picks antigos mostram só a data. */}
                         <span className="text-[10px] text-ink-4 shrink-0 w-12 leading-tight">
                           <span className="block">
                             {new Date(tip.match_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
@@ -585,18 +584,26 @@ export default function ResultadosPublicos() {
                       </div>
                     ))}
                   </div>
-                  {recentTotal > RECENT_PAGE_SIZE && (() => {
-                    const totalPages = Math.ceil(recentTotal / RECENT_PAGE_SIZE)
-                    return (
-                      <div className="flex items-center justify-center gap-1 py-4 border-t border-line/50">
-                        <button disabled={recentPage === 0} onClick={() => setRecentPage(p => p - 1)}
-                          className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-line-strong text-ink-2 hover:border-ink-4 disabled:opacity-30 transition-colors">Ant</button>
-                        <span className="text-xs text-ink-3 px-2">{recentPage + 1} / {totalPages}</span>
-                        <button disabled={(recentPage + 1) * RECENT_PAGE_SIZE >= recentTotal} onClick={() => setRecentPage(p => p + 1)}
-                          className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-line-strong text-ink-2 hover:border-ink-4 disabled:opacity-30 transition-colors">Próx</button>
-                      </div>
-                    )
-                  })()}
+                  {/* Paginação */}
+                  <div className="px-4 py-3 border-t border-line flex items-center justify-between gap-2 flex-wrap">
+                    <button
+                      disabled={recentPage === 0 || loading}
+                      onClick={() => setRecentPage(p => p - 1)}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-md border border-line text-ink-3 hover:text-ink-2 hover:border-line-strong disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    >
+                      ← Anterior
+                    </button>
+                    <span className="text-[11px] text-ink-4 tabular-nums">
+                      {totalPages > 0 ? `Pág. ${recentPage + 1} de ${totalPages}` : ''}
+                    </span>
+                    <button
+                      disabled={recentPage >= totalPages - 1 || loading}
+                      onClick={() => setRecentPage(p => p + 1)}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-md border border-line text-ink-3 hover:text-ink-2 hover:border-line-strong disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Próxima →
+                    </button>
+                  </div>
                 </div>
                 )
               })()}

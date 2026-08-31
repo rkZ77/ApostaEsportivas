@@ -18,6 +18,7 @@ O caso que da' nome ao arquivo, com os numeros de producao: Atletico-MG x Gremio
 Poisson 60.4%. Publicado: 66.3% com edge de +15.8%. Saiu 14 escanteios.
 """
 import pytest
+from datetime import date
 
 from services.pick_engine import orchestrator, probability_model
 from services.pick_engine.config import PickEngineConfig, DEFAULT_CONFIG
@@ -110,11 +111,15 @@ def test_a_regra_continua_nunca_subindo_a_probabilidade():
     test_mando_prior_desacordo.test_desacordo_nunca_sobe_a_probabilidade."""
     hist = ([_jogo(f"2026-07-{i + 1:02d}", 10) for i in range(6)]
             + [_jogo(f"2026-07-{i + 10:02d}", 3) for i in range(4)])
+    # reference_date fixo: todos os 10 jogos ficam dentro de 14 dias
+    # (2026-07-01 a 2026-07-13), garantindo peso temporal 1.0 uniforme e
+    # taxa ponderada == taxa bruta simples (6/10 = 60%).
     candidatos = orchestrator.analyze_fixture_markets(
         _odds(linha="4.5"), hist, hist,
         calibration_data={"by_market": {}, "by_market_league": {}},
         home_team_id=1, away_team_id=2,
         config=PickEngineConfig(disagreement_on_raw_rate=True),
+        reference_date=date(2026, 7, 13),
     )
     over = next(c for c in candidatos if c["value"] == "Over")
     assert over["taxa_bruta_pre_bayes"] == pytest.approx(0.6, abs=1e-3)

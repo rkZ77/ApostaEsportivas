@@ -375,7 +375,7 @@ def _pagina_de_resultados(cur, date_cond: str, date_params: tuple, source: Optio
         linhas = _q(cur, f"""
             SELECT *, COUNT(*) OVER () AS _total
             FROM ({union}) t
-            ORDER BY match_date DESC, result DESC,
+            ORDER BY match_date DESC, match_datetime DESC NULLS LAST,
                      array_position(%s::text[], source),
                      market NULLS LAST, line NULLS LAST, home_team_name NULLS LAST
             LIMIT %s OFFSET %s
@@ -407,7 +407,7 @@ def _collect_results(cur, date_cond: str, date_params: tuple, source: Optional[s
     for fn in builders:
         sub = fn(date_cond)
         try:
-            batch = _q(cur, f"SELECT * FROM ({sub}) t ORDER BY match_date DESC, result LIMIT %s", date_params + (fetch_n,))
+            batch = _q(cur, f"SELECT * FROM ({sub}) t ORDER BY match_date DESC, match_datetime DESC NULLS LAST LIMIT %s", date_params + (fetch_n,))
         except Exception:
             # A propriedade que este caminho existe pra ter: uma fonte quebrada
             # sai do resultado, nao derruba as outras cinco.
@@ -415,7 +415,7 @@ def _collect_results(cur, date_cond: str, date_params: tuple, source: Optional[s
             cur.connection.rollback()
             continue
         rows.extend(batch)
-    rows.sort(key=lambda r: (str(r["match_date"]), str(r.get("result",""))), reverse=True)
+    rows.sort(key=lambda r: (str(r["match_date"]), str(r.get("match_datetime") or "")), reverse=True)
     return rows[offset:offset + limit]
 
 

@@ -10,6 +10,7 @@ tres coisas erradas, e cada teste aqui trava uma delas:
 3. o Poisson dizia 53.5% e o desacordo de 24.5pp nao mexia em nada.
 """
 import pytest
+from datetime import date
 
 from services.pick_engine import bayesian_model, confidence, orchestrator, stats_model
 from services.pick_engine.config import DEFAULT_CONFIG
@@ -254,10 +255,13 @@ def test_desacordo_nunca_sobe_a_probabilidade():
     o efeito da correcao, o modelo parou de exagerar. Pra continuar testando
     "desacordo pra cima nao faz nada" o desacordo tem que existir."""
     hist = _historico_total([10] * 6 + [3] * 4)
+    # reference_date fixo: todos os 10 jogos (2026-07-01 a 2026-07-10) ficam
+    # dentro de 14 dias, peso temporal 1.0 uniforme, taxa ponderada == 6/10 = 0.6.
     candidatos = orchestrator.analyze_fixture_markets(
         _odds_over_under(linha="4.5"), hist, hist,
         calibration_data={"by_market": {}, "by_market_league": {}},
         home_team_id=1, away_team_id=2,
+        reference_date=date(2026, 7, 13),
     )
     over = next(c for c in candidatos if c["value"] == "Over")
     assert over["poisson_probability"] > over["taxa_real"]

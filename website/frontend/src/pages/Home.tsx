@@ -61,98 +61,58 @@ interface PublicData {
   stake_label?: string
   summary: PublicSummary
   recent: RecentTip[]
+  recent_total?: number
   by_league?: Array<{ league_id: number | null; league_name: string }>
 }
 
 /* ── Últimos resultados ─────────────────────────────────────────────────── */
 
-/** Quantos picks do MESMO produto cabem na lista da Home. */
-const MAX_POR_PRODUTO = 2
+const PAGE_SIZE = 30
 
-/**
- * As últimas finalizadas, com teto por produto.
- *
- * POR QUE NÃO É SÓ `slice(0, 10)` (2026-08-30)
- * --------------------------------------------
- * Os produtos publicam em volumes muito diferentes: o motor ao vivo fez 31
- * picks num único dia, contra 3 do VIP e 1 do Free. Pegar as dez mais recentes
- * dava uma lista que era, na prática, "as últimas dez do ao vivo" -- e num dia
- * ruim dele a Home abria com oito RED seguidos, todos do mesmo motor.
- *
- * Isso não é a plataforma. É o produto mais novo, com o histórico mais curto,
- * ocupando sozinho a seção que existe para mostrar o conjunto.
- *
- * O teto por produto resolve sem esconder nada: cada pick continua sendo real,
- * recente e verificável, e a página de Resultados continua listando TODOS sem
- * teto nenhum. O que muda é a Home passar a mostrar uma amostra do que a IA
- * faz, em vez do último lote de um motor. O título diz exatamente isso.
- *
- * A ordem cronológica é preservada: filtra, não reordena.
- */
-function ultimasPorProduto(tips: RecentTip[], limite = 10): RecentTip[] {
-  const vistos: Record<string, number> = {}
-  const escolhidas: RecentTip[] = []
-  for (const t of tips) {
-    const n = vistos[t.source] ?? 0
-    if (n >= MAX_POR_PRODUTO) continue
-    vistos[t.source] = n + 1
-    escolhidas.push(t)
-    if (escolhidas.length === limite) break
-  }
-  /* Menos de `limite` porque há poucos produtos com resultado? Completa com as
-     mais recentes que sobraram. Uma lista curta seria pior que uma lista com
-     dois picks do mesmo produto. */
-  if (escolhidas.length < limite) {
-    for (const t of tips) {
-      if (escolhidas.includes(t)) continue
-      escolhidas.push(t)
-      if (escolhidas.length === limite) break
-    }
-  }
-  return escolhidas
-}
-
-function RecentResults({ data, loading }: { data: PublicData | null; loading: boolean }) {
-  const todas = data?.recent ?? []
-
-  /* FILTRO POR PRODUTO (2026-08-30, pedido do usuário).
-   *
-   * "Todos" mostra a lista balanceada -- no máximo dois por produto, pra a
-   * seção retratar a plataforma e não o último lote de um motor. Escolhendo
-   * um produto, o teto sai: quem clicou em VIP quer ver VIP, e limitar a dois
-   * ali seria responder outra pergunta.
-   *
-   * Os chips saem do que EXISTE na janela, na ordem em que apareceram (mais
-   * recente primeiro). Chip de produto sem pick seria um caminho para uma
-   * lista vazia -- e um produto que não publicou hoje não precisa ser
-   * anunciado na página de captação.
-   */
+function RecentResults({ summary }: { summary: PublicSummary | null }) {
+  const [page, setPage]       = useState(0)
   const [produto, setProduto] = useState<string | null>(null)
+  const [recent, setRecent]   = useState<RecentTip[]>([])
+  const [total, setTotal]     = useState(0)
+  const [pageLoading, setPageLoading] = useState(true)
+
+  /* Produtos observados na janela atual (para os chips de filtro). */
   const produtos = useMemo(() => {
     const vistos: string[] = []
-    for (const t of todas) if (!vistos.includes(t.source)) vistos.push(t.source)
+    for (const t of recent) if (!vistos.includes(t.source)) vistos.push(t.source)
     return vistos
-  }, [todas])
+  }, [recent])
 
-  const recent = useMemo(
-    () => (produto
-      ? todas.filter(t => t.source === produto).slice(0, 10)
-      : ultimasPorProduto(todas, 10)),
-    [todas, produto])
+  /* Toda vez que página ou filtro de produto mudam, busca no backend. */
+  useEffect(() => {
+    setPageLoading(true)
+    const params: Record<string, unknown> = {
+      recent_limit:  PAGE_SIZE,
+      recent_offset: page * PAGE_SIZE,
+      slim: 1,
+    }
+    if (produto) params.source = produto
+    api.get('/public/results', { params })
+      .then(r => {
+        setRecent(r.data?.recent ?? [])
+        setTotal(r.data?.recent_total ?? 0)
+      })
+      .catch(() => { setRecent([]); setTotal(0) })
+      .finally(() => setPageLoading(false))
+  }, [page, produto])
 
-  const resumo = data?.summary ?? null
+  /* Ao trocar filtro de produto, volta pra página 0. */
+  const handleProduto = (p: string | null) => {
+    setProduto(p)
+    setPage(0)
+  }
+
+  const totalPages = Math.ceil(total / PAGE_SIZE)
+
+  const resumo = summary
 
   /*
    * Curva de lucro por produto · a prova mais forte que esta seção tem.
-   *
-   * Uma lista de dez resultados prova que os picks existem; a curva prova que
-   * eles somam. É o argumento que o visitante deslogado precisa para criar
-   * conta, e é o mesmo gráfico da página de Resultados, sem número novo.
-   *
-   * Chamada PRÓPRIA e tardia, não pendurada no payload da Home: aquela rota é
-   * chamada com slim=1 justamente para cair de sete consultas para três, e ela
-   * desenha o topo da página. Aqui é abaixo da dobra · se demorar, não atrasa
-   * a primeira tela.
    */
   const [curva, setCurva] = useState<Array<{ match_date: string; source: string; profit: number }>>([])
   useEffect(() => {
@@ -160,18 +120,6 @@ function RecentResults({ data, loading }: { data: PublicData | null; loading: bo
       .then(r => setCurva(r.data ?? []))
       .catch(() => setCurva([]))
   }, [])
-
-  /* O CABEÇALHO NÃO PONTUA DEZ PICKS (2026-08-30).
-   *
-   * Ele já mostrou o saldo do último dia ("0G · 9R") e depois o saldo destas
-   * dez ("0G 8R -32,0u"). Os dois erram do mesmo jeito: dez resultados não
-   * medem nada, e um recorte pequeno de um produto de alta variância é ruído
-   * apresentado como número.
-   *
-   * A medida séria está a dois blocos daqui, na mesma tela: 466 picks, 307
-   * greens, +191,2u -- e ela vale porque tem amostra. Repetir um placar de dez
-   * ao lado só dá ao visitante um número para desmentir o outro.
-   */
 
   return (
     <section id="resultados" className="section section-alt">
@@ -181,76 +129,60 @@ function RecentResults({ data, loading }: { data: PublicData | null; loading: bo
           sub="Todo pick publicado fica registrado. Qualquer pessoa pode conferir, sem conta."
         />
 
-        {loading ? (
-          <div className="flex justify-center py-12"><Spinner size="lg" /></div>
-        ) : recent.length === 0 ? (
-          <p className="text-center text-ink-4 text-sm py-8">Nenhum resultado ainda.</p>
-        ) : (
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: '0px 0px -80px 0px' }}
-            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-          >
-            {curva.length > 0 && (
-              <Panel className="mb-4">
-                <PanelHead
-                  label="Lucro acumulado por produto"
-                  meta="em unidades · últimos 180 dias"
-                />
-                <div className="p-5">
-                  <PipelineProfitChart data={curva} height={220} />
-                </div>
-              </Panel>
-            )}
-
-            <Panel>
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: '0px 0px -80px 0px' }}
+          transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+        >
+          {curva.length > 0 && (
+            <Panel className="mb-4">
               <PanelHead
-                label="Últimas finalizadas"
-                meta={produto
-                  ? `só ${PICK_TYPE_LABEL[produto] ?? produto}`
-                  : 'os mais recentes de cada produto'}
+                label="Lucro acumulado por produto"
+                meta="em unidades · últimos 180 dias"
               />
+              <div className="p-5">
+                <PipelineProfitChart data={curva} height={220} />
+              </div>
+            </Panel>
+          )}
 
-              {produtos.length > 1 && (
-                <div className="flex flex-wrap gap-1.5 px-4 pt-3">
-                  {/* "Todos" primeiro e sempre visível: é o estado que mostra a
-                      plataforma inteira, e é pra ele que se volta. */}
-                  {[null, ...produtos].map(chave => {
-                    const ativo = produto === chave
-                    return (
-                      <button
-                        key={chave ?? 'todos'}
-                        onClick={() => setProduto(chave)}
-                        className={`text-[11px] font-semibold px-2.5 py-1.5 min-h-[32px] rounded-md border transition-colors ${
-                          ativo
-                            ? 'border-accent/50 bg-accent/10 text-accent-ink'
-                            : 'border-line text-ink-3 hover:text-ink-2 hover:border-line-strong'}`}
-                      >
-                        {chave === null ? 'Todos' : (PICK_TYPE_LABEL[chave] ?? chave)}
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
+          <Panel>
+            <PanelHead
+              label="Últimas finalizadas"
+              meta={`${total > 0 ? `${total} picks` : ''}${produto ? ` · só ${PICK_TYPE_LABEL[produto] ?? produto}` : ' · ordenados por data e hora da partida'}`}
+            />
 
+            {/* Chips de filtro por produto — sempre visíveis quando há mais de um tipo */}
+            <div className="flex flex-wrap gap-1.5 px-4 pt-3">
+              {[null, ...produtos].map(chave => {
+                const ativo = produto === chave
+                return (
+                  <button
+                    key={chave ?? 'todos'}
+                    onClick={() => handleProduto(chave)}
+                    className={`text-[11px] font-semibold px-2.5 py-1.5 min-h-[32px] rounded-md border transition-colors ${
+                      ativo
+                        ? 'border-accent/50 bg-accent/10 text-accent-ink'
+                        : 'border-line text-ink-3 hover:text-ink-2 hover:border-line-strong'}`}
+                  >
+                    {chave === null ? 'Todos' : (PICK_TYPE_LABEL[chave] ?? chave)}
+                  </button>
+                )
+              })}
+            </div>
+
+            {pageLoading ? (
+              <div className="flex justify-center py-10"><Spinner size="md" /></div>
+            ) : recent.length === 0 ? (
+              <p className="text-center text-ink-4 text-sm py-8">Nenhum resultado ainda.</p>
+            ) : (
               <div className="divide-y divide-line/50">
                 {recent.map((tip, i) => (
                   <div key={i} className="flex items-center gap-2 px-4 py-3">
-                    {/* DIA E HORA (2026-08-30, pedido do usuário).
-                      *
-                      * A hora vem de `fixtures`, a única tabela do projeto que
-                      * a tem -- os picks guardam `match_date`, que é DATE pura.
-                      * E `fixtures` é efêmera: a linha some depois que o jogo
-                      * passa. Então a hora aparece no que é recente e falta no
-                      * histórico antigo, e a coluna encolhe pra data sozinha
-                      * em vez de mostrar um vazio alinhado.
-                      *
-                      * Fatiado da string, nunca `new Date` no datetime: o
-                      * backend grava o horário do jogo em Brasília sem fuso, e
-                      * qualquer parse aplicaria o fuso do navegador por cima.
-                      * A data pura pode ir por `new Date` porque leva T12:00
-                      * fixo, longe da virada do dia. */}
+                    {/* Data e hora da partida: ordenados cronologicamente, mais
+                        recente no topo. Hora vem de `fixtures` (efêmera), então
+                        picks antigos mostram só a data. */}
                     <span className="font-mono text-[10px] text-ink-4 tabular-nums shrink-0 w-10 leading-tight">
                       <span className="block">
                         {new Date(tip.match_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
@@ -287,40 +219,57 @@ function RecentResults({ data, loading }: { data: PublicData | null; loading: bo
                   </div>
                 ))}
               </div>
-
-              <div className="px-5 py-4 border-t border-line flex items-center justify-center gap-4 flex-wrap">
-                <Button to="/resultados" variant="link" size="sm">Ver histórico completo</Button>
-                <span className="text-ink-4">·</span>
-                <Button to="/login?mode=register" variant="link" size="sm" className="text-accent-ink hover:text-accent-hover">
-                  Criar conta grátis
-                </Button>
-              </div>
-            </Panel>
-
-            {/* Fechamento da seção de prova.
-                O argumento é o número que a pessoa ACABOU de ver, não adjetivo:
-                a frase é montada com o resumo real e some inteira se o resumo
-                não vier. Nada de "melhor do Brasil" ou contador de usuários ·
-                prova social fabricada já saiu desta página em julho, e o que
-                sustenta a conversão aqui é o histórico ser conferível. */}
-            {resumo && resumo.total > 0 && (
-              <div className="mt-8 text-center max-w-xl mx-auto">
-                <p className="text-ink-1 text-sm font-semibold mb-1.5">
-                  São {resumo.total} picks publicados antes da bola rolar, com{' '}
-                  {resumo.greens} greens e {fmtUnits(Number(resumo.profit ?? 0), 1)} de lucro.
-                </p>
-                <p className="text-ink-3 text-xs leading-relaxed mb-4">
-                  Cada um deles fica registrado com data, mercado e odd, e o resultado é
-                  conferido contra a estatística oficial da partida. Você não precisa
-                  acreditar em nós: dá para abrir o histórico e conferir pick por pick,
-                  sem criar conta.
-                </p>
-                <Button to="/login?mode=register" size="lg" IconRight={ArrowRight}>
-                  Testar o VIP grátis por 2 dias
-                </Button>              </div>
             )}
-          </motion.div>
-        )}
+
+            {/* Paginação */}
+            <div className="px-4 py-3 border-t border-line flex items-center justify-between gap-2 flex-wrap">
+              <button
+                onClick={() => setPage(p => Math.max(0, p - 1))}
+                disabled={page === 0 || pageLoading}
+                className="text-xs font-semibold px-3 py-1.5 rounded-md border border-line text-ink-3 hover:text-ink-2 hover:border-line-strong disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                ← Anterior
+              </button>
+              <span className="text-[11px] text-ink-4 tabular-nums">
+                {totalPages > 0 ? `Pág. ${page + 1} de ${totalPages}` : ''}
+              </span>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                disabled={page >= totalPages - 1 || pageLoading}
+                className="text-xs font-semibold px-3 py-1.5 rounded-md border border-line text-ink-3 hover:text-ink-2 hover:border-line-strong disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                Próxima →
+              </button>
+            </div>
+
+            <div className="px-5 pb-4 flex items-center justify-center gap-4 flex-wrap">
+              <Button to="/resultados" variant="link" size="sm">Ver histórico completo</Button>
+              <span className="text-ink-4">·</span>
+              <Button to="/login?mode=register" variant="link" size="sm" className="text-accent-ink hover:text-accent-hover">
+                Criar conta grátis
+              </Button>
+            </div>
+          </Panel>
+
+          {/* Fechamento da seção de prova. */}
+          {resumo && resumo.total > 0 && (
+            <div className="mt-8 text-center max-w-xl mx-auto">
+              <p className="text-ink-1 text-sm font-semibold mb-1.5">
+                São {resumo.total} picks publicados antes da bola rolar, com{' '}
+                {resumo.greens} greens e {fmtUnits(Number(resumo.profit ?? 0), 1)} de lucro.
+              </p>
+              <p className="text-ink-3 text-xs leading-relaxed mb-4">
+                Cada um deles fica registrado com data, mercado e odd, e o resultado é
+                conferido contra a estatística oficial da partida. Você não precisa
+                acreditar em nós: dá para abrir o histórico e conferir pick por pick,
+                sem criar conta.
+              </p>
+              <Button to="/login?mode=register" size="lg" IconRight={ArrowRight}>
+                Testar o VIP grátis por 2 dias
+              </Button>
+            </div>
+          )}
+        </motion.div>
       </div>
     </section>
   )
@@ -622,10 +571,8 @@ export default function Home() {
   // lançamento, baixada inteira para não ser usada em lugar nenhum. Com slim a
   // rota faz duas consultas em vez de sete (ver public.py:/results).
   useEffect(() => {
-    /* 40 e nao 10: a lista da Home mostra 10, mas escolhidas entre produtos
-       (ver `ultimas` em RecentResults). Com 10 na mao, um dia cheio do motor
-       ao vivo ocupava a lista inteira e nao sobrava de onde tirar os outros. */
-    api.get('/public/results', { params: { recent_limit: 40, slim: 1 } })
+    /* Só summary e stake_label · RecentResults faz sua própria chamada paginada. */
+    api.get('/public/results', { params: { recent_limit: 1, slim: 1 } })
       .then(r => setData(r.data))
       .catch(() => setData(null))
       .finally(() => setLoaded(true))
@@ -780,7 +727,7 @@ export default function Home() {
         </div>
       </section>
 
-      <RecentResults data={data} loading={!loaded} />
+      <RecentResults summary={data?.summary ?? null} />
 
       <HowItWorks />
 
