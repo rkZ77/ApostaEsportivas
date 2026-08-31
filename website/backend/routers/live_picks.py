@@ -1603,6 +1603,16 @@ async def acompanhar_continuo(body: WatchBody, current_user: dict = Depends(requ
     _salvar_watch()
     _watch_task = asyncio.create_task(_laco_de_acompanhamento(
         body.intervalo_min, dry_run, body.max_partidas))
+
+    # Loga se a task morrer por exception nao tratada · sem isto o laco
+    # simplesmente some e o painel continua dizendo "ligado" pra sempre.
+    def _ao_terminar(task: asyncio.Task) -> None:
+        exc = task.exception() if not task.cancelled() else None
+        if exc:
+            logger.error("[LIVE-WATCH] laco encerrou com excecao: %s", exc, exc_info=exc)
+
+    _watch_task.add_done_callback(_ao_terminar)
+
     return {"ok": True, "ativo": True, "dry_run": dry_run,
             "intervalo_min": _watch_state["intervalo_min"]}
 
