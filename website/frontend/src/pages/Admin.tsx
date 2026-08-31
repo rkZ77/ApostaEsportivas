@@ -287,12 +287,21 @@ export default function Admin() {
      "Rodar Tudo" enquanto o consumo de API não estiver medido. */
 
   useEffect(() => {
+    // Poll com backoff: rápido enquanto pipeline está rodando (3s),
+    // desacelera para 10s quando está ocioso para não sobrecarregar o backend.
+    let id: ReturnType<typeof setInterval>
     const poll = () => {
-      api.get('/admin/pipeline-status').then(r => setPipelineStatus(r.data)).catch(() => {})
-      api.get('/admin/ai-review-status').then(r => setAiReviewStatus(r.data)).catch(() => {})
+      Promise.all([
+        api.get('/admin/pipeline-status').then(r => { setPipelineStatus(r.data); return r.data }),
+        api.get('/admin/ai-review-status').then(r => { setAiReviewStatus(r.data); return r.data }),
+      ]).then(([ps]) => {
+        const rodando = ps?.status === 'running'
+        clearInterval(id)
+        id = setInterval(poll, rodando ? 3000 : 10_000)
+      }).catch(() => {})
     }
     poll()
-    const id = setInterval(poll, 3000)
+    id = setInterval(poll, 3000)
     return () => clearInterval(id)
   }, [])
 

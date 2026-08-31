@@ -35,7 +35,11 @@ const AuthContext = createContext<AuthContextType | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const stored = localStorage.getItem('user')
-  const [user, setUser] = useState<User | null>(stored ? JSON.parse(stored) : null)
+  const [user, setUser] = useState<User | null>(() => {
+    if (!stored) return null
+    try { return JSON.parse(stored) as User }
+    catch { localStorage.removeItem('user'); return null }
+  })
 
   // Só dados de UI (sem token) ficam no localStorage
   const _save = (u: User) => {

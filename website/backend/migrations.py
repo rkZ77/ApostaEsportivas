@@ -824,6 +824,16 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_player_stats_pendentes ON picks_player_stats (match_date) WHERE result IS NULL;")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_player_stats_metodo ON picks_player_stats (method, match_date DESC);")
 
+        # Índice composto que o pipeline ao vivo (live_pipeline.py) usa em
+        # todas as queries de baseline: baselines_por_liga, baseline_do_arbitro,
+        # baseline_do_mando, baseline_do_confronto consultam match_statistics
+        # com WHERE league_id = X AND match_date >= NOW() - N days. Sem índice
+        # composto é full scan na tabela inteira a cada rodada do motor.
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_match_stats_league_date
+            ON match_statistics (league_id, match_date DESC)
+        """)
+
         conn.commit()
         return True
     except Exception as e:
