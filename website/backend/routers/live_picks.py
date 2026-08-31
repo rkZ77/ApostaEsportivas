@@ -643,14 +643,30 @@ def feed(
     # A tela nao fica vazia: o pick continua com o snapshot da criacao, que e'
     # justamente o que o motor viu quando decidiu -- o mesmo dado que a aba
     # mostra quando a partida acabou.
+    #
+    # PICKS JA LIQUIDADOS NAO CONSULTAM A API (2026-09).
+    #
+    # `result IS NOT NULL` significa jogo encerrado: o placar e as stats sao
+    # definitivos e estao no banco. Chamar `_enriquecer` sobre eles custava
+    # uma req de fixture + uma de stats por pick liquidado a cada poll -- e
+    # picks liquidados ficam na lista o dia inteiro. Com 10 picks encerrados
+    # e poll de 30s, isso era ~60 req/hora gratuitas de informacao que ja
+    # esta gravada. `_sem_enriquecer` devolve o snapshot da criacao, que e'
+    # o dado correto pra um pick que ja foi resolvido.
     ao_vivo = _watch_state["ativo"] and not _watch_state.get("hibernando")
+    # Bulk so' para os picks SEM resultado que precisam de estado atual.
     if linhas and ao_vivo:
-        _fetch_fixtures_bulk([p["fixture_id"] for p in linhas if p["fixture_id"]])
+        _fetch_fixtures_bulk([
+            p["fixture_id"] for p in linhas
+            if p["fixture_id"] and p.get("result") is None
+        ])
 
     agora = _agora_naive()
     saida = []
     for p in linhas:
-        item = _enriquecer(p) if ao_vivo else _sem_enriquecer(p)
+        # Pick liquidado: dado definitivo no banco, nao precisa de API.
+        pick_ativo = p.get("result") is None
+        item = _enriquecer(p) if (ao_vivo and pick_ativo) else _sem_enriquecer(p)
         seguido = seguidos.get(p["id"])
         validade = p.get("odd_valid_until")
         item["is_followed"] = seguido is not None
@@ -737,15 +753,16 @@ _JANELA_EM_LEITURA_MIN = 60
 #:
 #: POR QUE NAO USAR O TTL DE 20s DO RESTO DO LIVE. `_fetch_stats` custa UMA
 #: requisicao POR PARTIDA, e este bloco olha ate' 12 jogos ao mesmo tempo. Com o
-#: TTL de 20s e a tela pesquisando de 15 em 15 segundos, uma unica aba aberta
-#: geraria ~36 requisicoes por minuto -- que e' a ordem de grandeza que estourou
+#: TTL de 20s e a tela pesquisando de 30 em 30 segundos, uma unica aba aberta
+#: geraria ~24 requisicoes por minuto -- que e' a ordem de grandeza que estourou
 #: a cota em 01/08 e custou o agendador.
 #:
-#: 90 segundos e' o ponto onde as duas coisas cabem: escanteio e chute mudam de
-#: minuto em minuto, nao de segundo em segundo, entao a tela deixa de mentir sem
-#: que a conta exploda. O placar e o minuto NAO passam por aqui: eles vem do
-#: bulk de fixtures, que custa uma requisicao pra vinte jogos.
-_LEITURA_STATS_TTL = 90
+#: 180 segundos (era 90s): o poll do front passou de 15s para 30s, logo o TTL
+#: pode dobrar mantendo a mesma proporcao de cache hit (TTL > 2x poll).
+#: Escanteio e chute mudam no ritmo do provedor (~1min), entao 3 minutos de
+#: cache nao perde dado util nenhum. O placar e o minuto NAO passam por aqui:
+#: eles vem do bulk de fixtures, que custa uma requisicao pra vinte jogos.
+_LEITURA_STATS_TTL = 180
 _LEITURA_STATS_MAX = 12
 _leitura_stats: dict = {}
 

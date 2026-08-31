@@ -765,7 +765,7 @@ function PickCard({ pick, unitValue, onRefresh, syncedAt }: {
   )
 }
 
-const REFRESH_LIVE = 15_000 // 15s · polling quando tem pick ao vivo
+const REFRESH_LIVE = 30_000 // 30s · alinhado com o TTL de fixture do backend (30s)
 
 function LiveSkeleton() {
   return (

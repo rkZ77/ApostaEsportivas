@@ -545,10 +545,12 @@ import { PICK_TYPE_BORDER } from '../utils/resultStyle'
 
 const TEAM_LOGO = (id?: number) => (id ? `/api/proxy/team/${id}.png` : null)
 
-/* Mesmo intervalo do polling de Minhas Apostas (15s): o dado que alimenta os
-   dois vem do mesmo cache de 20s no backend, então poll mais rápido só
-   gastaria requisição sem trazer número novo. */
-const POLL_MS = 15000
+/* Poll de 30s: o backend separou o TTL de fixture (30s) e de stats (60s),
+   então 30s é o ponto ótimo — bate no cache de placar sempre e no de stats
+   a cada dois polls. Era 15s, o que com TTL de 20s garantia miss em stats
+   a cada visita. Dobrar o intervalo reduz ~50% das requisições de stats
+   sem atrasar o placar (fixture atualiza em 30s de qualquer forma). */
+const POLL_MS = 30_000
 
 const STATUS_LABEL: Record<string, string> = {
   '1H': '1º Tempo', HT: 'Intervalo', '2H': '2º Tempo', ET: 'Prorrogação',

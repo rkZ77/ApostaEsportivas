@@ -24,12 +24,15 @@ API_BASE      = "https://v3.football.api-sports.io"
 LIVE_STATUSES = {"1H", "HT", "2H", "ET", "BT", "P", "SUSP", "INT"}
 FT_STATUSES   = {"FT", "AET", "PEN"}
 
-# TTL adaptativo: jogos ao vivo → curto; não iniciados → médio; encerrados → longo
-# TTL_LIVE alinhado ao polling mais rápido do front (15s, ver LivePicks.tsx)
-# pra maioria dos polls bater em cache em vez de sempre errar (era 10s < 15s de poll = miss garantido)
-_TTL_LIVE = 20   # segundos · atualiza depressa durante o jogo
-_TTL_NS   = 60   # segundos · jogo ainda não começou
-_TTL_FT   = 300  # segundos · encerrado, dados não mudam
+# TTL SEPARADO: placar/minuto mudam com gols; stats (escanteios, chutes) mudam
+# no ritmo de minutos. Usar o mesmo TTL curto para os dois desperdicava cota:
+# com poll de 30s e TTL_LIVE de 20s, cada poll de stats era miss garantido.
+# A separação permite que fixture (placar) atualize rápido enquanto stats
+# atualiza no ritmo do provedor, que publica acumulado por minuto.
+_TTL_LIVE         = 30   # segundos · fixture (placar + minuto) ao vivo
+_TTL_STATS_LIVE   = 60   # segundos · statistics ao vivo (escanteios, chutes, cartões)
+_TTL_NS           = 60   # segundos · jogo ainda não começou
+_TTL_FT           = 300  # segundos · encerrado, dados não mudam
 
 _fix_cache:   dict[int, tuple[float, dict]] = {}
 _stats_cache: dict[int, tuple[float, list]] = {}
@@ -39,6 +42,22 @@ _odds_live_cache: dict[int, tuple[float, list]] = {}
 def _cache_ttl(status: str) -> int:
     if status in LIVE_STATUSES:
         return _TTL_LIVE
+    if status in FT_STATUSES:
+        return _TTL_FT
+    return _TTL_NS
+
+
+def _stats_ttl(status: str) -> int:
+    """TTL específico para /fixtures/statistics, maior que o do placar.
+
+    Stats acumuladas mudam no ritmo do provedor (publica a cada ~1min),
+    não a cada requisição. Usar o TTL de fixture aqui custava uma req por
+    poll por partida sem trazer número novo — foi isso que estourou a cota
+    em 01/08 e que o cache de 90s no bloco 'em-leitura' já consertou para
+    aquele endpoint. Aqui o mesmo princípio vale para o feed principal.
+    """
+    if status in LIVE_STATUSES:
+        return _TTL_STATS_LIVE
     if status in FT_STATUSES:
         return _TTL_FT
     return _TTL_NS
@@ -109,7 +128,7 @@ def _fetch_stats(fid: int, status: str) -> list:
     now = time.time()
     if fid in _stats_cache:
         ts, cached = _stats_cache[fid]
-        if now - ts < _cache_ttl(status):
+        if now - ts < _stats_ttl(status):
             return cached
     try:
         r = requests.get(f"{API_BASE}/fixtures/statistics", headers=_headers(),
