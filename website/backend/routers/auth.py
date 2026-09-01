@@ -1480,7 +1480,15 @@ def me(current_user: dict = Depends(get_current_user)):
     cur = conn.cursor()
     try:
         cur.execute(
-            "SELECT id, name, email, phone, username, plan, active, expires_at, subscription_type, created_at, avatar_url, trial_used, email_verified, phone_verified, last_login_device, last_login_at FROM users WHERE id = %s",
+            "SELECT id, name, email, phone, username, plan, active, expires_at, subscription_type, created_at, avatar_url, trial_used, email_verified, phone_verified, last_login_device, last_login_at, "
+            # O HASH NAO SAI DAQUI -- so' a resposta de "existe?".
+            #
+            # A tela de senha do perfil pedia a senha ATUAL de uma conta que
+            # nasceu no Google e nao tem nenhuma: a pessoa so' descobria isso
+            # depois de preencher e levar erro. Com este booleano a tela sabe
+            # antes e oferece o caminho certo.
+            "(password_hash IS NOT NULL) AS tem_senha "
+            "FROM users WHERE id = %s",
             (current_user["sub"],),
         )
         row = cur.fetchone()

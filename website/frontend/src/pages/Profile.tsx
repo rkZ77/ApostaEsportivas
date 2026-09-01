@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Bell, BellOff, Eye, EyeOff } from 'lucide-react'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
@@ -434,6 +434,34 @@ export default function Profile() {
             )}
 
             <hr className="border-line" />
+            {/* CONTA QUE ENTROU PELO GOOGLE NÃO TEM SENHA (01/09/2026).
+                Este bloco pedia a senha ATUAL, e quem criou conta pelo Google
+                nunca teve uma: a pessoa preenchia o formulário inteiro para
+                descobrir isso no erro. Agora a tela sabe antes (`tem_senha` vem
+                do /auth/me) e oferece o caminho que funciona.
+
+                Ter senha é opcional para sempre. Ela serve para quem quer poder
+                entrar sem depender do Google · e o caminho é o mesmo do
+                "esqueci minha senha", que manda um código para o e-mail. Esse
+                e-mail é verificado pelo próprio Google, então a prova de posse
+                é pelo menos tão forte quanto a de qualquer outra conta. */}
+            {meData?.tem_senha === false ? (
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="min-w-0">
+                  <p className="text-xs text-ink-3 font-semibold">Senha</p>
+                  <p className="text-xs text-ink-4 mt-0.5 leading-relaxed">
+                    Sua conta entra pelo Google e não tem senha. Criar uma é opcional, e serve
+                    para você poder entrar também por usuário e senha.
+                  </p>
+                </div>
+                <Link
+                  to="/forgot-password"
+                  className="text-xs text-blue-400 hover:text-blue-300 transition-colors font-semibold border border-blue-400/20 hover:border-blue-400/40 bg-blue-400/5 px-3 py-2 rounded-lg shrink-0"
+                >
+                  Criar uma senha
+                </Link>
+              </div>
+            ) : (
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-ink-3 font-semibold">Senha</p>
@@ -451,6 +479,7 @@ export default function Profile() {
                 </button>
               )}
             </div>
+            )}
 
             {showPasswordChange && pwStep === 'form' && (
               <div className="space-y-3">

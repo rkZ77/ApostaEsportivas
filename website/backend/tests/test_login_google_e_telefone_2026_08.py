@@ -404,3 +404,38 @@ def test_telefone_repetido_nao_derruba_o_login():
 
     fonte = _fonte("routers/auth.py")
     assert "NOT EXISTS (SELECT 1 FROM users u2 WHERE u2.phone = %s)" in fonte
+
+
+# ── a senha de quem entrou pelo Google ───────────────────────────────────────
+
+def test_a_tela_sabe_que_a_conta_nao_tem_senha():
+    """`/auth/me` responde `tem_senha`, e o hash NUNCA sai junto.
+
+    Sem esse booleano a tela do perfil pedia a senha ATUAL de uma conta que
+    nasceu no Google e nunca teve nenhuma: a pessoa preenchia o formulario
+    inteiro pra descobrir no erro."""
+    from tests.test_home_2026_08 import _fonte, _front
+
+    fonte = _fonte("routers/auth.py")
+    assert "(password_hash IS NOT NULL) AS tem_senha" in fonte
+    # O hash em si continua fora do SELECT do /me.
+    me = fonte.split('@router.get("/me")')[1].split("@router.")[0]
+    assert "password_hash," not in me
+
+    perfil = _front("pages/Profile.tsx")
+    assert "meData?.tem_senha === false" in perfil
+    assert "Criar uma senha" in perfil
+
+
+def test_criar_senha_passa_pelo_esqueci_minha_senha():
+    """Nao existe endpoint proprio pra "definir a primeira senha", e nem
+    precisa: /forgot-password manda codigo pro e-mail, e esse e-mail foi
+    verificado pelo proprio Google. A prova de posse e' pelo menos tao forte
+    quanto a de qualquer outra conta -- e um caminho a menos e' uma superficie
+    a menos."""
+    from tests.test_home_2026_08 import _fonte
+
+    fonte = _fonte("routers/auth.py")
+    forgot = fonte.split('@router.post("/forgot-password")')[1].split("@router.")[0]
+    # Nao filtra por ter senha: conta do Google tem que conseguir pedir codigo.
+    assert "password_hash" not in forgot
