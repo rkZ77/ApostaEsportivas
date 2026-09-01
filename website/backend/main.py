@@ -160,7 +160,10 @@ async def security_headers(request: Request, call_next):
         # dentro de um iframe (frame). Faltando uma delas o botao some sem
         # erro visivel -- o CSP bloqueia calado.
         "script-src 'self' https://accounts.google.com https://www.googletagmanager.com https://www.google-analytics.com https://challenges.cloudflare.com; "
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        # accounts.google.com tambem no style-src: o GIS busca a folha de estilo
+        # do proprio botao em /gsi/style. Bloqueada, o botao aparece mas sem
+        # o CSS dele -- moldura branca em volta, visivel em dev antes disto.
+        "style-src 'self' 'unsafe-inline' https://accounts.google.com https://fonts.googleapis.com; "
         "img-src 'self' data: https:; "
         "connect-src 'self' https://accounts.google.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com https://challenges.cloudflare.com; "
         "font-src 'self' data: https://fonts.gstatic.com; "
