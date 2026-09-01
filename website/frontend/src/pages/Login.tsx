@@ -367,46 +367,16 @@ export default function Login() {
         }
       />
 
-      {/* DUAS COLUNAS NO DESKTOP, UMA NO CELULAR.
-          A tela dividida tinha saído por um motivo real: metade do desktop era
-          painel decorativo, e o celular (a maioria de quem entra) não via nada
-          daquilo. O formato volta agora porque o painel deixou de ser
-          decoração · ele carrega a marca, a promessa e as três razões para
-          confiar, que é o que uma tela de senha de site de aposta precisa
-          dizer. No celular esse mesmo conteúdo não some: desce para baixo do
-          formulário, onde ele já estava. */}
-      <div className="flex-1 grid lg:grid-cols-2">
+      {/* UMA COLUNA, CENTRALIZADA.
+          A tela dividida foi tentada e reprovada: no desktop ela empurra o
+          formulário para um dos lados e deixa metade da janela conversando
+          sozinha. Centralizado, o olho cai direto no campo de usuário, que é o
+          que a pessoa veio fazer. O conteúdo do painel não sumiu, continua
+          abaixo do formulário, onde o celular já o via. */}
+      <FundoDeCampo />
 
-        {/* Peça visual · só a partir de lg. */}
-        <aside className="relative hidden lg:flex items-center justify-center border-r border-line overflow-hidden px-12 py-16">
-          <FundoDeCampo />
-          <div className="relative z-10 w-full max-w-sm">
-            <img
-              src="/logo.png"
-              alt=""
-              width={72}
-              height={72}
-              className="w-[72px] h-[72px] mb-6 drop-shadow-[0_0_30px_rgba(0,204,0,0.28)]"
-            />
-            <p className="font-display text-3xl font-bold text-ink-1 tracking-tight leading-tight mb-3">
-              O jogo lido por número,<br />não por palpite.
-            </p>
-            <p className="text-ink-3 text-sm leading-relaxed mb-8">
-              Cada mercado tem o seu próprio modelo, e nenhum pick é publicado
-              sem passar no corte de valor. O que acerta e o que erra fica tudo
-              no histórico público.
-            </p>
-            <SeloDeConfianca className="mt-0" />
-          </div>
-        </aside>
-
-        {/* Formulário. */}
-        <main className="relative flex justify-center px-5 sm:px-6 py-8 sm:py-12">
-          {/* O campo no fundo só no celular: no desktop ele já está do lado. */}
-          <div className="lg:hidden">
-            <FundoDeCampo />
-          </div>
-          <div className="relative w-full max-w-md">
+      <main className="relative flex-1 flex justify-center px-5 sm:px-6 py-8 sm:py-12">
+        <div className="relative w-full max-w-md">
           {/* Este e o <h1> da pagina. A marca acima e logotipo, e aparecia
               duas vezes como h1 (uma no painel de desktop, outra no bloco
               mobile): so uma renderiza, mas as duas existiam no DOM, entao
@@ -730,12 +700,9 @@ export default function Login() {
             )}
           </div>
 
-          {/* No desktop ele já está no painel ao lado · repetir seria dizer a
-              mesma coisa duas vezes na mesma tela. */}
-          <SeloDeConfianca className="lg:hidden" />
+          <SeloDeConfianca />
           </div>
-        </main>
-      </div>
+      </main>
 
       <footer className="relative border-t border-line">
         <div className="mx-auto w-full max-w-3xl px-5 sm:px-6 py-5 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-xs text-ink-4">
