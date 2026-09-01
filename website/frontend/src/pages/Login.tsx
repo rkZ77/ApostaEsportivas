@@ -8,6 +8,7 @@ import { maskPhone } from '../utils/format'
 import api from '../services/api'
 import Turnstile, { TurnstileHandle } from '../components/Turnstile'
 import PublicNav from '../components/PublicNav'
+import LeagueMarquee from '../components/LeagueMarquee'
 import GoogleSignInButton from '../components/GoogleSignInButton'
 import { getPasswordStrength } from '../utils/passwordStrength'
 import { tabFade } from '../lib/motion'
@@ -690,6 +691,20 @@ export default function Login() {
           <SeloDeConfianca />
         </div>
       </main>
+
+      {/* Os escudos das ligas cobertas, na largura toda.
+          A mesma fita da Home, e ela é a única "imagem" desta tela: escudo de
+          competição real é o que o olho reconhece em meio segundo, e responde
+          "o que exatamente vocês analisam?" sem custar uma linha de texto. A
+          lista vem do banco, então nunca anuncia campeonato fora de
+          temporada. Fica entre o selo e o rodapé de propósito: é reforço,
+          não é o assunto. */}
+      <section className="relative border-t border-line overflow-hidden py-5">
+        <p className="text-center text-[11px] uppercase tracking-wide font-semibold text-ink-4 mb-3">
+          Ligas que a IA analisa hoje
+        </p>
+        <LeagueMarquee />
+      </section>
 
       <footer className="relative border-t border-line">
         <div className="mx-auto w-full max-w-3xl px-5 sm:px-6 py-5 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-xs text-ink-4">
