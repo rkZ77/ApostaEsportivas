@@ -772,7 +772,13 @@ def test_login_tem_volta_pro_site_e_topo_enxuto_no_mobile():
     assert "Voltar para o site" in tela
     assert "w-24 h-24" not in tela, "logo gigante voltou pro mobile"
     # O painel de oferta so' aparece em cadastro · quem vai entrar ja' e cliente.
-    assert "mode === 'register' ? (" in tela
+    # A tela dividida saiu em 01/09/2026: o painel virou uma faixa acima do
+    # formulario, entao a condicao deixou de ser um ternario. O que o teste
+    # guarda nao e' a forma, e' que a oferta continue presa ao modo `register`.
+    assert "{mode === 'register' && (" in tela
+    # E a barra agora e a mesma das outras publicas, em vez de um cabecalho
+    # so' desta tela.
+    assert "PublicNav" in tela, "o login voltou a montar cabecalho proprio"
 
 
 def test_win_rate_do_login_nao_puxa_a_rota_inteira():

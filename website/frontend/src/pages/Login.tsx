@@ -116,7 +116,7 @@ function SeloDeConfianca() {
     {
       Icone: Lock,
       titulo: 'Nada de pagamento aqui',
-      texto: <>Não pedimos Pix, cartão nem CPF para criar conta. A assinatura, quando você quiser, passa pelo MercadoPago.</>,
+      texto: <>Criar conta não pede Pix, CPF nem dado de pagamento nenhum. A assinatura, quando você quiser, passa pelo MercadoPago.</>,
     },
     {
       Icone: ShieldCheck,
@@ -382,7 +382,7 @@ export default function Login() {
           <p className="text-ink-3 mb-6 text-sm">
             {mode === 'login'
               ? 'Entre para acessar seus picks de hoje.'
-              : 'Acesso completo. Sem cartão, sem CPF, sem renovação automática.'}
+              : 'Acesso completo por 2 dias. Sem CPF e sem renovação automática.'}
           </p>
 
           {/* A oferta em quatro linhas · era o painel do desktop, que o celular
