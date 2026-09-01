@@ -2009,20 +2009,6 @@ function VipLockOverlay({ color = 'yellow', picks, resumo, rotulo = 'picks' }: {
         </Link>
       </div>
 
-      {/* O QUE NÃO SE PAGA FICA ABERTO (01/09/2026, pedido do usuário).
-          O cadeado terminava num beco: ou assina, ou volta. Mas as duas coisas
-          que respondem "vale a pena?" não são o pick em si · são como o produto
-          funciona e como ele vem se saindo, e as duas já são públicas. Quem
-          está decidindo precisa exatamente delas, e sair da tela para procurar
-          é o mesmo que desistir. */}
-      <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 pt-1">
-        <Link to="/como-funciona" className="text-xs font-semibold text-ink-3 hover:text-ink-1 underline underline-offset-4 transition-colors">
-          Como funciona
-        </Link>
-        <Link to="/resultados" className="text-xs font-semibold text-ink-3 hover:text-ink-1 underline underline-offset-4 transition-colors">
-          Ver todos os resultados
-        </Link>
-      </div>
     </div>
   )
 }
