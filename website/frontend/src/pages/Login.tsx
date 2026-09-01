@@ -356,16 +356,19 @@ export default function Login() {
           lugar para a saída de volta, que é o que falta aqui. */}
       <PublicNav
         width="full"
+        /* Só a casinha, no MESMO tom do seletor de tema ao lado (`text-ink-2`):
+           dois ícones vizinhos em cinzas diferentes leem como um ativo e outro
+           desativado. Ícone sozinho precisa de nome acessível e de alvo de
+           toque, então o `aria-label` diz o que o texto dizia e o quadrado de
+           40px mantém o alvo que a frase tinha. */
         acoes={
           <Link
             to="/"
-            className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-ink-3 hover:text-ink-1 transition-colors px-2 py-2"
+            aria-label="Voltar para o site"
+            title="Voltar para o site"
+            className="inline-flex items-center justify-center w-10 h-10 rounded-md text-ink-2 hover:text-ink-1 transition-colors"
           >
-            {/* Casinha, e não seta. A seta diz "volte um passo", que é
-                impreciso: quem chega aqui por link do WhatsApp ou por busca não
-                tem passo anterior nenhum. A casa diz para onde vai. */}
-            <House className="w-4 h-4" />
-            Voltar para o site
+            <House className="w-5 h-5" />
           </Link>
         }
       />
