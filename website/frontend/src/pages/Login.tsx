@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext'
 import { maskPhone } from '../utils/format'
 import api from '../services/api'
 import Turnstile, { TurnstileHandle } from '../components/Turnstile'
+import PublicNav from '../components/PublicNav'
 import GoogleSignInButton from '../components/GoogleSignInButton'
 import { getPasswordStrength } from '../utils/passwordStrength'
 import { tabFade } from '../lib/motion'
@@ -40,6 +41,56 @@ function RealWinRate({ className = 'mt-5' }: { className?: string }) {
         Ver histórico
       </Link>
     </span>
+  )
+}
+
+/* O fundo da tela · um meio-campo visto de cima.
+
+   Fundo preto liso fazia esta página parecer erro de servidor ao lado do resto
+   do site. O que entra aqui não é enfeite aleatório: é o mesmo vocabulário que
+   a Home e o 404 já usam (verde da marca em opacidade baixa, formas simples,
+   nada que dispute com o formulário). A bola do 404 mostrou que dá pra falar
+   de futebol sem ilustração pesada, e o campo faz isso ocupando só as bordas.
+
+   Tudo em SVG e gradiente, sem imagem: são poucos bytes, escala em qualquer
+   tela e acompanha o tema claro sozinho, porque a cor sai do token `--accent`
+   em vez de estar assada num arquivo. */
+function FundoDeCampo() {
+  return (
+    <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+      {/* Faixas do gramado. A máscara apaga o centro: onde mora o formulário,
+          o fundo tem que sumir. */}
+      <div className="absolute inset-0 bg-field-pattern bg-[length:100%_72px] opacity-70 [mask-image:radial-gradient(ellipse_90%_70%_at_50%_40%,transparent_35%,black)]" />
+
+      {/* Halo verde no topo, o mesmo do hero da Home. Em radial-gradient e não
+          em blur, porque desfoque grande é o efeito mais caro no Safari do
+          iPhone e esta é uma tela que a maioria abre no celular. */}
+      <div
+        className="absolute -top-40 left-1/2 -translate-x-1/2 w-[860px] h-[560px]"
+        style={{ background: 'radial-gradient(50% 50% at 50% 50%, rgb(var(--accent) / 0.13), transparent 70%)' }}
+      />
+
+      {/* As linhas do campo. Meio-campo, círculo central e as duas grandes
+          áreas, com o traço fino que elas têm de verdade vistas de cima. */}
+      <svg
+        className="absolute inset-x-0 top-0 w-full h-full"
+        viewBox="0 0 400 800"
+        preserveAspectRatio="xMidYMid slice"
+        fill="none"
+        stroke="rgb(var(--accent) / 0.16)"
+        strokeWidth="1.5"
+      >
+        <line x1="0" y1="400" x2="400" y2="400" />
+        <circle cx="200" cy="400" r="76" />
+        <circle cx="200" cy="400" r="3" fill="rgb(var(--accent) / 0.22)" stroke="none" />
+        <rect x="110" y="-1" width="180" height="86" />
+        <rect x="110" y="715" width="180" height="86" />
+      </svg>
+
+      {/* Véu por cima de tudo: o desenho precisa ficar na periferia da visão,
+          não competir com o campo de senha. */}
+      <div className="absolute inset-0 bg-surface-0/70" />
+    </div>
   )
 }
 
@@ -290,33 +341,35 @@ export default function Login() {
      linha do selo abaixo do card, e a lista do trial virou uma faixa acima
      dele, visível TAMBÉM no celular, onde antes não aparecia. */
   return (
-    <div className={`min-h-screen bg-surface-0 flex flex-col ${classesRevelacao(revelado)}`} style={{ transitionDuration: `${FADE_REVELACAO_MS}ms` }} aria-busy={!revelado}>
+    <div className={`relative min-h-screen bg-surface-0 flex flex-col overflow-hidden ${classesRevelacao(revelado)}`} style={{ transitionDuration: `${FADE_REVELACAO_MS}ms` }} aria-busy={!revelado}>
       <Helmet>
         <title>Entrar · Pick IA</title>
         <meta name="description" content="Acesse sua conta Pick IA para ver os picks da IA do dia, sua banca e seu histórico." />
       </Helmet>
 
 
-      {/* Marca no topo, do tamanho de um cabeçalho · e não de um cartaz.
-          Ela precisa dizer onde a pessoa está e dar o caminho de volta, nada
-          além disso: o assunto da tela é o formulário. */}
-      <header className="border-b border-line">
-        <div className="mx-auto w-full max-w-md px-5 sm:px-6 h-14 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2.5" aria-label="Pick IA, ir para a página inicial">
-            <img src="/logo.png" alt="" width={32} height={32} className="w-8 h-8 shrink-0" />
-            <p className="font-display text-lg font-bold text-ink-1">Pick<span className="text-accent-ink">IA</span></p>
-          </Link>
+      {/* A MESMA barra das outras páginas públicas.
+          Esta tela montava um cabeçalho só dela: logo à esquerda, link à
+          direita, sem o seletor de tema. No desktop a diferença saltava · ao
+          lado de /resultados parecia outro site, que é justamente a impressão
+          que uma tela de senha não pode dar. O par Entrar/Criar conta cede o
+          lugar para a saída de volta, que é o que falta aqui. */}
+      <PublicNav
+        width="full"
+        acoes={
           <Link
             to="/"
-            className="inline-flex items-center gap-1.5 text-xs text-ink-3 hover:text-ink-1 transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-ink-3 hover:text-ink-1 transition-colors px-2 py-2"
           >
-            <ArrowLeft className="w-3.5 h-3.5" />
+            <ArrowLeft className="w-4 h-4" />
             Voltar para o site
           </Link>
-        </div>
-      </header>
+        }
+      />
 
-      <main className="flex-1 w-full mx-auto max-w-md px-5 sm:px-6 py-8 sm:py-12">
+      <FundoDeCampo />
+
+      <main className="relative flex-1 w-full mx-auto max-w-md px-5 sm:px-6 py-8 sm:py-12">
         <div className="w-full">
           {/* Este e o <h1> da pagina. A marca acima e logotipo, e aparecia
               duas vezes como h1 (uma no painel de desktop, outra no bloco
@@ -638,8 +691,8 @@ export default function Login() {
         </div>
       </main>
 
-      <footer className="border-t border-line">
-        <div className="mx-auto w-full max-w-md px-5 sm:px-6 py-5 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-xs text-ink-4">
+      <footer className="relative border-t border-line">
+        <div className="mx-auto w-full max-w-3xl px-5 sm:px-6 py-5 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-xs text-ink-4">
           <Link to="/termos" className="hover:text-ink-2 transition-colors">Termos de Uso</Link>
           <Link to="/privacidade" className="hover:text-ink-2 transition-colors">Privacidade</Link>
           <Link to="/como-funciona" className="hover:text-ink-2 transition-colors">Como funciona</Link>

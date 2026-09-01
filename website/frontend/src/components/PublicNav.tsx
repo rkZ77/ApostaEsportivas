@@ -16,7 +16,16 @@ import ThemeToggle from './ThemeToggle'
  * caiu aqui por link) e criar conta (todo o resto). Uma página pública de
  * prova existe pra converter · deixar isso implícito é desperdiçar a visita.
  */
-export default function PublicNav({ width = 'full' }: { width?: PageWidth }) {
+export default function PublicNav({
+  width = 'full',
+  /* Substitui o par Entrar/Criar conta. Existe por causa da própria tela de
+     login: lá esses dois botões apontam para onde a pessoa já está, e o que
+     falta é a saída de volta pro site. */
+  acoes,
+}: {
+  width?: PageWidth
+  acoes?: React.ReactNode
+}) {
   return (
     <nav className="border-b border-line/60 bg-surface-0/80 backdrop-blur-sm sticky top-0 z-40">
       <div className={`mx-auto h-14 flex items-center justify-between gap-3 ${PAGE_WIDTH[width]}`}>
@@ -29,10 +38,14 @@ export default function PublicNav({ width = 'full' }: { width?: PageWidth }) {
 
         <div className="flex items-center gap-2 shrink-0">
           <ThemeToggle className="-ml-1" />
-          <Button to="/login" size="sm">Entrar</Button>
-          <Button to="/login?mode=register" variant="ghost" size="sm" className="hidden sm:inline-flex">
-            Criar conta
-          </Button>
+          {acoes ?? (
+            <>
+              <Button to="/login" size="sm">Entrar</Button>
+              <Button to="/login?mode=register" variant="ghost" size="sm" className="hidden sm:inline-flex">
+                Criar conta
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </nav>
