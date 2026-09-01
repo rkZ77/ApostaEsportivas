@@ -1,7 +1,7 @@
 import { useState, useRef, FormEvent, useEffect } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { AnimatePresence, motion } from 'framer-motion'
-import { PartyPopper, Eye, EyeOff, ArrowLeft, ShieldCheck, LineChart, Lock } from 'lucide-react'
+import { PartyPopper, Eye, EyeOff, ArrowLeft, House, ShieldCheck, LineChart, Lock } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { maskPhone } from '../utils/format'
@@ -361,7 +361,10 @@ export default function Login() {
             to="/"
             className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-ink-3 hover:text-ink-1 transition-colors px-2 py-2"
           >
-            <ArrowLeft className="w-4 h-4" />
+            {/* Casinha, e não seta. A seta diz "volte um passo", que é
+                impreciso: quem chega aqui por link do WhatsApp ou por busca não
+                tem passo anterior nenhum. A casa diz para onde vai. */}
+            <House className="w-4 h-4" />
             Voltar para o site
           </Link>
         }
