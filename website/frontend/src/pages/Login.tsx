@@ -191,11 +191,11 @@ export default function Login() {
   /* O Google resolve login e cadastro no mesmo clique, então este caminho
      ignora o modo da tela · quem decide se cria ou entra é o backend. O código
      de indicação segue junto para não perder o crédito de quem indicou. */
-  const entrarComGoogle = async (credential: string) => {
+  const entrarComGoogle = async (code: string) => {
     setError('')
     setLoading(true)
     try {
-      await loginComGoogle(credential, refCode || undefined)
+      await loginComGoogle(code, refCode || undefined)
       localStorage.removeItem('ref_code')
       navigate(redirectTo ?? '/picks')
     } catch (err: any) {
@@ -341,8 +341,9 @@ export default function Login() {
           <div className={googleDisponivel ? 'mb-5' : ''}>
             <GoogleSignInButton
               modo={mode}
-              onCredential={entrarComGoogle}
+              onCode={entrarComGoogle}
               onDisponivel={setGoogleDisponivel}
+              desabilitado={loading}
             />
             {googleDisponivel && (
               <div className="flex items-center gap-3 mt-5">

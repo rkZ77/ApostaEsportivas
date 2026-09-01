@@ -22,7 +22,7 @@ interface AuthContextType {
   user: User | null
   login: (identifier: string, password: string, captcha_token?: string) => Promise<User>
   register: (name: string, email: string, password: string, phone: string, username?: string, ref_code?: string, accepted_terms?: boolean, captcha_token?: string) => Promise<User>
-  loginComGoogle: (credential: string, ref_code?: string) => Promise<User>
+  loginComGoogle: (code: string, ref_code?: string) => Promise<User>
   logout: () => void
   updateUser: (patch: Partial<User>) => void
   refreshUser: () => Promise<void>
@@ -68,8 +68,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   /* Um caminho só para entrar e criar conta com Google · quem descobre se a
      conta é nova é o backend, e é ele quem diz de volta em `conta_nova`. Sem
      isso o funil contaria todo login pelo Google como cadastro. */
-  const loginComGoogle = async (credential: string, ref_code?: string): Promise<User> => {
-    const { data } = await api.post('/auth/google', { credential, ref_code })
+  const loginComGoogle = async (code: string, ref_code?: string): Promise<User> => {
+    const { data } = await api.post('/auth/google', { code, ref_code })
     _save(data.user)
     if (data.conta_nova) criouConta()
     else entrou()

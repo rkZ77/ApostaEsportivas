@@ -315,6 +315,60 @@ def _google_client_id() -> str:
     return (os.getenv("GOOGLE_CLIENT_ID") or "").strip()
 
 
+def _google_client_secret() -> str:
+    return (os.getenv("GOOGLE_CLIENT_SECRET") or "").strip()
+
+
+def _trocar_code_por_id_token(code: str) -> str:
+    """Fluxo de codigo de autorizacao: o navegador manda um `code`, nao o token.
+
+    Existe porque o botao da tela e NOSSO, desenhado com o CSS do site. O
+    widget oficial do Google (que devolve ID token direto) vive dentro de um
+    iframe do proprio Google e nao aceita estilo de fora -- era ele que trazia
+    o quadrado branco atras do G. Trocar de fluxo foi o preco de ter um botao
+    com a mesma altura e o mesmo arredondamento dos outros.
+
+    `redirect_uri` e' literalmente a palavra "postmessage": e' o que o Google
+    espera quando o code veio do popup do `initCodeClient`, e nao de um
+    redirecionamento de verdade. Por isso o console segue sem nenhuma URI de
+    redirecionamento cadastrada.
+
+    Este e' o unico ponto do sistema que usa o client_secret. Ele nunca chega
+    ao navegador.
+    """
+    client_id = _google_client_id()
+    secret = _google_client_secret()
+    if not client_id or not secret:
+        raise HTTPException(503, "Login com Google nao esta configurado neste ambiente.")
+    try:
+        r = httpx.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "code": code,
+                "client_id": client_id,
+                "client_secret": secret,
+                "redirect_uri": "postmessage",
+                "grant_type": "authorization_code",
+            },
+            timeout=10.0,
+        )
+    except Exception as e:
+        logger.error("[GOOGLE] troca de code indisponivel: %s", e)
+        raise HTTPException(503, "Nao foi possivel falar com o Google agora. Tente de novo em instantes.")
+
+    if r.status_code != 200:
+        # O corpo do erro do Google e' curto e nao tem segredo, mas tambem nao
+        # vai pro usuario: "invalid_grant" nao ajuda ninguem na tela.
+        logger.warning("[GOOGLE] troca de code recusada (%s): %s", r.status_code, r.text[:200])
+        raise HTTPException(401, "Nao foi possivel concluir o login com o Google. Tente de novo.")
+
+    id_token = (r.json() or {}).get("id_token")
+    if not id_token:
+        logger.error("[GOOGLE] resposta sem id_token")
+        raise HTTPException(502, "O Google nao devolveu os dados da conta. Tente de novo.")
+    return id_token
+
+
 def _google_jwks(forcar: bool = False) -> dict:
     agora = time.time()
     if not forcar and _google_jwks_cache["chaves"] and _google_jwks_cache["expira"] > agora:
@@ -496,7 +550,11 @@ class LoginBody(BaseModel):
     captcha_token: Optional[str] = None
 
 class GoogleAuthBody(BaseModel):
-    credential: str
+    # Dois caminhos de propósito. `code` é o do site, com botão próprio. O
+    # `credential` (ID token direto) fica para o app nativo, onde o SDK do
+    # Google entrega o token e não existe popup de navegador.
+    code: Optional[str] = None
+    credential: Optional[str] = None
     ref_code: Optional[str] = None
 
 
@@ -975,7 +1033,14 @@ def google_config():
     rebuild do front alem da variavel no servidor -- duas metades que
     dessincronizam. Client_id nao e' segredo: ele aparece inteiro na
     requisicao que o proprio navegador faz pro Google.
+
+    Devolve vazio se FALTAR QUALQUER UMA das duas variaveis. O fluxo de codigo
+    precisa do par, entao anunciar o client_id sozinho so' produziria um botao
+    que abre o popup do Google e falha no fim, depois de a pessoa ja' ter
+    escolhido a conta -- pior que nao ter botao nenhum.
     """
+    if not _google_client_secret():
+        return {"client_id": ""}
     return {"client_id": _google_client_id()}
 
 
@@ -997,7 +1062,13 @@ def login_com_google(body: GoogleAuthBody, response: Response, request: Request,
     cadastro em um toque. O trial sai mesmo assim, porque `email_verified`
     sozinho ja' basta em `_ativar_trial_se_elegivel`.
     """
-    claims = _verificar_id_token_google(body.credential.strip())
+    if body.code:
+        id_token = _trocar_code_por_id_token(body.code.strip())
+    elif body.credential:
+        id_token = body.credential.strip()
+    else:
+        raise HTTPException(400, "Faltou o codigo do Google.")
+    claims = _verificar_id_token_google(id_token)
     google_sub = str(claims["sub"])
     email = claims["email"]
     nome_google = (claims.get("name") or email.split("@")[0]).strip()

@@ -193,3 +193,104 @@ def test_google_nao_usa_o_gate_de_email_do_login():
     # E a sessão única continua valendo: entrar pelo Google derruba a sessão
     # anterior igual ao login por senha.
     assert "session_token=%s, last_login_device=%s" in google
+
+
+# ── fluxo de codigo de autorizacao (o botao proprio da tela) ─────────────────
+#
+# O site deixou de usar o widget do Google em 01/09/2026: ele vive num iframe
+# que nao aceita CSS de fora, e o botao destoava do resto da tela. Com o fluxo
+# de codigo, o navegador manda um `code` e QUEM FALA COM O GOOGLE E' O SERVIDOR
+# -- o client_secret nunca chega ao front.
+
+def test_config_nao_anuncia_client_id_sem_secret(monkeypatch):
+    """Meio configurado é pior que desligado: o botão apareceria, a pessoa
+    escolheria a conta no popup e só então levaria erro."""
+    from routers.auth import google_config
+
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "abc.apps.googleusercontent.com")
+    monkeypatch.delenv("GOOGLE_CLIENT_SECRET", raising=False)
+    assert google_config() == {"client_id": ""}
+
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "segredo")
+    assert google_config() == {"client_id": "abc.apps.googleusercontent.com"}
+
+
+class _RespostaFalsa:
+    def __init__(self, status, dados=None, texto=""):
+        self.status_code = status
+        self._dados = dados or {}
+        self.text = texto
+
+    def json(self):
+        return self._dados
+
+
+def _finge_post(monkeypatch, resposta):
+    enviados = {}
+
+    def _post(url, data=None, timeout=None):
+        enviados["url"] = url
+        enviados["data"] = data
+        return resposta
+
+    monkeypatch.setattr(auth_mod.httpx, "post", _post)
+    return enviados
+
+
+def test_troca_de_code_manda_o_secret_e_o_postmessage(monkeypatch):
+    """`redirect_uri=postmessage` é o que o Google exige quando o code veio do
+    popup. Errar isso dá `invalid_grant` e nenhum login funciona."""
+    from routers.auth import _trocar_code_por_id_token
+
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "abc.apps.googleusercontent.com")
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "segredo-do-servidor")
+    enviados = _finge_post(monkeypatch, _RespostaFalsa(200, {"id_token": "eyJ.token.aqui"}))
+
+    assert _trocar_code_por_id_token("codigo-do-popup") == "eyJ.token.aqui"
+    assert enviados["url"] == "https://oauth2.googleapis.com/token"
+    assert enviados["data"]["redirect_uri"] == "postmessage"
+    assert enviados["data"]["grant_type"] == "authorization_code"
+    assert enviados["data"]["client_secret"] == "segredo-do-servidor"
+
+
+def test_code_recusado_pelo_google_vira_401(monkeypatch):
+    from routers.auth import _trocar_code_por_id_token
+
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "abc")
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "s")
+    _finge_post(monkeypatch, _RespostaFalsa(400, texto='{"error":"invalid_grant"}'))
+    with pytest.raises(HTTPException) as e:
+        _trocar_code_por_id_token("code-velho")
+    assert e.value.status_code == 401
+    assert "invalid_grant" not in str(e.value.detail)
+
+
+def test_resposta_sem_id_token_nao_passa_por_login(monkeypatch):
+    from routers.auth import _trocar_code_por_id_token
+
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "abc")
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "s")
+    _finge_post(monkeypatch, _RespostaFalsa(200, {"access_token": "so-isso"}))
+    with pytest.raises(HTTPException) as e:
+        _trocar_code_por_id_token("code")
+    assert e.value.status_code == 502
+
+
+def test_sem_secret_a_troca_nem_tenta(monkeypatch):
+    from routers.auth import _trocar_code_por_id_token
+
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "abc")
+    monkeypatch.delenv("GOOGLE_CLIENT_SECRET", raising=False)
+    with pytest.raises(HTTPException) as e:
+        _trocar_code_por_id_token("code")
+    assert e.value.status_code == 503
+
+
+def test_o_secret_nunca_sai_do_servidor():
+    """O client_secret só pode aparecer no ponto que fala com o Google. Se ele
+    vazar pro corpo de uma resposta ou pro front, o login inteiro é forjável."""
+    from tests.test_home_2026_08 import _fonte, _front
+
+    fonte = _fonte("routers/auth.py")
+    assert fonte.count("GOOGLE_CLIENT_SECRET") == 1
+    assert "client_secret" not in _front("components/GoogleSignInButton.tsx")
