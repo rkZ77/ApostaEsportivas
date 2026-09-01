@@ -370,32 +370,40 @@ function Leaderboard() {
 
 const FREE_ITEMS: Array<[boolean, string]> = [
   [true,  '1 pick gratuito por dia'],
-  [true,  'Histórico do pick free'],
-  [true,  'Resultados de todos os picks'],
-  [true,  'Detalhes dos picks resolvidos'],
+  [true,  'Histórico de todos os picks'],
+  [true,  'Resultados auditáveis'],
   [false, 'Picks VIP do dia'],
+  [false, 'Picks ao vivo'],
   [false, 'Múltiplas geradas por IA'],
   [false, 'Alavancagem'],
+  [false, 'Mercados de faltas e defesas'],
   [false, 'Agente IA de futebol'],
+  [false, 'Gestão de banca completa'],
 ]
 
 const TRIAL_ITEMS = [
-  'Pick free mais todos os picks VIP',
-  'Múltiplas geradas por IA',
-  'Alavancagem',
-  'Mercados de faltas e defesas',
-  'Agente IA de futebol',
-  'Histórico completo com filtros',
-  'Gestão de banca com stake sugerida',
-  'Depois de 2 dias volta pro Free, sem cobrança',
+  'Experimente tudo por 2 dias — sem pagar nada',
+  'Vence sozinho, sem cobrança automática',
 ]
 
+/*
+ * VIP lista tudo que está incluso, do mais impactante ao mais detalhado.
+ * O trial é só o acesso temporário ao mesmo conjunto -- por isso o VIP
+ * tem mais linhas: é ele que vende, não o trial.
+ */
 const VIP_ITEMS = [
-  'Tudo do teste VIP',
-  'Acesso permanente enquanto o plano estiver ativo',
+  'Todos os picks VIP do dia',
+  'Picks ao vivo (motor em tempo real)',
+  'Múltiplas geradas por IA',
+  'Alavancagem com reinvestimento',
+  'Mercados de faltas e defesas',
+  'Estatística individual de jogadores',
+  'Pick Boost (linhas subvalorizadas)',
+  'Agente IA de futebol',
+  'Gestão de banca com stake por Kelly',
+  'Fechamento mensal automático',
+  'Acesso ativo enquanto o plano durar',
   'Suporte prioritário',
-  'Todas as ligas cobertas',
-  'Fechamento mensal de banca',
 ]
 
 function Plans({ monthly }: { monthly: Plan }) {
@@ -403,8 +411,8 @@ function Plans({ monthly }: { monthly: Plan }) {
     <section id="planos" className="section section-alt">
       <div className="shell">
         <SectionHead
-          title="Comece de graça, evolua quando quiser"
-          sub="Dois dias com acesso VIP completo. Depois você escolhe."
+          title="Comece de graça, assine se gostar"
+          sub="2 dias com acesso VIP completo, sem precisar de cartão."
         />
 
         <motion.div
@@ -418,7 +426,7 @@ function Plans({ monthly }: { monthly: Plan }) {
           <motion.div variants={fadeInUp} className="bg-surface-0 border border-line rounded-lg p-6">
             <Badge tone="neutral">Free</Badge>
             <p className="font-mono text-3xl font-bold text-ink-1 mt-3 mb-0.5">R$ 0</p>
-            <p className="text-ink-3 text-xs mb-6">Para sempre</p>
+            <p className="text-ink-3 text-xs mb-6">Para sempre, sem cadastro de cartão</p>
             <ul className="space-y-2.5 mb-7">
               {FREE_ITEMS.map(([ok, t]) => (
                 <li key={t} className="flex items-start gap-2.5">
@@ -432,35 +440,18 @@ function Plans({ monthly }: { monthly: Plan }) {
             <Button to="/login?mode=register" variant="ghost" block>Criar conta grátis</Button>
           </motion.div>
 
-          {/* Teste · destaque */}
-          <motion.div variants={fadeInUp} className="relative bg-surface-0 border border-accent/50 rounded-lg p-6 overflow-hidden">
-            <div aria-hidden="true" className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-accent to-transparent" />
+          {/* VIP · destaque principal */}
+          <motion.div variants={fadeInUp} className="relative bg-surface-0 border border-yellow-400/50 rounded-lg p-6 overflow-hidden">
+            <div aria-hidden="true" className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-yellow-400/80 to-transparent" />
             <div className="flex items-center justify-between gap-2 mb-3">
-              <Badge tone="green">Teste grátis</Badge>
-              <Badge tone="green">Começar aqui</Badge>
+              <Badge tone="yellow">VIP</Badge>
+              <Badge tone="yellow">Mais popular</Badge>
             </div>
-            <p className="font-mono text-3xl font-bold text-ink-1 mb-0.5">R$ 0</p>
-            <p className="text-ink-2 text-xs mb-6">2 dias completos, sem compromisso</p>
-            <ul className="space-y-2.5 mb-7">
-              {TRIAL_ITEMS.map(t => (
-                <li key={t} className="flex items-start gap-2.5">
-                  <Check className="w-4 h-4 text-accent-ink shrink-0 mt-0.5" />
-                  <span className="text-sm text-ink-2 leading-snug">{t}</span>
-                </li>
-              ))}
-            </ul>
-            <Button to="/login?mode=register" block>Ativar teste gratuito</Button>
-          </motion.div>
-
-          {/* VIP */}
-          <motion.div variants={fadeInUp} className="relative bg-surface-0 border border-yellow-400/30 rounded-lg p-6 overflow-hidden">
-            <div aria-hidden="true" className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-yellow-400/60 to-transparent" />
-            <Badge tone="yellow">VIP</Badge>
-            <p className="font-mono text-3xl font-bold text-ink-1 mt-3 mb-0.5">
+            <p className="font-mono text-3xl font-bold text-ink-1 mb-0.5">
               {fmtPlanPrice(monthly.price)}<span className="text-base font-semibold text-ink-3">/mês</span>
             </p>
             <p className="text-ink-3 text-xs mb-6">
-              Menos de {fmtPlanPrice(monthly.price / 30)} por dia
+              Menos de {fmtPlanPrice(monthly.price / 30)} por dia · pagamento único, sem renovação automática
             </p>
             <ul className="space-y-2.5 mb-7">
               {VIP_ITEMS.map(t => (
@@ -471,6 +462,28 @@ function Plans({ monthly }: { monthly: Plan }) {
               ))}
             </ul>
             <Button to="/planos" variant="vip" block>Ver planos VIP</Button>
+          </motion.div>
+
+          {/* Teste grátis · gateway para o VIP */}
+          <motion.div variants={fadeInUp} className="relative bg-surface-0 border border-accent/40 rounded-lg p-6 overflow-hidden">
+            <div aria-hidden="true" className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-accent/60 to-transparent" />
+            <Badge tone="green">Teste gratuito</Badge>
+            <p className="font-mono text-3xl font-bold text-ink-1 mt-3 mb-0.5">R$ 0</p>
+            <p className="text-ink-2 text-xs mb-5">Acesso VIP completo por 2 dias</p>
+            {/* O trial dá acesso ao mesmo conjunto do VIP -- por isso não lista
+                item por item: repete o VIP ao lado e confunde quem compara. */}
+            <div className="rounded-md bg-surface-1 border border-line px-4 py-3.5 mb-5 space-y-2">
+              {TRIAL_ITEMS.map(t => (
+                <p key={t} className="text-sm text-ink-2 leading-snug flex items-start gap-2">
+                  <Check className="w-4 h-4 text-accent-ink shrink-0 mt-0.5" />
+                  {t}
+                </p>
+              ))}
+              <p className="text-xs text-ink-3 pt-1 border-t border-line mt-1">
+                Tudo que está incluso no VIP, por 2 dias.
+              </p>
+            </div>
+            <Button to="/login?mode=register" block>Ativar teste gratuito</Button>
           </motion.div>
         </motion.div>
       </div>

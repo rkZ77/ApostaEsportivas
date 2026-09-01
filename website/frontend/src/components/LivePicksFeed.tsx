@@ -263,31 +263,59 @@ function minutoVivo(p: EmLeitura, segundosExtras: number): { minuto: number | nu
  * Ela SÓ aparece com a busca ligada. Fita girando com o motor parado seria
  * animação decorativa mentindo sobre o estado do produto.
  */
+/* Placeholder de escudo quando não há id de time */
+function TeamLogoOrDot({ id, name }: { id?: number | null; name?: string | null }) {
+  const [err, setErr] = useState(false)
+  const src = id ? `/api/proxy/team/${id}.png` : null
+  if (!src || err) {
+    return (
+      <span className="w-[18px] h-[18px] rounded-full bg-surface-3 border border-line shrink-0
+                       flex items-center justify-center text-[8px] font-bold text-ink-4 uppercase">
+        {(name ?? '?').slice(0, 1)}
+      </span>
+    )
+  }
+  return (
+    <img src={src} alt={name ?? ''} width={18} height={18}
+      className="object-contain shrink-0"
+      style={{ width: 18, height: 18 }}
+      onError={() => setErr(true)} />
+  )
+}
+
 function FitaDeBusca({ partidas }: { partidas: EmLeitura[] }) {
   if (partidas.length === 0) return null
   const itens = partidas.map(p => (
     <span key={p.fixture_id}
-          className="inline-flex items-center gap-1.5 text-[11px] whitespace-nowrap">
-      <LeagueLogo id={p.league_id ?? undefined} name={p.liga ?? ''} />
-      <span className="text-ink-2">{p.home_team ?? 'Time'}</span>
-      <span className="text-ink-4">x</span>
-      <span className="text-ink-2">{p.away_team ?? 'Time'}</span>
+          className="inline-flex items-center gap-1.5 text-[11px] whitespace-nowrap
+                     bg-surface-1 border border-line rounded-md px-2.5 py-1">
+      <LeagueLogo id={p.league_id ?? undefined} name={p.liga ?? ''} size={14} />
+      <TeamLogoOrDot id={p.home_team_id} name={p.home_team} />
+      <span className="text-ink-2 font-medium">{p.home_team ?? 'Time'}</span>
+      <span className="text-ink-4 text-[10px]">x</span>
+      <TeamLogoOrDot id={p.away_team_id} name={p.away_team} />
+      <span className="text-ink-2 font-medium">{p.away_team ?? 'Time'}</span>
       {p.minuto != null && (
-        <span className="font-mono text-accent-ink font-bold">{p.minuto}&apos;</span>
+        <span className="font-mono text-accent-ink font-bold text-[10px]
+                         bg-accent/10 border border-accent/20 rounded px-1">
+          {p.minuto}&apos;
+        </span>
       )}
     </span>
   ))
   return (
     <div className="relative overflow-hidden rounded-lg border border-accent/20 bg-accent/[0.04] py-2.5 mb-6">
-      <div className="flex items-center gap-2 px-3 mb-1.5">
+      <div className="flex items-center gap-2 px-3 mb-2">
         <LiveDot />
         <span className="text-[10px] font-bold text-accent-ink uppercase tracking-wide">
           a IA está lendo estes jogos agora
         </span>
+        <span className="ml-auto font-mono text-[10px] text-ink-4 tabular-nums">
+          {partidas.length} {partidas.length === 1 ? 'jogo' : 'jogos'}
+        </span>
       </div>
-      {/* Devagar de propósito: o item é curto, mas quem olha quer LER o nome
-          do jogo que passou, não ver um borrão. */}
-      <Marquee items={itens} spacing="pr-6" speed={28} />
+      {/* gap-2 entre os cards: cada item já tem borda e fundo próprios */}
+      <Marquee items={itens} spacing="pr-2" speed={28} />
     </div>
   )
 }
@@ -454,7 +482,7 @@ function EmLeituraAgora({ partidas, tick, disponivel, motor }: {
                   {([[p.home_team_id, p.home_team], [p.away_team_id, p.away_team]] as const).map(
                     ([id, nome], i) => (
                       <div key={i} className="flex items-center gap-1.5 min-w-0">
-                        <TeamLogo id={id ?? undefined} name={nome ?? ''} />
+                        <TeamLogoOrDot id={id} name={nome} />
                         <span className="text-sm text-ink-1 truncate">{nome ?? 'Time ?'}</span>
                       </div>
                     ))}
@@ -1173,17 +1201,17 @@ export default function LivePicksFeed({ isActive, banca }: {
 
   return (
     <div>
-      {/* A BARRA DE ESTADO SUBIU, A EXPLICAÇÃO DESCEU (29/08, pedido do
-          usuário).
-          *
-          * Os dois moravam na mesma caixa, e não é a mesma coisa: o estado do
-          * motor e o botão de atualizar são CONTROLE -- se olham toda hora --
-          * e o "o que são os Picks Ao Vivo" é apresentação, que se lê uma vez.
-          * Juntos, a caixa de texto empurrava os controles pra dentro dela e
-          * os picks pra baixo da dobra no celular.
-          *
-          * Agora o controle abre a aba numa linha só, e a explicação fecha, no
-          * rodapé, onde quem já conhece o produto simplesmente não passa. */}
+      {/* ComoFunciona ANTES dos picks: igual a todas as outras abas.
+          Fecha por padrão — quem conhece o produto passa direto. */}
+      <ComoFunciona titulo="O que são os Picks Ao Vivo?" className="mb-4">
+        <p>
+          A IA lê a partida em andamento e compara com a odd do momento. Só publica quando o jogo
+          se afasta do esperado e o preço paga por isso.{' '}
+          <span className="font-bold text-ink-1">Confira a odd na casa antes de apostar.</span>
+        </p>
+        <PlacarDoLive recarregar={pedidoDeRecarga} />
+      </ComoFunciona>
+
       <div className="flex flex-wrap items-center justify-end gap-2 mb-4">
         <div className="flex items-center gap-2">
         {/* O ESTADO DO MOTOR NO TOPO, SEMPRE (29/08, pedido do usuário).
@@ -1351,20 +1379,6 @@ export default function LivePicksFeed({ isActive, banca }: {
       >
         Ver os picks já encerrados em Minhas Apostas
       </button>
-
-      {/* Apresentação e placar, no fim e FECHADOS · o mesmo ComoFunciona das
-          outras oito abas (30/08). Aqui ele já morava no rodapé desde ontem;
-          o que muda é passar a ser o mesmo componente, com o mesmo ícone e o
-          mesmo toque pra abrir. Nove abas com nove jeitos de explicar o
-          produto é o tipo de diferença que ninguém escolheu. */}
-      <ComoFunciona titulo="O que são os Picks Ao Vivo?" className="mt-8">
-        <p>
-          A IA lê a partida em andamento e compara com a odd do momento. Só publica quando o jogo
-          se afasta do esperado e o preço paga por isso.{' '}
-          <span className="font-bold text-ink-1">Confira a odd na casa antes de apostar.</span>
-        </p>
-        <PlacarDoLive recarregar={pedidoDeRecarga} />
-      </ComoFunciona>
 
       <AnimatePresence>
         {alvo && (
