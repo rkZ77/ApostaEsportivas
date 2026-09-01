@@ -154,12 +154,17 @@ async def security_headers(request: Request, call_next):
     response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self' https://www.googletagmanager.com https://www.google-analytics.com https://challenges.cloudflare.com; "
+        # accounts.google.com aparece nas TRES diretivas porque o Sign in with
+        # Google usa as tres: baixa o gsi/client (script), conversa com o
+        # endpoint de sessao (connect) e desenha o proprio botao e o popup
+        # dentro de um iframe (frame). Faltando uma delas o botao some sem
+        # erro visivel -- o CSP bloqueia calado.
+        "script-src 'self' https://accounts.google.com https://www.googletagmanager.com https://www.google-analytics.com https://challenges.cloudflare.com; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "img-src 'self' data: https:; "
-        "connect-src 'self' https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com https://challenges.cloudflare.com; "
+        "connect-src 'self' https://accounts.google.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com https://challenges.cloudflare.com; "
         "font-src 'self' data: https://fonts.gstatic.com; "
-        "frame-src https://challenges.cloudflare.com; "
+        "frame-src https://accounts.google.com https://challenges.cloudflare.com; "
         "frame-ancestors 'none'"
     )
     return response
