@@ -99,10 +99,30 @@ class TestLiberacao:
         assert "export const LIVE_PICKS_ENABLED = true" in src
         assert "import.meta.env.VITE_LIVE_PICKS_ENABLED" not in src
 
-    def test_a_aba_continua_sendo_premium(self):
+    def test_a_aba_deixou_de_ser_100_premium(self):
+        """01/09/2026: um pick ao vivo por dia virou free, mesma regra do Pick
+        Boost. Aba marcada VIP que abre com um pick liberado dentro contradiz o
+        proprio selo -- entao o selo saiu, e quem tranca o resto e' o teaser."""
         src = _ler(_FRONT, "pages", "Picks.tsx")
-        trecho = src[src.index("key: 'ao_vivo'"):]
-        assert "premiumOnly: true" in trecho[:400]
+        trecho = src[src.index("key: 'ao_vivo'"):][:600]
+        assert "premiumOnly: true" not in trecho
+
+    def test_o_feed_atende_quem_nao_assina(self):
+        """Ate 01/09 o endpoint exigia VIP e a aba respondia erro pro free: um
+        produto inteiro parecendo defeito. Quem corta agora e o proprio feed."""
+        src = _ler(_BACK, "routers", "live_picks.py") if "_BACK" in globals() else None
+        if src is None:
+            import os
+            raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            with open(os.path.join(raiz, "routers", "live_picks.py"), encoding="utf-8") as f:
+                src = f.read()
+        feed = src[src.index("def feed("):]
+        assert "Depends(get_current_user)" in feed[:400]
+        assert "is_vip_active(current_user)" in feed
+        # O teaser nao pode carregar a analise: e ela que se paga.
+        bloco = feed[feed.index("bloqueados.append("):feed.index("bloqueados.append(") + 900]
+        for proibido in ("market", "reasoning", "probability", "stake", "\"ev\"", "confidence"):
+            assert proibido not in bloco, proibido
 
     def test_admin_ve_mesmo_com_o_produto_desligado(self):
         """Quem opera precisa ver a MESMA tela que o assinante ve, e nao so' o

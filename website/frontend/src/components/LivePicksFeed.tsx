@@ -40,7 +40,7 @@
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Radio, RefreshCw, Timer, CheckCircle2, Clock, PowerOff, Eye,
-         Goal, Flag, Target, Crosshair } from 'lucide-react'
+         Goal, Flag, Target, Crosshair, Lock } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import ApostaModal from './ApostaModal'
@@ -585,6 +585,17 @@ const STATUS_LABEL: Record<string, string> = {
   FT: 'Encerrado', AET: 'Encerrado', PEN: 'Encerrado', NS: 'Não iniciado',
 }
 
+/* O teaser de quem não assina. Times, liga, odd e o minuto · nunca mercado,
+   linha, análise, probabilidade ou stake, que é o que se paga. */
+interface TeaserAoVivo {
+  id: number
+  league_name?: string | null
+  home_team_name?: string | null
+  away_team_name?: string | null
+  odd?: number | string | null
+  minute_at_creation?: number | null
+}
+
 interface LivePick {
   id: number
   fixture_id: number
@@ -1072,6 +1083,10 @@ export default function LivePicksFeed({ isActive, banca }: {
   banca?: { bankroll_current: number; unit_value: number } | null
 }) {
   const [picks, setPicks] = useState<LivePick[] | null>(null)
+  /* O que o free NÃO vê. Vem do servidor sem mercado, análise nem stake ·
+     mesmo contrato de teaser dos outros produtos VIP. */
+  const [bloqueados, setBloqueados] = useState<TeaserAoVivo[]>([])
+  const [eVip, setEVip] = useState(true)
   const [disponivel, setDisponivel] = useState(true)
   const [motivo, setMotivo] = useState<string | null>(null)
   /* Estado do motor · só o que o assinante precisa (ligado e última varredura).
@@ -1098,6 +1113,8 @@ export default function LivePicksFeed({ isActive, banca }: {
       setMotivo(r.data.motivo ?? null)
       setMotor(r.data.motor ?? null)
       setPicks(r.data.picks ?? [])
+      setBloqueados(r.data.bloqueados ?? [])
+      setEVip(r.data.e_vip !== false)
       setErro(false)
     } catch {
       setErro(true)
@@ -1361,6 +1378,53 @@ export default function LivePicksFeed({ isActive, banca }: {
             </AnimatePresence>
           </div>
         </>
+      )}
+
+      {/* O RESTO DO DIA, TRANCADO.
+          Quem não assina vê um pick por dia e o teaser do que ficou de fora ·
+          jogo, liga e odd, sem mercado, análise nem stake. É o mesmo contrato
+          dos outros produtos VIP, e existe porque a alternativa que estava no
+          ar era pior que um cadeado: a aba respondia erro e o produto inteiro
+          parecia quebrado. */}
+      {!eVip && bloqueados.length > 0 && (
+        <div className="mt-6 space-y-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            {bloqueados.slice(0, 4).map(b => (
+              <div key={b.id} className="card p-4 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-ink-1 truncate">
+                    {b.home_team_name} x {b.away_team_name}
+                  </p>
+                  <p className="text-[11px] text-ink-4 truncate">
+                    {b.league_name}
+                    {b.minute_at_creation != null ? `, ${b.minute_at_creation}'` : ''}
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-[10px] text-ink-4">Odd</p>
+                  <p className="font-mono text-base font-black text-ink-2">
+                    {b.odd != null ? Number(b.odd).toFixed(2) : '-'}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="rounded-lg border border-green-500/30 bg-surface-1 p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="w-11 h-11 rounded-full border border-green-500/30 flex items-center justify-center shrink-0">
+              <Lock className="w-5 h-5 text-green-400" aria-hidden="true" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-display text-ink-1 font-bold text-sm mb-0.5">
+                Mais {bloqueados.length} {bloqueados.length === 1 ? 'entrada' : 'entradas'} ao vivo hoje
+              </p>
+              <p className="text-ink-3 text-xs leading-relaxed">
+                O jogo e a odd você já vê. O mercado, a leitura da partida e a sugestão de stake abrem no VIP.
+              </p>
+            </div>
+            <Button to="/checkout" size="sm" className="shrink-0">Assinar VIP</Button>
+          </div>
+        </div>
       )}
 
       {/* O QUE O MOTOR ESTÁ LENDO fica DEPOIS dos picks (29/08, pedido do

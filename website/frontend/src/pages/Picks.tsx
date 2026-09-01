@@ -192,14 +192,6 @@ function TabBar({ tab, setTab, canSeeVip, verAoVivo, counts, liveCount, onPrefet
     { key: 'hoje',         label: 'Hoje'            },
     { key: 'pick_seguro',  label: 'Picks Free',      badge: 'FREE', badgeCls: 'bg-green-500/10 text-green-400 border-green-500/20' },
     { key: 'vip',          label: 'Picks VIP',       premiumOnly: true },
-    { key: 'multiplas',    label: 'Múltiplas',       premiumOnly: true },
-    { key: 'alavancagem',  label: 'Alavancagem',      premiumOnly: true },
-    {
-      /* Prop de jogador · chutes, chutes no alvo, gols, defesas, faltas,
-         desarmes e passes. Aba própria e não uma seção do VIP: o que decide
-         aqui é o indivíduo e não o confronto. */
-      key: 'jogadores' as Tab, label: 'Jogadores', premiumOnly: true,
-    },
     {
       /* Pick Boost · combinação fixa (Over 1.5 FT + Under 2.5 HT) em que o
          motor escolhe os JOGOS, não o mercado.
@@ -220,13 +212,24 @@ function TabBar({ tab, setTab, canSeeVip, verAoVivo, counts, liveCount, onPrefet
          `premiumOnly` já ocupa esse espaço. Dois selos na mesma aba viram
          ruído numa barra que rola no celular. */
       key: 'ao_vivo' as Tab, label: 'Picks Ao Vivo',
-      premiumOnly: true,
+      /* SEM `premiumOnly` desde 01/09/2026, pelo mesmo motivo do Pick Boost:
+         um pick por dia é gratuito, e aba marcada VIP que abre com um pick
+         liberado dentro contradiz o próprio selo. O resto do dia vem
+         trancado, com o teaser dos outros produtos. */
       /* NA BARRA por padrão desde 27/08 · o produto abriu. A variável de
          ambiente sumiu em 28/08 (o usuário removeu as do Live no Railway) e
          `LIVE_PICKS_ENABLED` virou constante em config.ts · uma linha que
          aparece no diff, e não um interruptor que some sem rastro.
          Ver `podeVerAoVivo` aqui. */
       oculta: !verAoVivo,
+    },
+    { key: 'multiplas',    label: 'Múltiplas',       premiumOnly: true },
+    { key: 'alavancagem',  label: 'Alavancagem',      premiumOnly: true },
+    {
+      /* Prop de jogador · chutes, chutes no alvo, gols, defesas, faltas,
+         desarmes e passes. Aba própria e não uma seção do VIP: o que decide
+         aqui é o indivíduo e não o confronto. */
+      key: 'jogadores' as Tab, label: 'Jogadores', premiumOnly: true,
     },
     {
       /* O que o usuário decidiu seguir. O contador pulsante continua aqui,
@@ -2003,6 +2006,21 @@ function VipLockOverlay({ color = 'yellow', picks, resumo, rotulo = 'picks' }: {
           className={`inline-flex items-center justify-center font-black px-6 py-2.5 rounded-md transition-colors text-sm shrink-0 min-h-[44px] ${cls.btn}`}
         >
           Assinar VIP
+        </Link>
+      </div>
+
+      {/* O QUE NÃO SE PAGA FICA ABERTO (01/09/2026, pedido do usuário).
+          O cadeado terminava num beco: ou assina, ou volta. Mas as duas coisas
+          que respondem "vale a pena?" não são o pick em si · são como o produto
+          funciona e como ele vem se saindo, e as duas já são públicas. Quem
+          está decidindo precisa exatamente delas, e sair da tela para procurar
+          é o mesmo que desistir. */}
+      <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 pt-1">
+        <Link to="/como-funciona" className="text-xs font-semibold text-ink-3 hover:text-ink-1 underline underline-offset-4 transition-colors">
+          Como funciona
+        </Link>
+        <Link to="/resultados" className="text-xs font-semibold text-ink-3 hover:text-ink-1 underline underline-offset-4 transition-colors">
+          Ver todos os resultados
         </Link>
       </div>
     </div>

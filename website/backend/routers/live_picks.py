@@ -36,7 +36,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
-from auth_utils import get_current_user, require_admin, require_vip
+from auth_utils import get_current_user, is_vip_active, require_admin, require_vip
 from database import get_connection
 from settlement_bridge import settlement
 
@@ -513,7 +513,7 @@ def _enriquecer(pick: dict) -> dict:
 
 @router.get("/feed")
 def feed(
-    current_user: dict = Depends(require_live_reader),
+    current_user: dict = Depends(get_current_user),
     incluir_encerrados: bool = Query(True, description="mostra tambem os ja liquidados de hoje"),
     dias: int = Query(1, ge=0, le=365,
                       description="quantos dias para tras alem de hoje (0 = so hoje)"),
@@ -713,9 +713,64 @@ def feed(
         # quem ja' esta' olhando, que e' o mais importante.
         logger.warning("[LIVE] Falha ao notificar pick novo: %s", e)
 
+    # UM PICK AO VIVO POR DIA E' FREE (01/09/2026, decisao do usuario).
+    #
+    # Mesma regra do Pick Boost, e pelo mesmo motivo: o Ao Vivo publica varios
+    # picks ao longo da noite, entao liberar um nao esvazia o produto -- e e' o
+    # unico jeito de quem nao assina entender o que ele e'. Ate' hoje a aba
+    # respondia 403 pro free, e a tela mostrava "nao foi possivel carregar":
+    # um produto inteiro parecendo defeito.
+    #
+    # O liberado e' o de MAIOR `live_signal_score` entre os que estao de pe',
+    # que e' o mesmo criterio de qualidade do motor. Nao e' o mais recente de
+    # proposito: "o primeiro que apareceu" daria ao free um pick pior so' por
+    # sorte de horario.
+    #
+    # O `plano` e' explicito e nao inferido pela posicao -- a tela reordena, e
+    # a marca tem que sobreviver a isso. Mesma decisao de `_marcar_boost_free`.
+    e_vip = is_vip_active(current_user)
+    bloqueados = []
+    if not e_vip:
+        de_pe = [p for p in saida
+                 if p.get("result") is None and p.get("status") == STATUS_ATIVO]
+        liberado = max(
+            de_pe,
+            key=lambda p: (p.get("live_signal_score") or 0),
+            default=None,
+        )
+        novo = []
+        for p in saida:
+            if liberado is not None and p["id"] == liberado["id"]:
+                p["plano"] = "free"
+                novo.append(p)
+                continue
+            # O QUE O TEASER MOSTRA e' o mesmo contrato do link publico de pick
+            # e do teaser dos outros produtos: times, liga, horario e odd.
+            # NUNCA market, line, reasoning, probability, ev, edge, confidence
+            # ou stake -- a analise e' o que se paga, e ela nao sai daqui.
+            if p.get("result") is None:
+                bloqueados.append({
+                    "id": p["id"],
+                    "match_date": p.get("match_date"),
+                    "league_name": p.get("league_name"),
+                    "home_team_name": p.get("home_team_name"),
+                    "away_team_name": p.get("away_team_name"),
+                    "home_team_id": p.get("home_team_id"),
+                    "away_team_id": p.get("away_team_id"),
+                    "odd": p.get("odd"),
+                    "minute_at_creation": p.get("minute_at_creation"),
+                })
+        saida = novo
+    else:
+        for p in saida:
+            p["plano"] = "vip"
+
     return {
         "disponivel": True,
         "picks": saida,
+        "e_vip": e_vip,
+        # So' preenchido pra quem nao assina · o VIP ve' tudo em `picks`.
+        "bloqueados": bloqueados,
         "expirados_agora": expirados,
         "liquidados_agora": liquidacao["liquidados"],
         # ESTADO DO MOTOR, no minimo que o assinante precisa (2026-08-27).
