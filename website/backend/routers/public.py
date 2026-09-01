@@ -1,6 +1,6 @@
 import logging
 import traceback
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
 from typing import Optional
 from auth_utils import get_current_user_optional
 from database import get_connection
@@ -439,6 +439,7 @@ def _count_recent(cur, date_cond: str, date_params: tuple, source: Optional[str]
 
 @router.get("/results")
 def public_results(
+    background: BackgroundTasks,
     month:  Optional[str] = Query(None, description="YYYY-MM · filtra por mês"),
     source: Optional[str] = Query(None, description="all | vip | free | multiplas | alavancagem | faltas | goleiros"),
     recent_limit:  int = Query(10, ge=1, le=50, description="Itens por página em 'recent'"),
@@ -456,39 +457,42 @@ def public_results(
 
     Com slim a rota cai de sete consultas pra tres. Sem ele, nada muda: a
     pagina de Resultados continua recebendo a resposta inteira.
+
+    OS TRES EFEITOS COLATERAIS RODAM EM BACKGROUND (2026-08-xx)
+    -----------------------------------------------------------
+    Antes eram chamados sincronamente antes do conn = get_connection().
+    O problema: cada um pode tocar o banco ou (no caso do stats_sweep) chamar
+    a API-Football -- trabalho que atrasava a resposta sem contribuir para o
+    conteudo que o cliente pediu. Com BackgroundTasks o FastAPI dispara os tres
+    DEPOIS de enviar a resposta HTTP: o usuario recebe os dados em ~150ms, e as
+    varreduras rodam em paralelo sem custar latencia visivel.
+
+    Os freios proprios de cada modulo (relogio + lock de thread) continuam
+    valendo: multiplas visitas concorrentes nao viram multiplas varreduras.
     """
-    # Mesma varredura em segundo plano de /suggestions/today. Entra aqui
-    # também porque esta é a tela que o visitante DESLOGADO abre: sem isso,
-    # num dia em que nenhum assinante entrasse no site, o placar público
-    # continuaria mostrando "pendente" com os jogos já encerrados.
-    try:
-        from routers.live import maybe_resolve_pending
-        maybe_resolve_pending()
-    except Exception:
-        logger.warning("[AUTO-RESULT] gatilho em /results falhou", exc_info=True)
+    # Os tres gatilhos abaixo foram movidos para background (ver docstring).
+    # Ainda entram aqui porque esta e' a tela que o visitante DESLOGADO abre:
+    # sem isso, num dia em que nenhum assinante entrasse, o placar publico
+    # continuaria mostrando "pendente" com os jogos ja encerrados.
+    def _gatilhos_em_background():
+        try:
+            from routers.live import maybe_resolve_pending
+            maybe_resolve_pending()
+        except Exception:
+            logger.warning("[AUTO-RESULT] gatilho em background falhou", exc_info=True)
+        try:
+            from stats_sweep import maybe_sync_finished_stats
+            maybe_sync_finished_stats()
+        except Exception:
+            logger.warning("[STATS-SWEEP] gatilho em background falhou", exc_info=True)
+        try:
+            from plan_expiry import maybe_expirar_vencidos
+            from routers.auth import _avisos_de_plano
+            maybe_expirar_vencidos(**_avisos_de_plano())
+        except Exception:
+            logger.warning("[PLAN-SWEEP] gatilho em background falhou", exc_info=True)
 
-    # Mesma carona, outra varredura: a estatistica das partidas encerradas.
-    # `match_statistics` so' enchia no clique do /admin, e e' dela que saem os
-    # baselines do motor -- jogo que aconteceu e nao foi lido deixa a media
-    # velha sem parecer defeito de nada. Freios proprios em stats_sweep.py.
-    try:
-        from stats_sweep import maybe_sync_finished_stats
-        maybe_sync_finished_stats()
-    except Exception:
-        logger.warning("[STATS-SWEEP] gatilho em /results falhou", exc_info=True)
-
-    # Terceira carona: planos vencidos. As outras duas olham o jogo, esta olha
-    # a conta. `expirar_plano_vencido` roda no login, no refresh e no /auth/me,
-    # o que cobre quem VOLTA -- e deixa de fora exatamente quem parou de abrir
-    # o site: essa pessoa fica marcada como VIP/trial pra sempre no /admin e
-    # nunca recebe o e-mail de que o acesso acabou. Freios proprios em
-    # plan_expiry.py (relogio + uma consulta que quase sempre diz "ninguem").
-    try:
-        from plan_expiry import maybe_expirar_vencidos
-        from routers.auth import _avisos_de_plano
-        maybe_expirar_vencidos(**_avisos_de_plano())
-    except Exception:
-        logger.warning("[PLAN-SWEEP] gatilho em /results falhou", exc_info=True)
+    background.add_task(_gatilhos_em_background)
 
     conn = get_connection()
     cur  = conn.cursor()

@@ -10,7 +10,7 @@
   },
   "variables": {
     "WEB_CONCURRENCY": "2",
-    "DB_POOL_MIN": "1",
+    "DB_POOL_MIN": "2",
     "LOGO_CACHE_DIR": "/tmp/pickia_logos_persistent"
   }
 }
