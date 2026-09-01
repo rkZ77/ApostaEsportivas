@@ -742,7 +742,7 @@ function Contagem({ segundos }: { segundos: number | null }) {
     if (restante <= 0) return
     const t = setInterval(() => setRestante(s => Math.max(0, s - 1)), 1000)
     return () => clearInterval(t)
-  }, [restante > 0])
+  }, [restante])
 
   if (segundos === null) return null
   const expirou = restante <= 0

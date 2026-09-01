@@ -33,7 +33,8 @@ import traceback
 from services.engine_audit import EngineRun, amostra
 from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
-from services.pick_engine import context_gate
+from services.pick_engine import context_gate, tie_effect
+from services.pick_engine.ai_review import review_gate
 from services.pick_engine.staking import calculate_stake
 from services.pick_engine_boost import config as cfg
 from services.pick_engine_boost import explanation, goals_history, score as scoring
@@ -184,9 +185,7 @@ def _avaliar_fixture(fixture: dict, cur, match_stats: MatchStatsService,
     perfil_away = stats_model.perfil_do_time(hist_away, fixture["away_team_id"], "away")
     confronto = stats_model.analisar_confronto(perfil_home, perfil_away)
 
-    # Contexto do confronto (mata-mata, perna, agregado, rivalidade). Nao
-    # entra no Score -- entra na AMOSTRA e na explicacao, que era o pedido:
-    # saber se e' classico, se e' o segundo jogo e o que aconteceu no primeiro.
+    # Contexto do confronto (mata-mata, perna, agregado, rivalidade).
     match_context = context_gate.build_for_fixture(match_stats, fixture)
 
     resultado["amostra"] = amostra.build(
@@ -195,6 +194,40 @@ def _avaliar_fixture(fixture: dict, cur, match_stats: MatchStatsService,
         home_team=fixture.get("home_team"), away_team=fixture.get("away_team"),
         match_context=match_context,
     )
+
+    # Efeito do agregado nas duas pernas (2026-09-01). O boost e' Over 1.5 FT
+    # + Under 2.5 HT -- exatamente as familias que o tie_effect mede. Numa
+    # volta de mata-mata onde o mandante precisa reverter, o Over 1.5 FT ganha
+    # bonus (mandante ataca) e o Under 2.5 HT pode ser penalizado (volume
+    # total sobe com o jogo aberto). Sem isto o boost ignorava o agregado.
+    #
+    # O tie_effect age sobre as probabilidades ANTES dos cortes -- e' a mesma
+    # regra do faltas_pipeline: o contexto reprova, nao so' enfeita.
+    lam_ft = confronto.get("lambda_ft")
+    lam_ht = confronto.get("lambda_ht")
+    if match_context:
+        # Over 1.5 FT -- mandante atacando abre o jogo inteiro
+        analise_ft = {"probability": confronto.get("prob_over15_ft"), "odd": perna_ft["odd"],
+                      "edge": 0.0, "expected_value": lam_ft}
+        analise_ft = tie_effect.aplicar_em_analise(
+            analise_ft, match_context, familia="goals", escopo="total",
+            direcao="over", linha=cfg.LINHA_OVER_FT, lambda_esperado=lam_ft)
+        confronto = {**confronto, "prob_over15_ft": analise_ft.get("probability",
+                                                                    confronto.get("prob_over15_ft"))}
+
+        # Under 2.5 HT -- jogo aberto no 1o tempo pode subir volume
+        analise_ht = {"probability": confronto.get("prob_under25_ht"), "odd": perna_ht["odd"],
+                      "edge": 0.0, "expected_value": lam_ht}
+        analise_ht = tie_effect.aplicar_em_analise(
+            analise_ht, match_context, familia="goals", escopo="total",
+            direcao="under", linha=cfg.LINHA_UNDER_HT, lambda_esperado=lam_ht)
+        confronto = {**confronto, "prob_under25_ht": analise_ht.get("probability",
+                                                                     confronto.get("prob_under25_ht"))}
+        # Recalcula a probabilidade combinada com as duas pernas ajustadas
+        p_ft = confronto["prob_over15_ft"]
+        p_ht = confronto["prob_under25_ht"]
+        if p_ft is not None and p_ht is not None:
+            confronto = {**confronto, "prob_combinada": round(p_ft * p_ht, 4)}
 
     calculo = scoring.calcular(confronto, perfil_home, perfil_away)
     resultado["score"] = calculo["score"]
@@ -224,6 +257,7 @@ def _avaliar_fixture(fixture: dict, cur, match_stats: MatchStatsService,
     resultado["ev"] = (round(prob_par * odd_combinada - 1, 4) if prob_par else None)
     resultado["edge"] = (round(prob_par - 1 / odd_combinada, 4) if prob_par else None)
     resultado["aprovado"] = True
+    resultado["match_context"] = match_context
     return resultado
 
 
@@ -358,8 +392,19 @@ def run_pick_boost_engine():
         publicaveis, excedentes = (aprovados[:cfg.MAX_PICKS_POR_RODADA],
                                    aprovados[cfg.MAX_PICKS_POR_RODADA:])
 
+        gate = review_gate("boost")
         salvos = 0
         for c in publicaveis:
+            # AI review antes de salvar -- mesmo padrao do faltas_pipeline.
+            aprovado = gate.apply([c], "boost", c["fixture"])
+            if not aprovado:
+                print(f"[PICK_BOOST] Fixture {c['fixture']['fixture_id']} vetado pela revisao de IA.")
+                run.analisado(c["fixture"], selecionado=False, score=c["score"],
+                              probabilidade=c.get("probabilidade"), odd=c.get("odd"),
+                              motivo="vetado pela revisao de IA",
+                              dados=_dados_da_auditoria(c))
+                continue
+            c = {**c, "ai_review": aprovado[0].get("ai_review")}
             pick_id = None
             try:
                 pick_id = _salvar(cur, c)

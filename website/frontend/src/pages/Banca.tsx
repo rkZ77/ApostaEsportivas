@@ -276,7 +276,7 @@ export default function Banca() {
   const start   = data?.bankroll_start ?? 100
 
   // ganho em unidades (exclui alavancagem, igual ao total_pnl)
-  const ganhoUnidades = (data?.unit_value ?? 0) > 0 ? (data?.total_pnl ?? 0) / data.unit_value : 0
+  const ganhoUnidades = (data?.unit_value ?? 0) > 0 ? (data?.total_pnl ?? 0) / (data?.unit_value ?? 1) : 0
 
   // distribuição
   const distTotal = (data?.greens ?? 0) + (data?.reds ?? 0) + (data?.push ?? 0) + (data?.half_wins ?? 0) + (data?.half_loss ?? 0)

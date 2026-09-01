@@ -229,15 +229,16 @@ def send_push_to_all_vip(title: str, body: str, url: str = "/picks"):
                 logger.debug("[PUSH] Falha: %s", e)
 
     if expired:
+        conn2 = get_connection()
         try:
-            conn2 = get_connection()
-            cur2  = conn2.cursor()
+            cur2 = conn2.cursor()
             cur2.execute("DELETE FROM user_push_subscriptions WHERE endpoint = ANY(%s)", (expired,))
             conn2.commit()
             cur2.close()
-            conn2.close()
         except Exception:
             pass
+        finally:
+            conn2.close()
 
     logger.info("[PUSH] %d enviados, %d expirados removidos.", ok_count, len(expired))
 

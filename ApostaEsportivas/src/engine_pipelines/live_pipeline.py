@@ -598,10 +598,10 @@ def contexto_pre_jogo(cur, estado: dict) -> dict | None:
     lado precisa na tabela). Quem responde "e o que esta' acontecendo agora" e'
     need_model, contra o placar em campo, a cada passada.
 
-    So' banco, nenhuma requisicao de API -- o orcamento do Live nao muda por
-    causa disto. `round` sai de `fixtures` quando a linha ainda existe (a
-    tabela e' efemera e guarda so' jogos NS) e de `match_statistics` como
-    segunda fonte, que e' onde ele sobrevive depois do apito inicial.
+    H2H via API (2026-09-01): se o banco tem menos de 4 confrontos diretos,
+    build_for_fixture complementa automaticamente com a API-Football. O Live
+    usava get_h2h_matches() direto e ficava fora dessa logica -- corrigido aqui
+    trocando a chamada manual por build_for_fixture, que ja centraliza tudo.
 
     None em qualquer falha: contexto e' sinal auxiliar e nunca pode derrubar a
     analise ao vivo de uma partida em andamento.
@@ -622,30 +622,30 @@ def contexto_pre_jogo(cur, estado: dict) -> dict | None:
             linha = cur.fetchone()
         round_str, season, quando = (linha or (None, None, None))
 
-        match_stats = MatchStatsService()
-        h2h = match_stats.get_h2h_matches(home_id, away_id)
         tabela = (StandingsService().get_league_table(league_id, season)
                   if league_id and season else [])
-        return context_gate.build_context(
-            round_str=round_str, home_team_id=home_id, away_team_id=away_id,
-            h2h_matches=h2h, league_id=league_id, season=season,
-            # O baseline de cartoes alimenta so' o sinal de rivalidade, que o
-            # Live nao consome (nao ha mercado de cartao na V1) -- passar None
-            # deixa a rivalidade marcada como nao confiavel, que e' o correto.
-            baseline_cartoes=None, league_table=tabela,
-            # A DATA DESTA PARTIDA, que faltava aqui ate 2026-08-19 e cegava o
-            # Live inteiro pro agregado.
-            #
-            # `encontrar_jogo_de_ida` so' aceita a busca estrita (a que prova
-            # qual e' a ida pela inversao de mando) quando tem a janela de dias
-            # pra conferir; sem `match_date` ela devolve None de proposito, e a
-            # busca estrita e' a UNICA usada quando o rotulo nao traz a perna.
-            # Medido no mesmo dia: a API-Football manda "Round of 16" seco pras
-            # oitavas de Libertadores e Sul-Americana, entao o rotulo nunca traz
-            # a perna nessas competicoes -- o Live tratava toda volta de
-            # mata-mata como jogo solto, sem agregado, caindo na necessidade de
-            # tabela de uma competicao que nem tem tabela naquela fase.
-            match_date=quando,
+
+        # Monta o fixture no formato que build_for_fixture espera.
+        # match_datetime e' usado por encontrar_jogo_de_ida (busca estrita de
+        # jogo de volta sem rotulo de perna) -- sem ele o Live ficava cego ao
+        # agregado em mata-mata de Libertadores/Sul-Americana (rotulo "Round of
+        # 16" sem numero de perna).
+        fixture_live = {
+            "fixture_id":      fid,
+            "home_team_id":    home_id,
+            "away_team_id":    away_id,
+            "league_id":       league_id,
+            "season":          season,
+            "round":           round_str,
+            "match_datetime":  quando,
+        }
+        match_stats = MatchStatsService()
+        # baseline_cartoes=None: Live nao tem mercado de cartao na V1, entao
+        # a rivalidade ficara marcada como nao confiavel -- correto.
+        return context_gate.build_for_fixture(
+            match_stats, fixture_live,
+            convergencia_cartoes=None,
+            league_table=tabela,
         )
     except Exception as e:
         print(f"[LIVE] Contexto pre-jogo indisponivel para {fid}: {e}")

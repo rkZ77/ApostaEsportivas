@@ -132,6 +132,7 @@ def _fetch_fixtures_bulk(fids: list[int]) -> None:
             stale.append(fid)
     if not stale:
         return
+    _evict_cache(_fix_cache)
     for i in range(0, len(stale), 20):
         batch = stale[i:i + 20]
         try:
@@ -144,7 +145,6 @@ def _fetch_fixtures_bulk(fids: list[int]) -> None:
             continue
         fetched_now = time.time()
         by_id = {item.get("fixture", {}).get("id"): item for item in items}
-        _evict_cache(_fix_cache)
         for fid in batch:
             data = by_id.get(fid)
             if data is not None:

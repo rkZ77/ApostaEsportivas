@@ -12,7 +12,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/social", tags=["social"])
 
 VALID_REACTIONS = {"fire", "money", "like", "doubt"}
-VALID_PICK_TYPES = {"vip", "free", "multiplas", "alavancagem"}
+# Todos os tipos seguíveis. pick_sources.py é a fonte canônica de tabelas,
+# mas aqui só precisamos do nome do tipo para validação de entrada.
+# "multipla" e "multiplas" coexistem: a tabela é picks_multiplas mas o
+# pick_type gravado em user_followed_picks é "multipla" (sem 's').
+VALID_PICK_TYPES = {
+    "vip", "free", "multipla", "multiplas", "alavancagem",
+    "faltas", "goleiros", "player_stats", "boost", "live",
+}
 
 # Rate limit: máx 5 comentários + 5 msgs de chat por usuário por 60s
 _comment_rate: dict[str, list[float]] = defaultdict(list)

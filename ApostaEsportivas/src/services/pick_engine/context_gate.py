@@ -54,6 +54,11 @@ from __future__ import annotations
 
 from services.pick_engine import competitive_pressure, match_context_model, rivalry_model
 
+# Mínimo de jogos H2H no banco para dispensar a chamada à API.
+# Abaixo disto o rivalry_model marcaria como não confiável de qualquer jeito
+# (MIN_CONFRONTOS = 4), então vale a pena gastar 1 requisição para completar.
+_H2H_MIN_BANCO = rivalry_model.MIN_CONFRONTOS
+
 # Familias cujo volume sobe quando a partida abre, e por isso um Under nelas
 # contradiz o contexto.
 #
@@ -87,7 +92,16 @@ PENALIDADE_MAX = 0.10
 # Acima deste total de sinal contrario, o Under nao e' penalizado e sim
 # BLOQUEADO -- ha um ponto em que reduzir a probabilidade nao basta, porque a
 # estimativa inteira veio da distribuicao errada.
-BLOQUEIO_LIMIAR = 0.085
+#
+# ERA 0.085. Reducao para 0.07 em 2026-09-01 apos medicao do caso Atletico-MG
+# x Cruzeiro (quartas Copa do Brasil, volta, agregado 1-1): a pressao medida
+# foi 0.0737 -- a 0.011 do limiar antigo -- num dos cenarios mais criticos
+# possiveis (stakes=0.86, precisa_de_resultado=ambos). O limiar 0.085 foi
+# calibrado sem esse cenario representado nos dados historicos do picks_ledger
+# (mata-mata de copa e' raro). 0.07 e' o menor valor que bloqueia este cenario
+# sem bloquear jogos que a medicao nao pede bloqueio (ida de oitavas com
+# agregado a decidir, que gera ~0.05, fica abaixo).
+BLOQUEIO_LIMIAR = 0.07
 
 
 def _direcao(candidate: dict) -> str:
@@ -162,12 +176,53 @@ def build_for_fixture(match_stats, fixture: dict, convergencia_cartoes: dict | N
     direto e' medido; sem ela a rivalidade fica marcada como nao confiavel e o
     gate nao age -- ausencia de dado nunca vira evidencia de calma.
 
+    H2H via API: quando o banco tem menos de `_H2H_MIN_BANCO` confrontos
+    diretos, busca os ultimos H2H_LIMIT jogos na API-Football
+    (services.h2h_api_fetcher.get_h2h) e complementa a lista do banco.
+    Jogos ja presentes no banco nao sao duplicados: o merge deduplica por
+    (match_date, home_team_id, away_team_id). Nao persiste nada -- o dado
+    e' usado so nesta execucao e descartado.
+
     Nunca levanta: contexto e' sinal auxiliar e nao pode derrubar a geracao de
     pick. Falha -> None -> gate inerte -> motor igual ao de antes.
     """
     try:
         h2h = match_stats.get_h2h_matches(
             fixture["home_team_id"], fixture["away_team_id"], before_date=before_date)
+
+        # Se o banco tem H2H insuficiente, complementa com a API.
+        # O before_date preserva o contrato de nao-vazamento em backtest:
+        # a API so' devolve jogos ate aquela data quando passado.
+        if len(h2h) < _H2H_MIN_BANCO:
+            try:
+                from services.h2h_api_fetcher import get_h2h as _api_h2h
+                api_jogos = _api_h2h(
+                    fixture["home_team_id"], fixture["away_team_id"],
+                    before_date=before_date,
+                )
+                if api_jogos:
+                    # Deduplica: chave (data, mandante, visitante)
+                    chaves_banco = {
+                        (j.get("match_date"), j.get("home_team_id"), j.get("away_team_id"))
+                        for j in h2h
+                    }
+                    novos = [
+                        j for j in api_jogos
+                        if (j.get("match_date"), j.get("home_team_id"), j.get("away_team_id"))
+                        not in chaves_banco
+                    ]
+                    if novos:
+                        print(f"[CONTEXT_GATE] H2H via API: {len(novos)} jogo(s) adicionado(s) "
+                              f"ao banco({len(h2h)}) para fixture {fixture.get('fixture_id')}")
+                    h2h = sorted(
+                        h2h + novos,
+                        key=lambda j: j.get("match_date") or "",
+                        reverse=True,
+                    )
+            except Exception as e_api:
+                print(f"[CONTEXT_GATE] H2H API falhou para fixture "
+                      f"{fixture.get('fixture_id')}, usando so banco: {e_api}")
+
         baseline = (convergencia_cartoes or {}).get("expected_value")
         return build_context(
             round_str=fixture.get("round"),

@@ -704,7 +704,20 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
                 created_at    TIMESTAMP DEFAULT NOW()
             )
         """)
-        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_picks_boost_dia_jogo ON picks_boost (match_date, fixture_id);")
+        # Índice único por DIA + JOGO + MERCADO (2026-08-xx).
+        #
+        # O índice original era só (match_date, fixture_id), o que permitia
+        # duplicatas quando o motor gerava dois mercados diferentes no mesmo
+        # jogo (ex: Over 1.5 HT e Over 2.5 FT). O market_type identifica o
+        # produto (boost_over15_under25ht, etc.), tornando a chave completa.
+        #
+        # DROP condicional: o índice antigo pode existir com nome diferente
+        # e sem o market_type; sem remover, o UNIQUE novo não substitui.
+        cur.execute("DROP INDEX IF EXISTS idx_picks_boost_dia_jogo;")
+        cur.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_picks_boost_dia_jogo
+            ON picks_boost (match_date, fixture_id, market_type)
+        """)
         cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_boost_pendentes ON picks_boost (match_date) WHERE result IS NULL;")
 
         cur.execute("""

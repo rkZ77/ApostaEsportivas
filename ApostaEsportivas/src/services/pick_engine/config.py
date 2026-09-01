@@ -203,10 +203,12 @@ class PickEngineConfig:
     # contagem concordar com o Poisson -- so' move o numero. Comparar o encolhido
     # mistura as duas coisas.
     #
-    # Fica em False ate' o backtest medir volume de pick e hit-rate nos dois
-    # modos. Ligar reduz volume por construcao (a regra passa a disparar muito
-    # mais), e volume nao pode cair sem que o acerto suba.
-    disagreement_on_raw_rate: bool = False
+    # LIGADO em 2026-09-01. O caso que motivou a flag esta' documentado acima:
+    # 8 de 8 REDs de 14-16/08 tinham taxa bruta acima do Poisson por >13pp e a
+    # regra nao disparou nenhuma vez comparando o encolhido. Com True a regra
+    # dispara mais (reduz volume) -- esse e' o efeito certo: taxa bruta muito
+    # acima do Poisson em amostra curta e' exatamente o sinal de falso positivo.
+    disagreement_on_raw_rate: bool = True
 
     # Amostra (Q)
     sample_rich_n: int = 8
@@ -237,24 +239,22 @@ class PickEngineConfig:
     # ------------------------------------------------------------------
     # Camada probabilistica (2026-08-06) -- TODAS DESLIGADAS POR PADRAO.
     #
-    # calibration_model / market_anchor / selection_bias estao implementados e
-    # testados, mas nenhum foi promovido: promover exige backtest comparativo,
-    # e ate' a medicao existir a decisao seria por argumento, nao por dado.
-    # Com as tres em False o motor produz EXATAMENTE o mesmo resultado de
-    # antes -- ha teste travando essa equivalencia
-    # (test_camada_probabilistica.py::test_flags_desligadas_nao_mudam_nada).
+    # calibration_model / market_anchor / selection_bias: implementados e
+    # testados. Ordem de promocao documentada abaixo.
     #
-    # O caminho de promocao e' uma flag por vez, cada uma com sua rodada de
-    # backtest, na ordem abaixo (da menor pra maior mudanca de comportamento):
+    # use_isotonic_calibration LIGADO em 2026-09-01: transformacao MONOTONA --
+    # nunca reordena candidatos, so' corrige o NIVEL da probabilidade declarada.
+    # Goals (185 picks), corners (175) e cards (64) ja ultrapassam MIN_AMOSTRA_FIT=30.
+    # Para os outros mercados (amostra < 30) o modelo cai no calibration_adjustment
+    # existente (delta unico por mercado) -- nenhuma regressao.
     #
-    #   1. use_isotonic_calibration -- transformacao MONOTONA, nunca reordena
-    #      candidatos; muda quanto se aposta, nunca em que se aposta.
-    #   2. use_selection_bias -- desconta o vies do vencedor de uma disputa
-    #      entre muitos candidatos; reduz volume de pick, nao reordena.
-    #   3. use_market_anchor -- a maior mudanca: reescreve a probabilidade
-    #      combinando com o mercado, entao reordena e muda gate.
+    # use_selection_bias: desconta vies do vencedor de uma disputa entre muitos
+    # candidatos; reduz volume, nao reordena. Aguarda backtest.
+    #
+    # use_market_anchor: maior mudanca -- reescreve probabilidade combinando com
+    # o mercado, reordena candidatos. Aguarda CLV significativo por mercado.
     # ------------------------------------------------------------------
-    use_isotonic_calibration: bool = False
+    use_isotonic_calibration: bool = True
     use_selection_bias: bool = False
     use_market_anchor: bool = False
 

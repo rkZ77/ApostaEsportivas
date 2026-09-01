@@ -259,13 +259,17 @@ def _gather_leg_candidates(fixtures: list, used_pairs: set) -> list:
             # Contexto da partida: mata-mata, ida/volta, placar da ida,
             # agregado e rivalidade medida no confronto direto. Alimenta o
             # context_gate, que barra Under contradizendo o que o jogo vai ser.
+            # league_table: faltava aqui ate 2026-09-01.
             conv_cartoes = stats_model.expected_value_convergence(
                 last10_home, last10_away, "cards", "total",
                 home_team_id=fixture["home_team_id"], away_team_id=fixture["away_team_id"],
                 team_stats_home=team_stats_home, team_stats_away=team_stats_away,
                 league_baseline=league_baseline,
             )
-            match_context = context_gate.build_for_fixture(match_stats, fixture, conv_cartoes)
+            league_table = standings_service.get_league_table(
+                fixture["league_id"], fixture["season"])
+            match_context = context_gate.build_for_fixture(
+                match_stats, fixture, conv_cartoes, league_table=league_table)
 
             # ALAVANCAGEM_CONFIG e nao a config padrao: o piso de 1.39 do motor
             # tornava a dupla aritmeticamente impossivel (1.39 * 1.39 = 1.93, ja'
