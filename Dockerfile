@@ -30,4 +30,11 @@ EXPOSE 8000
 # conexoes com o Supabase: cada worker tem o SEU pool de DB_POOL_MAX. Antes de
 # passar pra 2, conferir o limite de conexoes do plano e dividir DB_POOL_MAX
 # pelo numero de workers.
-CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --workers ${WEB_CONCURRENCY:-1} --proxy-headers --forwarded-allow-ips=*
+# --app-dir /app NAO e enfeite: dentro da imagem existem DOIS main.py, o do
+# site em /app e o do motor em /app/pipeline. Com um worker so o uvicorn
+# importa a partir do diretorio atual e acerta; com --workers 2 ele respawna
+# o processo e o /app deixa de ganhar a disputa, entao `main` casa com o do
+# motor -- que nao tem `app`. O sintoma e um 502 permanente com
+# "Attribute app not found in module main" em loop, vivido em 01/09/2026.
+# Com a flag, /app entra na frente do sys.path em qualquer numero de workers.
+CMD uvicorn main:app --app-dir /app --host 0.0.0.0 --port ${PORT:-8000} --workers ${WEB_CONCURRENCY:-1} --proxy-headers --forwarded-allow-ips=*
