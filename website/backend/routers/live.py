@@ -38,6 +38,26 @@ _fix_cache:   dict[int, tuple[float, dict]] = {}
 _stats_cache: dict[int, tuple[float, list]] = {}
 _odds_live_cache: dict[int, tuple[float, list]] = {}
 
+# Tamanho máximo de cada cache em memória. Sem limite o dict cresce sem parar
+# enquanto o processo estiver de pé: cada fixture novo adiciona uma entrada e
+# nenhuma é removida automaticamente. Com muitos jogos ao vivo por dia o
+# processo eventualmente come memória até o Railway reiniciar.
+_CACHE_MAX = 500
+
+
+def _evict_cache(cache: dict) -> None:
+    """Remove as entradas mais velhas quando o cache passa de _CACHE_MAX.
+
+    LRU simplificado: ordena por timestamp e descarta a metade mais antiga.
+    Chamado logo antes de gravar uma entrada nova -- assim o cache nunca
+    passa de _CACHE_MAX + 1 entradas.
+    """
+    if len(cache) < _CACHE_MAX:
+        return
+    ordenado = sorted(cache.items(), key=lambda kv: kv[1][0])
+    for k, _ in ordenado[: len(cache) // 2]:
+        cache.pop(k, None)
+
 
 def _cache_ttl(status: str) -> int:
     if status in LIVE_STATUSES:
