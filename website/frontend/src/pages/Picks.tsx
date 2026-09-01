@@ -212,10 +212,14 @@ function TabBar({ tab, setTab, canSeeVip, verAoVivo, counts, liveCount, onPrefet
          `premiumOnly` já ocupa esse espaço. Dois selos na mesma aba viram
          ruído numa barra que rola no celular. */
       key: 'ao_vivo' as Tab, label: 'Picks Ao Vivo',
-      /* SEM `premiumOnly` desde 01/09/2026, pelo mesmo motivo do Pick Boost:
-         um pick por dia é gratuito, e aba marcada VIP que abre com um pick
-         liberado dentro contradiz o próprio selo. O resto do dia vem
-         trancado, com o teaser dos outros produtos. */
+      /* SELO VIP COMO BADGE, e não `premiumOnly`.
+         A diferença não é cosmética. `premiumOnly` desenha um CADEADO para
+         quem não assina, e cadeado ali seria mentira: um pick por dia é
+         gratuito desde 01/09. O badge mostra o mesmo selo amarelo para todo
+         mundo, que é a informação verdadeira · a maior parte do dia é VIP, e
+         a aba abre de qualquer jeito. Mesma escolha do Pick Boost, que
+         também tem free do dia. */
+      badge: 'VIP',
       /* NA BARRA por padrão desde 27/08 · o produto abriu. A variável de
          ambiente sumiu em 28/08 (o usuário removeu as do Live no Railway) e
          `LIVE_PICKS_ENABLED` virou constante em config.ts · uma linha que
