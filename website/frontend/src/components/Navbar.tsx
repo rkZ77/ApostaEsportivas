@@ -211,7 +211,12 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
                         sao da sua conta. */}
                     <div className="border-t border-line py-1">
                       <Link to="/profile" className="flex items-center gap-3 px-4 py-2.5 text-sm text-ink-2 hover:text-ink-1 hover:bg-surface-2 transition-colors">
-                        <Avatar name={user?.name ?? ''} size="sm" />
+                        {/* A FOTO, e não só as iniciais. Este era o único
+                            Avatar da tela que não recebia `imageUrl`: quem
+                            tinha foto via o próprio rosto na barra e um círculo
+                            colorido com as iniciais uma linha abaixo, no menu
+                            aberto, como se fossem duas contas. */}
+                        <Avatar name={user?.name ?? ''} imageUrl={user?.avatar_url} size="sm" />
                         Meu perfil
                         {emailPendente && (
                           <span className="ml-auto text-[10px] font-bold text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 px-1.5 py-0.5 rounded">

@@ -2,13 +2,15 @@ import { useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
   ArrowDown, BarChart2, ClipboardCheck, ClipboardList, CircleCheck, ExternalLink,
-  Mail, Search, ShieldCheck, Sparkles, Ticket, TrendingUp, Wallet, Zap,
+  Mail, MessageCircle, Radio, Search, ShieldCheck, Sparkles, Ticket, TrendingUp,
+  Wallet, Zap,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useOnboarding } from '../../context/OnboardingContext'
 import api from '../../services/api'
 import {
-  EVENTO_CONFIGURAR_BANCA, MAX_PASSOS, passoDoEmailEntra, totalDePassos,
+  EVENTO_CONFIGURAR_BANCA, MAX_PASSOS, passoDoEmailEntra, passoDoWhatsAppEntra,
+  totalDePassos,
   type ContextoTour,
 } from './constantes'
 
@@ -330,6 +332,76 @@ export const TOUR_STEPS: TourStep[] = [
     ),
   },
   {
+    /* O QUE A CONTA GRATUITA TEM ALÉM DA DICA DO DIA.
+       O tour terminava sem nunca citar os dois produtos que abriram entrada
+       gratuita: o Pick Boost em 28/08 e os Picks Ao Vivo em 01/09. Quem acabou
+       de criar conta saía achando que free era um pick por dia, e os outros
+       dois ficavam atrás de uma aba que ela nunca abriu · o produto estava lá,
+       de graça, e não era encontrado.
+
+       O alvo é a aba real, na barra de Picks. Se ela não existir (o Ao Vivo
+       pode estar desligado na constante), o tour cai no `picks-area` como os
+       outros passos. */
+    id: 'ao-vivo-e-boost',
+    titulo: 'Você também tem picks ao vivo',
+    Icon: Radio,
+    rota: '/picks',
+    alvos: ['[data-aba="ao_vivo"]', '[data-aba="boost"]', '[data-tour="picks-area"]'],
+    resumo: 'Além da dica do dia, a conta gratuita recebe um pick ao vivo e um Pick Boost por dia.',
+    corpo: (
+      <div className="space-y-3">
+        <Etiqueta>Duas abas que você já pode abrir</Etiqueta>
+        <Lista
+          itens={[
+            [Radio, 'Picks Ao Vivo: a IA lê a partida em andamento e publica quando o jogo se afasta do que a odd previa'],
+            [Zap, 'Pick Boost: ela procura a linha alternativa que a casa deixou de corrigir'],
+            [Ticket, 'Um de cada por dia é gratuito. O resto do dia fica no VIP'],
+          ]}
+        />
+        <p className="text-xs text-ink-2 leading-relaxed">
+          O pick ao vivo tem prazo: a odd muda com o jogo, então ele vale enquanto o preço durar.
+        </p>
+      </div>
+    ),
+  },
+  {
+    /* O TELEFONE, PEDIDO NA HORA CERTA.
+       Ele nunca foi opcional na prática: é o contato do aviso de pick
+       publicado e de pick ao vivo, e o ao vivo é o que mais depende disso ·
+       a odd dura minutos, então "abrir o site mais tarde" não recupera a
+       oportunidade. O cadastro por formulário pede o número; o do Google não,
+       e essas contas chegavam sem.
+
+       Fica no fim, e não no cadastro: pedir telefone antes de a pessoa ver o
+       produto é onde o cadastro morre, e foi por isso que o CPF saiu em 18/08.
+       Aqui ela já viu os picks e já sabe o que perde sem o aviso.
+
+       Só aparece para quem não tem número (ver `passoDoWhatsAppEntra`). */
+    id: 'whatsapp',
+    titulo: 'Receba os picks no WhatsApp',
+    Icon: MessageCircle,
+    mostrar: passoDoWhatsAppEntra,
+    rota: '/profile',
+    alvos: ['[data-tour="perfil-telefone"]'],
+    resumo: 'Sua conta ainda está sem telefone. É por ele que avisamos quando um pick sai.',
+    corpo: (
+      <div className="space-y-3">
+        <Etiqueta>Para que serve o número</Etiqueta>
+        <Lista
+          itens={[
+            [Zap, 'Aviso quando os picks do dia são publicados'],
+            [Radio, 'Aviso de pick ao vivo, que é o que tem prazo: a odd dura minutos'],
+            [ShieldCheck, 'E é ele que garante uma conta por pessoa'],
+          ]}
+        />
+        <p className="text-xs text-ink-2 leading-relaxed">
+          O campo está aqui no seu perfil. Você pode preencher agora ou depois, e desativar
+          os avisos quando quiser.
+        </p>
+      </div>
+    ),
+  },
+  {
     id: 'casa-de-apostas',
     titulo: 'A aposta é realizada por você',
     Icon: ExternalLink,
@@ -451,8 +523,8 @@ export function passosDoTour(ctx: ContextoTour): TourStep[] {
    conta divergir, o "N de M" do balão mente. Roda uma vez, no import, e some do
    build de produção junto com o `if`. */
 if (import.meta.env.DEV) {
-  const cheio: ContextoTour = { emailPendente: true, trialNaMesa: true }
-  const enxuto: ContextoTour = { emailPendente: false, trialNaMesa: false }
+  const cheio: ContextoTour = { emailPendente: true, trialNaMesa: true, semTelefone: true }
+  const enxuto: ContextoTour = { emailPendente: false, trialNaMesa: false, semTelefone: false }
   if (
     passosDoTour(cheio).length !== totalDePassos(cheio) ||
     passosDoTour(enxuto).length !== totalDePassos(enxuto) ||

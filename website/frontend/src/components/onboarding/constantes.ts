@@ -26,17 +26,21 @@ export interface ContextoTour {
   emailPendente: boolean
   /** Os 2 dias de VIP ainda não foram usados. */
   trialNaMesa: boolean
+  /** Conta sem telefone · não dá para avisar no WhatsApp. */
+  semTelefone: boolean
 }
 
+/* 8 desde 01/09/2026: entrou o passo dos Picks Ao Vivo e do Pick Boost, os
+   dois produtos que ganharam entrada gratuita e que o roteiro nunca citava. */
 /** Passos do roteiro de boas-vindas que toda conta vê. */
-export const PASSOS_FIXOS = 7
+export const PASSOS_FIXOS = 8
 
 /**
  * Maior roteiro de boas-vindas possível. É o teto que o backend valida em
  * `tutorial_step`. Mudar aqui exige mudar `TUTORIAL_TOTAL_STEPS` em
  * routers/personal.py · há teste travando os dois juntos.
  */
-export const MAX_PASSOS = 8
+export const MAX_PASSOS = 10
 
 /**
  * Roteiro do VIP · o que a assinatura abriu.
@@ -66,8 +70,22 @@ export function passoDoEmailEntra(ctx: ContextoTour): boolean {
   return ctx.emailPendente && ctx.trialNaMesa
 }
 
+/*
+ * O passo do WhatsApp entra?
+ *
+ * Só para quem não tem telefone na conta. Quem entrou pelo Google costuma cair
+ * aqui: o cadastro por formulário pede o número, o do Google não · e é ele que
+ * o aviso de pick publicado e de pick ao vivo usa. Pedir de novo a quem já
+ * preencheu seria um passo que não muda nada, e o roteiro é curto de propósito.
+ */
+export function passoDoWhatsAppEntra(ctx: ContextoTour): boolean {
+  return ctx.semTelefone
+}
+
 export function totalDePassos(ctx: ContextoTour): number {
-  return PASSOS_FIXOS + (passoDoEmailEntra(ctx) ? 1 : 0)
+  return PASSOS_FIXOS
+    + (passoDoEmailEntra(ctx) ? 1 : 0)
+    + (passoDoWhatsAppEntra(ctx) ? 1 : 0)
 }
 
 /** Quantos passos este roteiro tem, para esta conta. */

@@ -295,7 +295,8 @@ def test_o_front_e_o_back_contam_os_mesmos_passos():
     ).read_text(encoding="utf-8")
     assert f"MAX_PASSOS = {TUTORIAL_TOTAL_STEPS}" in constantes
     # E o piso: os passos que TODA conta ve.
-    assert "PASSOS_FIXOS = 7" in constantes
+    # 8 desde 01/09/2026 (entrou o passo dos Picks Ao Vivo e do Pick Boost).
+    assert "PASSOS_FIXOS = 8" in constantes
 
 
 def test_o_passo_do_email_so_entra_pra_quem_tem_trial_esperando():
@@ -315,7 +316,12 @@ def test_o_passo_do_email_so_entra_pra_quem_tem_trial_esperando():
     ).read_text(encoding="utf-8")
     assert "export function passoDoEmailEntra" in constantes
     assert "ctx.emailPendente && ctx.trialNaMesa" in constantes
-    assert "PASSOS_FIXOS + (passoDoEmailEntra(ctx) ? 1 : 0)" in constantes
+    # Dois condicionais desde 01/09/2026: o do e-mail e o do WhatsApp, que so
+    # entra pra conta sem telefone -- o cadastro pelo Google nao pede numero.
+    assert "PASSOS_FIXOS" in constantes
+    assert "(passoDoEmailEntra(ctx) ? 1 : 0)" in constantes
+    assert "(passoDoWhatsAppEntra(ctx) ? 1 : 0)" in constantes
+    assert "return ctx.semTelefone" in constantes
 
 
 def test_estados_possiveis_sao_so_esses_tres():

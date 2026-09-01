@@ -290,9 +290,10 @@ def list_achievements(current_user: dict = Depends(get_current_user)):
 # recomecava do primeiro passo.
 
 # Teto do roteiro de boas-vindas: 7 passos fixos + o de confirmar e-mail, que
-# so' entra pra quem ainda tem os 2 dias de VIP esperando. O total que a TELA
-# mostra varia entre 7 e 8, entao o que o backend valida e' o maximo.
-TUTORIAL_TOTAL_STEPS = 8
+# so' entra pra quem ainda tem os 2 dias de VIP esperando, e o do WhatsApp so'
+# pra conta sem telefone (o cadastro pelo Google nao pede numero). O total que a
+# TELA mostra varia entre 8 e 10, entao o que o backend valida e' o maximo.
+TUTORIAL_TOTAL_STEPS = 10
 # Roteiro do VIP: o que a assinatura abriu.
 #
 # 8 desde 2026-08-28. Eram 6 ate' o passo de "Mercados" (aba que deixou de

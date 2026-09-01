@@ -415,8 +415,16 @@ export default function Profile() {
             </div>
 
             <div>
-              <label className="text-xs text-ink-3 block mb-1.5">WhatsApp <span className="text-ink-4 font-normal">(opcional)</span></label>
-              <input className="input w-full" value={phone} onChange={e => setPhone(maskPhone(e.target.value))} placeholder="(11) 99999-9999" type="tel" inputMode="numeric" />
+              {/* "OPCIONAL" SAIU (01/09/2026, pedido do usuário).
+                  Preencher continua sendo escolha da pessoa · o que a palavra
+                  dizia errado era o VALOR do campo. É por este número que sai o
+                  aviso de pick publicado e, principalmente, o de pick ao vivo,
+                  que tem prazo: a odd dura minutos, e quem não recebe o aviso
+                  não perde uma notificação, perde a entrada. */}
+              <label className="text-xs text-ink-3 block mb-1.5">
+                WhatsApp <span className="text-ink-4 font-normal">(para avisar quando sair pick)</span>
+              </label>
+              <input data-tour="perfil-telefone" className="input w-full" value={phone} onChange={e => setPhone(maskPhone(e.target.value))} placeholder="(11) 99999-9999" type="tel" inputMode="numeric" />
             </div>
 
             {user?.plan === 'free' && !meData?.trial_used && !user?.email_verified && (

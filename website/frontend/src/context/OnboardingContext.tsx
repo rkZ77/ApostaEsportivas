@@ -88,7 +88,7 @@ const Ctx = createContext<OnboardingCtx | null>(null)
  */
 const ROTAS_DE_APP = ['/picks', '/banca', '/meus-picks', '/fixtures', '/estatisticas', '/agente', '/profile']
 
-const CONTEXTO_VAZIO: ContextoTour = { emailPendente: false, trialNaMesa: false }
+const CONTEXTO_VAZIO: ContextoTour = { emailPendente: false, trialNaMesa: false, semTelefone: false }
 
 /** Teto por roteiro, para o clamp do passo salvo. */
 const TETO: Record<NomeTour, number> = {
@@ -124,6 +124,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
   const contextoAgora: ContextoTour = {
     emailPendente: user?.email_verified === false,
     trialNaMesa: user?.trial_used !== true,
+    semTelefone: !user?.phone,
   }
   const [contexto, setContexto] = useState<ContextoTour>(CONTEXTO_VAZIO)
   const total = tour ? totalDoTour(tour, contexto) : totalDoTour(TOUR_BOAS_VINDAS, contexto)
@@ -205,7 +206,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     setPasso(Math.max(0, Math.min(de, totalDoTour(nome, contextoAgora) - 1)))
     setPausado(false)
     setTour(nome)
-  }, [user, contextoAgora.emailPendente, contextoAgora.trialNaMesa])
+  }, [user, contextoAgora.emailPendente, contextoAgora.trialNaMesa, contextoAgora.semTelefone])
 
   const encerrar = useCallback((novo: Status) => {
     if (!tour) return
