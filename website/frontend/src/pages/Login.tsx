@@ -105,7 +105,7 @@ function FundoDeCampo() {
    O bloco de pagamento é o item mais importante dos três: golpe de tips vive
    de pedir Pix na entrada. Dizer, na tela de cadastro, que aqui não se pede
    nada disso responde a objeção no momento em que ela existe. */
-function SeloDeConfianca() {
+function SeloDeConfianca({ className = 'mt-7' }: { className?: string }) {
   const itens = [
     {
       Icone: LineChart,
@@ -131,7 +131,7 @@ function SeloDeConfianca() {
     },
   ]
   return (
-    <div className="mt-7 space-y-3.5">
+    <div className={`space-y-3.5 ${className}`}>
       {itens.map(({ Icone, titulo, texto }) => (
         <div key={titulo} className="flex gap-3">
           <Icone className="w-4 h-4 text-ink-3 shrink-0 mt-0.5" aria-hidden="true" />
@@ -367,10 +367,46 @@ export default function Login() {
         }
       />
 
-      <FundoDeCampo />
+      {/* DUAS COLUNAS NO DESKTOP, UMA NO CELULAR.
+          A tela dividida tinha saído por um motivo real: metade do desktop era
+          painel decorativo, e o celular (a maioria de quem entra) não via nada
+          daquilo. O formato volta agora porque o painel deixou de ser
+          decoração · ele carrega a marca, a promessa e as três razões para
+          confiar, que é o que uma tela de senha de site de aposta precisa
+          dizer. No celular esse mesmo conteúdo não some: desce para baixo do
+          formulário, onde ele já estava. */}
+      <div className="flex-1 grid lg:grid-cols-2">
 
-      <main className="relative flex-1 w-full mx-auto max-w-md px-5 sm:px-6 py-8 sm:py-12">
-        <div className="w-full">
+        {/* Peça visual · só a partir de lg. */}
+        <aside className="relative hidden lg:flex items-center justify-center border-r border-line overflow-hidden px-12 py-16">
+          <FundoDeCampo />
+          <div className="relative z-10 w-full max-w-sm">
+            <img
+              src="/logo.png"
+              alt=""
+              width={72}
+              height={72}
+              className="w-[72px] h-[72px] mb-6 drop-shadow-[0_0_30px_rgba(0,204,0,0.28)]"
+            />
+            <p className="font-display text-3xl font-bold text-ink-1 tracking-tight leading-tight mb-3">
+              O jogo lido por número,<br />não por palpite.
+            </p>
+            <p className="text-ink-3 text-sm leading-relaxed mb-8">
+              Cada mercado tem o seu próprio modelo, e nenhum pick é publicado
+              sem passar no corte de valor. O que acerta e o que erra fica tudo
+              no histórico público.
+            </p>
+            <SeloDeConfianca className="mt-0" />
+          </div>
+        </aside>
+
+        {/* Formulário. */}
+        <main className="relative flex justify-center px-5 sm:px-6 py-8 sm:py-12">
+          {/* O campo no fundo só no celular: no desktop ele já está do lado. */}
+          <div className="lg:hidden">
+            <FundoDeCampo />
+          </div>
+          <div className="relative w-full max-w-md">
           {/* Este e o <h1> da pagina. A marca acima e logotipo, e aparecia
               duas vezes como h1 (uma no painel de desktop, outra no bloco
               mobile): so uma renderiza, mas as duas existiam no DOM, entao
@@ -420,25 +456,6 @@ export default function Login() {
               </Link>
             </div>
           )}
-
-          {/* O Google vem ANTES do formulário de propósito: é o caminho mais
-              curto dos dois, e enterrá-lo embaixo de cinco campos faz a pessoa
-              preencher tudo antes de descobrir que não precisava. */}
-          <div className={googleDisponivel ? 'mb-5' : ''}>
-            <GoogleSignInButton
-              modo={mode}
-              onCode={entrarComGoogle}
-              onDisponivel={setGoogleDisponivel}
-              desabilitado={loading}
-            />
-            {googleDisponivel && (
-              <div className="flex items-center gap-3 mt-5">
-                <div className="h-px flex-1 bg-line" />
-                <span className="text-[11px] text-ink-4 font-semibold uppercase tracking-wide">ou</span>
-                <div className="h-px flex-1 bg-line" />
-              </div>
-            )}
-          </div>
 
           <form onSubmit={submit} className="space-y-4">
 
@@ -664,6 +681,32 @@ export default function Login() {
             </button>
           </form>
 
+          {/* ENTRAR COM GOOGLE, DEPOIS DO FORMULÁRIO.
+              Ele já esteve em cima, com o argumento de ser o caminho mais
+              curto. Mas em cima ele rouba a decisão de quem já tem conta e
+              senha, que é a maioria de quem abre esta tela · e é assim que
+              nasce a conta duplicada, uma por senha e outra pelo Google.
+              Embaixo, com o rótulo "ou entre com", ele é a alternativa que
+              anuncia ser. Mesma ordem que casa de aposta usa, pelo mesmo
+              motivo. */}
+          {googleDisponivel && (
+            <div className="mt-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="h-px flex-1 bg-line" />
+                <span className="text-[11px] text-ink-4 font-semibold uppercase tracking-wide">
+                  {mode === 'login' ? 'ou entre com' : 'ou cadastre-se com'}
+                </span>
+                <div className="h-px flex-1 bg-line" />
+              </div>
+            </div>
+          )}
+          <GoogleSignInButton
+            modo={mode}
+            onCode={entrarComGoogle}
+            onDisponivel={setGoogleDisponivel}
+            desabilitado={loading}
+          />
+
           {/* As duas saídas da tela eram frases com uma palavra clicável no
               fim ("Clique aqui", "Criar conta grátis"). No celular o alvo tinha
               a altura de uma linha de texto, e a mais usada das duas · criar
@@ -687,9 +730,12 @@ export default function Login() {
             )}
           </div>
 
-          <SeloDeConfianca />
-        </div>
-      </main>
+          {/* No desktop ele já está no painel ao lado · repetir seria dizer a
+              mesma coisa duas vezes na mesma tela. */}
+          <SeloDeConfianca className="lg:hidden" />
+          </div>
+        </main>
+      </div>
 
       <footer className="relative border-t border-line">
         <div className="mx-auto w-full max-w-3xl px-5 sm:px-6 py-5 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-xs text-ink-4">
