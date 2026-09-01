@@ -151,59 +151,13 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
             cur.execute(f"ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS home_team_id_{_n} INTEGER;")
             cur.execute(f"ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS away_team_id_{_n} INTEGER;")
 
-        # Backfill 1 · pelo fixture_id, que so' as pernas 1 e 2 guardam e so'
-        # enquanto o jogo esta na janela. E' a fonte exata; as outras duas sao
-        # reconstrucao.
-        for _n in (1, 2):
-            cur.execute(f"""
-                UPDATE picks_alavancagem pa
-                SET home_team_id_{_n} = f.home_team_id,
-                    away_team_id_{_n} = f.away_team_id
-                FROM fixtures f
-                WHERE f.fixture_id = pa.fixture_id_{_n}
-                  AND pa.home_team_id_{_n} IS NULL
-                  AND f.home_team_id IS NOT NULL;
-            """)
-
-        # Backfill 2 · pelo PAR de nomes mais a data. Identifica a PARTIDA e
-        # nao um time: dois clubes homonimos nao enfrentam o mesmo adversario
-        # no mesmo dia. E' o unico caminho da perna 3, que nao tem fixture_id.
-        for _n in (1, 2, 3):
-            cur.execute(f"""
-                UPDATE picks_alavancagem pa
-                SET home_team_id_{_n} = f.home_team_id,
-                    away_team_id_{_n} = f.away_team_id
-                FROM fixtures f
-                WHERE f.home_team = pa.home_team_{_n}
-                  AND f.away_team = pa.away_team_{_n}
-                  AND f.match_datetime::date = pa.match_date
-                  AND pa.home_team_id_{_n} IS NULL
-                  AND f.home_team_id IS NOT NULL;
-            """)
-
-        # Backfill 3 · `teams`, que nao e' podada por data, DESEMPATADA PELO
-        # ADVERSARIO: os dois times de uma partida disputam a mesma
-        # competicao, entao o time procurado tem que aparecer em alguma liga
-        # onde o adversario tambem aparece. "Nautico Recife" e' unico e esta na
-        # liga 72; so' um dos dois "Athletic Club" esta la.
-        #
-        # O HAVING recusa o que continua ambiguo depois do desempate: NULL
-        # desenha o card sem escudo, e sem escudo e' melhor que com o escudo
-        # errado.
-        for _n in (1, 2, 3):
-            for _lado, _outro in (("home", "away"), ("away", "home")):
-                cur.execute(f"""
-                    UPDATE picks_alavancagem pa
-                    SET {_lado}_team_id_{_n} = (
-                        SELECT MIN(t.team_id) FROM teams t
-                        WHERE t.name = pa.{_lado}_team_{_n}
-                          AND t.league_id IN (SELECT adv.league_id FROM teams adv
-                                               WHERE adv.name = pa.{_outro}_team_{_n})
-                        HAVING COUNT(DISTINCT t.team_id) = 1
-                    )
-                    WHERE pa.{_lado}_team_id_{_n} IS NULL
-                      AND pa.{_lado}_team_{_n} IS NOT NULL;
-                """)
+        # Backfills de team_id em picks_alavancagem foram REMOVIDOS daqui em
+        # 2026-08-xx (otimizacao de startup). Ja' rodaram uma vez contra a base
+        # real e migraram todos os picks existentes. Novos picks ja' gravam o
+        # team_id no momento da criacao (motor atualizado). Rodar estes UPDATEs
+        # a cada deploy varre tabelas inteiras e atrasa o startup ~10-20 s.
+        # Para re-executar manualmente caso necessario, ver:
+        #   scripts/backfill_alav_team_ids.sql
         cur.execute("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;")
         cur.execute("ALTER TABLE user_followed_picks ADD COLUMN IF NOT EXISTS actual_odd DECIMAL(6,2);")
         cur.execute("ALTER TABLE user_followed_picks ADD COLUMN IF NOT EXISTS bet_house VARCHAR(100);")
@@ -428,15 +382,9 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
                 created_at      TIMESTAMP DEFAULT NOW()
             )
         """)
-        cur.execute("""
-            UPDATE picks_free pf
-            SET home_team_id = f.home_team_id,
-                away_team_id = f.away_team_id
-            FROM fixtures f
-            WHERE f.fixture_id = pf.fixture_id
-              AND pf.home_team_id IS NULL
-              AND f.home_team_id IS NOT NULL;
-        """)
+        # Backfill de home/away_team_id em picks_free removido do startup
+        # pelo mesmo motivo dos backfills de picks_alavancagem acima.
+        # Ver scripts/backfill_alav_team_ids.sql para re-executar se necessario.
         cur.execute("""
             CREATE TABLE IF NOT EXISTS user_push_subscriptions (
                 id         SERIAL PRIMARY KEY,
@@ -457,30 +405,9 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_alav_date ON picks_alavancagem(match_date DESC);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_multi_date ON picks_multiplas(match_date DESC);")
         cur.execute("ALTER TABLE user_followed_picks ADD COLUMN IF NOT EXISTS result VARCHAR(20);")
-        cur.execute("""
-            UPDATE user_followed_picks uf SET result = pv.result
-            FROM picks_vip pv
-            WHERE uf.pick_type = 'vip' AND uf.pick_id = pv.id
-              AND pv.result IS NOT NULL AND uf.result IS NULL
-        """)
-        cur.execute("""
-            UPDATE user_followed_picks uf SET result = pf.result
-            FROM picks_free pf
-            WHERE uf.pick_type = 'free' AND uf.pick_id = pf.id
-              AND pf.result IS NOT NULL AND uf.result IS NULL
-        """)
-        cur.execute("""
-            UPDATE user_followed_picks uf SET result = pm.result
-            FROM picks_multiplas pm
-            WHERE uf.pick_type = 'multipla' AND uf.pick_id = pm.id
-              AND pm.result IS NOT NULL AND uf.result IS NULL
-        """)
-        cur.execute("""
-            UPDATE user_followed_picks uf SET result = pa.result
-            FROM picks_alavancagem pa
-            WHERE uf.pick_type = 'alavancagem' AND uf.pick_id = pa.id
-              AND pa.result IS NOT NULL AND uf.result IS NULL
-        """)
+        # Backfills de result em user_followed_picks removidos do startup.
+        # Picks novos ja' gravam result via settlement_bridge. Para backfill
+        # manual ver scripts/backfill_alav_team_ids.sql.
         cur.execute("""
             CREATE TABLE IF NOT EXISTS banca_monthly_closes (
                 id              SERIAL PRIMARY KEY,

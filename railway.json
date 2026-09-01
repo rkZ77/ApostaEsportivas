@@ -7,5 +7,10 @@
   "deploy": {
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3
+  },
+  "variables": {
+    "WEB_CONCURRENCY": "2",
+    "DB_POOL_MIN": "1",
+    "LOGO_CACHE_DIR": "/tmp/pickia_logos_persistent"
   }
 }
