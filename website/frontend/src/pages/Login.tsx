@@ -677,26 +677,36 @@ export default function Login() {
             desabilitado={loading}
           />
 
-          {/* As duas saídas da tela eram frases com uma palavra clicável no
-              fim ("Clique aqui", "Criar conta grátis"). No celular o alvo tinha
-              a altura de uma linha de texto, e a mais usada das duas · criar
-              conta · ficava indistinguível da legenda que a antecede. Viraram
-              botões de largura cheia, na hierarquia certa: a secundária com
-              borda, a primária com fundo. */}
-          <div className="mt-5 space-y-2">
-            <button
-              onClick={switchMode}
-              className="w-full text-sm font-bold text-accent-ink bg-accent/10 border border-accent/30 hover:bg-accent/20 rounded-lg py-3 min-h-[44px] transition-colors"
-            >
-              {mode === 'login' ? 'Criar conta grátis' : 'Entrar na minha conta'}
-            </button>
-            {mode === 'login' && (
-              <Link
-                to="/forgot-password"
-                className="flex items-center justify-center w-full text-sm font-semibold text-ink-3 hover:text-ink-1 border border-line hover:border-line-strong rounded-lg py-3 min-h-[44px] transition-colors"
+          {/* AS DUAS SAÍDAS, EM FRASE (01/09/2026, pedido do usuário).
+              Elas já foram frase, viraram botão de largura cheia e voltam a ser
+              frase. O motivo de terem virado botão continua de pé e por isso
+              não se repete o erro antigo: no celular, uma palavra sublinhada no
+              meio do texto tem a altura de uma linha e é difícil de acertar com
+              o polegar. Aqui a parte clicável é um <Link> com padding próprio e
+              44px de altura mínima, então ela lê como frase e tem alvo de
+              botão. */}
+          <div className="mt-6 space-y-1 text-center">
+            <p className="text-sm text-ink-3">
+              {mode === 'login' ? 'Novo usuário?' : 'Já tem conta?'}{' '}
+              <button
+                type="button"
+                onClick={switchMode}
+                className="inline-flex items-center justify-center min-h-[44px] px-1 font-bold text-accent-ink hover:text-accent-hover transition-colors"
               >
-                Esqueci minha senha
-              </Link>
+                {mode === 'login' ? 'Cadastre-se aqui' : 'Entrar na minha conta'}
+              </button>
+            </p>
+
+            {mode === 'login' && (
+              <p className="text-sm text-ink-3">
+                Esqueceu sua senha?{' '}
+                <Link
+                  to="/forgot-password"
+                  className="inline-flex items-center justify-center min-h-[44px] px-1 font-bold text-accent-ink hover:text-accent-hover transition-colors"
+                >
+                  Clique aqui
+                </Link>
+              </p>
             )}
           </div>
 
