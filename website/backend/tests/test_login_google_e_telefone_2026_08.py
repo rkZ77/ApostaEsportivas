@@ -209,10 +209,10 @@ def test_config_nao_anuncia_client_id_sem_secret(monkeypatch):
 
     monkeypatch.setenv("GOOGLE_CLIENT_ID", "abc.apps.googleusercontent.com")
     monkeypatch.delenv("GOOGLE_CLIENT_SECRET", raising=False)
-    assert google_config() == {"client_id": ""}
+    assert google_config()["client_id"] == ""
 
     monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "segredo")
-    assert google_config() == {"client_id": "abc.apps.googleusercontent.com"}
+    assert google_config()["client_id"] == "abc.apps.googleusercontent.com"
 
 
 class _RespostaFalsa:
@@ -240,13 +240,13 @@ def _finge_post(monkeypatch, resposta):
 def test_troca_de_code_manda_o_secret_e_o_postmessage(monkeypatch):
     """`redirect_uri=postmessage` é o que o Google exige quando o code veio do
     popup. Errar isso dá `invalid_grant` e nenhum login funciona."""
-    from routers.auth import _trocar_code_por_id_token
+    from routers.auth import _trocar_code_por_tokens
 
     monkeypatch.setenv("GOOGLE_CLIENT_ID", "abc.apps.googleusercontent.com")
     monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "segredo-do-servidor")
     enviados = _finge_post(monkeypatch, _RespostaFalsa(200, {"id_token": "eyJ.token.aqui"}))
 
-    assert _trocar_code_por_id_token("codigo-do-popup") == "eyJ.token.aqui"
+    assert _trocar_code_por_tokens("codigo-do-popup")["id_token"] == "eyJ.token.aqui"
     assert enviados["url"] == "https://oauth2.googleapis.com/token"
     assert enviados["data"]["redirect_uri"] == "postmessage"
     assert enviados["data"]["grant_type"] == "authorization_code"
@@ -254,35 +254,35 @@ def test_troca_de_code_manda_o_secret_e_o_postmessage(monkeypatch):
 
 
 def test_code_recusado_pelo_google_vira_401(monkeypatch):
-    from routers.auth import _trocar_code_por_id_token
+    from routers.auth import _trocar_code_por_tokens
 
     monkeypatch.setenv("GOOGLE_CLIENT_ID", "abc")
     monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "s")
     _finge_post(monkeypatch, _RespostaFalsa(400, texto='{"error":"invalid_grant"}'))
     with pytest.raises(HTTPException) as e:
-        _trocar_code_por_id_token("code-velho")
+        _trocar_code_por_tokens("code-velho")
     assert e.value.status_code == 401
     assert "invalid_grant" not in str(e.value.detail)
 
 
 def test_resposta_sem_id_token_nao_passa_por_login(monkeypatch):
-    from routers.auth import _trocar_code_por_id_token
+    from routers.auth import _trocar_code_por_tokens
 
     monkeypatch.setenv("GOOGLE_CLIENT_ID", "abc")
     monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "s")
     _finge_post(monkeypatch, _RespostaFalsa(200, {"access_token": "so-isso"}))
     with pytest.raises(HTTPException) as e:
-        _trocar_code_por_id_token("code")
+        _trocar_code_por_tokens("code")
     assert e.value.status_code == 502
 
 
 def test_sem_secret_a_troca_nem_tenta(monkeypatch):
-    from routers.auth import _trocar_code_por_id_token
+    from routers.auth import _trocar_code_por_tokens
 
     monkeypatch.setenv("GOOGLE_CLIENT_ID", "abc")
     monkeypatch.delenv("GOOGLE_CLIENT_SECRET", raising=False)
     with pytest.raises(HTTPException) as e:
-        _trocar_code_por_id_token("code")
+        _trocar_code_por_tokens("code")
     assert e.value.status_code == 503
 
 
@@ -294,3 +294,113 @@ def test_o_secret_nunca_sai_do_servidor():
     fonte = _fonte("routers/auth.py")
     assert fonte.count("GOOGLE_CLIENT_SECRET") == 1
     assert "client_secret" not in _front("components/GoogleSignInButton.tsx")
+
+
+# ── username e telefone vindos do Google (01/09/2026) ────────────────────────
+
+class _CursorUsername:
+    """Cursor minimo: responde se um username ja existe."""
+
+    def __init__(self, ocupados):
+        self.ocupados = set(ocupados)
+        self.ultimo = None
+
+    def execute(self, sql, params=None):
+        self.ultimo = params[0] if params else None
+
+    def fetchone(self):
+        return {"id": 1} if self.ultimo in self.ocupados else None
+
+
+def test_username_sai_do_que_vem_antes_do_arroba():
+    """E o nome que a pessoa reconhece como dela: e o que ela digita todo dia
+    pra abrir o proprio e-mail. `henrique4821`, gerado do primeiro nome,
+    ninguem lembra na hora de entrar por usuario e senha."""
+    from routers.auth import _username_do_email
+
+    assert _username_do_email("henrique.silva@gmail.com", _CursorUsername([])) == "henriquesilva"
+    assert _username_do_email("HPDS.Silva7@Gmail.com", _CursorUsername([])) == "hpdssilva7"
+
+
+def test_username_ocupado_ganha_sufixo_e_nao_estoura_o_limite():
+    """O numero so entra quando precisa, e o resultado tem que caber na coluna
+    (VARCHAR(30), mas o `_USERNAME_RE` do cadastro para em 20)."""
+    from routers.auth import _username_do_email, _USERNAME_RE
+
+    u = _username_do_email("henrique@gmail.com", _CursorUsername(["henrique"]))
+    assert u != "henrique"
+    assert u.startswith("henrique")
+    assert _USERNAME_RE.match(u), u
+
+    longo = _username_do_email("um.email.absurdamente.comprido@gmail.com", _CursorUsername([]))
+    assert len(longo) <= 20 and _USERNAME_RE.match(longo), longo
+
+
+def test_username_curto_demais_nao_vira_invalido():
+    """`_USERNAME_RE` exige 3 caracteres. `a@x.com` nao pode gerar "a"."""
+    from routers.auth import _username_do_email, _USERNAME_RE
+
+    u = _username_do_email("a@gmail.com", _CursorUsername([]))
+    assert _USERNAME_RE.match(u), u
+
+
+def test_escopo_do_telefone_nasce_desligado(monkeypatch):
+    """Pedir telefone e escopo SENSIVEL no Google: joga o app na fila de
+    verificacao e, ate passar, no teto de 100 contas de teste. Ligar isso e
+    decisao de negocio, nunca efeito colateral de deploy."""
+    from routers.auth import _google_scope, _ESCOPO_TELEFONE
+
+    monkeypatch.delenv("GOOGLE_PEDIR_TELEFONE", raising=False)
+    assert _ESCOPO_TELEFONE not in _google_scope()
+
+    monkeypatch.setenv("GOOGLE_PEDIR_TELEFONE", "true")
+    assert _ESCOPO_TELEFONE in _google_scope()
+
+
+def test_telefone_do_google_normaliza_para_e164(monkeypatch):
+    from routers import auth as m
+
+    def _get(url, params=None, headers=None, timeout=None):
+        return _RespostaFalsa(200, {"phoneNumbers": [{"value": "(11) 98765-4321"}]})
+
+    monkeypatch.setattr(m.httpx, "get", _get)
+    assert m._telefone_do_google("token") == "+5511987654321"
+
+
+@pytest.mark.parametrize("resposta", [
+    _RespostaFalsa(403, {}),                                    # nao autorizou
+    _RespostaFalsa(200, {}),                                    # conta sem telefone
+    _RespostaFalsa(200, {"phoneNumbers": [{"value": "+1 202 555 0143"}]}),  # numero de fora
+])
+def test_telefone_ausente_ou_estrangeiro_vira_none(monkeypatch, resposta):
+    """Nada disso pode derrubar o login: autorizar so o e-mail e caminho
+    normal, e telefone no perfil Google e opcional. Numero de fora fica de
+    fora da coluna que sustenta "1 conta por chip"."""
+    from routers import auth as m
+
+    monkeypatch.setattr(m.httpx, "get", lambda *a, **k: resposta)
+    assert m._telefone_do_google("token") is None
+
+
+def test_telefone_do_google_nao_marca_verificado():
+    """O Google diz que o numero esta no perfil, nao que a pessoa provou o
+    numero agora. Quem prova continua sendo o codigo por SMS -- e e
+    `phone_verified` que paga o trial."""
+    from tests.test_home_2026_08 import _fonte
+
+    fonte = _fonte("routers/auth.py")
+    google = fonte.split('@router.post("/google")')[1].split('@router.post("/verify-email")')[0]
+    assert "_telefone_do_google" in google
+    # A palavra aparece no comentario que explica a decisao; o que nao pode
+    # existir e o UPDATE que marca o campo.
+    assert "phone_verified = TRUE" not in google
+    assert "phone_verified=TRUE" not in google
+
+
+def test_telefone_repetido_nao_derruba_o_login():
+    """`phone` e unico. Duas contas Google com o mesmo numero no perfil (casal,
+    familia) estourariam o indice e o segundo login morreria em 500."""
+    from tests.test_home_2026_08 import _fonte
+
+    fonte = _fonte("routers/auth.py")
+    assert "NOT EXISTS (SELECT 1 FROM users u2 WHERE u2.phone = %s)" in fonte

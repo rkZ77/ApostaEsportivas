@@ -262,6 +262,35 @@ def _generate_username(name: str, cur) -> str:
     return base + secrets.token_hex(3)
 
 
+def _username_do_email(email: str, cur) -> str:
+    """Username a partir do que vem ANTES do @.
+
+    Para quem entra pelo Google, esse e' o nome que a pessoa reconhece como
+    dela: e' o que ela digita todo dia pra abrir o proprio e-mail. Gerar
+    "henrique4821" a partir do primeiro nome produzia um usuario que ninguem
+    lembra e que, na hora de entrar por usuario e senha, obrigava a olhar o
+    perfil pra descobrir qual era.
+
+    So' cai no numero quando precisa: primeiro tenta o proprio local part, e
+    o sufixo entra apenas se ele ja' estiver ocupado.
+    """
+    base = re.sub(r"[^a-z0-9_]", "", email.split("@")[0].lower())[:20]
+    if len(base) < 3:
+        base = (base + "user")[:20]
+
+    cur.execute("SELECT id FROM users WHERE username = %s", (base,))
+    if not cur.fetchone():
+        return base
+
+    tronco = base[:15]
+    for _ in range(20):
+        candidato = tronco + str(secrets.randbelow(9000) + 1000)
+        cur.execute("SELECT id FROM users WHERE username = %s", (candidato,))
+        if not cur.fetchone():
+            return candidato
+    return (tronco + secrets.token_hex(3))[:20]
+
+
 def _resolve_identifier(identifier: str) -> tuple[str, str]:
     """Detecta tipo do identificador e retorna (tipo, valor_normalizado).
     Tipos: 'email', 'username'
@@ -319,7 +348,60 @@ def _google_client_secret() -> str:
     return (os.getenv("GOOGLE_CLIENT_SECRET") or "").strip()
 
 
-def _trocar_code_por_id_token(code: str) -> str:
+# Escopo do telefone. E' SENSIVEL no Google: pedi-lo joga o app na fila de
+# verificacao (e, ate' passar, no limite de 100 contas de teste). Por isso ele
+# e' opcional e nasce DESLIGADO -- ligar e' decisao de negocio, nao efeito
+# colateral de um deploy. Ver GOOGLE_PEDIR_TELEFONE.
+_ESCOPO_BASE = "openid email profile"
+_ESCOPO_TELEFONE = "https://www.googleapis.com/auth/user.phonenumbers.read"
+
+
+def _google_pede_telefone() -> bool:
+    return (os.getenv("GOOGLE_PEDIR_TELEFONE") or "").strip().lower() in ("1", "true", "on", "sim")
+
+
+def _google_scope() -> str:
+    return f"{_ESCOPO_BASE} {_ESCOPO_TELEFONE}" if _google_pede_telefone() else _ESCOPO_BASE
+
+
+def _telefone_do_google(access_token: str) -> Optional[str]:
+    """Busca o telefone do perfil Google. Devolve None em qualquer tropeco.
+
+    Nunca pode derrubar o login: a pessoa autorizar o e-mail e nao o telefone
+    e' um caminho normal, e telefone no perfil Google e' opcional -- boa parte
+    das contas simplesmente nao tem. Quem depende do numero (o trial, o
+    WhatsApp) ja' sabe lidar com a ausencia dele.
+
+    So' aceita numero brasileiro: `_validate_phone_br` e' o mesmo portao do
+    cadastro, entao um numero de fora entra como None em vez de sujar a coluna
+    que sustenta "1 conta por chip".
+    """
+    if not access_token:
+        return None
+    try:
+        r = httpx.get(
+            "https://people.googleapis.com/v1/people/me",
+            params={"personFields": "phoneNumbers"},
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=6.0,
+        )
+        if r.status_code != 200:
+            logger.info("[GOOGLE] telefone indisponivel (%s)", r.status_code)
+            return None
+        for numero in (r.json() or {}).get("phoneNumbers") or []:
+            bruto = (numero.get("canonicalForm") or numero.get("value") or "").strip()
+            if not bruto:
+                continue
+            try:
+                return _validate_phone_br(bruto)
+            except HTTPException:
+                continue
+    except Exception as e:
+        logger.info("[GOOGLE] falha ao ler telefone: %s", e)
+    return None
+
+
+def _trocar_code_por_tokens(code: str) -> dict:
     """Fluxo de codigo de autorizacao: o navegador manda um `code`, nao o token.
 
     Existe porque o botao da tela e NOSSO, desenhado com o CSS do site. O
@@ -362,11 +444,11 @@ def _trocar_code_por_id_token(code: str) -> str:
         logger.warning("[GOOGLE] troca de code recusada (%s): %s", r.status_code, r.text[:200])
         raise HTTPException(401, "Nao foi possivel concluir o login com o Google. Tente de novo.")
 
-    id_token = (r.json() or {}).get("id_token")
-    if not id_token:
+    dados = r.json() or {}
+    if not dados.get("id_token"):
         logger.error("[GOOGLE] resposta sem id_token")
         raise HTTPException(502, "O Google nao devolveu os dados da conta. Tente de novo.")
-    return id_token
+    return dados
 
 
 def _google_jwks(forcar: bool = False) -> dict:
@@ -810,6 +892,7 @@ def login(body: LoginBody, response: Response, request: Request, background_task
         user = dict(row)
         if not user["active"]:
             raise HTTPException(status_code=403, detail="Conta desativada")
+
         # Conta nascida no Google nao tem hash -- `verify_password` receberia
         # None e estouraria 500 no lugar de um erro que a pessoa entende. O
         # caminho de saida existe: /forgot-password define uma senha e a conta
@@ -1040,8 +1123,10 @@ def google_config():
     escolhido a conta -- pior que nao ter botao nenhum.
     """
     if not _google_client_secret():
-        return {"client_id": ""}
-    return {"client_id": _google_client_id()}
+        return {"client_id": "", "scope": _ESCOPO_BASE}
+    # O escopo vem do servidor pelo mesmo motivo do client_id: ligar o pedido
+    # de telefone nao pode exigir rebuild do front.
+    return {"client_id": _google_client_id(), "scope": _google_scope()}
 
 
 @router.post("/google")
@@ -1062,8 +1147,11 @@ def login_com_google(body: GoogleAuthBody, response: Response, request: Request,
     cadastro em um toque. O trial sai mesmo assim, porque `email_verified`
     sozinho ja' basta em `_ativar_trial_se_elegivel`.
     """
+    access_token = None
     if body.code:
-        id_token = _trocar_code_por_id_token(body.code.strip())
+        tokens = _trocar_code_por_tokens(body.code.strip())
+        id_token = tokens["id_token"]
+        access_token = tokens.get("access_token")
     elif body.credential:
         id_token = body.credential.strip()
     else:
@@ -1099,7 +1187,7 @@ def login_com_google(body: GoogleAuthBody, response: Response, request: Request,
         if not row:
             conta_nova = True
             nome_formatado = " ".join(w.capitalize() for w in nome_google.split()) or "Usuario"
-            username = _generate_username(nome_formatado, cur)
+            username = _username_do_email(email, cur)
 
             referrer_id: Optional[int] = None
             if body.ref_code:
@@ -1144,6 +1232,33 @@ def login_com_google(body: GoogleAuthBody, response: Response, request: Request,
         user = dict(row)
         if not user["active"]:
             raise HTTPException(status_code=403, detail="Conta desativada")
+
+        # Telefone do perfil Google, quando ele vier e a conta ainda nao tiver.
+        #
+        # NAO marca `phone_verified`: o Google diz que aquele numero esta no
+        # perfil, nao que a pessoa provou o numero agora. Quem prova continua
+        # sendo o codigo por SMS. O que se ganha aqui e' o contato preenchido
+        # sem pedir nada -- que era o campo que mais fazia gente abandonar o
+        # cadastro.
+        #
+        # O UPDATE e' condicional na propria consulta porque `phone` e unico:
+        # duas contas Google com o mesmo numero no perfil (casal, familia)
+        # estourariam o indice e derrubariam o login da segunda.
+        if not user.get("phone"):
+            telefone = _telefone_do_google(access_token)
+            if telefone:
+                try:
+                    cur.execute(
+                        "UPDATE users SET phone = %s WHERE id = %s"
+                        " AND NOT EXISTS (SELECT 1 FROM users u2 WHERE u2.phone = %s)",
+                        (telefone, user["id"], telefone),
+                    )
+                    if cur.rowcount:
+                        user["phone"] = telefone
+                    conn.commit()
+                except Exception as e:
+                    conn.rollback()
+                    logger.warning("[GOOGLE] nao gravou telefone do user %s: %s", user["id"], e)
 
         # Foto do Google so' entra quando nao ha' avatar -- quem subiu o proprio
         # nao pode ve-lo trocado por ter entrado pelo Google.

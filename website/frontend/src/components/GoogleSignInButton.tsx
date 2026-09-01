@@ -44,14 +44,21 @@ function loadScript(): Promise<void> {
    fecha e um botão aqui só levaria a pessoa a escolher a conta para falhar
    depois. Promessa memorizada no módulo porque a tela remonta este componente
    a cada troca entre "entrar" e "criar conta". */
-let configPromise: Promise<string> | null = null
-function fetchClientId(): Promise<string> {
+interface ConfigGoogle { clientId: string; scope: string }
+
+let configPromise: Promise<ConfigGoogle> | null = null
+function fetchConfig(): Promise<ConfigGoogle> {
   if (!configPromise) {
     configPromise = api.get('/auth/google/config')
-      .then(r => String(r.data?.client_id ?? ''))
+      .then(r => ({
+        clientId: String(r.data?.client_id ?? ''),
+        // O escopo vem do servidor porque ele pode incluir o telefone, e essa
+        // é uma decisão que muda no painel do Railway · não no build do front.
+        scope: String(r.data?.scope ?? 'openid email profile'),
+      }))
       .catch(() => {
         configPromise = null
-        return ''
+        return { clientId: '', scope: 'openid email profile' }
       })
   }
   return configPromise
@@ -101,8 +108,8 @@ export default function GoogleSignInButton({ onCode, onDisponivel, modo = 'login
   useEffect(() => {
     let cancelado = false
 
-    Promise.all([fetchClientId(), loadScript()])
-      .then(([clientId]) => {
+    Promise.all([fetchConfig(), loadScript()])
+      .then(([{ clientId, scope }]) => {
         if (cancelado) return
         if (!clientId || !window.google?.accounts?.oauth2) {
           avisaRef.current?.(false)
@@ -110,9 +117,7 @@ export default function GoogleSignInButton({ onCode, onDisponivel, modo = 'login
         }
         clientRef.current = window.google.accounts.oauth2.initCodeClient({
           client_id: clientId,
-          // `openid email profile` é o mínimo que devolve um id_token com
-          // e-mail, nome e foto · nada além disso é pedido à pessoa.
-          scope: 'openid email profile',
+          scope,
           ux_mode: 'popup',
           callback: (resposta: { code?: string }) => {
             if (resposta?.code) cbRef.current(resposta.code)
