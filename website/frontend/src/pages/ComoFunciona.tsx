@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Zap, TrendingUp, BarChart2, Wallet, Bot, BookOpen, ArrowRight, Check, X, Compass } from 'lucide-react'
+import { Zap, TrendingUp, BarChart2, Wallet, Bot, BookOpen, ArrowRight, Check, X, Compass, Radio, UserSquare, Flag } from 'lucide-react'
 import PageShell from '../components/PageShell'
 import { Button } from '../components/ui'
 import { useAuth } from '../context/AuthContext'
@@ -27,6 +27,71 @@ const features = [
     title: 'Dica do Dia',
     desc: 'Pick gratuito disponível para todos os usuários. A IA seleciona o mercado com maior taxa histórica do dia para você testar a plataforma.',
     items: ['Disponível para plano free', 'Mercado com maior taxa histórica', 'Ótimo para começar'],
+  },
+  /*
+   * OS QUATRO MOTORES QUE NASCERAM DEPOIS DESTA PÁGINA.
+   *
+   * Ela listava sete módulos e parou de crescer junto com o produto: quem
+   * abria "Como funciona" para decidir se assinava não via o motor ao vivo, o
+   * Pick Boost, a projeção por jogador nem os mercados de falta e defesa · ou
+   * seja, a página que existe para explicar o produto escondia quase metade
+   * dele. Cada um tem modelo próprio, e é isso que as linhas abaixo dizem.
+   */
+  {
+    icon: Radio,
+    color: 'text-green-400',
+    bg: 'bg-green-500/10 border-green-500/20',
+    badge: 'VIP',
+    badgeColor: 'bg-yellow-500/20 text-yellow-400',
+    title: 'Picks ao vivo',
+    desc: 'Um motor separado acompanha a partida em andamento e publica quando o que está acontecendo em campo desmente o preço que a casa fez antes do apito.',
+    items: [
+      'Lê o jogo em tempo real, não a tabela de antes',
+      'Decisão própria, diferente da do pré-jogo',
+      'Publica só quando campo e mercado discordam',
+    ],
+  },
+  {
+    icon: Zap,
+    color: 'text-blue-400',
+    bg: 'bg-blue-500/10 border-blue-500/20',
+    badge: 'VIP',
+    badgeColor: 'bg-yellow-500/20 text-yellow-400',
+    title: 'Pick Boost',
+    desc: 'Varre os mercados alternativos do mesmo jogo atrás da linha que a casa deixou de corrigir. O mercado principal costuma estar bem precificado; as bordas, nem sempre.',
+    items: [
+      'Procura na linha alternativa, não na principal',
+      'Compara a projeção do modelo com a odd oferecida',
+      'Só publica quando a diferença sobrevive ao corte de valor',
+    ],
+  },
+  {
+    icon: UserSquare,
+    color: 'text-orange-400',
+    bg: 'bg-orange-500/10 border-orange-500/20',
+    badge: 'VIP',
+    badgeColor: 'bg-yellow-500/20 text-yellow-400',
+    title: 'Estatística de jogador',
+    desc: 'Projeção individual por atleta, para os mercados que a maior parte das casas ainda precifica no olho: finalizações, desarmes, participação em gol.',
+    items: [
+      'Histórico do jogador, não a média do time',
+      'Considera o adversário e o tempo em campo esperado',
+      'Mercado jovem, onde o preço erra mais',
+    ],
+  },
+  {
+    icon: Flag,
+    color: 'text-purple-400',
+    bg: 'bg-purple-500/10 border-purple-500/20',
+    badge: 'VIP',
+    badgeColor: 'bg-yellow-500/20 text-yellow-400',
+    title: 'Faltas e defesas de goleiro',
+    desc: 'Dois modelos próprios para mercados que quase ninguém modela. Falta depende de árbitro e de estilo de jogo; defesa de goleiro depende do volume de finalização que o adversário costuma produzir.',
+    items: [
+      'Modelo de falta considera o árbitro da partida',
+      'Defesa sai do volume de finalização esperado dos dois lados',
+      'Contagem tratada como distribuição dispersa, não como média',
+    ],
   },
   {
     icon: TrendingUp,

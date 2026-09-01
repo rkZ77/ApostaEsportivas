@@ -14,6 +14,7 @@ import { TeamLogo } from '../components/TeamLogo'
 import PipelineProfitChart from '../components/PipelineProfitChart'
 import { usePlans, fmtPlanPrice, type Plan } from '../hooks/usePlans'
 import { fadeInUp, staggerContainer } from '../lib/motion'
+import { MODULOS_FREE, MODULOS_VIP } from '../lib/oferta'
 import { fmtUnits } from '../utils/format'
 import { PICK_TYPE_LABEL } from '../utils/resultStyle'
 import { useAuth } from '../context/AuthContext'
@@ -277,17 +278,23 @@ function RecentResults({ summary }: { summary: PublicSummary | null }) {
 
 /* ── Planos ─────────────────────────────────────────────────────────────── */
 
+/*
+ * A COMPARAÇÃO SAI DE lib/oferta, e não de uma lista escrita aqui.
+ *
+ * Esta era a TERCEIRA cópia do catálogo: a vitrine e o checkout já foram
+ * unificados, e a tabela de planos da Home continuou à mão. Ela já estava
+ * defasada · anunciava oito itens bloqueados no Free e nenhum deles era o Pick
+ * Boost nem a estatística de jogador, os dois módulos mais recentes. Quem
+ * compara plano numa tabela que esquece dois produtos decide com menos do que
+ * existe.
+ *
+ * O Free lista o que ele tem E o que não tem, porque é assim que uma coluna de
+ * comparação funciona: sem os itens em cinza, a pessoa não sabe o que está
+ * deixando na mesa.
+ */
 const FREE_ITEMS: Array<[boolean, string]> = [
-  [true,  '1 pick gratuito por dia'],
-  [true,  'Histórico de todos os picks'],
-  [true,  'Resultados auditáveis'],
-  [false, 'Picks VIP do dia'],
-  [false, 'Picks ao vivo'],
-  [false, 'Múltiplas geradas por IA'],
-  [false, 'Alavancagem'],
-  [false, 'Mercados de faltas e defesas'],
-  [false, 'Agente IA de futebol'],
-  [false, 'Gestão de banca completa'],
+  ...MODULOS_FREE.map(m => [true, m.titulo] as [boolean, string]),
+  ...MODULOS_VIP.map(m => [false, m.titulo] as [boolean, string]),
 ]
 
 const TRIAL_ITEMS = [
@@ -295,25 +302,8 @@ const TRIAL_ITEMS = [
   'Vence sozinho, sem cobrança automática',
 ]
 
-/*
- * VIP lista tudo que está incluso, do mais impactante ao mais detalhado.
- * O trial é só o acesso temporário ao mesmo conjunto -- por isso o VIP
- * tem mais linhas: é ele que vende, não o trial.
- */
-const VIP_ITEMS = [
-  'Todos os picks VIP do dia',
-  'Picks ao vivo (motor em tempo real)',
-  'Múltiplas geradas por IA',
-  'Alavancagem com reinvestimento',
-  'Mercados de faltas e defesas',
-  'Estatística individual de jogadores',
-  'Pick Boost (linhas subvalorizadas)',
-  'Agente IA de futebol',
-  'Gestão de banca com stake por Kelly',
-  'Fechamento mensal automático',
-  'Acesso ativo enquanto o plano durar',
-  'Suporte prioritário',
-]
+/* VIP é tudo: o que já vem no Free mais o que a assinatura abre. */
+const VIP_ITEMS = [...MODULOS_FREE, ...MODULOS_VIP].map(m => m.titulo)
 
 function Plans({ monthly }: { monthly: Plan }) {
   return (
