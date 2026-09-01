@@ -289,7 +289,7 @@ function FitaDeBusca({ partidas }: { partidas: EmLeitura[] }) {
     <span key={p.fixture_id}
           className="inline-flex items-center gap-1.5 text-[11px] whitespace-nowrap
                      bg-surface-1 border border-line rounded-md px-2.5 py-1">
-      <LeagueLogo id={p.league_id ?? undefined} name={p.liga ?? ''} size={14} />
+      <LeagueLogo id={p.league_id ?? undefined} name={p.liga ?? ''} />
       <TeamLogoOrDot id={p.home_team_id} name={p.home_team} />
       <span className="text-ink-2 font-medium">{p.home_team ?? 'Time'}</span>
       <span className="text-ink-4 text-[10px]">x</span>

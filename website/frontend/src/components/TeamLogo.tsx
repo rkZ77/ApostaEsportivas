@@ -16,12 +16,12 @@ export function TeamLogo({ id, name, size = 22 }: { id?: number; name: string; s
   )
 }
 
-export function LeagueLogo({ id, name }: { id?: number; name?: string }) {
+export function LeagueLogo({ id, name, size = 16 }: { id?: number; name?: string; size?: number }) {
   const src = LEAGUE_LOGO(id)
   if (!src) return null
   return (
-    <img src={src} alt={name ?? ''} width={16} height={16} loading="lazy"
-      className="w-4 h-4 object-contain shrink-0 opacity-70"
+    <img src={src} alt={name ?? ''} width={size} height={size} loading="lazy"
+      className="object-contain shrink-0 opacity-70" style={{ width: size, height: size }}
       onError={e => (e.currentTarget.style.display = 'none')} />
   )
 }
