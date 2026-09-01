@@ -8,7 +8,7 @@ import SiteHeader from '../components/SiteHeader'
 import Footer from '../components/Footer'
 import {
   Badge, Button, LiveDot, Panel, PanelHead, PickTypeBadge, ResultBadge,
-  SectionHead, Skeleton, Spinner,
+  SectionHead, Spinner,
 } from '../components/ui'
 import { TeamLogo } from '../components/TeamLogo'
 import PipelineProfitChart from '../components/PipelineProfitChart'
@@ -67,7 +67,7 @@ interface PublicData {
 
 /* ── Últimos resultados ─────────────────────────────────────────────────── */
 
-const PAGE_SIZE = 30
+const PAGE_SIZE = 10
 
 function RecentResults({ summary }: { summary: PublicSummary | null }) {
   const [page, setPage]       = useState(0)
@@ -270,97 +270,6 @@ function RecentResults({ summary }: { summary: PublicSummary | null }) {
             </div>
           )}
         </motion.div>
-      </div>
-    </section>
-  )
-}
-
-/* ── Ranking de usuários ────────────────────────────────────────────────── */
-
-interface LeaderEntry {
-  name: string
-  avatar_url?: string
-  total: number
-  greens: number
-  win_rate: number
-  yield_roi: number
-}
-
-function Leaderboard() {
-  const [leaders, setLeaders] = useState<LeaderEntry[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    api.get('/public/leaderboard')
-      .then(r => setLeaders(Array.isArray(r.data) ? r.data : []))
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [])
-
-  if (!loading && leaders.length === 0) return null
-
-  const rankCls = ['bg-yellow-400 text-on-fill', 'bg-ink-2 text-surface-0', 'bg-orange-400 text-on-fill']
-
-  // Esqueleto com a MESMA altura das três linhas finais. Antes era um spinner
-  // solto num `py-8`: a seção crescia quando os dados chegavam e empurrava o
-  // rodapé para baixo, mesmo estando abaixo da dobra. Reservar o espaço custa
-  // nada e tira o último pulo da página.
-  const linhaAltura = 'h-[74px]'
-
-  return (
-    <section className="section-tight">
-      <div className="shell-narrow">
-        <SectionHead
-          title="Quem está indo melhor"
-          sub="Usuários com o melhor aproveitamento na banca este mês."
-        />
-
-        {loading ? (
-          <div className="space-y-2.5">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className={`${linhaAltura} w-full`} />
-            ))}
-          </div>
-        ) : (
-          <motion.div
-            variants={staggerContainer}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: '0px 0px -80px 0px' }}
-            className="space-y-2.5"
-          >
-            {leaders.slice(0, 3).map((l, i) => (
-              <motion.div
-                key={i}
-                variants={fadeInUp}
-                className="flex items-center gap-3.5 bg-surface-0 border border-line rounded-lg px-5 py-4"
-              >
-                <span className={`font-mono text-xs font-bold w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${rankCls[i] ?? 'bg-surface-2 text-ink-2'}`}>
-                  {i + 1}
-                </span>
-                <div className="w-9 h-9 rounded-full bg-surface-2 flex items-center justify-center text-sm font-bold text-ink-2 shrink-0 overflow-hidden">
-                  {l.avatar_url
-                    ? <img src={l.avatar_url} alt="" width={36} height={36} className="w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')} />
-                    : l.name[0]?.toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-ink-1 truncate">{l.name}</p>
-                  <p className="text-[11px] text-ink-3">{l.total} picks · {l.greens} greens</p>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className={`font-mono text-base font-bold tabular-nums ${l.yield_roi >= 0 ? 'text-accent-ink' : 'text-red-400'}`}>
-                    {l.yield_roi >= 0 ? '+' : ''}{l.yield_roi.toFixed(1)}%
-                  </p>
-                  <p className="stat-label !mt-0">Yield</p>
-                </div>
-                <div className="text-right shrink-0 hidden sm:block">
-                  <p className="font-mono text-base font-bold text-ink-1 tabular-nums">{l.win_rate}%</p>
-                  <p className="stat-label !mt-0">Win rate</p>
-                </div>
-              </motion.div>
-            ))}
-          </motion.div>
-        )}
       </div>
     </section>
   )
@@ -749,8 +658,6 @@ export default function Home() {
       <Leagues />
 
       <Plans monthly={monthly} />
-
-      <Leaderboard />
 
       <FinalCTA />
 
