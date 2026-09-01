@@ -219,12 +219,10 @@ function TabBar({ tab, setTab, canSeeVip, verAoVivo, counts, liveCount, onPrefet
          mundo, que é a informação verdadeira · a maior parte do dia é VIP, e
          a aba abre de qualquer jeito. Mesma escolha do Pick Boost, que
          também tem free do dia. */
-      /* O selo diz VIP, mas veste a cor DO PRODUTO, e não a amarela do plano.
-         O Ao Vivo é o único que precisa se distinguir de relance numa barra
-         que rola no celular: ele muda ao longo da noite, e as outras abas não.
-         Magenta porque sobrou · ver o comentário do tom em ui/Badge. */
+      /* O selo fica AMARELO como o dos outros: ele fala de plano, e plano é a
+         mesma coisa em toda aba. A cor própria do produto (magenta) vive
+         dentro da página, não no selo. */
       badge: 'VIP',
-      badgeCls: 'bg-fuchsia-500/10 text-fuchsia-400 border-fuchsia-500/30',
       /* NA BARRA por padrão desde 27/08 · o produto abriu. A variável de
          ambiente sumiu em 28/08 (o usuário removeu as do Live no Railway) e
          `LIVE_PICKS_ENABLED` virou constante em config.ts · uma linha que
@@ -2106,7 +2104,6 @@ function PlacarDoProduto({ source, tom }: { source: string; tom: string }) {
 
   const winRate = Number(dados.win_rate ?? 0)
   const lucro   = Number(dados.profit ?? 0)
-  const streak  = Number(dados.streak ?? 0)
   const tiles = [
     { label: 'Picks', value: String(total),               cor: 'text-ink-1' },
     { label: 'Green', value: String(dados.greens ?? 0),   cor: 'text-accent-ink' },
@@ -2125,15 +2122,13 @@ function PlacarDoProduto({ source, tom }: { source: string; tom: string }) {
           </div>
         ))}
       </div>
-      {/* A sequência é o "ir avisando": ela muda a cada liquidação, e é a
-        * única linha do bloco que responde "e agora, como está?". */}
-      {streak > 1 && dados.streak_type && (
-        <p className={`text-[11px] mt-2 font-semibold ${
-          dados.streak_type === 'green' ? 'text-accent-ink' : 'text-red-400'}`}>
-          {streak} {dados.streak_type === 'green' ? 'greens' : 'reds'} seguidos
-          <span className={`text-ink-4 font-normal`}>, liquidados neste produto</span>
-        </p>
-      )}
+      {/* A LINHA DA SEQUÊNCIA SAIU (01/09/2026, pedido do usuário).
+        * Ela dizia "3 reds seguidos" no cabeçalho de cada produto. Sequência
+        * curta é ruído: três resultados não dizem nada sobre um motor medido
+        * em centenas, e a mesma linha que anima numa maré boa assusta numa
+        * ruim, sem que nenhuma das duas signifique o que aparenta. O placar
+        * logo acima continua ali, com a amostra inteira, que é o número que
+        * responde de verdade. */}
       <p className={`text-[10px] mt-1.5 ${tom}`}>
         Todos os picks já liquidados deste produto, com o mesmo plano de stake do placar público.
       </p>

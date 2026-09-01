@@ -1220,7 +1220,12 @@ export default function LivePicksFeed({ isActive, banca }: {
     <div>
       {/* ComoFunciona ANTES dos picks: igual a todas as outras abas.
           Fecha por padrão — quem conhece o produto passa direto. */}
-      <ComoFunciona titulo="O que são os Picks Ao Vivo?" className="mb-4">
+      {/* Magenta, a cor do produto · mesmo tratamento das Múltiplas em azul e
+          do Pick Boost. O verde daqui era o verde da MARCA, que toda tela usa:
+          num produto que se abre ao lado de outros, ele não distinguia nada. */}
+      <ComoFunciona titulo="O que são os Picks Ao Vivo?" className="mb-4"
+                    cor="text-fuchsia-400"
+                    borda="border-fuchsia-400/20" fundo="bg-fuchsia-400/5">
         <p>
           A IA lê a partida em andamento e compara com a odd do momento. Só publica quando o jogo
           se afasta do esperado e o preço paga por isso.{' '}
