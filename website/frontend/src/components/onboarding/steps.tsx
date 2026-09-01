@@ -8,6 +8,7 @@ import {
 import { useAuth } from '../../context/AuthContext'
 import { useOnboarding } from '../../context/OnboardingContext'
 import api from '../../services/api'
+import { maskPhone } from '../../utils/format'
 import {
   EVENTO_CONFIGURAR_BANCA, MAX_PASSOS, passoDoEmailEntra, passoDoWhatsAppEntra,
   totalDePassos,
@@ -263,7 +264,103 @@ function PassoBanca() {
 
 /* ── O roteiro ──────────────────────────────────────────────────────────── */
 
-export const TOUR_STEPS: TourStep[] = [
+export /**
+ * O telefone, preenchido SEM SAIR DO TOUR.
+ *
+ * Aqui o campo mora no próprio balão, e não num modal da página de perfil como
+ * a banca. A diferença não é estilo: a banca tem três campos, regras de
+ * unidade e um aviso legal, então vale abrir o formulário de verdade em vez de
+ * manter duas cópias dele. Telefone é UM campo. Mandar a pessoa para outra
+ * tela, achar o campo, salvar e voltar, por um campo, é onde ela desiste.
+ *
+ * Salva no mesmo endpoint do perfil (`PUT /auth/profile`), então a validação
+ * de DDD e de nono dígito é a mesma do resto do site · não nasce uma segunda
+ * regra de telefone aqui.
+ */
+function PassoWhatsApp() {
+  const { user, refreshUser } = useAuth()
+  const [numero, setNumero] = useState('')
+  const [salvando, setSalvando] = useState(false)
+  const [salvo, setSalvo] = useState(false)
+  const [erro, setErro] = useState('')
+
+  const digitos = numero.replace(/\D/g, '')
+  const valido = digitos.length >= 10 && digitos.length <= 11
+
+  const salvar = async () => {
+    if (!valido) return
+    setSalvando(true)
+    setErro('')
+    try {
+      await api.put('/auth/profile', { phone: numero })
+      await refreshUser()
+      setSalvo(true)
+    } catch (e: any) {
+      const detalhe = e?.response?.data?.detail
+      setErro(typeof detalhe === 'string' ? detalhe : 'Não deu para salvar agora. Tente de novo.')
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  /* Quem já tem número não deveria chegar aqui (o passo é condicional), mas o
+     contexto do tour é congelado na abertura: salvar noutra aba no meio do
+     caminho deixaria esta tela pedindo o que já existe. */
+  const jaTem = salvo || !!user?.phone
+
+  return (
+    <div className="space-y-3">
+      <Etiqueta>Para que serve o número</Etiqueta>
+      <Lista
+        itens={[
+          [Zap, 'Aviso quando os picks do dia são publicados'],
+          [Radio, 'Aviso de pick ao vivo, que é o que tem prazo: a odd dura minutos'],
+          [ShieldCheck, 'E é ele que garante uma conta por pessoa'],
+        ]}
+      />
+
+      {jaTem ? (
+        <p className="text-xs text-accent-ink font-semibold flex items-center gap-1.5">
+          <CircleCheck className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+          Número salvo. Os avisos já valem para esta conta.
+        </p>
+      ) : (
+        <>
+          {/* `type="tel"` e `inputMode="numeric"` abrem o teclado numérico no
+              celular, que é de onde vem a maior parte do cadastro. */}
+          <label className="block">
+            <span className="sr-only">Seu WhatsApp</span>
+            <input
+              className="input w-full"
+              value={numero}
+              onChange={e => { setNumero(maskPhone(e.target.value)); setErro('') }}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); salvar() } }}
+              placeholder="(11) 99999-9999"
+              type="tel"
+              inputMode="numeric"
+              autoComplete="tel-national"
+              maxLength={15}
+              aria-invalid={!!erro}
+            />
+          </label>
+
+          <AcaoDoPasso onClick={salvar} disabled={!valido || salvando}>
+            <MessageCircle className="w-3.5 h-3.5" aria-hidden="true" />
+            {salvando ? 'Salvando...' : 'Salvar e receber os avisos'}
+          </AcaoDoPasso>
+
+          {erro && <p className="text-[11px] text-red-400 leading-relaxed">{erro}</p>}
+        </>
+      )}
+
+      <p className="text-[11px] text-ink-4 leading-relaxed">
+        Pode preencher depois no seu perfil, e desativar os avisos quando quiser.
+      </p>
+    </div>
+  )
+}
+
+const TOUR_STEPS: TourStep[] = [
   {
     id: 'bem-vindo',
     titulo: 'Bem-vindo à PickIA',
@@ -381,25 +478,12 @@ export const TOUR_STEPS: TourStep[] = [
     titulo: 'Receba os picks no WhatsApp',
     Icon: MessageCircle,
     mostrar: passoDoWhatsAppEntra,
-    rota: '/profile',
-    alvos: ['[data-tour="perfil-telefone"]'],
+    /* SEM `rota` e SEM `alvos`: o campo está aqui dentro, então não há para
+       onde levar nem o que destacar. O balão fica centralizado, igual ao passo
+       de confirmar o e-mail · e no celular isso importa, porque navegar para o
+       perfil no meio do tour tira a pessoa da tela dos picks. */
     resumo: 'Sua conta ainda está sem telefone. É por ele que avisamos quando um pick sai.',
-    corpo: (
-      <div className="space-y-3">
-        <Etiqueta>Para que serve o número</Etiqueta>
-        <Lista
-          itens={[
-            [Zap, 'Aviso quando os picks do dia são publicados'],
-            [Radio, 'Aviso de pick ao vivo, que é o que tem prazo: a odd dura minutos'],
-            [ShieldCheck, 'E é ele que garante uma conta por pessoa'],
-          ]}
-        />
-        <p className="text-xs text-ink-2 leading-relaxed">
-          O campo está aqui no seu perfil. Você pode preencher agora ou depois, e desativar
-          os avisos quando quiser.
-        </p>
-      </div>
-    ),
+    corpo: <PassoWhatsApp />,
   },
   {
     id: 'casa-de-apostas',
