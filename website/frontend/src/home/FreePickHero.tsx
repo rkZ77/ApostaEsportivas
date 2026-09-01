@@ -136,7 +136,7 @@ export default function FreePickHero({ revelar = true, onCarregou }: {
           {(pick.league_name || quando) && (
             <p className="text-[11px] text-ink-4 mb-3">
               {pick.league_name}
-              {pick.league_name && quando ? ' · ' : ''}
+              {pick.league_name && quando ? '-' : ''}
               {quando}
             </p>
           )}

@@ -384,7 +384,7 @@ export default function ExplorarLigas() {
                     onde esse time e' uma das linhas. */}
                 {[dados?.liga?.pais ?? pais ?? liga.pais,
                   dados && `${dados.resumo.jogos_finalizados} de ${dados.resumo.jogos_total} jogos disputados`]
-                  .filter(Boolean).join(' · ')}
+                  .filter(Boolean).join(', ')}
               </p>
             </div>
             {temporadas.length > 0 && (
@@ -421,14 +421,14 @@ export default function ExplorarLigas() {
               {/* Resumo da temporada */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <StatTile label="Gols por jogo" value={dados.resumo.media_gols.toFixed(2)} tone="green"
-                  hint={`casa ${dados.resumo.media_gols_casa.toFixed(2)} · fora ${dados.resumo.media_gols_fora.toFixed(2)}`} />
+                  hint={`casa ${dados.resumo.media_gols_casa.toFixed(2)}, fora ${dados.resumo.media_gols_fora.toFixed(2)}`} />
                 <StatTile label="Ambos marcam" value={`${dados.resumo.btts_pct}%`} />
                 <StatTile label="Over 2.5"     value={`${dados.resumo.over25_pct}%`}
-                  hint={`1.5: ${dados.resumo.over15_pct}% · 3.5: ${dados.resumo.over35_pct}%`} />
+                  hint={`1.5: ${dados.resumo.over15_pct}%, 3.5: ${dados.resumo.over35_pct}%`} />
                 <StatTile
                   label="Mando de campo"
                   value={`${dados.resumo.vitoria_casa_pct}%`}
-                  hint={`empate ${dados.resumo.empate_pct}% · fora ${dados.resumo.vitoria_fora_pct}%`}
+                  hint={`empate ${dados.resumo.empate_pct}%, fora ${dados.resumo.vitoria_fora_pct}%`}
                 />
                 {/* Tempo do gol. Só entra quando a temporada tem placar de
                     intervalo: nas antigas a fonte devolve nulo, e uma média de
@@ -494,7 +494,7 @@ export default function ExplorarLigas() {
                   <h3 className="text-sm font-bold text-ink-1">
                     {def.label}
                     <span className="text-ink-4 font-normal">
-                      {' · '}
+                      {', '}
                       {recorte === 'todos' ? 'todos os jogos' : recorte === 'casa' ? 'só em casa' : 'só fora'}
                     </span>
                   </h3>
@@ -563,7 +563,7 @@ export default function ExplorarLigas() {
                 onError={ev => (ev.currentTarget.style.display = 'none')} />
               <div className="min-w-0">
                 <h3 className="text-base font-bold text-ink-1 truncate">{timeAberto.nome}</h3>
-                <p className="text-[11px] text-ink-4">{liga?.nome} · {temporada}</p>
+                <p className="text-[11px] text-ink-4">{liga?.nome}, {temporada}</p>
               </div>
             </div>
             <button onClick={() => setTimeAberto(null)} aria-label="Fechar"
@@ -584,7 +584,7 @@ export default function ExplorarLigas() {
                       {r === 'todos' ? 'Todos' : r === 'casa' ? 'Casa' : 'Fora'}
                     </div>
                     <div className="font-mono text-lg font-black text-ink-1">{c.aproveitamento_pct}%</div>
-                    <div className="text-[10px] text-ink-4 mt-0.5">{c.jogos}j · {c.v}-{c.e}-{c.d}</div>
+                    <div className="text-[10px] text-ink-4 mt-0.5">{c.jogos}j, {c.v}-{c.e}-{c.d}</div>
                     <div className="mt-2 pt-2 border-t border-line/60 font-mono text-[11px] text-ink-2">
                       {c.media_gols_pro.toFixed(2)} <span className="text-ink-4">marcados</span>
                     </div>
@@ -705,7 +705,7 @@ export default function ExplorarLigas() {
                   <p className="text-[11px] text-ink-4 mt-0.5">
                     <span className="text-yellow-400 font-semibold">{detalheTime.cartoes.amarelo.por_jogo}</span> amarelos
                     e <span className="text-red-400 font-semibold">{detalheTime.cartoes.vermelho.por_jogo}</span> vermelhos por jogo
-                    · {detalheTime.jogos.todos} jogos
+, {detalheTime.jogos.todos} jogos
                   </p>
                 </div>
                 <div className="p-4 space-y-1.5">

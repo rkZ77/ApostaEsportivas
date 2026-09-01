@@ -14,7 +14,7 @@ function formatDate(iso: string): string {
 export default function Blog() {
   return (
     <PageShell
-      title="Blog Pick IA · Gestão de banca e estratégia em apostas esportivas"
+      title="Blog Pick IA | Gestão de banca e estratégia em apostas esportivas"
       description="Artigos sobre gestão de banca, Kelly Criterion, EV positivo e estratégia para apostas esportivas de futebol, direto da equipe do Pick IA."
       canonical="https://pickia.com.br/blog"
       width="prose"
@@ -55,7 +55,7 @@ export default function Blog() {
                         {post.category}
                       </span>
                       <span className="text-ink-4 text-xs">{formatDate(post.publishedAt)}</span>
-                      <span className="text-ink-4 text-xs">· {post.readingTime} min de leitura</span>
+                      <span className="text-ink-4 text-xs">, {post.readingTime} min de leitura</span>
                     </div>
                     <h2 className="text-ink-1 font-bold text-lg mb-1.5 leading-snug">{post.title}</h2>
                     <p className="text-ink-2 text-sm leading-relaxed">{post.description}</p>

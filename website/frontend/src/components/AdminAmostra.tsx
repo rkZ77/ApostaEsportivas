@@ -80,7 +80,7 @@ interface Atuacao {
 }
 
 const diaMes = (iso?: string | null) => {
-  if (!iso) return '·'
+  if (!iso) return '-'
   const [a, m, d] = iso.slice(0, 10).split('-')
   return d && m ? `${d}/${m}` : a
 }
@@ -89,10 +89,10 @@ const dec = (v: unknown) => {
   const n = typeof v === 'string' ? Number(v) : v
   return typeof n === 'number' && !Number.isNaN(n)
     ? n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    : '·'
+    : '-'
 }
 
-const inteiro = (v: number | null | undefined) => (v == null ? '·' : String(v))
+const inteiro = (v: number | null | undefined) => (v == null ? '-' : String(v))
 
 /** As médias que se lê olhando um jogo · o resto de team_statistics é ruído
  *  numa tela de conferência (28 colunas de avg_* não cabem em nada). */
@@ -183,15 +183,15 @@ export default function AdminAmostra({ alvo, onClose }: { alvo: AlvoAmostra; onC
             <div className="flex flex-wrap items-baseline justify-between gap-2 mb-2">
               <p className="text-xs font-bold text-ink-1">
                 {dados.jogador?.time ?? 'Time ?'}
-                {dados.jogador?.posicao ? ` · ${dados.jogador.posicao}` : ''}
+                {dados.jogador?.posicao ? `, ${dados.jogador.posicao}` : ''}
               </p>
               <p className="text-[10px] font-mono text-ink-4">
                 {dados.lidas} de {dados.atuacoes?.length ?? 0} atuações lidas
-                {dados.mando !== 'todos' && ` · ${dados.mando === 'casa' ? 'em casa' : 'fora'}`}
+                {dados.mando !== 'todos' && `, ${dados.mando === 'casa' ? 'em casa' : 'fora'}`}
                 {/* Mesmo aviso que a amostra do time dá com multi_competicao:
                   * média de duas competições não descreve nenhuma das duas. */}
                 {(dados.competicoes?.length ?? 0) > 1 && (
-                  <span className="text-yellow-400"> · {dados.competicoes.length} competições</span>
+                  <span className="text-yellow-400">, {dados.competicoes.length} competições</span>
                 )}
               </p>
             </div>
@@ -214,7 +214,7 @@ export default function AdminAmostra({ alvo, onClose }: { alvo: AlvoAmostra; onC
             </div>
             <p className="text-[10px] text-ink-4 mt-2 leading-relaxed">
               A média sai só das atuações de {dados.min_minutos} minutos ou mais, que é o corte
-              do motor · a lista abaixo mostra todas, e a que ficou de fora aparece apagada.
+              do motor, a lista abaixo mostra todas, e a que ficou de fora aparece apagada.
               Entrada curta e jogo inteiro não são a mesma observação.
             </p>
           </div>
@@ -241,7 +241,7 @@ export default function AdminAmostra({ alvo, onClose }: { alvo: AlvoAmostra; onC
                       </span>
                     </div>
                     {(dados.competicoes?.length ?? 0) > 1 && (
-                      <p className="pl-11 text-[10px] text-ink-4 truncate">{a.liga ?? '·'}</p>
+                      <p className="pl-11 text-[10px] text-ink-4 truncate">{a.liga ?? '-'}</p>
                     )}
                     <div className="flex flex-wrap gap-x-3 pl-11 mt-0.5 text-[10px] font-mono text-ink-4 tabular-nums">
                       {dados.colunas?.map((c: { chave: string; rotulo: string }) => (
@@ -252,7 +252,7 @@ export default function AdminAmostra({ alvo, onClose }: { alvo: AlvoAmostra; onC
                     </div>
                     {curta && (
                       <p className="pl-11 mt-0.5 text-[10px] text-ink-4">
-                        abaixo do corte · não entra na média
+                        abaixo do corte, não entra na média
                       </p>
                     )}
                   </div>
@@ -284,7 +284,7 @@ export default function AdminAmostra({ alvo, onClose }: { alvo: AlvoAmostra; onC
             >
               {dados.contextos.map((c: any) => (
                 <option key={`${c.league_id}|${c.season}`} value={`${c.league_id}|${c.season}`}>
-                  {c.liga ?? `liga ${c.league_id}`} · {c.season} · {c.jogos} jogo(s)
+                  {c.liga ?? `liga ${c.league_id}`}, {c.season}, {c.jogos} jogo(s)
                 </option>
               ))}
             </select>
@@ -310,7 +310,7 @@ export default function AdminAmostra({ alvo, onClose }: { alvo: AlvoAmostra; onC
                 <span className="font-bold text-ink-1">
                   {dados.jogos_com_buraco} de {dados.jogos.length} jogo(s) entraram com estatística faltando.
                 </span>{' '}
-                O agregador soma o contador ausente como zero e conta o jogo do mesmo jeito ·
+                O agregador soma o contador ausente como zero e conta o jogo do mesmo jeito, 
                 então a média não fica só menos confiável, ela fica menor. É o mesmo buraco que
                 a lista de partidas mostra em amarelo, visto do lado da média.
               </p>
@@ -332,7 +332,7 @@ export default function AdminAmostra({ alvo, onClose }: { alvo: AlvoAmostra; onC
                         {ctx === 'HOME' ? 'Em casa' : 'Fora'}
                       </p>
                       <p className="text-[10px] font-mono text-ink-4">
-                        {motor?.games_count ?? salva?.games_count ?? '·'} jogo(s)
+                        {motor?.games_count ?? salva?.games_count ?? '-'} jogo(s)
                       </p>
                     </div>
                     <div className="space-y-1">
@@ -364,9 +364,9 @@ export default function AdminAmostra({ alvo, onClose }: { alvo: AlvoAmostra; onC
               <div className="flex items-baseline justify-between gap-2 mb-2">
                 <p className="text-xs font-bold text-ink-1">Média gravada</p>
                 <p className="text-[10px] font-mono text-ink-4">
-                  {dados.media_salva.games ?? '·'} com folha
+                  {dados.media_salva.games ?? '-'} com folha
                   {dados.media_salva.games_total != null &&
-                    ` · ${dados.media_salva.games_total} apitados`}
+                    `, ${dados.media_salva.games_total} apitados`}
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1">
@@ -382,7 +382,7 @@ export default function AdminAmostra({ alvo, onClose }: { alvo: AlvoAmostra; onC
                 ))}
               </div>
               <p className="text-[10px] text-ink-4 mt-2 leading-relaxed">
-                "Com folha" é a amostra que sustenta a média de cartões · é esse número que o
+                "Com folha" é a amostra que sustenta a média de cartões, é esse número que o
                 gate do motor lê. A distância dele para os apitados é quanta coleta falta.
               </p>
             </div>

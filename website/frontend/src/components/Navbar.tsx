@@ -238,7 +238,7 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
             <button
               onClick={() => setSidebarOpen(v => !v)}
               className="lg:hidden relative text-ink-2 hover:text-ink-1 transition-colors p-2"
-              aria-label={emailPendente ? 'Menu · e-mail não confirmado' : 'Menu'}
+              aria-label={emailPendente ? 'Menu, e-mail não confirmado' : 'Menu'}
             >
               {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
               {emailPendente && !sidebarOpen && (

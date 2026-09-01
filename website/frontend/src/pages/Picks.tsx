@@ -672,7 +672,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
         </div>
         <div className="flex items-center gap-2 text-xs text-ink-3">
           <span className="font-semibold text-ink-2">{translateMarket(dica.market)}</span>
-          {dica.line && <><span>·</span><span>{translateLine(dica.line)}</span></>}
+          {dica.line && <><span>,</span><span>{translateLine(dica.line)}</span></>}
           <InfoTip text={explainMarket(dica.market, dica.line)} />
         </div>
       </div>
@@ -812,7 +812,7 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
       homeTeamId: legs[0]?.home_team_id,
       awayTeamId: legs[0]?.away_team_id,
       pickType: 'multipla',
-      market: `Múltipla · ${legs.length} seleções`,
+      market: `Múltipla, ${legs.length} seleções`,
       odd: Number(m.total_odd),
       probabilityPct: pctProb(m.probability ?? m.confidence),
       result: m.result,
@@ -883,11 +883,11 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
           <span className="badge-vip">VIP</span>
           <span className="text-[10px] text-ink-4">
             {new Date(m.match_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
-            {' · '}{legs.length} seleções
+            {', '}{legs.length} seleções
           </span>
           {legs.length >= 2 && legs[0]?.home && legs[1]?.home && (
             <span className="text-[9px] text-ink-3 truncate max-w-[140px]">
-              {legs[0].home} · {legs[1].home}
+              {legs[0].home}, {legs[1].home}
             </span>
           )}
         </div>
@@ -1058,7 +1058,7 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
             </div>
             <div className="flex items-center gap-1.5 ml-7 text-xs mt-1">
               <span className="font-semibold text-ink-2">{translateMarket(leg.market)}</span>
-              {leg.line && <><span className="text-ink-4">·</span><span className="text-ink-2">{translateLine(leg.line)}</span></>}
+              {leg.line && <><span className="text-ink-4">,</span><span className="text-ink-2">{translateLine(leg.line)}</span></>}
               <InfoTip text={explainMarket(leg.market, leg.line)} />
             </div>
           </div>
@@ -1275,7 +1275,7 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
                 <span className="text-2xl font-black text-orange-400">R${stake.toFixed(2)}</span>
                 {!pick.result && (
                   <>
-                    <span className="text-ink-4 text-sm">·</span>
+                    <span className="text-ink-4 text-sm">,</span>
                     <span className="text-lg font-black text-ink-1">R${potReturn.toFixed(2)}</span>
                     <span className="text-[10px] text-ink-4">se green</span>
                   </>
@@ -1341,8 +1341,8 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
             </div>
             <div className="flex items-center gap-1.5 ml-7 text-xs mt-1">
               <span className="font-semibold text-ink-2">{translateMarket(leg.market)}</span>
-              {leg.line && <><span className="text-ink-4">·</span><span className="text-ink-2">{translateLine(leg.line)}</span></>}
-              {leg.house && <><span className="text-ink-4">·</span><span className="text-ink-3">{leg.house}</span></>}
+              {leg.line && <><span className="text-ink-4">,</span><span className="text-ink-2">{translateLine(leg.line)}</span></>}
+              {leg.house && <><span className="text-ink-4">,</span><span className="text-ink-3">{leg.house}</span></>}
               <InfoTip text={explainMarket(leg.market, leg.line)} />
             </div>
           </div>
@@ -1799,7 +1799,7 @@ function PipelineStatusCard() {
             }`}>
               {s.status === 'done' ? '✓' : s.status === 'running' ? (
                 <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
-              ) : '·'}
+              ) : '-'}
             </span>
             <span className={`text-sm ${
               s.status === 'done'    ? 'text-ink-2' :
@@ -2085,7 +2085,7 @@ function PlacarDoProduto({ source, tom }: { source: string; tom: string }) {
   if (!dados || total === 0) {
     return (
       <p className="text-xs text-ink-4 mt-3 leading-relaxed">
-        Nenhum pick deste tipo foi liquidado ainda · o placar aparece aqui assim que o
+        Nenhum pick deste tipo foi liquidado ainda, o placar aparece aqui assim que o
         primeiro fechar.
       </p>
     )
@@ -2118,7 +2118,7 @@ function PlacarDoProduto({ source, tom }: { source: string; tom: string }) {
         <p className={`text-[11px] mt-2 font-semibold ${
           dados.streak_type === 'green' ? 'text-accent-ink' : 'text-red-400'}`}>
           {streak} {dados.streak_type === 'green' ? 'greens' : 'reds'} seguidos
-          <span className={`text-ink-4 font-normal`}> · liquidados neste produto</span>
+          <span className={`text-ink-4 font-normal`}>, liquidados neste produto</span>
         </p>
       )}
       <p className={`text-[10px] mt-1.5 ${tom}`}>
@@ -2601,7 +2601,7 @@ export default function Picks() {
                 onClick={() => setSelectedOffset(0)}
                 className="ml-1 text-[10px] text-accent-ink hover:text-accent-hover font-bold transition-colors"
               >
-                · Hoje
+. Hoje
               </button>
             )}
           </span>
@@ -2616,7 +2616,7 @@ export default function Picks() {
                 <span className={`font-mono font-bold text-sm tabular-nums ${lucroUnidades >= 0 ? 'text-accent-ink' : 'text-red-400'}`}>
                   {fmtUnits(lucroUnidades, 1)}
                 </span>
-                <span className="text-ink-4">· Win rate</span>
+                <span className="text-ink-4">. Win rate</span>
                 <span className={`font-mono font-bold text-sm ${(quickStats.win_rate ?? 0) >= 55 ? 'text-accent-ink' : 'text-ink-2'}`}>
                   {quickStats.win_rate ?? 0}%
                 </span>
@@ -2762,7 +2762,7 @@ export default function Picks() {
                   porcentagem, escondendo justo o resultado. */}
               {quickStats && (
                 <div>
-                  <p className="text-[10px] text-ink-4 font-semibold mb-2">Performance da IA · Geral</p>
+                  <p className="text-[10px] text-ink-4 font-semibold mb-2">Performance geral da IA</p>
                   <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                     {[
                       { label: 'Picks', value: String(quickStats.total ?? 0), color: 'text-ink-1' },
@@ -2807,7 +2807,7 @@ export default function Picks() {
               {/* Pick Seguro · visível para todos; some se não houver dica hoje */}
               {today?.dica_do_dia && (
                 <section>
-                  <SectionHeader color="bg-green-500" label="Pick do Dia · Free" />
+                  <SectionHeader color="bg-green-500" label="Pick do Dia. Free" />
                   <PickSeguroCard dica={today.dica_do_dia} compact banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(today.dica_do_dia.fixture_id)} />
                 </section>
               )}
@@ -3012,7 +3012,7 @@ export default function Picks() {
             {/* Pick de hoje */}
             {todayLoading ? <PickLoading /> : (
               <div>
-                <SectionHeader color="bg-green-500" label={`Pick do Dia · ${todayDateStr}`} />
+                <SectionHeader color="bg-green-500" label={`Pick do Dia, ${todayDateStr}`} />
                 {today?.dica_do_dia ? <PickSeguroCard dica={today.dica_do_dia} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(today.dica_do_dia.fixture_id)} /> : <PickSeguroEmpty />}
               </div>
             )}
@@ -3047,7 +3047,7 @@ export default function Picks() {
             <div>
               <SectionHeader
                 color="bg-yellow-400"
-                label={`Picks do Dia · ${todayDateStr}`}
+                label={`Picks do Dia, ${todayDateStr}`}
               />
               {!canSeeVip ? <VipLockOverlay color="yellow" picks={today?.bloqueados?.vip} /> : todayLoading ? <PickLoading /> : (() => {
                 const vips = today?.vip ?? []
@@ -3180,7 +3180,7 @@ export default function Picks() {
 
             {/* Múltiplas de hoje */}
             <div>
-              <SectionHeader color="bg-blue-400" label={`Múltiplas do Dia · ${todayDateStr}`} />
+              <SectionHeader color="bg-blue-400" label={`Múltiplas do Dia, ${todayDateStr}`} />
               {!canSeeVip ? <VipLockOverlay color="blue" resumo={today?.bloqueados?.multipla} rotulo="múltiplas" /> : todayLoading ? <PickLoading /> : (
                 today?.multiplas?.length > 0 ? (
                   <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-4">
@@ -3239,7 +3239,7 @@ export default function Picks() {
                 <p>
                   Se der <span className="text-red-400 font-bold">red</span> em qualquer etapa, o
                   caminho acaba e você perde <span className="text-ink-1 font-bold">apenas o valor
-                  de entrada</span>, nunca o acumulado · o bolo que estava em jogo nunca saiu da
+                  de entrada</span>, nunca o acumulado, o bolo que estava em jogo nunca saiu da
                   mesa, então nunca foi seu para perder. Um caminho novo começa em seguida.
                 </p>
                 <p className="text-ink-3">
@@ -3248,7 +3248,7 @@ export default function Picks() {
                 </p>
                 <div className="grid grid-cols-3 gap-3 mt-3">
                   {[
-                    { label: 'Odd por etapa', value: '1.40–1.55', color: 'text-orange-400' },
+                    { label: 'Odd por etapa', value: '1.40 a 1.55', color: 'text-orange-400' },
                     { label: 'Meta',          value: `${userAlavSerie?.meta ?? 6} greens`, color: 'text-green-400' },
                     { label: 'Risco',         value: '1u',        color: 'text-ink-1'      },
                     /* Sem placar em unidades aqui de propósito: a alavancagem
@@ -3269,7 +3269,7 @@ export default function Picks() {
             {/* Stats da série + Pick de hoje (bloqueado para free) */}
             {!canSeeVip ? (
               <div>
-                <SectionHeader color="bg-orange-400" label={`Pick do Dia · ${todayDateStr}`} />
+                <SectionHeader color="bg-orange-400" label={`Pick do Dia, ${todayDateStr}`} />
                 <VipLockOverlay color="orange" resumo={today?.bloqueados?.alavancagem} rotulo="caminhos" />
               </div>
             ) : (
@@ -3277,7 +3277,7 @@ export default function Picks() {
                 {/* Pick de hoje */}
                 {todayLoading ? <PickLoading /> : (
                   <div>
-                    <SectionHeader color="bg-orange-400" label={`Pick do Dia · ${todayDateStr}`} />
+                    <SectionHeader color="bg-orange-400" label={`Pick do Dia, ${todayDateStr}`} />
                     {today?.alavancagem ? (
                       <AlavancagemCard
                         pick={today.alavancagem}
@@ -3441,7 +3441,7 @@ export default function Picks() {
                         <span key={s.pick_id} className="flex items-center gap-1">
                           <span className="text-ink-4 text-[10px]">&rsaquo;</span>
                           <span
-                            title={`${s.match} · odd ${s.odd.toFixed(2)}`}
+                            title={`${s.match} | odd ${s.odd.toFixed(2)}`}
                             className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
                               s.result === 'GREEN'
                                 ? 'bg-green-500/10 text-green-400'
@@ -3479,7 +3479,7 @@ export default function Picks() {
                                 {h.greens > 0
                                   ? `${h.greens} ${h.greens === 1 ? 'green seu' : 'greens seus'}`
                                   : 'você não seguiu nenhum pick deste caminho'}
-                                {h.ended_at && ` · ${h.ended_at.slice(8, 10)}/${h.ended_at.slice(5, 7)}`}
+                                {h.ended_at && `, ${h.ended_at.slice(8, 10)}/${h.ended_at.slice(5, 7)}`}
                               </p>
                             </div>
                             <span className={`font-mono text-xs font-bold shrink-0 ${h.realized >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -3787,7 +3787,7 @@ export default function Picks() {
                     <p>
                       A média sai das atuações dele{' '}
                       <span className="text-ink-1 font-bold">na mesma competição</span>, contando só
-                      jogo em que ele foi titular efetivo · atuação de doze minutos e jogo inteiro
+                      jogo em que ele foi titular efetivo, atuação de doze minutos e jogo inteiro
                       não são a mesma observação, e misturar as duas derruba toda média.
                     </p>
                     <p>

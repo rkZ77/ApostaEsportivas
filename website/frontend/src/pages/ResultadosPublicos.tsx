@@ -293,7 +293,7 @@ export default function ResultadosPublicos() {
     .map(l => ({
       label: l.league_name,
       value: Math.round(Number(l.profit ?? 0) * 100) / 100,
-      meta: `${l.total} picks · ${l.greens}G ${l.reds}R`,
+      meta: `${l.total} picks, ${l.greens}G ${l.reds}R`,
     }))
     .sort((a, b) => b.value - a.value)
 
@@ -337,7 +337,7 @@ export default function ResultadosPublicos() {
 
   return (
     <PageShell
-      title="Resultados · Pick IA"
+      title="Resultados | Pick IA"
       description="Histórico completo dos picks da IA com win rate auditável por liga, por jogo e por mês. Todos os picks registrados, qualquer pessoa pode conferir."
       canonical="https://pickia.com.br/resultados"
       width="full"
@@ -434,8 +434,8 @@ export default function ResultadosPublicos() {
                 {[
                   { label: 'Ligas',        value: String(leaguesCovered), color: 'text-ink-1' },
                   { label: 'Dias com pick', value: String(daysWithPicks),  color: 'text-ink-1' },
-                  { label: 'Picks por dia', value: avgPerDay != null ? avgPerDay.toFixed(1) : '·', color: 'text-ink-1' },
-                  { label: 'Seq. positiva', value: bestStreak > 0 ? `${bestStreak}d` : '·', color: bestStreak > 0 ? 'text-green-400' : 'text-ink-2' },
+                  { label: 'Picks por dia', value: avgPerDay != null ? avgPerDay.toFixed(1) : '-', color: 'text-ink-1' },
+                  { label: 'Seq. positiva', value: bestStreak > 0 ? `${bestStreak}d` : '-', color: bestStreak > 0 ? 'text-green-400' : 'text-ink-2' },
                 ].map(({ label, value, color }) => (
                   <div key={label} className="stat-tile">
                     <div className={`stat-value ${color}`}>{value}</div>
@@ -516,7 +516,7 @@ export default function ResultadosPublicos() {
                 <div className="panel">
                   <div className="panel-head">
                     <span className="panel-label">Picks recentes</span>
-                    <span className="panel-meta">{recentTotal} picks · ordenados por data e hora</span>
+                    <span className="panel-meta">{recentTotal} picks, ordenados por data e hora</span>
                   </div>
                   {recentLeagues.length > 1 && (
                     <div className="flex gap-2 flex-wrap px-4 pt-3">
@@ -625,7 +625,7 @@ export default function ResultadosPublicos() {
             <AbaStats tiles={statsPorLiga} />
             {lucroPorLiga.length > 1 && (
               <div className="panel p-5 mb-5">
-                <p className="panel-label mb-4">Lucro por liga · unidades</p>
+                <p className="panel-label mb-4">Lucro por liga, unidades</p>
                 <LucroBarChart data={lucroPorLiga} orientation="horizontal" />
               </div>
             )}
@@ -644,7 +644,7 @@ export default function ResultadosPublicos() {
                       <span className="text-sm font-semibold text-ink-1 flex-1 min-w-0 truncate">{lg.league_name}</span>
                       <span className="text-[11px] text-ink-4 shrink-0 hidden sm:block">{lg.total} picks</span>
                       <span className="font-mono text-[11px] text-ink-4 w-16 text-right shrink-0 hidden sm:block">
-                        {lg.greens}G · {lg.reds}R
+                        {lg.greens}G, {lg.reds}R
                       </span>
                       <span className={`font-mono text-xs font-black w-12 text-right shrink-0 ${(wr ?? 0) >= 55 ? 'text-green-400' : 'text-ink-2'}`}>
                         {wr}%
@@ -703,7 +703,7 @@ export default function ResultadosPublicos() {
                         </span>
                         <span className="text-[11px] text-ink-4 shrink-0 hidden sm:block">{f.total} picks</span>
                         <span className="font-mono text-[11px] text-ink-4 w-16 text-right shrink-0 hidden sm:block">
-                          {f.greens}G · {f.reds}R
+                          {f.greens}G, {f.reds}R
                         </span>
                         <div className="flex-1 h-1.5 bg-surface-2 rounded-full overflow-hidden min-w-[40px]">
                           <div
@@ -776,7 +776,7 @@ export default function ResultadosPublicos() {
                               )}
                             </div>
                             <span className="text-[11px] text-ink-3 shrink-0 hidden sm:block truncate max-w-[120px]">
-                              {g.market}{g.line ? ` · ${g.line}` : ''}
+                              {g.market}{g.line ? `, ${g.line}` : ''}
                             </span>
                             <span className="font-mono text-xs font-bold text-ink-2 shrink-0">{g.odd ? Number(g.odd).toFixed(2) : ''}</span>
                             {g.result ? (
@@ -819,7 +819,7 @@ export default function ResultadosPublicos() {
               <AbaStats tiles={statsPorMes} />
               {lucroPorMes.length > 1 && (
                 <div className="panel p-5 mb-5">
-                  <p className="panel-label mb-4">Lucro por mês · unidades</p>
+                  <p className="panel-label mb-4">Lucro por mês, unidades</p>
                   <LucroBarChart data={lucroPorMes} orientation="vertical" />
                 </div>
               )}

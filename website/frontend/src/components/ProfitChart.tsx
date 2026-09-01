@@ -238,7 +238,7 @@ export default function ProfitChart({
             color: hv >= 0 ? 'rgb(var(--c-green-400))' : 'rgb(var(--c-red-400))',
           }}
         >
-          {fmtDate(dates[hoverIdx])} · {fmtVal(hv)}
+          {fmtDate(dates[hoverIdx])}, {fmtVal(hv)}
         </motion.div>
       )}
       </AnimatePresence>

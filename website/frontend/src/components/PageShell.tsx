@@ -83,7 +83,7 @@ export default function PageShell({
 }) {
   const revelado = useRevelacao(!revelacao)
   const fullTitle = title
-    ? (title.includes('Pick IA') ? title : `${title} · Pick IA`)
+    ? (title.includes('Pick IA') ? title : `${title} | Pick IA`)
     : undefined
 
   return (

@@ -98,7 +98,7 @@ const PERIODOS = [
  *  DATE pura e o construtor a interpreta como UTC, o que volta um dia atrás
  *  no fuso de Brasília. */
 const diaMes = (d?: string | null) =>
-  d ? d.slice(5, 10).split('-').reverse().join('/') : '·'
+  d ? d.slice(5, 10).split('-').reverse().join('/') : '-'
 
 /** "2026-08-28T15:41:36-03:00" -> "15:41". Fatiado, nunca por `new Date`: o
  *  backend já grava no fuso de Brasília (ver _relogio_do_watch em
@@ -317,8 +317,8 @@ export default function AdminMotorLive() {
               {diag.grava_em.toUpperCase()}
             </span>
             {diag.grava_em.startsWith('produ')
-              ? ' · o pick que sair daqui aparece pro assinante.'
-              : ' · nada daqui chega ao assinante.'}
+              ? ', o pick que sair daqui aparece pro assinante.'
+              : ', nada daqui chega ao assinante.'}
           </p>
         )}
         {/* Lista completa mesmo quando tudo passa: num painel de teste, saber
@@ -331,7 +331,7 @@ export default function AdminMotorLive() {
                 : <XCircle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-px" />}
               <span className={c.ok ? 'text-ink-3' : 'text-ink-1 font-semibold'}>
                 {c.item}
-                <span className="text-ink-4 font-normal"> · {c.detalhe}</span>
+                <span className="text-ink-4 font-normal">, {c.detalhe}</span>
               </span>
             </li>
           ))}
@@ -352,7 +352,7 @@ export default function AdminMotorLive() {
               Acompanhamento contínuo
             </h3>
             <p className="text-[11px] text-ink-4 mt-1 leading-relaxed max-w-xl">
-              Dispara uma rodada atrás da outra no intervalo escolhido e não para sozinho ·
+              Dispara uma rodada atrás da outra no intervalo escolhido e não para sozinho, 
               só quando você desligar. Uma passada só não constrói a janela de ritmo que o
               motor usa, são a segunda e a terceira que fazem o modelo valer.
             </p>
@@ -388,7 +388,7 @@ export default function AdminMotorLive() {
           <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
             {[
               { l: 'Rodadas', v: String(watch?.rodadas ?? 0) },
-              { l: 'Desde',   v: horaCurta(watch?.iniciado_em) || '·' },
+              { l: 'Desde',   v: horaCurta(watch?.iniciado_em) || '-' },
               { l: 'Última',  v: horaCurta(watch?.ultima_rodada) || 'primeira em curso' },
               {
                 l: 'Próxima em',
@@ -409,7 +409,7 @@ export default function AdminMotorLive() {
              botão "Ligar" e a queda passava como se nunca tivesse acontecido. */
           <p className="mt-3 text-[11px] text-amber-300 leading-relaxed flex items-start gap-1.5">
             <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" />
-            Parou depois de {watch.rodadas} rodada(s) · {watch.motivo_parada}
+            Parou depois de {watch.rodadas} rodada(s), {watch.motivo_parada}
           </p>
         ) : null}
 
@@ -469,10 +469,10 @@ export default function AdminMotorLive() {
         {(run?.started_at || run?.finished_at) && (
           <p className="text-[11px] text-ink-4 mt-2">
             {run.started_at && <>início {horaCurta(run.started_at)}</>}
-            {run.finished_at && <> · fim {horaCurta(run.finished_at)}</>}
+            {run.finished_at && <>, fim {horaCurta(run.finished_at)}</>}
             {run.returncode !== null && (
               <span className={run.returncode === 0 ? ' text-green-400' : ' text-red-400'}>
-                {' '}· saída {run.returncode}
+                {' '}, saída {run.returncode}
               </span>
             )}
           </p>
@@ -509,7 +509,7 @@ export default function AdminMotorLive() {
             ))}
           </div>
           <p className="text-[11px] text-ink-4 mt-2 leading-relaxed">
-            {stats.greens}G · {stats.reds}R · {stats.push}P em {stats.resolvidos} resolvidos,
+            {stats.greens}G, {stats.reds}R, {stats.push}P em {stats.resolvidos} resolvidos,
             {' '}e {stats.expirados} tiveram a janela da odd fechada antes de alguém pegar
             {stats.minuto_medio !== null && <>, com minuto médio de entrada {stats.minuto_medio}&#39;</>}
           </p>
@@ -520,7 +520,7 @@ export default function AdminMotorLive() {
       <div className="bg-surface-1 border border-line rounded-lg p-4">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <h3 className="text-xs font-semibold text-ink-3">
-            Picks gerados {picks.length > 0 && <span className="text-ink-4 font-normal">· {picks.length}</span>}
+            Picks gerados {picks.length > 0 && <span className="text-ink-4 font-normal">, {picks.length}</span>}
           </h3>
           <div className="flex items-center gap-0.5">
             {PERIODOS.map(p => (
@@ -577,8 +577,8 @@ export default function AdminMotorLive() {
                 </div>
                 <p className="text-[11px] text-ink-3 mt-0.5">{p.market} {p.line}</p>
                 <p className="text-[10px] text-ink-4 font-mono mt-0.5">
-                  {diaMes(p.match_date)} · {p.minute_at_creation}&#39; · odd {Number(p.odd).toFixed(2)}
-                  {p.ev !== null && p.ev !== undefined && <> · EV {(Number(p.ev) * 100).toFixed(1)}%</>}
+                  {diaMes(p.match_date)}, {p.minute_at_creation}&#39;, odd {Number(p.odd).toFixed(2)}
+                  {p.ev !== null && p.ev !== undefined && <>. EV {(Number(p.ev) * 100).toFixed(1)}%</>}
                 </p>
               </li>
             ))}
@@ -612,7 +612,7 @@ export default function AdminMotorLive() {
                     <td className="py-2 pr-2 text-right text-ink-4 font-mono">{p.minute_at_creation}&#39;</td>
                     <td className="py-2 pr-2 text-right text-ink-2 font-mono">{Number(p.odd).toFixed(2)}</td>
                     <td className="py-2 pr-2 text-right font-mono text-ink-3">
-                      {p.ev !== null && p.ev !== undefined ? `${(Number(p.ev) * 100).toFixed(1)}%` : '·'}
+                      {p.ev !== null && p.ev !== undefined ? `${(Number(p.ev) * 100).toFixed(1)}%` : '-'}
                     </td>
                     <td className="py-2 text-right">
                       <span className={`font-bold ${

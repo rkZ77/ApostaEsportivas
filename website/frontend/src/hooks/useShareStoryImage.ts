@@ -91,7 +91,7 @@ export function useShareStoryImage() {
 
       const shareUrl = `${window.location.origin}/p/${input.pickTypeRoute}/${input.pickId}${refCode ? `?ref=${refCode}` : ''}`
       const blob = await buildStoryImage({ ...input, shareUrl, winRatePct })
-      const resultLabel = input.result ? ` · ${input.result}` : ''
+      const resultLabel = input.result ? `, ${input.result}` : ''
       const text = `Pick IA${resultLabel}: ${input.homeTeamName}${input.awayTeamName ? ` x ${input.awayTeamName}` : ''} @ ${input.odd.toFixed(2)}`
 
       await dispatchShare(blob, 'pick-ia.png', 'Pick IA', text, shareUrl)
@@ -124,7 +124,7 @@ export function useShareResultsImage() {
       const { shareText, ...imgInput } = input
       const blob = await buildResultsStoryImage({ ...imgInput, shareUrl })
       const text = shareText ?? `A IA da Pick IA acerta ${Math.round(input.winRatePct)}% dos picks. Histórico 100% auditável.`
-      await dispatchShare(blob, 'pick-ia-resultados.png', 'Pick IA · Resultados', text, shareUrl)
+      await dispatchShare(blob, 'pick-ia-resultados.png', 'Pick IA. Resultados', text, shareUrl)
       setShared(true)
       setTimeout(() => setShared(false), 2500)
     } catch (err: any) {
@@ -160,7 +160,7 @@ export function useShareTodayGamesImage() {
         ? `A IA da Pick IA vai analisar ${games.length} jogo(s) amanhã. Os picks saem sem hora marcada, quando passam no corte.`
         : `A IA da Pick IA já analisou ${games.length} jogo(s) de hoje e os picks já estão no ar.`
       const filename = variant === 'amanha' ? 'pick-ia-jogos-amanha.png' : 'pick-ia-jogos-hoje.png'
-      const title = variant === 'amanha' ? 'Pick IA · Jogos de amanhã' : 'Pick IA · Jogos de hoje'
+      const title = variant === 'amanha' ? 'Pick IA. Jogos de amanhã' : 'Pick IA. Jogos de hoje'
       await dispatchShare(blob, filename, title, text, shareUrl)
       setShared(true)
       setTimeout(() => setShared(false), 2500)
@@ -193,7 +193,7 @@ export function useShareLeagueResultsImage() {
       const text = top
         ? `${top.leagueName}: ${Math.round(top.winRatePct)}% de acerto na Pick IA. Histórico 100% auditável.`
         : 'Resultados da IA por liga na Pick IA. Histórico 100% auditável.'
-      await dispatchShare(blob, 'pick-ia-resultados-liga.png', 'Pick IA · Resultados por liga', text, shareUrl)
+      await dispatchShare(blob, 'pick-ia-resultados-liga.png', 'Pick IA. Resultados por liga', text, shareUrl)
       setShared(true)
       setTimeout(() => setShared(false), 2500)
     } catch (err: any) {
@@ -233,7 +233,7 @@ export function useShareAlavancagemImage() {
       const blob = await buildAlavancagemStoryImage({ ...imgInput, shareUrl })
       const quantos = imgInput.legs.length
       const texto = `Alavancagem da Pick IA: ${quantos} ${quantos === 1 ? 'jogo' : 'jogos'}, 1 unidade virando ${imgInput.oddCombined.toFixed(2)}u.`
-      await dispatchShare(blob, 'pick-ia-alavancagem.png', 'Pick IA · Alavancagem', texto, shareUrl)
+      await dispatchShare(blob, 'pick-ia-alavancagem.png', 'Pick IA. Alavancagem', texto, shareUrl)
       setShared(true)
       setTimeout(() => setShared(false), 2500)
     } catch (err: any) {

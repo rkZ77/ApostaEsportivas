@@ -61,7 +61,7 @@ export interface Amostra {
 }
 
 const diaMes = (iso?: string | null) => {
-  if (!iso) return '·'
+  if (!iso) return '-'
   const [a, m, d] = iso.slice(0, 10).split('-')
   return d && m ? `${d}/${m}` : a
 }
@@ -90,14 +90,14 @@ export default function BlocoAmostra({ amostra }: { amostra: Amostra }) {
             <p className="text-[11px] text-ink-2">
               Ida: {c.jogo_de_ida.gols_mandante_atual} x {c.jogo_de_ida.gols_visitante_atual}
               {c.agregado?.gols_para_reverter
-                ? ` · faltam ${c.agregado.gols_para_reverter} gol(s) para virar o agregado`
+                ? `, faltam ${c.agregado.gols_para_reverter} gol(s) para virar o agregado`
                 : ''}
             </p>
           )}
           {c.descricao && <p className="text-[11px] text-ink-3 leading-relaxed">{c.descricao}</p>}
           {c.is_classico && c.rivalidade_confrontos != null && (
             <p className="text-[10px] text-ink-4">
-              Rivalidade medida em {c.rivalidade_confrontos} confronto(s) diretos · é excesso de
+              Rivalidade medida em {c.rivalidade_confrontos} confronto(s) diretos, é excesso de
               cartão sobre a linha de base, não rótulo.
             </p>
           )}
@@ -108,7 +108,7 @@ export default function BlocoAmostra({ amostra }: { amostra: Amostra }) {
       {amostra.valores && amostra.valores.length > 0 && (
         <div className="bg-surface-0 border border-line rounded-lg p-3">
           <div className="text-[10px] text-ink-4 mb-1.5">
-            Últimas atuações{amostra.atuacoes_lidas ? ` · ${amostra.valores.length} de ${amostra.atuacoes_lidas} lidas` : ''}
+            Últimas atuações{amostra.atuacoes_lidas ? `, ${amostra.valores.length} de ${amostra.atuacoes_lidas} lidas` : ''}
           </div>
           <div className="flex flex-wrap gap-1">
             {amostra.valores.map((v, i) => (
@@ -129,7 +129,7 @@ export default function BlocoAmostra({ amostra }: { amostra: Amostra }) {
               {/* Ler todas as competições é o recorte que o motor usa em copa e
                 * seleção. Dizer isso na tela evita a leitura errada de "ele
                 * misturou competição": ele misturou de propósito. */}
-              {lado.multi_competicao && ' · todas as competições'}
+              {lado.multi_competicao && ', todas as competições'}
             </span>
           </div>
           <div className="overflow-x-auto">
@@ -147,15 +147,15 @@ export default function BlocoAmostra({ amostra }: { amostra: Amostra }) {
                 {lado.jogos.map((j, i) => (
                   <tr key={i} className="border-b border-line/50 last:border-0">
                     <td className="px-3 py-1.5 text-ink-3 font-mono tabular-nums">{diaMes(j.data)}</td>
-                    <td className="px-2 py-1.5 text-ink-2 truncate max-w-[10rem]">{j.adversario ?? '·'}</td>
+                    <td className="px-2 py-1.5 text-ink-2 truncate max-w-[10rem]">{j.adversario ?? '-'}</td>
                     <td className="px-2 py-1.5 text-center text-ink-4">
                       {j.mando === 'casa' ? 'Casa' : 'Fora'}
                     </td>
                     <td className="px-2 py-1.5 text-right font-mono tabular-nums text-ink-1">
-                      {j.gols_pro ?? '·'}-{j.gols_contra ?? '·'}
+                      {j.gols_pro ?? '-'}-{j.gols_contra ?? '-'}
                     </td>
                     <td className="px-3 py-1.5 text-right font-mono tabular-nums text-ink-3">
-                      {j.gols_ht ?? '·'}
+                      {j.gols_ht ?? '-'}
                     </td>
                   </tr>
                 ))}

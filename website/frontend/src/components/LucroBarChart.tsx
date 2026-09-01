@@ -168,11 +168,11 @@ export default function LucroBarChart({
 
       {hover !== null && (
         <p className="text-[10px] text-ink-4 mt-1">
-          {data[hover].label} · <span className="font-mono font-bold tabular-nums"
+          {data[hover].label}, <span className="font-mono font-bold tabular-nums"
             style={{ color: Number(data[hover].value) >= 0 ? VERDE : VERMELHO }}>
             {fmtUnits(Number(data[hover].value), 1)}
           </span>
-          {data[hover].meta && ` · ${data[hover].meta}`}
+          {data[hover].meta && `, ${data[hover].meta}`}
         </p>
       )}
     </div>

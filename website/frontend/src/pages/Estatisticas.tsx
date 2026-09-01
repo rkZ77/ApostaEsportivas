@@ -284,7 +284,7 @@ export function EstatisticasContent() {
                 <div>
                   <h2 className="text-ink-1 font-bold text-base">{selectedLeague.name}</h2>
                   <p className="text-ink-3 text-xs">
-                    Temporada {selectedLeague.season} · <span className="font-mono text-green-400 font-bold">{summary.total_games}</span> jogos analisados
+                    Temporada {selectedLeague.season}, <span className="font-mono text-green-400 font-bold">{summary.total_games}</span> jogos analisados
                   </p>
                 </div>
               </div>

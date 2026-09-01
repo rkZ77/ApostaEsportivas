@@ -159,7 +159,7 @@ function LinhaCaminho({ c }: { c: CaminhoEncerrado }) {
       <div className="flex-1 min-w-0">
         <p className="text-sm text-ink-1 font-semibold truncate">{m.label}</p>
         <p className="text-[11px] text-ink-4">
-          {dataBR(c.ended_at)} · entrou com {fmtBRL(c.initial)} · {c.greens}{' '}
+          {dataBR(c.ended_at)}, entrou com {fmtBRL(c.initial)}, {c.greens}{' '}
           {c.greens === 1 ? 'green' : 'greens'} no caminho
         </p>
       </div>
@@ -234,7 +234,7 @@ export default function AlavancagemPanel() {
     .map(c => ({
       label: dataBR(c.ended_at).slice(0, 5),
       value: c.units,
-      meta: `${c.greens}G · ${fmtSigned(c.realized)}`,
+      meta: `${c.greens}G, ${fmtSigned(c.realized)}`,
     }))
 
   return (
@@ -294,7 +294,7 @@ export default function AlavancagemPanel() {
             <div className="text-xs text-ink-4 mt-1">
               entrada: {fmtBRL(serie.initial_bankroll)}
               {emAberto > 0 && (
-                <span className="text-accent-ink font-semibold"> · {fmtSigned(emAberto)} em jogo</span>
+                <span className="text-accent-ink font-semibold">, {fmtSigned(emAberto)} em jogo</span>
               )}
             </div>
           </div>

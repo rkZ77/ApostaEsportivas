@@ -343,7 +343,7 @@ export default function Login() {
   return (
     <div className={`relative min-h-screen bg-surface-0 flex flex-col overflow-hidden ${classesRevelacao(revelado)}`} style={{ transitionDuration: `${FADE_REVELACAO_MS}ms` }} aria-busy={!revelado}>
       <Helmet>
-        <title>Entrar · Pick IA</title>
+        <title>Entrar | Pick IA</title>
         <meta name="description" content="Acesse sua conta Pick IA para ver os picks da IA do dia, sua banca e seu histórico." />
       </Helmet>
 
@@ -542,7 +542,7 @@ export default function Login() {
                     onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
                     required className="input" placeholder="seu_usuario"
                     autoComplete="username" maxLength={20} />
-                  <p className="text-xs text-ink-4 mt-1">3–20 caracteres. Letras minúsculas, números e _.</p>
+                  <p className="text-xs text-ink-4 mt-1">3 a 20 caracteres. Letras minúsculas, números e _.</p>
                 </div>
                 <div>
                   <label htmlFor="reg-email" className="block text-sm text-ink-2 mb-1.5 font-medium">Email</label>
@@ -745,7 +745,7 @@ export default function Login() {
           {/* Não é enfeite legal: é o aviso que separa quem opera às claras de
               quem promete lucro garantido. */}
           <span className="w-full text-center text-ink-4 mt-1">
-            18+ · Aposta é entretenimento, não fonte de renda. Jogue com responsabilidade.
+            Proibido para menores de 18 anos. Aposta é entretenimento, não fonte de renda. Jogue com responsabilidade.
           </span>
         </div>
       </footer>

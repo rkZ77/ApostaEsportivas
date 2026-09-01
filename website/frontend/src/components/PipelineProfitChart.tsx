@@ -252,8 +252,8 @@ export default function PipelineProfitChart({
 
       {hoverIdx !== null && (
         <p className="text-[10px] text-ink-4 mt-1.5">
-          {fmtDia(dias[hoverIdx])} ·{' '}
-          {visiveis.map(f => `${NOME[f]} ${fmtUnits(porFonte[f][hoverIdx], 1)}`).join(' · ')}
+          {fmtDia(dias[hoverIdx])}, {' '}
+          {visiveis.map(f => `${NOME[f]} ${fmtUnits(porFonte[f][hoverIdx], 1)}`).join(', ')}
         </p>
       )}
     </div>

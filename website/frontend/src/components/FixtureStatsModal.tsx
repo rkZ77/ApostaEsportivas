@@ -176,7 +176,7 @@ function TeamDonutRow({ matches, teamId, name, logoSrc, circles }: {
       {matches.length > 0 && (
         <p className="text-[11px] text-ink-3 mb-3">
           Média: <span className="text-blue-400 font-bold">{feitos.toFixed(1)}</span> feitos
-          {' · '}
+          {', '}
           <span className="text-rose-400 font-bold">{cedidos.toFixed(1)}</span> cedidos
         </p>
       )}

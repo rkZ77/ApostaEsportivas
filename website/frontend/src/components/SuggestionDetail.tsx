@@ -438,7 +438,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                                 </div>
                                 <span className="text-green-400 font-black shrink-0">{g.odd ? Number(g.odd).toFixed(2) : ''}</span>
                               </div>
-                              <div className="text-xs text-ink-3 mt-0.5">{translateMarket(g.market)}{g.line ? ` · ${translateLine(g.line)}` : ''}</div>
+                              <div className="text-xs text-ink-3 mt-0.5">{translateMarket(g.market)}{g.line ? `, ${translateLine(g.line)}` : ''}</div>
                             </div>
                           )
                         })}

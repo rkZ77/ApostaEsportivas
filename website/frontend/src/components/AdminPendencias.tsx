@@ -226,7 +226,7 @@ export default function AdminPendencias() {
                 </div>
                 <p className="text-[11px] text-ink-3 mt-0.5">{i.market} {i.line}</p>
                 <p className="text-[10px] text-ink-4 font-mono mt-0.5">
-                  {i.match_date} · {i.pick_type} · fixture {i.fixture_id ?? 'sem'}
+                  {i.match_date}, {i.pick_type}, fixture {i.fixture_id ?? 'sem'}
                 </p>
               </li>
             ))}
@@ -254,7 +254,7 @@ export default function AdminPendencias() {
                       {i.home_team} x {i.away_team}
                     </td>
                     <td className="py-2 pr-2 text-ink-3 max-w-[150px] truncate">{i.market} {i.line}</td>
-                    <td className="py-2 pr-2 text-ink-4 font-mono">{i.fixture_id ?? '·'}</td>
+                    <td className="py-2 pr-2 text-ink-4 font-mono">{i.fixture_id ?? '-'}</td>
                     <td className={`py-2 font-semibold ${i.travado ? (COR_MOTIVO[i.motivo] ?? 'text-ink-3') : 'text-ink-4'}`}>
                       {i.travado ? i.motivo : 'aguardando o jogo'}
                     </td>

@@ -294,11 +294,11 @@ export default function MonthlyCloseModal({ onClose }: Props) {
               </p>
               <div className="flex items-center justify-between pt-2 border-t border-line">
                 <span className="text-[11px] text-ink-3">
-                  {data.greens}G · {data.reds}R
-                  {data.half_wins > 0 ? ` · ${data.half_wins}½W` : ''}
-                  {data.half_loss > 0 ? ` · ${data.half_loss}½L` : ''}
-                  {data.push > 0 ? ` · ${data.push}P` : ''}
-                  {' '}· {data.total_resolved} picks
+                  {data.greens}G, {data.reds}R
+                  {data.half_wins > 0 ? `, ${data.half_wins}½W` : ''}
+                  {data.half_loss > 0 ? `, ${data.half_loss}½L` : ''}
+                  {data.push > 0 ? `, ${data.push}P` : ''}
+                  {' '}, {data.total_resolved} picks
                 </span>
                 <span className={`text-[11px] font-bold ${winRate >= 55 ? 'text-green-400' : 'text-ink-2'}`}>
                   {winRate}% win rate

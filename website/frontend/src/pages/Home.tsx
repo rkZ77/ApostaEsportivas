@@ -140,7 +140,7 @@ function RecentResults({ summary }: { summary: PublicSummary | null }) {
             <Panel className="mb-4">
               <PanelHead
                 label="Lucro acumulado por produto"
-                meta="em unidades · últimos 180 dias"
+                meta="em unidades, últimos 180 dias"
               />
               <div className="p-5">
                 <PipelineProfitChart data={curva} height={220} />
@@ -151,7 +151,7 @@ function RecentResults({ summary }: { summary: PublicSummary | null }) {
           <Panel>
             <PanelHead
               label="Últimas finalizadas"
-              meta={`${total > 0 ? `${total} picks` : ''}${produto ? ` · só ${PICK_TYPE_LABEL[produto] ?? produto}` : ' · ordenados por data e hora da partida'}`}
+              meta={`${total > 0 ? `${total} picks` : ''}${produto ? `, só ${PICK_TYPE_LABEL[produto] ?? produto}` : ', ordenados por data e hora da partida'}`}
             />
 
             {/* Chips de filtro por produto — sempre visíveis quando há mais de um tipo */}
@@ -245,7 +245,7 @@ function RecentResults({ summary }: { summary: PublicSummary | null }) {
 
             <div className="px-5 pb-4 flex items-center justify-center gap-4 flex-wrap">
               <Button to="/resultados" variant="link" size="sm">Ver histórico completo</Button>
-              <span className="text-ink-4">·</span>
+              <span className="text-ink-4">,</span>
               <Button to="/login?mode=register" variant="link" size="sm" className="text-accent-ink hover:text-accent-hover">
                 Criar conta grátis
               </Button>
@@ -298,7 +298,7 @@ const FREE_ITEMS: Array<[boolean, string]> = [
 ]
 
 const TRIAL_ITEMS = [
-  'Experimente tudo por 2 dias — sem pagar nada',
+  'Experimente tudo por 2 dias, sem pagar nada',
   'Vence sozinho, sem cobrança automática',
 ]
 
@@ -350,7 +350,7 @@ function Plans({ monthly }: { monthly: Plan }) {
               {fmtPlanPrice(monthly.price)}<span className="text-base font-semibold text-ink-3">/mês</span>
             </p>
             <p className="text-ink-3 text-xs mb-6">
-              Menos de {fmtPlanPrice(monthly.price / 30)} por dia · pagamento único, sem renovação automática
+              Menos de {fmtPlanPrice(monthly.price / 30)} por dia. Pagamento único, sem renovação automática.
             </p>
             <ul className="space-y-2.5 mb-7">
               {VIP_ITEMS.map(t => (
@@ -520,7 +520,7 @@ export default function Home() {
   return (
     <div className={`min-h-screen bg-surface-0 text-ink-1 overflow-x-hidden flex flex-col ${ctaDismissed || !ctaFaixa ? '' : 'pb-20 sm:pb-0'}`}>
       <Helmet>
-        <title>Pick IA · Inteligência artificial para apostas de valor no futebol</title>
+        <title>Pick IA | Inteligência artificial para apostas de valor no futebol</title>
         <meta
           name="description"
           content="Plataforma de análise esportiva com IA. Estatística real, probabilidade calculada e apenas picks com valor esperado positivo. Histórico público e auditável. Teste grátis por 2 dias."

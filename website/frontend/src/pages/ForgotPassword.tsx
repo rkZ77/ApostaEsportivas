@@ -64,7 +64,7 @@ export default function ForgotPassword() {
   return (
     <div className={`min-h-screen bg-surface-0 flex items-center justify-center px-4 ${classesRevelacao(revelado)}`} style={{ transitionDuration: `${FADE_REVELACAO_MS}ms` }} aria-busy={!revelado}>
       <Helmet>
-        <title>Recuperar senha · Pick IA</title>
+        <title>Recuperar senha | Pick IA</title>
         <meta name="robots" content="noindex, nofollow" />
       </Helmet>
       <div className="w-full max-w-sm">

@@ -93,7 +93,7 @@ export default function VerifyEmail() {
   return (
     <div className={`min-h-screen bg-surface-0 flex items-center justify-center p-4 ${classesRevelacao(revelado)}`} style={{ transitionDuration: `${FADE_REVELACAO_MS}ms` }} aria-busy={!revelado}>
       <Helmet>
-        <title>Confirmar e-mail · Pick IA</title>
+        <title>Confirmar e-mail | Pick IA</title>
         <meta name="robots" content="noindex, nofollow" />
       </Helmet>
 

@@ -96,7 +96,7 @@ export default function NotFound() {
   return (
     <div className={`min-h-screen bg-surface-0 flex flex-col items-center justify-center px-4 text-center ${classesRevelacao(revelado)}`} style={{ transitionDuration: `${FADE_REVELACAO_MS}ms` }} aria-busy={!revelado}>
       <Helmet>
-        <title>Página não encontrada · Pick IA</title>
+        <title>Página não encontrada | Pick IA</title>
         {/* 404 fora do índice: sem isso o Google guarda a URL quebrada. */}
         <meta name="robots" content="noindex, nofollow" />
       </Helmet>

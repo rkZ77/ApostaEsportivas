@@ -64,7 +64,7 @@ export default function AmostraDoMotor({
       <BlocoAmostra amostra={amostra} />
       <p className="text-[10px] text-ink-4 leading-relaxed mt-2">
         Esta é a amostra que gerou a análise, exatamente como o motor a leu no
-        momento da escolha · não é uma consulta refeita depois.
+        momento da escolha, não é uma consulta refeita depois.
       </p>
     </div>
   )

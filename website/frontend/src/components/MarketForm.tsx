@@ -149,9 +149,9 @@ function Grafico({
       </div>
 
       <p className="text-[11px] text-ink-4 mb-2">
-        {serie.label} · últimos {jogos.length} jogos {contexto}
-        {serie.average != null && <> · média {serie.average}</>}
-        {taxa != null && <> · {serie.greens} GREEN em {serie.resolved}</>}
+        {serie.label}, últimos {jogos.length} jogos {contexto}
+        {serie.average != null && <>, média {serie.average}</>}
+        {taxa != null && <>, {serie.greens} GREEN em {serie.resolved}</>}
       </p>
 
       {/* O fato em uma frase, do jeito que o apostador lê nas casas. Fica ACIMA
@@ -181,10 +181,10 @@ function Grafico({
         {jogos.map(m => {
           const altura = m.value != null ? Math.max((m.value / teto) * 100, 4) : 100
           const quando = m.match_date ?? ''
-          const contra = m.opponent ? ` · ${prefixo ? `${prefixo} ` : ''}${m.opponent}` : ''
+          const contra = m.opponent ? `, ${prefixo ? `${prefixo} ` : ''}${m.opponent}` : ''
           const titulo = m.value == null
-            ? `${quando}${contra} · sem estatística publicada`
-            : `${quando}${contra} · ${m.value}`
+            ? `${quando}${contra}, sem estatística publicada`
+            : `${quando}${contra}, ${m.value}`
           return (
             <div key={m.fixture_id} className="flex-1 h-full flex items-end" title={titulo}>
               <div
@@ -239,7 +239,7 @@ function BlocoDaPerna({ leg, numero }: { leg: Leg; numero: number | null }) {
           <p className="text-[11px] font-semibold text-ink-1 min-w-0">
             {leg.home_team} x {leg.away_team}
             <span className="text-ink-3 font-normal">
-              {' · '}{translateMarket(leg.market ?? '')}
+              {', '}{translateMarket(leg.market ?? '')}
               {leg.line && <> {translateLine(leg.line)}</>}
             </span>
           </p>

@@ -146,8 +146,8 @@ export default function AnalysisModal({
       title="Entenda esta análise"
       description={[
         data.homeTeam && data.awayTeam ? `${data.homeTeam} x ${data.awayTeam}` : null,
-        `${data.market}${data.line ? ` · ${data.line}` : ''}`,
-      ].filter(Boolean).join(' · ')}
+        `${data.market}${data.line ? `, ${data.line}` : ''}`,
+      ].filter(Boolean).join(', ')}
     >
       <div className="p-5 space-y-5">
 
@@ -273,7 +273,7 @@ export default function AnalysisModal({
                     <div className="min-w-0">
                       <p className="text-[11px] font-semibold text-ink-1">
                         {translateMarket(leg.market ?? '')}
-                        {leg.line && <span className="text-ink-3"> · {translateLine(leg.line)}</span>}
+                        {leg.line && <span className="text-ink-3">, {translateLine(leg.line)}</span>}
                       </p>
                       <p className="text-xs text-ink-2 leading-relaxed mt-0.5">
                         {r ? r.green : txt}

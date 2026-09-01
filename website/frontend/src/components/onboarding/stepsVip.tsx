@@ -131,7 +131,7 @@ export const TOUR_STEPS_VIP: TourStep[] = [
       <div className="space-y-3">
         <p className="text-xs text-ink-2 leading-relaxed">
           A média sai das atuações dele na mesma competição, contando só jogo em que ele foi
-          titular efetivo · entrada de doze minutos e jogo inteiro não são a mesma coisa.
+          titular efetivo, entrada de doze minutos e jogo inteiro não são a mesma coisa.
         </p>
         <p className="text-[11px] text-ink-3 leading-relaxed">
           Faltas continua existindo e agora fica dentro da própria aba VIP, logo abaixo da
@@ -152,7 +152,7 @@ export const TOUR_STEPS_VIP: TourStep[] = [
       <div className="space-y-3">
         <p className="text-xs text-ink-2 leading-relaxed">
           Nos outros produtos o motor olha um jogo e escolhe o melhor mercado dele. Aqui é o
-          contrário: o mercado já está definido e o que se escolhe são os jogos · por isso o
+          contrário: o mercado já está definido e o que se escolhe são os jogos, por isso o
           dia costuma ter mais de um.
         </p>
         <p className="text-[11px] text-ink-3 leading-relaxed">
@@ -171,12 +171,12 @@ export const TOUR_STEPS_VIP: TourStep[] = [
     corpo: (
       <div className="space-y-3">
         <p className="text-xs text-ink-2 leading-relaxed">
-          A odd ao vivo vale minutos, então o card mostra uma contagem regressiva · o preço
+          A odd ao vivo vale minutos, então o card mostra uma contagem regressiva, o preço
           é o do instante da análise, e vale conferir na casa antes de apostar.
         </p>
         <p className="text-[11px] text-ink-3 leading-relaxed">
           Você recebe um aviso quando o motor publica um pick novo. Quando não há nada, a
-          aba diz se o motor está ligado ou parado · são coisas diferentes.
+          aba diz se o motor está ligado ou parado, são coisas diferentes.
         </p>
       </div>
     ),
@@ -191,7 +191,7 @@ export const TOUR_STEPS_VIP: TourStep[] = [
     corpo: (
       <div className="space-y-3">
         <p className="text-xs text-ink-2 leading-relaxed">
-          São os mesmos números que o motor lê para decidir os picks · escanteios, faltas,
+          São os mesmos números que o motor lê para decidir os picks, escanteios, faltas,
           cartões e chutes, jogo a jogo. Serve tanto para conferir um pick quanto para
           olhar uma partida que a IA não escolheu.
         </p>

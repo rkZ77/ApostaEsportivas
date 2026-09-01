@@ -287,15 +287,15 @@ const SECOES = [
 type Secao = (typeof SECOES)[number][0]
 
 const numero = (v: number | null | undefined) =>
-  v == null ? '·' : v.toLocaleString('pt-BR')
+  v == null ? '-' : v.toLocaleString('pt-BR')
 
 const decimal = (v: number | null | undefined) =>
-  v == null ? '·' : v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  v == null ? '-' : v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 /** "2026-08-22T21:30:00" -> "22/08". Fatiado, nunca por `new Date`: as datas
  *  deste banco já estão em Brasília e qualquer parse reintroduz fuso. */
 const diaMes = (iso?: string | null) => {
-  if (!iso) return '·'
+  if (!iso) return '-'
   const [a, m, d] = iso.slice(0, 10).split('-')
   return d && m ? `${d}/${m}` : a
 }
@@ -806,7 +806,7 @@ export default function AdminDados() {
       const r = await api.post('/admin/dados/placar-falso')
       setAviso({
         fixture: -4, ok: true,
-        texto: `${r.data?.corrigidas ?? 0} placar(es) reescrito(s) · ${r.data?.medias ?? 0} média(s) de time refeitas.`,
+        texto: `${r.data?.corrigidas ?? 0} placar(es) reescrito(s), ${r.data?.medias ?? 0} média(s) de time refeitas.`,
       })
       buscarBuracos()
       buscarHistorico(pagina, filtroPartidas?.chave, diagnostico?.meses)
@@ -825,7 +825,7 @@ export default function AdminDados() {
       setVermelho(v => (v ? { ...v, alvo: 0 } : v))
       setAviso({
         fixture: -1, ok: true,
-        texto: `${r.data?.corrigidas ?? 0} linha(s) corrigidas · ${r.data?.arbitros ?? 0} média(s) de árbitro refeitas.`,
+        texto: `${r.data?.corrigidas ?? 0} linha(s) corrigidas, ${r.data?.arbitros ?? 0} média(s) de árbitro refeitas.`,
       })
       buscarHistorico(pagina, filtroPartidas?.chave, diagnostico?.meses)
       buscarBuracos()
@@ -930,7 +930,7 @@ export default function AdminDados() {
             <p className="text-[11px] text-ink-3 mt-1 leading-relaxed">
               {totalBuracos > 0 ? (
                 <>
-                  É a distância entre o que aconteceu e o que o motor sabe · sem a linha
+                  É a distância entre o que aconteceu e o que o motor sabe, sem a linha
                   em <span className="font-mono">match_statistics</span>, o jogo não entra
                   em baseline de liga, média de time, média de árbitro nem confronto direto.
                   {dados.buracos?.mais_antigo && ` Mais antigo: ${diaMes(dados.buracos.mais_antigo)}.`}
@@ -965,7 +965,7 @@ export default function AdminDados() {
                       {b.mandante ?? 'Time ?'} x {b.visitante ?? 'Time ?'}
                     </p>
                     <p className="text-[10px] text-ink-4 mt-0.5 truncate">
-                      {b.liga ?? 'liga ?'} · {b.status} · fixture{' '}
+                      {b.liga ?? 'liga ?'}, {b.status}, fixture{' '}
                       <span className="font-mono">{b.fixture_id}</span>
                     </p>
                   </div>
@@ -1041,11 +1041,11 @@ export default function AdminDados() {
                 O coletor lia placar ausente como zero. Zero não é ausência: essas linhas entram
                 na média de gols como jogo real, e como o campo está "preenchido" elas não
                 aparecem em nenhuma contagem de cobertura nem na varredura automática. O placar
-                de 90 minutos e o do intervalo, que vêm noutras colunas, provam a contradição ·
+                de 90 minutos e o do intervalo, que vêm noutras colunas, provam a contradição, 
                 onde os três concordam em zero, o 0x0 é real e a linha não é tocada.
                 {!!placar.so_recoleta && (
                   <> {numero(placar.so_recoleta)} delas foram para a prorrogação, e aí o placar
-                  de 90 minutos não responde pelo final · essas só voltam pela recoleta.</>
+                  de 90 minutos não responde pelo final, essas só voltam pela recoleta.</>
                 )}
               </p>
 
@@ -1058,9 +1058,9 @@ export default function AdminDados() {
                         {b.mandante ?? 'Time ?'} x {b.visitante ?? 'Time ?'}
                       </p>
                       <p className="text-[10px] text-ink-4 mt-0.5 font-mono tabular-nums">
-                        gravado 0x0 · 90 minutos {numero(b.home_goals_90)}x{numero(b.away_goals_90)}
-                        {' '}· intervalo {numero(b.home_goals_ht)}x{numero(b.away_goals_ht)}
-                        {' '}· {b.status}
+                        gravado 0x0, 90 minutos {numero(b.home_goals_90)}x{numero(b.away_goals_90)}
+                        {' '}, intervalo {numero(b.home_goals_ht)}x{numero(b.away_goals_ht)}
+                        {' '}, {b.status}
                       </p>
                     </div>
                   ))}
@@ -1095,14 +1095,14 @@ export default function AdminDados() {
                 {numero(vermelho.alvo)} partida(s) com o cartão vermelho apagado
               </p>
               <p className="text-[11px] text-ink-3 mt-1 leading-relaxed">
-                A folha está completa no resto e o buraco é só no vermelho · essa combinação
+                A folha está completa no resto e o buraco é só no vermelho, essa combinação
                 só sai do coletor antigo lendo uma folha publicada, ou seja, a API respondeu
                 e disse que não houve expulsão. Jogo sem os dois contadores de cartão cai
                 fora do pool do motor, e a média de vermelho do árbitro sai tirada só dos
                 jogos com expulsão.
                 {!!vermelho.folha_incompleta && (
                   <> Outras {numero(vermelho.folha_incompleta)} partida(s) estão de fato sem
-                  folha e continuam em branco · essas voltam pela coleta.</>
+                  folha e continuam em branco, essas voltam pela coleta.</>
                 )}
               </p>
               <Button
@@ -1124,7 +1124,7 @@ export default function AdminDados() {
 
       {!abertos && (
         <p className="text-[11px] text-ink-4 leading-relaxed">
-          Nada pendente aqui. A cobertura e o histórico ficam nas outras duas seções ·
+          Nada pendente aqui. A cobertura e o histórico ficam nas outras duas seções, 
           esta só mostra o que pede ação.
         </p>
       )}
@@ -1155,9 +1155,9 @@ export default function AdminDados() {
           <>
             <p className="text-[11px] text-ink-3 leading-relaxed">
               {v.habilitada
-                ? <>Ligada · roda no máximo a cada {Math.round((v.intervalo_s ?? 600) / 60)} min,
+                ? <>Ligada, roda no máximo a cada {Math.round((v.intervalo_s ?? 600) / 60)} min,
                     e só quando há jogo encerrado sem estatística nos últimos {v.janela_dias} dias.</>
-                : <>Desligada neste ambiente. Ela só roda em produção · a chave da API é uma
+                : <>Desligada neste ambiente. Ela só roda em produção, a chave da API é uma
                     conta só para os três ambientes, então dev consumiria a cota do site real.</>}
             </p>
             <p className="text-[11px] text-ink-4 leading-relaxed mt-1.5">
@@ -1196,7 +1196,7 @@ export default function AdminDados() {
                 A tabela inteira dos últimos {diagnostico.meses} meses, não as últimas 40.
                 Folha completa aqui é{' '}
                 <span className="font-mono">{diagnostico.colunas_da_folha?.length ?? 5}</span>{' '}
-                contadores presentes · não as 16 famílias: defesa de goleiro aparece em menos
+                contadores presentes, não as 16 famílias: defesa de goleiro aparece em menos
                 de 1% das folhas, e exigir as 16 mandaria recoletar tudo pra receber o mesmo vazio.
               </p>
             </div>
@@ -1221,7 +1221,7 @@ export default function AdminDados() {
               <StatTile label="Folha incompleta" value={numero(diagnostico.incompletas)}
                 tone={diagnostico.incompletas > 0 ? 'red' : 'default'}
                 hint={diagnostico.incompleta_mais_antiga
-                  ? `mais antiga em ${diaMes(diagnostico.incompleta_mais_antiga)} · toque para ver`
+                  ? `mais antiga em ${diaMes(diagnostico.incompleta_mais_antiga)}, toque para ver`
                   : 'toque para ver'} />
             </button>
             <button type="button" className="text-left" onClick={() => setSecao('problemas')}>
@@ -1233,7 +1233,7 @@ export default function AdminDados() {
                     onClick={() => abrirFiltro('zeradas', 'coletadas zeradas')}>
               <StatTile label="Coletadas zeradas" value={numero(diagnostico.zeradas)}
                 tone={diagnostico.zeradas > 0 ? 'red' : 'default'}
-                hint="escanteio, chute e falta em 0 · toque para ver" />
+                hint="escanteio, chute e falta em 0, toque para ver" />
             </button>
           </div>
 
@@ -1251,7 +1251,7 @@ export default function AdminDados() {
           <p className="text-[11px] text-ink-4 mb-2 leading-relaxed">
             Quanto maior o número, maior o buraco. Estatística que só passou a existir depois
             aparece alta aqui de propósito: gols do 1º tempo e dos 90 minutos são colunas novas,
-            e jogo coletado antes delas nunca vai ter o número · a data ao lado é a do jogo mais
+            e jogo coletado antes delas nunca vai ter o número, a data ao lado é a do jogo mais
             antigo sem ela.
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -1275,7 +1275,7 @@ export default function AdminDados() {
                 </p>
                 <p className="text-[10px] font-mono tabular-nums text-ink-4">
                   {f.sem_dado > 0
-                    ? `de ${numero(diagnostico.ft)} · desde ${diaMes(f.desde)}`
+                    ? `de ${numero(diagnostico.ft)}, desde ${diaMes(f.desde)}`
                     : 'nenhum buraco'}
                 </p>
               </button>
@@ -1290,7 +1290,7 @@ export default function AdminDados() {
             Toque em qualquer número acima para ver as partidas por trás dele, com os botões de
             Rodar e Preencher à mão. Recoletar resolve o caso em que a API ainda publica a folha;
             quando ela não publica (e folha velha ela não publica), digitar olhando a súmula é o
-            único caminho que sobra · e o motor lê o número da mão igual ao coletado.
+            único caminho que sobra, e o motor lê o número da mão igual ao coletado.
           </p>
 
           {/* Recoleta em lote · o botão Rodar aplicado à lista inteira. */}
@@ -1302,7 +1302,7 @@ export default function AdminDados() {
                     Recoletando {recoleta.feitas} de {recoleta.total}
                   </p>
                   <p className="text-[10px] font-mono text-ink-4">
-                    {recoleta.gravadas} gravada(s) · {recoleta.falhas} falha(s)
+                    {recoleta.gravadas} gravada(s), {recoleta.falhas} falha(s)
                   </p>
                 </div>
                 <div className="h-1.5 bg-surface-2 rounded-full overflow-hidden mt-2">
@@ -1312,7 +1312,7 @@ export default function AdminDados() {
                   />
                 </div>
                 <p className="text-[10px] text-ink-4 mt-1.5">
-                  Duas requisições por partida. Dá pra sair da aba · o lote continua no servidor.
+                  Duas requisições por partida. Dá pra sair da aba, o lote continua no servidor.
                 </p>
               </>
             ) : (
@@ -1325,7 +1325,7 @@ export default function AdminDados() {
                     aria-label="Quantas partidas recoletar"
                   >
                     {[10, 20, 50, 100].map(n => (
-                      <option key={n} value={n}>{n} partidas · {n * 2} requisições</option>
+                      <option key={n} value={n}>{n} partidas, {n * 2} requisições</option>
                     ))}
                   </select>
                   <Button size="sm" variant="ghost" loading={pedindoLote}
@@ -1338,14 +1338,14 @@ export default function AdminDados() {
                   Pega as partidas mais recentes com folha furada ou sem linha nenhuma, nos
                   últimos 3 meses. Mais recente primeiro de propósito: a API publica folha de
                   jogo velho cada vez menos, então gastar o lote em agosto rende mais que
-                  gastá-lo em março. Só o cartão vermelho se conserta sem cota · o resto é
+                  gastá-lo em março. Só o cartão vermelho se conserta sem cota, o resto é
                   API ou digitação.
                 </p>
                 {recoleta?.terminada_em && (
                   <p className="text-[11px] text-green-400 mt-1.5">
                     Último lote: {recoleta.gravadas} de {recoleta.total} gravada(s)
-                    {recoleta.falhas > 0 && ` · ${recoleta.falhas} falha(s)`}
-                    {recoleta.medias > 0 && ` · ${recoleta.medias} média(s) de time refeitas`}
+                    {recoleta.falhas > 0 && `, ${recoleta.falhas} falha(s)`}
+                    {recoleta.medias > 0 && `, ${recoleta.medias} média(s) de time refeitas`}
                   </p>
                 )}
                 {recoleta?.erro && (
@@ -1402,7 +1402,7 @@ export default function AdminDados() {
           </div>
 
           <p className="text-[10px] text-ink-4 mt-3 leading-relaxed">
-            Posse e precisão de passe são média por lado, não soma · somadas dariam 100% em
+            Posse e precisão de passe são média por lado, não soma, somadas dariam 100% em
             todo jogo. São as duas que servem de aferição: posse média longe de 50 é coleta
             torta, não jogo estranho.
           </p>
@@ -1444,7 +1444,7 @@ export default function AdminDados() {
                       <span className="text-yellow-400 font-semibold">
                         {numero(medias.total)} time(s)
                       </span>{' '}
-                      têm partida gravada depois da última vez que a média deles foi calculada ·
+                      têm partida gravada depois da última vez que a média deles foi calculada, 
                       é essa média que o motor lê. Recalcular não gasta requisição da API: sai tudo
                       do banco.
                     </>
@@ -1452,7 +1452,7 @@ export default function AdminDados() {
                       número de agora.</>}
               </p>
               <p className="text-[10px] text-ink-4 mt-1.5 leading-relaxed">
-                Só entram os times que de fato mudaram · a varredura antiga refazia a conta de
+                Só entram os times que de fato mudaram, a varredura antiga refazia a conta de
                 todo time que tivesse jogado nos últimos 3 dias, tivesse mudado alguma coisa nele
                 ou não, e isso rodava no caminho de uma visita ao site.
               </p>
@@ -1483,7 +1483,7 @@ export default function AdminDados() {
                 />
               </div>
               <p className="text-[10px] text-ink-4 mt-1.5">
-                Dá pra sair da aba · o recálculo continua no servidor.
+                Dá pra sair da aba, o recálculo continua no servidor.
               </p>
             </>
           )}
@@ -1491,7 +1491,7 @@ export default function AdminDados() {
           {!medias.rodando && medias.terminada_em && (
             <p className="text-[11px] text-green-400 mt-2">
               Último recálculo: {medias.feitas} time(s)
-              {medias.falhas > 0 && ` · ${medias.falhas} falha(s)`}
+              {medias.falhas > 0 && `, ${medias.falhas} falha(s)`}
             </p>
           )}
           {medias.erro && <p className="text-[11px] text-red-400 mt-2">{medias.erro}</p>}
@@ -1520,12 +1520,12 @@ export default function AdminDados() {
             <div className="min-w-0">
               <h3 className="flex items-center gap-2 text-sm font-bold text-ink-1">
                 <Users className="w-4 h-4" />
-                Médias de time{times?.season ? ` · temporada ${times.season}` : ''}
+                Médias de time{times?.season ? `, temporada ${times.season}` : ''}
               </h3>
               <p className="text-[11px] text-ink-4 mt-0.5 leading-relaxed">
                 É daqui que sai o baseline de escanteio, falta, cartão e chute de cada pick.
                 A média é separada por mando porque o motor lê a do lado em que o time vai
-                jogar · mandante e visitante produzem escanteio e falta em taxas diferentes,
+                jogar, mandante e visitante produzem escanteio e falta em taxas diferentes,
                 e a média misturada não descreve nenhum dos dois casos. Toque no time para
                 ver os jogos que formaram o número.
               </p>
@@ -1582,7 +1582,7 @@ export default function AdminDados() {
                 <option value="">Todas as competições</option>
                 {times?.ligas.map(l => (
                   <option key={l.league_id} value={l.league_id}>
-                    {l.liga ?? `liga ${l.league_id}`} · {l.partidas}
+                    {l.liga ?? `liga ${l.league_id}`}, {l.partidas}
                   </option>
                 ))}
               </select>
@@ -1712,7 +1712,7 @@ export default function AdminDados() {
                         <span className={`font-mono tabular-nums ${
                           t.sem_media ? 'text-red-400'
                             : t.amostra_curta ? 'text-yellow-400' : 'text-ink-2'}`}>
-                          {t.jogos == null ? '·' : numero(t.jogos)}
+                          {t.jogos == null ? '-' : numero(t.jogos)}
                           <span className="text-ink-4">/{numero(t.partidas)}</span>
                         </span>
                         {t.sem_media ? (
@@ -1729,7 +1729,7 @@ export default function AdminDados() {
                           <td key={c.chave}
                               className="px-2 py-2.5 text-right font-mono tabular-nums align-top">
                             <span className={media == null ? 'text-ink-4' : 'text-ink-1'}>
-                              {media == null ? '·' : decimal(Number(media))}
+                              {media == null ? '-' : decimal(Number(media))}
                             </span>
                           </td>
                         )
@@ -1771,7 +1771,7 @@ export default function AdminDados() {
               <p className="text-[11px] text-ink-4 leading-relaxed">
                 As {numero(historico?.total)} partidas dos últimos {historico?.meses ?? 24} meses
                 que estão sem esse número, da mais recente pra mais antiga. Aqui o teto de{' '}
-                {historico?.teto ?? 40} não vale · ele existe pra lista sem filtro, e manteria
+                {historico?.teto ?? 40} não vale, ele existe pra lista sem filtro, e manteria
                 escondida justamente a partida antiga que precisa de conserto.
               </p>
               <button
@@ -1840,7 +1840,7 @@ export default function AdminDados() {
                       Recoletando {recoleta.feitas} de {recoleta.total}
                     </p>
                     <p className="text-[10px] font-mono text-ink-4">
-                      {recoleta.gravadas} gravada(s) · {recoleta.falhas} falha(s)
+                      {recoleta.gravadas} gravada(s), {recoleta.falhas} falha(s)
                     </p>
                   </div>
                   <div className="h-1.5 bg-surface-2 rounded-full overflow-hidden mt-2">
@@ -1850,7 +1850,7 @@ export default function AdminDados() {
                     />
                   </div>
                   <p className="text-[10px] text-ink-4 mt-1.5">
-                    Duas requisições por partida. Dá pra sair da aba · o lote continua no servidor.
+                    Duas requisições por partida. Dá pra sair da aba, o lote continua no servidor.
                   </p>
                 </>
               ) : (
@@ -1863,7 +1863,7 @@ export default function AdminDados() {
                       aria-label="Quantas partidas deste filtro recoletar"
                     >
                       {[10, 20, 50, 100].map(n => (
-                        <option key={n} value={n}>{n} partidas · {n * 2} requisições</option>
+                        <option key={n} value={n}>{n} partidas, {n * 2} requisições</option>
                       ))}
                     </select>
                     <Button size="sm" loading={pedindoLote}
@@ -1875,7 +1875,7 @@ export default function AdminDados() {
                   <p className="text-[10px] text-ink-4 mt-2 leading-relaxed">
                     Roda a coleta nas {Math.min(lote, historico?.total ?? lote)} partidas mais
                     recentes <span className="font-semibold">deste filtro</span>, da janela de{' '}
-                    {diagnostico?.meses ?? 12} meses · é o botão Rodar de cada linha, aplicado à
+                    {diagnostico?.meses ?? 12} meses, é o botão Rodar de cada linha, aplicado à
                     lista. Quem continuar sem o número depois é folha que a API não publica mais:
                     essa só sai preenchendo à mão.
                   </p>
@@ -1998,7 +1998,7 @@ export default function AdminDados() {
                                       min={0}
                                       value={lado === 0 ? casaTxt : foraTxt}
                                       onChange={e => trocar(lado, e.target.value)}
-                                      aria-label={`${f.rotulo} · ${lado === 0 ? 'casa' : 'fora'}`}
+                                      aria-label={`${f.rotulo}, ${lado === 0 ? 'casa' : 'fora'}`}
                                       className="w-full min-h-[32px] bg-surface-0 border border-line-strong rounded px-1.5 py-1 font-mono text-[11px] text-right tabular-nums text-ink-1 focus:border-ink-4 focus:outline-none"
                                     />
                                   ))}
@@ -2086,12 +2086,12 @@ export default function AdminDados() {
 
                         <p className="text-[10px] text-ink-4 mt-1.5 leading-relaxed">
                           {emEdicao ? (
-                            <>Campo em branco apaga o número de volta para ausência · é assim que se
+                            <>Campo em branco apaga o número de volta para ausência, é assim que se
                             desfaz um valor digitado errado sem inventar zero no lugar. Salvar refaz
                             o total da família e a média dos dois times na temporada.</>
                           ) : (
-                            <>Árbitro: {p.referee || 'não informado'} · coletada em{' '}
-                            {diaMes(p.coletada_em)} · fixture{' '}
+                            <>Árbitro: {p.referee || 'não informado'}, coletada em{' '}
+                            {diaMes(p.coletada_em)}, fixture{' '}
                             <span className="font-mono">{p.fixture_id}</span></>
                           )}
                         </p>
@@ -2126,10 +2126,10 @@ export default function AdminDados() {
             <div className="min-w-0">
               <h3 className="flex items-center gap-2 text-sm font-bold text-ink-1">
                 <Gavel className="w-4 h-4" />
-                Árbitros · temporada {arbitros.season}
+                Árbitros, temporada {arbitros.season}
               </h3>
               <p className="text-[11px] text-ink-4 mt-0.5 leading-relaxed">
-                "Com folha" é a amostra que sustenta a média de cartões · é esse número que o
+                "Com folha" é a amostra que sustenta a média de cartões, é esse número que o
                 motor lê pra liberar o mercado. Abaixo de {arbitros.amostra_minima ?? 3} ele cai
                 no fallback da média da liga. Toque no árbitro para ver os jogos.
               </p>
@@ -2199,7 +2199,7 @@ export default function AdminDados() {
                       <td className="px-4 py-2.5 text-ink-2 truncate max-w-[12rem]">{a.name}</td>
                       <td className={`px-2 py-2.5 text-right font-mono tabular-nums ${
                         curto ? 'text-yellow-400' : 'text-ink-2'}`}>
-                        {a.games ?? '·'}
+                        {a.games ?? '-'}
                         {faltando && <span className="text-ink-4">/{a.games_total}</span>}
                       </td>
                       <td className="px-2 py-2.5 text-right font-mono tabular-nums text-ink-1">
@@ -2254,11 +2254,11 @@ export default function AdminDados() {
               <div className="min-w-0">
                 <h3 className="flex items-center gap-2 text-sm font-bold text-ink-1">
                   <User className="w-4 h-4" />
-                  Jogadores · temporada {jogadores.season}
+                  Jogadores, temporada {jogadores.season}
                 </h3>
                 <p className="text-[11px] text-ink-4 mt-0.5 leading-relaxed">
                   Média por atuação de cada contador que vira mercado. Só entram atuações de{' '}
-                  {jogadores.min_minutos} minutos ou mais, que é o corte do motor · entrada de
+                  {jogadores.min_minutos} minutos ou mais, que é o corte do motor, entrada de
                   doze minutos e jogo inteiro não são a mesma observação, e misturar as duas
                   derruba toda média. Sem filtro de competição, o jogador que atuou em duas na
                   mesma temporada aparece com as duas somadas, e a linha vem marcada em amarelo.
@@ -2319,7 +2319,7 @@ export default function AdminDados() {
                   <option value="">Todas as competições</option>
                   {jogadores.ligas.map(l => (
                     <option key={l.league_id} value={l.league_id}>
-                      {l.liga ?? `liga ${l.league_id}`} · {l.atuacoes}
+                      {l.liga ?? `liga ${l.league_id}`}, {l.atuacoes}
                     </option>
                   ))}
                 </select>
@@ -2384,9 +2384,9 @@ export default function AdminDados() {
                     className="border-b border-line/60 cursor-pointer hover:bg-surface-2/60 transition-colors duration-1"
                   >
                     <td className="px-4 py-2.5">
-                      <span className="text-ink-2 block truncate max-w-[11rem]">{j.nome ?? '·'}</span>
+                      <span className="text-ink-2 block truncate max-w-[11rem]">{j.nome ?? '-'}</span>
                       <span className="text-[10px] text-ink-4 block truncate max-w-[11rem]">
-                        {j.time ?? 'time ?'}{j.posicao ? ` · ${j.posicao}` : ''}
+                        {j.time ?? 'time ?'}{j.posicao ? `, ${j.posicao}` : ''}
                       </span>
                     </td>
                     <td className="px-2 py-2.5 text-right font-mono tabular-nums text-ink-2 align-top">
@@ -2415,7 +2415,7 @@ export default function AdminDados() {
                         <td key={c.chave}
                             className="px-2 py-2.5 text-right font-mono tabular-nums align-top">
                           <span className={n === 0 ? 'text-ink-4' : 'text-ink-1'}>
-                            {media == null ? '·' : decimal(Number(media))}
+                            {media == null ? '-' : decimal(Number(media))}
                           </span>
                           {parcial && (
                             <span className="block text-[10px] text-yellow-400">de {n}</span>

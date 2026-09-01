@@ -60,7 +60,7 @@ export default function BlogPost() {
 
   return (
     <PageShell
-      title={`${meta.title} · Blog Pick IA`}
+      title={`${meta.title} | Blog Pick IA`}
       description={meta.description}
       canonical={url}
       width="narrow"
@@ -76,13 +76,13 @@ export default function BlogPost() {
               {meta.category}
             </span>
             <span className="text-ink-4 text-xs">{formatDate(meta.publishedAt)}</span>
-            <span className="text-ink-4 text-xs">· {meta.readingTime} min de leitura</span>
+            <span className="text-ink-4 text-xs">, {meta.readingTime} min de leitura</span>
           </div>
 
           <h1 className="text-2xl sm:text-3xl font-bold mb-3 leading-tight">{meta.title}</h1>
           <p className="text-ink-2 text-sm leading-relaxed mb-6">{meta.description}</p>
           <p className="text-ink-4 text-xs mb-8">
-            {meta.author.name} · {meta.author.role}
+            {meta.author.name}, {meta.author.role}
           </p>
 
           <Suspense fallback={<div className="text-ink-4 text-sm">Carregando artigo...</div>}>

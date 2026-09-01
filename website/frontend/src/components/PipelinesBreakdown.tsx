@@ -56,7 +56,7 @@ function CardPipeline({ p, volumeTotal }: { p: Pipeline; volumeTotal: number }) 
         <div className="min-w-0">
           <p className="text-sm font-black text-ink-1">{p.label}</p>
           <p className="text-[11px] text-ink-4 mt-0.5">
-            {p.total} {p.total === 1 ? 'aposta' : 'apostas'} · {p.greens}G/{p.reds}R
+            {p.total} {p.total === 1 ? 'aposta' : 'apostas'}, {p.greens}G/{p.reds}R
           </p>
         </div>
         <div className="text-right shrink-0">

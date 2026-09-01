@@ -111,7 +111,7 @@ export default function AdminShareResults() {
     const wr = calcWinRate(monthSummary.greens, monthSummary.total)
     shareCurrentMonth.share({
       winRatePct: wr ?? 0, total: monthSummary.total, greens: monthSummary.greens, reds: monthSummary.reds, profit: Number(monthSummary.profit),
-      badgeLabel: `RESULTADOS · ${currentMonthLabel.toUpperCase()}`,
+      badgeLabel: `RESULTADOS, ${currentMonthLabel.toUpperCase()}`,
       footerText: `Referente a ${currentMonthLabel}`,
       shareText: `Em ${currentMonthLabel}, a IA da Pick IA fechou ${monthSummary.greens}G / ${monthSummary.reds}R (${Math.round(wr ?? 0)}%). Histórico 100% auditável.`,
     })
@@ -229,7 +229,7 @@ export default function AdminShareResults() {
           onClick={() => compartilharLive(
             shareLiveHoje,
             { date: todayStr },
-            'AO VIVO · HOJE',
+            'AO VIVO. HOJE',
             new Date(todayStr + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' }),
             (g, r, wr) => `Hoje o motor Ao Vivo da Pick IA fechou ${g}G / ${r}R (${wr}%), lendo a partida em andamento. Histórico 100% auditável.`,
           )}
@@ -243,7 +243,7 @@ export default function AdminShareResults() {
           onClick={() => compartilharLive(
             shareLiveMes,
             { month: currentMonthStr },
-            `AO VIVO · ${currentMonthLabel.toUpperCase()}`,
+            `AO VIVO, ${currentMonthLabel.toUpperCase()}`,
             `Referente a ${currentMonthLabel}`,
             (g, r, wr) => `Em ${currentMonthLabel}, o motor Ao Vivo da Pick IA fechou ${g}G / ${r}R (${wr}%), lendo a partida em andamento. Histórico 100% auditável.`,
           )}

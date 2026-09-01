@@ -471,7 +471,7 @@ function SuggestionCard({
         </div>
         <div className="flex items-center gap-2 text-xs text-ink-3">
           <span className="font-semibold text-ink-2">{translateMarket(s.market)}</span>
-          {s.line && <><span>·</span><span>{translateLine(s.line)}</span></>}
+          {s.line && <><span>,</span><span>{translateLine(s.line)}</span></>}
           <InfoTip text={explainMarket(s.market, s.line)} />
         </div>
       </div>

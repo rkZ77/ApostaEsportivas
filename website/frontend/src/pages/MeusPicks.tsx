@@ -439,7 +439,7 @@ export default function MeusPicks() {
                           {fmtSigned(Number(melhor.profit) || 0)}
                         </dd>
                         <dt className="text-[11px] text-ink-3 mt-0.5">
-                          Melhor dia · {diaBR(melhor.match_date)}
+                          Melhor dia, {diaBR(melhor.match_date)}
                         </dt>
                       </div>
                       <div>
@@ -447,7 +447,7 @@ export default function MeusPicks() {
                           {fmtSigned(Number(pior.profit) || 0)}
                         </dd>
                         <dt className="text-[11px] text-ink-3 mt-0.5">
-                          Pior dia · {diaBR(pior.match_date)}
+                          Pior dia, {diaBR(pior.match_date)}
                         </dt>
                       </div>
                     </dl>
@@ -574,10 +574,10 @@ export default function MeusPicks() {
                               <div className="flex items-center gap-1 min-w-0">
                                 <p className="text-xs text-ink-4 truncate">
                                   {translateMarket(e.market) ?? ''}
-                                  {e.line ? ` · ${e.line}` : ''}
+                                  {e.line ? `, ${e.line}` : ''}
                                   {e.actual_odd
-                                    ? <> · <span className="text-ink-2">Odd {Number(e.actual_odd).toFixed(2)}</span>{Math.abs(Number(e.actual_odd) - Number(e.odd)) > 0.001 ? <span className="text-ink-4"> (pick: {Number(e.odd).toFixed(2)})</span> : null}</>
-                                    : e.odd ? ` · Odd ${Number(e.odd).toFixed(2)}` : ''}
+                                    ? <>, <span className="text-ink-2">Odd {Number(e.actual_odd).toFixed(2)}</span>{Math.abs(Number(e.actual_odd) - Number(e.odd)) > 0.001 ? <span className="text-ink-4"> (pick: {Number(e.odd).toFixed(2)})</span> : null}</>
+                                    : e.odd ? `. Odd ${Number(e.odd).toFixed(2)}` : ''}
                                 </p>
                                 <InfoTip text={explainMarket(e.market, e.line)} className="shrink-0" />
                               </div>
@@ -625,7 +625,7 @@ export default function MeusPicks() {
                       className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-line-strong text-ink-2 hover:border-ink-4 disabled:opacity-30 transition-colors"
                     >Ant</button>
                     <span className="text-xs text-ink-3">
-                      {todayPage * PAGE_SIZE + 1}–{Math.min((todayPage + 1) * PAGE_SIZE, filteredTabEntries.length)} de {filteredTabEntries.length}
+                      {todayPage * PAGE_SIZE + 1}, {Math.min((todayPage + 1) * PAGE_SIZE, filteredTabEntries.length)} de {filteredTabEntries.length}
                     </span>
                     <button
                       disabled={(todayPage + 1) * PAGE_SIZE >= filteredTabEntries.length}

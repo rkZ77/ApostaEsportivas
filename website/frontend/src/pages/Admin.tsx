@@ -605,8 +605,8 @@ export default function Admin() {
               <span className={`text-3xl font-black ${
                 (overview.api_football.pct ?? 0) >= 90 ? 'text-red-400'
                   : (overview.api_football.pct ?? 0) >= 70 ? 'text-orange-400' : 'text-green-400'
-              }`}>{overview.api_football.usado ?? '·'}</span>
-              <span className="text-ink-4 text-sm">/ {overview.api_football.limite ?? '·'} hoje</span>
+              }`}>{overview.api_football.usado ?? '-'}</span>
+              <span className="text-ink-4 text-sm">/ {overview.api_football.limite ?? '-'} hoje</span>
             </div>
             <div className="mt-2 h-1.5 bg-surface-2 rounded-full overflow-hidden">
               <div className={`h-full rounded-full ${
@@ -765,7 +765,7 @@ export default function Admin() {
           {pipelineAvulsos.length > 0 && (
             <div className="mt-3 pt-3 border-t border-line/60">
               <p className="text-[10px] text-ink-4 mb-2">
-                Fora do "Rodar tudo" · rodam só no clique
+                Fora do "Rodar tudo", rodam só no clique
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
                 {pipelineAvulsos.map(({ command, label }) => {
@@ -881,7 +881,7 @@ export default function Admin() {
               <h2 className="text-xs font-semibold text-ink-3">Revisão por IA</h2>
               <p className="text-[11px] text-ink-4 mt-1">
                 {aiReviewStatus?.migration_pending ? 'Aguardando a primeira migração do pipeline.' :
-                  `${aiReviewStatus?.config?.mode ?? 'off'} · ${aiReviewStatus?.config?.environment ?? 'prod'} · limite ${aiReviewStatus?.config?.daily_limit ?? 0}/dia`}
+                  `${aiReviewStatus?.config?.mode ?? 'off'}, ${aiReviewStatus?.config?.environment ?? 'prod'}, limite ${aiReviewStatus?.config?.daily_limit ?? 0}/dia`}
               </p>
             </div>
             {/* Sem o selo de modo aqui: o cartão logo abaixo carrega o mesmo
@@ -1061,7 +1061,7 @@ export default function Admin() {
                     const r = await api.post('/admin/sync-payment', { mp_payment_id: id })
                     showToast(r.data.duplicate
                       ? 'Pagamento já estava registrado.'
-                      : `VIP ativado: ${r.data.user.name} · ${r.data.plan}`)
+                      : `VIP ativado: ${r.data.user.name}, ${r.data.plan}`)
                     api.get('/admin/payments').then(r2 => setPayments(r2.data)).catch(() => {})
                   } catch (e: any) {
                     showToast('Erro: ' + (e.response?.data?.detail || e.message), false)
@@ -1101,7 +1101,7 @@ export default function Admin() {
                     </div>
                     <p className="text-[10px] text-ink-4 font-mono mt-1">
                       {new Date(p.created_at).toLocaleDateString('pt-BR')}
-                      {p.expires_at && <> · expira {new Date(p.expires_at).toLocaleDateString('pt-BR')}</>}
+                      {p.expires_at && <>, expira {new Date(p.expires_at).toLocaleDateString('pt-BR')}</>}
                     </p>
                   </li>
                 ))}
@@ -1294,7 +1294,7 @@ export default function Admin() {
                     .filter(([, v]) => Number(v) > 0).map(([k, v]) => `${k} ${v}`).join(', ')}`)
                 }
                 if (corrigidos > 0) partes.push(`${corrigidos} corrigido(s) após revisão da API`)
-                showToast(partes.length ? partes.join(' · ') : 'Nada pendente e nada a corrigir.')
+                showToast(partes.length ? partes.join(', ') : 'Nada pendente e nada a corrigir.')
                 carregarOverview()
               } catch (err: any) {
                 showToast(err.response?.data?.detail || 'Erro ao atualizar resultados', false)
@@ -1405,7 +1405,7 @@ export default function Admin() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={`text-[10px] font-black px-2 py-1 rounded border ${resCls}`}>{p.result ?? 'Pendente'}</span>
-                      <span className="text-ink-4 text-xs">·</span>
+                      <span className="text-ink-4 text-xs">,</span>
                       <span className="text-xs text-ink-3 truncate flex-1">{p.market} {p.line ?? ''}</span>
                       {p.odd != null && (
                         <span className="font-mono text-xs text-ink-2 shrink-0">@{Number(p.odd).toFixed(2)}</span>
@@ -1633,7 +1633,7 @@ export default function Admin() {
             </table>
             {usersTotalPages > 1 && (
               <div className="flex items-center justify-between px-4 py-3 border-t border-line">
-                <span className="text-xs text-ink-4">Página {usersPageSafe + 1} de {usersTotalPages} · {filtered.length} usuário(s)</span>
+                <span className="text-xs text-ink-4">Página {usersPageSafe + 1} de {usersTotalPages}, {filtered.length} usuário(s)</span>
                 <div className="flex gap-2">
                   <button onClick={() => setUsersPage(p => Math.max(0, p - 1))} disabled={usersPageSafe === 0} className="px-3 py-1 text-xs rounded border border-line-strong text-ink-2 hover:text-ink-1 disabled:opacity-30">← Ant</button>
                   <button onClick={() => setUsersPage(p => Math.min(usersTotalPages - 1, p + 1))} disabled={usersPageSafe === usersTotalPages - 1} className="px-3 py-1 text-xs rounded border border-line-strong text-ink-2 hover:text-ink-1 disabled:opacity-30">Próx</button>
@@ -1834,7 +1834,7 @@ export default function Admin() {
                     </p>
                     <p className="text-[11px] text-ink-4 mt-1">
                       {previaLiga.inicio} a {previaLiga.fim}
-                      {previaLiga.rodada_atual ? ` · agora em "${previaLiga.rodada_atual}"` : ''}
+                      {previaLiga.rodada_atual ? `, agora em "${previaLiga.rodada_atual}"` : ''}
                     </p>
                     <p className="text-[11px] text-ink-3 mt-2 leading-relaxed">
                       {previaLiga.iniciada
@@ -1871,7 +1871,7 @@ export default function Admin() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm text-ink-1 font-bold truncate">{l.name}</span>
-                        <span className="font-mono text-[10px] text-ink-4">#{l.league_id} · {l.season}</span>
+                        <span className="font-mono text-[10px] text-ink-4">#{l.league_id}, {l.season}</span>
                         {!l.ativa && (
                           <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-surface-3 text-ink-3">
                             SÓ HISTÓRICO
@@ -1879,7 +1879,7 @@ export default function Admin() {
                         )}
                       </div>
                       <div className="text-[11px] text-ink-3 mt-0.5 font-mono">
-                        {l.times} times · {l.jogos_coletados} jogos coletados · {l.jogos_agendados} agendados
+                        {l.times} times, {l.jogos_coletados} jogos coletados, {l.jogos_agendados} agendados
                       </div>
                       {l.temporada_iniciada === false && (
                         <div className="text-[11px] text-ink-4 mt-0.5">
@@ -2136,8 +2136,8 @@ export default function Admin() {
                       </span>
                     </div>
                     <p className="text-[11px] text-ink-4 font-mono mt-0.5">
-                      #{bk.bookmaker_id} · {bk.n_odds.toLocaleString('pt-BR')} odds
-                      {' · '}{bk.n_fixtures.toLocaleString('pt-BR')} fixtures
+                      #{bk.bookmaker_id}, {bk.n_odds.toLocaleString('pt-BR')} odds
+                      {', '}{bk.n_fixtures.toLocaleString('pt-BR')} fixtures
                     </p>
                     <button
                       className="mt-2 text-[11px] text-ink-2 border border-line-strong rounded px-2 py-1 hover:text-ink-1 transition-colors"

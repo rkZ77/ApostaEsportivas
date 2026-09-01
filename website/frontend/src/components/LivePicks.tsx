@@ -332,7 +332,7 @@ function LiveLeg({ leg, syncedAt }: { leg: any; syncedAt: number }) {
         </div>
       </div>
       <div className="flex items-center justify-between text-xs">
-        <span className="text-ink-3 truncate">{leg.market} · {leg.line}</span>
+        <span className="text-ink-3 truncate">{leg.market}, {leg.line}</span>
         {leg.current_val != null && (
           <StatChip label={leg.stat_label} value={leg.current_val} cls={stColor} compact />
         )}
@@ -393,7 +393,7 @@ function CashoutModal({ pick, unitValue, onClose, onDone }: {
         {stakeR != null && (
           <div className="font-mono bg-surface-2/60 rounded-md px-3 py-2 flex justify-between text-xs">
             <span className="text-ink-3">Apostado</span>
-            <span className="text-ink-1 font-semibold">{pick.stake_units}u · R$ {stakeR.toFixed(2)}</span>
+            <span className="text-ink-1 font-semibold">{pick.stake_units}u. R$ {stakeR.toFixed(2)}</span>
           </div>
         )}
 
@@ -589,7 +589,7 @@ function PickCard({ pick, unitValue, onRefresh, syncedAt }: {
   // Sub-label do header
   const headerSub = isMulti
     ? `${(pick.legs ?? []).length} seleções`
-    : [pick.market, pick.line].filter(Boolean).join(' · ')
+    : [pick.market, pick.line].filter(Boolean).join(', ')
 
   return (
     <div className={`rounded-lg border overflow-hidden transition-colors ${
@@ -673,7 +673,7 @@ function PickCard({ pick, unitValue, onRefresh, syncedAt }: {
                 </div>
                 {/* Mercado + stat atual */}
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-ink-2 truncate">{pick.market} · {pick.line}</span>
+                  <span className="text-ink-2 truncate">{pick.market}, {pick.line}</span>
                   {pick.current_val != null && (
                     <StatChip label={pick.stat_label} value={pick.current_val} cls={stColor} />
                   )}
@@ -1055,7 +1055,7 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
 
       {lastUpdate && (
         <p className="text-center text-[10px] text-ink-4">
-          {hasLive ? 'Atualiza a cada 15s · ' : ''}última atualização: {lastUpdate.toLocaleTimeString('pt-BR')}
+          {hasLive ? 'Atualiza a cada 15s, ' : ''}última atualização: {lastUpdate.toLocaleTimeString('pt-BR')}
         </p>
       )}
     </div>

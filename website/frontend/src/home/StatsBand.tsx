@@ -121,7 +121,7 @@ export default function StatsBand({
   const medias = [
     mediaVip !== null ? `VIP ${fmtUnits(mediaVip, 2)}` : null,
     mediaFree !== null ? `free ${fmtUnits(mediaFree, 2)}` : null,
-  ].filter(Boolean).join(' · ')
+  ].filter(Boolean).join(', ')
 
   return (
     <div className="space-y-3">

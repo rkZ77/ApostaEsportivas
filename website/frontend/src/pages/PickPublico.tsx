@@ -83,14 +83,14 @@ export default function PickPublico() {
   const profit = pick.profit != null ? Number(pick.profit) : null
   const odd    = pick.odd != null ? Number(pick.odd) : null
   const typeLabel = PICK_TYPE_LABEL[pick.pick_type ?? pick_type ?? 'vip'] ?? 'VIP'
-  const resultLabel = pick.result ? ` · ${pick.result}` : ''
-  const pageTitle = `${pick.home_team_name ?? pick.teams_preview?.[0] ?? 'Múltipla'}${pick.away_team_name ? ` x ${pick.away_team_name}` : ''}${resultLabel} · Pick IA`
+  const resultLabel = pick.result ? `, ${pick.result}` : ''
+  const pageTitle = `${pick.home_team_name ?? pick.teams_preview?.[0] ?? 'Múltipla'}${pick.away_team_name ? ` x ${pick.away_team_name}` : ''}${resultLabel}. Pick IA`
 
   return (
     <div className={`min-h-screen bg-surface-0 flex flex-col ${classesRevelacao(revelado)}`} style={{ transitionDuration: `${FADE_REVELACAO_MS}ms` }} aria-busy={!revelado}>
       <Helmet>
         <title>{pageTitle}</title>
-        <meta name="description" content={`Odd ${odd?.toFixed(2) ?? '-'} · ${typeLabel} · Análise de IA para apostas esportivas.`} />
+        <meta name="description" content={`Odd ${odd?.toFixed(2) ?? '-'}, ${typeLabel}. Análise de IA para apostas esportivas.`} />
       </Helmet>
       {/* Topo */}
       <div className="px-4 pt-5 pb-3 flex items-center justify-between">
@@ -186,7 +186,7 @@ export default function PickPublico() {
             <div className="px-5 py-4 space-y-2 border-b border-line/60">
               <div className="flex items-center gap-2">
                 <span className="text-[10px] text-ink-3">Mercado</span>
-                <span className="text-sm font-bold text-ink-1">{fullPick.market} {fullPick.line ? `· ${fullPick.line}` : ''}</span>
+                <span className="text-sm font-bold text-ink-1">{fullPick.market} {fullPick.line ? `, ${fullPick.line}` : ''}</span>
               </div>
               {fullPick.reasoning && (
                 <p className="text-xs text-ink-2 leading-relaxed line-clamp-4">{fullPick.reasoning}</p>
@@ -197,7 +197,7 @@ export default function PickPublico() {
               <div className="flex items-center gap-3 px-4 py-3 bg-surface-1 border border-line rounded-md">
                 <Lock className="w-4 h-4 text-yellow-400 shrink-0" />
                 <div>
-                  <p className="text-xs font-bold text-ink-1">Mercado · Linha · Análise da IA</p>
+                  <p className="text-xs font-bold text-ink-1">Mercado. Linha. Análise da IA</p>
                   <p className="text-[11px] text-ink-3 mt-0.5">Disponível apenas para assinantes VIP</p>
                 </div>
               </div>
@@ -246,7 +246,7 @@ export default function PickPublico() {
         </div>
 
         {/* Footer branding */}
-        <p className="text-center text-[10px] text-ink-4 mt-6">Pick IA · Tips por Inteligência Artificial</p>
+        <p className="text-center text-[10px] text-ink-4 mt-6">Pick IA. Tips por Inteligência Artificial</p>
       </div>
     </div>
   )

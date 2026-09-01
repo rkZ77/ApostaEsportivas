@@ -269,7 +269,7 @@ export async function buildStoryImage(input: StoryImageInput): Promise<Blob> {
   cursorY += 190
 
   if (input.market) {
-    const marketText = input.line ? `${input.market} · ${input.line}` : input.market
+    const marketText = input.line ? `${input.market}, ${input.line}` : input.market
     ctx.font = fontDisplay(800, 36)
     const fitted = fitText(ctx, marketText, W - 240)
     const textW = ctx.measureText(fitted).width
@@ -395,7 +395,7 @@ function drawFooterCredit(ctx: CanvasRenderingContext2D): void {
   ctx.font = fontSans(600, 23)
   ctx.fillStyle = '#3f3f46'
   ctx.textAlign = 'center'
-  ctx.fillText('Pick IA · Tips por Inteligência Artificial', W / 2, CREDIT_Y)
+  ctx.fillText('Pick IA. Tips por Inteligência Artificial', W / 2, CREDIT_Y)
 }
 
 // ── Helpers compartilhados pelos cards abaixo (resultado geral / jogos do dia) ──
@@ -626,8 +626,8 @@ export async function buildTodayGamesStoryImage(input: TodayGamesStoryInput): Pr
   let cursorY = brandY + 56
   ctx.font = fontDisplay(800, 28)
   const badgeLabel = input.variant === 'amanha'
-    ? 'JOGOS DE AMANHÃ · A IA VAI ANALISAR'
-    : 'JOGOS DE HOJE · A IA JÁ ANALISOU'
+    ? 'JOGOS DE AMANHÃ. A IA VAI ANALISAR'
+    : 'JOGOS DE HOJE. A IA JÁ ANALISOU'
   const badgeTextW = ctx.measureText(badgeLabel).width
   const badgeW = badgeTextW + 72
   drawRoundedRect(ctx, W / 2 - badgeW / 2, cursorY, badgeW, 60, 30)
@@ -871,7 +871,7 @@ export async function buildAlavancagemStoryImage(input: AlavancagemStoryInput): 
   let cursorY = brandY + 56
 
   // Badge: ALAVANCAGEM · TRIPLA
-  const badgeLabel = `ALAVANCAGEM · ${input.tipoLabel.toUpperCase()}`
+  const badgeLabel = `ALAVANCAGEM, ${input.tipoLabel.toUpperCase()}`
   ctx.font = fontDisplay(800, 30)
   const badgeW = ctx.measureText(badgeLabel).width + 80
   drawRoundedRect(ctx, W / 2 - badgeW / 2, cursorY, badgeW, 64, 32)
@@ -947,7 +947,7 @@ export async function buildAlavancagemStoryImage(input: AlavancagemStoryInput): 
     const confronto = l.awayTeamName ? `${l.homeTeamName} x ${l.awayTeamName}` : l.homeTeamName
     ctx.fillText(fitText(ctx, confronto, largura), textoX, midY - 14)
 
-    const mercado = [l.market, l.line].filter(Boolean).join(' · ')
+    const mercado = [l.market, l.line].filter(Boolean).join(', ')
     if (mercado) {
       ctx.font = fontSans(600, 26)
       ctx.fillStyle = '#a1a1aa'

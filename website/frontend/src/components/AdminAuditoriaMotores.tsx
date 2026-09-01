@@ -106,7 +106,7 @@ const ROTULO_DO_STATUS: Record<string, string> = {
 }
 
 const hora = (iso?: string | null) => {
-  if (!iso) return '·'
+  if (!iso) return '-'
   // Vem do Postgres como "2026-08-27 19:04:12". Fatiado, e não passado por
   // `new Date`, pelo mesmo motivo do resto do projeto: o timestamp não carrega
   // fuso, e o construtor de Date assume um.
@@ -115,20 +115,20 @@ const hora = (iso?: string | null) => {
 }
 
 const diaMes = (iso?: string | null) => {
-  if (!iso) return '·'
+  if (!iso) return '-'
   const [a, m, d] = iso.slice(0, 10).split('-')
   return d && m ? `${d}/${m}` : a
 }
 
 const duracao = (s?: number | null) => {
-  if (s == null) return '·'
+  if (s == null) return '-'
   if (s < 60) return `${s}s`
   const min = Math.floor(s / 60)
   return `${min}min ${s % 60}s`
 }
 
 const pct = (v?: number | null) => {
-  if (v == null) return '·'
+  if (v == null) return '-'
   const n = Number(v)
   return `${((n <= 1 ? n * 100 : n)).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%`
 }
@@ -331,7 +331,7 @@ export default function AdminAuditoriaMotores() {
             <thead>
               <tr className="text-ink-4 text-[10px] border-b border-line">
                 <th className="text-left font-medium px-4 py-2">Run ID</th>
-                <th className="text-left font-medium px-2 py-2">Motor · método</th>
+                <th className="text-left font-medium px-2 py-2">Motor, método</th>
                 <th className="text-left font-medium px-2 py-2">Versão</th>
                 <th className="text-left font-medium px-2 py-2">Horário</th>
                 <th className="text-right font-medium px-2 py-2">Analisados</th>
@@ -356,12 +356,12 @@ export default function AdminAuditoriaMotores() {
                     </span>
                   </td>
                   <td className="px-2 py-2.5 text-ink-2">
-                    {e.engine} · {e.metodo_label ?? e.method}
+                    {e.engine}, {e.metodo_label ?? e.method}
                   </td>
                   <td className="px-2 py-2.5 font-mono text-[11px] text-ink-4">v{e.engine_version}</td>
                   <td className="px-2 py-2.5 text-ink-3 whitespace-nowrap">
                     {hora(e.iniciada_em)}
-                    <span className="text-ink-4"> · {duracao(e.duracao_s)}</span>
+                    <span className="text-ink-4">, {duracao(e.duracao_s)}</span>
                   </td>
                   <td className="px-2 py-2.5 text-right font-mono tabular-nums text-ink-2">{e.analisados}</td>
                   <td className={`px-2 py-2.5 text-right font-mono tabular-nums ${
@@ -400,8 +400,8 @@ export default function AdminAuditoriaMotores() {
               <h3 className="text-sm font-bold text-ink-1 font-mono">{aberta}</h3>
               {detalhe?.execucao && (
                 <p className="text-[11px] text-ink-4">
-                  {detalhe.execucao.engine} · {detalhe.execucao.metodo_label ?? detalhe.execucao.method}
-                  {' '}· v{detalhe.execucao.engine_version} · {diaMes(detalhe.execucao.dia)}
+                  {detalhe.execucao.engine}, {detalhe.execucao.metodo_label ?? detalhe.execucao.method}
+                  {' '}, v{detalhe.execucao.engine_version}, {diaMes(detalhe.execucao.dia)}
                 </p>
               )}
             </div>
@@ -469,7 +469,7 @@ export default function AdminAuditoriaMotores() {
                             ? <Check className="w-3.5 h-3.5 text-green-400 shrink-0" />
                             : <X className="w-3.5 h-3.5 text-ink-4 shrink-0" />}
                           <span className="text-xs text-ink-1 truncate">
-                            {j.home_team ?? '·'} x {j.away_team ?? '·'}
+                            {j.home_team ?? '-'} x {j.away_team ?? '-'}
                           </span>
                         </span>
                         <span className="flex items-center gap-3 text-[11px] shrink-0">

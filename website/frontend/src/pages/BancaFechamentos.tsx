@@ -41,8 +41,8 @@ function LinhaRecorte({ nome, r }: { nome: string; r: Recorte }) {
       <div className="flex-1 min-w-0">
         <p className="text-sm text-ink-1 font-semibold truncate">{nome}</p>
         <p className="text-[11px] text-ink-4">
-          {r.picks} {r.picks === 1 ? 'pick' : 'picks'} · {r.greens}G/{r.reds}R
-          {r.picks > 0 && <> · {r.win_rate}%</>}
+          {r.picks} {r.picks === 1 ? 'pick' : 'picks'}, {r.greens}G/{r.reds}R
+          {r.picks > 0 && <>, {r.win_rate}%</>}
         </p>
       </div>
       <div className="text-right shrink-0">

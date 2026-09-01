@@ -132,7 +132,7 @@ function SetupModal({ current, locked, onSave, onClose, onWithdraw }: {
                 >
                   Usar {fmtBRL(parseFloat(suggested) || 0)}
                 </button>
-                <p className="text-ink-4 text-[11px] mt-1">Sugerido · 1% da banca, gestão conservadora</p>
+                <p className="text-ink-4 text-[11px] mt-1">Sugerido, 1% da banca, gestão conservadora</p>
               </div>
             )}
 
@@ -148,7 +148,7 @@ function SetupModal({ current, locked, onSave, onClose, onWithdraw }: {
                   type="button" onClick={() => setUnitValue(maxUnitSafe ?? '')}
                   className="mt-2 text-xs font-bold text-red-300 bg-red-500/10 border border-red-500/40 hover:bg-red-500/20 rounded-md px-3 py-1.5 min-h-[32px] transition-colors"
                 >
-                  Usar o máximo permitido · {fmtBRL(parseFloat(maxUnitSafe ?? '0'))} por unidade
+                  Usar o máximo permitido, {fmtBRL(parseFloat(maxUnitSafe ?? '0'))} por unidade
                 </button>
               </div>
             )}
@@ -163,14 +163,14 @@ function SetupModal({ current, locked, onSave, onClose, onWithdraw }: {
                   type="button" onClick={() => setUnitValue(suggested)}
                   className="mt-2 text-xs font-bold text-yellow-300 bg-yellow-500/10 border border-yellow-500/40 hover:bg-yellow-500/20 rounded-md px-3 py-1.5 min-h-[32px] transition-colors"
                 >
-                  Usar o ideal · {fmtBRL(parseFloat(suggested) || 0)} por unidade
+                  Usar o ideal, {fmtBRL(parseFloat(suggested) || 0)} por unidade
                 </button>
               </div>
             )}
             {bancaStatus === 'ok' && totalUnits !== null && (
               <div className="mt-2 flex items-center gap-1.5 text-xs text-accent-ink">
                 <span className="font-bold">Banca saudável</span>
-                <span className="text-ink-4">·</span>
+                <span className="text-ink-4">,</span>
                 <span className="text-ink-2">{Math.floor(totalUnits)} unidades totais</span>
               </div>
             )}
@@ -661,10 +661,10 @@ export default function Banca() {
                       </div>
                       <p className="text-xs text-ink-4 truncate">
                         {e.market ?? ''}
-                        {e.line ? ` · ${e.line}` : ''}
+                        {e.line ? `, ${e.line}` : ''}
                         {e.actual_odd
-                          ? <> · <span className="text-ink-2">Odd {Number(e.actual_odd).toFixed(2)}</span>{Math.abs(Number(e.actual_odd) - Number(e.odd)) > 0.001 ? <span className="text-ink-4"> (pick: {Number(e.odd).toFixed(2)})</span> : null}</>
-                          : e.odd ? ` · Odd ${Number(e.odd).toFixed(2)}` : ''}
+                          ? <>, <span className="text-ink-2">Odd {Number(e.actual_odd).toFixed(2)}</span>{Math.abs(Number(e.actual_odd) - Number(e.odd)) > 0.001 ? <span className="text-ink-4"> (pick: {Number(e.odd).toFixed(2)})</span> : null}</>
+                          : e.odd ? `. Odd ${Number(e.odd).toFixed(2)}` : ''}
                       </p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">

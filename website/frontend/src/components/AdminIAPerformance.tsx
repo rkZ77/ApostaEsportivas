@@ -84,9 +84,9 @@ const PICK_LABEL: Record<string, string> = {
 // com base em nada.
 const AMOSTRA_MINIMA = 8
 
-const pct = (v: number | null | undefined) => (v == null ? '·' : `${v.toFixed(1)}%`)
+const pct = (v: number | null | undefined) => (v == null ? '-' : `${v.toFixed(1)}%`)
 const sinal = (v: number | null | undefined, casas = 1) =>
-  v == null ? '·' : `${v > 0 ? '+' : ''}${v.toFixed(casas)}`
+  v == null ? '-' : `${v > 0 ? '+' : ''}${v.toFixed(casas)}`
 
 /** Leitura em uma frase do que o par (aprovados, vetados) está dizendo. */
 function veredito(m: Modelo): { texto: string; tom: 'green' | 'red' | 'neutral' | 'muted' } {
@@ -133,7 +133,7 @@ function CardModelo({ m }: { m: Modelo }) {
           <p className="font-mono text-sm font-bold text-ink-1 break-all">{m.model ?? 'sem modelo'}</p>
           <p className="text-[11px] text-ink-4 mt-0.5">
             {m.provider ?? 'provider desconhecido'}
-            {m.pipelines?.length ? ` · ${m.pipelines.join(', ')}` : ''}
+            {m.pipelines?.length ? `, ${m.pipelines.join(', ')}` : ''}
           </p>
         </div>
         {m.lift != null && m.vetados.resolvidos >= AMOSTRA_MINIMA && (
@@ -148,16 +148,16 @@ function CardModelo({ m }: { m: Modelo }) {
           <p className="text-[10px] text-ink-4 uppercase tracking-wide mb-1">Aprovou</p>
           <p className="font-mono text-xl font-bold text-ink-1">{pct(m.aprovados.hit)}</p>
           <p className="text-[10px] text-ink-4 mt-0.5">
-            {m.aprovados.green}G · {m.aprovados.red}R
-            {m.aprovados.pendentes > 0 && ` · ${m.aprovados.pendentes} pend.`}
+            {m.aprovados.green}G, {m.aprovados.red}R
+            {m.aprovados.pendentes > 0 && `, ${m.aprovados.pendentes} pend.`}
           </p>
         </div>
         <div className="rounded-md bg-surface-0 border border-line p-3">
           <p className="text-[10px] text-ink-4 uppercase tracking-wide mb-1">Quis vetar</p>
           <p className="font-mono text-xl font-bold text-ink-1">{pct(m.vetados.hit)}</p>
           <p className="text-[10px] text-ink-4 mt-0.5">
-            {m.vetados.green}G · {m.vetados.red}R
-            {m.vetados.pendentes > 0 && ` · ${m.vetados.pendentes} pend.`}
+            {m.vetados.green}G, {m.vetados.red}R
+            {m.vetados.pendentes > 0 && `, ${m.vetados.pendentes} pend.`}
           </p>
         </div>
       </div>
@@ -168,7 +168,7 @@ function CardModelo({ m }: { m: Modelo }) {
         <div>
           <p className="text-ink-4">Chamadas</p>
           <p className="font-mono text-ink-1 font-semibold">
-            {m.chamadas ?? '·'}
+            {m.chamadas ?? '-'}
             {m.cache ? <span className="text-ink-4 font-normal"> +{m.cache} cache</span> : null}
           </p>
         </div>
@@ -188,7 +188,7 @@ function CardModelo({ m }: { m: Modelo }) {
             (m.economia_do_veto ?? 0) > 0 ? 'text-green-400'
               : (m.economia_do_veto ?? 0) < 0 ? 'text-red-400' : 'text-ink-1'
           }`}>
-            {m.economia_do_veto == null ? '·' : `${sinal(m.economia_do_veto, 2)}u`}
+            {m.economia_do_veto == null ? '-' : `${sinal(m.economia_do_veto, 2)}u`}
           </p>
         </div>
       </div>
@@ -258,7 +258,7 @@ export default function AdminIAPerformance({ status }: { status: AIReviewStatus 
           r.lift == null || r.vetados.resolvidos < AMOSTRA_MINIMA ? 'text-ink-4'
             : r.lift > 0 ? 'text-green-400' : 'text-red-400'
         }`}>
-          {r.lift == null ? '·' : sinal(r.lift)}
+          {r.lift == null ? '-' : sinal(r.lift)}
         </span>
       ),
     },
@@ -266,7 +266,7 @@ export default function AdminIAPerformance({ status }: { status: AIReviewStatus 
       key: 'clv', header: 'CLV', align: 'right', hideOnMobile: true,
       cell: r => (
         <span className="font-mono text-xs text-ink-3 tabular-nums">
-          {r.aprovados.clv == null ? '·' : `${sinal(r.aprovados.clv, 2)}%`}
+          {r.aprovados.clv == null ? '-' : `${sinal(r.aprovados.clv, 2)}%`}
         </span>
       ),
     },
@@ -305,10 +305,10 @@ export default function AdminIAPerformance({ status }: { status: AIReviewStatus 
           "escanteio está sangrando há 60 dias" é acionável. */}
       {!loading && !erro && !!data?.por_mercado?.length && (
         <Panel>
-          <PanelHead label="Resultado por mercado" meta={`${data.days} dias · todos os picks`} />
+          <PanelHead label="Resultado por mercado" meta={`${data.days} dias, todos os picks`} />
           <div className="px-4 py-3 border-b border-line">
             <p className="text-[11px] text-ink-4 leading-relaxed">
-              Todo pick do período, tenha a IA olhado ou não. Do pior pro melhor em unidades ·
+              Todo pick do período, tenha a IA olhado ou não. Do pior pro melhor em unidades, 
               lucro é o que importa, não taxa de acerto: mercado com 55% de acerto em odd baixa
               perde dinheiro.
             </p>
@@ -325,9 +325,9 @@ export default function AdminIAPerformance({ status }: { status: AIReviewStatus 
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-semibold text-ink-1 truncate">{m.label}</p>
                     <p className="text-[10px] text-ink-4">
-                      {t.resolvidos} resolvido(s) · {t.green}G {t.red}R
-                      {t.pendentes > 0 && ` · ${t.pendentes} pend.`}
-                      {!relevante && ' · amostra pequena'}
+                      {t.resolvidos} resolvido(s), {t.green}G {t.red}R
+                      {t.pendentes > 0 && `, ${t.pendentes} pend.`}
+                      {!relevante && ', amostra pequena'}
                     </p>
                   </div>
                   <div className="text-right shrink-0">
@@ -336,7 +336,7 @@ export default function AdminIAPerformance({ status }: { status: AIReviewStatus 
                       {sinal(t.lucro, 2)}u
                     </p>
                     <p className="text-[10px] text-ink-4 tabular-nums">
-                      {pct(t.hit)} acerto · ROI {pct(t.roi)}
+                      {pct(t.hit)} acerto. ROI {pct(t.roi)}
                     </p>
                   </div>
                   {/* Só aparece onde a IA de fato opinou · em branco não é
@@ -345,7 +345,7 @@ export default function AdminIAPerformance({ status }: { status: AIReviewStatus 
                     <p className="text-[10px] text-ink-4">a IA viu</p>
                     <p className="font-mono text-[11px] text-ink-2 tabular-nums">
                       {m.aprovados.n + m.vetados.n === 0
-                        ? '·'
+                        ? ', '
                         : `${m.aprovados.n} ok / ${m.vetados.n} veto`}
                     </p>
                   </div>
@@ -447,7 +447,7 @@ export default function AdminIAPerformance({ status }: { status: AIReviewStatus 
                 <div className="flex flex-wrap gap-2">
                   {data.falhas.map(f => (
                     <span key={f.status} className="text-[10px] font-mono px-2 py-1 rounded bg-surface-1 text-ink-2">
-                      {f.status} · {f.n}
+                      {f.status}, {f.n}
                     </span>
                   ))}
                 </div>

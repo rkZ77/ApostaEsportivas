@@ -88,7 +88,7 @@ interface Mercado {
 const agruparPorMercado = (cands: Candidato[]): Mercado[] => {
   const mapa = new Map<string, Mercado>()
   const pegar = (c: Candidato) => {
-    const chave = `${c.market_type ?? '?'}${c.scope ? `·${c.scope}` : ''}`
+    const chave = `${c.market_type ?? '?'}${c.scope ? `, ${c.scope}` : ''}`
     let m = mapa.get(chave)
     if (!m) {
       m = { chave, rotulo: c.market_type ?? '?', vencedor: null, linhas: [], eliminada: null }
@@ -127,17 +127,17 @@ interface Linha {
 const POR_PAGINA = 10
 
 const diaMes = (iso?: string | null) => {
-  if (!iso) return '·'
+  if (!iso) return '-'
   const [a, m, d] = iso.slice(0, 10).split('-')
   return d && m ? `${d}/${m}` : a
 }
 
 const num = (v: number | null | undefined, casas = 2) =>
-  v == null ? '·' : v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas })
+  v == null ? '-' : v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas })
 
 /** Taxa/probabilidade chega em 0..1 do motor e em 0..100 de alguns modelos. */
 const pct = (v: number | null | undefined) => {
-  if (v == null) return '·'
+  if (v == null) return '-'
   const n = v <= 1 ? v * 100 : v
   return `${n.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%`
 }
@@ -252,7 +252,7 @@ export default function AdminMotorDecisoes() {
             >
               {dados.dias.map(d => (
                 <option key={d.dia} value={d.dia}>
-                  {diaMes(d.dia)} · {d.n} linha(s)
+                  {diaMes(d.dia)}, {d.n} linha(s)
                 </option>
               ))}
             </select>
@@ -268,10 +268,10 @@ export default function AdminMotorDecisoes() {
         * não distingue limiar apertado de coleta furada. */}
       <div className="card p-0 overflow-hidden">
         <div className="px-4 py-3 border-b border-line">
-          <h3 className="text-sm font-bold text-ink-1">Dia {diaMes(dia)} · por pipeline</h3>
+          <h3 className="text-sm font-bold text-ink-1">Dia {diaMes(dia)}, por pipeline</h3>
           <p className="text-[11px] text-ink-4 mt-0.5 leading-relaxed">
             Avaliados é quanto o motor rodou. Com aprovado é em quantos desses sobrou candidato.
-            Picks é o que foi publicado · entre um e outro ainda passam o gate de IA, a
+            Picks é o que foi publicado, entre um e outro ainda passam o gate de IA, a
             exclusividade de partida e o teto do dia.
           </p>
         </div>
@@ -309,7 +309,7 @@ export default function AdminMotorDecisoes() {
                       p.com_aprovado > 0 ? 'text-green-400' : 'text-ink-4'}`}>{p.com_aprovado}</td>
                     <td className="px-2 py-2.5 text-right font-mono tabular-nums text-ink-4">{p.descartados}</td>
                     <td className="px-4 py-2.5 text-right font-mono tabular-nums text-ink-1 font-bold">
-                      {p.picks == null ? '·' : p.picks}
+                      {p.picks == null ? '-' : p.picks}
                     </td>
                   </tr>
                 )
@@ -325,7 +325,7 @@ export default function AdminMotorDecisoes() {
         <div className="card p-4">
           <h3 className="flex items-center gap-2 text-sm font-bold text-ink-1 mb-2">
             <CircleSlash className="w-4 h-4 text-ink-3" />
-            Onde os jogos morreram {pipeline && <span className="text-ink-4 font-normal">· só {pipeline}</span>}
+            Onde os jogos morreram {pipeline && <span className="text-ink-4 font-normal">, só {pipeline}</span>}
           </h3>
           <div className="space-y-1.5">
             {motivosDoPipeline.slice(0, 12).map((m, i) => (
@@ -346,7 +346,7 @@ export default function AdminMotorDecisoes() {
         <div className="card p-0 overflow-hidden">
           <div className="px-4 py-3 border-b border-line flex flex-wrap items-center justify-between gap-2">
             <div className="min-w-0">
-              <h3 className="text-sm font-bold text-ink-1">{pipeline.replace('_ENGINE', '')} · partida a partida</h3>
+              <h3 className="text-sm font-bold text-ink-1">{pipeline.replace('_ENGINE', '')}, partida a partida</h3>
               <p className="text-[11px] text-ink-4 mt-0.5">
                 Toque na partida para ver todos os mercados que o motor pontuou nela.
               </p>
@@ -455,7 +455,7 @@ export default function AdminMotorDecisoes() {
                                   * o motivo e a unica coisa que ela tem pra dizer. */}
                                 {morto && (
                                   <p className="px-3 py-1.5 text-[10px] text-yellow-400/80 leading-relaxed">
-                                    {m.eliminada?.motivos_reprovacao?.join(' · ')}
+                                    {m.eliminada?.motivos_reprovacao?.join(', ')}
                                   </p>
                                 )}
 
@@ -502,7 +502,7 @@ export default function AdminMotorDecisoes() {
                                                 )}
                                                 {!!c.motivos_reprovacao?.length && (
                                                   <p className="text-[10px] text-yellow-400/80 mt-0.5 leading-snug">
-                                                    {c.motivos_reprovacao.join(' · ')}
+                                                    {c.motivos_reprovacao.join(', ')}
                                                   </p>
                                                 )}
                                               </td>
@@ -513,7 +513,7 @@ export default function AdminMotorDecisoes() {
                                                 {pct(c.taxa_real ?? c.probability)}
                                               </td>
                                               <td className="px-2 py-1.5 text-right font-mono tabular-nums text-ink-4">
-                                                {c.amostra ?? '·'}
+                                                {c.amostra ?? '-'}
                                               </td>
                                               <td className={`px-2 py-1.5 text-right font-mono tabular-nums ${
                                                 (c.ev ?? 0) > 0 ? 'text-green-400' : 'text-ink-4'}`}>
@@ -535,11 +535,11 @@ export default function AdminMotorDecisoes() {
 
                           <p className="text-[10px] text-ink-4 leading-relaxed">
                             Cada bloco e um mercado, e dentro dele estao TODAS as linhas que o motor
-                            olhou · a que representou o mercado vem primeiro, as outras embaixo com o
+                            olhou, a que representou o mercado vem primeiro, as outras embaixo com o
                             motivo de terem perdido. Linha marcada "nem calculou" tem a odd fora da
                             faixa do pipeline: ela e descartada antes da conta, porque calcular nao
                             mudaria o desfecho. Taxa e a frequencia historica do evento, nao a odd
-                            implicita · edge alto e alerta, nao qualidade.
+                            implicita, edge alto e alerta, nao qualidade.
                             {l.gravada_em && ` Gravada em ${l.gravada_em.slice(0, 16).replace('T', ' ')}.`}
                           </p>
                           {/* De onde vieram esses numeros: a media do time na

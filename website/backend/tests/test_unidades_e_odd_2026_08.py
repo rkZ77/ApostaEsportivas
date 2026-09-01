@@ -192,7 +192,7 @@ def test_lucro_fecha_a_fila_na_tela_de_picks():
     """Ordem pedida: volume (Picks, Green, Red), taxa (Win %) e o resultado por
     ultimo."""
     tela = _front_codigo("pages/Picks.tsx")
-    inicio = tela.index("Performance da IA · Geral")
+    inicio = tela.index("Performance geral da IA")
     bloco = tela[inicio:inicio + 1500]
     rotulos = ["'Picks'", "'Green'", "'Red'", "'Win %'", "'Lucro'"]
     posicoes = [bloco.find(r) for r in rotulos]

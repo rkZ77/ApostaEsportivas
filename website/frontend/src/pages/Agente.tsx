@@ -103,7 +103,7 @@ export default function Agente() {
        e termina em rodapé. */
     <div className="h-screen bg-surface-0 flex flex-col overflow-hidden">
       <Helmet>
-        <title>Agente IA · Pick IA</title>
+        <title>Agente IA | Pick IA</title>
         <meta name="robots" content="noindex, nofollow" />
       </Helmet>
       <Navbar />
@@ -117,7 +117,7 @@ export default function Agente() {
           </div>
           <div>
             <h1 className="font-display text-base font-semibold text-ink-1">Pick<span className="text-accent-ink">IA</span> Agent</h1>
-            <p className="text-ink-3 text-xs mt-0.5">Picks · Banca · Alavancagem · Jogos ao vivo</p>
+            <p className="text-ink-3 text-xs mt-0.5">Picks. Banca. Alavancagem. Jogos ao vivo</p>
           </div>
           <div className="ml-auto flex items-center gap-1.5">
             <LiveDot tone={loading ? 'amber' : 'green'} />

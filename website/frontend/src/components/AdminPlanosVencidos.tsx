@@ -95,7 +95,7 @@ export default function AdminPlanosVencidos() {
 
       {d.total === 0 ? (
         <p className="text-[11px] text-ink-4 mt-2 leading-relaxed">
-          Ninguém pendente · todo VIP e teste vencido já voltou pro plano free e
+          Ninguém pendente, todo VIP e teste vencido já voltou pro plano free e
           recebeu o aviso.
         </p>
       ) : (
@@ -111,7 +111,7 @@ export default function AdminPlanosVencidos() {
                   <div className="text-[11px] font-semibold text-amber-400 uppercase">{p.plan}</div>
                   <div className="text-[10px] text-ink-4">
                     venceu há {dias(p.expires_at)}d
-                    {p.last_login_at ? '' : ' · nunca entrou'}
+                    {p.last_login_at ? '' : ', nunca entrou'}
                   </div>
                 </div>
               </div>
@@ -119,15 +119,15 @@ export default function AdminPlanosVencidos() {
           </div>
           <p className="text-[11px] text-ink-4 mt-3 leading-relaxed">
             {d.varredura.habilitada
-              ? 'A varredura volta essas contas pro free, cria o aviso no sino e manda o e-mail de fim de acesso · um por pessoa.'
-              : 'Varredura desligada neste ambiente. O aviso e o e-mail saem juntos, e aqui o e-mail não sai · rodar só queimaria o aviso da pessoa.'}
+              ? 'A varredura volta essas contas pro free, cria o aviso no sino e manda o e-mail de fim de acesso, um por pessoa.'
+              : 'Varredura desligada neste ambiente. O aviso e o e-mail saem juntos, e aqui o e-mail não sai, rodar só queimaria o aviso da pessoa.'}
           </p>
         </>
       )}
 
       {resumo && (
         <p className="text-[11px] text-green-400 mt-2">
-          {resumo.rebaixados} conta(s) rebaixada(s) · {resumo.trial} teste, {resumo.vip} VIP.
+          {resumo.rebaixados} conta(s) rebaixada(s), {resumo.trial} teste, {resumo.vip} VIP.
         </p>
       )}
       {erro && <p className="text-[11px] text-red-400 mt-2">{erro}</p>}

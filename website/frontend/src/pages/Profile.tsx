@@ -411,7 +411,7 @@ export default function Profile() {
               <input className="input w-full" value={username}
                 onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
                 placeholder="seu_usuario" maxLength={20} />
-              <p className="text-xs text-ink-4 mt-1">3–20 caracteres, letras minúsculas, números e _</p>
+              <p className="text-xs text-ink-4 mt-1">3 a 20 caracteres, letras minúsculas, números e _</p>
             </div>
 
             <div>
@@ -677,7 +677,7 @@ export default function Profile() {
 
             {smsTrial && (
               <p className="text-green-400 text-xs font-semibold">
-                Telefone confirmado · 2 dias de VIP liberados!
+                Telefone confirmado, 2 dias de VIP liberados!
               </p>
             )}
 
@@ -753,7 +753,7 @@ export default function Profile() {
                 Último login: <span className="font-semibold text-ink-1">{meData.last_login_device}</span>
                 {meData.last_login_at && (
                   <span className="text-ink-3">
-                    {' · '}
+                    {', '}
                     {new Date(meData.last_login_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                   </span>
                 )}

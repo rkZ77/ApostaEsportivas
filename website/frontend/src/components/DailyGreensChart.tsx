@@ -170,11 +170,11 @@ export default function DailyGreensChart({
           <p className="text-ink-2 font-semibold mb-1">{fmtDate(hovered.match_date)}</p>
           <div className="font-mono flex items-center gap-2">
             <span className="text-green-400 font-black">{hovered.greens} green</span>
-            <span className="text-ink-4">·</span>
+            <span className="text-ink-4">,</span>
             <span className="text-ink-2">{hovered.total} picks</span>
             {wr !== null && (
               <>
-                <span className="text-ink-4">·</span>
+                <span className="text-ink-4">,</span>
                 <span className={`font-bold ${wr >= 60 ? 'text-green-400' : wr >= 45 ? 'text-yellow-400' : 'text-red-400'}`}>{wr}%</span>
               </>
             )}

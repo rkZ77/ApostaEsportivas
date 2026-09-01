@@ -165,7 +165,7 @@ export default function Planos() {
 
   return (
     <PageShell
-      title="Planos · Pick IA | VIP e Free para Apostas Esportivas"
+      title="Planos VIP e Free para apostas esportivas | Pick IA"
       description="Escolha seu plano Pick IA. Free com picks diários ou VIP com análise completa, múltiplas, alavancagem e gestão de banca para Brasileirão e as principais ligas europeias."
       canonical="https://pickia.com.br/planos"
       width="wide"
@@ -208,7 +208,7 @@ export default function Planos() {
               <p className="text-ink-3 text-sm leading-relaxed">
                 Cada mercado é calculado contra a estatística real dos dois times e comparado
                 com a odd que a casa está pagando. Só vira pick o que tem valor esperado
-                positivo · o resto é descartado, e o descarte é a maior parte.
+                positivo, o resto é descartado, e o descarte é a maior parte.
               </p>
             </div>
 
@@ -449,7 +449,7 @@ export default function Planos() {
 
             {/* Features incluídas */}
             <div className="grid grid-cols-2 gap-2">
-              {['Picks VIP (10–20/dia)', 'Múltiplas por IA', 'Alavancagem de risco calculado', 'Agente IA de futebol', 'Histórico com ROI', 'Análise detalhada'].map(f => (
+              {['Picks VIP (10 a 20/dia)', 'Múltiplas por IA', 'Alavancagem de risco calculado', 'Agente IA de futebol', 'Histórico com ROI', 'Análise detalhada'].map(f => (
                 <div key={f} className="flex items-center gap-1.5 text-xs text-ink-2">
                   <svg className="w-3.5 h-3.5 text-accent-ink shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -500,7 +500,7 @@ export default function Planos() {
                 <h2 className="text-xl font-bold text-ink-1 mb-1">2 dias de VIP grátis</h2>
                 <p className="text-ink-2 text-sm mb-4">Acesse todos os picks VIP, Múltiplas, Alavancagem e Agente IA por 2 dias.</p>
                 <ul className="space-y-1.5 mb-5">
-                  {['Picks VIP completos (10–20/dia)', 'Múltiplas e Alavancagem', 'Agente IA de futebol', 'Histórico completo com ROI'].map(f => (
+                  {['Picks VIP completos (10 a 20/dia)', 'Múltiplas e Alavancagem', 'Agente IA de futebol', 'Histórico completo com ROI'].map(f => (
                     <li key={f} className="flex items-center gap-2 text-sm text-ink-2">
                       <svg className="w-4 h-4 text-accent-ink shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -534,7 +534,7 @@ export default function Planos() {
                   className="relative p-4 rounded-md border border-line-strong hover:border-yellow-400/50 hover:bg-yellow-400/5 transition-all text-left group">
                   <p className="text-ink-1 font-black text-sm group-hover:text-yellow-400 transition-colors">{opt.label}</p>
                   <p className="font-mono text-ink-3 text-xs mt-0.5">{fmtPlanPrice(opt.price_per_month)}/mês</p>
-                  <p className="text-accent-ink text-xs font-bold mt-2">Economize {fmtPlanPrice(opt.savings)} · {opt.save_pct}%</p>
+                  <p className="text-accent-ink text-xs font-bold mt-2">Economize {fmtPlanPrice(opt.savings)} ({opt.save_pct}%)</p>
                 </button>
               ))}
             </div>
@@ -640,7 +640,7 @@ export default function Planos() {
                         Plano Picks: {PLAN_LABEL[p.plan] ?? p.plan}
                       </p>
                       <p className="text-ink-3 text-xs mt-0.5">
-                        {date} · {METHOD_LABEL[p.payment_method] ?? p.payment_method}
+                        {date}, {METHOD_LABEL[p.payment_method] ?? p.payment_method}
                       </p>
                     </div>
                     <div className="text-right">
