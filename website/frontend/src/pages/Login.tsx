@@ -1,7 +1,7 @@
 import { useState, useRef, FormEvent, useEffect } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { AnimatePresence, motion } from 'framer-motion'
-import { PartyPopper, Eye, EyeOff, ArrowLeft } from 'lucide-react'
+import { PartyPopper, Eye, EyeOff, ArrowLeft, ShieldCheck, LineChart, Lock } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { maskPhone } from '../utils/format'
@@ -34,12 +34,62 @@ function RealWinRate({ className = 'mt-5' }: { className?: string }) {
   }, [])
   if (pct == null) return null
   return (
-    <p className={`text-xs text-ink-4 ${className}`}>
-      Win rate real auditável:{' '}
-      <Link to="/resultados" className="text-accent-ink font-bold hover:text-green-400 transition-colors">
-        {pct}% <span className="text-ink-4 font-normal">· ver histórico</span>
+    <span className={className}>
+      {' '}Hoje: <strong className="text-accent-ink">{pct}% de acerto</strong>.{' '}
+      <Link to="/resultados" className="text-ink-2 underline underline-offset-2 hover:text-ink-1 transition-colors">
+        Ver histórico
       </Link>
-    </p>
+    </span>
+  )
+}
+
+/* As três razões para acreditar que isto não é um golpe · e todas são
+   verificáveis pelo próprio visitante, agora, sem criar conta.
+
+   Não entra nada aqui que a gente não consiga provar. A tela já teve "prova
+   social" fabricada (um ticker de atividade inventado, removido em 17/07) e é
+   exatamente esse tipo de coisa que produz o efeito contrário: quem desconfia
+   de site de aposta reconhece um número inventado de longe.
+
+   O bloco de pagamento é o item mais importante dos três: golpe de tips vive
+   de pedir Pix na entrada. Dizer, na tela de cadastro, que aqui não se pede
+   nada disso responde a objeção no momento em que ela existe. */
+function SeloDeConfianca() {
+  const itens = [
+    {
+      Icone: LineChart,
+      titulo: 'Resultado auditável',
+      texto: <>Todo pick vira GREEN ou RED em público, com data e odd.<RealWinRate /></>,
+    },
+    {
+      Icone: Lock,
+      titulo: 'Nada de pagamento aqui',
+      texto: <>Não pedimos Pix, cartão nem CPF para criar conta. A assinatura, quando você quiser, passa pelo MercadoPago.</>,
+    },
+    {
+      Icone: ShieldCheck,
+      titulo: 'Seus dados',
+      texto: (
+        <>
+          Ficam com a gente e você apaga quando quiser.{' '}
+          <Link to="/privacidade" className="text-ink-2 underline underline-offset-2 hover:text-ink-1 transition-colors">
+            Política de Privacidade
+          </Link>
+        </>
+      ),
+    },
+  ]
+  return (
+    <div className="mt-7 space-y-3.5">
+      {itens.map(({ Icone, titulo, texto }) => (
+        <div key={titulo} className="flex gap-3">
+          <Icone className="w-4 h-4 text-ink-3 shrink-0 mt-0.5" aria-hidden="true" />
+          <p className="text-xs leading-relaxed text-ink-3">
+            <span className="text-ink-2 font-semibold">{titulo}.</span> {texto}
+          </p>
+        </div>
+      ))}
+    </div>
   )
 }
 
@@ -229,93 +279,76 @@ export default function Login() {
     { key: 'phone',    label: 'Telefone' },
   ]
 
+  /* Coluna única, centralizada, com a marca no topo · o formato que todo
+     mundo já viu em banco e em e-mail.
+
+     A tela dividida saiu porque ela custava caro e entregava pouco: metade do
+     desktop era um painel decorativo que o celular (a maioria de quem entra
+     aqui) nunca via, e no lugar dele cabia o que de fato importa nesta tela,
+     que é responder "posso confiar neste site?" antes de pedir e-mail e senha.
+     O conteúdo daquele painel não se perdeu: o win rate real virou a primeira
+     linha do selo abaixo do card, e a lista do trial virou uma faixa acima
+     dele, visível TAMBÉM no celular, onde antes não aparecia. */
   return (
-    <div className={`min-h-screen bg-surface-0 flex items-stretch ${classesRevelacao(revelado)}`} style={{ transitionDuration: `${FADE_REVELACAO_MS}ms` }} aria-busy={!revelado}>
+    <div className={`min-h-screen bg-surface-0 flex flex-col ${classesRevelacao(revelado)}`} style={{ transitionDuration: `${FADE_REVELACAO_MS}ms` }} aria-busy={!revelado}>
       <Helmet>
         <title>Entrar · Pick IA</title>
         <meta name="description" content="Acesse sua conta Pick IA para ver os picks da IA do dia, sua banca e seu histórico." />
       </Helmet>
 
 
-      {/* Left panel · branding.
-          O CONTEÚDO SEGUE O MODO. A lista do trial ficava aqui sempre, inclusive
-          para quem só ia entrar na conta: quem já é cliente não está decidindo
-          se testa, está tentando ver os picks de hoje. Em `login` o painel diz o
-          que a marca é e mostra o número auditável; a oferta aparece em
-          `register`, que é onde ela decide alguma coisa. */}
-      <div className="hidden lg:flex lg:w-1/2 flex-col items-center justify-center relative overflow-hidden bg-surface-0 border-r border-line">
-        <div className="absolute inset-0 bg-gradient-radial from-green-500/10 via-transparent to-transparent" />
-        <div className="absolute top-0 left-0 w-full h-1 bg-green-500" />
-
-        <div className="relative z-10 text-center px-12">
-          <Link to="/" aria-label="Voltar para a página inicial">
-            <img src="/logo.png" alt="Pick IA" width={160} height={160} className="w-40 h-40 mx-auto mb-6 drop-shadow-[0_0_30px_rgba(0,204,0,0.3)]" />
+      {/* Marca no topo, do tamanho de um cabeçalho · e não de um cartaz.
+          Ela precisa dizer onde a pessoa está e dar o caminho de volta, nada
+          além disso: o assunto da tela é o formulário. */}
+      <header className="border-b border-line">
+        <div className="mx-auto w-full max-w-md px-5 sm:px-6 h-14 flex items-center justify-between">
+          <Link to="/" className="flex items-center gap-2.5" aria-label="Pick IA, ir para a página inicial">
+            <img src="/logo.png" alt="" width={32} height={32} className="w-8 h-8 shrink-0" />
+            <p className="font-display text-lg font-bold text-ink-1">Pick<span className="text-accent-ink">IA</span></p>
           </Link>
-          <p className="font-display text-4xl font-bold text-ink-1 tracking-tight mb-2">Pick<span className="text-accent-ink">IA</span></p>
-          <p className="text-ink-2 text-lg mb-8">Tips esportivas geradas por Inteligência Artificial</p>
-
-          {mode === 'register' ? (
-            <div className="mt-8 text-left max-w-xs mx-auto">
-              <p className="text-ink-3 text-xs font-medium mb-4">No seu teste de 2 dias você acessa:</p>
-              <div className="space-y-3">
-                {[
-                  { dot: 'bg-green-500',  text: 'Picks VIP diários com edge positivo' },
-                  { dot: 'bg-blue-400',   text: 'Múltiplas geradas pela IA' },
-                  { dot: 'bg-orange-400', text: 'Alavancagem de risco calculado' },
-                  { dot: 'bg-purple-400', text: 'Agente IA de futebol 24/7' },
-                ].map(({ dot, text }) => (
-                  <div key={text} className="flex items-center gap-3">
-                    <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
-                    <span className="text-sm text-ink-2">{text}</span>
-                  </div>
-                ))}
-              </div>
-              <RealWinRate />
-            </div>
-          ) : (
-            <div className="max-w-xs mx-auto">
-              <RealWinRate className="mt-0" />
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Right panel · form */}
-      <div className="flex-1 flex items-center justify-center px-5 sm:px-6 py-8 sm:py-12 overflow-y-auto">
-        <div className="w-full max-w-sm">
-
-          {/* VOLTAR PRO SITE.
-              A tela de login não tem navegação nenhuma: quem cai aqui sem
-              querer (ou só foi olhar o preço) ficava sem saída a não ser o botão
-              do navegador. Fica acima de tudo, nos dois tamanhos. */}
           <Link
             to="/"
-            className="inline-flex items-center gap-1.5 text-xs text-ink-3 hover:text-ink-1 transition-colors mb-5"
+            className="inline-flex items-center gap-1.5 text-xs text-ink-3 hover:text-ink-1 transition-colors"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             Voltar para o site
           </Link>
+        </div>
+      </header>
 
-          {/* Marca no mobile · DEITADA E MIÚDA.
-              Era logo de 96px, empilhada com o nome em 30px e 40px de respiro:
-              só a marca comia quase metade da tela de 844px antes do primeiro
-              campo, e esta é a tela em que a pessoa quer digitar e entrar. De
-              lado e menor, o formulário começa acima da dobra. */}
-          <Link to="/" className="flex lg:hidden items-center gap-2.5 mb-5">
-            <img src="/logo.png" alt="Pick IA" width={40} height={40} className="w-10 h-10 shrink-0" />
-            <p className="font-display text-xl font-bold text-ink-1">Pick<span className="text-accent-ink">IA</span></p>
-          </Link>
-
+      <main className="flex-1 w-full mx-auto max-w-md px-5 sm:px-6 py-8 sm:py-12">
+        <div className="w-full">
           {/* Este e o <h1> da pagina. A marca acima e logotipo, e aparecia
               duas vezes como h1 (uma no painel de desktop, outra no bloco
               mobile): so uma renderiza, mas as duas existiam no DOM, entao
               leitor de tela e robo de busca viam duas. */}
           <h1 className="text-2xl font-bold text-ink-1 mb-1">
-            {mode === 'login' ? 'Bem-vindo de volta' : '2 dias VIP grátis'}
+            {mode === 'login' ? 'Bem-vindo de volta' : '2 dias de VIP, de graça'}
           </h1>
           <p className="text-ink-3 mb-6 text-sm">
-            {mode === 'login' ? 'Entre para acessar seus picks' : 'Acesso completo à plataforma por 2 dias.'}
+            {mode === 'login'
+              ? 'Entre para acessar seus picks de hoje.'
+              : 'Acesso completo. Sem cartão, sem CPF, sem renovação automática.'}
           </p>
+
+          {/* A oferta em quatro linhas · era o painel do desktop, que o celular
+              nunca via. Só no cadastro: quem já é cliente não está decidindo se
+              testa, está tentando ver os picks de hoje. */}
+          {mode === 'register' && (
+            <ul className="mb-6 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+              {[
+                { dot: 'bg-green-500',  text: 'Picks VIP diários' },
+                { dot: 'bg-blue-400',   text: 'Múltiplas da IA' },
+                { dot: 'bg-orange-400', text: 'Alavancagem' },
+                { dot: 'bg-purple-400', text: 'Agente IA 24/7' },
+              ].map(({ dot, text }) => (
+                <li key={text} className="flex items-center gap-2.5">
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
+                  <span className="text-sm text-ink-2">{text}</span>
+                </li>
+              ))}
+            </ul>
+          )}
 
           {kickedDevice && (
             <div className="mb-4 rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-4 text-sm">
@@ -601,8 +634,22 @@ export default function Login() {
             )}
           </div>
 
+          <SeloDeConfianca />
         </div>
-      </div>
+      </main>
+
+      <footer className="border-t border-line">
+        <div className="mx-auto w-full max-w-md px-5 sm:px-6 py-5 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-xs text-ink-4">
+          <Link to="/termos" className="hover:text-ink-2 transition-colors">Termos de Uso</Link>
+          <Link to="/privacidade" className="hover:text-ink-2 transition-colors">Privacidade</Link>
+          <Link to="/como-funciona" className="hover:text-ink-2 transition-colors">Como funciona</Link>
+          {/* Não é enfeite legal: é o aviso que separa quem opera às claras de
+              quem promete lucro garantido. */}
+          <span className="w-full text-center text-ink-4 mt-1">
+            18+ · Aposta é entretenimento, não fonte de renda. Jogue com responsabilidade.
+          </span>
+        </div>
+      </footer>
     </div>
   )
 }
