@@ -219,7 +219,12 @@ function TabBar({ tab, setTab, canSeeVip, verAoVivo, counts, liveCount, onPrefet
          mundo, que é a informação verdadeira · a maior parte do dia é VIP, e
          a aba abre de qualquer jeito. Mesma escolha do Pick Boost, que
          também tem free do dia. */
+      /* O selo diz VIP, mas veste a cor DO PRODUTO, e não a amarela do plano.
+         O Ao Vivo é o único que precisa se distinguir de relance numa barra
+         que rola no celular: ele muda ao longo da noite, e as outras abas não.
+         Magenta porque sobrou · ver o comentário do tom em ui/Badge. */
       badge: 'VIP',
+      badgeCls: 'bg-fuchsia-500/10 text-fuchsia-400 border-fuchsia-500/30',
       /* NA BARRA por padrão desde 27/08 · o produto abriu. A variável de
          ambiente sumiu em 28/08 (o usuário removeu as do Live no Railway) e
          `LIVE_PICKS_ENABLED` virou constante em config.ts · uma linha que

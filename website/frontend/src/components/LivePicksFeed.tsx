@@ -1242,44 +1242,33 @@ export default function LivePicksFeed({ isActive, banca }: {
           * Agora é a primeira coisa da aba, e diz as duas metades da resposta:
           * se está varrendo, e de quando foi a última passada. */}
 
-          {/* ATUALIZAR NA MÃO (29/08, pedido do usuário).
-            *
-            * A aba já pesquisa sozinha de 15 em 15 segundos, e mesmo assim o
-            * botão faz falta: ao vivo a pessoa está decidindo com o jogo
-            * rolando, e "esperar até 15 segundos pra ver se mudou" é uma
-            * espera sem fim visível. O botão troca isso por uma ação com
-            * resposta imediata.
-            *
-            * Ele puxa as três fontes da aba de uma vez -- picks, leitura e
-            * placar -- porque atualizar só uma deixaria a tela meio nova e
-            * meio velha, que é pior que velha inteira. */}
-          <Button size="sm" variant="ghost" onClick={atualizarTudo} disabled={atualizando}
-                  aria-label="Atualizar os dados da aba">
-            <RefreshCw className={`w-3.5 h-3.5 ${atualizando ? 'animate-spin' : ''}`} />
-            Atualizar
-          </Button>
+          {/* O BOTÃO "ATUALIZAR" SAIU (01/09/2026, pedido do usuário).
+              Ele existia para encurtar a espera dos 15 segundos do polling,
+              mas cobrava uma barra de ferramentas inteira em cima dos picks
+              para uma ação que a aba já faz sozinha. A aba continua se
+              atualizando no mesmo intervalo · o que sumiu é o botão, não o
+              comportamento.
+
+              E o estado do motor deixa de ser uma pílula desenhada aqui e
+              passa a usar o `Badge` do design system, como todo selo do site.
+              Hibernando NÃO é pausado, e o tom diz isso: verde enquanto está
+              tudo certo, âmbar só no caso em que alguém desligou, que é o
+              único dos três que pede ação de alguém. */}
           {motor && (() => {
-            /* Hibernando NÃO é pausado, e a cor diz isso: continua no verde do
-               produto, porque nada está errado -- só não há jogo em campo. O
-               âmbar fica reservado pro caso em que alguém desligou, que é o
-               único dos três que pede ação de alguém. */
             const dormindo = motor.ligado && motor.hibernando
             return (
-              <span className={`flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full border ${
-                motor.ligado
-                  ? 'border-accent/40 bg-accent/10 text-accent-ink'
-                  : 'border-amber-500/40 bg-amber-500/10 text-amber-400'}`}>
+              <Badge tone={motor.ligado ? 'green' : 'amber'}>
                 {!motor.ligado
-                  ? <><PowerOff className="w-3 h-3" /> busca pausada</>
+                  ? <><PowerOff className="w-3 h-3" /> Busca pausada</>
                   : dormindo
-                  ? <><Clock className="w-3 h-3" /> aguardando jogo</>
+                  ? <><Clock className="w-3 h-3" /> Aguardando jogo</>
                   : <><LiveDot /> IA buscando entradas</>}
                 {motor.ultima_rodada && (
-                  <span className="font-mono font-normal opacity-80">
+                  <span className="font-mono font-normal opacity-70">
                     {horaCurta(motor.ultima_rodada)}
                   </span>
                 )}
-              </span>
+              </Badge>
             )
           })()}
         </div>
@@ -1410,9 +1399,9 @@ export default function LivePicksFeed({ isActive, banca }: {
             ))}
           </div>
 
-          <div className="rounded-lg border border-green-500/30 bg-surface-1 p-5 flex flex-col sm:flex-row sm:items-center gap-4">
-            <div className="w-11 h-11 rounded-full border border-green-500/30 flex items-center justify-center shrink-0">
-              <Lock className="w-5 h-5 text-green-400" aria-hidden="true" />
+          <div className="rounded-lg border border-fuchsia-500/30 bg-surface-1 p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="w-11 h-11 rounded-full border border-fuchsia-500/30 flex items-center justify-center shrink-0">
+              <Lock className="w-5 h-5 text-fuchsia-400" aria-hidden="true" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-display text-ink-1 font-bold text-sm mb-0.5">

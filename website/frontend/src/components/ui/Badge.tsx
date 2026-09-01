@@ -21,6 +21,12 @@ const TONE = {
   orange:  'bg-orange-400/5 text-orange-400 border-orange-400/30',
   sky:     'bg-sky-400/5 text-sky-400 border-sky-400/30',
   teal:    'bg-teal-500/5 text-teal-400 border-teal-500/30',
+  /* A cor do Ao Vivo. Magenta porque sobrou: verde e a marca, amarelo e o VIP,
+     azul e a multipla, laranja e a alavancagem, roxo e as faltas, e vermelho
+     esta reservado pro RED -- num site de aposta nenhum produto pode vestir a
+     cor de "perdeu". Magenta e o unico que fica distinto de todos eles e ainda
+     lê como "transmissao acontecendo agora". */
+  fuchsia: 'bg-fuchsia-500/5 text-fuchsia-400 border-fuchsia-500/30',
 } as const
 
 export type BadgeTone = keyof typeof TONE

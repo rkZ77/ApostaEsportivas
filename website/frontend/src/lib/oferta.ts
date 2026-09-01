@@ -55,7 +55,7 @@ export const MODULOS: Modulo[] = [
     titulo: 'Picks ao vivo',
     desc: 'Um motor separado lê a partida em andamento e publica quando o campo desmente o que o mercado precificou.',
     plano: 'vip',
-    tag: { label: 'VIP', tone: 'green' },
+    tag: { label: 'VIP', tone: 'fuchsia' },
   },
   {
     Icon: Layers,
