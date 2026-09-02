@@ -24,6 +24,8 @@ maior margem -- escolher a linha faz parte da decisao.
 """
 import json
 import re
+import textwrap
+import traceback
 
 from utils.db_utils import get_connection
 from utils.data_br import HOJE_BR
@@ -483,7 +485,15 @@ def run_faltas_engine():
             c = _avaliar_fixture(fixture, match_stats, odds_service,
                                  referee_service, faixas=faixas)
         except Exception as e:
+            # Stack trace completo, como nos outros pipelines. Sem ele este
+            # handler ja' escondeu um bug por dias: o NameError de
+            # `context_gate`/`tie_effect` sem import (corrigido em 28/08)
+            # descartava TODA partida que chegasse a ser avaliada, e a saida
+            # so' dizia "erro ao avaliar o fixture" -- indistinguivel de um
+            # descarte legitimo. Era o unico dos oito motores a engolir a
+            # excecao sem dizer ONDE quebrou.
             print(f"[FALTAS_ENGINE] Erro no fixture {fixture['fixture_id']}: {e}")
+            print(textwrap.indent(traceback.format_exc(), "    "))
             log_skip("FALTAS_ENGINE", fixture, f"{MOTIVO_ERRO}: {e}")
             continue
         if c:
