@@ -40,7 +40,7 @@
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Radio, RefreshCw, Timer, CheckCircle2, Clock, PowerOff, Eye,
-         Goal, Flag, Target, Crosshair, Lock } from 'lucide-react'
+         Goal, Flag, Target, Crosshair, Lock, Radar } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import ApostaModal from './ApostaModal'
@@ -296,19 +296,28 @@ function FitaDeBusca({ partidas }: { partidas: EmLeitura[] }) {
       <TeamLogoOrDot id={p.away_team_id} name={p.away_team} />
       <span className="text-ink-2 font-medium">{p.away_team ?? 'Time'}</span>
       {p.minuto != null && (
-        <span className="font-mono text-accent-ink font-bold text-[10px]
-                         bg-accent/10 border border-accent/20 rounded px-1">
+        <span className="font-mono text-indigo-300 font-bold text-[10px]
+                         bg-indigo-500/10 border border-indigo-500/20 rounded px-1">
           {p.minuto}&apos;
         </span>
       )}
     </span>
   ))
   return (
-    <div className="relative overflow-hidden rounded-lg border border-accent/20 bg-accent/[0.04] py-2.5 mb-6">
-      <div className="flex items-center gap-2 px-3 mb-2">
-        <LiveDot />
-        <span className="text-[10px] font-bold text-accent-ink uppercase tracking-wide">
-          a IA está lendo estes jogos agora
+    <div className="relative overflow-hidden rounded-lg border border-indigo-500/25 bg-indigo-500/[0.05] py-2.5 mb-6">
+      <div className="flex items-center gap-2.5 px-3 mb-2">
+        {/* O RADAR. Um ponto pulsando dizia "ligado" e nada mais · aqui o
+            ícone é o próprio verbo do produto (varrer os jogos), e as duas
+            ondas saindo dele dão o movimento que faz a pessoa entender que a
+            busca está ACONTECENDO, e não apenas habilitada. O `motion-safe`
+            respeita quem pediu menos animação no sistema. */}
+        <span className="relative flex items-center justify-center w-5 h-5 shrink-0">
+          <span aria-hidden="true"
+                className="absolute inset-0 rounded-full border border-indigo-400/40 motion-safe:animate-ping" />
+          <Radar className="relative w-4 h-4 text-indigo-300 motion-safe:animate-pulse" aria-hidden="true" />
+        </span>
+        <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-wide">
+          a IA está varrendo estes jogos agora
         </span>
         <span className="ml-auto font-mono text-[10px] text-ink-4 tabular-nums">
           {partidas.length} {partidas.length === 1 ? 'jogo' : 'jogos'}
@@ -1224,8 +1233,8 @@ export default function LivePicksFeed({ isActive, banca }: {
           do Pick Boost. O verde daqui era o verde da MARCA, que toda tela usa:
           num produto que se abre ao lado de outros, ele não distinguia nada. */}
       <ComoFunciona titulo="O que são os Picks Ao Vivo?" className="mb-4"
-                    cor="text-fuchsia-400"
-                    borda="border-fuchsia-400/20" fundo="bg-fuchsia-400/5">
+                    cor="text-indigo-300"
+                    borda="border-indigo-400/20" fundo="bg-indigo-400/5">
         <p>
           A IA lê a partida em andamento e compara com a odd do momento. Só publica quando o jogo
           se afasta do esperado e o preço paga por isso.{' '}
@@ -1404,9 +1413,9 @@ export default function LivePicksFeed({ isActive, banca }: {
             ))}
           </div>
 
-          <div className="rounded-lg border border-fuchsia-500/30 bg-surface-1 p-5 flex flex-col sm:flex-row sm:items-center gap-4">
-            <div className="w-11 h-11 rounded-full border border-fuchsia-500/30 flex items-center justify-center shrink-0">
-              <Lock className="w-5 h-5 text-fuchsia-400" aria-hidden="true" />
+          <div className="rounded-lg border border-indigo-500/30 bg-surface-1 p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="w-11 h-11 rounded-full border border-indigo-500/30 flex items-center justify-center shrink-0">
+              <Lock className="w-5 h-5 text-indigo-300" aria-hidden="true" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-display text-ink-1 font-bold text-sm mb-0.5">
