@@ -42,7 +42,25 @@ _COLUNAS = """
 
 
 def _nome_do_adversario(team_id_col: str) -> str:
-    return f"(SELECT t.name FROM teams t WHERE t.team_id = {team_id_col})"
+    """Nome do adversario, UMA linha garantida.
+
+    `teams` guarda uma linha por (team_id, season) -- Flamengo aparece tres
+    vezes, uma por temporada coletada. Sem o LIMIT esta subconsulta escalar
+    estoura "more than one row returned by a subquery used as an expression" no
+    primeiro jogo cujo adversario tenha mais de uma temporada na base.
+
+    E o estrago nao parava no jogo: o erro aborta a transacao, e todo fixture
+    seguinte do laco morria com "current transaction is aborted". Foi assim que
+    o Pick Boost fechou FAILED com 0 analisados em TODAS as rodadas desde
+    2026-08-31 -- um unico jogo com Flamengo (ou Santos, ou Palmeiras) levava a
+    execucao inteira junto.
+
+    O resto do projeto ja' fazia certo: `admin.py` usa
+    `ORDER BY season DESC LIMIT 1` em todas as seis consultas equivalentes.
+    Este era o unico ponto que nao seguia o padrao.
+    """
+    return (f"(SELECT t.name FROM teams t WHERE t.team_id = {team_id_col}"
+            f"  ORDER BY t.season DESC LIMIT 1)")
 
 
 def carregar(cur, team_id: int, league_id, season, *, since_date=None,

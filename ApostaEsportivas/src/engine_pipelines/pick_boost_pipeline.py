@@ -397,6 +397,16 @@ def run_pick_boost_engine():
                 avaliados.append(_avaliar_fixture(fixture, cur, match_stats, odds_service,
                                                   standings_service))
             except Exception as e:
+                # ROLLBACK OBRIGATORIO. Sem ele um erro de SQL num jogo aborta a
+                # transacao e TODO fixture seguinte falha com "current
+                # transaction is aborted" -- o laco continua rodando e nao
+                # avalia mais nada. Foi o que transformou um unico jogo
+                # problematico em run FAILED com 0 analisados, todos os dias
+                # desde 31/08 (ver goals_history._nome_do_adversario).
+                #
+                # O `continue` do except so' protege de erro em Python; erro de
+                # banco exige devolver a conexao a um estado usavel.
+                conn.rollback()
                 run.erro(e, contexto=f"{fixture.get('home_team')} x {fixture.get('away_team')}",
                          fixture_id=fixture.get("fixture_id"))
                 print(textwrap.indent(traceback.format_exc(), "    "))
