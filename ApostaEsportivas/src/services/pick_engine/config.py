@@ -203,12 +203,23 @@ class PickEngineConfig:
     # contagem concordar com o Poisson -- so' move o numero. Comparar o encolhido
     # mistura as duas coisas.
     #
-    # LIGADO em 2026-09-01. O caso que motivou a flag esta' documentado acima:
-    # 8 de 8 REDs de 14-16/08 tinham taxa bruta acima do Poisson por >13pp e a
-    # regra nao disparou nenhuma vez comparando o encolhido. Com True a regra
-    # dispara mais (reduz volume) -- esse e' o efeito certo: taxa bruta muito
-    # acima do Poisson em amostra curta e' exatamente o sinal de falso positivo.
-    disagreement_on_raw_rate: bool = True
+    # LIGADO em 2026-09-01 e DESLIGADO em 2026-09-02, sem julgar o merito.
+    #
+    # A justificativa de 01/09 continua de pe' e continua registrada: 8 de 8
+    # REDs de 14-16/08 tinham taxa bruta acima do Poisson por >13pp e a regra
+    # nao disparou nenhuma vez comparando o encolhido.
+    #
+    # O problema nao foi a flag, foi COMO ela subiu: junto de
+    # use_isotonic_calibration, no mesmo commit e no mesmo dia, sem o backtest
+    # que este proprio comentario exigia. As duas cortam pelo mesmo lugar --
+    # derrubam a probabilidade, logo o edge, logo o EV -- entao com as duas
+    # ligadas nao da' pra atribuir a queda de volume a nenhuma das duas. O
+    # descarte subiu o bastante pra aparecer a olho nu no volume de picks.
+    #
+    # Volta a False pra o dia render pick de novo. Religar e' uma por vez, cada
+    # uma com sua medicao de volume e hit rate -- que era o caminho escrito aqui
+    # desde o comeco.
+    disagreement_on_raw_rate: bool = False
 
     # Amostra (Q)
     sample_rich_n: int = 8
@@ -242,11 +253,20 @@ class PickEngineConfig:
     # calibration_model / market_anchor / selection_bias: implementados e
     # testados. Ordem de promocao documentada abaixo.
     #
-    # use_isotonic_calibration LIGADO em 2026-09-01: transformacao MONOTONA --
-    # nunca reordena candidatos, so' corrige o NIVEL da probabilidade declarada.
-    # Goals (185 picks), corners (175) e cards (64) ja ultrapassam MIN_AMOSTRA_FIT=30.
-    # Para os outros mercados (amostra < 30) o modelo cai no calibration_adjustment
-    # existente (delta unico por mercado) -- nenhuma regressao.
+    # use_isotonic_calibration: LIGADO em 2026-09-01, DESLIGADO em 2026-09-02.
+    # Transformacao MONOTONA -- nunca reordena candidatos, so' corrige o NIVEL
+    # da probabilidade declarada. Goals (185 picks), corners (175) e cards (64)
+    # ja ultrapassam MIN_AMOSTRA_FIT=30; abaixo disso cai no
+    # calibration_adjustment existente.
+    #
+    # Nao reordenar nao quer dizer nao cortar: baixar o nivel de TODAS as
+    # probabilidades de uma familia empurra a cauda inteira pra baixo do
+    # min_edge de uma vez. Somada a disagreement_on_raw_rate, que subiu no mesmo
+    # commit e corta pelo mesmo lugar, o volume de pick caiu sem que desse pra
+    # dizer qual das duas cobrou. Ver o bloco de disagreement_on_raw_rate.
+    #
+    # E' a segunda vez que esta camada e' desligada -- a primeira foi por
+    # medicao. Religar exige backtest, sozinha.
     #
     # use_selection_bias: desconta vies do vencedor de uma disputa entre muitos
     # candidatos; reduz volume, nao reordena. Aguarda backtest.
@@ -254,7 +274,7 @@ class PickEngineConfig:
     # use_market_anchor: maior mudanca -- reescreve probabilidade combinando com
     # o mercado, reordena candidatos. Aguarda CLV significativo por mercado.
     # ------------------------------------------------------------------
-    use_isotonic_calibration: bool = True
+    use_isotonic_calibration: bool = False
     use_selection_bias: bool = False
     use_market_anchor: bool = False
 
