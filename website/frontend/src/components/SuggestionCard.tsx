@@ -12,7 +12,7 @@ import { PICK_TYPE_BORDER } from '../utils/resultStyle'
 import AnalysisModal from './AnalysisModal'
 import { Badge, PickTypeBadge, ResultBadge } from './ui'
 import {
-  PickCardFooter, PickExplainButton, PickProbability,
+  CampoDoPick, PickCardFooter, PickExplainButton, PickProbability,
 } from './PickCardParts'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
 import { useOddAtualizada } from '../hooks/useOddAtualizada'
@@ -118,6 +118,27 @@ interface BancaSummary { bankroll_current: number; unit_value: number }
 const MAX_UNITS_POR_TIPO: Record<string, number> = {
   free: 6, multipla: 3, faltas: 6, goleiros: 6, player_stats: 6, boost: 5,
 }
+
+/*
+ * A COR DA PERNA É A COR DO PRODUTO.
+ *
+ * O círculo numerado e a odd de cada seleção estavam em âmbar fixo, que é a cor
+ * do Player Stats · num card de Pick Boost, que é ciano da borda ao selo, os
+ * dois números apareciam na cor de outro produto. Numa lista misturada é
+ * exatamente assim que se lê errado: a cor é o que diz de qual produto o card é
+ * antes de qualquer palavra.
+ *
+ * Os hex vêm de PICK_TYPE_HEX (utils/resultStyle), que é a fonte da verdade das
+ * cores de produto no site · aqui ficam as classes equivalentes, porque
+ * Tailwind não monta nome de classe a partir de variável.
+ */
+const COR_DA_PERNA: Record<string, { circulo: string; texto: string }> = {
+  boost:       { circulo: 'bg-cyan-500/10 text-cyan-400',   texto: 'text-cyan-300' },
+  multipla:    { circulo: 'bg-blue-500/10 text-blue-400',   texto: 'text-blue-300' },
+  multiplas:   { circulo: 'bg-blue-500/10 text-blue-400',   texto: 'text-blue-300' },
+  alavancagem: { circulo: 'bg-orange-500/10 text-orange-400', texto: 'text-orange-300' },
+}
+const COR_DA_PERNA_PADRAO = { circulo: 'bg-surface-3 text-ink-3', texto: 'text-ink-2' }
 
 /* Memoizado no fim do arquivo · este é o card mais repetido do site (lista VIP,
    aba Mercados, histórico), e a tela de Picks repinta a árvore inteira a cada
@@ -543,9 +564,10 @@ function SuggestionCard({
               const boxClass = lr === 'GREEN' ? 'border-green-500/20 bg-green-500/5'
                 : lr === 'RED' ? 'border-red-500/20 bg-red-500/5'
                 : 'border-line bg-surface-1/60'
+              const cor = COR_DA_PERNA[s.pick_type ?? ''] ?? COR_DA_PERNA_PADRAO
               const circleClass = lr === 'GREEN' ? 'bg-green-500/20 text-green-400'
                 : lr === 'RED' ? 'bg-red-500/20 text-red-400'
-                : 'bg-amber-500/10 text-amber-400'
+                : cor.circulo
               return (
                 <div key={i} className={`rounded-md border px-3 py-2 ${boxClass}`}>
                   <div className="flex items-center gap-2">
@@ -553,11 +575,8 @@ function SuggestionCard({
                                       ${circleClass} text-[10px] font-black shrink-0`}>
                       {lr === 'GREEN' ? '✓' : lr === 'RED' ? '✗' : i + 1}
                     </span>
-                    {/* A APOSTA, e não o nome do mercado. "Mais de 1.5 gols"
-                        cabe e se entende. O nome técnico não se perde: ele abre a
-                        regra do mercado no "Entenda esta análise". */}
                     <span className="text-xs text-ink-2 font-semibold truncate">
-                      {leg.label ?? translateMarket(leg.market)}
+                      Seleção {i + 1}
                     </span>
                     {leg.periodo && (
                       <span className="shrink-0 px-1.5 py-px rounded bg-surface-3 border border-line
@@ -568,16 +587,40 @@ function SuggestionCard({
                     {leg.odd != null && (
                       <span className={`ml-auto font-mono font-black text-sm shrink-0 ${
                         lr === 'GREEN' ? 'text-green-400'
-                        : lr === 'RED' ? 'text-red-400' : 'text-amber-300'}`}>
+                        : lr === 'RED' ? 'text-red-400' : cor.texto}`}>
                         {Number(leg.odd).toFixed(2)}
                       </span>
                     )}
                   </div>
-                  {leg.probability != null && (
-                    <div className="ml-7 mt-1 text-[10px] text-ink-4">
-                      {Math.round(Number(leg.probability) * 100)}% de chance nesta perna
-                    </div>
-                  )}
+                  {/* A PERNA TAMBÉM É MERCADO E LINHA, e também vem rotulada:
+                      é o mesmo desenho do card de mercado único, que é o
+                      desenho do site inteiro desde 02/09.
+
+                      Na linha entra o `label` quando existe ("Mais de 1.5
+                      gols"), porque é a aposta escrita como se lê no bilhete da
+                      casa · o nome técnico do mercado já está na linha de cima,
+                      então não se perde nada. */}
+                  <dl className="ml-7 mt-1 space-y-0.5">
+                    <CampoDoPick rotulo="Mercado">
+                      <dd className="text-xs text-ink-2 truncate">
+                        {translateMarket(leg.market)}
+                      </dd>
+                    </CampoDoPick>
+                    {(leg.label || leg.line) && (
+                      <CampoDoPick rotulo="Linha">
+                        <dd className="text-xs text-ink-2 truncate">
+                          {leg.label ?? translateLine(leg.line ?? undefined)}
+                        </dd>
+                      </CampoDoPick>
+                    )}
+                    {leg.probability != null && (
+                      <CampoDoPick rotulo="Chance">
+                        <dd className="text-xs text-ink-3">
+                          {Math.round(Number(leg.probability) * 100)}% nesta perna
+                        </dd>
+                      </CampoDoPick>
+                    )}
+                  </dl>
                 </div>
               )
             })}
@@ -597,13 +640,12 @@ function SuggestionCard({
           <div className="flex items-start gap-2.5">
             <PlayerPhoto id={s.player_id} name={s.player_name} size={38} />
             <dl className="flex-1 min-w-0 space-y-0.5">
-              <div className="flex items-baseline gap-2">
-                <dt className="w-[3.75rem] shrink-0 text-[10px] text-ink-4">Jogador</dt>
+              <CampoDoPick rotulo="Jogador">
                 <dd className="text-xs font-bold text-ink-1 truncate">{s.player_name}</dd>
                 {s.player_team && (
                   <span className="text-[10px] text-ink-4 truncate shrink">{s.player_team}</span>
                 )}
-              </div>
+              </CampoDoPick>
               {/* O ESTADO DA ESCALAÇÃO, na linha do jogador.
                 *
                 * É a informação que decide se o pick sequer tem chance: quem
@@ -614,8 +656,7 @@ function SuggestionCard({
                 *
                 * 'fora' aparece junto do pick anulado, logo abaixo. */}
               {s.escalacao && s.escalacao !== 'fora' && !s.result && (
-                <div className="flex items-baseline gap-2">
-                  <dt className="w-[3.75rem] shrink-0 text-[10px] text-ink-4">Escalação</dt>
+                <CampoDoPick rotulo="Escalação">
                   <dd>
                     {s.escalacao === 'titular' ? (
                       <Badge tone="green">Escalado para começar</Badge>
@@ -623,27 +664,35 @@ function SuggestionCard({
                       <Badge tone="neutral">Ainda não saiu</Badge>
                     )}
                   </dd>
-                </div>
+                </CampoDoPick>
               )}
-              <div className="flex items-baseline gap-2">
-                <dt className="w-[3.75rem] shrink-0 text-[10px] text-ink-4">Mercado</dt>
+              <CampoDoPick rotulo="Mercado">
                 <dd className="text-xs font-semibold text-ink-2 truncate">
                   {translateMarket(s.market)}
                 </dd>
-              </div>
-              <div className="flex items-baseline gap-2">
-                <dt className="w-[3.75rem] shrink-0 text-[10px] text-ink-4">Linha</dt>
+              </CampoDoPick>
+              <CampoDoPick rotulo="Linha">
                 <dd className="text-xs text-ink-2 truncate">
                   {linhaDoJogador(s.line, s.line_value, s.player_name)}
                 </dd>
-              </div>
+              </CampoDoPick>
             </dl>
           </div>
         ) : (
-          <div className="flex items-center gap-2 text-xs text-ink-3">
-            <span className="font-semibold text-ink-2">{translateMarket(s.market)}</span>
-            {s.line && <><span>,</span><span>{translateLine(s.line)}</span></>}
-          </div>
+          /* Mesmos campos rotulados do pick de jogador · é o desenho do site
+             inteiro desde 02/09. Ver CampoDoPick. */
+          <dl className="space-y-0.5">
+            <CampoDoPick rotulo="Mercado">
+              <dd className="text-xs font-semibold text-ink-2 truncate">
+                {translateMarket(s.market)}
+              </dd>
+            </CampoDoPick>
+            {s.line && (
+              <CampoDoPick rotulo="Linha">
+                <dd className="text-xs text-ink-2 truncate">{translateLine(s.line)}</dd>
+              </CampoDoPick>
+            )}
+          </dl>
         )}
 
         {/* PICK ANULADO, E O CARD FICA.

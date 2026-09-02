@@ -149,7 +149,14 @@ export default function PicksPendingCard() {
   useEffect(() => {
     api.get('/public/next-fixtures', { params: { date: hojeBR(), limit: 30 } })
       .then(r => {
-        const games = (r.data ?? []) as Fixture[]
+        /* `Array.isArray`, e não `r.data ?? []`: a rota devolve lista, e
+           qualquer outra coisa (erro serializado, resposta de proxy, HTML de
+           uma página de erro) passa pelo `??` e chega inteira no `.filter` lá
+           embaixo. Um `filter is not a function` ali não estraga este card: ele
+           sobe pro ErrorBoundary e derruba a PÁGINA DE PICKS inteira, com um
+           "Algo deu errado" no lugar dos picks.
+           Mesma trava que LivePicks já tem em /live/my-picks. */
+        const games = (Array.isArray(r.data) ? r.data : []) as Fixture[]
         setTodayGames(games)
         setTodayCount(games.length)
       })
@@ -176,7 +183,7 @@ export default function PicksPendingCard() {
    */
   useEffect(() => {
     api.get('/public/next-fixtures', { params: { limit: 30 } })
-      .then(r => setNextGames((r.data ?? []) as Fixture[]))
+      .then(r => setNextGames((Array.isArray(r.data) ? r.data : []) as Fixture[]))
       .catch(() => setNextGames([]))
   }, [])
 

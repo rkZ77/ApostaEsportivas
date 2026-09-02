@@ -19,7 +19,7 @@ import { aplicarFiltro, FILTRO_INICIAL } from '../lib/mercadoFiltro'
 import EngineStatus from '../components/EngineStatus'
 import AnalysisModal from '../components/AnalysisModal'
 import {
-  PickCardFooter, PickExplainButton, PickProbability,
+  CampoDoPick, PickCardFooter, PickExplainButton, PickProbability,
 } from '../components/PickCardParts'
 /*
  * As duas abas mais pesadas não entram no chunk desta página.
@@ -672,10 +672,20 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
           <span className="text-sm font-bold text-ink-1 truncate">{dica.away_team}</span>
           <TeamLogo id={dica.away_team_id} name={dica.away_team ?? ''} size={22} />
         </div>
-        <div className="flex items-center gap-2 text-xs text-ink-3">
-          <span className="font-semibold text-ink-2">{translateMarket(dica.market)}</span>
-          {dica.line && <><span>,</span><span>{translateLine(dica.line)}</span></>}
-        </div>
+        {/* Campos rotulados · o desenho de todo card do site desde 02/09.
+            Ver CampoDoPick em PickCardParts. */}
+        <dl className="space-y-0.5">
+          <CampoDoPick rotulo="Mercado">
+            <dd className="text-xs font-semibold text-ink-2 truncate">
+              {translateMarket(dica.market)}
+            </dd>
+          </CampoDoPick>
+          {dica.line && (
+            <CampoDoPick rotulo="Linha">
+              <dd className="text-xs text-ink-2 truncate">{translateLine(dica.line)}</dd>
+            </CampoDoPick>
+          )}
+        </dl>
       </div>
 
       <PickProbability confidence={dica.confidence} probability={dica.probability} />
@@ -1064,10 +1074,18 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
                 {Number(leg.odd).toFixed(2)}
               </span>
             </div>
-            <div className="flex items-center gap-1.5 ml-7 text-xs mt-1">
-              <span className="font-semibold text-ink-2">{translateMarket(leg.market)}</span>
-              {leg.line && <><span className="text-ink-4">,</span><span className="text-ink-2">{translateLine(leg.line)}</span></>}
-            </div>
+            {/* A perna também é mercado e linha, rotulados · mesmo desenho
+                do card de mercado único. */}
+            <dl className="ml-7 mt-1 space-y-0.5">
+              <CampoDoPick rotulo="Mercado">
+                <dd className="text-xs text-ink-2 truncate">{translateMarket(leg.market)}</dd>
+              </CampoDoPick>
+              {leg.line && (
+                <CampoDoPick rotulo="Linha">
+                  <dd className="text-xs text-ink-2 truncate">{translateLine(leg.line)}</dd>
+                </CampoDoPick>
+              )}
+            </dl>
           </div>
           )
         })}
@@ -1353,11 +1371,21 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
                 {Number(leg.odd).toFixed(2)}
               </span>
             </div>
-            <div className="flex items-center gap-1.5 ml-7 text-xs mt-1">
-              <span className="font-semibold text-ink-2">{translateMarket(leg.market)}</span>
-              {leg.line && <><span className="text-ink-4">,</span><span className="text-ink-2">{translateLine(leg.line)}</span></>}
-              {leg.house && <><span className="text-ink-4">,</span><span className="text-ink-3">{leg.house}</span></>}
-            </div>
+            <dl className="ml-7 mt-1 space-y-0.5">
+              <CampoDoPick rotulo="Mercado">
+                <dd className="text-xs text-ink-2 truncate">{translateMarket(leg.market)}</dd>
+              </CampoDoPick>
+              {leg.line && (
+                <CampoDoPick rotulo="Linha">
+                  <dd className="text-xs text-ink-2 truncate">{translateLine(leg.line)}</dd>
+                </CampoDoPick>
+              )}
+              {leg.house && (
+                <CampoDoPick rotulo="Casa">
+                  <dd className="text-xs text-ink-3 truncate">{leg.house}</dd>
+                </CampoDoPick>
+              )}
+            </dl>
           </div>
           )
         })}

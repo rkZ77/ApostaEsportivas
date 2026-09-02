@@ -159,9 +159,31 @@ def test_o_today_devolve_a_escalacao_de_graca():
     aqui, cada abertura da tela custaria uma chamada de API por partida."""
     fonte = open(os.path.join(_BACKEND, "routers", "suggestions.py"),
                  encoding="utf-8").read()
-    bloco = fonte[fonte.index('result["player_stats"]'):]
-    bloco = bloco[:bloco.index('result["boost"]')]
+    bloco = fonte[fonte.index("def _juntar_escalacao"):]
+    bloco = bloco[:bloco.index("def _get_user_banca")]
     for esperado in ("fixture_lineups", "'indefinida'", "'titular'", "'fora'",
                      "pp.void_reason"):
-        assert esperado in bloco, f"sumiu do /today: {esperado}"
+        assert esperado in bloco, f"sumiu da consulta de escalação: {esperado}"
     assert "requests" not in bloco
+
+
+def test_a_lista_de_picks_nao_depende_da_escalacao():
+    """A REGRESSÃO DE 02/09, travada.
+
+    `_safe_query` devolve lista vazia quando qualquer coisa falha -- decisão
+    certa pra "tabela que ainda não existe nesta instância", e desastrosa
+    quando um campo opcional está DENTRO da consulta que traz os picks: com o
+    JOIN em `fixture_lineups` e `void_reason` no SELECT, um backend sem a
+    migration parou de mostrar QUALQUER pick de jogador, em silêncio, com os
+    picks gravados no banco.
+
+    A regra que fica: a consulta que lista os picks não menciona nada opcional.
+    """
+    fonte = open(os.path.join(_BACKEND, "routers", "suggestions.py"),
+                 encoding="utf-8").read()
+    bloco = fonte[fonte.index('result["player_stats"] = '):]
+    bloco = bloco[:bloco.index("_juntar_escalacao(cur")]
+    for proibido in ("fixture_lineups", "void_reason"):
+        assert proibido not in bloco, (
+            f"'{proibido}' voltou pra consulta dos picks: se a coluna ou a "
+            "tabela faltar, a aba Jogadores fica vazia de novo")

@@ -38,8 +38,12 @@ const ESPERA_INICIAL_MS = 200
 /** Piso de tempo visível: rota estática (termos, privacidade) não busca nada,
  *  e uma barra que aparece e some no mesmo piscar incomoda mais que ajuda. */
 const TEMPO_MINIMO_MS = 400
-/** Teto absoluto: rede travada não pode deixar a barra eterna na tela. */
-const TEMPO_MAXIMO_MS = 10_000
+/** Teto absoluto: rede travada não pode deixar a barra eterna na tela.
+ *
+ *  Eram 10s, e 10s de barra andando é a tela dizendo "ainda estou carregando"
+ *  muito depois de a página já estar lá · quem lê isso conclui que o site é
+ *  lento, não que uma requisição ficou pendurada. */
+const TEMPO_MAXIMO_MS = 6_000
 /** Tempo pro salto até 100% ser visto antes do fade. */
 const SAIDA_MS = 260
 
@@ -88,9 +92,23 @@ export default function TopProgressBar() {
       }, SAIDA_MS)
     }
 
+    /* O QUE JÁ ESTAVA EM VOO NÃO SEGURA A BARRA.
+     *
+     * Várias telas fazem polling em segundo plano (o sino, o "está ao vivo?",
+     * o Admin). Esperar o contador chegar a ZERO fazia a barra da navegação
+     * ficar refém de uma requisição que não tem nada a ver com ela: bastava um
+     * poll estar no ar no instante do clique para a barra continuar andando
+     * depois de a tela nova já estar pronta -- até o teto de tempo, no pior
+     * caso.
+     *
+     * O que interessa é o que a tela NOVA pediu. As pendentes de antes entram
+     * como piso: a barra fecha quando o contador volta ao nível em que estava
+     * quando a navegação começou. */
+    const herdadas = pendentesAgora()
+
     const podeFinalizar = () =>
       Date.now() - inicio >= Math.max(ESPERA_INICIAL_MS, TEMPO_MINIMO_MS) &&
-      pendentesAgora() === 0
+      pendentesAgora() <= herdadas
 
     setVisivel(true)
     setProgresso(8)
@@ -117,6 +135,9 @@ export default function TopProgressBar() {
   return (
     <div
       className="fixed inset-x-0 top-0 z-[100] h-[3px] pointer-events-none"
+      /* Marca estável pra varredura visual medir quando a barra entra e sai ·
+         a classe utilitária muda com o design, o papel não. */
+      data-barra-topo=""
       /* Decorativa: o conteúdo que está chegando é anunciado pela própria
          página, e um progressbar sem valor real só faria barulho no leitor. */
       aria-hidden="true"

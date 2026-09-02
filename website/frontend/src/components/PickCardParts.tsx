@@ -193,6 +193,39 @@ export function PickProbability({
  * essa parte é garantida pelas peças abaixo e pela classe `.pick-card`.
  */
 
+/* ── Os campos do pick ──────────────────────────────────────────────────── */
+
+/*
+ * "MERCADO: X" E "LINHA: Y", UM POR LINHA, EM TODO CARD DO SITE.
+ *
+ * Antes cada card escrevia isso do seu jeito e tudo numa linha só, separado por
+ * vírgulas: "Gols Mais/Menos , Mais de 1.5 , Betano". Três informações
+ * diferentes com o mesmo peso visual e nenhum rótulo, então a leitura dependia
+ * de já saber qual é qual · e no celular a linha truncava justamente no fim,
+ * que é onde mora a linha da aposta.
+ *
+ * Rotulado, cada pergunta tem um lugar fixo: o olho desce a coluna dos rótulos
+ * e encontra o mesmo campo em qualquer produto, do VIP à perna da múltipla. Foi
+ * o desenho que nasceu no pick de jogador (jogador, mercado, linha) e que o
+ * usuário pediu para valer no site inteiro em 02/09.
+ *
+ * A coluna do rótulo é FIXA (`w-[3.75rem]`) de propósito: é ela que alinha os
+ * valores entre linhas e entre cards. Com largura automática, "Linha" e
+ * "Mercado" empurrariam o valor para posições diferentes em cada card.
+ */
+export function CampoDoPick({ rotulo, children, className }: {
+  rotulo: string
+  children: React.ReactNode
+  className?: string
+}) {
+  return (
+    <div className={cn('flex items-baseline gap-2', className)}>
+      <dt className="w-[3.75rem] shrink-0 text-[10px] text-ink-4">{rotulo}</dt>
+      {children}
+    </div>
+  )
+}
+
 /* ── O trecho do raciocínio saiu do card em 2026-09-02 ──────────────────── */
 
 /*
