@@ -1,5 +1,6 @@
 import { BookOpen, Percent, Target, TrendingUp, Scale } from 'lucide-react'
 import Modal from './ui/Modal'
+import { plural } from '../utils/format'
 import { Badge } from './ui'
 import { explainMarket, regraDoMercado, translateLine, translateMarket } from '../utils/marketTranslate'
 import type { RegraDoMercado } from '../utils/marketTranslate'
@@ -231,7 +232,7 @@ export default function AnalysisModal({
       description={[
         data.homeTeam && data.awayTeam ? `${data.homeTeam} x ${data.awayTeam}` : null,
         temPernas
-          ? `${data.legs!.length} seleções`
+          ? plural(data.legs!.length, 'seleção', 'seleções')
           /* Pick de jogador: o nome primeiro, e a linha em número puro. O
              subtítulo saía "Chutes no alvo, Pedro · 2 ou mais chutes no alvo"
              · o mesmo mercado duas vezes numa linha de 40 caracteres. */

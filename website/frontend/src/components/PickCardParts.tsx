@@ -193,29 +193,22 @@ export function PickProbability({
  * essa parte é garantida pelas peças abaixo e pela classe `.pick-card`.
  */
 
-/* ── Trecho do raciocínio ───────────────────────────────────────────────── */
+/* ── O trecho do raciocínio saiu do card em 2026-09-02 ──────────────────── */
 
 /*
- * `flex-1` ABSORVE A FOLGA DO CARD.
+ * `PickReasoning` desenhava o "Fato": as primeiras linhas do mesmo `reasoning`
+ * que abre dentro do "Entenda esta análise", na seção "Leitura do jogo". Ou
+ * seja, o card gastava três linhas de parágrafo para adiantar um texto que
+ * está a um toque de distância, e numa lista lida no celular isso empurra o
+ * próximo pick para fora da tela.
  *
- * Este é o único bloco de altura variável do card (o texto do fato vai de uma a
- * três linhas), e sem ele crescendo, tudo que vem depois · "Entenda esta
- * análise" e o rodapé · parava onde o texto acabasse. Com quatro picks lado a
- * lado, os botões ficavam em quatro alturas diferentes, e o alinhamento passava
- * a depender do tamanho do nome do time e da análise.
+ * O componente foi removido, não escondido: bloco sem chamador vira código
+ * morto e depois volta por engano. Quem quiser o texto abre a análise.
+ *
+ * O `flex-1` DELE ainda importa e mora agora nos cards. `.pick-card` é
+ * `flex flex-col h-full`, e alguém precisa absorver a sobra de altura da
+ * grade, senão o rodapé de cada card para onde o conteúdo dele acabar. Cada
+ * card tem um `<div className="flex-1" />` no lugar exato onde este bloco
+ * ficava.
  */
-export function PickReasoning({ text, label = 'Fato', className }: {
-  text?: string | null
-  /** Rótulo do trecho. O card ao vivo diz "Leitura": ali o motor não relata um
-   *  fato do histórico, e sim o que está acontecendo em campo agora. */
-  label?: string
-  className?: string
-}) {
-  if (!text) return null
-  return (
-    <div className={cn('mx-5 mb-3 px-3 py-2 bg-surface-1 border border-line rounded-md flex-1', className)}>
-      <span className="label-micro">{label}: </span>
-      <span className="text-[11px] text-ink-2 leading-relaxed line-clamp-3">{text}</span>
-    </div>
-  )
-}
+

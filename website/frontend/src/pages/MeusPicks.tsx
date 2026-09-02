@@ -7,13 +7,12 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { tabFade, toastUp } from '../lib/motion'
 import api from '../services/api'
 import PageShell from '../components/PageShell'
-import { translateMarket, translateLine, explainMarket } from '../utils/marketTranslate'
+import { translateMarket, translateLine } from '../utils/marketTranslate'
 import SuggestionDetail from '../components/SuggestionDetail'
 import ProfitChart from '../components/ProfitChart'
 import { fmtBRL, fmtSigned, winRate as calcWinRate, capitalizarFrase } from '../utils/format'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { TeamLogo } from '../components/TeamLogo'
-import InfoTip from '../components/InfoTip'
 import ResetMonthModal from '../components/ResetMonthModal'
 import PipelinesBreakdown from '../components/PipelinesBreakdown'
 import AlavancagemPanel from '../components/AlavancagemPanel'
@@ -579,7 +578,6 @@ export default function MeusPicks() {
                                     ? <>, <span className="text-ink-2">Odd {Number(e.actual_odd).toFixed(2)}</span>{Math.abs(Number(e.actual_odd) - Number(e.odd)) > 0.001 ? <span className="text-ink-4"> (pick: {Number(e.odd).toFixed(2)})</span> : null}</>
                                     : e.odd ? `. Odd ${Number(e.odd).toFixed(2)}` : ''}
                                 </p>
-                                <InfoTip text={explainMarket(e.market, e.line)} className="shrink-0" />
                               </div>
                             </div>
 

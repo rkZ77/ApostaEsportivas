@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { ArrowRight, Gift, History, Lock } from 'lucide-react'
 import api from '../services/api'
+import { rotuloDoMercado } from '../utils/marketTranslate'
 import { useAuth } from '../context/AuthContext'
 import { Badge, Button, LiveDot, ResultBadge, Skeleton } from '../components/ui'
 import { TeamLogo } from '../components/TeamLogo'
@@ -175,7 +176,7 @@ export default function FreePickHero({ revelar = true, onCarregou }: {
               </div>
             ) : (
               <div className="font-mono text-base font-bold text-ink-1 truncate">
-                {pick.market}{pick.line ? ` ${pick.line}` : ''}
+                {rotuloDoMercado(pick.market, pick.line)}
               </div>
             )}
           </div>

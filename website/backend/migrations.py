@@ -791,6 +791,41 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_player_stats_pendentes ON picks_player_stats (match_date) WHERE result IS NULL;")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_player_stats_metodo ON picks_player_stats (method, match_date DESC);")
 
+        # ── ESCALAÇÃO (02/09) ───────────────────────────────────────────
+        #
+        # Pick de jogador é sobre uma pessoa, e até aqui ninguém perguntava se
+        # essa pessoa ia jogar. Um titular poupado no meio da semana virava um
+        # pick que só podia dar RED, e o card seguia anunciando "2 ou mais
+        # chutes no alvo" de alguém no banco.
+        #
+        # A escalação oficial sai de 20 a 40 minutos antes do apito
+        # (/fixtures/lineups). Guardar aqui, e não consultar na hora de
+        # desenhar a tela, é o que mantém a leitura de graça: a tela lê banco,
+        # e quem fala com a API é a varredura (lineups_sweep.py), uma vez por
+        # partida.
+        #
+        # `titulares` e `reservas` guardam os player_id dos DOIS times. Quem
+        # pergunta é sempre "este jogador está no XI?", e um array por partida
+        # responde isso com um `= ANY(...)`.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS fixture_lineups (
+                fixture_id    INTEGER PRIMARY KEY,
+                oficial       BOOLEAN NOT NULL DEFAULT FALSE,
+                titulares     INTEGER[] NOT NULL DEFAULT '{}',
+                reservas      INTEGER[] NOT NULL DEFAULT '{}',
+                tentativas    INTEGER NOT NULL DEFAULT 0,
+                atualizado_em TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        # Por que a anulação precisa de MOTIVO NOMEADO: é a mesma regra que
+        # _anulacao_sem_estatistica segue em routers/live.py. PUSH silencioso
+        # some com a evidência -- um bug nosso viraria "aposta devolvida" e
+        # ninguém investigaria. Com o motivo gravado, a tela diz por que o
+        # pick foi anulado e o admin consegue separar anulação legítima de
+        # defeito.
+        cur.execute("ALTER TABLE picks_player_stats "
+                    "ADD COLUMN IF NOT EXISTS void_reason TEXT")
+
         # Índice composto que o pipeline ao vivo (live_pipeline.py) usa em
         # todas as queries de baseline: baselines_por_liga, baseline_do_arbitro,
         # baseline_do_mando, baseline_do_confronto consultam match_statistics

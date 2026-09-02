@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { ArrowRight, Check, X as XIcon } from 'lucide-react'
 
 import api from '../services/api'
+import { rotuloDoMercado } from '../utils/marketTranslate'
 import SiteHeader from '../components/SiteHeader'
 import Footer from '../components/Footer'
 import {
@@ -208,8 +209,7 @@ function RecentResults({ summary }: { summary: PublicSummary | null }) {
                         )}
                       </div>
                       <p className="text-[10px] text-ink-3 truncate mt-0.5">
-                        {tip.market && tip.market !== '--' ? tip.market : ''}
-                        {tip.line && tip.line !== '--' ? ` ${tip.line}` : ''}
+                        {rotuloDoMercado(tip.market, tip.line)}
                       </p>
                     </div>
 

@@ -539,6 +539,16 @@ def get_today_suggestions(
     except Exception:
         logger.warning("[STATS-SWEEP] gatilho em /today falhou", exc_info=True)
 
+    # E a ESCALACAO dos jogos com pick de jogador. Mesmo padrao, mesma razao:
+    # a escalacao oficial sai perto do apito, e quem abre a tela nesse momento
+    # e' justamente quem precisa saber se o jogador comeca. Ver
+    # lineups_sweep.py -- os freios sao dele, esta chamada nao espera nada.
+    try:
+        from lineups_sweep import maybe_check_lineups
+        maybe_check_lineups()
+    except Exception:
+        logger.warning("[LINEUP-SWEEP] gatilho em /today falhou", exc_info=True)
+
     conn = get_connection()
     cur = conn.cursor()
     try:
@@ -710,6 +720,18 @@ def get_today_suggestions(
             # METODO ("Chutes no alvo" nao e' "Defesas"), e um bloco unico
             # rotulado "Defesas" com pick de desarme dentro seria pior que
             # duas listas.
+            # ESCALACAO (02/09). Tres estados, resolvidos no banco -- a
+            # consulta a API mora na varredura (lineups_sweep.py), nunca aqui:
+            #
+            #   'indefinida' -- a escalacao oficial ainda nao saiu;
+            #   'titular'    -- o jogador esta no XI inicial;
+            #   'fora'       -- saiu e ele nao esta (o pick ja' foi anulado
+            #                   pela varredura, `void_reason` diz por que).
+            #
+            # `void_reason` vem com COALESCE de coluna ausente? Nao: a
+            # migration adiciona a coluna no startup, e `_safe_query` cobre a
+            # instancia que ainda nao migrou devolvendo lista vazia pro bloco
+            # inteiro -- que e' o mesmo tratamento dos outros mercados novos.
             result["player_stats"] = [dict(r) for r in _safe_query(cur, f"""
                 SELECT pp.id, pp.fixture_id, pp.match_date,
                        pp.home_team, pp.away_team, pp.home_team_id, pp.away_team_id,
@@ -719,11 +741,17 @@ def get_today_suggestions(
                        pp.bet_house, pp.confidence, pp.prob_real,
                        pp.prob_real AS probability, pp.edge, pp.score,
                        pp.reasoning, pp.stake_pct, pp.stake_units,
-                       pp.result, pp.profit, pp.created_at,
-                       f.match_datetime, l.name AS league_name
+                       pp.result, pp.profit, pp.void_reason, pp.created_at,
+                       f.match_datetime, l.name AS league_name,
+                       CASE
+                         WHEN COALESCE(fl.oficial, FALSE) = FALSE THEN 'indefinida'
+                         WHEN pp.player_id = ANY(fl.titulares)     THEN 'titular'
+                         ELSE 'fora'
+                       END AS escalacao
                 FROM picks_player_stats pp
                 LEFT JOIN fixtures f ON f.fixture_id = pp.fixture_id
                 LEFT JOIN leagues  l ON l.league_id  = pp.league_id
+                LEFT JOIN fixture_lineups fl ON fl.fixture_id = pp.fixture_id
                 WHERE {_merc_where.replace('match_date', 'pp.match_date').replace('result IS NULL', 'pp.result IS NULL')}
                 ORDER BY pp.score DESC NULLS LAST
             """, _d)]
@@ -1369,10 +1397,29 @@ def get_suggestion_detail(
             tabela = {"faltas": "picks_faltas", "goleiros": "picks_goleiros",
                       "player_stats": "picks_player_stats",
                       "boost": "picks_boost"}[pick_type]
+            # O JOGADOR TAMBEM AQUI (02/09). A lista (/today) ja' devolvia
+            # player_name e line_value, e o detalhe nao -- entao o mesmo pick
+            # aparecia com o jogador em campo proprio no card e diluido dentro
+            # da string da linha quando aberto pelo painel. Uma tela por
+            # origem do dado e' exatamente a deriva que o card unico existe
+            # pra evitar.
+            #
+            # `picks_goleiros` e' a tabela legada e nunca teve `method`: o
+            # metodo dela e' fixo e mora em market_type ('saves').
+            colunas_jogador = {
+                "player_stats": "p.player_id, p.player_name, p.team_name, "
+                                "p.line_value, p.method",
+                "goleiros": "p.player_id, p.player_name, p.team_name, "
+                            "p.line_value, p.market_type AS method",
+            }.get(pick_type,
+                  "NULL::int AS player_id, NULL::text AS player_name, "
+                  "NULL::text AS team_name, NULL::numeric AS line_value, "
+                  "NULL::text AS method")
             cur.execute(f"""
                 SELECT p.id, p.match_date, p.home_team, p.away_team,
                        p.home_team_id, p.away_team_id,
                        p.market, p.line, p.odd, p.bet_house,
+                       {colunas_jogador},
                        p.prob_real, p.edge, p.reasoning, p.result, p.profit,
                        p.fixture_id,
                        f.match_datetime, f.league_id, l.name AS league_name
@@ -1400,6 +1447,10 @@ def get_suggestion_detail(
                 "home_team_name": d.get("home_team"),
                 "away_team_name": d.get("away_team"),
                 "pick_type": pick_type,
+                # Numero puro pra tela montar "2 ou mais" sem interpretar
+                # texto. Decimal do psycopg2 nao serializa sozinho.
+                "line_value": (float(d["line_value"])
+                               if d.get("line_value") is not None else None),
                 # prob_real faz as vezes de confianca: e o numero que o modelo
                 # desses dois mercados produz.
                 "confidence": float(d["prob_real"]) if d.get("prob_real") is not None else None,

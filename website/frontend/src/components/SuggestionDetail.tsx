@@ -9,7 +9,8 @@ import api from '../services/api'
 import { pctProb, fmtUnits } from '../utils/format'
 import PickSocial from './PickSocial'
 import { calcVipStake, calcFreeStake, calcMultiplaStake } from '../utils/stakeUtils'
-import { translateMarket, translateLine } from '../utils/marketTranslate'
+import { translateMarket, translateLine, linhaDoJogador } from '../utils/marketTranslate'
+import { PlayerPhoto } from './TeamLogo'
 import { backdropFade, dialogScale } from '../lib/motion'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
 import AnalysisModal from './AnalysisModal'
@@ -251,6 +252,20 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
           {/* Bet summary bar */}
           {s && pickType !== 'multipla' && pickType !== 'alavancagem' && (
             <div className="flex items-center gap-0 border-t border-line/60 text-center divide-x divide-line/60">
+              {/* JOGADOR, quando o pick é sobre uma pessoa (02/09).
+                * Esta barra é o mesmo dado do card, e o card passou a mostrar
+                * quem, qual mercado e qual linha em campos próprios. Sem esta
+                * célula o painel continuava com o nome diluído dentro da
+                * string da linha, e o mesmo pick tinha duas leituras. */}
+              {s.player_name && (
+                <div className="flex-1 py-2.5 px-3 min-w-0">
+                  <div className="text-[10px] text-ink-3 mb-0.5">Jogador</div>
+                  <div className="flex items-center justify-center gap-1.5 min-w-0">
+                    <PlayerPhoto id={s.player_id} name={s.player_name} size={20} />
+                    <span className="text-xs font-bold text-ink-1 truncate">{s.player_name}</span>
+                  </div>
+                </div>
+              )}
               <div className="flex-1 py-2.5 px-3">
                 <div className="text-[10px] text-ink-3 mb-0.5">Mercado</div>
                 <div className="text-xs font-bold text-ink-1 truncate">{translateMarket(s.market) ?? ''}</div>
@@ -258,7 +273,9 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
               {s.line && (
                 <div className="flex-1 py-2.5 px-3">
                   <div className="text-[10px] text-ink-3 mb-0.5">Linha</div>
-                  <div className="text-xs font-bold text-ink-1">{translateLine(s.line)}</div>
+                  <div className="text-xs font-bold text-ink-1">
+                    {linhaDoJogador(s.line, s.line_value, s.player_name)}
+                  </div>
                 </div>
               )}
               <div className="flex-1 py-2.5 px-3">
@@ -482,6 +499,13 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
               line: translateLine(s.line),
               marketRaw: s.market,
               lineRaw: s.line,
+              /* Mesmo contexto que o card passa: sem ele o modal aberto pelo
+                 painel caía no texto genérico de mercado desconhecido, e o
+                 aberto pelo card escrevia a regra. */
+              playerId: s.player_id ?? undefined,
+              playerName: s.player_name ?? undefined,
+              playerTeam: s.team_name ?? undefined,
+              lineValue: s.line_value ?? undefined,
               pickId: id,
               pickType,
               odd: Number(s.total_odd ?? s.odd ?? 0),

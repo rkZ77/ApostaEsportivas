@@ -46,10 +46,9 @@ import api from '../services/api'
 import ApostaModal from './ApostaModal'
 import { Badge, Button, ComoFunciona, EmptyState, ErrorState, LiveDot, Marquee, PickTypeBadge,
          ResultBadge, Skeleton, SkeletonPickGrid } from './ui'
-import { PickExplainButton, PickProbability, PickReasoning } from './PickCardParts'
-import InfoTip from './InfoTip'
+import { PickExplainButton, PickProbability } from './PickCardParts'
 import LiveAnalysisModal from './LiveAnalysisModal'
-import { explainMarket, translateLine, translateMarket } from '../utils/marketTranslate'
+import { translateLine, translateMarket } from '../utils/marketTranslate'
 import { LeagueLogo, TeamLogo } from './TeamLogo'
 import { rotuloDoStatus, escudoDoTime } from '../lib/aoVivo'
 import { calcVipStake } from '../utils/stakeUtils'
@@ -980,7 +979,6 @@ const CardLive = forwardRef<HTMLDivElement, {
         <div className="flex items-center gap-2 text-xs text-ink-3">
           <span className="font-semibold text-ink-2">{translateMarket(pick.market)}</span>
           {pick.line && <span>{translateLine(pick.line)}</span>}
-          <InfoTip text={explainMarket(pick.market, pick.line)} />
         </div>
       </div>
 
@@ -995,8 +993,15 @@ const CardLive = forwardRef<HTMLDivElement, {
         </div>
       )}
 
-      <PickReasoning text={pick.reasoning} label="Leitura" />
 
+      {/* O ESPAÇADOR QUE O "Fato" ERA.
+        *
+        * `.pick-card` é `flex flex-col h-full`: numa grade, todos os cards da
+        * linha têm a altura do mais alto. Quem absorvia essa sobra era o bloco
+        * do fato, com `flex-1`. Sem alguém absorvendo, o rodapé de cada card
+        * para onde o conteúdo dele acabar, e quatro picks lado a lado ficam
+        * com "Entenda esta análise" em quatro alturas diferentes. */}
+      <div className="flex-1" aria-hidden="true" />
       <PickExplainButton onClick={() => setVerAnalise(true)} />
 
       {/* Rodapé · ação à esquerda e prazo da odd à direita, no lugar onde o

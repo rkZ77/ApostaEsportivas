@@ -3,22 +3,21 @@ import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { toastUp, fadeInUp } from '../lib/motion'
 import api from '../services/api'
-import { pctProb } from '../utils/format'
+import { pctProb, capitalizarFrase } from '../utils/format'
 import { calcVipStake, calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import { stakeDe, contaEmUnidades } from '../utils/stakePlan'
 import ApostaModal from './ApostaModal'
-import { translateMarket, translateLine, translateTeamName, explainMarket, linhaDoJogador } from '../utils/marketTranslate'
+import { translateMarket, translateLine, translateTeamName, linhaDoJogador } from '../utils/marketTranslate'
 import { PICK_TYPE_BORDER } from '../utils/resultStyle'
-import InfoTip from './InfoTip'
 import AnalysisModal from './AnalysisModal'
 import { Badge, PickTypeBadge, ResultBadge } from './ui'
 import {
-  PickCardFooter, PickExplainButton, PickProbability, PickReasoning,
+  PickCardFooter, PickExplainButton, PickProbability,
 } from './PickCardParts'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
 import { useOddAtualizada } from '../hooks/useOddAtualizada'
 import { TeamLogo, LeagueLogo, PlayerPhoto } from './TeamLogo'
-import { Clock } from 'lucide-react'
+import { Ban, Clock } from 'lucide-react'
 
 function wcPhase(dateStr?: string): string | null {
   if (!dateStr) return null
@@ -76,11 +75,20 @@ interface Suggestion {
   player_team?: string | null
   /** `line_value` do banco · o número puro da linha, sem a frase em volta. */
   line_value?: number | null
+  /* ESCALAÇÃO (02/09). O pick é sobre uma pessoa, e até aqui a tela não dizia
+     se ela ia entrar em campo. Três estados, vindos do banco:
+     'indefinida' (a escalação oficial ainda não saiu), 'titular' (está no XI)
+     e 'fora' (saiu e ele não está · aí o pick já foi anulado). */
+  escalacao?: 'titular' | 'fora' | 'indefinida' | null
+  /** Por que o pick foi anulado. Só existe em PUSH, e é sempre nomeado. */
+  void_reason?: string | null
   /** Pernas de um pick COMBINADO. Hoje só o Pick Boost usa (Over 1.5 FT +
    *  Under 2.5 HT), mas o formato é genérico de propósito: qualquer produto
    *  que junte mais de um mercado numa odd só cai aqui sem card novo. */
   legs?: Array<{
-    /** Nome do mercado na linguagem do resto do site. Alimenta o InfoTip. */
+    /** Nome do mercado na linguagem do resto do site. É o rótulo de reserva
+     *  quando a perna não traz `label`, e o que vai para a regra do mercado
+     *  dentro do "Entenda esta análise". */
     market: string
     line?: string | null
     /** O que a pessoa aposta, escrito como ela leria no bilhete da casa
@@ -94,14 +102,6 @@ interface Suggestion {
     probability?: number | null
     result?: string | null
   }>
-}
-
-/** Extrai só o trecho "FATO: ..." ou as primeiras ~120 chars do reasoning */
-function shortReasoning(text?: string): string {
-  if (!text) return ''
-  const fatoMatch = text.match(/FATO:\s*(.+?)(?=\s*ANÁLISE:|$)/i)
-  if (fatoMatch) return fatoMatch[1].trim()
-  return text.slice(0, 120)
 }
 
 interface BancaSummary { bankroll_current: number; unit_value: number }
@@ -208,7 +208,12 @@ function SuggestionCard({
       leagueName: s.league_name,
       pickType: pickTypeRoute,
       market: s.market ? translateMarket(s.market) : undefined,
-      line: translateLine(s.line),
+      /* A imagem segue o card: no pick de jogador a linha é "Pedro, 2 ou
+         mais" e não a frase inteira, que repetiria o mercado impresso logo
+         acima dela. */
+      line: s.player_name
+        ? `${s.player_name}, ${linhaDoJogador(s.line, s.line_value, s.player_name)}`
+        : translateLine(s.line),
       odd: Number(s.odd),
       probabilityPct: pctProb(s.probability ?? s.confidence),
       result: s.result,
@@ -265,7 +270,6 @@ function SuggestionCard({
     }
   }
 
-  const fato   = shortReasoning(s.reasoning)
   const isCopa = s.league_id === 1
   const pickType = s.pick_type ?? 'vip'
 
@@ -550,7 +554,8 @@ function SuggestionCard({
                       {lr === 'GREEN' ? '✓' : lr === 'RED' ? '✗' : i + 1}
                     </span>
                     {/* A APOSTA, e não o nome do mercado. "Mais de 1.5 gols"
-                        cabe e se entende; o técnico fica no InfoTip. */}
+                        cabe e se entende. O nome técnico não se perde: ele abre a
+                        regra do mercado no "Entenda esta análise". */}
                     <span className="text-xs text-ink-2 font-semibold truncate">
                       {leg.label ?? translateMarket(leg.market)}
                     </span>
@@ -560,7 +565,6 @@ function SuggestionCard({
                         {leg.periodo}
                       </span>
                     )}
-                    <InfoTip text={explainMarket(leg.market, leg.line ?? undefined)} />
                     {leg.odd != null && (
                       <span className={`ml-auto font-mono font-black text-sm shrink-0 ${
                         lr === 'GREEN' ? 'text-green-400'
@@ -600,12 +604,32 @@ function SuggestionCard({
                   <span className="text-[10px] text-ink-4 truncate shrink">{s.player_team}</span>
                 )}
               </div>
+              {/* O ESTADO DA ESCALAÇÃO, na linha do jogador.
+                *
+                * É a informação que decide se o pick sequer tem chance: quem
+                * não entra em campo faz zero de qualquer estatística. A
+                * escalação oficial sai de 20 a 40 minutos antes do apito, e
+                * até lá o honesto é dizer que ainda não saiu · em vez de
+                * deixar o card sugerindo que está tudo certo.
+                *
+                * 'fora' aparece junto do pick anulado, logo abaixo. */}
+              {s.escalacao && s.escalacao !== 'fora' && !s.result && (
+                <div className="flex items-baseline gap-2">
+                  <dt className="w-[3.75rem] shrink-0 text-[10px] text-ink-4">Escalação</dt>
+                  <dd>
+                    {s.escalacao === 'titular' ? (
+                      <Badge tone="green">Escalado para começar</Badge>
+                    ) : (
+                      <Badge tone="neutral">Ainda não saiu</Badge>
+                    )}
+                  </dd>
+                </div>
+              )}
               <div className="flex items-baseline gap-2">
                 <dt className="w-[3.75rem] shrink-0 text-[10px] text-ink-4">Mercado</dt>
                 <dd className="text-xs font-semibold text-ink-2 truncate">
                   {translateMarket(s.market)}
                 </dd>
-                <InfoTip text={explainMarket(s.market, s.line)} />
               </div>
               <div className="flex items-baseline gap-2">
                 <dt className="w-[3.75rem] shrink-0 text-[10px] text-ink-4">Linha</dt>
@@ -619,27 +643,53 @@ function SuggestionCard({
           <div className="flex items-center gap-2 text-xs text-ink-3">
             <span className="font-semibold text-ink-2">{translateMarket(s.market)}</span>
             {s.line && <><span>,</span><span>{translateLine(s.line)}</span></>}
-            <InfoTip text={explainMarket(s.market, s.line)} />
+          </div>
+        )}
+
+        {/* PICK ANULADO, E O CARD FICA.
+          *
+          * Sumir com ele responderia "cadê o pick do Pedro?" com nada. Quem
+          * seguiu a aposta precisa entender por que a casa devolveu a entrada,
+          * e a explicação é uma linha: ele não começou.
+          *
+          * PUSH não é derrota: a entrada volta, e o /admin não conta anulação
+          * no denominador de acerto. O texto evita a palavra "perdeu" de
+          * propósito. */}
+        {s.result === 'PUSH' && s.void_reason && (
+          <div className="flex items-start gap-2 rounded-md border border-line bg-surface-2/50 px-3 py-2">
+            <Ban className="w-3.5 h-3.5 text-ink-4 shrink-0 mt-px" />
+            <p className="text-[11px] text-ink-3 leading-relaxed">
+              <span className="font-semibold text-ink-2">Pick anulado.</span>{' '}
+              {capitalizarFrase(s.void_reason)}, então a aposta é devolvida e não
+              conta como acerto nem como erro.
+            </p>
           </div>
         )}
       </div>
 
       <PickProbability confidence={s.confidence} probability={s.probability} />
 
-      {/* O "Fato" NÃO aparece no pick de jogador (02/09).
+      {/* O "FATO" SAIU DE TODOS OS CARDS (02/09).
         *
-        * Ele repetia, em texto corrido, exatamente o que os três campos acima
-        * já dizem em duas linhas: quem, qual mercado, qual média, em quantas
-        * atuações. Quatro linhas de parágrafo por card, num produto que sai em
-        * lista e é lido no celular.
+        * Ele era um trecho do mesmo `reasoning` que abre dentro do "Entenda
+        * esta análise", logo abaixo, na seção "Leitura do jogo". O card
+        * pagava quatro linhas de parágrafo por pick para adiantar o começo de
+        * um texto que está a um toque de distância -- e a lista é lida no
+        * celular, onde essas quatro linhas empurram o próximo card para fora
+        * da tela.
         *
-        * O texto não se perde: continua inteiro em "Entenda esta análise", que
-        * é onde ele responde a pergunta que o card não responde ("por que ela
-        * acha que sai"). Nos outros produtos ele fica, porque lá é a única
-        * frase que descreve a partida. */}
-      {!s.player_name && <PickReasoning text={fato} />}
+        * O que o card mantém é o que ele responde melhor que o modal: o jogo,
+        * o mercado, a linha, a odd e a probabilidade. O porquê é do modal. */}
 
 
+      {/* O ESPAÇADOR QUE O "Fato" ERA.
+        *
+        * `.pick-card` é `flex flex-col h-full`: numa grade, todos os cards da
+        * linha têm a altura do mais alto. Quem absorvia essa sobra era o bloco
+        * do fato, com `flex-1`. Sem alguém absorvendo, o rodapé de cada card
+        * para onde o conteúdo dele acabar, e quatro picks lado a lado ficam
+        * com "Entenda esta análise" em quatro alturas diferentes. */}
+      <div className="flex-1" aria-hidden="true" />
       {/* Footer */}
       {(s.reasoning || s.ev != null || probPct != null) && (
         <PickExplainButton onClick={() => setShowAnalysis(true)} />

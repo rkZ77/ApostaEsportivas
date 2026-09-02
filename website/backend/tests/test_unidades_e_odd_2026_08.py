@@ -569,9 +569,17 @@ def test_ladrilho_e_numero_e_rotulo_e_mais_nada():
     # pra contradizer -- e' so' premissa de calculo, que e' o papel dela.
     assert "Plano fixo de stake" not in _front("pages/Picks.tsx")
 
-    # O InfoTip do MERCADO, dentro do card de pick, continua -- ele explica o
-    # que o mercado e', que foi pedido explicitamente.
-    assert "explainMarket" in _front_codigo("pages/Picks.tsx")
+    # O "i" AO LADO DO MERCADO SAIU DE TODOS OS CARDS (2026-09-02, pedido do
+    # usuario). Ele abria um tooltip com a regra do mercado -- a mesma regra
+    # que hoje e' a PRIMEIRA secao do "Entenda esta analise", que todo card tem
+    # no rodape. No celular o icone e' um alvo de 12px que, quando acerta,
+    # cobre a linha que a pessoa estava lendo.
+    #
+    # A regra nao se perde, e e' isso que o teste trava: sumiu do card, mas
+    # continua alcancavel pelo botao de analise.
+    for tela in ("pages/Picks.tsx", "components/SuggestionCard.tsx"):
+        assert "<InfoTip" not in _front_codigo(tela), f"{tela} tem o 'i' de volta no card"
+    assert "regraDoMercado" in _front_codigo("components/AnalysisModal.tsx")
 
 
 def test_mercado_em_portugues_encontra_a_propria_explicacao():
@@ -649,9 +657,20 @@ def test_rodape_do_card_de_pick_desce_pro_fim():
 
     partes = _front_codigo("components/PickCardParts.tsx")
     assert "border-t border-line/60 mt-auto" in partes, "rodape nao desce sozinho"
-    # O bloco de altura variavel precisa absorver a folga, senao o botao
-    # "Entenda esta analise" continua dancando com o tamanho do texto.
-    assert "rounded-md flex-1" in partes, "a analise nao absorve a folga"
+
+    # ALGUEM PRECISA ABSORVER A FOLGA, e ate' 2026-09-02 era o bloco do "Fato"
+    # (PickReasoning, `rounded-md flex-1`). O "Fato" saiu de todos os cards --
+    # ele adiantava as primeiras linhas do mesmo texto que abre dentro do
+    # "Entenda esta analise" --, entao o `flex-1` passou a ser um espacador
+    # explicito, um por card.
+    #
+    # Sem ele o defeito volta inteiro: numa grade de quatro picks, o botao de
+    # analise para onde o conteudo de cada card acabar.
+    for tela, quantos in (("components/SuggestionCard.tsx", 1),
+                          ("pages/Picks.tsx", 3)):
+        fonte = _front_codigo(tela)
+        assert fonte.count('<div className="flex-1" aria-hidden="true" />') >= quantos, (
+            f"{tela} perdeu o espacador que segura o rodape no fim do card")
 
 
 def test_serie_do_mercado_cobre_chutes_e_impedimentos():

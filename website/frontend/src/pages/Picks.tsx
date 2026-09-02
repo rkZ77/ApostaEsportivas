@@ -19,7 +19,7 @@ import { aplicarFiltro, FILTRO_INICIAL } from '../lib/mercadoFiltro'
 import EngineStatus from '../components/EngineStatus'
 import AnalysisModal from '../components/AnalysisModal'
 import {
-  PickCardFooter, PickExplainButton, PickProbability, PickReasoning,
+  PickCardFooter, PickExplainButton, PickProbability,
 } from '../components/PickCardParts'
 /*
  * As duas abas mais pesadas não entram no chunk desta página.
@@ -41,12 +41,11 @@ import { LIVE_PICKS_ENABLED } from '../config'
 import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2, TrendingUp, X as XIcon, Lock, Ticket } from 'lucide-react'
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import { stakeDe } from '../utils/stakePlan'
-import {fmtUnits, pctProb, capitalizarFrase } from '../utils/format'
-import InfoTip from '../components/InfoTip'
+import { fmtUnits, pctProb, capitalizarFrase, plural } from '../utils/format'
 import { getResultStyle, PICK_TYPE_CLS, PICK_TYPE_BORDER } from '../utils/resultStyle'
 import { useShareStoryImage, useShareAlavancagemImage } from '../hooks/useShareStoryImage'
 import { useOddAtualizada } from '../hooks/useOddAtualizada'
-import { translateMarket, translateLine, translateTeamName, explainMarket } from '../utils/marketTranslate'
+import { translateMarket, translateLine, translateTeamName } from '../utils/marketTranslate'
 import FilterPanel, { FilterGroup } from '../components/FilterPanel'
 // Copa do Mundo 2026 · fase pelo match_date
 function wcPhase(dateStr?: string): string | null {
@@ -395,12 +394,6 @@ function UserGreeting({ user, isVip, isAdmin, daysUntilExpiry }: {
 }
 
 // Pick do Dia card
-function shortReasoning(text?: string): string {
-  if (!text) return ''
-  const fatoMatch = text.match(/FATO:\s*(.+?)(?=\s*ANÁLISE:|$)/i)
-  if (fatoMatch) return fatoMatch[1].trim()
-  return text.slice(0, 130)
-}
 
 function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = false }: { dica: any; compact?: boolean; onClick?: () => void; banca?: { bankroll_current: number; unit_value: number } | null; isLive?: boolean }) {
   const [showAnalysis, setShowAnalysis] = useState(false)
@@ -449,7 +442,6 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
       banca.unit_value,
     )
   })()
-  const fato = shortReasoning(dica.reasoning)
 
   const handleShare = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -683,14 +675,20 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
         <div className="flex items-center gap-2 text-xs text-ink-3">
           <span className="font-semibold text-ink-2">{translateMarket(dica.market)}</span>
           {dica.line && <><span>,</span><span>{translateLine(dica.line)}</span></>}
-          <InfoTip text={explainMarket(dica.market, dica.line)} />
         </div>
       </div>
 
       <PickProbability confidence={dica.confidence} probability={dica.probability} />
 
-      <PickReasoning text={fato} />
 
+      {/* O ESPAÇADOR QUE O "Fato" ERA.
+        *
+        * `.pick-card` é `flex flex-col h-full`: numa grade, todos os cards da
+        * linha têm a altura do mais alto. Quem absorvia essa sobra era o bloco
+        * do fato, com `flex-1`. Sem alguém absorvendo, o rodapé de cada card
+        * para onde o conteúdo dele acabar, e quatro picks lado a lado ficam
+        * com "Entenda esta análise" em quatro alturas diferentes. */}
+      <div className="flex-1" aria-hidden="true" />
       {/* Footer */}
       {dica.reasoning && (
         <PickExplainButton onClick={() => setShowAnalysis(true)} />
@@ -1069,7 +1067,6 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
             <div className="flex items-center gap-1.5 ml-7 text-xs mt-1">
               <span className="font-semibold text-ink-2">{translateMarket(leg.market)}</span>
               {leg.line && <><span className="text-ink-4">,</span><span className="text-ink-2">{translateLine(leg.line)}</span></>}
-              <InfoTip text={explainMarket(leg.market, leg.line)} />
             </div>
           </div>
           )
@@ -1082,8 +1079,15 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
         label="Probabilidade combinada"
       />
 
-      <PickReasoning text={shortReasoning(m.reasoning)} />
 
+      {/* O ESPAÇADOR QUE O "Fato" ERA.
+        *
+        * `.pick-card` é `flex flex-col h-full`: numa grade, todos os cards da
+        * linha têm a altura do mais alto. Quem absorvia essa sobra era o bloco
+        * do fato, com `flex-1`. Sem alguém absorvendo, o rodapé de cada card
+        * para onde o conteúdo dele acabar, e quatro picks lado a lado ficam
+        * com "Entenda esta análise" em quatro alturas diferentes. */}
+      <div className="flex-1" aria-hidden="true" />
       {/* Footer */}
       {m.reasoning && (
         <PickExplainButton onClick={() => setShowAnalysis(true)} />
@@ -1353,7 +1357,6 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
               <span className="font-semibold text-ink-2">{translateMarket(leg.market)}</span>
               {leg.line && <><span className="text-ink-4">,</span><span className="text-ink-2">{translateLine(leg.line)}</span></>}
               {leg.house && <><span className="text-ink-4">,</span><span className="text-ink-3">{leg.house}</span></>}
-              <InfoTip text={explainMarket(leg.market, leg.line)} />
             </div>
           </div>
           )
@@ -1366,8 +1369,15 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
           nos picks VIP antigos sem probabilidade. */}
       <PickProbability confidence={pick.confidence_media} />
 
-      <PickReasoning text={shortReasoning(pick.reasoning_1)} />
 
+      {/* O ESPAÇADOR QUE O "Fato" ERA.
+        *
+        * `.pick-card` é `flex flex-col h-full`: numa grade, todos os cards da
+        * linha têm a altura do mais alto. Quem absorvia essa sobra era o bloco
+        * do fato, com `flex-1`. Sem alguém absorvendo, o rodapé de cada card
+        * para onde o conteúdo dele acabar, e quatro picks lado a lado ficam
+        * com "Entenda esta análise" em quatro alturas diferentes. */}
+      <div className="flex-1" aria-hidden="true" />
       {/* Footer */}
       {pick.reasoning_1 && (
         <PickExplainButton onClick={() => setShowAnalysis(true)} />
@@ -1491,6 +1501,9 @@ interface MercadoPick {
   market: string; market_type?: string; line: string
   /** Número puro da linha. O card monta "2 ou mais" a partir dele. */
   line_value?: number | null
+  /* Escalação e anulação · só Player Stats. Ver SuggestionCard. */
+  escalacao?: 'titular' | 'fora' | 'indefinida' | null
+  void_reason?: string | null
   odd: number; bet_house?: string
   prob_real?: number; edge?: number
   /* Só Player Stats · nele a odd é faixa de sanidade e quem ordena é o Score
@@ -1586,6 +1599,8 @@ function mercadoParaSuggestion(p: MercadoPick, tipo: TipoMercado) {
     player_name: p.player_name,
     player_team: p.team_name,
     line_value: p.line_value != null ? Number(p.line_value) : null,
+    escalacao: p.escalacao ?? null,
+    void_reason: p.void_reason ?? null,
     market: tipo === 'player_stats'
       ? (LABEL_DO_METODO[p.method ?? ''] ?? p.method ?? p.market)
       /* O Boost tem DUAS pernas e uma odd só. `market` continua com a
@@ -2024,7 +2039,7 @@ function VipLockOverlay({ color = 'yellow', picks, resumo, rotulo = 'picks' }: {
         <div className="card p-5 space-y-3">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <span className="text-xs text-ink-3">
-              {resumo.total_legs ? `${resumo.total_legs} seleções` : 'Bilhete do dia'}
+              {resumo.total_legs ? plural(resumo.total_legs, 'seleção', 'seleções') : 'Bilhete do dia'}
             </span>
             {odd != null && (
               <span className="flex items-baseline gap-1.5">

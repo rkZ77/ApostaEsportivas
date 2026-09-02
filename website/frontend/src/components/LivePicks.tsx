@@ -6,6 +6,8 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import api from '../services/api'
+import { plural } from '../utils/format'
+import { rotuloDoMercado } from '../utils/marketTranslate'
 import { backdropFade, sheetUp } from '../lib/motion'
 import { AO_VIVO as LIVE_SET, ENCERRADO as FINISHED_SET, STATUS_LABEL } from '../lib/aoVivo'
 import { TeamLogo } from './TeamLogo'
@@ -318,7 +320,7 @@ function LiveLeg({ leg, syncedAt }: { leg: any; syncedAt: number }) {
         </div>
       </div>
       <div className="flex items-center justify-between text-xs">
-        <span className="text-ink-3 truncate">{leg.market}, {leg.line}</span>
+        <span className="text-ink-3 truncate">{rotuloDoMercado(leg.market, leg.line)}</span>
         {leg.current_val != null && (
           <StatChip label={leg.stat_label} value={leg.current_val} cls={stColor} compact />
         )}
@@ -439,7 +441,12 @@ function calcMultiProb(legs: any[]): number | null {
     }
     const isLive = LIVE_SET.has(leg.status)
     const legOdd = Number(leg.odd)
-    if (legOdd <= 1) return null
+    /* `Number.isFinite` e nao so' `<= 1`: perna sem odd no payload virava NaN,
+       que passa batido pelo `<= 1` (toda comparacao com NaN e' falsa), se
+       propaga pela multiplicacao e o bilhete inteiro aparecia com "NaN%" no
+       lugar da probabilidade. Sem odd nao ha' probabilidade implicita, entao o
+       certo e' nao exibir numero nenhum. */
+    if (!Number.isFinite(legOdd) || legOdd <= 1) return null
     // Leg ao vivo: usa Poisson. Leg aguardando: probabilidade implícita da odd.
     const legProb = isLive && leg.elapsed != null
       ? (calcLiveProb(leg) ?? Math.round(100 / legOdd))
@@ -574,8 +581,8 @@ function PickCard({ pick, unitValue, onRefresh, syncedAt }: {
 
   // Sub-label do header
   const headerSub = isMulti
-    ? `${(pick.legs ?? []).length} seleções`
-    : [pick.market, pick.line].filter(Boolean).join(', ')
+    ? plural((pick.legs ?? []).length, 'seleção', 'seleções')
+    : rotuloDoMercado(pick.market, pick.line)
 
   return (
     <div className={`rounded-lg border overflow-hidden transition-colors ${
@@ -659,7 +666,7 @@ function PickCard({ pick, unitValue, onRefresh, syncedAt }: {
                 </div>
                 {/* Mercado + stat atual */}
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-ink-2 truncate">{pick.market}, {pick.line}</span>
+                  <span className="text-ink-2 truncate">{rotuloDoMercado(pick.market, pick.line)}</span>
                   {pick.current_val != null && (
                     <StatChip label={pick.stat_label} value={pick.current_val} cls={stColor} />
                   )}

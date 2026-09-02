@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Activity, TrendingUp } from 'lucide-react'
 import api from '../services/api'
+import { rotuloDoMercado } from '../utils/marketTranslate'
 import PageShell from '../components/PageShell'
 import PublicNav from '../components/PublicNav'
 import { useAuth } from '../context/AuthContext'
@@ -93,7 +94,7 @@ function ClvSection({ data, loading }: { data: ClvData | null; loading: boolean 
             <PickTypeBadge type={r.pick_type} short />
             <span className="text-xs text-ink-1 truncate">{r.home_team} x {r.away_team}</span>
           </div>
-          <p className="text-[10px] text-ink-4 truncate mt-0.5">{r.market} {r.line}</p>
+          <p className="text-[10px] text-ink-4 truncate mt-0.5">{rotuloDoMercado(r.market, r.line)}</p>
         </div>
       ),
     },

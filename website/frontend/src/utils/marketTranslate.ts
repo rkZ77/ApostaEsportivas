@@ -64,8 +64,38 @@ const MARKET_PT: Record<string, string> = {
   // Defesas de goleiro (bet_id 267) -- prop de JOGADOR, nao over/under de
   // time: a linha ja vem com o nome do goleiro ("Fabio · 3 ou mais defesas").
   'goalkeeper saves': 'Defesas do goleiro',
+  'goalkeeper saves over/under': 'Defesas do goleiro',
   'player saves': 'Defesas do goleiro',
   'saves': 'Defesas do goleiro',
+  /* OS OUTROS MERCADOS DE JOGADOR (02/09).
+   *
+   * Defesas estava aqui desde que era motor próprio; os cinco métodos que
+   * nasceram com o Player Stats em 27/08 não. A aba Jogadores não sentia,
+   * porque lá o rótulo vem do MÉTODO (LABEL_DO_METODO em Picks.tsx), mas
+   * fora dela o nome da casa vazava cru: "Player Shots on Target" em Minhas
+   * Apostas, na banca, no histórico e no painel de detalhe.
+   *
+   * Só as chaves que trazem "player" ou "by player". As formas nuas
+   * ("shots on target", "tackles") ficam de fora de propósito: elas também
+   * existem como mercado de TIME, e traduzir pelo nome curto marcaria um
+   * mercado de time como se fosse de jogador.
+   *
+   * Fonte dos nomes: services/player_stats_engine/methods.py, campo
+   * `nomes_mercado`. */
+  'player shots on target': 'Chutes no alvo',
+  'player shots on goal': 'Chutes no alvo',
+  'shots on target by player': 'Chutes no alvo',
+  'player shots': 'Chutes do jogador',
+  'player total shots': 'Chutes do jogador',
+  'total shots by player': 'Chutes do jogador',
+  'player fouls committed': 'Faltas do jogador',
+  'fouls committed': 'Faltas do jogador',
+  'player fouls': 'Faltas do jogador',
+  'player tackles': 'Desarmes',
+  'player tackles made': 'Desarmes',
+  'player passes': 'Passes do jogador',
+  'player total passes': 'Passes do jogador',
+  'total passes by player': 'Passes do jogador',
   // Chutes e impedimentos · vinham CRUS pra tela ("Total Shots Over 23.5" na
   // Dica do Dia da Home, "Total ShotOnGoal" no histórico).
   'total shots': 'Finalizações Mais/Menos',
@@ -400,6 +430,37 @@ export function translateLine(line?: string): string {
 
   // `trimmed`, não `line`: é a versão já sem ponto do meio.
   return trimmed
+}
+
+/*
+ * "MERCADO, LINHA" NUMA STRING SÓ.
+ *
+ * Metade das telas escrevia isso à mão, e cada uma de um jeito: umas com
+ * vírgula, outras com espaço; umas traduzindo os dois campos, outras nenhum.
+ * O resultado é que o MESMO pick saía "Chutes no alvo, Mais de 1.5" no card e
+ * "Player Shots on Target Over 1.5" na lista de resultados.
+ *
+ * Aqui não há decisão de layout, só a frase. Quem precisa dos dois em caixas
+ * separadas (o card, o painel de detalhe) continua chamando `translateMarket`
+ * e `translateLine` direto · esta função é para os lugares em que a frase cabe
+ * numa linha de texto.
+ */
+export function rotuloDoMercado(market?: string, line?: string): string {
+  const m = translateMarket(market)
+  const l = translateLine(line)
+  /* LINHA DE JOGADOR SE EXPLICA SOZINHA.
+   *
+   * "Pedro, 2 ou mais chutes no alvo" já diz quem e o quê. Com o mercado na
+   * frente vira "Chutes no alvo, Pedro, 2 ou mais chutes no alvo" · a mesma
+   * contagem escrita duas vezes numa linha que ainda vai ser truncada no
+   * celular.
+   *
+   * O limiar inclusivo ("N ou mais") é a assinatura desse formato: nenhum
+   * mercado de partida é escrito assim, todos usam "Mais de X.5". */
+  if (l && /\d+\s+ou\s+(mais|menos)\s+\S/i.test(l)) return l
+  // "--" é o que o backend manda quando o mercado do dia ainda não existe.
+  const partes = [m, l].filter(t => t && t !== '--')
+  return partes.join(', ')
 }
 
 /*

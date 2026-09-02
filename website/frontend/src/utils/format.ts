@@ -82,3 +82,16 @@ export function capitalizarFrase(texto: string): string {
   if (!texto) return texto
   return texto.charAt(0).toUpperCase() + texto.slice(1)
 }
+
+
+/*
+ * Concordância de número, para o caso que aparece o tempo todo aqui: uma
+ * contagem seguida do substantivo.
+ *
+ * Bilhete de UMA perna existe (alavancagem simples), e a tela dizia
+ * "1 seleções" em três lugares · na aba Minhas Apostas, no subtítulo do
+ * "Entenda esta análise" e no resumo do caminho aberto.
+ */
+export function plural(n: number, singular: string, plural: string): string {
+  return `${n} ${n === 1 ? singular : plural}`
+}
