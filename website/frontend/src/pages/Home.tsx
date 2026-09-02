@@ -472,11 +472,13 @@ export default function Home() {
    */
   useEffect(() => { if (topoPronto) encerrarBarraInicial() }, [topoPronto])
 
-  // Uma chamada só: alimenta a faixa de indicadores e a lista de resultados.
+  // Esta chamada alimenta SÓ a faixa de indicadores. A lista de resultados tem
+  // a sua, paginada, no efeito lá de cima (recent_limit: PAGE_SIZE).
   //
-  // recent_limit=10 porque a lista mostra 10. Estava em 50: o backend roda uma
-  // sub-query por tipo de pick (seis) buscando 50 linhas cada, ordenava as 300
-  // e devolvia todas · para a Home jogar 40 fora no `.slice(0, 10)`.
+  // recent_limit=1 porque este bloco não lê `recent`, e a rota não aceita zero.
+  // Já foi 50: o backend roda uma sub-query por tipo de pick (seis) buscando 50
+  // linhas cada, ordenava as 300 e devolvia todas, para a Home jogar 40 fora
+  // num `.slice(0, 10)` que hoje nem existe mais.
   //
   // slim=1 pelo mesmo motivo, um nível acima: a resposta trazia sete blocos e
   // esta tela lê três. `by_day` era o pior · uma linha por dia desde o

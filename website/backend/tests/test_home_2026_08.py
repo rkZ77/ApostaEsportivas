@@ -171,31 +171,34 @@ def test_tela_trata_a_dica_anterior_como_historico():
 # ──────────────────────── Peso da pagina ───────────────────────────────
 
 
-def test_home_pede_o_suficiente_pra_escolher_e_nao_mais():
-    """Pedia 50 e renderizava 10: o backend roda uma sub-query por tipo de
-    pick, entao o excesso multiplicava por seis do lado do banco.
+def test_home_nao_baixa_mais_do_que_renderiza():
+    """A Home pedia 50 picks e renderizava 10, e o backend roda uma sub-query
+    por tipo de pick -- o excesso multiplicava por seis do lado do banco.
 
-    Em 30/08 a Home passou a ESCOLHER as dez com teto por produto -- sem isso,
-    um dia cheio do motor ao vivo ocupava a lista inteira. Escolher exige ter
-    de onde: pedir dez e mostrar dez volta ao problema antigo.
+    O TESTE seguia a solucao da epoca (pedir uma janela maior e escolher dez
+    com `ultimasPorProduto`), que deixou de existir: hoje a lista pagina no
+    servidor e a Home faz DUAS chamadas com papeis separados. Escrito contra a
+    forma antiga ele quebrou sem nada de errado ter acontecido no produto, e a
+    regex pegava a chamada errada das duas.
 
-    A folga tem limite: 40 cobre o teto por produto com sobra e continua longe
-    do teto de 50 da rota."""
+    O que precisa continuar valendo e' a regra, nao a implementacao: nenhuma
+    das duas chamadas baixa lista que a tela nao mostra.
+    """
     src = _front("pages/Home.tsx")
-    pedido = re.search(r"recent_limit:\s*(\d+)", src)
-    assert pedido
-    assert 10 <= int(pedido.group(1)) <= 40
-    # E a lista renderizada continua sendo dez.
-    #
-    # A chamada era `ultimasPorProduto(data?.recent ?? [], 10)`, casada aqui
-    # literalmente. Com o filtro por produto (30/08) a lista passou por uma
-    # variavel (`todas`) e o argumento deixou de ser a expressao inteira, entao
-    # a asserção literal quebrou sem nada de errado ter acontecido no produto.
-    #
-    # O que este teste precisa garantir e' o TETO -- que a Home escolhe dez de
-    # uma janela maior, e nao que a expressao esteja escrita de um jeito. O
-    # argumento 10 continua sendo checado; a origem da lista, nao.
-    assert re.search(r"ultimasPorProduto\([^)]*,\s*10\)", src)
+
+    # 1. A faixa de indicadores nao arrasta lista nenhuma. `slim=1` corta os
+    #    blocos que esta tela nao le, e recent_limit=1 porque a rota nao aceita
+    #    zero -- este bloco nao usa `recent`.
+    resumo = re.search(r"recent_limit:\s*1[^}]*slim:\s*1", src)
+    assert resumo, "a chamada do resumo deveria pedir recent_limit: 1 com slim: 1"
+
+    # 2. A lista pede exatamente a pagina que mostra, nunca um numero solto.
+    assert re.search(r"recent_limit:\s*PAGE_SIZE", src), "a lista deveria pedir PAGE_SIZE, e nao um literal"
+    pagina = re.search(r"const PAGE_SIZE = (\d+)", src)
+    assert pagina, "PAGE_SIZE sumiu"
+    # Teto de 40: continua longe do teto de 50 da rota, e uma pagina maior que
+    # isso volta ao problema de baixar o que ninguem le.
+    assert 10 <= int(pagina.group(1)) <= 40
 
 
 def test_resposta_da_api_sai_comprimida():
