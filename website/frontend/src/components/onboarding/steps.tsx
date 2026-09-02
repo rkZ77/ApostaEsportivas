@@ -430,33 +430,38 @@ const TOUR_STEPS: TourStep[] = [
   },
   {
     /* O QUE A CONTA GRATUITA TEM ALÉM DA DICA DO DIA.
-       O tour terminava sem nunca citar os dois produtos que abriram entrada
-       gratuita: o Pick Boost em 28/08 e os Picks Ao Vivo em 01/09. Quem acabou
-       de criar conta saía achando que free era um pick por dia, e os outros
-       dois ficavam atrás de uma aba que ela nunca abriu · o produto estava lá,
-       de graça, e não era encontrado.
+       O tour terminava sem nunca citar o Pick Boost, que abriu entrada
+       gratuita em 28/08. Quem acabou de criar conta saía achando que free era
+       um pick por dia, e o Boost ficava atrás de uma aba que ela nunca abriu:
+       o produto estava lá, de graça, e não era encontrado.
 
-       O alvo é a aba real, na barra de Picks. Se ela não existir (o Ao Vivo
-       pode estar desligado na constante), o tour cai no `picks-area` como os
-       outros passos. */
-    id: 'ao-vivo-e-boost',
-    titulo: 'Você também tem picks ao vivo',
-    Icon: Radio,
+       PICKS AO VIVO SAIU DAQUI (02/09, decisão do usuário). O passo cobria os
+       dois, e o tour do VIP tem um passo inteiro só de Ao Vivo
+       (stepsVip::vip-ao-vivo) -- quem assina via a mesma explicação duas
+       vezes, e ela é mais longa que a do Boost porque o produto tem prazo de
+       odd. O Boost fica: ele também se repete no tour do VIP, mas o tour do
+       VIP só roda pra quem assina, e o Boost é o que a conta gratuita tem
+       agora.
+
+       O alvo é a aba real, na barra de Picks. Se ela não existir, o tour cai
+       no `picks-area` como os outros passos. */
+    id: 'boost',
+    titulo: 'Você também tem Pick Boost',
+    Icon: Zap,
     rota: '/picks',
-    alvos: ['[data-aba="ao_vivo"]', '[data-aba="boost"]', '[data-tour="picks-area"]'],
-    resumo: 'Além da dica do dia, a conta gratuita recebe um pick ao vivo e um Pick Boost por dia.',
+    alvos: ['[data-aba="boost"]', '[data-tour="picks-area"]'],
+    resumo: 'Além da dica do dia, a conta gratuita recebe um Pick Boost por dia.',
     corpo: (
       <div className="space-y-3">
-        <Etiqueta>Duas abas que você já pode abrir</Etiqueta>
+        <Etiqueta>Mais uma aba que você já pode abrir</Etiqueta>
         <Lista
           itens={[
-            [Radio, 'Picks Ao Vivo: a IA lê a partida em andamento e publica quando o jogo se afasta do que a odd previa'],
-            [Zap, 'Pick Boost: ela procura a linha alternativa que a casa deixou de corrigir'],
-            [Ticket, 'Um de cada por dia é gratuito. O resto do dia fica no VIP'],
+            [Zap, 'Pick Boost: a IA procura a linha alternativa que a casa deixou de corrigir'],
+            [Ticket, 'Um por dia é gratuito. O resto do dia fica no VIP'],
           ]}
         />
         <p className="text-xs text-ink-2 leading-relaxed">
-          O pick ao vivo tem prazo: a odd muda com o jogo, então ele vale enquanto o preço durar.
+          É a mesma análise da dica do dia, procurando onde o preço ficou para trás.
         </p>
       </div>
     ),

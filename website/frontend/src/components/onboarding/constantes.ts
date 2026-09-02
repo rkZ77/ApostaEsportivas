@@ -30,8 +30,12 @@ export interface ContextoTour {
   semTelefone: boolean
 }
 
-/* 8 desde 01/09/2026: entrou o passo dos Picks Ao Vivo e do Pick Boost, os
-   dois produtos que ganharam entrada gratuita e que o roteiro nunca citava. */
+/* 8 desde 01/09/2026: entrou o passo dos produtos que ganharam entrada
+   gratuita e que o roteiro nunca citava.
+
+   Em 02/09 ele encolheu de "Ao Vivo e Boost" para so' o Boost, e a CONTAGEM
+   NAO MUDOU -- continua sendo um passo. O Ao Vivo saiu porque o tour do VIP
+   ja' tem um passo inteiro dele (stepsVip::vip-ao-vivo). */
 /** Passos do roteiro de boas-vindas que toda conta vê. */
 export const PASSOS_FIXOS = 8
 
