@@ -3,94 +3,188 @@ Carrosséis do Instagram: PNG 1080x1350, desenhados em HTML.
 
     python carrossel.py --listar
     python carrossel.py --todos
-    python carrossel.py --carrossel banca
+    python carrossel.py --carrossel fechamento
 
-1080x1350 é 4:5, o formato que ocupa mais altura no feed · quadrado 1:1
+1080x1350 é 4:5, o formato que ocupa mais altura no feed. Quadrado 1:1
 desperdiça tela em celular, e 9:16 o feed corta.
 
-Mesma identidade dos vídeos: fundo #0a0a0c, verde #00CC00, logo lido do
-`frontend/public/logo.png`. O texto vive em `CARROSSEIS` aqui embaixo, junto,
-pra editar tudo num lugar só.
+PADRÃO "TELA" (aprovado em 02/09/2026)
+--------------------------------------
+Todo slide mostra o site num aparelho que sangra pela borda de baixo. O texto
+vive no terço de cima, que é a faixa que o feed nunca corta, e o degradê do
+rodapé dissolve o aparelho na borda em vez de cortá-lo na faca.
 
-Cada carrossel tem capa, slides de conteúdo e um último de chamada pra ação.
+Os prints saem de `prints.py`, que fotografa o site num viewport de celular.
+Slide sem print desenha a moldura vazia, então dá pra diagramar antes de ter a
+foto.
+
+NÚMERO NO SLIDE
+---------------
+Carrossel com `"mes"` preenchido resolve `{placeholder}` com os números
+públicos daquele mês, lidos por `fechamento.py`. Nenhum número é digitado à
+mão aqui: o que o post afirma é o mesmo que /resultados mostra, e se divergir
+é porque o mês virou, não porque alguém errou de teclar.
 """
 from __future__ import annotations
 
 import argparse
+import base64
 import sys
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
 from cartoes import ACENTO, FUNDO, TINTA, TINTA_3, _logo_embutido
+from fechamento import numeros
 
 LARGURA, ALTURA = 1080, 1350
+AQUI = Path(__file__).parent
+PRINTS = AQUI / "carrossel" / "prints"
 
-# nome -> {titulo, slides: [(titulo, corpo)], cta}
-# Slide de conteúdo bom tem UMA ideia. Se precisou de dois parágrafos, era dois
-# slides.
+# Slide bom tem UMA ideia. Se precisou de dois parágrafos, era dois slides.
+#
+# capa/cta: (título, texto, print) · slides: (título, texto, print)
+# O kicker verde da capa é o `rotulo`; nos slides de conteúdo ele vira a
+# contagem, porque no meio do carrossel o que a pessoa quer saber é quanto
+# falta.
 CARROSSEIS: dict[str, dict] = {
-    # Versão enxuta: UMA frase por slide. Parágrafo de três linhas ninguém lê
-    # passando o dedo no feed · o slide tem que ser lido de relance.
-    "o-que-e": {
-        "capa": ("O que é\no Pick IA?", "Em 5 telas"),
+    # ---------------------------------------------------------------- dia 1
+    "fechamento": {
+        "mes": "2026-08",
+        "rotulo": "Fechamento de {mes}",
+        "capa": ("{mes_ano}\nfechou em {lucro}",
+                 "Todo pick publicado, green e red, está no site.",
+                 "mes-resumo"),
         "slides": [
-            ("Achamos onde a odd está errada",
-             "Todo dia, nos jogos das ligas em temporada."),
-            ("Não somos casa de aposta",
-             "Você aposta onde já aposta. Aqui você decide no quê."),
-            ("Tem pick grátis todo dia",
-             "Sem conta, sem cartão."),
-            ("O histórico é público",
-             "Green e red. Os dois."),
-            ("E cuidamos da sua banca",
-             "A parte que quase ninguém faz."),
+            ("{picks} picks resolvidos",
+             "Em {dias} dias, espalhados por {ligas} ligas.",
+             "mes-lista"),
+            ("ROI de {roi}",
+             "É o lucro sobre tudo que foi arriscado, não sobre o que deu certo.",
+             "mes-resumo"),
+            ("{acerto} de acerto",
+             "{greens} green e {reds} red. O red aparece na mesma tela.",
+             "mes-resumo"),
+            ("{liga_melhor} puxou o mês",
+             "{liga_melhor_lucro} só nessa liga.",
+             "mes-ligas"),
+            ("{liga_pior} tirou {liga_pior_lucro}",
+             "O mês teve buraco, e o buraco fica publicado do mesmo tamanho.",
+             "mes-ligas"),
         ],
-        "cta": ("Conheça o Pick IA", "Conta grátis, com 2 dias de VIP."),
+        "cta": ("Confira você mesmo",
+                "O histórico abre sem conta e sem cartão.",
+                "mes-resumo"),
     },
+    # ---------------------------------------------------------------- dia 2
+    "produtos": {
+        "mes": "2026-08",
+        "rotulo": "Produto por produto",
+        "capa": ("Nem tudo\ndeu lucro",
+                 "O fechamento de {mes} aberto por tipo de pick.",
+                 "mes-resumo"),
+        "slides": [
+            ("{vip_nome}: {vip_lucro}",
+             "{vip_picks} picks, {vip_acerto} de acerto, ROI de {vip_roi}.",
+             "mes-vip"),
+            ("{live_nome}: {live_lucro}",
+             "{live_picks} picks lidos com o jogo em andamento. ROI de {live_roi}.",
+             "mes-live"),
+            ("{free_nome}: {free_lucro}",
+             "O pick grátis fechou {mes} no vermelho. Está publicado assim mesmo.",
+             "mes-free"),
+            ("{multiplas_nome}: {multiplas_lucro}",
+             "{multiplas_acerto} de acerto e ainda assim lucro. Odd alta faz isso.",
+             "mes-multiplas"),
+            ("Por que mostrar o que perdeu",
+             "Porque um placar que só tem green não é placar, é anúncio.",
+             "mes-resumo"),
+        ],
+        "cta": ("Tudo isso está aberto",
+                "Filtre por produto, por liga ou por mês.",
+                "mes-ligas"),
+    },
+    # ---------------------------------------------------------------- dia 3
     "como-funciona": {
-        "capa": ("De onde vem\num pick?", "Em 5 telas"),
+        "rotulo": "Por dentro",
+        "capa": ("De onde vem\num pick?",
+                 "O caminho inteiro, em cinco telas.",
+                 "como-funciona"),
         "slides": [
-            ("1. Lê o jogo", "Finalização, escanteio, falta, ritmo. Estatística real."),
-            ("2. Calcula a chance", "A probabilidade de cada mercado naquele jogo."),
-            ("3. Compara com a odd", "Odd é probabilidade disfarçada."),
-            ("4. Só então vira pick", "Sem valor, o jogo não entra."),
-            ("5. Fica registrado", "Green ou red, vai pro histórico público."),
+            ("1. Lê o jogo",
+             "Finalização, escanteio, falta, ritmo. Estatística real das duas equipes.",
+             "como-funciona-passos"),
+            ("2. Calcula a chance",
+             "A probabilidade daquele mercado acontecer naquela partida.",
+             "home-passos"),
+            ("3. Compara com a odd",
+             "Odd é probabilidade disfarçada. Dá pra saber quanto a casa está pagando a mais.",
+             "home-passos"),
+            ("4. Só então vira pick",
+             "Sem diferença a favor, o jogo não entra. A maioria não entra.",
+             "como-funciona"),
+            ("5. Fica registrado",
+             "Green ou red, vai pro histórico público no mesmo dia.",
+             "resultados-lista"),
         ],
-        "cta": ("Confira o histórico", "O placar completo está aberto."),
+        "cta": ("Veja o método inteiro",
+                "A página Como Funciona abre sem login.",
+                "como-funciona"),
     },
+    # ---------------------------------------------------------------- dia 4
     "banca": {
-        "capa": ("Apostar sem banca\né torcer.", "Como montar a sua"),
+        "mes": "2026-08",
+        "rotulo": "Gestão de banca",
+        "capa": ("Apostar sem banca\né torcer",
+                 "A parte que decide se você sobrevive ao mês ruim.",
+                 "planos"),
         "slides": [
-            ("O que é banca", "O dinheiro que você separou pra apostar."),
-            ("O que é unidade", "O tamanho padrão da sua entrada."),
-            ("Quanto vale a unidade", "Entre 1% e 5% da banca. Nem mais."),
-            ("Por que isso importa", "Unidade grande quebra você na primeira má fase."),
-            ("O site avisa", "Ele trava se a unidade for grande demais."),
+            ("Banca é o dinheiro separado",
+             "O que você pode perder inteiro sem mexer em conta de casa.",
+             "planos"),
+            ("Unidade é o tamanho da entrada",
+             "Entre 1% e 5% da banca. O site trava se você passar disso.",
+             "planos"),
+            ("Cinco reds seguidos acontecem",
+             "Com unidade grande eles zeram você. Com unidade certa, custam um mau dia.",
+             "mes-ligas"),
+            ("O stake sai calculado",
+             "Em {mes}: {stake_label}.",
+             "mes-lista"),
+            ("Registrar é o que fecha a conta",
+             "Sem registro você lembra dos greens e esquece dos reds.",
+             "planos"),
         ],
-        "cta": ("Configure a sua", "Leva 30 segundos."),
+        "cta": ("Configure a sua banca",
+                "Leva menos de um minuto.",
+                "planos"),
     },
-    "pegar-pick": {
-        "capa": ("Por que ESSE\nmercado?", "Lendo um pick de verdade"),
+    # ---------------------------------------------------------------- dia 5
+    "comecar": {
+        "rotulo": "Comece hoje",
+        "capa": ("Tem pick grátis\ntodo dia",
+                 "Sem cartão, e sem precisar acreditar em ninguém.",
+                 "home"),
         "slides": [
-            ("O card diz o essencial", "Times, mercado, odd e a chance calculada."),
-            ("Entenda esta análise", "Um toque abre o raciocínio inteiro."),
-            ("Os números na mesa", "Dá pra discordar e não entrar."),
-            ("Registre a aposta", "A casa, a odd que você pegou, as unidades."),
-            ("O stake vem pronto", "Sai da sua banca, não de chute."),
+            ("A Dica do Dia é aberta",
+             "Um pick por dia, liberado pra qualquer conta.",
+             "home"),
+            ("O histórico vem antes",
+             "Confira o placar de meses inteiros antes de gastar um real.",
+             "resultados"),
+            ("O VIP tem 2 dias grátis",
+             "Todos os picks, o raciocínio de cada um e a gestão de banca junto.",
+             "planos"),
+            ("Não somos casa de aposta",
+             "Você aposta onde já aposta. Aqui você decide no quê.",
+             "planos"),
+            ("E se não servir",
+             "Você sai. O histórico continua aberto do mesmo jeito.",
+             "resultados"),
         ],
-        "cta": ("Veja os picks de hoje", "Publicados direto no site."),
-    },
-    "erros-de-banca": {
-        "capa": ("5 erros que\nquebram a banca", "Nenhum é escolher mal o jogo"),
-        "slides": [
-            ("1. Unidade grande demais", "Cinco reds seguidos zeram você. E acontecem."),
-            ("2. Dobrar depois do red", "Martingale parece conta. É armadilha."),
-            ("3. Apostar pra recuperar", "É a perda decidindo por você."),
-            ("4. Subir a unidade no lucro", "O primeiro red devolve duas semanas."),
-            ("5. Não registrar", "Você lembra dos greens e esquece dos reds."),
-        ],
-        "cta": ("Configure sua banca", "O site calcula a unidade e avisa o risco."),
+        "cta": ("Criar conta grátis",
+                "pickia.com.br",
+                "home"),
     },
 }
 
@@ -99,86 +193,121 @@ _ESTILO = f"""
 body {{
   width:{LARGURA}px; height:{ALTURA}px; background:{FUNDO}; color:{TINTA};
   font-family:"Segoe UI",system-ui,-apple-system,sans-serif;
-  display:flex; flex-direction:column; padding:88px 84px;
-  position:relative; overflow:hidden;
+  position:relative; overflow:hidden; padding:74px;
 }}
+/* Brilho da marca atrás do texto, no mesmo lugar dos cartões do vídeo. */
 body::before {{
-  content:''; position:absolute; left:46%; top:56%;
-  width:1250px; height:1250px; transform:translate(-50%,-50%);
-  background:radial-gradient(circle, rgba(0,204,0,.16) 0%, rgba(0,204,0,0) 64%);
+  content:''; position:absolute; left:38%; top:26%; width:1100px; height:1100px;
+  transform:translate(-50%,-50%);
+  background:radial-gradient(circle, rgba(0,204,0,.14) 0%, rgba(0,204,0,0) 66%);
 }}
-.topo {{
-  display:flex; align-items:center; gap:18px; position:relative; z-index:1;
-  font-size:32px; font-weight:800; letter-spacing:-.02em;
+.topo {{ display:flex; align-items:center; gap:16px; position:relative; z-index:2; }}
+.topo img {{ width:62px; height:62px; display:block; }}
+.wordmark {{ font-size:30px; font-weight:800; letter-spacing:-.02em; }}
+.wordmark i {{ font-style:normal; color:{ACENTO}; }}
+
+.texto {{ position:relative; z-index:2; margin-top:52px; }}
+.kicker {{
+  font-size:25px; font-weight:800; letter-spacing:.18em; text-transform:uppercase;
+  color:{ACENTO}; margin-bottom:22px;
 }}
-.topo img {{ width:70px; height:70px; }}
-.topo .nome {{ color:{TINTA}; }}
-.topo .nome span {{ color:{ACENTO}; }}
-.corpo {{
-  flex:1; display:flex; flex-direction:column; justify-content:center;
-  position:relative; z-index:1;
+.h {{ font-size:78px; font-weight:900; line-height:1.04; letter-spacing:-.035em;
+  white-space:pre-line; }}
+/* Título longo desce de tamanho em vez de invadir o aparelho. */
+.h.longo {{ font-size:64px; }}
+.p {{ font-size:36px; font-weight:500; line-height:1.36; color:#c7c7cf;
+  margin-top:20px; max-width:800px; }}
+.pilula {{
+  display:inline-block; margin-top:30px; padding:22px 44px; background:{ACENTO};
+  color:#04140a; border-radius:18px; font-size:34px; font-weight:900;
 }}
-.barra {{ width:112px; height:8px; background:{ACENTO}; border-radius:99px; margin-bottom:44px; }}
-.capa-titulo {{ font-size:104px; font-weight:900; line-height:1.02; letter-spacing:-.035em; white-space:pre-line; }}
-.capa-sub {{ font-size:40px; font-weight:600; color:{TINTA_3}; margin-top:36px; }}
-.num {{ font-size:34px; font-weight:900; color:{ACENTO}; letter-spacing:.06em; margin-bottom:20px; }}
-.titulo {{ font-size:76px; font-weight:900; line-height:1.06; letter-spacing:-.03em; }}
-/* Corpo grande porque agora é uma frase, não um parágrafo · slide de feed é
-   lido de relance, com o dedo já a caminho do próximo. */
-.texto {{ font-size:46px; font-weight:500; line-height:1.4; color:#c7c7cf; margin-top:34px; }}
-.cta {{
-  display:inline-block; margin-top:48px; padding:26px 48px; background:{ACENTO};
-  color:#04140a; border-radius:20px; font-size:38px; font-weight:900;
+
+/* O aparelho sangra pela borda de baixo: mostra tela de verdade sem gastar o
+   slide inteiro, e o corte no rodapé sugere que tem mais pra ver no site.
+   A borda é mais clara que o fundo de propósito, senão o aparelho some: o
+   print e o slide são os dois #0a0a0c. */
+.aparelho {{
+  position:absolute; left:50%; transform:translateX(-50%);
+  top:600px; width:604px; height:820px;
+  border:12px solid #3a3a44; border-top-left-radius:58px;
+  border-top-right-radius:58px; overflow:hidden;
+  background:#141418; z-index:1;
+  box-shadow:0 0 0 2px #101014, 0 -18px 70px rgba(0,0,0,.85);
 }}
+.aparelho img {{ width:100%; display:block; }}
+.aparelho .vazio {{
+  height:100%; display:flex; align-items:center; justify-content:center;
+  font-size:28px; font-weight:700; color:#4a4a54; letter-spacing:.04em;
+}}
+
 .rodape {{
-  position:relative; z-index:1; font-size:26px; font-weight:600; color:{TINTA_3};
-  display:flex; justify-content:space-between; align-items:center;
+  position:absolute; left:0; right:0; bottom:0; z-index:3;
+  padding:110px 74px 56px;
+  background:linear-gradient(to bottom, rgba(10,10,12,0) 0%, {FUNDO} 58%);
+  display:flex; justify-content:space-between; align-items:flex-end;
+  font-size:25px; font-weight:600; color:{TINTA_3};
 }}
-.arraste {{ color:{ACENTO}; font-weight:800; }}
+.rodape .arraste {{ color:{ACENTO}; font-weight:800; }}
+.trilho {{ display:inline-flex; gap:8px; width:230px; margin-bottom:14px; }}
+.trilho i {{ height:6px; flex:1; border-radius:99px; background:#2b2b31; }}
+.trilho i.on {{ background:{ACENTO}; }}
 """
 
 
-def _pagina(corpo: str, rodape_dir: str, logo: str) -> str:
+def _print_embutido(nome: str) -> str:
+    """O print como data URI: a página é renderizada sem servidor."""
+    arquivo = PRINTS / f"{nome}.png"
+    if not arquivo.exists():
+        return f"<div class='vazio'>print de {nome}</div>"
+    uri = "data:image/png;base64," + base64.b64encode(arquivo.read_bytes()).decode()
+    return f"<img src='{uri}' alt=''>"
+
+
+def _pagina(kicker: str, titulo: str, texto: str, nome_print: str,
+            pilula: bool, acesos: int, total: int, direita: str,
+            logo: str) -> str:
+    # 34 caracteres por linha é o que cabe em 78px sem esbarrar no aparelho.
+    maior_linha = max((len(l) for l in titulo.split("\n")), default=0)
+    classe = "h longo" if maior_linha > 34 else "h"
+    barras = "".join(f"<i class='{'on' if n < acesos else ''}'></i>"
+                     for n in range(total))
+    botao = "<div><span class='pilula'>pickia.com.br</span></div>" if pilula else ""
     return (
         f"<!doctype html><meta charset='utf-8'><style>{_ESTILO}</style>"
-        f"<div class='topo'>{logo}<span class='nome'>Pick<span>IA</span></span></div>"
-        f"<div class='corpo'>{corpo}</div>"
-        f"<div class='rodape'><span>pickia.com.br</span>"
-        f"<span class='arraste'>{rodape_dir}</span></div>"
+        f"<div class='topo'>{logo}<span class='wordmark'>Pick<i>IA</i></span></div>"
+        f"<div class='texto'><div class='kicker'>{kicker}</div>"
+        f"<div class='{classe}'>{titulo}</div><div class='p'>{texto}</div>{botao}</div>"
+        f"<div class='aparelho'>{_print_embutido(nome_print)}</div>"
+        f"<div class='rodape'>"
+        f"<span><span class='trilho'>{barras}</span><br>pickia.com.br</span>"
+        f"<span class='arraste'>{direita}</span></div>"
     )
 
 
 def render(nome: str, destino: Path) -> list[Path]:
     dados = CARROSSEIS[nome]
     destino.mkdir(parents=True, exist_ok=True)
-    logo_uri = _logo_embutido()
-    logo = f'<img src="{logo_uri}" alt="">' if logo_uri else ""
+    uri = _logo_embutido()
+    logo = f"<img src='{uri}' alt=''>" if uri else ""
 
-    titulo_capa, sub_capa = dados["capa"]
-    paginas = [(
-        f"<div class='barra'></div>"
-        f"<div class='capa-titulo'>{titulo_capa}</div>"
-        f"<div class='capa-sub'>{sub_capa}</div>",
-        "arraste →",
-    )]
+    n = numeros(dados["mes"]) if dados.get("mes") else {}
+    preencher = (lambda t: t.format(**n)) if n else (lambda t: t)
+
+    rotulo = preencher(dados["rotulo"])
+    paginas: list[tuple] = []
+
+    titulo, texto, print_capa = dados["capa"]
+    paginas.append((rotulo, preencher(titulo), preencher(texto), print_capa,
+                    False, "arraste"))
 
     total = len(dados["slides"])
-    for i, (titulo, texto) in enumerate(dados["slides"], start=1):
-        paginas.append((
-            f"<div class='num'>{i:02d} / {total:02d}</div>"
-            f"<div class='titulo'>{titulo}</div>"
-            f"<div class='texto'>{texto}</div>",
-            "arraste →",
-        ))
+    for i, (titulo, texto, nome_print) in enumerate(dados["slides"], start=1):
+        paginas.append((f"{i:02d} de {total:02d}", preencher(titulo),
+                        preencher(texto), nome_print, False, "arraste"))
 
-    cta_titulo, cta_texto = dados["cta"]
-    paginas.append((
-        f"<div class='barra'></div>"
-        f"<div class='titulo'>{cta_titulo}</div>"
-        f"<div class='texto'>{cta_texto}</div>"
-        f"<div><span class='cta'>pickia.com.br</span></div>",
-        "link na bio",
-    ))
+    titulo, texto, print_cta = dados["cta"]
+    paginas.append((rotulo, preencher(titulo), preencher(texto), print_cta,
+                    True, "link na bio"))
 
     gerados: list[Path] = []
     with sync_playwright() as pw:
@@ -186,9 +315,12 @@ def render(nome: str, destino: Path) -> list[Path]:
         pagina = navegador.new_page(
             viewport={"width": LARGURA, "height": ALTURA}, device_scale_factor=1
         )
-        for i, (corpo, rodape) in enumerate(paginas):
+        for i, (kicker, titulo, texto, nome_print, pilula, direita) in enumerate(paginas):
             arquivo = destino / f"{nome}-{i:02d}.png"
-            pagina.set_content(_pagina(corpo, rodape, logo))
+            pagina.set_content(_pagina(
+                kicker, titulo, texto, nome_print, pilula,
+                i + 1, len(paginas), direita, logo,
+            ))
             pagina.screenshot(path=str(arquivo))
             gerados.append(arquivo)
         navegador.close()
@@ -201,13 +333,16 @@ def main() -> int:
     p.add_argument("--carrossel", action="append", default=[])
     p.add_argument("--todos", action="store_true")
     p.add_argument("--listar", action="store_true")
-    p.add_argument("--saida", default=str(Path(__file__).parent / "carrossel"))
+    p.add_argument("--saida", default=str(AQUI / "carrossel"))
     args = p.parse_args()
+
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
     if args.listar:
         print("carrosséis disponíveis:\n")
         for nome, d in CARROSSEIS.items():
-            print(f"  {nome:<15} {len(d['slides']) + 2} slides · {d['capa'][1]}")
+            mes = d.get("mes", "sem número")
+            print(f"  {nome:<15} {len(d['slides']) + 2} slides · {mes}")
         return 0
 
     escolhidos = list(CARROSSEIS) if args.todos else args.carrossel

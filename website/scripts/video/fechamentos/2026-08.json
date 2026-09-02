@@ -1,0 +1,1542 @@
+{
+ "available_months": [
+  "2026-08",
+  "2026-07",
+  "2026-06"
+ ],
+ "summary": {
+  "total": 253,
+  "greens": 165,
+  "reds": 80,
+  "push": 5,
+  "half_wins": 2,
+  "half_losses": 1,
+  "profit": 105.6504,
+  "stake_total": 843,
+  "roi": 12.5,
+  "leagues_count": 16,
+  "vip_profit": 56.56,
+  "vip_total": 116,
+  "free_profit": -4.92,
+  "free_total": 22
+ },
+ "by_day": [
+  {
+   "match_date": "2026-08-01",
+   "total": 1,
+   "greens": 0,
+   "reds": 1,
+   "profit": -3.0
+  },
+  {
+   "match_date": "2026-08-02",
+   "total": 4,
+   "greens": 4,
+   "reds": 0,
+   "profit": 7.84
+  },
+  {
+   "match_date": "2026-08-03",
+   "total": 2,
+   "greens": 2,
+   "reds": 0,
+   "profit": 2.6
+  },
+  {
+   "match_date": "2026-08-04",
+   "total": 5,
+   "greens": 2,
+   "reds": 3,
+   "profit": -1.2
+  },
+  {
+   "match_date": "2026-08-05",
+   "total": 6,
+   "greens": 5,
+   "reds": 1,
+   "profit": 5.44
+  },
+  {
+   "match_date": "2026-08-06",
+   "total": 3,
+   "greens": 2,
+   "reds": 1,
+   "profit": 0.67
+  },
+  {
+   "match_date": "2026-08-07",
+   "total": 2,
+   "greens": 2,
+   "reds": 0,
+   "profit": 6.6
+  },
+  {
+   "match_date": "2026-08-08",
+   "total": 7,
+   "greens": 4,
+   "reds": 3,
+   "profit": 1.3
+  },
+  {
+   "match_date": "2026-08-09",
+   "total": 9,
+   "greens": 5,
+   "reds": 4,
+   "profit": -4.28
+  },
+  {
+   "match_date": "2026-08-11",
+   "total": 3,
+   "greens": 1,
+   "reds": 2,
+   "profit": -3.0
+  },
+  {
+   "match_date": "2026-08-12",
+   "total": 4,
+   "greens": 3,
+   "reds": 1,
+   "profit": 1.89
+  },
+  {
+   "match_date": "2026-08-13",
+   "total": 5,
+   "greens": 4,
+   "reds": 1,
+   "profit": 1.9789
+  },
+  {
+   "match_date": "2026-08-14",
+   "total": 6,
+   "greens": 5,
+   "reds": 1,
+   "profit": 9.82
+  },
+  {
+   "match_date": "2026-08-15",
+   "total": 10,
+   "greens": 6,
+   "reds": 4,
+   "profit": 6.15
+  },
+  {
+   "match_date": "2026-08-16",
+   "total": 11,
+   "greens": 3,
+   "reds": 8,
+   "profit": -16.22
+  },
+  {
+   "match_date": "2026-08-17",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 3.6
+  },
+  {
+   "match_date": "2026-08-18",
+   "total": 11,
+   "greens": 10,
+   "reds": 1,
+   "profit": 23.42
+  },
+  {
+   "match_date": "2026-08-19",
+   "total": 14,
+   "greens": 8,
+   "reds": 6,
+   "profit": -0.6
+  },
+  {
+   "match_date": "2026-08-20",
+   "total": 10,
+   "greens": 8,
+   "reds": 2,
+   "profit": 15.08
+  },
+  {
+   "match_date": "2026-08-22",
+   "total": 7,
+   "greens": 6,
+   "reds": 1,
+   "profit": 11.6675
+  },
+  {
+   "match_date": "2026-08-23",
+   "total": 13,
+   "greens": 7,
+   "reds": 6,
+   "profit": 1.56
+  },
+  {
+   "match_date": "2026-08-24",
+   "total": 5,
+   "greens": 2,
+   "reds": 3,
+   "profit": -3.71
+  },
+  {
+   "match_date": "2026-08-25",
+   "total": 10,
+   "greens": 6,
+   "reds": 4,
+   "profit": -0.12
+  },
+  {
+   "match_date": "2026-08-26",
+   "total": 7,
+   "greens": 5,
+   "reds": 2,
+   "profit": 0.156
+  },
+  {
+   "match_date": "2026-08-27",
+   "total": 3,
+   "greens": 2,
+   "reds": 1,
+   "profit": -0.72
+  },
+  {
+   "match_date": "2026-08-28",
+   "total": 16,
+   "greens": 9,
+   "reds": 6,
+   "profit": -6.59
+  },
+  {
+   "match_date": "2026-08-29",
+   "total": 36,
+   "greens": 25,
+   "reds": 9,
+   "profit": 19.058
+  },
+  {
+   "match_date": "2026-08-30",
+   "total": 28,
+   "greens": 20,
+   "reds": 6,
+   "profit": 22.25
+  },
+  {
+   "match_date": "2026-08-31",
+   "total": 14,
+   "greens": 8,
+   "reds": 3,
+   "profit": 4.01
+  }
+ ],
+ "by_league": [
+  {
+   "league_id": 72,
+   "total": 55,
+   "greens": 38,
+   "reds": 16,
+   "profit": 37.63,
+   "stake_total": 213,
+   "league_name": "Brasileirão Serie B"
+  },
+  {
+   "league_id": 71,
+   "total": 50,
+   "greens": 26,
+   "reds": 24,
+   "profit": -30.48,
+   "stake_total": 193,
+   "league_name": "Brasileirão Serie A"
+  },
+  {
+   "league_id": 73,
+   "total": 24,
+   "greens": 16,
+   "reds": 8,
+   "profit": 9.69,
+   "stake_total": 89,
+   "league_name": "Copa do Brasil"
+  },
+  {
+   "league_id": 13,
+   "total": 16,
+   "greens": 12,
+   "reds": 4,
+   "profit": 14.58,
+   "stake_total": 61,
+   "league_name": "Libertadores"
+  },
+  {
+   "league_id": 11,
+   "total": 15,
+   "greens": 11,
+   "reds": 4,
+   "profit": 15.29,
+   "stake_total": 57,
+   "league_name": "Conmebol Sudamericana"
+  },
+  {
+   "league_id": 78,
+   "total": 8,
+   "greens": 3,
+   "reds": 4,
+   "profit": -10.32,
+   "stake_total": 32,
+   "league_name": "Bundesliga"
+  },
+  {
+   "league_id": 203,
+   "total": 6,
+   "greens": 5,
+   "reds": 0,
+   "profit": 14.6,
+   "stake_total": 24,
+   "league_name": "Süper Lig"
+  },
+  {
+   "league_id": 39,
+   "total": 6,
+   "greens": 5,
+   "reds": 1,
+   "profit": 7.72,
+   "stake_total": 24,
+   "league_name": "Premier League"
+  },
+  {
+   "league_id": 79,
+   "total": 6,
+   "greens": 4,
+   "reds": 1,
+   "profit": 5.68,
+   "stake_total": 24,
+   "league_name": "2. Bundesliga"
+  },
+  {
+   "league_id": 40,
+   "total": 5,
+   "greens": 4,
+   "reds": 1,
+   "profit": 4.76,
+   "stake_total": 20,
+   "league_name": "Championship"
+  },
+  {
+   "league_id": 307,
+   "total": 5,
+   "greens": 5,
+   "reds": 0,
+   "profit": 12.0,
+   "stake_total": 20,
+   "league_name": "Saudi Pro League"
+  },
+  {
+   "league_id": 94,
+   "total": 4,
+   "greens": 4,
+   "reds": 0,
+   "profit": 12.68,
+   "stake_total": 16,
+   "league_name": "Liga de Portugal"
+  },
+  {
+   "league_id": 61,
+   "total": 4,
+   "greens": 2,
+   "reds": 1,
+   "profit": 0.92,
+   "stake_total": 16,
+   "league_name": "Ligue 1"
+  },
+  {
+   "league_id": 140,
+   "total": 3,
+   "greens": 1,
+   "reds": 0,
+   "profit": 3.16,
+   "stake_total": 12,
+   "league_name": "La Liga"
+  },
+  {
+   "league_id": 88,
+   "total": 3,
+   "greens": 3,
+   "reds": 0,
+   "profit": 7.36,
+   "stake_total": 12,
+   "league_name": "Eredivisie"
+  },
+  {
+   "league_id": 135,
+   "total": 2,
+   "greens": 1,
+   "reds": 0,
+   "profit": 1.32,
+   "stake_total": 8,
+   "league_name": "Italy Serie A"
+  }
+ ],
+ "by_source": [
+  {
+   "source": "vip",
+   "total": 116,
+   "greens": 78,
+   "reds": 38,
+   "profit": 56.56,
+   "stake_total": 464.0,
+   "win_rate": 67.2,
+   "roi": 12.2
+  },
+  {
+   "source": "live",
+   "total": 70,
+   "greens": 45,
+   "reds": 17,
+   "profit": 41.44,
+   "stake_total": 280.0,
+   "win_rate": 64.3,
+   "roi": 14.8
+  },
+  {
+   "source": "faltas",
+   "total": 3,
+   "greens": 3,
+   "reds": 0,
+   "profit": 7.35,
+   "stake_total": 9.0,
+   "win_rate": 100.0,
+   "roi": 81.7
+  },
+  {
+   "source": "multiplas",
+   "total": 18,
+   "greens": 8,
+   "reds": 10,
+   "profit": 3.06,
+   "stake_total": 18.0,
+   "win_rate": 44.4,
+   "roi": 17.0
+  },
+  {
+   "source": "player_stats",
+   "total": 2,
+   "greens": 2,
+   "reds": 0,
+   "profit": 2.16,
+   "stake_total": 6.0,
+   "win_rate": 100.0,
+   "roi": 36.0
+  },
+  {
+   "source": "alavancagem",
+   "total": 22,
+   "greens": 17,
+   "reds": 5,
+   "profit": 0.0,
+   "stake_total": 0.0,
+   "win_rate": 77.3,
+   "roi": 0.0
+  },
+  {
+   "source": "free",
+   "total": 22,
+   "greens": 12,
+   "reds": 10,
+   "profit": -4.92,
+   "stake_total": 66.0,
+   "win_rate": 54.5,
+   "roi": -7.5
+  }
+ ],
+ "by_source_day": [
+  {
+   "match_date": "2026-08-01",
+   "source": "free",
+   "total": 1,
+   "greens": 0,
+   "reds": 1,
+   "profit": -3.0,
+   "stake_total": 3
+  },
+  {
+   "match_date": "2026-08-02",
+   "source": "alavancagem",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 0.0,
+   "stake_total": 0
+  },
+  {
+   "match_date": "2026-08-02",
+   "source": "vip",
+   "total": 3,
+   "greens": 3,
+   "reds": 0,
+   "profit": 7.84,
+   "stake_total": 12
+  },
+  {
+   "match_date": "2026-08-03",
+   "source": "alavancagem",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 0.0,
+   "stake_total": 0
+  },
+  {
+   "match_date": "2026-08-03",
+   "source": "vip",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 2.6,
+   "stake_total": 4
+  },
+  {
+   "match_date": "2026-08-04",
+   "source": "alavancagem",
+   "total": 1,
+   "greens": 0,
+   "reds": 1,
+   "profit": 0.0,
+   "stake_total": 0
+  },
+  {
+   "match_date": "2026-08-04",
+   "source": "faltas",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 2.4,
+   "stake_total": 3
+  },
+  {
+   "match_date": "2026-08-04",
+   "source": "free",
+   "total": 1,
+   "greens": 0,
+   "reds": 1,
+   "profit": -3.0,
+   "stake_total": 3
+  },
+  {
+   "match_date": "2026-08-04",
+   "source": "vip",
+   "total": 2,
+   "greens": 1,
+   "reds": 1,
+   "profit": -0.6,
+   "stake_total": 8
+  },
+  {
+   "match_date": "2026-08-05",
+   "source": "alavancagem",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 0.0,
+   "stake_total": 0
+  },
+  {
+   "match_date": "2026-08-05",
+   "source": "free",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 2.16,
+   "stake_total": 3
+  },
+  {
+   "match_date": "2026-08-05",
+   "source": "vip",
+   "total": 4,
+   "greens": 3,
+   "reds": 1,
+   "profit": 3.28,
+   "stake_total": 16
+  },
+  {
+   "match_date": "2026-08-06",
+   "source": "free",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 1.35,
+   "stake_total": 3
+  },
+  {
+   "match_date": "2026-08-06",
+   "source": "vip",
+   "total": 2,
+   "greens": 1,
+   "reds": 1,
+   "profit": -0.68,
+   "stake_total": 8
+  },
+  {
+   "match_date": "2026-08-07",
+   "source": "vip",
+   "total": 2,
+   "greens": 2,
+   "reds": 0,
+   "profit": 6.6,
+   "stake_total": 8
+  },
+  {
+   "match_date": "2026-08-08",
+   "source": "free",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 2.1,
+   "stake_total": 3
+  },
+  {
+   "match_date": "2026-08-08",
+   "source": "multiplas",
+   "total": 1,
+   "greens": 0,
+   "reds": 1,
+   "profit": -1,
+   "stake_total": 1
+  },
+  {
+   "match_date": "2026-08-08",
+   "source": "vip",
+   "total": 5,
+   "greens": 3,
+   "reds": 2,
+   "profit": 0.2,
+   "stake_total": 20
+  },
+  {
+   "match_date": "2026-08-09",
+   "source": "alavancagem",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 0.0,
+   "stake_total": 0
+  },
+  {
+   "match_date": "2026-08-09",
+   "source": "free",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 1.8,
+   "stake_total": 3
+  },
+  {
+   "match_date": "2026-08-09",
+   "source": "multiplas",
+   "total": 1,
+   "greens": 0,
+   "reds": 1,
+   "profit": -1.0,
+   "stake_total": 1
+  },
+  {
+   "match_date": "2026-08-09",
+   "source": "vip",
+   "total": 6,
+   "greens": 3,
+   "reds": 3,
+   "profit": -5.08,
+   "stake_total": 24
+  },
+  {
+   "match_date": "2026-08-11",
+   "source": "free",
+   "total": 1,
+   "greens": 0,
+   "reds": 1,
+   "profit": -3.0,
+   "stake_total": 3
+  },
+  {
+   "match_date": "2026-08-11",
+   "source": "vip",
+   "total": 2,
+   "greens": 1,
+   "reds": 1,
+   "profit": 0.0,
+   "stake_total": 8
+  },
+  {
+   "match_date": "2026-08-12",
+   "source": "alavancagem",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 0.0,
+   "stake_total": 0
+  },
+  {
+   "match_date": "2026-08-12",
+   "source": "free",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 2.61,
+   "stake_total": 3
+  },
+  {
+   "match_date": "2026-08-12",
+   "source": "vip",
+   "total": 2,
+   "greens": 1,
+   "reds": 1,
+   "profit": -0.72,
+   "stake_total": 8
+  },
+  {
+   "match_date": "2026-08-13",
+   "source": "alavancagem",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 0.0,
+   "stake_total": 0
+  },
+  {
+   "match_date": "2026-08-13",
+   "source": "multiplas",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 1.7789,
+   "stake_total": 1
+  },
+  {
+   "match_date": "2026-08-13",
+   "source": "vip",
+   "total": 3,
+   "greens": 2,
+   "reds": 1,
+   "profit": 0.2,
+   "stake_total": 12
+  },
+  {
+   "match_date": "2026-08-14",
+   "source": "alavancagem",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 0.0,
+   "stake_total": 0
+  },
+  {
+   "match_date": "2026-08-14",
+   "source": "free",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 1.98,
+   "stake_total": 3
+  },
+  {
+   "match_date": "2026-08-14",
+   "source": "multiplas",
+   "total": 1,
+   "greens": 0,
+   "reds": 1,
+   "profit": -1.0,
+   "stake_total": 1
+  },
+  {
+   "match_date": "2026-08-14",
+   "source": "vip",
+   "total": 3,
+   "greens": 3,
+   "reds": 0,
+   "profit": 8.84,
+   "stake_total": 12
+  },
+  {
+   "match_date": "2026-08-15",
+   "source": "alavancagem",
+   "total": 1,
+   "greens": 0,
+   "reds": 1,
+   "profit": 0.0,
+   "stake_total": 0
+  },
+  {
+   "match_date": "2026-08-15",
+   "source": "free",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 2.43,
+   "stake_total": 3
+  },
+  {
+   "match_date": "2026-08-15",
+   "source": "multiplas",
+   "total": 1,
+   "greens": 0,
+   "reds": 1,
+   "profit": -1.0,
+   "stake_total": 1
+  },
+  {
+   "match_date": "2026-08-15",
+   "source": "vip",
+   "total": 7,
+   "greens": 5,
+   "reds": 2,
+   "profit": 4.72,
+   "stake_total": 28
+  },
+  {
+   "match_date": "2026-08-16",
+   "source": "alavancagem",
+   "total": 1,
+   "greens": 0,
+   "reds": 1,
+   "profit": 0.0,
+   "stake_total": 0
+  },
+  {
+   "match_date": "2026-08-16",
+   "source": "faltas",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 2.34,
+   "stake_total": 3
+  },
+  {
+   "match_date": "2026-08-16",
+   "source": "free",
+   "total": 1,
+   "greens": 0,
+   "reds": 1,
+   "profit": -3.0,
+   "stake_total": 3
+  },
+  {
+   "match_date": "2026-08-16",
+   "source": "multiplas",
+   "total": 1,
+   "greens": 0,
+   "reds": 1,
+   "profit": -1.0,
+   "stake_total": 1
+  },
+  {
+   "match_date": "2026-08-16",
+   "source": "vip",
+   "total": 7,
+   "greens": 2,
+   "reds": 5,
+   "profit": -14.56,
+   "stake_total": 28
+  },
+  {
+   "match_date": "2026-08-17",
+   "source": "vip",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 3.6,
+   "stake_total": 4
+  },
+  {
+   "match_date": "2026-08-18",
+   "source": "alavancagem",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 0.0,
+   "stake_total": 0
+  },
+  {
+   "match_date": "2026-08-18",
+   "source": "faltas",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 2.61,
+   "stake_total": 3
+  },
+  {
+   "match_date": "2026-08-18",
+   "source": "free",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 2.37,
+   "stake_total": 3
+  },
+  {
+   "match_date": "2026-08-18",
+   "source": "multiplas",
+   "total": 1,
+   "greens": 0,
+   "reds": 1,
+   "profit": -1.0,
+   "stake_total": 1
+  },
+  {
+   "match_date": "2026-08-18",
+   "source": "vip",
+   "total": 7,
+   "greens": 7,
+   "reds": 0,
+   "profit": 19.44,
+   "stake_total": 28
+  },
+  {
+   "match_date": "2026-08-19",
+   "source": "alavancagem",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 0.0,
+   "stake_total": 0
+  },
+  {
+   "match_date": "2026-08-19",
+   "source": "free",
+   "total": 1,
+   "greens": 0,
+   "reds": 1,
+   "profit": -3.0,
+   "stake_total": 3
+  },
+  {
+   "match_date": "2026-08-19",
+   "source": "multiplas",
+   "total": 1,
+   "greens": 0,
+   "reds": 1,
+   "profit": -1.0,
+   "stake_total": 1
+  },
+  {
+   "match_date": "2026-08-19",
+   "source": "vip",
+   "total": 11,
+   "greens": 7,
+   "reds": 4,
+   "profit": 3.4,
+   "stake_total": 44
+  },
+  {
+   "match_date": "2026-08-20",
+   "source": "alavancagem",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 0.0,
+   "stake_total": 0
+  },
+  {
+   "match_date": "2026-08-20",
+   "source": "free",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 2.16,
+   "stake_total": 3
+  },
+  {
+   "match_date": "2026-08-20",
+   "source": "multiplas",
+   "total": 1,
+   "greens": 0,
+   "reds": 1,
+   "profit": 0,
+   "stake_total": 1
+  },
+  {
+   "match_date": "2026-08-20",
+   "source": "vip",
+   "total": 7,
+   "greens": 6,
+   "reds": 1,
+   "profit": 12.92,
+   "stake_total": 28
+  },
+  {
+   "match_date": "2026-08-22",
+   "source": "alavancagem",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 0.0,
+   "stake_total": 0
+  },
+  {
+   "match_date": "2026-08-22",
+   "source": "free",
+   "total": 1,
+   "greens": 0,
+   "reds": 1,
+   "profit": -3.0,
+   "stake_total": 3
+  },
+  {
+   "match_date": "2026-08-22",
+   "source": "multiplas",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 1.8275,
+   "stake_total": 1
+  },
+  {
+   "match_date": "2026-08-22",
+   "source": "vip",
+   "total": 4,
+   "greens": 4,
+   "reds": 0,
+   "profit": 12.84,
+   "stake_total": 16
+  },
+  {
+   "match_date": "2026-08-23",
+   "source": "alavancagem",
+   "total": 1,
+   "greens": 0,
+   "reds": 1,
+   "profit": 0.0,
+   "stake_total": 0
+  },
+  {
+   "match_date": "2026-08-23",
+   "source": "free",
+   "total": 1,
+   "greens": 0,
+   "reds": 1,
+   "profit": -3.0,
+   "stake_total": 3
+  },
+  {
+   "match_date": "2026-08-23",
+   "source": "multiplas",
+   "total": 1,
+   "greens": 0,
+   "reds": 1,
+   "profit": -1.0,
+   "stake_total": 1
+  },
+  {
+   "match_date": "2026-08-23",
+   "source": "vip",
+   "total": 10,
+   "greens": 7,
+   "reds": 3,
+   "profit": 5.56,
+   "stake_total": 40
+  },
+  {
+   "match_date": "2026-08-24",
+   "source": "free",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 2.49,
+   "stake_total": 3
+  },
+  {
+   "match_date": "2026-08-24",
+   "source": "multiplas",
+   "total": 1,
+   "greens": 0,
+   "reds": 1,
+   "profit": -1.0,
+   "stake_total": 1
+  },
+  {
+   "match_date": "2026-08-24",
+   "source": "vip",
+   "total": 3,
+   "greens": 1,
+   "reds": 2,
+   "profit": -5.2,
+   "stake_total": 12
+  },
+  {
+   "match_date": "2026-08-25",
+   "source": "alavancagem",
+   "total": 1,
+   "greens": 0,
+   "reds": 1,
+   "profit": 0.0,
+   "stake_total": 0
+  },
+  {
+   "match_date": "2026-08-25",
+   "source": "free",
+   "total": 1,
+   "greens": 0,
+   "reds": 1,
+   "profit": -3.0,
+   "stake_total": 3
+  },
+  {
+   "match_date": "2026-08-25",
+   "source": "live",
+   "total": 4,
+   "greens": 3,
+   "reds": 1,
+   "profit": 2.04,
+   "stake_total": 16
+  },
+  {
+   "match_date": "2026-08-25",
+   "source": "multiplas",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 0,
+   "stake_total": 1
+  },
+  {
+   "match_date": "2026-08-25",
+   "source": "vip",
+   "total": 3,
+   "greens": 2,
+   "reds": 1,
+   "profit": 0.84,
+   "stake_total": 12
+  },
+  {
+   "match_date": "2026-08-26",
+   "source": "alavancagem",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 0.0,
+   "stake_total": 0
+  },
+  {
+   "match_date": "2026-08-26",
+   "source": "free",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 1.62,
+   "stake_total": 3
+  },
+  {
+   "match_date": "2026-08-26",
+   "source": "live",
+   "total": 2,
+   "greens": 2,
+   "reds": 0,
+   "profit": 4.44,
+   "stake_total": 8
+  },
+  {
+   "match_date": "2026-08-26",
+   "source": "multiplas",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 2.096,
+   "stake_total": 1
+  },
+  {
+   "match_date": "2026-08-26",
+   "source": "vip",
+   "total": 2,
+   "greens": 0,
+   "reds": 2,
+   "profit": -8.0,
+   "stake_total": 8
+  },
+  {
+   "match_date": "2026-08-27",
+   "source": "alavancagem",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 0.0,
+   "stake_total": 0
+  },
+  {
+   "match_date": "2026-08-27",
+   "source": "free",
+   "total": 1,
+   "greens": 0,
+   "reds": 1,
+   "profit": -3.0,
+   "stake_total": 3
+  },
+  {
+   "match_date": "2026-08-27",
+   "source": "vip",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 2.28,
+   "stake_total": 4
+  },
+  {
+   "match_date": "2026-08-28",
+   "source": "alavancagem",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 0.0,
+   "stake_total": 0
+  },
+  {
+   "match_date": "2026-08-28",
+   "source": "free",
+   "total": 1,
+   "greens": 0,
+   "reds": 1,
+   "profit": -3.0,
+   "stake_total": 3
+  },
+  {
+   "match_date": "2026-08-28",
+   "source": "live",
+   "total": 9,
+   "greens": 5,
+   "reds": 3,
+   "profit": -1.64,
+   "stake_total": 36
+  },
+  {
+   "match_date": "2026-08-28",
+   "source": "multiplas",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 1.89,
+   "stake_total": 1
+  },
+  {
+   "match_date": "2026-08-28",
+   "source": "player_stats",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 1.32,
+   "stake_total": 3
+  },
+  {
+   "match_date": "2026-08-28",
+   "source": "vip",
+   "total": 3,
+   "greens": 1,
+   "reds": 2,
+   "profit": -5.16,
+   "stake_total": 12
+  },
+  {
+   "match_date": "2026-08-29",
+   "source": "alavancagem",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 0.0,
+   "stake_total": 0
+  },
+  {
+   "match_date": "2026-08-29",
+   "source": "live",
+   "total": 31,
+   "greens": 21,
+   "reds": 8,
+   "profit": 17.56,
+   "stake_total": 124
+  },
+  {
+   "match_date": "2026-08-29",
+   "source": "multiplas",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 1.418,
+   "stake_total": 1
+  },
+  {
+   "match_date": "2026-08-29",
+   "source": "vip",
+   "total": 3,
+   "greens": 2,
+   "reds": 1,
+   "profit": 0.08,
+   "stake_total": 12
+  },
+  {
+   "match_date": "2026-08-30",
+   "source": "alavancagem",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 0.0,
+   "stake_total": 0
+  },
+  {
+   "match_date": "2026-08-30",
+   "source": "live",
+   "total": 15,
+   "greens": 11,
+   "reds": 2,
+   "profit": 23.2,
+   "stake_total": 60
+  },
+  {
+   "match_date": "2026-08-30",
+   "source": "multiplas",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 1.17,
+   "stake_total": 1
+  },
+  {
+   "match_date": "2026-08-30",
+   "source": "player_stats",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 0.84,
+   "stake_total": 3
+  },
+  {
+   "match_date": "2026-08-30",
+   "source": "vip",
+   "total": 10,
+   "greens": 6,
+   "reds": 4,
+   "profit": -2.96,
+   "stake_total": 40
+  },
+  {
+   "match_date": "2026-08-31",
+   "source": "alavancagem",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 0.0,
+   "stake_total": 0
+  },
+  {
+   "match_date": "2026-08-31",
+   "source": "free",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 2.01,
+   "stake_total": 3
+  },
+  {
+   "match_date": "2026-08-31",
+   "source": "live",
+   "total": 9,
+   "greens": 3,
+   "reds": 3,
+   "profit": -4.16,
+   "stake_total": 36
+  },
+  {
+   "match_date": "2026-08-31",
+   "source": "multiplas",
+   "total": 1,
+   "greens": 1,
+   "reds": 0,
+   "profit": 1.88,
+   "stake_total": 1
+  },
+  {
+   "match_date": "2026-08-31",
+   "source": "vip",
+   "total": 2,
+   "greens": 2,
+   "reds": 0,
+   "profit": 4.28,
+   "stake_total": 8
+  }
+ ],
+ "recent": [
+  {
+   "match_date": "2026-08-31",
+   "match_datetime": "2026-08-31T20:00:00",
+   "home_team_name": "Remo",
+   "away_team_name": "Coritiba",
+   "home_team_id": 1198,
+   "away_team_id": 147,
+   "market": "Gols Mais/Menos",
+   "line": "Over 1.5",
+   "odd": 1.4,
+   "result": "GREEN",
+   "profit": 1.6,
+   "stake": 4,
+   "source": "vip",
+   "league_id": 71,
+   "league_name": "Brasileirão Serie A"
+  },
+  {
+   "match_date": "2026-08-31",
+   "match_datetime": "2026-08-31T20:00:00",
+   "home_team_name": "Remo",
+   "away_team_name": "Coritiba",
+   "home_team_id": 1198,
+   "away_team_id": 147,
+   "market": "Total de Cartões Visitante",
+   "line": "Under 2.5",
+   "odd": 1.67,
+   "result": "GREEN",
+   "profit": 2.01,
+   "stake": 3,
+   "source": "free",
+   "league_id": 71,
+   "league_name": "Brasileirão Serie A"
+  },
+  {
+   "match_date": "2026-08-31",
+   "match_datetime": "2026-08-31T20:00:00",
+   "home_team_name": "Remo",
+   "away_team_name": "Coritiba",
+   "home_team_id": 1198,
+   "away_team_id": 147,
+   "market": "Impedimentos Casa Mais/Menos",
+   "line": "Over 0.5",
+   "odd": 1.52,
+   "result": "GREEN",
+   "profit": 0.0,
+   "stake": 0,
+   "source": "alavancagem",
+   "league_id": null,
+   "league_name": "Alavancagem"
+  },
+  {
+   "match_date": "2026-08-31",
+   "match_datetime": "2026-08-31T20:00:00",
+   "home_team_name": "Remo",
+   "away_team_name": "Coritiba",
+   "home_team_id": 1198,
+   "away_team_id": 147,
+   "market": "Escanteios Mais/Menos",
+   "line": "Under 9.0",
+   "odd": 1.5,
+   "result": "RED",
+   "profit": -4.0,
+   "stake": 4,
+   "source": "live",
+   "league_id": 71,
+   "league_name": "Serie A"
+  },
+  {
+   "match_date": "2026-08-31",
+   "match_datetime": "2026-08-31T20:00:00",
+   "home_team_name": "Remo",
+   "away_team_name": "Coritiba",
+   "home_team_id": 1198,
+   "away_team_id": 147,
+   "market": "Gols Mais/Menos",
+   "line": "Under 2.0",
+   "odd": 1.62,
+   "result": "RED",
+   "profit": -4.0,
+   "stake": 4,
+   "source": "live",
+   "league_id": 71,
+   "league_name": "Serie A"
+  },
+  {
+   "match_date": "2026-08-31",
+   "match_datetime": "2026-08-31T19:30:00",
+   "home_team_name": "Fortaleza EC",
+   "away_team_name": "Operario-PR",
+   "home_team_id": 154,
+   "away_team_id": 1223,
+   "market": "Cartões Mais/Menos",
+   "line": "Under 5.5",
+   "odd": 1.67,
+   "result": "GREEN",
+   "profit": 2.68,
+   "stake": 4,
+   "source": "vip",
+   "league_id": 72,
+   "league_name": "Brasileirão Serie B"
+  },
+  {
+   "match_date": "2026-08-31",
+   "match_datetime": "2026-08-31T19:30:00",
+   "home_team_name": "Fortaleza EC",
+   "away_team_name": "Operario-PR",
+   "home_team_id": 154,
+   "away_team_id": 1223,
+   "market": "Escanteios Mais/Menos",
+   "line": "Under 11.0",
+   "odd": 1.57,
+   "result": "RED",
+   "profit": -4.0,
+   "stake": 4,
+   "source": "live",
+   "league_id": 72,
+   "league_name": "Serie B"
+  },
+  {
+   "match_date": "2026-08-31",
+   "match_datetime": "2026-08-31T16:00:00",
+   "home_team_name": "Aston Villa",
+   "away_team_name": "Arsenal",
+   "home_team_id": 66,
+   "away_team_id": 42,
+   "market": "Escanteios Mais/Menos",
+   "line": "Under 9.0",
+   "odd": 1.8,
+   "result": "GREEN",
+   "profit": 3.2,
+   "stake": 4,
+   "source": "live",
+   "league_id": 39,
+   "league_name": "Premier League"
+  },
+  {
+   "match_date": "2026-08-31",
+   "match_datetime": "2026-08-31T16:00:00",
+   "home_team_name": "Aston Villa",
+   "away_team_name": "Arsenal",
+   "home_team_id": 66,
+   "away_team_id": 42,
+   "market": "Gols Mais/Menos",
+   "line": "Under 2.5",
+   "odd": 1.57,
+   "result": "GREEN",
+   "profit": 2.28,
+   "stake": 4,
+   "source": "live",
+   "league_id": 39,
+   "league_name": "Premier League"
+  },
+  {
+   "match_date": "2026-08-31",
+   "match_datetime": "2026-08-31T15:45:00",
+   "home_team_name": "Atalanta",
+   "away_team_name": "Bologna",
+   "home_team_id": 499,
+   "away_team_id": 500,
+   "market": "Escanteios Mais/Menos",
+   "line": "Under 8.0",
+   "odd": 1.83,
+   "result": "GREEN",
+   "profit": 3.32,
+   "stake": 4,
+   "source": "live",
+   "league_id": 135,
+   "league_name": "Serie A"
+  }
+ ],
+ "recent_total": 253,
+ "counts": {
+  "vip_total": 259,
+  "free_total": 62,
+  "multipla_total": 57,
+  "alavancagem_total": 55,
+  "faltas_total": 3,
+  "goleiros_total": 0,
+  "player_stats_total": 2,
+  "boost_total": 0,
+  "live_total": 70
+ },
+ "stake_label": "VIP e ao vivo 4u · free e mercados 3u · múltipla 1u"
+}
