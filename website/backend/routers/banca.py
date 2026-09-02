@@ -1761,7 +1761,16 @@ def sync_monthly_close_notification(cur, user_id: int) -> None:
     year, mo, month_start, month_end = _month_bounds(month_key)
     stats = _compute_month_stats(cur, user_id, month_start, month_end, unit_value)
     alav  = _get_alavancagem_month_stats(cur, user_id, month_start, month_end)
-    has_alav_activity = bool(alav) and (alav["greens_this_month"] > 0 or alav["reds_this_month"] > 0)
+    # AS CHAVES SAO AS DE CAMINHO, NAO AS DE PICK (corrigido em 02/09/2026).
+    #
+    # `_get_alavancagem_month_stats` passou a contar CAMINHOS quando a
+    # alavancagem virou "caminho" e deixou de ser pick avulso, mas esta linha
+    # continuou pedindo `greens_this_month`/`reds_this_month`, que morreram na
+    # mesma mudanca. O KeyError caia no try/except de notifications.py e virava
+    # um WARNING no log -- entao o fechamento mensal simplesmente NUNCA era
+    # criado pra quem tem alavancagem configurada, sem nada quebrar na cara de
+    # ninguem. E o mesmo criterio que MonthlyCloseModal.tsx ja usava no front.
+    has_alav_activity = bool(alav) and (alav["closed_this_month"] > 0 or alav["busted_this_month"])
     if stats["total_followed"] == 0 and not has_alav_activity:
         _monthly_close_checked.add((user_id, month_key))
         return  # mês sem movimento nenhum
