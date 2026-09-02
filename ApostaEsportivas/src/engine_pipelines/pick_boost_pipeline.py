@@ -319,7 +319,14 @@ def _salvar(cur, c: dict) -> int | None:
                 %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s)
-        ON CONFLICT (match_date, fixture_id) DO NOTHING
+        -- As TRES colunas do indice unico (idx_picks_boost_dia_jogo). Citar so'
+        -- (match_date, fixture_id) nao casa com constraint nenhuma, e o Postgres
+        -- recusa com "there is no unique or exclusion constraint matching the
+        -- ON CONFLICT specification" -- erro na GRAVACAO, depois de o motor ja'
+        -- ter feito o trabalho todo. `market_type` entrou no indice quando o
+        -- boost passou a poder ter mais de um metodo por jogo; o INSERT nao
+        -- acompanhou.
+        ON CONFLICT (match_date, fixture_id, market_type) DO NOTHING
         RETURNING id
     """, (
         f["fixture_id"], f["home_team"], f["away_team"],

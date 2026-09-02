@@ -665,6 +665,19 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         # Mesma DDL de main.py::run_migrations, pelo mesmo motivo das tabelas
         # de auditoria acima: o site le, e o site nao pode esperar o motor.
         cur.execute("""
+            CREATE TABLE IF NOT EXISTS api_quota_daily (
+                dia            DATE PRIMARY KEY,
+                limite         INTEGER,
+                restante_min   INTEGER NOT NULL,
+                origem_min     TEXT,
+                atualizado_em  TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+        """)
+        # Consumo da cota da API-Football, lido dos headers que ela ja' manda em
+        # todo response (x-ratelimit-requests-limit / -remaining). Uma linha por
+        # dia, guardando o MENOR "restante" visto -- que e' o pico de uso do dia.
+        # Ver website/backend/api_quota.py pro porque do minimo e nao do ultimo.
+        cur.execute("""
             CREATE TABLE IF NOT EXISTS picks_boost (
                 id            SERIAL PRIMARY KEY,
                 fixture_id    INTEGER,

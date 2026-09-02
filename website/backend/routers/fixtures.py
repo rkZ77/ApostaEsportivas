@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
 from database import get_connection
 from auth_utils import get_current_user
+import api_quota
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,7 @@ def _fetch_by_utc_date(league_id: int, season: int, utc_date: str) -> list:
             "date":     utc_date,
             "timezone": TZ_BRAZIL,
         }, timeout=10)
+        api_quota.registrar(getattr(resp, "headers", None), "fixtures")
         resp.raise_for_status()
         result = resp.json().get("response", [])
         _cache[cache_key] = (time.time(), result)

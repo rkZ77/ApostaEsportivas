@@ -19,6 +19,7 @@ from auth_utils import require_admin, hash_password, get_current_user, invalidar
 # em settlement_bridge.py. Alimenta a aba Auditoria dos Motores com os rotulos
 # e as versoes que o proprio motor grava.
 from settlement_bridge import engine_registry
+import api_quota
 
 _pipeline_status: dict = {}  # command -> {status, started_at, finished_at, returncode}
 
@@ -732,6 +733,58 @@ def db_pool(current_user: dict = Depends(require_admin)):
     """
     from database import pool_stats
     return pool_stats()
+
+
+@router.get("/api-quota")
+def api_quota_status(dias: int = 7, current_user: dict = Depends(require_admin)):
+    """Consumo da cota da API-Football, por dia.
+
+    O número vem dos headers que a própria API manda em todo response
+    (`x-ratelimit-requests-limit` / `-remaining`), lidos por
+    `api_quota.registrar` nos pontos que já chamavam a API. Custo: zero
+    requisição -- é dado que estava sendo descartado.
+
+    `restante_min` é o MENOR "remaining" visto no dia, ou seja o pico de uso.
+    O último valor não serviria: o contador da API reseta em algum ponto do dia
+    e o consumo alto desapareceria justamente no dia em que importava.
+
+    `origem_min` diz quem estava consumindo quando ficou mais baixo -- 'live',
+    'fixtures', 'explorar' ou 'motor'. É o que separa "o site gastou" de "o
+    motor gastou" sem precisar cruzar log.
+    """
+    dias = max(1, min(int(dias or 7), 90))
+    conn = get_connection()
+    # `get_connection` ja' devolve RealDictCursor (database.py) -- nao precisa
+    # de cursor_factory aqui.
+    cur = conn.cursor()
+    try:
+        try:
+            cur.execute("""
+                SELECT dia, limite, restante_min, origem_min, atualizado_em
+                  FROM api_quota_daily
+                 WHERE dia >= CURRENT_DATE - %s
+                 ORDER BY dia DESC
+            """, (dias,))
+            linhas = [dict(r) for r in cur.fetchall()]
+        except Exception:
+            conn.rollback()
+            # Tabela ainda não criada (banco antigo): não é erro de operação.
+            linhas = []
+    finally:
+        cur.close()
+        conn.close()
+
+    for l in linhas:
+        if l.get("limite") and l.get("restante_min") is not None:
+            l["consumidas"] = l["limite"] - l["restante_min"]
+            l["pct_usado"] = round(100.0 * l["consumidas"] / l["limite"], 1)
+
+    return {
+        "dias": linhas,
+        # O que este processo viu desde que subiu. Serve de conferência: se o
+        # banco está vazio e a memória tem número, a gravação é que falhou.
+        "processo_atual": api_quota.estado_atual(),
+    }
 
 
 #: Rotulo CURTO de cada passo · o titulo do cartao no /admin#pipeline.

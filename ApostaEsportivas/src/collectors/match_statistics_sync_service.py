@@ -11,6 +11,7 @@ load_dotenv(find_dotenv())
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.db_utils import get_connection
 from utils.stat_sheet import folha_publicada, ler_valor, somar
+from services import api_quota
 
 API_KEY = os.getenv("API_FOOTBALL_KEY")
 if not API_KEY:
@@ -220,6 +221,7 @@ class MatchStatisticsSyncService:
             }
 
             r = requests.get(FIXTURES_URL, headers=HEADERS, params=params)
+            api_quota.registrar(getattr(r, "headers", None), "coletor_stats")
             r.raise_for_status()
 
             response = r.json().get("response", [])
@@ -327,6 +329,7 @@ class MatchStatisticsSyncService:
     def _fetch_match_stats(self, fixture_id):
         r = requests.get(STATS_URL, headers=HEADERS,
                          params={"fixture": fixture_id}, timeout=15)
+        api_quota.registrar(getattr(r, "headers", None), "coletor_stats")
         r.raise_for_status()
         return r.json().get("response", [])
 
@@ -746,6 +749,7 @@ class MatchStatisticsSyncService:
         Custa 2 requisicoes. Requer a conexao ja' aberta (`self._open()`).
         """
         r = requests.get(FIXTURES_URL, headers=HEADERS, params={"id": fixture_id}, timeout=15)
+        api_quota.registrar(getattr(r, "headers", None), "coletor_stats")
         r.raise_for_status()
         response = r.json().get("response", [])
 

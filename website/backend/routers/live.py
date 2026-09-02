@@ -13,6 +13,7 @@ from database import get_connection
 from auth_utils import get_current_user
 from settlement_bridge import settlement, stat_sheet
 import market_form
+import api_quota
 
 _BR_TZ = ZoneInfo("America/Sao_Paulo")
 
@@ -102,6 +103,7 @@ def _fetch_fixture(fid: int) -> dict:
     try:
         r = requests.get(f"{API_BASE}/fixtures", headers=_headers(),
                          params={"id": fid, "timezone": "America/Sao_Paulo"}, timeout=10)
+        api_quota.registrar(getattr(r, "headers", None), "live")
         items = r.json().get("response", [])
         data  = items[0] if items else {}
     except Exception as e:
@@ -139,6 +141,7 @@ def _fetch_fixtures_bulk(fids: list[int]) -> None:
             r = requests.get(f"{API_BASE}/fixtures", headers=_headers(),
                              params={"ids": "-".join(str(f) for f in batch),
                                      "timezone": "America/Sao_Paulo"}, timeout=10)
+            api_quota.registrar(getattr(r, "headers", None), "live")
             items = r.json().get("response", [])
         except Exception as e:
             logger.error("[LIVE] bulk fixtures %s: %s", batch, e)
@@ -160,6 +163,7 @@ def _fetch_stats(fid: int, status: str) -> list:
     try:
         r = requests.get(f"{API_BASE}/fixtures/statistics", headers=_headers(),
                          params={"fixture": fid}, timeout=10)
+        api_quota.registrar(getattr(r, "headers", None), "live")
         data = r.json().get("response", [])
     except Exception as e:
         logger.error("[LIVE STATS] fixture %s: %s", fid, e)
@@ -183,6 +187,7 @@ def _fetch_live_odds(fid: int) -> list:
     try:
         r = requests.get(f"{API_BASE}/odds/live", headers=_headers(),
                          params={"fixture": fid}, timeout=10)
+        api_quota.registrar(getattr(r, "headers", None), "live")
         items = r.json().get("response", [])
         data = items[0].get("odds", []) if items else []
     except Exception as e:
@@ -372,6 +377,7 @@ def _fetch_prematch_odds(fid: int) -> list:
     try:
         r = requests.get(f"{API_BASE}/odds", headers=_headers(),
                          params={"fixture": fid}, timeout=10)
+        api_quota.registrar(getattr(r, "headers", None), "live")
         items = r.json().get("response", [])
         data = items[0].get("bookmakers", []) if items else []
     except Exception as e:

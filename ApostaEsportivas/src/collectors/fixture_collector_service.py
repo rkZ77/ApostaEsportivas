@@ -5,6 +5,7 @@ from dotenv import load_dotenv, find_dotenv
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from utils.db_utils import get_connection
+from services import api_quota
 
 load_dotenv(find_dotenv())
 
@@ -108,6 +109,7 @@ class FixtureCollectorService:
                 params={"date": date_str},
                 timeout=20,
             )
+            api_quota.registrar(getattr(response, "headers", None), "coletor_fixtures")
             response.raise_for_status()
         except requests.RequestException as e:
             print(f"[ERRO] Falha na API: {e}")

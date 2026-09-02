@@ -3,6 +3,7 @@ import requests
 from dotenv import load_dotenv, find_dotenv
 from psycopg2.extras import execute_batch
 from utils.db_utils import get_connection
+from services import api_quota
 
 load_dotenv(find_dotenv())
 
@@ -70,6 +71,7 @@ class StandingsCollectorService:
             },
             timeout=20
         )
+        api_quota.registrar(getattr(r, "headers", None), "coletor_tabela")
 
         r.raise_for_status()
 

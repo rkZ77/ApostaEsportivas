@@ -3,6 +3,7 @@ import requests
 from dotenv import load_dotenv, find_dotenv
 
 from utils.db_utils import get_connection
+from services import api_quota
 
 load_dotenv(find_dotenv())
 
@@ -67,6 +68,7 @@ class LeagueTeamsSyncService:
                 params=params,
                 timeout=15
             )
+            api_quota.registrar(getattr(response, "headers", None), "coletor_times")
             response.raise_for_status()
         except Exception as e:
             print(f"[ERRO] Falha API | League {league_id}: {e}")

@@ -38,6 +38,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from auth_utils import require_vip
 from database import get_connection
+import api_quota
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +128,7 @@ def _api(caminho: str, params: dict) -> list:
         raise HTTPException(503, "Integração com a API de futebol não está configurada.")
     try:
         resp = requests.get(f"{BASE_URL}{caminho}", headers=_headers(), params=params, timeout=20)
+        api_quota.registrar(getattr(resp, "headers", None), "explorar")
         resp.raise_for_status()
         corpo = resp.json()
     except Exception as e:

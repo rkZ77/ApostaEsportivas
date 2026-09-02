@@ -30,6 +30,7 @@ import time
 import requests
 
 from utils.stat_sheet import ler_folha
+from services import api_quota
 
 API_BASE = "https://v3.football.api-sports.io"
 
@@ -104,6 +105,7 @@ class LiveFeed:
                 f"{API_BASE}/{endpoint}", headers=self._headers(),
                 params=params, timeout=self.timeout,
             )
+            api_quota.registrar(getattr(resposta, "headers", None), "motor_live")
             resposta.raise_for_status()
             dados = resposta.json().get("response", []) or []
         except Exception as e:  # rede, HTTP, JSON -- todos terminam igual aqui

@@ -6,6 +6,7 @@ from psycopg2.extras import execute_batch
 from utils.db_utils import get_connection
 from dotenv import load_dotenv, find_dotenv
 from services.pick_engine.stats_model import classify_market
+from services import api_quota
 
 load_dotenv(find_dotenv())
 
@@ -407,6 +408,7 @@ class OddsCollectorService:
                     params={"fixture": fixture_id, "bookmaker": bm_id},
                     timeout=20,
                 )
+                api_quota.registrar(getattr(response, "headers", None), "coletor_odds")
                 response.raise_for_status()
             except requests.RequestException as e:
                 print(f"[ODDS API ERROR] fixture {fixture_id} bookmaker {bm_id}: {e}")

@@ -4,6 +4,7 @@ from datetime import datetime, date, timezone
 from zoneinfo import ZoneInfo
 from utils.db_utils import get_connection
 from dotenv import load_dotenv, find_dotenv
+from services import api_quota
 
 load_dotenv(find_dotenv())
 
@@ -42,6 +43,7 @@ class FixtureStatusSyncService:
     def fetch_fixture_status(self, fixture_id):
         r = requests.get(API_URL, headers=HEADERS, params={
                          "id": fixture_id}, timeout=20)
+        api_quota.registrar(getattr(r, "headers", None), "coletor_status")
         r.raise_for_status()
 
         response = r.json().get("response", [])
@@ -80,6 +82,7 @@ class FixtureStatusSyncService:
                     API_URL, headers=HEADERS,
                     params={"ids": "-".join(str(f) for f in lote)}, timeout=20,
                 )
+                api_quota.registrar(getattr(r, "headers", None), "coletor_status")
                 r.raise_for_status()
                 response = r.json().get("response", [])
             except Exception as e:

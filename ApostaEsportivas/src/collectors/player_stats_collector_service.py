@@ -34,6 +34,7 @@ import requests
 from dotenv import find_dotenv, load_dotenv
 
 from utils.db_utils import get_connection
+from services import api_quota
 
 load_dotenv(find_dotenv())
 
@@ -170,6 +171,7 @@ class PlayerStatsCollectorService:
     def _buscar(self, fixture_id: int) -> list:
         r = requests.get(f"{BASE}/fixtures/players", headers=HEADERS,
                          params={"fixture": fixture_id}, timeout=20)
+        api_quota.registrar(getattr(r, "headers", None), "coletor_jogadores")
         r.raise_for_status()
         corpo = r.json()
         erros = corpo.get("errors")
