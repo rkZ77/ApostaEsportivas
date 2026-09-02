@@ -673,10 +673,24 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
                 atualizado_em  TIMESTAMP NOT NULL DEFAULT NOW()
             )
         """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS api_quota_calls (
+                dia            DATE NOT NULL,
+                origem         TEXT NOT NULL,
+                chamadas       BIGINT NOT NULL DEFAULT 0,
+                atualizado_em  TIMESTAMP NOT NULL DEFAULT NOW(),
+                PRIMARY KEY (dia, origem)
+            )
+        """)
         # Consumo da cota da API-Football, lido dos headers que ela ja' manda em
         # todo response (x-ratelimit-requests-limit / -remaining). Uma linha por
         # dia, guardando o MENOR "restante" visto -- que e' o pico de uso do dia.
         # Ver website/backend/api_quota.py pro porque do minimo e nao do ultimo.
+        #
+        # `api_quota_calls` responde outra pergunta: QUANTO CADA PARTE gastou.
+        # O header da API da' o total (inclusive do que roda fora daqui), mas
+        # nao reparte -- e "o ao vivo esta' comendo a cota?" so' se responde
+        # repartindo. Uma linha por (dia, origem), incrementada a cada chamada.
         cur.execute("""
             CREATE TABLE IF NOT EXISTS picks_boost (
                 id            SERIAL PRIMARY KEY,

@@ -106,6 +106,9 @@ def registrar(headers, origem: str = "site") -> None:
         if restante is None:
             return
         hoje = date.today()
+        # A contagem por origem vale pra TODA chamada, nao so' pras que baixam o
+        # minimo -- e' um contador, nao uma marca d'agua.
+        _contar(hoje, origem)
         with _lock:
             if _estado["dia"] != hoje:
                 _estado.update({"dia": hoje, "limite": limite,
@@ -151,6 +154,39 @@ def _gravar(dia: date, limite: int | None, restante: int, origem: str) -> None:
     except Exception:
         logger.debug("[API_QUOTA] falha ao gravar (ignorado)", exc_info=True)
 
+
+def _contar(dia: date, origem: str) -> None:
+    """Uma chamada a mais nesta origem, hoje.
+
+    Por que contar por fora, se o header da API já dá o total: o header não
+    REPARTE. Ele diz que sobraram 6.812 de 7.500, não que o motor ao vivo gastou
+    300 e o Explorar gastou 40. "O ao vivo está comendo a cota?" só se responde
+    repartindo, e essa é a pergunta que se faz.
+
+    Os dois números convivem e medem coisas diferentes de propósito: o header é
+    a verdade sobre o TOTAL (inclusive do que roda fora daqui -- script na mão,
+    outra máquina), e este contador é a verdade sobre a REPARTIÇÃO do que passou
+    por este código. Divergir é esperado; se o total do header for bem maior que
+    a soma daqui, a diferença é consumo de fora, o que também é informação.
+    """
+    try:
+        from database import get_connection
+        conn = get_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute("""
+                INSERT INTO api_quota_calls (dia, origem, chamadas, atualizado_em)
+                     VALUES (%s, %s, 1, NOW())
+                ON CONFLICT (dia, origem) DO UPDATE
+                        SET chamadas = api_quota_calls.chamadas + 1,
+                            atualizado_em = NOW()
+            """, (dia, origem))
+            conn.commit()
+        finally:
+            cur.close()
+            conn.close()
+    except Exception:
+        logger.debug("[API_QUOTA] falha ao contar (ignorado)", exc_info=True)
 
 def estado_atual() -> dict:
     """O que está em memória neste processo. Leitura barata, sem banco."""

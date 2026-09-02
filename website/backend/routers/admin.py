@@ -6,7 +6,7 @@ import logging
 import threading
 from contextlib import contextmanager
 from collections import deque
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.concurrency import run_in_threadpool
@@ -735,6 +735,94 @@ def db_pool(current_user: dict = Depends(require_admin)):
     return pool_stats()
 
 
+#: Origens que pertencem ao motor AO VIVO. O `live_feed` do motor e o router
+#: `live` do site consomem a mesma cota pela mesma partida -- separa-los no
+#: painel faria o numero parecer menor do que e'.
+_ORIGENS_AO_VIVO = ("motor_live", "live")
+
+
+def _quota_por_origem(dias: int) -> list[dict]:
+    """Quantas chamadas cada parte fez, por dia.
+
+    Sai de `api_quota_calls`, que é contagem NOSSA -- o header da API dá o total
+    mas não reparte. Os dois números convivem: se o consumo do header for bem
+    maior que a soma daqui, a diferença é chamada feita fora deste código
+    (script na mão, outra máquina), e isso também é resposta.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        try:
+            cur.execute("""
+                SELECT dia, origem, chamadas
+                  FROM api_quota_calls
+                 WHERE dia >= CURRENT_DATE - %s
+                 ORDER BY dia DESC, chamadas DESC
+            """, (dias,))
+            return [dict(r) for r in cur.fetchall()]
+        except Exception:
+            conn.rollback()
+            return []
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.get("/api-quota/ao-vivo")
+def api_quota_ao_vivo(dias: int = 7, current_user: dict = Depends(require_admin)):
+    """Só o que o motor AO VIVO gastou -- é a pergunta que a aba dele faz.
+
+    O painel geral responde "quanto da cota foi usada hoje"; aqui a pergunta é
+    "quanto DISSO foi o ao vivo", que é a que decide se dá pra aumentar
+    `LIVE_MAX_MATCHES` ou a frequência das passadas.
+    """
+    dias = max(1, min(int(dias or 7), 90))
+    por_origem = _quota_por_origem(dias)
+
+    por_dia: dict = {}
+    for r in por_origem:
+        chave = str(r["dia"])
+        alvo = por_dia.setdefault(chave, {"dia": chave, "ao_vivo": 0, "total": 0})
+        alvo["total"] += int(r["chamadas"] or 0)
+        if r["origem"] in _ORIGENS_AO_VIVO:
+            alvo["ao_vivo"] += int(r["chamadas"] or 0)
+
+    dias_ord = sorted(por_dia.values(), key=lambda d: d["dia"], reverse=True)
+    for d in dias_ord:
+        d["pct_do_total"] = (round(100.0 * d["ao_vivo"] / d["total"], 1)
+                             if d["total"] else 0.0)
+
+    # O TOTAL VEM DO /status DA PRÓPRIA API, que já era consultado aqui
+    # (`_api_football_status`, com cache de 60s) e não consome cota. É a fonte
+    # oficial: sabe inclusive do que foi gasto fora deste código.
+    #
+    # A contagem de `api_quota_calls` NÃO substitui isso e nem tenta -- ela
+    # responde a outra metade da pergunta, que o /status não responde: a
+    # REPARTIÇÃO. Ter as duas é o que permite dizer "o ao vivo gastou 300 dos
+    # 1.200 do dia" em vez de só um dos dois números.
+    status = _api_football_status() or {}
+    limite = status.get("limite")
+    usado_oficial = status.get("usado")
+
+    de_hoje = dias_ord[0] if dias_ord and dias_ord[0]["dia"] == str(date.today()) else None
+    return {
+        "dias": dias_ord,
+        "hoje": de_hoje,
+        "limite": limite,
+        "usado_total": usado_oficial,
+        # Quanto do consumo REAL de hoje foi o ao vivo. Usa o total oficial e
+        # não a nossa soma: se alguém rodou coletor de outra máquina, o ao vivo
+        # pesa menos do que a nossa contagem sozinha sugeriria.
+        "pct_do_usado": (round(100.0 * de_hoje["ao_vivo"] / usado_oficial, 1)
+                         if de_hoje and usado_oficial else None),
+        # Quanto da cota DIÁRIA o ao vivo comeu -- é o número que responde
+        # "posso aumentar a frequência?".
+        "pct_da_cota": (round(100.0 * de_hoje["ao_vivo"] / limite, 1)
+                        if de_hoje and limite else None),
+        "origens_contadas": list(_ORIGENS_AO_VIVO),
+    }
+
+
 @router.get("/api-quota")
 def api_quota_status(dias: int = 7, current_user: dict = Depends(require_admin)):
     """Consumo da cota da API-Football, por dia.
@@ -781,6 +869,7 @@ def api_quota_status(dias: int = 7, current_user: dict = Depends(require_admin))
 
     return {
         "dias": linhas,
+        "por_origem": _quota_por_origem(dias),
         # O que este processo viu desde que subiu. Serve de conferência: se o
         # banco está vazio e a memória tem número, a gravação é que falhou.
         "processo_atual": api_quota.estado_atual(),

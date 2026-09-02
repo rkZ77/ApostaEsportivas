@@ -78,6 +78,20 @@ interface Watch {
 
 const POLL_MS = 3000
 
+/** Quanto da cota diária da API-Football o motor ao vivo consumiu.
+ *  `ao_vivo` conta as chamadas feitas pelo live_feed (motor) e pelo router
+ *  `live` (site) -- os dois gastam a mesma cota pela mesma partida. */
+type QuotaAoVivo = {
+  hoje?: { dia: string; ao_vivo: number; total: number; pct_do_total: number } | null
+  limite?: number | null
+  /** Consumo total de hoje pelo /status da própria API-Football, que é a fonte
+   *  oficial e enxerga inclusive o que roda fora daqui. */
+  usado_total?: number | null
+  pct_da_cota?: number | null
+  pct_do_usado?: number | null
+  dias?: Array<{ dia: string; ao_vivo: number; total: number; pct_do_total: number }>
+}
+
 /*
  * Janela do histórico. O feed nasceu servindo a aba pública, onde "ao vivo"
  * significa hoje e ontem · aqui a pergunta é outra ("o motor está acertando?")
@@ -121,6 +135,7 @@ export default function AdminMotorLive() {
   const [dias, setDias]       = useState<number>(PERIODOS[1].dias)
   const [logAberto, setLogAberto] = useState(false)
   const [erro, setErro]       = useState('')
+  const [cota, setCota] = useState<QuotaAoVivo | null>(null)
   const [carregando, setCarregando] = useState(true)
   const [liquidando, setLiquidando] = useState(false)
   const timer = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -164,6 +179,11 @@ export default function AdminMotorLive() {
       }
       if (r.status === 'fulfilled') setRun(r.value.data)
       if (w.status === 'fulfilled') setWatch(w.value.data)
+      // Cota entra em allSettled próprio: ela é informação lateral, e uma
+      // tabela que ainda não existe (banco antigo) não pode derrubar o painel.
+      api.get('/admin/api-quota/ao-vivo')
+        .then(res => setCota(res.data))
+        .catch(() => setCota(null))
       await buscarResultado()
     } finally {
       setCarregando(false)
@@ -247,8 +267,20 @@ export default function AdminMotorLive() {
     }
   }
 
-  if (carregando) return <div className="flex justify-center py-12"><Spinner /></div>
-
+  /* CARREGAMENTO NO PADRÃO DO PIPELINE (02/09).
+   *
+   * Antes: `if (carregando) return <Spinner />` -- tela em branco com uma
+   * bolinha no meio até TUDO chegar (diagnóstico, run, watch, feed, stats,
+   * cota). Cinco requisições, e a mais lenta definia quando a tela existia.
+   *
+   * A aba Pipeline não faz isso: ela nasce com o grid desenhado a partir de um
+   * fallback e vai preenchendo conforme as respostas chegam. Quem abre vê a
+   * estrutura na hora e entende que está carregando, em vez de olhar pro vazio.
+   *
+   * Aqui o mesmo: a tela renderiza sempre, e cada bloco resolve a própria
+   * ausência de dado (`diag` null vira traço, lista vazia vira estado vazio).
+   * `carregando` continua existindo, mas só pra marcar os números que ainda não
+   * chegaram -- não pra segurar a página. */
   const rodando = run?.status === 'running'
   const emLaco  = !!watch?.ativo
 
@@ -323,6 +355,20 @@ export default function AdminMotorLive() {
         )}
         {/* Lista completa mesmo quando tudo passa: num painel de teste, saber
             QUAL condição está satisfeita vale tanto quanto saber que falta uma. */}
+        {/* Sem o diagnóstico ainda, linhas fantasma no lugar da lista: é o que
+            diz "está vindo" sem segurar a página inteira, no mesmo espírito do
+            grid da aba Pipeline. */}
+        {!diag && (
+          <ul className="space-y-1.5" aria-hidden>
+            {[0, 1, 2, 3].map(i => (
+              <li key={i} className="flex items-center gap-2">
+                <span className="w-3.5 h-3.5 rounded-full bg-surface-2 shrink-0" />
+                <span className="h-2.5 rounded bg-surface-2"
+                      style={{ width: `${55 + (i % 3) * 12}%` }} />
+              </li>
+            ))}
+          </ul>
+        )}
         <ul className="space-y-1.5">
           {diag?.checagens.map(c => (
             <li key={c.item} className="flex items-start gap-2 text-[11px]">
@@ -336,6 +382,95 @@ export default function AdminMotorLive() {
             </li>
           ))}
         </ul>
+      </div>
+
+      {/* ── Cota da API-Football gasta por ESTE motor ─────────────────────── */}
+      {/*
+        O painel geral do /admin responde "quanto da cota foi usada hoje". Aqui
+        a pergunta é outra e mais específica: quanto DISSO foi o ao vivo. É ela
+        que decide se dá pra subir LIVE_MAX_MATCHES ou encurtar o intervalo
+        entre rodadas -- sem esse número, mexer nos dois é apostar.
+
+        Conta as chamadas do `live_feed` (motor) e do router `live` (site)
+        juntas: os dois gastam a mesma cota pela mesma partida, e separá-los
+        aqui faria o consumo parecer menor do que é.
+      */}
+      <div className="bg-surface-1 border border-line rounded-lg p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-xs font-semibold text-ink-3">Cota da API gasta pelo Ao Vivo</h3>
+          {cota?.limite && (
+            <span className="text-[10px] text-ink-4">
+              plano de {cota.limite.toLocaleString('pt-BR')}/dia
+            </span>
+          )}
+        </div>
+
+        {!cota ? (
+          <div className="grid grid-cols-3 gap-2" aria-hidden>
+            {[0, 1, 2].map(i => (
+              <div key={i} className="bg-surface-0 rounded-md px-3 py-2 border border-line">
+                <div className="h-5 w-12 rounded bg-surface-2" />
+                <div className="h-2 w-16 rounded bg-surface-2 mt-1.5" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { l: 'chamadas hoje', v: String(cota.hoje?.ao_vivo ?? 0) },
+                {
+                  l: 'da cota do dia',
+                  v: cota.pct_da_cota != null ? `${cota.pct_da_cota}%` : '-',
+                },
+                {
+                  /* Do consumo REAL do dia, não da nossa soma: se um coletor
+                     rodou de outra máquina, o ao vivo pesa menos do que a
+                     contagem local sozinha faria parecer. */
+                  l: 'do gasto de hoje',
+                  v: cota.pct_do_usado != null ? `${cota.pct_do_usado}%` : '-',
+                },
+              ].map(x => (
+                <div key={x.l} className="bg-surface-0 rounded-md px-3 py-2 border border-line">
+                  <div className="font-mono text-sm font-bold text-ink-1 truncate">{x.v}</div>
+                  <div className="text-[10px] text-ink-4 leading-tight">{x.l}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Os dias anteriores dão a régua: um número sozinho não diz se 300
+                chamadas é muito. */}
+            {(cota.dias?.length ?? 0) > 1 && (
+              <ul className="mt-3 pt-3 border-t border-line space-y-1">
+                {cota.dias!.slice(0, 6).map(d => (
+                  <li key={d.dia} className="flex items-center gap-2 text-[11px]">
+                    <span className="text-ink-4 w-16 shrink-0 font-mono">{diaMes(d.dia)}</span>
+                    <span className="flex-1 h-1.5 rounded bg-surface-2 overflow-hidden">
+                      <span
+                        className="block h-full bg-red-400/70"
+                        style={{
+                          width: `${cota.limite
+                            ? Math.min(100, (100 * d.ao_vivo) / cota.limite)
+                            : 0}%`,
+                        }}
+                      />
+                    </span>
+                    <span className="font-mono text-ink-2 tabular-nums w-12 text-right">
+                      {d.ao_vivo}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <p className="text-[10px] text-ink-4 leading-relaxed mt-3">
+              As chamadas do ao vivo são contadas aqui, uma a uma. O total do dia
+              {cota.usado_total != null && <> ({cota.usado_total.toLocaleString('pt-BR')})</>}{' '}
+              vem do <span className="text-ink-3">/status</span> da própria API, que não
+              consome cota e enxerga também o que roda fora daqui.
+            </p>
+          </>
+        )}
       </div>
 
       {/* ── Acompanhamento contínuo ───────────────────────────────────────── */}

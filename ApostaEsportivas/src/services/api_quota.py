@@ -71,6 +71,9 @@ def registrar(headers, origem: str = "motor") -> None:
         if restante is None:
             return
         hoje = date.today()
+        # A contagem por origem vale pra TODA chamada, nao so' pras que baixam o
+        # minimo -- e' um contador, nao uma marca d'agua.
+        _contar(hoje, origem)
         with _lock:
             if _estado["dia"] != hoje:
                 _estado.update({"dia": hoje, "limite": limite,
@@ -121,6 +124,28 @@ def _gravar(dia: date, limite: int | None, restante: int, origem: str) -> None:
     except Exception:
         pass
 
+
+def _contar(dia: date, origem: str) -> None:
+    """Uma chamada a mais nesta origem, hoje. Ver o gemeo do site pro porque de
+    contar por fora, se o header ja' da' o total: o header nao REPARTE."""
+    try:
+        from utils.db_utils import get_connection
+        conn = get_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute("""
+                INSERT INTO api_quota_calls (dia, origem, chamadas, atualizado_em)
+                     VALUES (%s, %s, 1, NOW())
+                ON CONFLICT (dia, origem) DO UPDATE
+                        SET chamadas = api_quota_calls.chamadas + 1,
+                            atualizado_em = NOW()
+            """, (dia, origem))
+            conn.commit()
+        finally:
+            cur.close()
+            conn.close()
+    except Exception:
+        pass
 
 def estado_atual() -> dict:
     with _lock:
