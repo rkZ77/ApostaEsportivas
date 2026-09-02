@@ -32,8 +32,10 @@ from utils.data_br import HOJE_BR
 from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
 from services.referee_stats_service import RefereeStatsService
+from services.standings_service import StandingsService
 from services.pick_engine import competition_profile as cp
 from services.pick_engine import context_gate, tie_effect
+from services.pick_engine import stats_model
 from services.pick_engine.config import DEFAULT_CONFIG
 from services.pick_engine.fouls_model import (
     LINHAS_SUPORTADAS,
@@ -268,6 +270,7 @@ def _fixtures_de_hoje(cur) -> list:
 def _avaliar_fixture(fixture: dict, match_stats: MatchStatsService,
                      odds_service: OddsService,
                      referee_service: RefereeStatsService,
+                     standings_service: StandingsService | None = None,
                      faixas: dict | None = None) -> dict | None:
     """Candidato de faltas pra um jogo, ou None se nao der pra avaliar."""
     # load_odds_by_fixture (RAW), nao load_odds_structured: aquele agrupa por
@@ -298,7 +301,26 @@ def _avaliar_fixture(fixture: dict, match_stats: MatchStatsService,
     # todos: o lado que precisa reverter comete 2.48 faltas A MENOS por jogo
     # (3.9 erros-padrao), e o que administra tambem cai. Como aqui so' se
     # publica OVER, o agregado aberto joga direto contra o pick.
-    contexto = context_gate.build_for_fixture(match_stats, fixture)
+    #
+    # AS DUAS CAMADAS QUE FALTAVAM (2026-09-02). Ate' aqui a chamada ia sem
+    # `conv_cartoes` e sem `league_table`, e sem esses dois argumentos o
+    # contexto nasce pela metade: `rivalry_signal` devolve label
+    # "desconhecido" quando o baseline de cartao e' None, e a pressao de tabela
+    # sai None sem a classificacao. Sobrava so' o agregado de mata-mata.
+    #
+    # O commit de 01/09 fez exatamente esta correcao em dica/multipla/
+    # alavancagem e nao passou por aqui. Em faltas a falta doia mais que nos
+    # outros: rivalidade e' medida em pontos de cartao, que e' o proxy mais
+    # direto de jogo quente que existe na base -- e jogo quente e' onde falta
+    # se multiplica.
+    conv_cartoes = stats_model.expected_value_convergence(
+        hist_casa, hist_fora, "cards", "total",
+        home_team_id=fixture["home_team_id"], away_team_id=fixture["away_team_id"],
+    )
+    league_table = (standings_service.get_league_table(
+        fixture["league_id"], fixture["season"]) if standings_service else None)
+    contexto = context_gate.build_for_fixture(
+        match_stats, fixture, conv_cartoes, league_table=league_table)
 
     arbitro = referee_service.get_stats(fixture.get("referee"), fixture["season"])
     media_arbitro = float(arbitro["avg_fouls"]) if arbitro and arbitro.get("avg_fouls") else None
@@ -478,12 +500,13 @@ def run_faltas_engine():
     match_stats = MatchStatsService()
     odds_service = OddsService()
     referee_service = RefereeStatsService()
+    standings_service = StandingsService()
 
     candidatos = []
     for fixture in fixtures:
         try:
             c = _avaliar_fixture(fixture, match_stats, odds_service,
-                                 referee_service, faixas=faixas)
+                                 referee_service, standings_service, faixas=faixas)
         except Exception as e:
             # Stack trace completo, como nos outros pipelines. Sem ele este
             # handler ja' escondeu um bug por dias: o NameError de

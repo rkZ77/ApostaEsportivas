@@ -31,6 +31,7 @@ import traceback
 
 from services.engine_audit import EngineRun
 from services.match_stats_service import MatchStatsService
+from services.standings_service import StandingsService
 from services.odds_service import OddsService
 from services.pick_engine import context_gate, tie_effect
 from services.pick_engine.goalkeeper_model import analyze_saves_market
@@ -208,7 +209,8 @@ def _avaliar_generico(oferta: dict, jogador: dict, metodo: cat.Metodo,
 
 def _avaliar_fixture(fixture: dict, cur, odds_service: OddsService,
                      match_stats: MatchStatsService,
-                     calibragem: dict, constantes_saves: dict) -> tuple:
+                     calibragem: dict, constantes_saves: dict,
+                     standings_service: StandingsService | None = None) -> tuple:
     """(candidatos, motivo_se_vazio) de uma partida, em todos os metodos."""
     odds_cruas = odds_service.load_odds_by_fixture(fixture["fixture_id"])
     if not odds_cruas:
@@ -232,7 +234,22 @@ def _avaliar_fixture(fixture: dict, cur, odds_service: OddsService,
     #
     # Nunca levanta: `build_for_fixture` devolve None em qualquer falha, e o
     # gate inerte deixa o motor igual ao de antes.
-    contexto = context_gate.build_for_fixture(match_stats, fixture)
+    #
+    # `league_table` entrou em 2026-09-02. Sem ela a pressao competitiva
+    # nascia None e o desconto de regime descrito acima so' enxergava
+    # mata-mata -- um jogo de fim de campeonato com time lutando contra o
+    # rebaixamento tambem foge da distribuicao normal do jogador, e agora
+    # conta. Mesma correcao que o commit de 01/09 fez nos tres pipelines de
+    # pick generico.
+    #
+    # `conv_cartoes` segue None de proposito: rivalidade e' medida em pontos de
+    # cartao sobre o historico do TIME, e este motor le' historico de JOGADOR
+    # (player_history). O baseline nao existe neste caminho -- ligar exigiria
+    # consulta nova, nao um argumento a mais.
+    league_table = (standings_service.get_league_table(
+        fixture["league_id"], fixture["season"]) if standings_service else None)
+    contexto = context_gate.build_for_fixture(
+        match_stats, fixture, league_table=league_table)
 
     candidatos = []
     houve_mercado = False
@@ -438,6 +455,7 @@ def run_player_stats_engine(metodos: tuple | None = None):
 
     fixtures = _fixtures_de_hoje(cur)
     odds_service = OddsService()
+    standings_service = StandingsService()
     # Uma instancia pra rodada inteira · ela e' so' o caminho ate' o h2h que o
     # contexto le, e abrir uma por jogo seria conexao nova por partida.
     match_stats = MatchStatsService()
@@ -452,7 +470,7 @@ def run_player_stats_engine(metodos: tuple | None = None):
         try:
             do_jogo, motivo = _avaliar_fixture(
                 fixture, cur, odds_service, match_stats, calibragem,
-                constantes_saves)
+                constantes_saves, standings_service)
         except Exception as e:
             # Guardado e nao registrado agora: o erro pertence a uma execucao,
             # e as execucoes so' abrem no laco de baixo. Registrar aqui exigiria

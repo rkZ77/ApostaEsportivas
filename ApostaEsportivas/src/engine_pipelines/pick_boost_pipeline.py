@@ -32,6 +32,7 @@ import traceback
 
 from services.engine_audit import EngineRun, amostra
 from services.match_stats_service import MatchStatsService
+from services.standings_service import StandingsService
 from services.odds_service import OddsService
 from services.pick_engine import context_gate, tie_effect
 from services.pick_engine.ai_review import review_gate
@@ -122,7 +123,8 @@ def _melhor_odd(odds_cruas: list, nomes_mercado, regex, linha_alvo: float) -> di
 
 
 def _avaliar_fixture(fixture: dict, cur, match_stats: MatchStatsService,
-                     odds_service: OddsService) -> dict:
+                     odds_service: OddsService,
+                     standings_service: StandingsService | None = None) -> dict:
     """Retrato completo de um jogo: aprovado ou nao, sempre com o porque.
 
     Devolve SEMPRE um dicionario -- nunca None. A auditoria precisa da linha
@@ -186,7 +188,22 @@ def _avaliar_fixture(fixture: dict, cur, match_stats: MatchStatsService,
     confronto = stats_model.analisar_confronto(perfil_home, perfil_away)
 
     # Contexto do confronto (mata-mata, perna, agregado, rivalidade).
-    match_context = context_gate.build_for_fixture(match_stats, fixture)
+    #
+    # `league_table` passou a ir junto em 2026-09-02: sem ela a pressao
+    # competitiva de tabela nascia None e este motor ficava cego a "time que
+    # precisa vencer pra nao cair", que abre jogo pelo mesmo mecanismo do
+    # agregado -- e o boost e' Over 1.5 FT, exatamente o lado que se beneficia.
+    # Mesma correcao que o commit de 01/09 fez em dica/multipla/alavancagem.
+    #
+    # `conv_cartoes` continua None aqui, e nao por esquecimento: a rivalidade e'
+    # medida em pontos de cartao, e o historico deste motor
+    # (pick_engine_boost/goals_history) le' so' gols de FT e HT -- nao ha' de
+    # onde tirar o baseline sem uma consulta nova. Ligar a rivalidade aqui e'
+    # trabalho de coleta, nao de argumento.
+    league_table = (standings_service.get_league_table(
+        fixture["league_id"], fixture["season"]) if standings_service else None)
+    match_context = context_gate.build_for_fixture(
+        match_stats, fixture, league_table=league_table)
 
     resultado["amostra"] = amostra.build(
         home_team_id=fixture["home_team_id"], away_team_id=fixture["away_team_id"],
@@ -372,11 +389,13 @@ def run_pick_boost_engine():
 
         match_stats = MatchStatsService()
         odds_service = OddsService()
+        standings_service = StandingsService()
 
         avaliados = []
         for fixture in fixtures:
             try:
-                avaliados.append(_avaliar_fixture(fixture, cur, match_stats, odds_service))
+                avaliados.append(_avaliar_fixture(fixture, cur, match_stats, odds_service,
+                                                  standings_service))
             except Exception as e:
                 run.erro(e, contexto=f"{fixture.get('home_team')} x {fixture.get('away_team')}",
                          fixture_id=fixture.get("fixture_id"))
