@@ -238,8 +238,12 @@ def _load_history(match_stats: MatchStatsService, team_id: int, season: int, lea
 def _best_candidate_across_fixtures(fixtures: list, used_groups: set,
                                     vip_por_fixture: dict | None = None) -> tuple | None:
     """Roda o motor pra cada fixture candidato e devolve (fixture, pick,
-    data_quality_score) do maior Score Final entre os que passam DICA_CONFIG
-    (confidence>=0.72), ou None se nenhum passar.
+    data_quality_score) do maior Score Final entre os que passam DICA_CONFIG,
+    ou None se nenhum passar.
+
+    Desde 2026-09-02 a DICA_CONFIG e' a mesma regua do VIP -- a Free deixou de
+    ter limiar proprio (o `min_confidence` de 0.72 saiu) e passa a buscar o
+    MELHOR pick do dia, nao o melhor pick acima de um corte extra.
 
     Nao repetir o que o VIP ja usou hoje e' PREFERENCIA em escada, nao veto --
     mudanca de 2026-08-05, decisao do usuario. Antes era filtro duro sobre o

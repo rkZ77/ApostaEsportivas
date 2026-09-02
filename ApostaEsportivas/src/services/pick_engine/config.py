@@ -352,18 +352,31 @@ VIP_CONFIG = PickEngineConfig(
     conservative_odd_low=1.45, conservative_odd_high=2.00,
 )
 
-# Dica do Dia exige consistencia maior (regra ja existia como constante fixa
-# CONFIDENCE_MIN=0.72 em dica_do_dia_pipeline.py). O teto de 1.90 ja era o da
-# faixa; o piso subiu de 1.39 pra 1.50 pelo mesmo dado do VIP acima -- pick
-# gratuita precisa ser mais "segura" que VIP, e odd baixa nao e' seguranca,
-# e' retorno que nao cobre o erro do modelo.
+# Dica do Dia: MESMA regua do VIP (2026-09-02, decisao do usuario).
 #
-# 2026-09-02: a Dica passa a usar a MESMA faixa do VIP (1.45-2.00). A distincao
-# entre free e VIP volta a ser so' o `min_confidence` de 0.72 -- que continua
-# sendo o filtro mais duro dos dois, e o que de fato faz a pick gratuita ser
-# mais conservadora. A faixa deixa de ser o instrumento dessa separacao.
+# A Dica carregava dois filtros proprios, e os dois sairam no mesmo dia:
+#
+#   faixa de odd  1.50-1.90  ->  1.45-2.00, igual a do VIP
+#   min_confidence     0.72  ->  0.55, o default (= o do VIP)
+#
+# O 0.72 era heranca da era da IA -- nasceu como a constante CONFIDENCE_MIN de
+# ai/dica_do_dia_pipeline.py, onde servia pra segurar um pick que um modelo de
+# linguagem tinha ESCOLHIDO. O motor deterministico de hoje nao escolhe assim,
+# e o numero nunca foi remedido contra ele: seguia cortando tudo entre 0.55 e
+# 0.72 sem nenhuma medicao dizendo que aquela regiao perdia dinheiro.
+#
+# A regra do produto passou a ser "a Free publica o MELHOR pick do dia", e um
+# corte de confianca mais alto que o do VIP e' incompativel com isso: ele nao
+# torna a Free mais segura, so' a impede de ver o melhor candidato disponivel.
+#
+# O que separa Free de VIP agora nao e' mais um limiar, e' a EXCLUSIVIDADE: o
+# VIP roda primeiro e reserva a partida, e a Free escolhe o melhor do que
+# sobrou (ver dica_pipeline._nivel_repeticao). `max_odd` fica em 2.00 so' pra
+# casar com o teto da faixa -- no VIP ele e' 15.0 porque la' o teto de sanidade
+# e o da faixa sao coisas separadas por historico, mas a faixa corta antes nos
+# dois, entao os dois pipelines rejeitam exatamente as mesmas odds.
 DICA_CONFIG = PickEngineConfig(
-    min_confidence=0.72, min_odd=1.45, max_odd=2.00, enforce_odd_band=True,
+    min_odd=1.45, max_odd=2.00, enforce_odd_band=True,
     conservative_odd_low=1.45, conservative_odd_high=2.00)
 
 # Alavancagem precisa do EXATO oposto do resto do motor: perna barata.

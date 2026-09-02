@@ -118,15 +118,21 @@ def test_cada_pipeline_tem_a_propria_faixa():
     """Os NUMEROS aqui sao decisao de produto e mudam · o que este teste protege
     e' que cada pipeline tenha a SUA, e nao herde a do vizinho por descuido.
 
-    Em 02/09 VIP e Dica passaram a dividir a MESMA faixa (1.45-2.00, decisao do
-    usuario) -- o que separa free de VIP hoje e' o `min_confidence` de 0.72 da
-    Dica, nao a largura da faixa. A alavancagem e' que ficou sozinha embaixo,
-    de proposito: ela e' o complemento dessas duas, entao perdeu o piso.
+    Em 02/09 a Dica perdeu os DOIS filtros proprios que tinha (faixa 1.50-1.90 e
+    min_confidence 0.72) e passou a usar a mesma regua do VIP: a Free publica o
+    melhor pick do dia, julgado por estatistica, contexto e H2H, sem um corte
+    extra por cima. O que separa Free de VIP virou a exclusividade
+    (dica_pipeline._nivel_repeticao), nao um limiar. A alavancagem e' que ficou
+    sozinha embaixo, de proposito: ela e' o complemento dessas duas.
     """
     assert (VIP_CONFIG.conservative_odd_low, VIP_CONFIG.conservative_odd_high) == (1.45, 2.00)
     assert (DICA_CONFIG.min_odd, DICA_CONFIG.max_odd) == (1.45, 2.00)
     assert DICA_CONFIG.enforce_odd_band
-    assert DICA_CONFIG.min_confidence > VIP_CONFIG.min_confidence
+    # A Dica NAO pode voltar a ter limiar proprio por descuido: o corte dela e'
+    # o mesmo do VIP, e as duas faixas tem que continuar identicas.
+    assert DICA_CONFIG.min_confidence == VIP_CONFIG.min_confidence
+    assert ((DICA_CONFIG.conservative_odd_low, DICA_CONFIG.conservative_odd_high)
+            == (VIP_CONFIG.conservative_odd_low, VIP_CONFIG.conservative_odd_high))
     # Alavancagem e' o produto de perna barata: a faixa dela e' a dela, e desde
     # 02/09 ela nao tem piso -- 1.01 e' o menor preco cotado, nao um limiar.
     assert (ALAVANCAGEM_CONFIG.conservative_odd_low,
