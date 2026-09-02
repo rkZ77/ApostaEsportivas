@@ -660,7 +660,16 @@ export default function ResultadosPublicos() {
         )}
         </AnimatePresence>
 
-          {/* Filtros */}
+          {/* Filtros · UM painel pra pagina inteira.
+              A aba Por Jogo tinha o proprio FilterPanel logo abaixo das abas,
+              e a tela ficava com DOIS botoes escritos "Filtros", um em cima e
+              outro embaixo, sem nada distinguindo os dois. Pior: os chips do
+              que estava filtrado ficavam divididos entre eles, e o "Limpar
+              tudo" de cada um so' limpava a metade dele.
+
+              O grupo "Resultado" e' da aba Por Jogo, entao ele entra aqui
+              SO' quando ela esta aberta -- filtro que nao filtra nada na aba
+              atual e' ruido. */}
           <FilterPanel
             accent="green"
             groups={[
@@ -671,11 +680,25 @@ export default function ResultadosPublicos() {
               },
               ...(months.length > 0 ? [{
                 key: 'month', label: 'Mês',
-                options: [{ value: '', label: 'Todos os meses' }, ...months.map(m => ({ value: m, label: m }))],
+                /* O rotulo era o proprio "2026-09": formato de banco na cara
+                   do usuario. `nomeDoMes` ja' existe pro fechamento. */
+                options: [{ value: '', label: 'Todos os meses' },
+                          ...months.map(m => ({ value: m, label: nomeDoMes(m) }))],
                 value: month, onChange: handleMonthChange,
               } as FilterGroup] : []),
+              ...(tab === 'por_jogo' ? [{
+                key: 'resultado', label: 'Resultado',
+                /* Sem sessao o backend ignora `pending`, entao oferecer a
+                   opcao seria um filtro que nao filtra nada. */
+                options: user ? RESULTADO_OPTIONS : RESULTADO_OPTIONS.filter(o => o.value !== 'pending'),
+                value: gamesFilter,
+                onChange: (v: string) => { setGamesFilter(v); setGamesPage(0); fetchGames(0, v, source, month) },
+              } as FilterGroup] : []),
             ]}
-            resultado={recentTotal}
+            /* A contagem segue a aba: em Por Jogo o painel prometia "N
+               resultados" contando os picks recentes do Resumo, que e' outra
+               lista. */
+            resultado={tab === 'por_jogo' ? gamesTotal : recentTotal}
           />
 
           {/* Abas · Por Liga e' publica; Por Jogo/Por Mes exigem login (dado detalhado por usuario) */}
@@ -961,18 +984,6 @@ export default function ResultadosPublicos() {
 
           {tab === 'por_jogo' && (
             <div>
-              <div className="mb-4">
-                <FilterPanel
-                  accent="green"
-                  groups={[{
-                    key: 'resultado', label: 'Resultado',
-                    /* Sem sessao o backend ignora `pending`, entao oferecer a
-                       opcao seria um filtro que nao filtra nada. */
-                    options: user ? RESULTADO_OPTIONS : RESULTADO_OPTIONS.filter(o => o.value !== 'pending'),
-                    value: gamesFilter, onChange: (v: string) => { setGamesFilter(v); setGamesPage(0); fetchGames(0, v, source, month) },
-                  }]}
-                />
-              </div>
               <AbaStats tiles={statsPorJogo} />
 
               {/* Curva por produto · responde "quem está puxando o resultado",
@@ -1001,7 +1012,7 @@ export default function ResultadosPublicos() {
                     {bySource.map(f => (
                       <div key={f.source} className="flex items-center gap-3 px-5 py-3">
                         <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${PICK_TYPE_CLS[f.source] ?? 'bg-surface-2 text-ink-3'}`}>
-                          {SOURCE_LABELS[f.source] ?? f.source}
+                          {rotuloProduto(f.source)}
                         </span>
                         <span className="text-[11px] text-ink-4 shrink-0 hidden sm:block">{f.total} picks</span>
                         <span className="font-mono text-[11px] text-ink-4 w-16 text-right shrink-0 hidden sm:block">
