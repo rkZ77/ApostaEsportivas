@@ -61,9 +61,14 @@ from services.engine_audit import auditar
 # publicar do que publicar uma odd que nao e' alavancagem.
 ODD_COMBINED_MIN = 1.40
 ODD_COMBINED_MAX = 1.55
-ODD_INDIVIDUAL_MIN = 1.05
+# Sem piso individual desde 2026-09-02 (pedido do usuario): a alavancagem e' o
+# complemento do VIP/Dica, que subiram pra 1.45-2.00 -- aqui embaixo qualquer
+# piso so' amputava a regiao que o produto existe pra usar. 1.01 e' o menor
+# preco cotado, ou seja, "sem piso" escrito em numero. Quem barra perna ruim
+# continua sendo o min_edge de 0.05 do motor, nao o preco.
+ODD_INDIVIDUAL_MIN = 1.01
 # Teto individual = teto do combinado. Perna acima de 1.55 nao entra em combo
-# nenhum: multiplicar por outra perna (>= 1.05) so' afasta mais da faixa, e
+# nenhum: multiplicar por outra perna (>= 1.01) so' afasta mais da faixa, e
 # sozinha ela ja' estoura o teto. Antes era 2.00 (fallback 1.90 + folga), o que
 # so' servia pra carregar candidato impossivel pelo pipeline inteiro.
 ODD_INDIVIDUAL_MAX = ODD_COMBINED_MAX

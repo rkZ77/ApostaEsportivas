@@ -36,8 +36,12 @@ from services.engine_audit import amostra, auditar
 
 
 WC_LEAGUE_ID = 1
-ODD_MIN = 1.39
-ODD_MAX = 1.90
+# Prefiltro SQL de candidatos. DERIVADO da DICA_CONFIG e nao cravado
+# (2026-09-02): esta consulta roda ANTES do motor, entao um numero solto aqui
+# mataria em silencio qualquer faixa nova da config -- foi o que aconteceu ate'
+# hoje, com 1.39/1.90 sobrevivendo a duas mudancas de faixa.
+ODD_MIN = DICA_CONFIG.min_odd
+ODD_MAX = DICA_CONFIG.max_odd
 
 _LEAGUE_PRIORITY = {
     1: 1, 2: 2, 3: 3, 848: 4, 39: 5, 140: 6, 135: 7, 78: 8,

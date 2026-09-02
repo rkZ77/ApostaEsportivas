@@ -334,10 +334,22 @@ DEFAULT_CONFIG = PickEngineConfig()
 # (1.30-1.50 e 1.90-1.99) separados do miolo. A quebra por faixa de odd ja'
 # existe no ledger (attribution.group_by), entao e' consulta, nao instrumento
 # novo.
+#
+# FAIXA DO VIP AJUSTADA PRA 1.45-2.00 (2026-09-02, decisao do usuario).
+#
+# Sobe o piso de 1.30 pra 1.45 e o teto de 1.99 pra 2.00. O piso recua na
+# direcao do que a medicao de 14/08 dizia (odd <1.50 era a unica faixa com ROI
+# negativo) sem voltar aos 1.50: fica a regiao 1.45-1.50 como aposta de que o
+# motor de hoje -- janela de 60 jogos, Binomial Negativa, gate de mata-mata --
+# le' aquela regiao melhor do que lia. O teto so' arredonda os 1.99.
+#
+# `min_odd` acompanha pelo mesmo motivo de sempre: ele e' um gate independente
+# da faixa, entao um piso mais baixo que `conservative_odd_low` nao abre nada,
+# e um mais alto cortaria a ponta de baixo da faixa em silencio.
 VIP_CONFIG = PickEngineConfig(
     enforce_odd_band=True,
-    min_odd=1.30, max_odd=15.0,
-    conservative_odd_low=1.30, conservative_odd_high=1.99,
+    min_odd=1.45, max_odd=15.0,
+    conservative_odd_low=1.45, conservative_odd_high=2.00,
 )
 
 # Dica do Dia exige consistencia maior (regra ja existia como constante fixa
@@ -345,8 +357,14 @@ VIP_CONFIG = PickEngineConfig(
 # faixa; o piso subiu de 1.39 pra 1.50 pelo mesmo dado do VIP acima -- pick
 # gratuita precisa ser mais "segura" que VIP, e odd baixa nao e' seguranca,
 # e' retorno que nao cobre o erro do modelo.
+#
+# 2026-09-02: a Dica passa a usar a MESMA faixa do VIP (1.45-2.00). A distincao
+# entre free e VIP volta a ser so' o `min_confidence` de 0.72 -- que continua
+# sendo o filtro mais duro dos dois, e o que de fato faz a pick gratuita ser
+# mais conservadora. A faixa deixa de ser o instrumento dessa separacao.
 DICA_CONFIG = PickEngineConfig(
-    min_confidence=0.72, min_odd=1.50, max_odd=1.90, enforce_odd_band=True)
+    min_confidence=0.72, min_odd=1.45, max_odd=2.00, enforce_odd_band=True,
+    conservative_odd_low=1.45, conservative_odd_high=2.00)
 
 # Alavancagem precisa do EXATO oposto do resto do motor: perna barata.
 #
@@ -374,7 +392,20 @@ DICA_CONFIG = PickEngineConfig(
 # CARO do proprio range (uma perna de 1.50 pontuava 1.0; uma de 1.20 pontuava
 # 0.85), exatamente o contrario da premissa do produto. Com a faixa igual ao
 # range, o termo volta a preferir a perna barata, que aqui e' a segura.
+#
+# PISO REMOVIDO (2026-09-02, decisao do usuario). A alavancagem e' o
+# complemento do VIP/Dica, nao um concorrente deles: enquanto la' a faixa
+# subiu pra 1.45-2.00, aqui o produto vive embaixo, e qualquer piso so'
+# amputava a ponta que a alavancagem existe pra usar. Sobra o teto de 1.55,
+# que e' o que realmente importa (perna acima do teto do combinado nao cabe em
+# combo nenhum). 1.01 e' o menor preco que uma casa cota -- e' "sem piso"
+# escrito em numero, nao um limiar.
+#
+# O que continua protegendo a perna barata e' o `min_edge` de 0.05, nao o
+# piso: numa odd de 1.10 ele exige taxa real de ~95%, numa de 1.05 exige ~100%
+# -- ou seja, a propria conta de EV fecha a porta muito antes de o preco virar
+# lixo. Piso de odd nunca foi o que segurava isso.
 ALAVANCAGEM_CONFIG = PickEngineConfig(
-    min_odd=1.10, max_odd=1.55,
-    conservative_odd_low=1.10, conservative_odd_high=1.55,
+    min_odd=1.01, max_odd=1.55,
+    conservative_odd_low=1.01, conservative_odd_high=1.55,
 )

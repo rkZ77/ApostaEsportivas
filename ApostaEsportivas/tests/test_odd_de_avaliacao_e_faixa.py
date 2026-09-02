@@ -69,7 +69,11 @@ def test_no_vig_le_os_dois_lados_pela_mesma_regra_de_preco():
 
 
 def test_vip_rejeita_linha_acima_do_teto_da_faixa():
-    fora = ranking.evaluate_all_lines([_linha(2.00)], VIP_CONFIG)[0]
+    """Lido do teto da config pelo mesmo motivo do teste do piso logo abaixo:
+    o numero e' decisao de produto e ja' mudou tres vezes (1.90 -> 1.99 -> 2.00).
+    O que o teste protege e' que existe teto e que ele corta."""
+    acima = round(VIP_CONFIG.conservative_odd_high + 0.05, 2)
+    fora = ranking.evaluate_all_lines([_linha(acima)], VIP_CONFIG)[0]
     assert "fora da faixa" in fora["reject_reason"]
 
 
@@ -114,16 +118,20 @@ def test_cada_pipeline_tem_a_propria_faixa():
     """Os NUMEROS aqui sao decisao de produto e mudam · o que este teste protege
     e' que cada pipeline tenha a SUA, e nao herde a do vizinho por descuido.
 
-    VIP abriu pra 1.30-1.99 em 28/08 (decisao do usuario). A Dica NAO acompanhou
-    de proposito: pick gratuita continua mais estreita que a VIP, e odd baixa
-    nao e' seguranca, e' retorno que nao cobre o erro do modelo.
+    Em 02/09 VIP e Dica passaram a dividir a MESMA faixa (1.45-2.00, decisao do
+    usuario) -- o que separa free de VIP hoje e' o `min_confidence` de 0.72 da
+    Dica, nao a largura da faixa. A alavancagem e' que ficou sozinha embaixo,
+    de proposito: ela e' o complemento dessas duas, entao perdeu o piso.
     """
-    assert (VIP_CONFIG.conservative_odd_low, VIP_CONFIG.conservative_odd_high) == (1.30, 1.99)
-    assert (DICA_CONFIG.min_odd, DICA_CONFIG.max_odd) == (1.50, 1.90)
+    assert (VIP_CONFIG.conservative_odd_low, VIP_CONFIG.conservative_odd_high) == (1.45, 2.00)
+    assert (DICA_CONFIG.min_odd, DICA_CONFIG.max_odd) == (1.45, 2.00)
     assert DICA_CONFIG.enforce_odd_band
-    # Alavancagem e' o produto de perna barata: a faixa dela e' a dela.
+    assert DICA_CONFIG.min_confidence > VIP_CONFIG.min_confidence
+    # Alavancagem e' o produto de perna barata: a faixa dela e' a dela, e desde
+    # 02/09 ela nao tem piso -- 1.01 e' o menor preco cotado, nao um limiar.
     assert (ALAVANCAGEM_CONFIG.conservative_odd_low,
-            ALAVANCAGEM_CONFIG.conservative_odd_high) == (1.10, 1.55)
+            ALAVANCAGEM_CONFIG.conservative_odd_high) == (1.01, 1.55)
+    assert ALAVANCAGEM_CONFIG.min_odd == 1.01
 
 
 def test_o_piso_de_sanidade_acompanha_a_faixa_do_vip():
@@ -192,6 +200,15 @@ def test_alavancagem_prefere_a_perna_barata_da_propria_faixa():
     produto), o termo empurrava a alavancagem pro lado CARO do range."""
     assert (ranking._safety_bonus(1.15, ALAVANCAGEM_CONFIG)
             > ranking._safety_bonus(1.50, ALAVANCAGEM_CONFIG))
+
+
+def test_alavancagem_alcanca_o_que_o_vip_nao_alcanca():
+    """02/09: o piso da alavancagem saiu porque VIP e Dica subiram pra 1.45.
+    O ponto nao e' que as faixas nao se toquem (1.45-1.55 e' comum as duas, e
+    tudo bem: la' e' perna de combo, aqui e' pick sozinha) -- e' que a
+    alavancagem CHEGUE onde as outras duas nao chegam mais."""
+    assert ALAVANCAGEM_CONFIG.min_odd < VIP_CONFIG.conservative_odd_low
+    assert ALAVANCAGEM_CONFIG.min_odd < DICA_CONFIG.min_odd
 
 
 def test_pesos_do_line_score_somam_um():
