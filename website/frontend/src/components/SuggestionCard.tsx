@@ -67,6 +67,24 @@ interface Suggestion {
   user_bet_house?: string | null
   stake_pct?: number | null
   suggested_stake_units?: number | null
+  /** Pernas de um pick COMBINADO. Hoje só o Pick Boost usa (Over 1.5 FT +
+   *  Under 2.5 HT), mas o formato é genérico de propósito: qualquer produto
+   *  que junte mais de um mercado numa odd só cai aqui sem card novo. */
+  legs?: Array<{
+    /** Nome do mercado na linguagem do resto do site. Alimenta o InfoTip. */
+    market: string
+    line?: string | null
+    /** O que a pessoa aposta, escrito como ela leria no bilhete da casa
+     *  ("Mais de 1.5 gols"). Sem isto a perna sai como nome técnico de mercado
+     *  + linha em duas colunas, e no celular as duas truncam. */
+    label?: string
+    /** Quando vale: "Jogo inteiro", "1º tempo". É o que diferencia as duas
+     *  pernas do Boost -- as duas são de gols, o que muda é o período. */
+    periodo?: string
+    odd?: number | null
+    probability?: number | null
+    result?: string | null
+  }>
 }
 
 /** Extrai só o trecho "FATO: ..." ou as primeiras ~120 chars do reasoning */
@@ -469,11 +487,57 @@ function SuggestionCard({
           <span className="text-sm font-bold text-ink-1 truncate">{s.away_team_name}</span>
           <TeamLogo id={s.away_team_id} name={s.away_team_name} />
         </div>
-        <div className="flex items-center gap-2 text-xs text-ink-3">
-          <span className="font-semibold text-ink-2">{translateMarket(s.market)}</span>
-          {s.line && <><span>,</span><span>{translateLine(s.line)}</span></>}
-          <InfoTip text={explainMarket(s.market, s.line)} />
-        </div>
+        {/* PICK COMBINADO MOSTRA AS PERNAS, uma por linha.
+          *
+          * O Pick Boost é "Over 1.5 no jogo todo" E "Under 2.5 no primeiro
+          * tempo" -- duas apostas diferentes, em tempos diferentes da partida,
+          * que só compartilham o bilhete. Escrever isso numa linha só
+          * ("Over 1.5 FT + Under 2.5 HT") economizava espaço e cobrava o preço
+          * errado: o card parecia um mercado único de nome esquisito, e quem
+          * ia apostar não sabia que precisava marcar DUAS seleções na casa.
+          *
+          * Cada perna leva a odd dela. A odd do topo continua sendo a
+          * combinada, que é o que se aposta -- as de baixo explicam de onde
+          * ela veio, e é a mesma leitura que o bilhete da casa mostra. */}
+        {s.legs && s.legs.length > 0 ? (
+          <div className="space-y-1.5">
+            {s.legs.map((leg, i) => (
+              <div key={i} className="flex items-center gap-2 text-xs">
+                {/* O número da perna ancora a leitura: sem ele, duas linhas
+                    parecidas viram uma frase só no celular. */}
+                <span className="w-4 h-4 shrink-0 rounded bg-surface-3 border border-line
+                                 grid place-items-center text-[9px] font-bold text-ink-4">
+                  {i + 1}
+                </span>
+                {/* A APOSTA, e não o nome do mercado. "Mais de 1.5 gols" cabe e
+                    se entende; "Gols Mais/Menos - 1º Tempo" + "Menos de 2.5"
+                    ocupava duas colunas e truncava as duas no celular. O nome
+                    técnico não se perde: continua no InfoTip. */}
+                <span className="font-semibold text-ink-2 truncate">
+                  {leg.label ?? translateMarket(leg.market)}
+                </span>
+                {leg.periodo && (
+                  <span className="shrink-0 px-1.5 py-px rounded bg-surface-3 border border-line
+                                   text-[10px] text-ink-4 whitespace-nowrap">
+                    {leg.periodo}
+                  </span>
+                )}
+                <InfoTip text={explainMarket(leg.market, leg.line ?? undefined)} />
+                {leg.odd != null && (
+                  <span className="ml-auto shrink-0 font-mono tabular-nums text-ink-3">
+                    {Number(leg.odd).toFixed(2)}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-xs text-ink-3">
+            <span className="font-semibold text-ink-2">{translateMarket(s.market)}</span>
+            {s.line && <><span>,</span><span>{translateLine(s.line)}</span></>}
+            <InfoTip text={explainMarket(s.market, s.line)} />
+          </div>
+        )}
       </div>
 
       <PickProbability confidence={s.confidence} probability={s.probability} />

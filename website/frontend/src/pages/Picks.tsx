@@ -1504,6 +1504,44 @@ interface MercadoPick {
   user_stake_units?: number | null
   user_actual_odd?: number | null
   user_bet_house?: string | null
+  /* Só Pick Boost · as duas pernas do bilhete, cada uma com odd, probabilidade
+     e resultado próprios. O backend já devolve tudo isto (suggestions.py); o
+     card é que mostrava só a odd combinada. */
+  odd_ft?: number | null; odd_ht?: number | null
+  prob_ft?: number | null; prob_ht?: number | null
+  result_ft?: string | null; result_ht?: string | null
+}
+
+/* As duas pernas do Pick Boost, no formato genérico que o SuggestionCard
+ * entende. As linhas vêm de `pick_engine_boost/config.py` (LINHA_OVER_FT=1.5 e
+ * LINHA_UNDER_HT=2.5) e estão escritas aqui porque o backend manda as odds e as
+ * probabilidades separadas, mas não o nome de cada mercado -- ele só guarda a
+ * combinação já montada em `market`.
+ *
+ * `market` usa os nomes que `translateMarket` conhece, senão a perna sairia em
+ * inglês no card enquanto o resto do site está em português. */
+function pernasDoBoost(p: MercadoPick) {
+  if (p.odd_ft == null && p.odd_ht == null) return undefined
+  return [
+    {
+      market: 'Gols Mais/Menos',
+      line: 'Over 1.5',
+      label: 'Mais de 1.5 gols',
+      periodo: 'Jogo inteiro',
+      odd: p.odd_ft != null ? Number(p.odd_ft) : null,
+      probability: p.prob_ft != null ? Number(p.prob_ft) : null,
+      result: p.result_ft ?? null,
+    },
+    {
+      market: 'Gols Mais/Menos - 1º Tempo',
+      line: 'Under 2.5',
+      label: 'Menos de 2.5 gols',
+      periodo: '1º tempo',
+      odd: p.odd_ht != null ? Number(p.odd_ht) : null,
+      probability: p.prob_ht != null ? Number(p.prob_ht) : null,
+      result: p.result_ht ?? null,
+    },
+  ]
 }
 
 /*
@@ -1539,9 +1577,10 @@ function mercadoParaSuggestion(p: MercadoPick, tipo: TipoMercado) {
        perde: ele já vem dentro de `line` ("Fulano · 2 ou mais chutes"). */
     market: tipo === 'player_stats'
       ? (LABEL_DO_METODO[p.method ?? ''] ?? p.method ?? p.market)
-      /* O Boost tem DUAS pernas e uma odd só. `market` do pipeline já vem com
-         a combinação escrita; manter o texto dele é o que impede o card de
-         anunciar só metade da aposta. */
+      /* O Boost tem DUAS pernas e uma odd só. `market` continua com a
+         combinação escrita pelo pipeline -- ele é o rótulo de fallback e o que
+         vai pro compartilhamento; quem desenha as pernas separadas no card é
+         `legs`, logo abaixo. */
       : p.market,
     line: p.line,
     odd: Number(p.odd),
@@ -1552,6 +1591,9 @@ function mercadoParaSuggestion(p: MercadoPick, tipo: TipoMercado) {
     confidence: p.prob_real != null ? Number(p.prob_real) : 0,
     probability: p.prob_real != null ? Number(p.prob_real) : null,
     market_type: p.market_type ?? tipo,
+    /* Só o Boost tem pernas hoje. `undefined` nos outros faz o card cair no
+       desenho de mercado único, que é o certo pra eles. */
+    legs: tipo === 'boost' ? pernasDoBoost(p) : undefined,
     ev: p.edge != null ? Number(p.edge) : undefined,
     /* Os dois vão separados de propósito: `match_date` é a DATA (coluna DATE)
        e `match_datetime` é o horário do jogo. Enquanto o card lia a hora de
