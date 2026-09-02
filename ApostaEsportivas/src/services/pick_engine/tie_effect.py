@@ -110,6 +110,50 @@ _MEDIDO_EMPATADO: dict[str, tuple] = {
     "cards": (0.70, 0.41),
 }
 
+# REMEDICAO DE 2026-09-02 -- A TABELA ACIMA NAO SE CONFIRMOU
+# ----------------------------------------------------------
+# `scripts/medir_efeito_do_agregado.py` refez a medicao de 19/08 com o MESMO
+# metodo contra a base de PROD de hoje: 134 confrontos de ida-e-volta contra os
+# 11 originais, e 37-54 lados por celula contra os 4 de AMOSTRA_ASSIMETRICA.
+#
+#   familia     papel       19/08          02/09              o que mudou
+#   corners     atras       +1.98 (1.18)   +1.02 (0.52) s2.0  metade do tamanho
+#   corners     na_frente   -1.66 (1.52)   -0.64 (0.38) s1.7  nao sustenta mais
+#   shots       atras       +2.95 (1.61)   +1.70 (0.88) s1.9  nao sustenta mais
+#   shots       na_frente   -0.30 (2.61)   +1.93 (1.01) s1.9  TROCOU DE SINAL
+#   goals       atras       +1.16 (0.47)   +0.16 (0.16) s1.0  o efeito sumiu
+#   goals       na_frente   +0.11 (0.48)   +0.39 (0.19) s2.0  passou a existir
+#   fouls       atras       -2.48 (0.64)   -1.15 (0.64) s1.8  era 3.9s, caiu
+#   fouls       na_frente   -1.14 (2.32)   -1.04 (0.56) s1.9  mesmo tamanho
+#   cards       empatado    +0.70 (0.41)   +0.24 (0.25) s1.0  nao sustenta mais
+#   fouls       empatado    (nao medido)   +1.67 (0.58) s2.9  <- o mais forte
+#   cards       atras       (nao medido)   +0.59 (0.30) s2.0  <- novo
+#
+# Nenhuma constante foi alterada por esta remedicao, e o motivo esta' na
+# ressalva abaixo -- mas o quadro ja' justifica o desconto que existe:
+# FATOR_DE_EXTRAPOLACAO=0.50 estava certo em desconfiar de 4 jogos.
+#
+# A RESSALVA QUE IMPEDE APLICAR ESTA TABELA DIRETO
+# ------------------------------------------------
+# Os papeis brutos sao simetricos (99 atras / 99 na_frente), mas o filtro de
+# amostra propria (MIN_JOGOS_PROPRIOS=4 no mesmo mando) derruba mais de metade
+# deles, e derruba de forma DESIGUAL por mando:
+#
+#   atras      usados: 27 em casa,  10 fora   (63% descartados)
+#   na_frente  usados: 18 em casa,  36 fora   (45% descartados)
+#
+# Nao e' acaso e nem bug: quem perde a ida perdeu jogando FORA, logo disputa a
+# volta EM CASA. O mando esta' amarrado ao papel por construcao do mata-mata.
+# A media propria e' casada por mando, o que controla o nivel -- mas as duas
+# celulas continuam descrevendo misturas diferentes de partida, entao compara-
+# las entre si ainda mede um resto de mando.
+#
+# O que resolveria: media propria com menos exigencia de mando (aceitar o
+# historico geral quando faltar jogo no mando certo) ou um controle explicito
+# de mando no lugar do casamento. As duas mudam o METODO, e mudar metodo e
+# amostra ao mesmo tempo produz uma tabela que nao da' pra comparar com
+# nenhuma das duas anteriores.
+
 #: Amostra que sustenta cada celula assimetrica. Guardado pra o rastro poder
 #: dizer em cima de quanta evidencia o ajuste foi feito -- quem le a
 #: explicacao precisa saber que sao 4 jogos, nao 400.
