@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { toastUp, fadeInUp } from '../lib/motion'
 import api from '../services/api'
+import { prefetchAnalise } from '../services/analisePick'
 import { pctProb, capitalizarFrase } from '../utils/format'
 import { calcVipStake, calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import { stakeDe, contaEmUnidades } from '../utils/stakePlan'
@@ -741,7 +742,11 @@ function SuggestionCard({
       <div className="flex-1" aria-hidden="true" />
       {/* Footer */}
       {(s.reasoning || s.ev != null || probPct != null) && (
-        <PickExplainButton onClick={() => setShowAnalysis(true)} />
+        <PickExplainButton
+          onClick={() => setShowAnalysis(true)}
+          /* O dedo encostando já dispara a busca · ver services/analisePick. */
+          onIntencao={() => prefetchAnalise(s.id, pickType)}
+        />
       )}
 
       <PickCardFooter

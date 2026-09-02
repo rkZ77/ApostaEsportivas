@@ -4,6 +4,9 @@ import { plural } from '../utils/format'
 import { Badge } from './ui'
 import { explainMarket, regraDoMercado, translateLine, translateMarket } from '../utils/marketTranslate'
 import type { RegraDoMercado } from '../utils/marketTranslate'
+import { useEffect, useState } from 'react'
+import { Skeleton } from './ui'
+import { carregarAnalise, type AnalisePick } from '../services/analisePick'
 import MarketForm from './MarketForm'
 import AmostraDoMotor from './AmostraDoMotor'
 
@@ -180,6 +183,34 @@ export default function AnalysisModal({
   data: AnalysisData
   onClose: () => void
 }) {
+  /* UMA BUSCA, UM CARREGAMENTO (02/09).
+   *
+   * A forma do mercado e a amostra do motor vinham de duas requisições, cada
+   * uma com o próprio esqueleto: o modal abria e ia se montando em duas
+   * etapas, tremendo na cara de quem estava lendo número.
+   *
+   * Agora as duas chegam juntas de `/suggestions/<id>/analise`, e na maior
+   * parte das vezes já chegaram ANTES de o modal abrir · o botão adianta a
+   * busca quando o dedo encosta nele (ver services/analisePick). Quando não
+   * deu tempo, o que aparece é UM bloco de espera, não dois. */
+  const [analise, setAnalise] = useState<AnalisePick | null>(null)
+  const temBlocos = data.pickId != null && !!data.pickType
+  const [carregandoBlocos, setCarregandoBlocos] = useState(temBlocos)
+
+  useEffect(() => {
+    if (!temBlocos) return
+    let vivo = true
+    setCarregandoBlocos(true)
+    carregarAnalise(data.pickId!, data.pickType!)
+      .then(a => { if (vivo) setAnalise(a) })
+      /* Falhou: o modal segue com o resto, que é o que ele já fazia quando uma
+         das duas rotas caía. `{}` e não `null` pra os dois blocos receberem
+         "não disponível" em vez de voltarem a buscar sozinhos. */
+      .catch(() => { if (vivo) setAnalise({}) })
+      .finally(() => { if (vivo) setCarregandoBlocos(false) })
+    return () => { vivo = false }
+  }, [data.pickId, data.pickType, temBlocos])
+
   const odd = Number(data.odd)
   const implied = impliedProb(odd)
   // probability é fração (0..1) no banco; confidence idem. Vira % aqui.
@@ -394,9 +425,15 @@ export default function AnalysisModal({
           </div>
         )}
 
+        {/* Um bloco de espera para as DUAS seções, e não um para cada: elas
+            chegam na mesma resposta, então piscar duas vezes seria inventar
+            duas esperas onde existe uma. */}
+        {temBlocos && carregandoBlocos && <Skeleton className="h-[220px] w-full rounded-lg" />}
+
         {/* O que aconteceu de verdade, antes do que a IA escreveu. */}
-        {data.pickId != null && data.pickType && (
-          <MarketForm pickId={data.pickId} pickType={data.pickType} />
+        {temBlocos && !carregandoBlocos && (
+          <MarketForm pickId={data.pickId!} pickType={data.pickType!}
+            dados={analise?.market_form ?? null} />
         )}
 
         {/* A amostra que DECIDIU · e o contexto do confronto.
@@ -407,13 +444,14 @@ export default function AnalysisModal({
           * de quem não se convenceu com a primeira · e traz o que nenhuma das
           * outras seções trazia: se é clássico, se é jogo de volta e o que
           * aconteceu na ida. */}
-        {data.pickId != null && data.pickType && (
+        {temBlocos && !carregandoBlocos && (
           <AmostraDoMotor
-            pickId={data.pickId}
-            pickType={data.pickType}
+            pickId={data.pickId!}
+            pickType={data.pickType!}
             mercado={data.playerName ? data.market : undefined}
             jogador={data.playerName}
             linha={data.lineValue}
+            dados={analise?.amostra ?? null}
           />
         )}
 

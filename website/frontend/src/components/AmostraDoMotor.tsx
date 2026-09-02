@@ -37,7 +37,7 @@ import BlocoAmostra, { type Amostra } from './BlocoAmostra'
  */
 
 export default function AmostraDoMotor({
-  pickId, pickType, mercado, jogador, linha,
+  pickId, pickType, mercado, jogador, linha, dados,
 }: {
   pickId: number
   pickType: string
@@ -55,11 +55,20 @@ export default function AmostraDoMotor({
   mercado?: string
   jogador?: string
   linha?: number
+  /* JÁ VEM PRONTA quando o modal buscou tudo de uma vez · ver
+     services/analisePick. `undefined` mantém a busca própria. */
+  dados?: { available?: boolean; amostra?: Amostra } | null
 }) {
-  const [amostra, setAmostra] = useState<Amostra | null>(null)
-  const [carregando, setCarregando] = useState(true)
+  const [amostra, setAmostra] = useState<Amostra | null>(
+    dados?.available ? (dados.amostra ?? null) : null)
+  const [carregando, setCarregando] = useState(dados === undefined)
 
   useEffect(() => {
+    if (dados !== undefined) {
+      setAmostra(dados?.available ? (dados.amostra ?? null) : null)
+      setCarregando(false)
+      return
+    }
     let vivo = true
     setCarregando(true)
     api.get(`/suggestions/${pickId}/amostra`, { params: { pick_type: pickType } })
@@ -67,7 +76,7 @@ export default function AmostraDoMotor({
       .catch(() => { if (vivo) setAmostra(null) })
       .finally(() => { if (vivo) setCarregando(false) })
     return () => { vivo = false }
-  }, [pickId, pickType])
+  }, [pickId, pickType, dados])
 
   if (carregando) return <Skeleton className="h-24 w-full rounded-lg" />
   if (!amostra) return null

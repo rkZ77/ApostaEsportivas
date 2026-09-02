@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { toastUp, fadeInUp, staggerContainer, tabFade } from '../lib/motion'
 import api from '../services/api'
+import { prefetchAnalise } from '../services/analisePick'
 import { sinalizarNavegacao } from '../services/progressBus'
 import { useAuth } from '../context/AuthContext'
 import { useNotifications } from '../context/NotificationContext'
@@ -701,7 +702,8 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
       <div className="flex-1" aria-hidden="true" />
       {/* Footer */}
       {dica.reasoning && (
-        <PickExplainButton onClick={() => setShowAnalysis(true)} />
+        <PickExplainButton onClick={() => setShowAnalysis(true)}
+          onIntencao={() => prefetchAnalise(dica.id, 'free')} />
       )}
 
       <PickCardFooter
@@ -1108,7 +1110,8 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
       <div className="flex-1" aria-hidden="true" />
       {/* Footer */}
       {m.reasoning && (
-        <PickExplainButton onClick={() => setShowAnalysis(true)} />
+        <PickExplainButton onClick={() => setShowAnalysis(true)}
+          onIntencao={() => prefetchAnalise(m.id, 'multipla')} />
       )}
 
       <PickCardFooter
@@ -1408,7 +1411,8 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
       <div className="flex-1" aria-hidden="true" />
       {/* Footer */}
       {pick.reasoning_1 && (
-        <PickExplainButton onClick={() => setShowAnalysis(true)} />
+        <PickExplainButton onClick={() => setShowAnalysis(true)}
+          onIntencao={() => prefetchAnalise(pick.id, 'alavancagem')} />
       )}
 
       <PickCardFooter

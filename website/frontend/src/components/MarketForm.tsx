@@ -226,7 +226,14 @@ function BlocoDaPerna({ leg, numero }: { leg: Leg; numero: number | null }) {
   // Teto compartilhado por todas as séries da perna, árbitro incluído: barras
   // de gráficos diferentes só são comparáveis na mesma escala, e comparar as
   // séries entre si é justamente o que a seção passou a permitir.
-  const series: Serie[] = [...leg.teams, ...(leg.referee ? [leg.referee] : [])]
+  /* `Array.isArray` antes de espalhar: uma perna sem `teams` (resposta parcial,
+     erro serializado, versão antiga do endpoint) não pode derrubar a PÁGINA.
+     Sem a guarda, o spread levanta "leg.teams is not iterable", o erro sobe pro
+     ErrorBoundary e o "Algo deu errado" toma o lugar dos picks -- um modal
+     estragado apagando a tela inteira. Mesma trava de PicksPendingCard e
+     LivePicks. */
+  const times: TeamSerie[] = Array.isArray(leg?.teams) ? leg.teams : []
+  const series: Serie[] = [...times, ...(leg?.referee ? [leg.referee] : [])]
   const valores = series.flatMap(s => s.matches.map(m => m.value)).filter((v): v is number => v != null)
   if (!valores.length) return null
   const teto = Math.max(...valores, leg.line_value ?? 0) * 1.15 || 1
@@ -246,7 +253,7 @@ function BlocoDaPerna({ leg, numero }: { leg: Leg; numero: number | null }) {
         </div>
       )}
 
-      {leg.teams.map(t => (
+      {times.map(t => (
         <Grafico
           key={`${t.team_id ?? t.team}-${t.side ?? 'jogador'}`}
           titulo={t.team ?? 'Time'}
@@ -279,21 +286,31 @@ function BlocoDaPerna({ leg, numero }: { leg: Leg; numero: number | null }) {
 export default function MarketForm({
   pickId,
   pickType,
+  dados,
 }: {
   pickId: number
   pickType: string
+  /* JÁ VEM PRONTO quando o modal buscou tudo de uma vez (o caso normal desde
+     02/09 · ver services/analisePick). A busca própria fica como caminho de
+     quem monta este bloco fora do modal. */
+  dados?: MarketFormData | null
 }) {
-  const [data, setData] = useState<MarketFormData | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [data, setData] = useState<MarketFormData | null>(dados ?? null)
+  const [loading, setLoading] = useState(dados === undefined)
 
   useEffect(() => {
+    if (dados !== undefined) {
+      setData(dados)
+      setLoading(false)
+      return
+    }
     let vivo = true
     api.get(`/suggestions/${pickId}/market-form`, { params: { pick_type: pickType } })
       .then(r => { if (vivo) setData(r.data) })
       .catch(() => { if (vivo) setData({ available: false }) })
       .finally(() => { if (vivo) setLoading(false) })
     return () => { vivo = false }
-  }, [pickId, pickType])
+  }, [pickId, pickType, dados])
 
   if (loading) return <Skeleton className="h-[200px]" />
   if (!data?.available || !data.legs?.length) return null

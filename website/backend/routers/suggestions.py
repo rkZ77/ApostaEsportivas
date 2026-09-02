@@ -3767,3 +3767,55 @@ def get_amostra(
             bloco["jogos"] = bloco["jogos"][:_AMOSTRA_MAX_EXIBIDA]
     return {"available": True, "tipo": "time", "amostra": amostra}
 
+
+
+# ─── A análise inteira, numa requisição ──────────────────────────────────────
+#
+# O "Entenda esta análise" abria e ia se montando: a forma do mercado chegava
+# de uma requisição, a amostra do motor de outra, cada uma com o próprio
+# esqueleto, cada uma terminando na hora dela. Em conexão de celular isso é o
+# modal pulando duas vezes na cara de quem abriu · e o pior momento pra tela
+# tremer é justamente o de ler número.
+#
+# Uma chamada, uma espera. O front busca isto ANTES de abrir (no toque do
+# botão) e guarda em cache, então na maior parte das vezes o modal abre com
+# tudo pronto e não pisca nada.
+#
+# NÃO CALCULA NADA NOVO: chama os dois handlers que já existem e junta as
+# respostas. Reimplementar aqui criaria uma segunda fonte pra mesma pergunta,
+# que é como as duas telas de amostra divergiram em produção.
+#
+# Falha de um lado não derruba o outro: quem tem forma de mercado mas não tem
+# amostra gravada (pick anterior a 27/08) continua vendo a metade que existe.
+@router.get("/{suggestion_id}/analise")
+def get_analise_completa(
+    suggestion_id: int,
+    pick_type: str = Query("vip"),
+    current_user: dict = Depends(get_current_user),
+):
+    """Forma do mercado + amostra do motor, juntas."""
+    def _tentar(fn, rotulo: str):
+        try:
+            return fn()
+        except HTTPException:
+            # Paywall e "não encontrado" são respostas legítimas dos dois
+            # handlers e precisam chegar inteiras ao chamador.
+            raise
+        except Exception:
+            logger.warning("[ANALISE] %s de %s#%s falhou", rotulo, pick_type,
+                           suggestion_id, exc_info=True)
+            return {"available": False}
+
+    return {
+        "market_form": _tentar(
+            # `limit` explícito: chamada direta em Python não passa pelo
+            # FastAPI, então o default do parâmetro seria o objeto `Query(10)`
+            # em vez do número 10 · ele iria inteiro pro `LIMIT %s`.
+            lambda: get_market_form(suggestion_id, pick_type=pick_type, limit=10,
+                                    current_user=current_user),
+            "forma do mercado"),
+        "amostra": _tentar(
+            lambda: get_amostra(suggestion_id, pick_type=pick_type,
+                                current_user=current_user),
+            "amostra"),
+    }

@@ -98,14 +98,28 @@ export function PickCardFooter({
  */
 export function PickExplainButton({
   onClick,
+  onIntencao,
   className,
 }: {
   onClick: (e: React.MouseEvent) => void
+  /** O DEDO ENCOSTANDO JÁ VALE COMO PEDIDO.
+   *
+   *  A análise é uma requisição ao servidor, e buscá-la só no clique faz o
+   *  modal abrir vazio e ir se preenchendo. `pointerdown` no celular acontece
+   *  de 100 a 300ms antes do clique, e `pointerenter` no desktop bem antes
+   *  disso · nesse tempo a resposta costuma chegar, e o modal abre pronto.
+   *
+   *  Quem passa isto adianta a busca (ver services/analisePick). Sem a prop, o
+   *  botão continua sendo só um botão. */
+  onIntencao?: () => void
   className?: string
 }) {
   return (
     <div className={cn('px-5 pb-3', className)}>
       <button
+        onPointerEnter={onIntencao}
+        onPointerDown={onIntencao}
+        onFocus={onIntencao}
         onClick={e => { e.stopPropagation(); onClick(e) }}
         className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold text-ink-2 hover:text-ink-1 border border-line hover:border-line-strong rounded-md py-2.5 min-h-[36px] transition-colors duration-1 ease-smooth"
       >
