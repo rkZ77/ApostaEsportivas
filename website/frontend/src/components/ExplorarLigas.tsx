@@ -5,7 +5,7 @@ import {
 import api from '../services/api'
 import { sinalizarNavegacao } from '../services/progressBus'
 import { useAuth } from '../context/AuthContext'
-import { SpinnerBlock, EmptyState, ErrorState, Modal, PillGroup, StatTile, Badge } from './ui'
+import { SpinnerBlock, EmptyState, ErrorState, Modal, PillGroup, SelectMenu, StatTile, Badge } from './ui'
 
 /*
  * Explorar: liga e temporada que NÃO estão no banco.
@@ -387,18 +387,21 @@ export default function ExplorarLigas() {
                   .filter(Boolean).join(', ')}
               </p>
             </div>
+            {/* Menu do site, nao select nativo -- mesma escolha do filtro longo
+                em FilterPanel: liga com 20 temporadas abria uma lista desenhada
+                pelo sistema, com a fonte e a cor de fora. */}
             {temporadas.length > 0 && (
-              <select
-                value={temporada ?? ''}
-                onChange={ev => setTemporada(Number(ev.target.value))}
-                aria-label="Temporada"
-                className="input py-2 text-sm ml-auto w-auto min-w-[9rem]">
-                {temporadas.map(t => (
-                  <option key={t.ano} value={t.ano}>
-                    {t.ano}{t.atual ? ' (atual)' : ''}
-                  </option>
-                ))}
-              </select>
+              <SelectMenu
+                className="ml-auto min-w-[9rem]"
+                align="right"
+                ariaLabel="Temporada"
+                value={String(temporada ?? '')}
+                onChange={v => setTemporada(Number(v))}
+                options={temporadas.map(t => ({
+                  value: String(t.ano),
+                  label: `${t.ano}${t.atual ? ' (atual)' : ''}`,
+                }))}
+              />
             )}
           </div>
 

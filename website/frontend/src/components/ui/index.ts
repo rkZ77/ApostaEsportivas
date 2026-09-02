@@ -23,6 +23,11 @@ export { default as Spinner, SpinnerBlock } from './Spinner'
 
 export { default as Pagination } from './Pagination'
 export { default as Tabs, PillGroup } from './Tabs'
+
+// Seletor de opcao unica em menu. Padrao do site pra escolher UM valor entre
+// muitos -- substitui a parede de pills e o <select> nativo (ver SelectMenu).
+export { default as SelectMenu } from './SelectMenu'
+export type { SelectMenuOption } from './SelectMenu'
 export type { TabItem } from './Tabs'
 export { default as Table } from './Table'
 export type { Column } from './Table'

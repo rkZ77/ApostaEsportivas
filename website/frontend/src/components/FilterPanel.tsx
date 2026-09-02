@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { SlidersHorizontal, X, ChevronDown } from 'lucide-react'
-import { SearchInput } from './ui'
+import { SearchInput, SelectMenu } from './ui'
 
 export interface FilterOption { value: string; label: string; icon?: React.ReactNode }
 
@@ -73,6 +73,14 @@ export default function FilterPanel({
   resultado?: number
 }) {
   const [open, setOpen] = useState(false)
+  /* O painel anima a ALTURA, e altura animada exige `overflow-hidden` -- senao
+     o conteudo vaza durante a transicao. So' que com ele ligado o menu de um
+     grupo longo (SelectMenu) era cortado na borda do painel: a lista abria e
+     morria no primeiro item que passasse do card. Libera o transbordo depois
+     que a animacao termina, e prende de novo antes de fechar. */
+  const [transbordo, setTransbordo] = useState(false)
+  const alternar = () => { setTransbordo(false); setOpen(o => !o) }
+  const fechar   = () => { setTransbordo(false); setOpen(false) }
   const c = ACCENTS[accent]
 
   const neutral = (g: FilterGroup) => g.defaultValue ?? g.options[0]?.value ?? ''
@@ -122,7 +130,7 @@ export default function FilterPanel({
 
       <div className="flex flex-wrap items-center gap-2">
         <button
-          onClick={() => setOpen(o => !o)}
+          onClick={alternar}
           className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg border transition-colors ${open ? c.active : 'border-line-strong text-ink-2 hover:border-ink-4'}`}
         >
           <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -175,25 +183,30 @@ export default function FilterPanel({
           animate={{ opacity: 1, height: 'auto' }}
           exit={{ opacity: 0, height: 0 }}
           transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-          className="overflow-hidden"
+          onAnimationComplete={() => setTransbordo(true)}
+          className={transbordo ? undefined : 'overflow-hidden'}
         >
         <div className="mt-2 card p-4 space-y-4 border-line">
           {groups.map(g => (
             <div key={g.key}>
               <p className="text-xs text-ink-3 mb-2">{g.label}</p>
-              {/* Muitas opcoes (ex: 30 meses de historico) viram select nativo em
-                  vez de parede de botoes -- pill buttons soh escalam bem ate uns
-                  8 itens, depois disso o painel fica maior que a tela. */}
+              {/* Muitas opcoes (ex: 30 meses de historico) viram MENU em vez de
+                  parede de botoes -- pill buttons soh escalam bem ate uns 8
+                  itens, depois disso o painel fica maior que a tela.
+
+                  Era um <select> nativo, que resolvia o tamanho e perdia o
+                  resto: a lista era desenhada pelo Android, com a fonte e a cor
+                  do sistema, sem icone e sem jeito de marcar o escolhido. O
+                  SelectMenu e' a mesma lista, desenhada pelo site, com busca
+                  quando fica longa. */}
               {g.options.length > 8 ? (
-                <select
+                <SelectMenu
+                  className="w-full"
+                  ariaLabel={g.label}
+                  options={g.options}
                   value={g.value}
-                  onChange={e => g.onChange(e.target.value)}
-                  className="input text-sm py-2 w-full"
-                >
-                  {g.options.map(opt => (
-                    <option key={opt.value || 'all'} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
+                  onChange={g.onChange}
+                />
               ) : (
                 <div className="flex flex-wrap gap-2">
                   {g.options.map(opt => (
@@ -248,7 +261,7 @@ export default function FilterPanel({
               painel e ver os N que sobraram e' a mesma acao.
             */}
             <button
-              onClick={() => setOpen(false)}
+              onClick={fechar}
               className={`text-xs font-bold px-4 py-2 rounded-lg border ${c.active}`}
             >
               {resultado == null
