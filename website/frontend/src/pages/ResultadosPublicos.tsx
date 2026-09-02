@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import { Trophy } from 'lucide-react'
 import api from '../services/api'
+import { translateLine } from '../utils/marketTranslate'
 import { Helmet } from 'react-helmet-async'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { winRate as calcWinRate, fmtUnits, STAKE_LABEL_PADRAO } from '../utils/format'
@@ -1089,7 +1090,7 @@ export default function ResultadosPublicos() {
                               )}
                             </div>
                             <span className="text-[11px] text-ink-3 shrink-0 hidden sm:block truncate max-w-[120px]">
-                              {g.market}{g.line ? `, ${g.line}` : ''}
+                              {g.market}{g.line ? `, ${translateLine(g.line)}` : ''}
                             </span>
                             <span className="font-mono text-xs font-bold text-ink-2 shrink-0">{g.odd ? Number(g.odd).toFixed(2) : ''}</span>
                             {g.result ? (

@@ -5,6 +5,7 @@ import { Helmet } from 'react-helmet-async'
 import { Lock, Crown, TrendingUp } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import api from '../services/api'
+import { translateLine } from '../utils/marketTranslate'
 import { getResultStyle, PICK_TYPE_LABEL } from '../utils/resultStyle'
 import { TeamLogo, LeagueLogo } from '../components/TeamLogo'
 import { useRevelacao, classesRevelacao, FADE_REVELACAO_MS } from '../hooks/useRevelacao'
@@ -186,7 +187,7 @@ export default function PickPublico() {
             <div className="px-5 py-4 space-y-2 border-b border-line/60">
               <div className="flex items-center gap-2">
                 <span className="text-[10px] text-ink-3">Mercado</span>
-                <span className="text-sm font-bold text-ink-1">{fullPick.market} {fullPick.line ? `, ${fullPick.line}` : ''}</span>
+                <span className="text-sm font-bold text-ink-1">{fullPick.market} {fullPick.line ? `, ${translateLine(fullPick.line)}` : ''}</span>
               </div>
               {fullPick.reasoning && (
                 <p className="text-xs text-ink-2 leading-relaxed line-clamp-4">{fullPick.reasoning}</p>

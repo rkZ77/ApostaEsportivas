@@ -308,12 +308,17 @@ except OSError:
     _logo_disk_cache.mkdir(parents=True, exist_ok=True)
 
 
-def _reduzir_logo(bruto: bytes) -> bytes:
+def _reduzir_logo(bruto: bytes, paletizar: bool = True) -> bytes:
     """Escudo no tamanho que a tela usa. Devolve o original se nao der.
 
     Paletiza em 256 cores porque escudo e' arte chapada: quase nao ha perda
     visivel e o arquivo cai muito mais do que so' redimensionando (45KB ->
     21.6KB so' com resize, 3.1KB com resize + paleta).
+
+    FOTO DE JOGADOR NAO E' ARTE CHAPADA. E' um retrato, com pele e gradiente de
+    fundo, e paletizar em 256 cores nele produz faixa visivel no rosto -- por
+    isso `paletizar=False` na foto. O arquivo fica maior que um escudo e ainda
+    assim pequeno: o corte de tamanho, que e' o que pesa, continua valendo.
 
     Nunca levanta. Falha aqui nao pode virar escudo faltando na tela -- serve o
     original, que e' pesado porem correto.
@@ -328,9 +333,10 @@ def _reduzir_logo(bruto: bytes) -> bytes:
             im.thumbnail((_LOGO_LADO, _LOGO_LADO), Image.LANCZOS)
             # FASTOCTREE preserva o canal alfa; o metodo padrao (mediancut) nao,
             # e escudo sem transparencia ganha um quadrado branco atras.
-            paleta = im.quantize(colors=256, method=Image.FASTOCTREE)
             saida = io.BytesIO()
-            paleta.save(saida, "PNG", optimize=True)
+            if paletizar:
+                im = im.quantize(colors=256, method=Image.FASTOCTREE)
+            im.save(saida, "PNG", optimize=True)
             reduzido = saida.getvalue()
         return reduzido if len(reduzido) < len(bruto) else bruto
     except Exception:
@@ -356,7 +362,7 @@ def _gravar_cache_logo(cache_path: pathlib.Path, conteudo: bytes) -> None:
         logger.warning("[LOGO] nao consegui gravar %s", cache_path, exc_info=True)
 
 
-async def _serve_logo(kind: str, item_id: int) -> Response:
+async def _serve_logo(kind: str, item_id: int, *, paletizar: bool = True) -> Response:
     cache_path = _logo_disk_cache / f"{kind}_{item_id}_{_LOGO_CACHE_V}.png"
 
     # TUDO QUE BLOQUEIA VAI PRO THREADPOOL.
@@ -375,7 +381,7 @@ async def _serve_logo(kind: str, item_id: int) -> Response:
         async with httpx.AsyncClient(timeout=8.0) as client:
             r = await client.get(url)
             if r.status_code == 200 and r.content:
-                conteudo = await run_in_threadpool(_reduzir_logo, r.content)
+                conteudo = await run_in_threadpool(_reduzir_logo, r.content, paletizar)
                 await run_in_threadpool(_gravar_cache_logo, cache_path, conteudo)
                 return Response(conteudo, media_type="image/png", headers=_LOGO_CACHE_HEADERS)
     except Exception:
@@ -395,6 +401,20 @@ async def proxy_league_logo(league_id: int):
     if not (1 <= league_id <= 999999):
         return Response(status_code=400)
     return await _serve_logo("league", league_id)
+
+
+# FOTO DO JOGADOR. Mesmo bucket dos escudos (media.api-sports.io/football/
+# players/<id>.png), mesma rota, mesmo cache em disco -- o pick de jogador e'
+# sobre uma PESSOA, e o card mostrava so' o nome dela.
+#
+# Nem todo jogador tem foto no provedor. Quando nao tem, aqui sai 404 e a tela
+# cai nas iniciais (ver FotoJogador no frontend) -- e' por isso que o avatar
+# nunca depende da imagem para existir.
+@app.get("/api/proxy/player/{player_id}.png", include_in_schema=False)
+async def proxy_player_photo(player_id: int):
+    if not (1 <= player_id <= 9999999):
+        return Response(status_code=400)
+    return await _serve_logo("player", player_id, paletizar=False)
 
 
 app.include_router(auth.router)

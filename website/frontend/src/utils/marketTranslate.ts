@@ -375,7 +375,14 @@ const LINE_PT: Record<string, string> = {
 // entende esse mesmo formato pra grading).
 export function translateLine(line?: string): string {
   if (!line) return ''
-  const trimmed = line.trim()
+  /* PONTO DO MEIO NUNCA CHEGA NA TELA (02/09).
+   *
+   * O motor de jogador gravava a linha como "Fulano · 2 ou mais chutes", e
+   * essa pontuação não é usada em lugar nenhum do site. O pipeline já grava com
+   * vírgula, mas os picks gravados ANTES continuam no banco e continuam sendo
+   * exibidos no histórico, então a limpeza mora aqui: é o funil por onde toda
+   * linha passa antes de virar texto. */
+  const trimmed = line.trim().replace(/\s*·\s*/g, ', ')
   const key = trimmed.toLowerCase()
   if (LINE_PT[key]) return LINE_PT[key]
 
@@ -391,7 +398,31 @@ export function translateLine(line?: string): string {
     if (a && b) return `${a}/${b}`
   }
 
-  return line
+  // `trimmed`, não `line`: é a versão já sem ponto do meio.
+  return trimmed
+}
+
+/*
+ * A LINHA DE UM PICK DE JOGADOR, sozinha.
+ *
+ * O que o motor grava em `line` é a frase inteira: "Pedro, 2 ou mais chutes no
+ * alvo". Ela serve ao compartilhamento e ao ledger, onde o pick aparece fora
+ * de contexto e precisa se explicar numa linha só.
+ *
+ * No card é o contrário: o jogador tem a foto e o nome dele em cima, e o
+ * mercado tem a linha própria logo acima -- repetir os dois aqui faz o card
+ * dizer "chutes no alvo" três vezes. Com `lineValue` (a coluna `line_value`,
+ * que é o número puro) sai o essencial: "2 ou mais". Sem ele, tira ao menos o
+ * nome do jogador da frente.
+ */
+export function linhaDoJogador(line?: string, lineValue?: number | null,
+                               player?: string | null): string {
+  if (lineValue != null) return `${lineValue} ou mais`
+  const texto = translateLine(line)
+  if (player && texto.toLowerCase().startsWith(player.toLowerCase())) {
+    return texto.slice(player.length).replace(/^[\s,]+/, '')
+  }
+  return texto
 }
 
 // Seleções nacionais (Copa do Mundo etc.) vêm da API-Football em inglês --

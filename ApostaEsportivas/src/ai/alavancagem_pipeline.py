@@ -82,7 +82,7 @@ REGRA DIVERSIFICACAO (dupla/tripla): picks com mercado IDENTICO sao PROIBIDOS e 
   Exemplos invalidos: "Total de Gols Casa Over 1.5" + "Total de Gols Casa Over 1.5" (mesmo mercado).
   Combine mercados diferentes: ex. gols totais + escanteios, ou gols casa + resultado, etc.
 
-ESTILO: PROIBIDO usar travessao (—) em qualquer campo de texto do JSON (reasoning). Use ponto, virgula, dois-pontos ou "·" no lugar.
+ESTILO: PROIBIDO usar travessao (—) em qualquer campo de texto do JSON (reasoning). Use ponto, virgula ou dois-pontos no lugar.
 
 Realize toda a analise INTERNAMENTE. Proibido texto fora do JSON.
 SAIDA: apenas JSON valido. Comeca com {{ e termina com }}.\

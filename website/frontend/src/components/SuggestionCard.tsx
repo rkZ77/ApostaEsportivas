@@ -7,7 +7,7 @@ import { pctProb } from '../utils/format'
 import { calcVipStake, calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import { stakeDe, contaEmUnidades } from '../utils/stakePlan'
 import ApostaModal from './ApostaModal'
-import { translateMarket, translateLine, translateTeamName, explainMarket } from '../utils/marketTranslate'
+import { translateMarket, translateLine, translateTeamName, explainMarket, linhaDoJogador } from '../utils/marketTranslate'
 import { PICK_TYPE_BORDER } from '../utils/resultStyle'
 import InfoTip from './InfoTip'
 import AnalysisModal from './AnalysisModal'
@@ -17,7 +17,7 @@ import {
 } from './PickCardParts'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
 import { useOddAtualizada } from '../hooks/useOddAtualizada'
-import { TeamLogo, LeagueLogo } from './TeamLogo'
+import { TeamLogo, LeagueLogo, PlayerPhoto } from './TeamLogo'
 import { Clock } from 'lucide-react'
 
 function wcPhase(dateStr?: string): string | null {
@@ -67,6 +67,15 @@ interface Suggestion {
   user_bet_house?: string | null
   stake_pct?: number | null
   suggested_stake_units?: number | null
+  /* PICK DE JOGADOR. Quando `player_name` vem, o card troca a linha única de
+     mercado por três campos rotulados (jogador, mercado, linha) e a foto da
+     pessoa · o pick é sobre ELA, e "Chutes no alvo, Pedro · 2 ou mais chutes
+     no alvo" numa linha só dizia o mercado duas vezes e o jogador no meio. */
+  player_id?: number | null
+  player_name?: string | null
+  player_team?: string | null
+  /** `line_value` do banco · o número puro da linha, sem a frase em volta. */
+  line_value?: number | null
   /** Pernas de um pick COMBINADO. Hoje só o Pick Boost usa (Over 1.5 FT +
    *  Under 2.5 HT), mas o formato é genérico de propósito: qualquer produto
    *  que junte mais de um mercado numa odd só cai aqui sem card novo. */
@@ -340,7 +349,13 @@ function SuggestionCard({
       {/* Hero: Odd | Stake | EV */}
       <div className="font-mono flex items-stretch divide-x divide-line/60 border-b border-line/60">
         <div className="flex-1 px-5 py-3 text-center">
-          <div className="text-[10px] text-ink-3 mb-0.5">Odd</div>
+          {/* "Odd combinada" quando o pick tem pernas · e' o vocabulario da
+              multipla, e no Boost o numero e' exatamente isso: o produto das
+              duas odds, nao a odd de um mercado. Ver as pernas logo abaixo,
+              cada uma com a sua. */}
+          <div className="text-[10px] text-ink-3 mb-0.5">
+            {s.legs && s.legs.length > 0 ? 'Odd combinada' : 'Odd'}
+          </div>
           <div className="text-3xl font-black text-green-400">
             {seguido && oddSeguida != null
               ? Number(oddSeguida).toFixed(2)
@@ -500,36 +515,105 @@ function SuggestionCard({
           * combinada, que é o que se aposta -- as de baixo explicam de onde
           * ela veio, e é a mesma leitura que o bilhete da casa mostra. */}
         {s.legs && s.legs.length > 0 ? (
-          <div className="space-y-1.5">
-            {s.legs.map((leg, i) => (
-              <div key={i} className="flex items-center gap-2 text-xs">
-                {/* O número da perna ancora a leitura: sem ele, duas linhas
-                    parecidas viram uma frase só no celular. */}
-                <span className="w-4 h-4 shrink-0 rounded bg-surface-3 border border-line
-                                 grid place-items-center text-[9px] font-bold text-ink-4">
-                  {i + 1}
-                </span>
-                {/* A APOSTA, e não o nome do mercado. "Mais de 1.5 gols" cabe e
-                    se entende; "Gols Mais/Menos - 1º Tempo" + "Menos de 2.5"
-                    ocupava duas colunas e truncava as duas no celular. O nome
-                    técnico não se perde: continua no InfoTip. */}
-                <span className="font-semibold text-ink-2 truncate">
-                  {leg.label ?? translateMarket(leg.market)}
-                </span>
-                {leg.periodo && (
-                  <span className="shrink-0 px-1.5 py-px rounded bg-surface-3 border border-line
-                                   text-[10px] text-ink-4 whitespace-nowrap">
-                    {leg.periodo}
-                  </span>
-                )}
-                <InfoTip text={explainMarket(leg.market, leg.line ?? undefined)} />
-                {leg.odd != null && (
-                  <span className="ml-auto shrink-0 font-mono tabular-nums text-ink-3">
-                    {Number(leg.odd).toFixed(2)}
-                  </span>
+          /* PERNA DESENHADA COMO A DA MÚLTIPLA (02/09).
+           *
+           * Os dois produtos são a mesma coisa para quem aposta: um bilhete de
+           * várias seleções por uma odd só. Mas cada um tinha o próprio desenho
+           * de perna: a múltipla numa caixa com borda, círculo numerado e a odd
+           * na direita; o Boost numa linha solta com um quadradinho cinza. Duas
+           * gramáticas para a mesma ideia, e a do Boost era a mais fraca: sem
+           * caixa, as duas pernas encostavam uma na outra e liam como uma frase
+           * só.
+           *
+           * Fica a da múltipla, que é a que já estava resolvida, e com o estado
+           * por perna junto. Num Boost só a perna do 1º tempo pode cair, e o
+           * card não tinha como mostrar isso. */
+          <div className="space-y-2">
+            {s.legs.map((leg, i) => {
+              /* Mesma regra da múltipla: a perna mostra o resultado DELA.
+                 Bilhete GREEN implica todas GREEN (dedução, não palpite);
+                 bilhete RED sem o dado da perna fica neutro, porque não se sabe
+                 qual caiu e pintar as duas de vermelho inventa metade. */
+              const lr = (leg.result ?? (s.result === 'GREEN' ? 'GREEN' : undefined)) as
+                'GREEN' | 'RED' | undefined
+              const boxClass = lr === 'GREEN' ? 'border-green-500/20 bg-green-500/5'
+                : lr === 'RED' ? 'border-red-500/20 bg-red-500/5'
+                : 'border-line bg-surface-1/60'
+              const circleClass = lr === 'GREEN' ? 'bg-green-500/20 text-green-400'
+                : lr === 'RED' ? 'bg-red-500/20 text-red-400'
+                : 'bg-amber-500/10 text-amber-400'
+              return (
+                <div key={i} className={`rounded-md border px-3 py-2 ${boxClass}`}>
+                  <div className="flex items-center gap-2">
+                    <span className={`w-5 h-5 flex items-center justify-center rounded-full
+                                      ${circleClass} text-[10px] font-black shrink-0`}>
+                      {lr === 'GREEN' ? '✓' : lr === 'RED' ? '✗' : i + 1}
+                    </span>
+                    {/* A APOSTA, e não o nome do mercado. "Mais de 1.5 gols"
+                        cabe e se entende; o técnico fica no InfoTip. */}
+                    <span className="text-xs text-ink-2 font-semibold truncate">
+                      {leg.label ?? translateMarket(leg.market)}
+                    </span>
+                    {leg.periodo && (
+                      <span className="shrink-0 px-1.5 py-px rounded bg-surface-3 border border-line
+                                       text-[10px] text-ink-4 whitespace-nowrap">
+                        {leg.periodo}
+                      </span>
+                    )}
+                    <InfoTip text={explainMarket(leg.market, leg.line ?? undefined)} />
+                    {leg.odd != null && (
+                      <span className={`ml-auto font-mono font-black text-sm shrink-0 ${
+                        lr === 'GREEN' ? 'text-green-400'
+                        : lr === 'RED' ? 'text-red-400' : 'text-amber-300'}`}>
+                        {Number(leg.odd).toFixed(2)}
+                      </span>
+                    )}
+                  </div>
+                  {leg.probability != null && (
+                    <div className="ml-7 mt-1 text-[10px] text-ink-4">
+                      {Math.round(Number(leg.probability) * 100)}% de chance nesta perna
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        ) : s.player_name ? (
+          /* PICK DE JOGADOR EM CAMPOS ROTULADOS.
+           *
+           * Numa linha só o card dizia "Chutes no alvo, Pedro · 2 ou mais
+           * chutes no alvo": o mercado aparecia duas vezes, o nome da pessoa
+           * ficava espremido dentro dele, e o separador era um ponto do meio,
+           * pontuação que o site não usa em lugar nenhum.
+           *
+           * Quebrado em jogador, mercado e linha, cada pergunta tem um lugar:
+           * QUEM, O QUÊ e QUANTO precisa sair. A foto entra porque esta é a
+           * única família de pick que é sobre uma pessoa, e escudo de time não
+           * identifica o Pedro. */
+          <div className="flex items-start gap-2.5">
+            <PlayerPhoto id={s.player_id} name={s.player_name} size={38} />
+            <dl className="flex-1 min-w-0 space-y-0.5">
+              <div className="flex items-baseline gap-2">
+                <dt className="w-[3.75rem] shrink-0 text-[10px] text-ink-4">Jogador</dt>
+                <dd className="text-xs font-bold text-ink-1 truncate">{s.player_name}</dd>
+                {s.player_team && (
+                  <span className="text-[10px] text-ink-4 truncate shrink">{s.player_team}</span>
                 )}
               </div>
-            ))}
+              <div className="flex items-baseline gap-2">
+                <dt className="w-[3.75rem] shrink-0 text-[10px] text-ink-4">Mercado</dt>
+                <dd className="text-xs font-semibold text-ink-2 truncate">
+                  {translateMarket(s.market)}
+                </dd>
+                <InfoTip text={explainMarket(s.market, s.line)} />
+              </div>
+              <div className="flex items-baseline gap-2">
+                <dt className="w-[3.75rem] shrink-0 text-[10px] text-ink-4">Linha</dt>
+                <dd className="text-xs text-ink-2 truncate">
+                  {linhaDoJogador(s.line, s.line_value, s.player_name)}
+                </dd>
+              </div>
+            </dl>
           </div>
         ) : (
           <div className="flex items-center gap-2 text-xs text-ink-3">
@@ -542,7 +626,18 @@ function SuggestionCard({
 
       <PickProbability confidence={s.confidence} probability={s.probability} />
 
-      <PickReasoning text={fato} />
+      {/* O "Fato" NÃO aparece no pick de jogador (02/09).
+        *
+        * Ele repetia, em texto corrido, exatamente o que os três campos acima
+        * já dizem em duas linhas: quem, qual mercado, qual média, em quantas
+        * atuações. Quatro linhas de parágrafo por card, num produto que sai em
+        * lista e é lido no celular.
+        *
+        * O texto não se perde: continua inteiro em "Entenda esta análise", que
+        * é onde ele responde a pergunta que o card não responde ("por que ela
+        * acha que sai"). Nos outros produtos ele fica, porque lá é a única
+        * frase que descreve a partida. */}
+      {!s.player_name && <PickReasoning text={fato} />}
 
 
       {/* Footer */}
@@ -566,6 +661,15 @@ function SuggestionCard({
         data={{
           market: translateMarket(s.market),
           line: translateLine(s.line),
+          /* O jogador vai separado pelo mesmo motivo do card: no pick de
+             jogador, "quem" é metade da aposta, e ele estava dentro da string
+             da linha. Com os campos separados o modal escreve a regra de
+             verdade ("dá GREEN se Pedro fizer 2 ou mais chutes no alvo") em
+             vez do texto genérico de mercado desconhecido. */
+          playerId: s.player_id ?? undefined,
+          playerName: s.player_name ?? undefined,
+          playerTeam: s.player_team ?? undefined,
+          lineValue: s.line_value ?? undefined,
           // Crus, pra regra do mercado: explainMarket casa por chave em inglês.
           marketRaw: s.market,
           lineRaw: s.line,

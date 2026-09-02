@@ -74,7 +74,7 @@ PRINCÍPIOS INEGOCIÁVEIS:
 COMBINAÇÕES IDEAIS: mercados de categorias diferentes + jogos de ligas sem relação estatística.
 Os detalhes de execução (varredura, score, correlação, montagem, conflitos proibidos) estão no prompt do usuário.
 
-ESTILO: PROIBIDO usar travessão (—) em qualquer campo de texto do JSON (reason, motivo). Use ponto, vírgula, dois-pontos ou "·" no lugar.
+ESTILO: PROIBIDO usar travessão (—) em qualquer campo de texto do JSON (reason, motivo). Use ponto, vírgula ou dois-pontos no lugar.
 
 SAÍDA OBRIGATÓRIA: realize toda a análise INTERNAMENTE. NÃO escreva texto, markdown, títulos ou raciocínio fora do JSON.
 Sua resposta começa com { e termina com }. Nenhum caractere antes ou depois do JSON."""

@@ -23,7 +23,7 @@ def resumo_estruturado(c: dict) -> list:
 
     itens = [
         {"rotulo": "Linha", "valor": c["rotulo_linha"],
-         "detalhe": f"{metodo.label} · {jogador['player_name']} ({jogador['team_name']})"},
+         "detalhe": f"{metodo.label}, {jogador['player_name']} ({jogador['team_name']})"},
         {"rotulo": "Média recente",
          "valor": _n(analise.get("esperado_bruto")),
          "detalhe": f"{analise.get('amostra')} atuações de titular"},
@@ -36,10 +36,10 @@ def resumo_estruturado(c: dict) -> list:
          "detalhe": f"{c.get('acertos')} de {analise.get('amostra')} atuações "
                     f"bateram a linha"},
         {"rotulo": "Probabilidade do modelo", "valor": _pct(analise.get("probability")),
-         "detalhe": f"Binomial Negativa · dispersão {_n(analise.get('phi'))}"},
+         "detalhe": f"Binomial Negativa, dispersão {_n(analise.get('phi'))}"},
         {"rotulo": "Odd justa x oferecida",
          "valor": f"{_n(analise.get('fair_odd'))} x {_n(analise.get('odd'))}",
-         "detalhe": f"margem {_pct(analise.get('edge'))} · EV {_pct(analise.get('ev'))}"},
+         "detalhe": f"margem {_pct(analise.get('edge'))}, EV {_pct(analise.get('ev'))}"},
         {"rotulo": "Score", "valor": _n(c.get("pick_score"), 3),
          "detalhe": "probabilidade, segurança da odd, amostra e margem"},
     ]
@@ -53,7 +53,7 @@ def resumo_estruturado(c: dict) -> list:
     if serie:
         itens.append({
             "rotulo": "Últimas atuações",
-            "valor": " · ".join(str(int(v)) for v in serie[:10]),
+            "valor": ", ".join(str(int(v)) for v in serie[:10]),
             "detalhe": "da mais recente para a mais antiga",
         })
     return itens

@@ -46,6 +46,11 @@ export interface Amostra {
   /** Prop de jogador guarda outra forma: uma lista de valores por atuação. */
   valores?: number[]
   atuacoes_lidas?: number
+  /* O endpoint devolve estes três no pick de jogador (metodo, linha e nome).
+     São a reserva de quem abre a amostra sem o card por perto. */
+  mercado?: string
+  jogador?: string
+  linha?: number
   confronto?: {
     descricao?: string | null
     fase?: string | null
@@ -66,9 +71,19 @@ const diaMes = (iso?: string | null) => {
   return d && m ? `${d}/${m}` : a
 }
 
-export default function BlocoAmostra({ amostra }: { amostra: Amostra }) {
+export default function BlocoAmostra({ amostra, mercado, jogador, linha }: {
+  amostra: Amostra
+  mercado?: string
+  jogador?: string
+  linha?: number
+}) {
   const lados = [amostra.mandante, amostra.visitante].filter(Boolean) as LadoDaAmostra[]
   const c = amostra.confronto
+  const valores = amostra.valores ?? []
+  // Quantas atuações bateram a linha. É a mesma conta que o motor fez
+  // (`frequencia` no pipeline), refeita aqui só sobre o que está na tela · por
+  // isso o rótulo diz "das N exibidas", e não "das N lidas".
+  const bateram = linha != null ? valores.filter(v => v >= linha).length : null
 
   return (
     <div className="space-y-3">
@@ -104,18 +119,69 @@ export default function BlocoAmostra({ amostra }: { amostra: Amostra }) {
         </div>
       )}
 
-      {/* Prop de jogador: uma fileira de números, não dois times. */}
-      {amostra.valores && amostra.valores.length > 0 && (
-        <div className="bg-surface-0 border border-line rounded-lg p-3">
-          <div className="text-[10px] text-ink-4 mb-1.5">
-            Últimas atuações{amostra.atuacoes_lidas ? `, ${amostra.valores.length} de ${amostra.atuacoes_lidas} lidas` : ''}
-          </div>
-          <div className="flex flex-wrap gap-1">
-            {amostra.valores.map((v, i) => (
-              <span key={i} className="font-mono text-xs bg-surface-2 text-ink-1 rounded px-1.5 py-0.5 tabular-nums">
-                {v}
-              </span>
-            ))}
+      {/* PROP DE JOGADOR: uma fileira de números, não dois times.
+        *
+        * E a fileira sozinha não se lê. "3 2 1 4 2 2 0 3 2 1" só vira
+        * informação com o cabeçalho que diz de que MERCADO são e qual LINHA
+        * precisava ser batida · aí cada número se classifica sozinho, e o
+        * verde/cinza mostra a frequência sem precisar contar na mão.
+        *
+        * Sem a linha (pick antigo, ou amostra aberta fora do card) o bloco
+        * continua igual ao que era: os números crus, sem cor inventada. */}
+      {valores.length > 0 && (
+        <div className="bg-surface-0 border border-line rounded-lg overflow-hidden">
+          {(mercado || linha != null) && (
+            <div className="px-3 py-2 border-b border-line space-y-0.5">
+              {jogador && (
+                <div className="flex items-baseline gap-2">
+                  <span className="w-[3.75rem] shrink-0 text-[10px] text-ink-4">Jogador</span>
+                  <span className="text-xs font-bold text-ink-1 truncate">{jogador}</span>
+                </div>
+              )}
+              {mercado && (
+                <div className="flex items-baseline gap-2">
+                  <span className="w-[3.75rem] shrink-0 text-[10px] text-ink-4">Mercado</span>
+                  <span className="text-xs font-semibold text-ink-2 truncate">{mercado}</span>
+                </div>
+              )}
+              {linha != null && (
+                <div className="flex items-baseline gap-2">
+                  <span className="w-[3.75rem] shrink-0 text-[10px] text-ink-4">Linha</span>
+                  <span className="text-xs text-ink-2">{linha} ou mais</span>
+                </div>
+              )}
+            </div>
+          )}
+          <div className="p-3">
+            <div className="text-[10px] text-ink-4 mb-1.5">
+              Últimas atuações{amostra.atuacoes_lidas ? `, ${valores.length} de ${amostra.atuacoes_lidas} lidas` : ''}
+              {', da mais recente para a mais antiga'}
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {valores.map((v, i) => {
+                const bateu = linha != null && v >= linha
+                return (
+                  <span
+                    key={i}
+                    title={linha == null ? undefined
+                      : bateu ? `${v}, bateu a linha` : `${v}, não bateu`}
+                    className={`font-mono text-xs rounded px-1.5 py-0.5 tabular-nums border ${
+                      linha == null
+                        ? 'bg-surface-2 text-ink-1 border-transparent'
+                        : bateu
+                          ? 'bg-green-500/10 text-green-400 border-green-500/25'
+                          : 'bg-surface-2 text-ink-4 border-line'}`}
+                  >
+                    {v}
+                  </span>
+                )
+              })}
+            </div>
+            {bateram != null && (
+              <p className="text-[10px] text-ink-4 mt-2">
+                {bateram} das {valores.length} atuações exibidas bateram a linha de {linha} ou mais.
+              </p>
+            )}
           </div>
         </div>
       )}

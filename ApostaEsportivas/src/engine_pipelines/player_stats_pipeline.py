@@ -397,7 +397,12 @@ def _salvar(cur, c: dict) -> int | None:
         j["player_id"], j["player_name"], j["team_id"], j["team_name"], j.get("position"),
         metodo.slug, metodo.coluna,
         c["oferta"]["market_name"], metodo.slug,
-        f"{j['player_name']} · {c['rotulo_linha']}", c["oferta"]["n"],
+        # A LINHA GRAVADA NAO USA PONTO DO MEIO (02/09). Ela sai em texto no
+        # card, no compartilhamento e no ledger, e "Fulano · 2 ou mais chutes"
+        # e' a pontuacao que o site nao usa em lugar nenhum. Quem separa o
+        # jogador do mercado na TELA e' o card, que desenha os dois em linhas
+        # proprias -- aqui fica a frase corrida, com virgula.
+        f"{j['player_name']}, {c['rotulo_linha']}", c["oferta"]["n"],
         analise.get("odd"), c["oferta"]["bookmaker"], c["oferta"]["market_id"],
         c.get("pick_score"), analise.get("probability"), analise.get("probability"),
         analise.get("fair_odd"), analise.get("edge"), analise.get("ev"),

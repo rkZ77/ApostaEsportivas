@@ -1487,8 +1487,10 @@ interface MercadoPick {
   home_team: string; away_team: string
   home_team_id?: number; away_team_id?: number
   league_id?: number; league_name?: string
-  player_name?: string; team_name?: string
+  player_id?: number; player_name?: string; team_name?: string
   market: string; market_type?: string; line: string
+  /** Número puro da linha. O card monta "2 ou mais" a partir dele. */
+  line_value?: number | null
   odd: number; bet_house?: string
   prob_real?: number; edge?: number
   /* Só Player Stats · nele a odd é faixa de sanidade e quem ordena é o Score
@@ -1575,6 +1577,15 @@ function mercadoParaSuggestion(p: MercadoPick, tipo: TipoMercado) {
        nome do mercado na casa de aposta, em inglês, e o card imprimiria
        "Player Shots on Target" para o assinante. O nome do jogador não se
        perde: ele já vem dentro de `line` ("Fulano · 2 ou mais chutes"). */
+    /* O JOGADOR VAI SEPARADO (02/09). Ele estava dentro de `line`
+       ("Pedro · 2 ou mais chutes no alvo"), então o card imprimia o nome de
+       uma pessoa no meio de um mercado, com um ponto do meio de separador.
+       Com os campos separados o card desenha jogador, mercado e linha em
+       linhas próprias, com a foto. */
+    player_id: p.player_id,
+    player_name: p.player_name,
+    player_team: p.team_name,
+    line_value: p.line_value != null ? Number(p.line_value) : null,
     market: tipo === 'player_stats'
       ? (LABEL_DO_METODO[p.method ?? ''] ?? p.method ?? p.market)
       /* O Boost tem DUAS pernas e uma odd só. `market` continua com a
@@ -2478,6 +2489,17 @@ export default function Picks() {
       (p: MercadoPick) => ({ id: p.id, s: mercadoParaSuggestion(p, 'player_stats') })),
     [today?.player_stats],
   )
+  /* Os dois grupos do Boost, prontos pra aba Hoje. `boostFree` é o de maior
+     Score do dia e é público; o resto é VIP. A separação já existia na aba do
+     produto e vem do backend (`plano`), não da posição na lista. */
+  const boostFreeCards = useMemo<Array<{ id: number; s: any }>>(
+    () => boostFree.map(p => ({ id: p.id, s: mercadoParaSuggestion(p, 'boost') })),
+    [boostFree],
+  )
+  const boostVipCards = useMemo<Array<{ id: number; s: any }>>(
+    () => boostVip.map(p => ({ id: p.id, s: mercadoParaSuggestion(p, 'boost') })),
+    [boostVip],
+  )
 
   useEffect(() => {
     api.get('/suggestions/recent-results', { params: { limit: 40 } })
@@ -2954,6 +2976,44 @@ export default function Picks() {
                       </button>
                     </>
                   )}
+                </section>
+              )}
+
+              {/* PICK BOOST NA ABA HOJE (02/09).
+                *
+                * Ele era o único produto publicado que não aparecia aqui. A
+                * aba Hoje é o resumo do dia · quem abre o site cai nela, e um
+                * produto inteiro de fora faz o resumo mentir por omissão, do
+                * mesmo jeito que acontecia com o Ao Vivo antes de 29/08.
+                *
+                * O corte free/VIP é o mesmo da aba do produto, e vem do campo
+                * `plano` que o backend marca: o de maior Score do dia é
+                * público, o resto é VIP. Quem não tem acesso vê o de graça e o
+                * cadeado dos outros, não uma seção vazia. */}
+              {(boostFreeCards.length > 0 || boostVipCards.length > 0) && (
+                <section>
+                  <SectionHeader color="bg-cyan-400" label="Pick Boost"
+                    contagem={boostFreeCards.length + (canSeeVip ? boostVipCards.length : 0)} />
+                  <div className="lista-longa grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                    {boostFreeCards.map(c => (
+                      <SuggestionCard key={`bf-${c.id}`} s={c.s}
+                        banca={bancaSummary?.has_banca ? bancaSummary : null} />
+                    ))}
+                    {canSeeVip && boostVipCards.map(c => (
+                      <SuggestionCard key={`bv-${c.id}`} s={c.s}
+                        banca={bancaSummary?.has_banca ? bancaSummary : null} />
+                    ))}
+                  </div>
+                  {!canSeeVip && boostVipCards.length > 0 && (
+                    <div className="mt-3">
+                      <VipLockOverlay color="blue" picks={today?.bloqueados?.mercados}
+                        rotulo="Pick Boost" />
+                    </div>
+                  )}
+                  <button onClick={() => setTab('boost')}
+                    className="mt-4 w-full text-center text-xs text-cyan-400 hover:text-cyan-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong">
+                    Abrir a aba Pick Boost
+                  </button>
                 </section>
               )}
 

@@ -16,7 +16,7 @@ OBJETIVO:
 Analisar os dados de uma partida e identificar os 3 mercados com maior consistência estatística real. Para isso: (1) varra TODOS os mercados disponíveis nas odds, (2) avalie a taxa de ocorrência real de cada um com os dados históricos, (3) selecione os 3 com maior padrão confirmado de categorias distintas. Entre os 3, designe qual é o melhor (is_best_pick: true) com base na análise completa · qualidade dos dados, volatilidade e confiança real.
 
 ESTILO DE TEXTO (todos os campos de texto do JSON, especialmente "reasoning"):
-PROIBIDO usar travessão (—) em qualquer lugar. Use ponto, vírgula, dois-pontos ou "·" no lugar.
+PROIBIDO usar travessão (—) em qualquer lugar. Use ponto, vírgula ou dois-pontos no lugar.
 
 SAÍDA: apenas JSON válido. Sua resposta começa com { e termina com }. Nenhum texto fora do JSON.\
 """

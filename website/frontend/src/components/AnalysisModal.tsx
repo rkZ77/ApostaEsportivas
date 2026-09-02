@@ -2,6 +2,7 @@ import { BookOpen, Percent, Target, TrendingUp, Scale } from 'lucide-react'
 import Modal from './ui/Modal'
 import { Badge } from './ui'
 import { explainMarket, regraDoMercado, translateLine, translateMarket } from '../utils/marketTranslate'
+import type { RegraDoMercado } from '../utils/marketTranslate'
 import MarketForm from './MarketForm'
 import AmostraDoMotor from './AmostraDoMotor'
 
@@ -95,6 +96,53 @@ export interface AnalysisData {
    */
   homeTeam?: string | null
   awayTeam?: string | null
+  /**
+   * PICK DE JOGADOR · quem, e qual número.
+   *
+   * Sem estes campos o modal caía no texto genérico de mercado desconhecido:
+   * "Dá GREEN conforme as condições do mercado Chutes no alvo, linha Pedro ·
+   * 2 ou mais chutes no alvo". Isso ocupava o lugar mais nobre da tela (a
+   * primeira caixa, a que explica a REGRA) para repetir o nome do pick.
+   *
+   * `explainMarket` não tinha como fazer melhor: a chave dele é o catálogo de
+   * mercados de jogo, e prop de jogador não está lá. A regra de um mercado de
+   * contagem individual é sempre a mesma frase, e ela se escreve com estes
+   * dois campos.
+   */
+  playerId?: number
+  playerName?: string
+  playerTeam?: string
+  /** `line_value` · o número puro da linha, sem a frase em volta. */
+  lineValue?: number
+}
+
+/*
+ * A REGRA DE UM MERCADO DE JOGADOR.
+ *
+ * Não vem de `regraDoMercado` porque o catálogo dele é indexado por mercado de
+ * PARTIDA (gols, escanteios, cartões). Aqui a regra não depende do mercado: em
+ * todos eles conta-se quantas vezes UMA pessoa faz UMA coisa, e a linha é
+ * sempre "n ou mais". Uma frase, com dois buracos.
+ *
+ * "Faltas do jogador" e "Defesas do goleiro" perdem o sufixo: escrito por
+ * extenso viraria "faltas do jogador de Erick Pulgar".
+ */
+function regraDoJogador(
+  { playerName, market, lineValue }: AnalysisData,
+): RegraDoMercado | null {
+  if (!playerName || lineValue == null) return null
+  const contagem = market.replace(/\s+do (jogador|goleiro)$/i, '').toLowerCase()
+  return {
+    oQueE: `Aposta na estatística individual do jogador: quantos ${contagem} `
+         + `${playerName} registra nesta partida. O placar não importa, só o que `
+         + `ele faz em campo.`,
+    green: `${playerName} registrar ${lineValue} ou mais ${contagem} no tempo normal.`,
+    red: lineValue >= 1
+      ? `Ele ficar em ${lineValue - 1} ou menos.`
+      : 'Ele não registrar nenhum.',
+    devolve: 'Se ele não entrar em campo, a maioria das casas devolve a aposta. '
+           + 'Confira a regra da sua antes de apostar.',
+  }
 }
 
 /** Probabilidade que a casa está embutindo na odd. */
@@ -159,8 +207,10 @@ export default function AnalysisModal({
 
      Quem explica um bilhete é o bloco perna a perna, que já diz o que precisa
      acontecer em cada uma. */
-  const regra = !temPernas && data.marketRaw
-    ? regraDoMercado(data.marketRaw, data.lineRaw ?? undefined) : null
+  const regra = !temPernas
+    ? (regraDoJogador(data)
+       ?? (data.marketRaw ? regraDoMercado(data.marketRaw, data.lineRaw ?? undefined) : null))
+    : null
   // Mercado que não é de contagem (resultado, ambas marcam) não vira número
   // inteiro · aí vale o texto corrido de sempre.
   const regraTexto = !temPernas && !regra && data.marketRaw
@@ -182,7 +232,12 @@ export default function AnalysisModal({
         data.homeTeam && data.awayTeam ? `${data.homeTeam} x ${data.awayTeam}` : null,
         temPernas
           ? `${data.legs!.length} seleções`
-          : `${data.market}${data.line ? `, ${data.line}` : ''}`,
+          /* Pick de jogador: o nome primeiro, e a linha em número puro. O
+             subtítulo saía "Chutes no alvo, Pedro · 2 ou mais chutes no alvo"
+             · o mesmo mercado duas vezes numa linha de 40 caracteres. */
+          : data.playerName
+            ? `${data.playerName}, ${data.lineValue ?? ''}${data.lineValue != null ? ' ou mais ' : ''}${data.market.toLowerCase()}`
+            : `${data.market}${data.line ? `, ${data.line}` : ''}`,
       ].filter(Boolean).join(', ')}
     >
       <div className="p-5 space-y-5">
@@ -319,7 +374,7 @@ export default function AnalysisModal({
                             outro pick. */}
                         {leg.label ?? translateMarket(leg.market ?? '')}
                         {leg.periodo
-                          ? <span className="text-ink-3"> · {leg.periodo}</span>
+                          ? <span className="text-ink-3">, {leg.periodo}</span>
                           : leg.line && <span className="text-ink-3">, {translateLine(leg.line)}</span>}
                       </p>
                       <p className="text-xs text-ink-2 leading-relaxed mt-0.5">
@@ -352,7 +407,13 @@ export default function AnalysisModal({
           * outras seções trazia: se é clássico, se é jogo de volta e o que
           * aconteceu na ida. */}
         {data.pickId != null && data.pickType && (
-          <AmostraDoMotor pickId={data.pickId} pickType={data.pickType} />
+          <AmostraDoMotor
+            pickId={data.pickId}
+            pickType={data.pickType}
+            mercado={data.playerName ? data.market : undefined}
+            jogador={data.playerName}
+            linha={data.lineValue}
+          />
         )}
 
         {/* Texto do motor */}

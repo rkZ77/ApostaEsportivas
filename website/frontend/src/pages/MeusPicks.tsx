@@ -7,7 +7,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { tabFade, toastUp } from '../lib/motion'
 import api from '../services/api'
 import PageShell from '../components/PageShell'
-import { translateMarket, explainMarket } from '../utils/marketTranslate'
+import { translateMarket, translateLine, explainMarket } from '../utils/marketTranslate'
 import SuggestionDetail from '../components/SuggestionDetail'
 import ProfitChart from '../components/ProfitChart'
 import { fmtBRL, fmtSigned, winRate as calcWinRate, capitalizarFrase } from '../utils/format'
@@ -574,7 +574,7 @@ export default function MeusPicks() {
                               <div className="flex items-center gap-1 min-w-0">
                                 <p className="text-xs text-ink-4 truncate">
                                   {translateMarket(e.market) ?? ''}
-                                  {e.line ? `, ${e.line}` : ''}
+                                  {e.line ? `, ${translateLine(e.line)}` : ''}
                                   {e.actual_odd
                                     ? <>, <span className="text-ink-2">Odd {Number(e.actual_odd).toFixed(2)}</span>{Math.abs(Number(e.actual_odd) - Number(e.odd)) > 0.001 ? <span className="text-ink-4"> (pick: {Number(e.odd).toFixed(2)})</span> : null}</>
                                     : e.odd ? `. Odd ${Number(e.odd).toFixed(2)}` : ''}

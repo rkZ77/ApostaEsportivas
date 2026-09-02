@@ -3631,10 +3631,27 @@ def get_amostra(
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute(f"SELECT engine_debug FROM {tabela} WHERE id = %s", (suggestion_id,))
+        # Pick de jogador leva TRES colunas a mais. A amostra dele e' uma fileira
+        # de numeros, e numero solto nao se le: "3 2 1 4" so' vira informacao ao
+        # lado da linha que precisava ser batida. O nome do mercado e o do
+        # jogador vem junto pela mesma razao -- a amostra passa a dizer de QUEM
+        # e de QUE mercado ela e', em vez de depender do card que ficou atras
+        # do modal.
+        # `picks_goleiros` e' a tabela legada e nunca teve coluna `method` -- o
+        # metodo dela e' fixo e mora em `market_type` ('saves').
+        extras = {"picks_player_stats": ", method, line_value, player_name",
+                  "picks_goleiros": ", market_type AS method, line_value, player_name",
+                  }.get(tabela, "")
+        cur.execute(f"SELECT engine_debug{extras} FROM {tabela} WHERE id = %s",
+                    (suggestion_id,))
         row = cur.fetchone()
         if not row:
             raise HTTPException(404, "Pick nao encontrado")
+        contexto_jogador = {
+            "metodo": row.get("method"),
+            "linha": float(row["line_value"]) if row.get("line_value") is not None else None,
+            "jogador": row.get("player_name"),
+        } if extras else {}
 
         debug = row["engine_debug"] or {}
         if isinstance(debug, str):
@@ -3661,7 +3678,7 @@ def get_amostra(
     # num formato so' produziria campos vazios dos dois lados.
     if "valores" in amostra and "mandante" not in amostra:
         return {"available": True, "tipo": "jogador",
-                "amostra": {**amostra,
+                "amostra": {**amostra, **contexto_jogador,
                             "valores": (amostra.get("valores") or [])[:_AMOSTRA_MAX_EXIBIDA]}}
 
     for lado in ("mandante", "visitante"):

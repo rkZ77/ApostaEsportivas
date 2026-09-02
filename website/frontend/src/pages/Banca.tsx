@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext'
 import { useOnboarding } from '../context/OnboardingContext'
 import { EVENTO_CONFIGURAR_BANCA } from '../components/onboarding/constantes'
 import PageShell from '../components/PageShell'
+import { translateLine } from '../utils/marketTranslate'
 import ProfitChart from '../components/ProfitChart'
 import SuggestionDetail from '../components/SuggestionDetail'
 import { fmtBRL, fmtSigned, fmtUnits } from '../utils/format'
@@ -661,7 +662,7 @@ export default function Banca() {
                       </div>
                       <p className="text-xs text-ink-4 truncate">
                         {e.market ?? ''}
-                        {e.line ? `, ${e.line}` : ''}
+                        {e.line ? `, ${translateLine(e.line)}` : ''}
                         {e.actual_odd
                           ? <>, <span className="text-ink-2">Odd {Number(e.actual_odd).toFixed(2)}</span>{Math.abs(Number(e.actual_odd) - Number(e.odd)) > 0.001 ? <span className="text-ink-4"> (pick: {Number(e.odd).toFixed(2)})</span> : null}</>
                           : e.odd ? `. Odd ${Number(e.odd).toFixed(2)}` : ''}

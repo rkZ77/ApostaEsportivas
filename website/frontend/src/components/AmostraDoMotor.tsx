@@ -37,8 +37,25 @@ import BlocoAmostra, { type Amostra } from './BlocoAmostra'
  */
 
 export default function AmostraDoMotor({
-  pickId, pickType,
-}: { pickId: number; pickType: string }) {
+  pickId, pickType, mercado, jogador, linha,
+}: {
+  pickId: number
+  pickType: string
+  /* CONTEXTO DO PICK DE JOGADOR (02/09).
+   *
+   * A amostra dele é uma fileira de números soltos: "3 2 1 4 2 2 0 3 2 1".
+   * Isso não é informação, é um monte de dígito · o que transforma em leitura
+   * é saber de QUE mercado são e QUAL linha precisava ser batida. Com a linha,
+   * a mesma fileira responde sozinha "bateu em 7 das 10".
+   *
+   * Vem por prop, do card, e não de uma consulta nova: quem já tem o número na
+   * tela é quem abriu o modal. O endpoint também devolve os três (a partir de
+   * 02/09), e eles servem de reserva para quem abre a amostra sem card por
+   * perto, como o painel de auditoria. */
+  mercado?: string
+  jogador?: string
+  linha?: number
+}) {
   const [amostra, setAmostra] = useState<Amostra | null>(null)
   const [carregando, setCarregando] = useState(true)
 
@@ -61,7 +78,12 @@ export default function AmostraDoMotor({
         <Layers className="w-3.5 h-3.5 text-ink-4" />
         <span className="panel-label">Os jogos que o motor olhou</span>
       </div>
-      <BlocoAmostra amostra={amostra} />
+      <BlocoAmostra
+        amostra={amostra}
+        mercado={mercado ?? amostra.mercado}
+        jogador={jogador ?? amostra.jogador}
+        linha={linha ?? amostra.linha}
+      />
       <p className="text-[10px] text-ink-4 leading-relaxed mt-2">
         Esta é a amostra que gerou a análise, exatamente como o motor a leu no
         momento da escolha, não é uma consulta refeita depois.
