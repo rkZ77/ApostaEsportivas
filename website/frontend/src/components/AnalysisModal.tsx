@@ -66,7 +66,25 @@ export interface AnalysisData {
    * tipos em que o apostador entende menos o que precisa acontecer. A regra
    * aparece PERNA A PERNA, que é a versão honesta de "igual aos outros".
    */
-  legs?: Array<{ market?: string | null; line?: string | null; odd?: number | null }>
+  legs?: Array<{
+    market?: string | null
+    line?: string | null
+    odd?: number | null
+    /** A aposta escrita como no bilhete ("Mais de 1.5 gols"). Quando vem, é o
+     *  que aparece no lugar do nome técnico do mercado. */
+    label?: string
+    /** Período em que a perna vale ("Jogo inteiro", "1º tempo"). */
+    periodo?: string
+  }>
+  /**
+   * As pernas são do MESMO jogo?
+   *
+   * Múltipla junta jogos diferentes; o Pick Boost junta dois mercados da mesma
+   * partida. O texto "o que precisa acontecer em cada jogo" está certo pra uma
+   * e errado pra outro -- no Boost só existe um jogo, e prometer vários
+   * confunde exatamente quem abriu o modal pra entender.
+   */
+  legsMesmoJogo?: boolean
   /**
    * Times do jogo · o modal nao dizia QUAL pick estava sendo explicado.
    *
@@ -130,10 +148,22 @@ export default function AnalysisModal({
   const mostraProb = ourProb ?? (conf != null ? conf : null)
   const edge = mostraProb != null ? mostraProb - implied : null
 
-  const regra = data.marketRaw ? regraDoMercado(data.marketRaw, data.lineRaw ?? undefined) : null
+  const temPernas = (data.legs?.length ?? 0) > 0
+
+  /* PICK DE PERNAS NÃO TEM "REGRA DO MERCADO", e fingir que tem é pior que
+     omitir. Num Boost, `marketRaw` é a combinação inteira ("Over 1.5 FT +
+     Under 2.5 HT"), que não existe como mercado no catálogo -- `explainMarket`
+     não acha regra nenhuma e cai no texto genérico: "Dá GREEN conforme as
+     condições do mercado X, linha Y". Isso ocupa o lugar mais nobre do modal
+     pra repetir o nome do pick e não explicar nada.
+
+     Quem explica um bilhete é o bloco perna a perna, que já diz o que precisa
+     acontecer em cada uma. */
+  const regra = !temPernas && data.marketRaw
+    ? regraDoMercado(data.marketRaw, data.lineRaw ?? undefined) : null
   // Mercado que não é de contagem (resultado, ambas marcam) não vira número
   // inteiro · aí vale o texto corrido de sempre.
-  const regraTexto = !regra && data.marketRaw
+  const regraTexto = !temPernas && !regra && data.marketRaw
     ? explainMarket(data.marketRaw, data.lineRaw ?? undefined)
     : ''
 
@@ -144,9 +174,15 @@ export default function AnalysisModal({
       // Pode ser aberto de dentro do painel do pick, que e z-[60].
       acimaDeTudo
       title="Entenda esta análise"
+      /* Num pick de pernas, `market` e `line` são a MESMA combinação escrita
+         duas vezes ("Over 1.5 FT + Under 2.5 HT, Over 1.5 FT · Under 2.5 HT").
+         Repetir isso no subtítulo não informa nada e ainda empurra o conteúdo
+         pra baixo. As pernas de verdade estão no bloco próprio, logo abaixo. */
       description={[
         data.homeTeam && data.awayTeam ? `${data.homeTeam} x ${data.awayTeam}` : null,
-        `${data.market}${data.line ? `, ${data.line}` : ''}`,
+        temPernas
+          ? `${data.legs!.length} seleções`
+          : `${data.market}${data.line ? `, ${data.line}` : ''}`,
       ].filter(Boolean).join(', ')}
     >
       <div className="p-5 space-y-5">
@@ -261,7 +297,11 @@ export default function AnalysisModal({
           <div className="bg-accent/5 border border-accent/25 rounded-lg p-4">
             <div className="flex items-center gap-2 mb-3">
               <BookOpen className="w-3.5 h-3.5 text-accent-ink" />
-              <span className="panel-label">O que precisa acontecer em cada jogo</span>
+              <span className="panel-label">
+                {data.legsMesmoJogo
+                  ? 'O que precisa acontecer nas duas seleções'
+                  : 'O que precisa acontecer em cada jogo'}
+              </span>
             </div>
             <ol className="space-y-3">
               {data.legs!.map((leg, i) => {
@@ -272,8 +312,15 @@ export default function AnalysisModal({
                     <span className="font-mono text-[10px] font-bold text-ink-4 pt-0.5 shrink-0">{i + 1}</span>
                     <div className="min-w-0">
                       <p className="text-[11px] font-semibold text-ink-1">
-                        {translateMarket(leg.market ?? '')}
-                        {leg.line && <span className="text-ink-3">, {translateLine(leg.line)}</span>}
+                        {/* Mesmo texto do card: a aposta, não o nome técnico.
+                            Ler "Menos de 2.5 gols · 1º tempo" aqui e
+                            "Menos de 2.5 gols" lá é a mesma frase; ler
+                            "Gols Mais/Menos - 1º Tempo, Under 2.5" parece
+                            outro pick. */}
+                        {leg.label ?? translateMarket(leg.market ?? '')}
+                        {leg.periodo
+                          ? <span className="text-ink-3"> · {leg.periodo}</span>
+                          : leg.line && <span className="text-ink-3">, {translateLine(leg.line)}</span>}
                       </p>
                       <p className="text-xs text-ink-2 leading-relaxed mt-0.5">
                         {r ? r.green : txt}
@@ -284,7 +331,9 @@ export default function AnalysisModal({
               })}
             </ol>
             <p className="text-[10px] text-ink-4 leading-relaxed mt-3 pt-3 border-t border-line">
-              Todas as seleções precisam dar certo. Uma que falhe derruba o bilhete inteiro.
+              {data.legsMesmoJogo
+                ? 'As duas precisam dar certo no mesmo jogo. Uma que falhe derruba o bilhete inteiro.'
+                : 'Todas as seleções precisam dar certo. Uma que falhe derruba o bilhete inteiro.'}
             </p>
           </div>
         )}

@@ -578,6 +578,14 @@ function SuggestionCard({
           reasoning: s.reasoning,
           homeTeam: s.home_team_name,
           awayTeam: s.away_team_name,
+          /* Pick combinado explica PERNA A PERNA. O modal já sabia fazer isso
+             (a múltipla usa desde sempre) -- o card é que não passava, então o
+             Boost abria a análise mostrando "Over 1.5 FT + Under 2.5 HT" como
+             se fosse um mercado só, o mesmo defeito que o card tinha. */
+          legs: s.legs,
+          /* As duas pernas do Boost são do MESMO jogo, ao contrário da
+             múltipla. Muda o texto, não o desenho. */
+          legsMesmoJogo: (s.legs?.length ?? 0) > 0 && s.pick_type === 'boost',
         }}
       />
     )}
