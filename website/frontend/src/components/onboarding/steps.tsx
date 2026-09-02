@@ -429,44 +429,6 @@ const TOUR_STEPS: TourStep[] = [
     ),
   },
   {
-    /* O QUE A CONTA GRATUITA TEM ALÉM DA DICA DO DIA.
-       O tour terminava sem nunca citar o Pick Boost, que abriu entrada
-       gratuita em 28/08. Quem acabou de criar conta saía achando que free era
-       um pick por dia, e o Boost ficava atrás de uma aba que ela nunca abriu:
-       o produto estava lá, de graça, e não era encontrado.
-
-       PICKS AO VIVO SAIU DAQUI (02/09, decisão do usuário). O passo cobria os
-       dois, e o tour do VIP tem um passo inteiro só de Ao Vivo
-       (stepsVip::vip-ao-vivo) -- quem assina via a mesma explicação duas
-       vezes, e ela é mais longa que a do Boost porque o produto tem prazo de
-       odd. O Boost fica: ele também se repete no tour do VIP, mas o tour do
-       VIP só roda pra quem assina, e o Boost é o que a conta gratuita tem
-       agora.
-
-       O alvo é a aba real, na barra de Picks. Se ela não existir, o tour cai
-       no `picks-area` como os outros passos. */
-    id: 'boost',
-    titulo: 'Você também tem Pick Boost',
-    Icon: Zap,
-    rota: '/picks',
-    alvos: ['[data-aba="boost"]', '[data-tour="picks-area"]'],
-    resumo: 'Além da dica do dia, a conta gratuita recebe um Pick Boost por dia.',
-    corpo: (
-      <div className="space-y-3">
-        <Etiqueta>Mais uma aba que você já pode abrir</Etiqueta>
-        <Lista
-          itens={[
-            [Zap, 'Pick Boost: a IA procura a linha alternativa que a casa deixou de corrigir'],
-            [Ticket, 'Um por dia é gratuito. O resto do dia fica no VIP'],
-          ]}
-        />
-        <p className="text-xs text-ink-2 leading-relaxed">
-          É a mesma análise da dica do dia, procurando onde o preço ficou para trás.
-        </p>
-      </div>
-    ),
-  },
-  {
     /* O TELEFONE, PEDIDO NA HORA CERTA.
        Ele nunca foi opcional na prática: é o contato do aviso de pick
        publicado e de pick ao vivo, e o ao vivo é o que mais depende disso ·

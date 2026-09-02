@@ -247,9 +247,18 @@ def test_corpo_vazio_e_recusado(usuario):
 
 
 def test_passo_acima_do_roteiro_e_recusado_na_entrada():
-    """A validação é do Pydantic · o teto vem de TUTORIAL_TOTAL_STEPS."""
+    """A validação é do Pydantic, e o teto dela e' o MAIOR entre os roteiros.
+
+    Escrito assim, e nao contra TUTORIAL_TOTAL_STEPS, porque qual roteiro e' o
+    maior ja' trocou: em 02/09/2026 o de boas-vindas caiu pra 9 e o do VIP subiu
+    pra 10. Amarrar o teto do Pydantic a um roteiro especifico faz o teste
+    quebrar (ou, pior, passar por engano) toda vez que a ordem inverte.
+
+    O corte POR ROTEIRO e' outra coisa, e mora no teste seguinte.
+    """
+    teto = max(TUTORIAL_TOTAL_STEPS, VIP_TOUR_TOTAL_STEPS)
     with pytest.raises(Exception):
-        TutorialBody(step=TUTORIAL_TOTAL_STEPS + 1)
+        TutorialBody(step=teto + 1)
 
 
 def test_passo_negativo_e_recusado():
@@ -295,8 +304,10 @@ def test_o_front_e_o_back_contam_os_mesmos_passos():
     ).read_text(encoding="utf-8")
     assert f"MAX_PASSOS = {TUTORIAL_TOTAL_STEPS}" in constantes
     # E o piso: os passos que TODA conta ve.
-    # 8 desde 01/09/2026 (entrou o passo dos Picks Ao Vivo e do Pick Boost).
-    assert "PASSOS_FIXOS = 8" in constantes
+    # 7 desde 02/09/2026 -- saiu o passo de produto ("Ao Vivo e Boost"). Toda
+    # conta ganha periodo de teste e acaba vendo o tour do VIP, que e' quem
+    # apresenta produto; este roteiro apresenta o site.
+    assert "PASSOS_FIXOS = 7" in constantes
 
 
 def test_o_passo_do_email_so_entra_pra_quem_tem_trial_esperando():
@@ -376,16 +387,29 @@ def test_vip_grava_na_coluna_do_vip(monkeypatch, usuario):
     assert "tutorial_status" not in sql
 
 
-def test_passo_do_vip_e_limitado_ao_roteiro_do_vip(monkeypatch, usuario):
-    """O teto do PUT e' o maior entre os roteiros; o clamp por roteiro vem
-    depois. Sem ele, o passo 7 (valido no de boas-vindas) entraria no do VIP,
-    que tem 5, e a tela abriria num passo que nao existe."""
-    cur = CursorFalso({"status": "pending", "step": VIP_TOUR_TOTAL_STEPS - 1})
+def test_passo_e_limitado_ao_ROTEIRO_e_nao_ao_teto_geral(monkeypatch, usuario):
+    """O teto do PUT e' o maior entre os roteiros; o corte por roteiro vem
+    depois.
+
+    Sem ele, um passo valido no roteiro MAIOR entraria no menor e a tela
+    abriria num passo que nao existe -- o tour reabriria do zero na visita
+    seguinte, que foi um bug real aqui.
+
+    O teste manda o teto geral no roteiro menor, seja ele qual for: em
+    02/09/2026 o menor virou o de boas-vindas (9 contra 10 do VIP), e antes
+    disso era o do VIP.
+    """
+    teto = max(TUTORIAL_TOTAL_STEPS, VIP_TOUR_TOTAL_STEPS)
+    menor = ("boas-vindas" if TUTORIAL_TOTAL_STEPS <= VIP_TOUR_TOTAL_STEPS
+             else "vip")
+    total_do_menor = min(TUTORIAL_TOTAL_STEPS, VIP_TOUR_TOTAL_STEPS)
+
+    cur = CursorFalso({"status": "pending", "step": total_do_menor - 1})
     _liga(monkeypatch, cur)
-    save_tutorial(TutorialBody(step=7), tour="vip", current_user=usuario)
+    save_tutorial(TutorialBody(step=teto), tour=menor, current_user=usuario)
 
     _, params = cur.executados[0]
-    assert params[0] == VIP_TOUR_TOTAL_STEPS - 1
+    assert params[0] == total_do_menor - 1
 
 
 def test_backfill_do_vip_poupa_so_quem_ja_e_assinante():

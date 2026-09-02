@@ -430,10 +430,18 @@ def test_por_jogo_cobre_todos_os_pipelines():
 
 def test_abas_de_resultados_tem_indicadores():
     """Por Liga, Por Jogo e Por Mes abriam direto numa lista, sem nenhuma
-    leitura de conjunto."""
+    leitura de conjunto.
+
+    `statsPorMes` deixou de existir em 02/09/2026: a aba Por Mes virou o
+    fechamento mensal da IA e passou a montar os proprios indicadores dentro de
+    `AbaFechamento`, do mes selecionado (picks, acerto, lucro, ROI) em vez do
+    historico inteiro. O teste segue o componente, nao o nome antigo -- o que
+    ele protege e' "nenhuma aba abre sem leitura de conjunto".
+    """
     tela = _front_codigo("pages/ResultadosPublicos.tsx")
-    for painel in ("statsPorLiga", "statsPorJogo", "statsPorMes"):
+    for painel in ("statsPorLiga", "statsPorJogo", "AbaFechamento"):
         assert painel in tela, f"{painel} nao esta montado"
+    # Uma por aba: Por Liga, Por Jogo e a de dentro do AbaFechamento (Por Mes).
     assert tela.count("<AbaStats") == 3
 
 

@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react'
 import {
-  BarChart2, Bot, CircleCheck, Crown, Layers, Radio, Rocket, ShieldQuestion, Sparkles, Trophy,
-  TrendingUp, Zap,
+  BarChart2, Bot, CircleCheck, ClipboardCheck, Crown, Layers, Radio, Rocket, ShieldQuestion,
+  Sparkles, Trophy, TrendingUp, Wallet, Zap,
 } from 'lucide-react'
 import type { TourStep } from './steps'
 import { Etiqueta, Lista, Linhas } from './steps'
@@ -26,13 +26,12 @@ import { TOTAL_PASSOS_VIP } from './constantes'
  * Prometer no tour de boas-vindas uma coisa que a assinatura não abre é a pior
  * hora possível para quebrar confiança.
  *
- * DUAS COISAS FICARAM DE FORA por essa mesma régua, mesmo sendo VIP no papel:
+ * UMA COISA FICOU DE FORA por essa mesma régua, mesmo sendo VIP no papel: a
+ * página /estatisticas exige VIP, mas não tem link em lugar nenhum do site.
+ * Anunciar uma tela que não se alcança é pior que o silêncio.
  *
- *   - a aba Picks Ao Vivo é `verAoVivo`, que hoje só é verdadeiro para ADMIN
- *     (o produto ainda não abriu). Citá-la mandaria o assinante procurar uma
- *     aba que ele não tem.
- *   - a página /estatisticas exige VIP, mas não tem link em lugar nenhum do
- *     site. Anunciar uma tela que não se alcança é pior que o silêncio.
+ * (Os Picks Ao Vivo também ficavam de fora enquanto `verAoVivo` só valia para
+ * ADMIN. O produto abriu em 01/09 e o passo entrou.)
  */
 
 const AVISO_ATRASO = (
@@ -208,7 +207,6 @@ export const TOUR_STEPS_VIP: TourStep[] = [
     rota: '/picks',
     alvos: ['[data-tour="agente"]', '[data-aba="hoje"]'],
     resumo: 'O assistente passa a responder sobre os picks, os jogos e os números do sistema, e não só as perguntas frequentes.',
-    avancar: 'Começar a usar',
     corpo: (
       <div className="space-y-3">
         <Etiqueta>Do que dá para perguntar</Etiqueta>
@@ -222,6 +220,72 @@ export const TOUR_STEPS_VIP: TourStep[] = [
         />
         <p className="text-[11px] text-ink-3 leading-relaxed">
           Ele fica neste botão, em qualquer tela.
+        </p>
+      </div>
+    ),
+  },
+{
+    /* REGISTRAR E ACOMPANHAR, OUTRA VEZ.
+       Os dois passos existem no tour de boas-vindas (steps::registrar e
+       steps::resultados) e a repeticao e' deliberada (decisao do usuario,
+       02/09). Dois motivos: o tour de boas-vindas pode ter sido pulado, e sem
+       registrar a aposta nada do que os passos acima abriram vira resultado na
+       banca -- o assinante veria seis abas novas e uma banca parada.
+
+       Nao e' o mesmo texto. La' o assunto e' COMO se registra, campo a campo;
+       aqui e' que o botao vale tambem pras abas que acabaram de abrir. */
+    id: 'vip-registrar',
+    titulo: 'Registre a aposta',
+    Icon: ClipboardCheck,
+    rota: '/picks',
+    alvos: ['[data-tour="pick-apostar"]', '[data-tour="pick-card"]', '[data-tour="picks-area"]'],
+    resumo: 'Todo pick tem o botão de registrar, inclusive os das abas que abriram agora.',
+    corpo: (
+      <div className="space-y-3">
+        <p className="text-xs text-ink-2 leading-relaxed">
+          A aposta você faz na casa. Aqui você registra o que apostou, e é isso que
+          transforma o pick em resultado na sua banca.
+        </p>
+        <Etiqueta>O que o registro pede</Etiqueta>
+        <Linhas
+          itens={[
+            ['Casa de aposta', 'Superbet, Bet365, Betano, Outra'],
+            ['Odd apostada', '2.05'],
+            ['Unidades a apostar', '2u'],
+          ]}
+        />
+        <p className="text-[11px] text-ink-3 leading-relaxed">
+          A odd vem preenchida com a do pick e você ajusta se apostou em outra. As
+          unidades viram reais pelo valor de unidade da sua banca.
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: 'vip-acompanhar',
+    titulo: 'Acompanhe sua evolução',
+    Icon: TrendingUp,
+    rota: '/banca',
+    alvos: ['[data-tour="banca-resumo"]', '[data-tour="banca-evolucao"]'],
+    resumo: 'A Minha Banca junta tudo que você registrou e mostra se o mês está indo bem.',
+    avancar: 'Começar a usar',
+    corpo: (
+      <div className="space-y-3">
+        <Etiqueta>O que esta tela mostra</Etiqueta>
+        {/* Só o que existe de verdade na página da Banca. Métrica listada aqui
+            e ausente lá vira promessa quebrada no primeiro clique. */}
+        <Lista
+          itens={[
+            [Wallet, 'Banca atual e lucro'],
+            [BarChart2, 'Yield e ROI'],
+            [CircleCheck, 'Win rate, greens e reds'],
+            [TrendingUp, 'Evolução da banca'],
+            [Zap, 'Sequência atual e melhor sequência'],
+          ]}
+        />
+        <p className="text-[11px] text-ink-3 leading-relaxed">
+          Os picks de todas as abas caem aqui juntos, então dá para ver qual produto
+          está rendendo mais na SUA banca, e não só no placar público.
         </p>
       </div>
     ),

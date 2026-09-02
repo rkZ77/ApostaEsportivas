@@ -292,11 +292,20 @@ def list_achievements(current_user: dict = Depends(get_current_user)):
 # Teto do roteiro de boas-vindas: 7 passos fixos + o de confirmar e-mail, que
 # so' entra pra quem ainda tem os 2 dias de VIP esperando, e o do WhatsApp so'
 # pra conta sem telefone (o cadastro pelo Google nao pede numero). O total que a
-# TELA mostra varia entre 8 e 10, entao o que o backend valida e' o maximo.
-TUTORIAL_TOTAL_STEPS = 10
+# TELA mostra varia entre 7 e 9, entao o que o backend valida e' o maximo.
+#
+# 9 desde 02/09/2026, era 10: saiu o passo de produto ("Ao Vivo e Boost"). Toda
+# conta ganha periodo de teste, entao toda conta acaba vendo o tour do VIP --
+# quem apresenta PRODUTO e' ele; este aqui apresenta o SITE.
+TUTORIAL_TOTAL_STEPS = 9
 # Roteiro do VIP: o que a assinatura abriu.
 #
-# 8 desde 2026-08-28. Eram 6 ate' o passo de "Mercados" (aba que deixou de
+# 10 desde 02/09/2026: entraram "Registre a aposta" e "Acompanhe sua evolucao",
+# que tambem existem no roteiro de boas-vindas. A repeticao e' deliberada -- o
+# tour de boas-vindas pode ter sido pulado, e sem registrar a aposta nada do que
+# este roteiro abriu vira resultado na banca.
+#
+# Eram 8 desde 2026-08-28, e 6 antes do passo de "Mercados" (aba que deixou de
 # existir) virar tres: picks de jogador, Pick Boost e Picks Ao Vivo.
 #
 # O numero vive nos DOIS lados e ha' teste comparando os arquivos, e a
@@ -304,7 +313,7 @@ TUTORIAL_TOTAL_STEPS = 10
 # ele precisa saber o teto sem baixar o roteiro (que e' TSX). Sem o teste, subir
 # um lado e esquecer o outro faria o backend recusar o ultimo passo do tour --
 # e o tour reabriria do zero na visita seguinte, que foi um bug real aqui.
-VIP_TOUR_TOTAL_STEPS = 8
+VIP_TOUR_TOTAL_STEPS = 10
 
 TUTORIAL_STATUS = ("pending", "completed", "skipped")
 

@@ -30,21 +30,25 @@ export interface ContextoTour {
   semTelefone: boolean
 }
 
-/* 8 desde 01/09/2026: entrou o passo dos produtos que ganharam entrada
-   gratuita e que o roteiro nunca citava.
+/* 7 desde 02/09/2026.
+   Saiu o passo de produto ("Ao Vivo e Boost", que tinha entrado em 01/09).
 
-   Em 02/09 ele encolheu de "Ao Vivo e Boost" para so' o Boost, e a CONTAGEM
-   NAO MUDOU -- continua sendo um passo. O Ao Vivo saiu porque o tour do VIP
-   ja' tem um passo inteiro dele (stepsVip::vip-ao-vivo). */
+   A DIVISAO ENTRE OS DOIS ROTEIROS, que e' o motivo: toda conta ganha periodo
+   de teste, entao TODA conta acaba vendo o tour do VIP. Com isso o roteiro de
+   boas-vindas nao precisa (nem deve) apresentar produto: ele apresenta o SITE
+   -- confirmar e-mail, configurar banca, onde ficam os picks, WhatsApp, como
+   registrar e como acompanhar. Quem apresenta produto e' o tour do VIP, que
+   abre quando o acesso libera. Produto citado nos dois vira a mesma explicacao
+   duas vezes em poucos dias. */
 /** Passos do roteiro de boas-vindas que toda conta vê. */
-export const PASSOS_FIXOS = 8
+export const PASSOS_FIXOS = 7
 
 /**
  * Maior roteiro de boas-vindas possível. É o teto que o backend valida em
  * `tutorial_step`. Mudar aqui exige mudar `TUTORIAL_TOTAL_STEPS` em
  * routers/personal.py · há teste travando os dois juntos.
  */
-export const MAX_PASSOS = 10
+export const MAX_PASSOS = 9
 
 /**
  * Roteiro do VIP · o que a assinatura abriu.
@@ -53,11 +57,18 @@ export const MAX_PASSOS = 10
  * então todas as áreas do roteiro valem para todo mundo que o vê. Espelha
  * `VIP_TOUR_TOTAL_STEPS` no backend.
  */
-/* 8 desde 2026-08-28 · Pick Boost e Picks Ao Vivo ganharam passo proprio, e o
-   de "Mercados" virou o de picks de jogador (a aba Mercados deixou de existir).
+/* 10 desde 02/09/2026 · entraram "Registre a aposta" e "Acompanhe sua
+   evolucao", que TAMBEM existem no roteiro de boas-vindas. A repeticao e'
+   deliberada (decisao do usuario): o tour de boas-vindas pode ter sido pulado,
+   e sem registrar a aposta nada do que este roteiro abriu vira resultado na
+   banca.
+
+   Eram 8 desde 2026-08-28, quando o passo de "Mercados" (aba que deixou de
+   existir) virou tres: picks de jogador, Pick Boost e Picks Ao Vivo.
+
    O numero e' literal e nao derivado do array de proposito: ele aparece no
-   rodape do tour ("passo 3 de 8") e a lista e' montada em outro arquivo. */
-export const TOTAL_PASSOS_VIP = 8
+   rodape do tour ("passo 3 de 10") e a lista e' montada em outro arquivo. */
+export const TOTAL_PASSOS_VIP = 10
 
 /**
  * O passo "Confirme seu e-mail" entra?
