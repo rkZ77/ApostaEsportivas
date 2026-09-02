@@ -13,6 +13,7 @@ import AgendaInteligente from '../components/AgendaInteligente'
 import ExplorarLigas from '../components/ExplorarLigas'
 import { sinalizarNavegacao } from '../services/progressBus'
 import { backdropFade, dialogScale, tabFade } from '../lib/motion'
+import { aoVivo as isLive, encerrado as isFinished, escudoDoTime } from '../lib/aoVivo'
 
 // Data de hoje no fuso de Brasília (toISOString retorna UTC e quebraria de madrugada)
 const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
@@ -100,10 +101,9 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
   PST:  { label: 'Adiado',     color: 'text-red-400' },
 }
 
-function isLive(status: string)     { return ['1H', 'HT', '2H', 'ET', 'BT', 'P'].includes(status) }
-function isFinished(status: string) { return ['FT', 'AET', 'PEN'].includes(status) }
-
-const TEAM_LOGO = (id?: number) => id ? `/api/proxy/team/${id}.png` : null
+// isLive/isFinished/TEAM_LOGO saíram daqui pra `lib/aoVivo.ts` em 02/09. As
+// listas locais não conheciam SUSP/INT (jogo suspenso ficava sem ser nem ao
+// vivo nem encerrado) nem CANC/PST -- ver o cabeçalho de lá.
 
 const leagueLogo = (league_id: number) => `/api/proxy/league/${league_id}.png`
 
@@ -113,7 +113,7 @@ function TeamLogo({ id, name, side, size = 32 }: {
   side?: 'left' | 'right'
   size?: number
 }) {
-  const src = TEAM_LOGO(id)
+  const src = escudoDoTime(id)
   if (!src) return null
   return (
     <img src={src} alt={name} width={size} height={size} loading="lazy"

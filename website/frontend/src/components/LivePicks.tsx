@@ -7,16 +7,12 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import api from '../services/api'
 import { backdropFade, sheetUp } from '../lib/motion'
+import { AO_VIVO as LIVE_SET, ENCERRADO as FINISHED_SET, STATUS_LABEL } from '../lib/aoVivo'
+import { TeamLogo } from './TeamLogo'
 
-const TEAM_LOGO = (id?: number) => id ? `/api/proxy/team/${id}.png` : null
-const LIVE_SET     = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'SUSP', 'INT'])
-const FINISHED_SET = new Set(['FT', 'AET', 'PEN', 'CANC', 'PST', 'ABD', 'AWD', 'WO'])
-
-const STATUS_LABEL: Record<string, string> = {
-  NS: 'Não iniciado', '1H': '1º Tempo', HT: 'Intervalo',
-  '2H': '2º Tempo', ET: 'Prorrogação', FT: 'Encerrado',
-  AET: 'Encerrado', CANC: 'Cancelado', PST: 'Adiado', SUSP: 'Suspenso',
-}
+// Régua de status e escudo saíram daqui pra `lib/aoVivo.ts` em 02/09: as
+// mesmas listas viviam copiadas em Fixtures, FixtureStatsModal e no feed de
+// Picks Ao Vivo, divergindo entre si. Ver o cabeçalho de lá.
 const TYPE_CLS: Record<string, string> = {
   vip: 'text-yellow-400 bg-yellow-400/10', free: 'text-green-400 bg-green-400/10',
   multipla: 'text-blue-400 bg-blue-400/10', alavancagem: 'text-orange-400 bg-orange-400/10',
@@ -131,16 +127,6 @@ function calcLiveProb(pick: any): number | null {
 
   // Fallback estático: probabilidade implícita da odd
   return elapsed != null ? null : Math.round(baseProb * 100)
-}
-
-function TeamLogo({ id, name, size = 24 }: { id?: number; name: string; size?: number }) {
-  const src = TEAM_LOGO(id)
-  if (!src) return null
-  return (
-    <img src={src} alt={name} width={size} height={size}
-      className="object-contain shrink-0" style={{ width: size, height: size }}
-      onError={e => (e.currentTarget.style.display = 'none')} />
-  )
 }
 
 /* ── Relógio do jogo ────────────────────────────────────────────────────────

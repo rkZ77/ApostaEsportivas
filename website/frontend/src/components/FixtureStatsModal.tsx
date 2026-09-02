@@ -5,6 +5,7 @@ import { X } from 'lucide-react'
 import api from '../services/api'
 import { backdropFade, sheetUp } from '../lib/motion'
 import { sinalizarNavegacao } from '../services/progressBus'
+import { aoVivo, encerrado } from '../lib/aoVivo'
 
 type Tab = 'geral' | 'gols' | 'escanteios' | 'cartoes'
 type Ctx = 'all' | 'home' | 'away'
@@ -341,12 +342,17 @@ export default function FixtureStatsModal({ fixture, onClose, inline = false }: 
   const homeStats: TeamStats = data?.home_stats ?? {}
   const awayStats: TeamStats = data?.away_stats ?? {}
 
+  // URL montada aqui e nao por `escudoDoTime`: estes dois vao direto pro
+  // `src` de um <img> que exige string, e o helper devolve `string | null`.
+  // Forcar o tipo aqui trocaria uma repeticao por um cast -- pior negocio.
   const homeLogo = `/api/proxy/team/${homeId}.png`
   const awayLogo = `/api/proxy/team/${awayId}.png`
 
   const status   = fixture.status ?? 'NS'
-  const live     = ['1H', 'HT', '2H', 'ET', 'BT', 'P'].includes(status)
-  const finished = ['FT', 'AET', 'PEN'].includes(status)
+  // Régua compartilhada desde 02/09: as listas estavam escritas à mão aqui e
+  // não conheciam SUSP/INT/CANC -- ver `lib/aoVivo.ts`.
+  const live     = aoVivo(status)
+  const finished = encerrado(status)
   const scoreStr = (finished || live) && fixture.home_goals != null
     ? `${fixture.home_goals} - ${fixture.away_goals ?? 0}`
     : 'vs'

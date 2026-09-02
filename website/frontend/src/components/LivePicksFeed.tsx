@@ -50,7 +50,8 @@ import { PickExplainButton, PickProbability, PickReasoning } from './PickCardPar
 import InfoTip from './InfoTip'
 import LiveAnalysisModal from './LiveAnalysisModal'
 import { explainMarket, translateLine, translateMarket } from '../utils/marketTranslate'
-import { LeagueLogo } from './TeamLogo'
+import { LeagueLogo, TeamLogo } from './TeamLogo'
+import { rotuloDoStatus, escudoDoTime } from '../lib/aoVivo'
 import { calcVipStake } from '../utils/stakeUtils'
 import { sinalizarNavegacao } from '../services/progressBus'
 
@@ -266,7 +267,7 @@ function minutoVivo(p: EmLeitura, segundosExtras: number): { minuto: number | nu
 /* Placeholder de escudo quando não há id de time */
 function TeamLogoOrDot({ id, name }: { id?: number | null; name?: string | null }) {
   const [err, setErr] = useState(false)
-  const src = id ? `/api/proxy/team/${id}.png` : null
+  const src = escudoDoTime(id ?? undefined)
   if (!src || err) {
     return (
       <span className="w-[18px] h-[18px] rounded-full bg-surface-3 border border-line shrink-0
@@ -475,7 +476,7 @@ function EmLeituraAgora({ partidas, tick, disponivel, motor }: {
                           title={projetado ? 'Minuto projetado desde a última leitura' : undefined}>
                       {minuto != null
                         ? `${projetado ? '~' : ''}${minuto}'`
-                        : (STATUS_LABEL[p.status ?? ''] ?? p.status ?? '-')}
+                        : rotuloDoStatus(p.status)}
                     </span>
                   </span>
                 </div>
@@ -580,7 +581,7 @@ function unidadesSugeridas(
 }
 import { PICK_TYPE_BORDER } from '../utils/resultStyle'
 
-const TEAM_LOGO = (id?: number) => (id ? `/api/proxy/team/${id}.png` : null)
+
 
 /* Poll de 30s: o backend separou o TTL de fixture (30s) e de stats (60s),
    então 30s é o ponto ótimo — bate no cache de placar sempre e no de stats
@@ -589,10 +590,7 @@ const TEAM_LOGO = (id?: number) => (id ? `/api/proxy/team/${id}.png` : null)
    sem atrasar o placar (fixture atualiza em 30s de qualquer forma). */
 const POLL_MS = 30_000
 
-const STATUS_LABEL: Record<string, string> = {
-  '1H': '1º Tempo', HT: 'Intervalo', '2H': '2º Tempo', ET: 'Prorrogação',
-  FT: 'Encerrado', AET: 'Encerrado', PEN: 'Encerrado', NS: 'Não iniciado',
-}
+
 
 /* O teaser de quem não assina. Times, liga, odd e o minuto · nunca mercado,
    linha, análise, probabilidade ou stake, que é o que se paga. */
@@ -700,16 +698,6 @@ function TituloDeSecao({ cor, texto, contagem }: {
         </span>
       )}
     </div>
-  )
-}
-
-function TeamLogo({ id, name }: { id?: number; name: string }) {
-  const src = TEAM_LOGO(id)
-  if (!src) return null
-  return (
-    <img src={src} alt={name} width={18} height={18}
-      className="object-contain shrink-0" style={{ width: 18, height: 18 }}
-      onError={e => (e.currentTarget.style.display = 'none')} />
   )
 }
 
@@ -894,10 +882,10 @@ const CardLive = forwardRef<HTMLDivElement, {
           ) : pick.is_live ? (
             <Badge tone="green" className="gap-1.5">
               <LiveDot className="w-1.5 h-1.5" />
-              {STATUS_LABEL[pick.live_status] ?? 'Ao vivo'}
+              {rotuloDoStatus(pick.live_status) || 'Ao vivo'}
             </Badge>
           ) : (
-            <Badge tone="neutral">{STATUS_LABEL[pick.live_status] ?? pick.live_status}</Badge>
+            <Badge tone="neutral">{rotuloDoStatus(pick.live_status)}</Badge>
           )}
         </div>
       </div>
@@ -980,14 +968,14 @@ const CardLive = forwardRef<HTMLDivElement, {
           vivo ele é parte da identificação do jogo, não um detalhe. */}
       <div className="px-5 py-3 space-y-2">
         <div className="flex items-center gap-2">
-          <TeamLogo id={pick.home_team_id} name={pick.home_team_name} />
+          <TeamLogo id={pick.home_team_id} name={pick.home_team_name} size={18} />
           <span className="text-sm font-bold text-ink-1 truncate">{pick.home_team_name}</span>
           <span className={`text-xs font-black tabular-nums shrink-0 px-1 ${
             pick.is_live ? 'text-green-400' : 'text-ink-3'}`}>
             {pick.home_goals ?? '-'}<span className="text-ink-4">x</span>{pick.away_goals ?? '-'}
           </span>
           <span className="text-sm font-bold text-ink-1 truncate">{pick.away_team_name}</span>
-          <TeamLogo id={pick.away_team_id} name={pick.away_team_name} />
+          <TeamLogo id={pick.away_team_id} name={pick.away_team_name} size={18} />
         </div>
         <div className="flex items-center gap-2 text-xs text-ink-3">
           <span className="font-semibold text-ink-2">{translateMarket(pick.market)}</span>
