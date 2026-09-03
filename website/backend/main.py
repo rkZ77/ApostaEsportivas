@@ -1,6 +1,5 @@
 import asyncio
 import io
-import json
 import logging
 import mimetypes
 import os
@@ -541,6 +540,39 @@ def get_version():
 # Havia aqui um segundo gerador (com as paginas /p/<tipo>/<id>) que nunca
 # chegava a responder, porque o FastAPI casa a primeira rota registrada.
 # Se as paginas de pick voltarem ao sitemap, o lugar e agent_web.sitemap_xml.
+
+
+# VERIFICACAO DO GOOGLE SEARCH CONSOLE
+#
+# O GSC entrega um arquivo googleXXXX.html pra por na raiz do dominio. Sem uma
+# rota propria ele cairia no catch-all do SPA (fim deste arquivo), que devolve
+# o index.html com status 404 pra qualquer caminho terminado em extensao -- e a
+# verificacao falha. Por isso a rota entra aqui, antes do catch-all.
+#
+# O token vem de env var: nao versiona credencial de propriedade e troca sem
+# rebuild do frontend. Aceita as tres formas que o painel mostra:
+# "googleabc123.html", "google-site-verification=abc123" ou "abc123".
+_gsc_token = (os.getenv("GOOGLE_SITE_VERIFICATION", "").strip()
+              .split("=", 1)[-1].strip())
+for _prefixo, _sufixo in (("google", ""), ("", ".html")):
+    if _prefixo and _gsc_token.startswith(_prefixo):
+        _gsc_token = _gsc_token[len(_prefixo):]
+    if _sufixo and _gsc_token.endswith(_sufixo):
+        _gsc_token = _gsc_token[: -len(_sufixo)]
+# Token do GSC e alfanumerico. Filtrar aqui impede que um valor colado errado
+# vire um path esquisito registrado na aplicacao.
+if _gsc_token and re.fullmatch(r"[A-Za-z0-9_-]{8,64}", _gsc_token):
+    _GSC_PATH = f"/google{_gsc_token}.html"
+
+    @app.get(_GSC_PATH, include_in_schema=False)
+    def google_site_verification():
+        return Response(content=f"google-site-verification: google{_gsc_token}.html",
+                        media_type="text/html")
+
+    logger.info("[SEO] verificacao do Search Console ativa em %s", _GSC_PATH)
+elif _gsc_token:
+    logger.warning("[SEO] GOOGLE_SITE_VERIFICATION com formato inesperado, rota nao registrada.")
+
 
 _dist = _base_dir / "dist"
 
