@@ -144,8 +144,20 @@ function regraDoJogador(
     red: lineValue >= 1
       ? `Ele ficar em ${lineValue - 1} ou menos.`
       : 'Ele não registrar nenhum.',
-    devolve: 'Se ele não entrar em campo, a maioria das casas devolve a aposta. '
-           + 'Confira a regra da sua antes de apostar.',
+    /* A REGRA DA SUBSTITUIÇÃO, dita como ela é.
+     *
+     * O que vale em toda casa: quem não entra em campo tem a aposta devolvida,
+     * e quem entra no decorrer conta normalmente · sair do banco aos 60' e dar
+     * dois chutes bate uma linha de dois chutes.
+     *
+     * O que NÃO vale em toda casa, e por isso aparece como aviso e não como
+     * promessa: algumas somam o que o substituto fez depois de entrar no lugar
+     * do apostado. Isso muda de casa pra casa e de mercado pra mercado, então
+     * o site não afirma nem finge que sabe qual é a da pessoa. */
+    devolve: 'Se ele não entrar em campo, a aposta é anulada e a entrada volta. '
+           + 'Entrando no decorrer do jogo, ela vale normalmente. Algumas casas '
+           + 'ainda somam o que o substituto dele fizer depois da troca, e essa '
+           + 'parte muda de casa para casa: confira a regra da sua.',
   }
 }
 

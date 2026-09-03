@@ -155,7 +155,10 @@ def _safe_query_one(cur, sql, params=()):
 #:
 #:   'indefinida' -- a escalacao oficial ainda nao saiu;
 #:   'titular'    -- o jogador esta no XI inicial;
-#:   'fora'       -- saiu e ele nao esta (o pick ja' foi anulado pela
+#:   'banco'      -- esta relacionado, comeca no banco. O PICK CONTINUA DE PE:
+#:                   aposta de estatistica individual vale se ele entrar em
+#:                   campo, e ele ainda pode entrar;
+#:   'fora'       -- nem foi relacionado (o pick ja' foi anulado pela
 #:                   varredura, e `void_reason` diz por que).
 def _juntar_escalacao(cur, picks: list) -> None:
     """Anexa `escalacao` e `void_reason` a cada pick de jogador, se der."""
@@ -167,6 +170,7 @@ def _juntar_escalacao(cur, picks: list) -> None:
                CASE
                  WHEN COALESCE(fl.oficial, FALSE) = FALSE THEN 'indefinida'
                  WHEN pp.player_id = ANY(fl.titulares)     THEN 'titular'
+                 WHEN pp.player_id = ANY(fl.reservas)      THEN 'banco'
                  ELSE 'fora'
                END AS escalacao
           FROM picks_player_stats pp

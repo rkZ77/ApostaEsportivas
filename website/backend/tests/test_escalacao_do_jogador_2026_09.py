@@ -11,8 +11,12 @@ são elas que este arquivo trava:
      titulares vazia (o provedor devolve isso enquanto o clube não confirma),
      não pode virar "ninguém foi escalado" -- isso anularia todos os picks da
      partida de uma vez.
-  2. ANULAR SÓ QUEM ESTÁ FORA, e como PUSH: a casa devolve a entrada de quem
-     não entrou em campo. RED puniria o apostador por decisão do técnico.
+  2. ANULAR SÓ QUEM NEM FOI RELACIONADO, e como PUSH. Quem começa no BANCO
+     não é anulado: aposta de estatística individual vale se o jogador entrar
+     em campo, e quem entra aos 60' e dá dois chutes bateu uma linha de dois
+     chutes. Anular ali tiraria do apostador uma aposta que a casa dele pagou.
+     (A primeira versão anulava todo mundo fora do XI inicial · corrigido em
+     02/09, antes de ir pra produção.)
   3. NÃO REESCREVER RESULTADO. O UPDATE tem `result IS NULL`, senão uma
      passada tardia transformaria um GREEN já liquidado em anulação.
 
@@ -92,6 +96,24 @@ class _CursorFalso:
         return [{"id": i} for i in self.ids]
 
 
+def test_quem_comeca_no_banco_nao_e_anulado():
+    """A REGRA QUE ESTAVA ERRADA.
+
+    O `_anular_fora_do_xi` recebe a RELAÇÃO INTEIRA (titulares + banco), e não
+    só o XI. Passar só os titulares anularia todo reserva no instante em que a
+    escalação sai · e reserva que entra e chuta faz o pick pagar.
+
+    Quem está no banco e acaba não entrando é anulado DEPOIS do jogo, pelo
+    caminho que já existia: sem folha do jogador, vira PUSH (routers/live.py).
+    """
+    fonte = open(os.path.join(_BACKEND, "lineups_sweep.py"), encoding="utf-8").read()
+    bloco = fonte[fonte.index("anulados = _anular_fora_do_xi("):]
+    bloco = bloco[:bloco.index("\n\n")]
+    assert "titulares + reservas" in bloco, (
+        "a anulação voltou a olhar só o XI inicial: reserva que entra em campo "
+        "faz a aposta valer, e anular ali tira do usuário um pick que pagou")
+
+
 def test_anula_como_push_e_avisa_quem_seguiu(monkeypatch):
     avisados = []
     import routers.live as live
@@ -161,8 +183,8 @@ def test_o_today_devolve_a_escalacao_de_graca():
                  encoding="utf-8").read()
     bloco = fonte[fonte.index("def _juntar_escalacao"):]
     bloco = bloco[:bloco.index("def _get_user_banca")]
-    for esperado in ("fixture_lineups", "'indefinida'", "'titular'", "'fora'",
-                     "pp.void_reason"):
+    for esperado in ("fixture_lineups", "'indefinida'", "'titular'", "'banco'",
+                     "'fora'", "pp.void_reason"):
         assert esperado in bloco, f"sumiu da consulta de escalação: {esperado}"
     assert "requests" not in bloco
 

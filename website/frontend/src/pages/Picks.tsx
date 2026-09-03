@@ -1534,7 +1534,7 @@ interface MercadoPick {
   /** Número puro da linha. O card monta "2 ou mais" a partir dele. */
   line_value?: number | null
   /* Escalação e anulação · só Player Stats. Ver SuggestionCard. */
-  escalacao?: 'titular' | 'fora' | 'indefinida' | null
+  escalacao?: 'titular' | 'banco' | 'fora' | 'indefinida' | null
   void_reason?: string | null
   odd: number; bet_house?: string
   prob_real?: number; edge?: number

@@ -77,10 +77,12 @@ interface Suggestion {
   /** `line_value` do banco · o número puro da linha, sem a frase em volta. */
   line_value?: number | null
   /* ESCALAÇÃO (02/09). O pick é sobre uma pessoa, e até aqui a tela não dizia
-     se ela ia entrar em campo. Três estados, vindos do banco:
-     'indefinida' (a escalação oficial ainda não saiu), 'titular' (está no XI)
-     e 'fora' (saiu e ele não está · aí o pick já foi anulado). */
-  escalacao?: 'titular' | 'fora' | 'indefinida' | null
+     se ela ia entrar em campo. Quatro estados, vindos do banco:
+     'indefinida' (a escalação oficial ainda não saiu), 'titular' (está no XI),
+     'banco' (relacionado, começa fora · o pick CONTINUA DE PÉ, porque a aposta
+     vale se ele entrar em campo) e 'fora' (nem foi relacionado · aí o pick já
+     foi anulado). */
+  escalacao?: 'titular' | 'banco' | 'fora' | 'indefinida' | null
   /** Por que o pick foi anulado. Só existe em PUSH, e é sempre nomeado. */
   void_reason?: string | null
   /** Pernas de um pick COMBINADO. Hoje só o Pick Boost usa (Over 1.5 FT +
@@ -658,9 +660,21 @@ function SuggestionCard({
                 * 'fora' aparece junto do pick anulado, logo abaixo. */}
               {s.escalacao && s.escalacao !== 'fora' && !s.result && (
                 <CampoDoPick rotulo="Escalação">
-                  <dd>
+                  <dd className="flex items-baseline gap-1.5 min-w-0">
                     {s.escalacao === 'titular' ? (
                       <Badge tone="green">Escalado para começar</Badge>
+                    ) : s.escalacao === 'banco' ? (
+                      <>
+                        {/* BANCO NÃO É ANULAÇÃO. A aposta de estatística
+                            individual vale se ele entrar em campo, mesmo
+                            saindo do banco · quem entra aos 60' e dá dois
+                            chutes bateu uma linha de dois chutes. O que muda é
+                            a chance, e é isso que o âmbar comunica. */}
+                        <Badge tone="amber">Começa no banco</Badge>
+                        <span className="text-[10px] text-ink-4 truncate">
+                          vale se ele entrar
+                        </span>
+                      </>
                     ) : (
                       <Badge tone="neutral">Ainda não saiu</Badge>
                     )}
