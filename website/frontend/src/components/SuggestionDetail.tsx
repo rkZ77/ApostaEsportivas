@@ -403,7 +403,14 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                         leagueName: s.league_name,
                         pickType: pickType === 'free' ? 'Dica do Dia' : (PICK_TYPE_LABEL[pickType] ?? 'VIP'),
                         market: translateMarket(s.market),
-                        line: translateLine(s.line),
+                        /* Mesma imagem do card: no pick de jogador a linha vai
+                           sem o nome, que aparece embaixo da foto. */
+                        line: s.player_name
+                          ? linhaDoJogador(s.line, s.line_value, s.player_name)
+                          : translateLine(s.line),
+                        playerId: s.player_id ?? undefined,
+                        playerName: s.player_name ?? undefined,
+                        playerTeamName: s.team_name ?? undefined,
                         odd: Number(s.total_odd ?? s.odd ?? 0),
                         probabilityPct: pctProb(s.probability ?? s.confidence),
                         result: s.result,

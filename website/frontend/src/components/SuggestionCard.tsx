@@ -237,12 +237,18 @@ function SuggestionCard({
       leagueName: s.league_name,
       pickType: pickTypeRoute,
       market: s.market ? translateMarket(s.market) : undefined,
-      /* A imagem segue o card: no pick de jogador a linha é "Pedro, 2 ou
-         mais" e não a frase inteira, que repetiria o mercado impresso logo
-         acima dela. */
+      /* A imagem segue o card: no pick de jogador a linha é só o número
+         ("2 ou mais"). O nome não se perde -- ele vai embaixo da foto, no
+         meio da imagem, e repetir aqui gastaria a linha inteira dizendo duas
+         vezes a mesma coisa. */
       line: s.player_name
-        ? `${s.player_name}, ${linhaDoJogador(s.line, s.line_value, s.player_name)}`
+        ? linhaDoJogador(s.line, s.line_value, s.player_name)
         : translateLine(s.line),
+      playerId: s.player_id ?? undefined,
+      playerName: s.player_name ?? undefined,
+      playerTeamName: s.player_team ?? undefined,
+      settledLabel: s.settled_value != null
+        ? valorLiquidado(s.market, s.settled_value) : undefined,
       odd: Number(s.odd),
       probabilityPct: pctProb(s.probability ?? s.confidence),
       result: s.result,

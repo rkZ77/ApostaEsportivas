@@ -28,6 +28,29 @@ export interface StoryImageInput {
    * do proprio pick responde a pergunta que o leitor ja estava fazendo.
    */
   probabilityPct?: number | null
+  /*
+   * PICK DE JOGADOR · a imagem é sobre uma PESSOA (02/09).
+   *
+   * O card do site passou a mostrar a foto e os campos rotulados, e a imagem
+   * que vai pro Instagram continuava desenhando dois escudos e uma frase.
+   * Escudo de time não identifica o Pedro, e é o rosto que faz alguém parar de
+   * rolar o feed.
+   *
+   * `playerId` vem do mesmo proxy dos escudos (/api/proxy/player/<id>.png),
+   * então herda o cache e não suja o canvas (mesma origem). Sem foto no
+   * provedor, ficam as iniciais.
+   */
+  playerId?: number | null
+  playerName?: string | null
+  playerTeamName?: string | null
+  /**
+   * O contador que decidiu o pick, já escrito ("12 escanteios").
+   *
+   * Numa imagem de resultado ele é a prova: "Menos de 12.0" com PUSH parece
+   * erro até a linha de baixo dizer que deu exatamente 12. É o mesmo número
+   * que o card mostra em "Deu".
+   */
+  settledLabel?: string | null
 }
 
 // ── Tipografia ───────────────────────────────────────────────────────────
@@ -177,6 +200,60 @@ function drawCircularLogo(ctx: CanvasRenderingContext2D, img: HTMLImageElement |
   ctx.restore()
 }
 
+/** Iniciais de "Erick Pulgar" -> "EP". Mesma regra do avatar do site. */
+function iniciaisDoNome(nome: string): string {
+  const partes = nome.trim().split(/\s+/).filter(Boolean)
+  if (partes.length === 0) return '?'
+  if (partes.length === 1) return partes[0].slice(0, 2).toUpperCase()
+  return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase()
+}
+
+/**
+ * A FOTO DO JOGADOR, redonda e recortada como capa.
+ *
+ * Diferente do escudo em dois pontos, e os dois importam: retrato não é PNG
+ * transparente, então ele ganha um disco atrás e um aro na cor do produto; e
+ * ele é `cover`, não `contain` -- foto de jogador vem em proporções variadas e
+ * `drawImage` esticado deforma o rosto, que é justamente o que a imagem existe
+ * pra mostrar.
+ *
+ * Sem foto no provedor, as iniciais ocupam o mesmo círculo: nunca fica buraco.
+ */
+function drawPlayerPhoto(ctx: CanvasRenderingContext2D, img: HTMLImageElement | null,
+                         nome: string, cx: number, cy: number, size: number,
+                         accentHex: string) {
+  const r = size / 2
+  ctx.save()
+  ctx.beginPath()
+  ctx.arc(cx, cy, r, 0, Math.PI * 2)
+  ctx.closePath()
+  ctx.fillStyle = '#1f1f23'
+  ctx.fill()
+  if (img && img.width && img.height) {
+    ctx.clip()
+    // "cover": a menor dimensão da foto preenche o círculo, e o excesso da
+    // outra é cortado igualmente dos dois lados.
+    const escala = Math.max(size / img.width, size / img.height)
+    const w = img.width * escala
+    const h = img.height * escala
+    ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h)
+    ctx.restore()
+    ctx.save()
+  } else {
+    ctx.fillStyle = '#a1a1aa'
+    ctx.font = fontDisplay(900, Math.round(size * 0.34))
+    ctx.textAlign = 'center'
+    ctx.fillText(iniciaisDoNome(nome), cx, cy + size * 0.12)
+  }
+  ctx.beginPath()
+  ctx.arc(cx, cy, r, 0, Math.PI * 2)
+  ctx.strokeStyle = `${accentHex}88`
+  ctx.lineWidth = 4
+  ctx.stroke()
+  ctx.restore()
+}
+
+
 export async function buildStoryImage(input: StoryImageInput): Promise<Blob> {
   const canvas = document.createElement('canvas')
   canvas.width = W
@@ -200,7 +277,10 @@ export async function buildStoryImage(input: StoryImageInput): Promise<Blob> {
   // Mirror dos incrementos de cursorY usados abaixo (876 = soma dos fixos;
   // leagueName/market são as duas únicas seções opcionais que mudam a altura).
   const contentBottomUnshifted = (logoImg ? 290 : 170) + 876
-    + (input.leagueName ? 58 : 0) + (input.market ? 80 : 0) + FOOTER_HEIGHT
+    + (input.leagueName ? 58 : 0) + (input.market ? 80 : 0)
+    // O bloco do jogador (foto + nome + time) é 60px mais alto que o "vs".
+    + (input.playerName ? 60 : 0)
+    + (input.settledLabel && input.result ? 46 : 0) + FOOTER_HEIGHT
   ctx.save()
   ctx.translate(0, computeShiftY(contentBottomUnshifted))
 
@@ -254,19 +334,59 @@ export async function buildStoryImage(input: StoryImageInput): Promise<Blob> {
   drawCircularLogo(ctx, homeLogo, W / 2 - 260, cursorY, logoSize)
   drawCircularLogo(ctx, awayLogo, W / 2 + 260, cursorY, logoSize)
 
-  ctx.font = fontDisplay(900, 46)
-  ctx.fillStyle = '#ffffff'
-  ctx.fillText(fitText(ctx, input.homeTeamName, 340), W / 2, cursorY - 88)
-  ctx.font = fontSans(700, 30)
-  ctx.fillStyle = '#52525b'
-  ctx.fillText('vs', W / 2, cursorY + 14)
-  if (input.awayTeamName) {
+  /* Pick de time escreve o mandante em cima e o visitante embaixo, com o
+     "vs" no meio. Pick de JOGADOR usa o meio pra foto, então os dois times
+     dividem a linha de cima -- ver logo abaixo. */
+  const temJogador = !!input.playerName
+  if (!temJogador) {
+    ctx.font = fontDisplay(900, 46)
+    ctx.fillStyle = '#ffffff'
+    ctx.fillText(fitText(ctx, input.homeTeamName, 340), W / 2, cursorY - 88)
+  }
+
+  /* O MEIO DA LINHA DOS TIMES É DO JOGADOR, quando o pick é sobre um.
+   *
+   * Ali só existia a palavra "vs", em cinza. Num pick de jogador esse é o
+   * espaço mais nobre da imagem, e o rosto responde de longe o que a frase
+   * responderia lendo: de quem é a aposta. Os dois escudos ficam onde estão e
+   * viram contexto, que é o papel deles aqui. */
+  if (temJogador) {
+    const foto = input.playerId != null
+      ? await loadImage(`/api/proxy/player/${input.playerId}.png`)
+      : null
+    drawPlayerPhoto(ctx, foto, input.playerName!, W / 2, cursorY + 6, 150, accentHex)
+    ctx.textAlign = 'center'
+    ctx.font = fontDisplay(900, 40)
+    ctx.fillStyle = '#ffffff'
+    ctx.fillText(fitText(ctx, input.playerName!, 460), W / 2, cursorY + 132)
+    if (input.playerTeamName) {
+      ctx.font = fontSans(600, 26)
+      ctx.fillStyle = '#71717a'
+      ctx.fillText(fitText(ctx, input.playerTeamName, 460), W / 2, cursorY + 172)
+    }
+  } else {
+    ctx.font = fontSans(700, 30)
+    ctx.fillStyle = '#52525b'
+    ctx.fillText('vs', W / 2, cursorY + 14)
+  }
+
+  if (input.awayTeamName && !temJogador) {
     ctx.font = fontDisplay(900, 46)
     ctx.fillStyle = '#ffffff'
     ctx.fillText(fitText(ctx, input.awayTeamName, 340), W / 2, cursorY + 110)
   }
 
-  cursorY += 190
+  /* Com a foto e o nome no meio, o time visitante sobe pra linha de cima,
+     junto do mandante · "Flamengo x Mirassol" numa linha só. Sem isso o nome
+     dele cairia em cima do nome do jogador. */
+  if (input.awayTeamName && temJogador) {
+    ctx.font = fontDisplay(900, 38)
+    ctx.fillStyle = '#a1a1aa'
+    ctx.fillText(fitText(ctx, `${input.homeTeamName} x ${input.awayTeamName}`, W - 200),
+                 W / 2, cursorY - 88)
+  }
+
+  cursorY += temJogador ? 250 : 190
 
   if (input.market) {
     const marketText = input.line ? `${input.market}, ${input.line}` : input.market
@@ -285,6 +405,18 @@ export async function buildStoryImage(input: StoryImageInput): Promise<Blob> {
     ctx.fillStyle = '#ffffff'
     ctx.fillText(fitted, W / 2, boxY + 51)
     cursorY += 80
+  }
+
+  /* O QUE DEU NO JOGO, logo abaixo da linha apostada.
+   *
+   * Só em pick liquidado, e é a linha que transforma o selo em prova: com
+   * "Menos de 12.0" e um PUSH, quem vê a imagem precisa dos 12 escanteios pra
+   * entender que a casa devolveu porque empatou, e não porque erramos. */
+  if (input.settledLabel && input.result) {
+    ctx.font = fontSans(700, 30)
+    ctx.fillStyle = '#a1a1aa'
+    ctx.fillText(fitText(ctx, `Deu ${input.settledLabel}`, W - 200), W / 2, cursorY + 26)
+    cursorY += 46
   }
 
   // Selo de resultado
