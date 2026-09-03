@@ -351,3 +351,56 @@ def test_pick_em_markdown_nao_expoe_mercado(monkeypatch):
     assert "Flamengo" in r.text
     for proibido in ("market", "reasoning", "Mercado:"):
         assert proibido not in r.text
+
+
+# ─────────────────── sitemap ────────────────────
+
+
+def test_sitemap_lista_publicas_e_esconde_area_logada(tmp_path, monkeypatch):
+    """O sitemap so' pode conter URL que responde sem conta.
+
+    Rota atras de PrivateRoute devolve o shell da SPA pro rastreador, entao
+    anuncia-la e' gastar orcamento de crawl em pagina vazia. A pagina publica
+    de pick fica fora por volume: sao milhares, com a analise bloqueada.
+    """
+    import xml.dom.minidom
+
+    manifesto = tmp_path / "blog-index.json"
+    manifesto.write_text(
+        json.dumps(
+            {
+                "posts": [
+                    {
+                        "slug": "gestao-de-banca",
+                        "title": "Gestao de banca",
+                        "publishedAt": "2026-07-23",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(agent_web, "_BLOG_INDEX", manifesto)
+
+    xml_txt = agent_web.sitemap_xml()
+    xml.dom.minidom.parseString(xml_txt)
+
+    for publica in ("/resultados", "/planos", "/como-funciona", "/blog"):
+        assert f"<loc>{agent_web.SITE}{publica}</loc>" in xml_txt
+
+    assert f"{agent_web.SITE}/blog/gestao-de-banca" in xml_txt
+    assert "<lastmod>2026-07-23</lastmod>" in xml_txt
+
+    for privada in ("/admin", "/banca", "/picks", "/profile", "/checkout", "/p/"):
+        assert privada not in xml_txt.replace(agent_web.SITE, "")
+
+
+def test_sitemap_responde_sem_manifesto_de_blog(monkeypatch, tmp_path):
+    """Dev sem build nao tem blog-index.json, e o sitemap ainda tem que sair."""
+    monkeypatch.setattr(agent_web, "_BLOG_INDEX", tmp_path / "nao-existe.json")
+
+    cliente = TestClient(_app())
+    r = cliente.get("/sitemap.xml")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("application/xml")
+    assert "/blog/" not in r.text

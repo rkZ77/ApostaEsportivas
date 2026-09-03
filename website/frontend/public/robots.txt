@@ -1,4 +1,26 @@
+# ATENCAO: este NAO e' o robots.txt completo que o site serve.
+# O Cloudflare injeta um bloco antes deste (bloqueio de bots de IA, entre
+# outros) e o que esta aqui e' so' a cauda. Regra de bot de IA se muda no
+# painel do Cloudflare, nao neste arquivo.
+
 User-agent: *
 Allow: /
+
+# Area logada. Nao ha segredo em bloquear: rastreador so' recebe o shell da
+# SPA e um redirecionamento pro login. Fora do rastreio pra nao gastar
+# orcamento de crawl em pagina que nunca vai render resultado.
+Disallow: /admin
+Disallow: /agente
+Disallow: /banca
+Disallow: /checkout
+Disallow: /estatisticas
+Disallow: /fixtures
+Disallow: /meus-picks
+Disallow: /picks
+Disallow: /profile
+
+# Fluxos de conta, com token na URL em alguns casos.
+Disallow: /forgot-password
+Disallow: /verify-email
 
 Sitemap: https://pickia.com.br/sitemap.xml

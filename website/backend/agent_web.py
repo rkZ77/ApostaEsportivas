@@ -560,6 +560,70 @@ def rota_llms_full():
     return Response(llms_full_txt(), media_type=MEDIA_TEXTO, headers=_CACHE_CURTO)
 
 
+def sitemap_xml() -> str:
+    """Sitemap das paginas publicas, no formato sitemaps.org.
+
+    So entra URL que responde conteudo pra quem nao tem conta. Tela atras de
+    PrivateRoute (picks, banca, perfil, admin) fica de fora: indexar uma rota
+    que redireciona pro login gasta rastreio e nao rende nada.
+
+    As paginas publicas de pick (`/p/<tipo>/<id>`) tambem ficam de fora, de
+    proposito. Sao milhares, cada uma com pouco texto e a analise bloqueada,
+    e o que elas mostram ja esta consolidado em /resultados.
+
+    A lista de posts vem do mesmo manifesto do llms.txt, entao publicar um
+    artigo atualiza o sitemap sozinho no build seguinte.
+    """
+    from xml.sax.saxutils import escape
+
+    urls: list[tuple[str, str, str]] = [
+        ("/", "daily", "1.0"),
+        ("/como-funciona", "monthly", "0.8"),
+        ("/planos", "monthly", "0.8"),
+        ("/resultados", "daily", "0.9"),
+        ("/performance", "weekly", "0.6"),
+        ("/blog", "weekly", "0.7"),
+        ("/termos", "yearly", "0.2"),
+        ("/privacidade", "yearly", "0.2"),
+    ]
+
+    linhas = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ]
+    for caminho, freq, prioridade in urls:
+        linhas.append("  <url>")
+        linhas.append(f"    <loc>{escape(SITE + caminho)}</loc>")
+        linhas.append(f"    <changefreq>{freq}</changefreq>")
+        linhas.append(f"    <priority>{prioridade}</priority>")
+        linhas.append("  </url>")
+
+    for post in posts_do_blog():
+        slug = (post.get("slug") or "").strip()
+        if not slug:
+            continue
+        linhas.append("  <url>")
+        linhas.append(f"    <loc>{escape(f'{SITE}/blog/{slug}')}</loc>")
+        publicado = (post.get("publishedAt") or "").strip()
+        if publicado:
+            linhas.append(f"    <lastmod>{escape(publicado)}</lastmod>")
+        linhas.append("    <changefreq>monthly</changefreq>")
+        linhas.append("    <priority>0.6</priority>")
+        linhas.append("  </url>")
+
+    linhas.append("</urlset>")
+    return "\n".join(linhas) + "\n"
+
+
+@router.get("/sitemap.xml")
+def rota_sitemap():
+    return Response(
+        sitemap_xml(),
+        media_type="application/xml",
+        headers=_CACHE_LONGO,
+    )
+
+
 @router.get("/index.md")
 def rota_index_md():
     return resposta_markdown("/")
