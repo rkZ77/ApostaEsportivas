@@ -272,9 +272,56 @@ class PlayerStatsCollectorService:
                     ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
                               %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb)
                     ON CONFLICT (fixture_id, player_id) DO UPDATE SET
-                        minutes = EXCLUDED.minutes, rating = EXCLUDED.rating,
-                        saves = EXCLUDED.saves, fouls_committed = EXCLUDED.fouls_committed,
-                        fouls_drawn = EXCLUDED.fouls_drawn, raw = EXCLUDED.raw
+                        -- COALESCE EM TUDO (2026-09-02), pelos dois motivos que
+                        -- `match_statistics` ja' resolvia assim ha' tempos:
+                        --
+                        -- 1. RECOLETA QUE VOLTA VAZIA NAO PODE APAGAR. A API
+                        --    manda `null` em campo que ela nao tem -- medido:
+                        --    "saves" volta null em 59% das atuacoes de goleiro,
+                        --    e no MESMO jogo ela manda 1 pra um goleiro e null
+                        --    pro outro. Com `saves = EXCLUDED.saves` cru, uma
+                        --    recoleta trocava o numero certo por nada.
+                        --
+                        -- 2. E APAGA O QUE FOI DIGITADO A MAO. E' o que
+                        --    inviabilizava a correcao manual: o valor sobrevivia
+                        --    ate' a proxima coleta daquele jogo e sumia sem
+                        --    aviso. COALESCE resolve os dois com a mesma regra --
+                        --    a API atualiza quando TEM dado, e so' nesse caso.
+                        --
+                        -- A lista tambem deixou de ser de seis colunas: antes so'
+                        -- minutes, rating, saves, fouls_* e raw se atualizavam, e
+                        -- correcao da API em chutes ou passes NUNCA chegava aqui.
+                        player_name = COALESCE(EXCLUDED.player_name, player_match_stats.player_name),
+                        team_id = COALESCE(EXCLUDED.team_id, player_match_stats.team_id),
+                        team_name = COALESCE(EXCLUDED.team_name, player_match_stats.team_name),
+                        league_id = COALESCE(EXCLUDED.league_id, player_match_stats.league_id),
+                        season = COALESCE(EXCLUDED.season, player_match_stats.season),
+                        match_date = COALESCE(EXCLUDED.match_date, player_match_stats.match_date),
+                        position = COALESCE(EXCLUDED.position, player_match_stats.position),
+                        minutes = COALESCE(EXCLUDED.minutes, player_match_stats.minutes),
+                        rating = COALESCE(EXCLUDED.rating, player_match_stats.rating),
+                        is_substitute = COALESCE(EXCLUDED.is_substitute, player_match_stats.is_substitute),
+                        shots_total = COALESCE(EXCLUDED.shots_total, player_match_stats.shots_total),
+                        shots_on = COALESCE(EXCLUDED.shots_on, player_match_stats.shots_on),
+                        goals_total = COALESCE(EXCLUDED.goals_total, player_match_stats.goals_total),
+                        goals_conceded = COALESCE(EXCLUDED.goals_conceded, player_match_stats.goals_conceded),
+                        assists = COALESCE(EXCLUDED.assists, player_match_stats.assists),
+                        saves = COALESCE(EXCLUDED.saves, player_match_stats.saves),
+                        passes_total = COALESCE(EXCLUDED.passes_total, player_match_stats.passes_total),
+                        passes_key = COALESCE(EXCLUDED.passes_key, player_match_stats.passes_key),
+                        tackles_total = COALESCE(EXCLUDED.tackles_total, player_match_stats.tackles_total),
+                        blocks = COALESCE(EXCLUDED.blocks, player_match_stats.blocks),
+                        interceptions = COALESCE(EXCLUDED.interceptions, player_match_stats.interceptions),
+                        duels_total = COALESCE(EXCLUDED.duels_total, player_match_stats.duels_total),
+                        duels_won = COALESCE(EXCLUDED.duels_won, player_match_stats.duels_won),
+                        dribbles_attempts = COALESCE(EXCLUDED.dribbles_attempts, player_match_stats.dribbles_attempts),
+                        dribbles_success = COALESCE(EXCLUDED.dribbles_success, player_match_stats.dribbles_success),
+                        fouls_drawn = COALESCE(EXCLUDED.fouls_drawn, player_match_stats.fouls_drawn),
+                        fouls_committed = COALESCE(EXCLUDED.fouls_committed, player_match_stats.fouls_committed),
+                        cards_yellow = COALESCE(EXCLUDED.cards_yellow, player_match_stats.cards_yellow),
+                        cards_red = COALESCE(EXCLUDED.cards_red, player_match_stats.cards_red),
+                        raw = COALESCE(EXCLUDED.raw, player_match_stats.raw),
+                        last_updated = NOW()
                 """, linhas)
                 conn.commit()
                 total += len(linhas)

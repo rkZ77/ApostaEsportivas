@@ -230,6 +230,18 @@ def run_migrations():
             created_at       TIMESTAMP DEFAULT NOW(),
             UNIQUE (fixture_id, player_id)
         );""",
+        # LAST_UPDATED E MANUAL_STATS (2026-09-02). `match_statistics` tinha as
+        # duas ha' tempos e `player_match_stats` nao tinha nenhuma, entao aqui
+        # nao dava pra responder nem "quando este numero mudou pela ultima vez"
+        # nem "este numero veio da API ou foi digitado".
+        #
+        # `manual_stats` guarda O QUE foi preenchido a mao, POR QUEM e QUANDO --
+        # mesmo formato do gemeo em match_statistics. Ele nao substitui a coluna
+        # do valor: a coluna continua sendo o numero que o motor le', e este
+        # JSONB e' a procedencia. Sem isso, media de goleiro passaria a misturar
+        # dado da API com dado digitado sem nenhum jeito de separar depois.
+        "ALTER TABLE player_match_stats ADD COLUMN IF NOT EXISTS last_updated TIMESTAMP;",
+        "ALTER TABLE player_match_stats ADD COLUMN IF NOT EXISTS manual_stats JSONB;",
         "CREATE INDEX IF NOT EXISTS idx_pms_player_date ON player_match_stats (player_id, match_date DESC);",
         "CREATE INDEX IF NOT EXISTS idx_pms_team_date   ON player_match_stats (team_id, match_date DESC);",
         "CREATE INDEX IF NOT EXISTS idx_pms_fixture     ON player_match_stats (fixture_id);",

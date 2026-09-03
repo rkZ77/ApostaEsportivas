@@ -673,6 +673,25 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
                 atualizado_em  TIMESTAMP NOT NULL DEFAULT NOW()
             )
         """)
+        # `player_match_stats` e' criada pelo MOTOR (src/main.py setup), mas o
+        # site tambem precisa das duas colunas: e' ele que grava a correcao
+        # manual e le' a data de modificacao na aba de Dados. ADD COLUMN IF NOT
+        # EXISTS e' idempotente, entao quem chegar primeiro cria -- mesmo padrao
+        # de engine_decisions, que os dois lados tambem tocam.
+        # Checa a existencia ANTES em vez de tentar e capturar: um `rollback`
+        # aqui desfaria todas as migracoes anteriores desta mesma transacao, o
+        # que e' um estrago muito maior que a coluna faltando.
+        # Alias nomeado porque o cursor do site e' RealDictCursor: `[0]` num
+        # dict daria KeyError.
+        cur.execute("SELECT to_regclass('public.player_match_stats') "
+                    "IS NOT NULL AS existe")
+        _linha = cur.fetchone()
+        if (_linha["existe"] if isinstance(_linha, dict) else _linha[0]):
+            cur.execute("ALTER TABLE player_match_stats "
+                        "ADD COLUMN IF NOT EXISTS last_updated TIMESTAMP")
+            cur.execute("ALTER TABLE player_match_stats "
+                        "ADD COLUMN IF NOT EXISTS manual_stats JSONB")
+
         cur.execute("""
             CREATE TABLE IF NOT EXISTS api_quota_calls (
                 dia            DATE NOT NULL,
