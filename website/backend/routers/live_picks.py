@@ -330,7 +330,19 @@ def liquidar_pendentes(cur, conn, limite: int = 30) -> dict:
 _COLUNA_DA_FOLHA = {
     "corners": "COALESCE(ms.total_corners, ms.home_corners + ms.away_corners)",
     "goals":   "COALESCE(ms.total_goals, ms.home_goals + ms.away_goals)",
-    "cards":   "(COALESCE(ms.total_yellow_cards, 0) + 2 * COALESCE(ms.total_red_cards, 0))",
+    # SEM COALESCE(x, 0) DE PROPOSITO (2026-09-02). Vermelho e' o campo de
+    # menor cobertura da folha -- ja' esteve em 68,7%, e o `or 0` nele e' o
+    # mesmo erro que o stats_model fechou com `_tem_folha_de_cartao_completa`:
+    # ausencia virando zero SUBESTIMA os pontos, e aqui isso liquidaria um
+    # "Under cartoes" como GREEN num jogo que teve expulsao nao registrada.
+    #
+    # Com a soma crua, folha sem vermelho devolve NULL e o pick NAO liquida --
+    # fica pendente ate' a folha completar, que e' o comportamento certo: pick
+    # sem estatistica vira PUSH pelo caminho proprio, nao GREEN por engano.
+    #
+    # Hoje nao ha' pick ao vivo de cartao (so' escanteio e gol) e a cobertura de
+    # vermelho esta' em 100% nos FT -- isto e' pra quando o mercado ligar.
+    "cards":   "(ms.total_yellow_cards + 2 * ms.total_red_cards)",
 }
 
 
