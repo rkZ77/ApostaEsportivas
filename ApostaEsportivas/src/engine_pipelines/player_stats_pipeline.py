@@ -263,6 +263,29 @@ def _avaliar_fixture(fixture: dict, cur, odds_service: OddsService,
         jogadores = player_history.jogadores_dos_times(
             cur, [fixture["home_team_id"], fixture["away_team_id"]],
             posicoes=metodo.posicoes or None, min_atuacoes=metodo.min_atuacoes)
+
+        # SO' QUEM TEM CHANCE REAL DE COMECAR (2026-09-02).
+        #
+        # `min_atuacoes` cobra HISTORICO -- quatro jogos de 60+ minutos bastam,
+        # mesmo espalhados em vinte rodadas do time. Isso deixava o motor
+        # escolher reserva: medido em PROD, 45 dos jogadores elegiveis comecavam
+        # em menos de 40% dos jogos, e 16 de 49 nos cinco times de maior
+        # amostra.
+        #
+        # A varredura de escalacao oficial (lineups_sweep) ja' ANULA o pick de
+        # quem fica fora do XI, mas ela age tarde: o pick ja' foi publicado, ja'
+        # ocupou o slot do dia e quem seguiu ja' registrou a aposta. Este corte
+        # age na ESCOLHA -- e as duas coisas se completam, uma antes e outra
+        # depois de a escalacao sair.
+        #
+        # A API-Football nao publica escalacao provavel, so' a oficial de 20 a
+        # 40 minutos antes. Titularidade recente e' a melhor aproximacao que o
+        # dado permite, e e' medida (`is_substitute`, cobertura total).
+        antes = len(jogadores)
+        jogadores = [j for j in jogadores if player_history.e_titular_provavel(j)]
+        if antes != len(jogadores):
+            print(f"[PLAYER_STATS] {metodo.slug}: {antes - len(jogadores)} de {antes} "
+                  f"jogador(es) fora por titularidade baixa.")
         if not jogadores:
             continue
 

@@ -121,6 +121,35 @@ def composicao(atuacoes: list) -> dict:
     }
 
 
+#: Janela pra medir titularidade, em dias. Quatro meses cobrem o returno de um
+#: pontos corridos sem carregar quem saiu do time em janeiro.
+JANELA_TITULARIDADE_DIAS = 120
+
+#: Abaixo desta fracao dos jogos do time, o jogador NAO e' titular provavel e
+#: nao vira pick.
+#:
+#: MEDIDO EM PROD (2026-09-02), sobre quem ja' passava no corte de 4 atuacoes:
+#:   titular fixo (>=70% dos jogos do time)   419 jogadores
+#:   alterna      (40 a 70%)                  195
+#:   reserva      (<40%)                        45
+#:
+#: Os 45 reservas eram candidatos legitimos pro motor: quatro atuacoes de 60+
+#: minutos bastam, mesmo que espalhadas em vinte jogos do time. O pick nascia
+#: sobre alguem que provavelmente nem comeca.
+#:
+#: NAO E' A MESMA COISA QUE A VARREDURA DE ESCALACAO, e as duas se completam. A
+#: varredura (website/backend/lineups_sweep.py) le' a escalacao OFICIAL, que sai
+#: de 20 a 40 minutos antes do apito, e ANULA o pick de quem ficou fora do XI.
+#: Ela protege o apostador, mas tarde: o pick ja' foi publicado, ja' ocupou o
+#: slot do dia e quem seguiu ja' registrou a aposta. Este corte age ANTES, na
+#: hora de escolher -- gasta o slot com quem tem chance real de comecar.
+#:
+#: A API-Football nao publica escalacao provavel, so' a oficial. Titularidade
+#: recente e' a melhor aproximacao que o dado permite, e ela e' medida, nao
+#: chutada.
+MIN_TAXA_TITULARIDADE = 0.40
+
+
 def jogadores_dos_times(cur, team_ids: list, *, posicoes=None,
                         min_atuacoes: int = 3) -> list[dict]:
     """Quem joga por estes times, com quantas atuacoes cada um tem.
@@ -141,10 +170,27 @@ def jogadores_dos_times(cur, team_ids: list, *, posicoes=None,
         params_posicao = [list(posicoes)]
 
     cur.execute(f"""
-        WITH recentes AS (
+        WITH jogos_do_time AS (
+            -- Quantas partidas o time teve na janela. E' o denominador da
+            -- titularidade: "comecou em 9" so' quer dizer alguma coisa contra
+            -- "de quantas".
+            SELECT team_id, COUNT(DISTINCT fixture_id) AS partidas
+              FROM player_match_stats
+             WHERE team_id = ANY(%s)
+               AND match_date >= CURRENT_DATE - %s
+             GROUP BY team_id
+        ),
+        recentes AS (
             SELECT p.player_id, p.player_name, p.team_id, p.team_name, p.position,
                    COUNT(*) AS atuacoes,
-                   MAX(p.match_date) AS ultima
+                   MAX(p.match_date) AS ultima,
+                   -- Titular = comecou jogando. `is_substitute` vem da folha e
+                   -- tem cobertura total (medido: zero nulos em 22.625
+                   -- linhas), entao aqui nao ha' o problema de campo omitido
+                   -- que atingiu os contadores.
+                   COUNT(*) FILTER (
+                       WHERE p.is_substitute IS NOT TRUE
+                         AND p.match_date >= CURRENT_DATE - %s) AS comecou_na_janela
               FROM player_match_stats p
              WHERE p.team_id = ANY(%s)
                AND COALESCE(p.minutes, 0) >= %s
@@ -153,6 +199,9 @@ def jogadores_dos_times(cur, team_ids: list, *, posicoes=None,
         )
         SELECT * FROM (
             SELECT r.*,
+                   COALESCE(t.partidas, 0) AS partidas_do_time,
+                   ROUND((r.comecou_na_janela::numeric
+                          / GREATEST(COALESCE(t.partidas, 0), 1)), 3) AS taxa_titularidade,
                    -- Um jogador pode aparecer por dois times na base (foi
                    -- transferido). Fica o time em que ele atuou MAIS
                    -- recentemente: e' o unico dos dois que ele pode
@@ -160,10 +209,28 @@ def jogadores_dos_times(cur, team_ids: list, *, posicoes=None,
                    ROW_NUMBER() OVER (PARTITION BY r.player_id
                                       ORDER BY r.ultima DESC, r.atuacoes DESC) AS ordem
               FROM recentes r
+              LEFT JOIN jogos_do_time t ON t.team_id = r.team_id
         ) x
         WHERE x.ordem = 1 AND x.atuacoes >= %s
-    """, (list(team_ids), MIN_MINUTOS, *params_posicao, min_atuacoes))
+    """, (list(team_ids), JANELA_TITULARIDADE_DIAS,
+          JANELA_TITULARIDADE_DIAS, list(team_ids), MIN_MINUTOS,
+          *params_posicao, min_atuacoes))
     return linhas_dict(cur)
+
+
+def e_titular_provavel(jogador: dict) -> bool:
+    """O jogador tem chance real de COMECAR a partida de hoje?
+
+    Sem `partidas_do_time` (time recem-cadastrado, janela vazia) devolve True:
+    ausencia de dado nao pode virar veto -- o motor volta a se comportar como
+    antes deste corte, e a varredura de escalacao oficial continua sendo a rede
+    de baixo.
+    """
+    partidas = jogador.get("partidas_do_time") or 0
+    if partidas < 4:
+        return True
+    taxa = jogador.get("taxa_titularidade")
+    return taxa is None or float(taxa) >= MIN_TAXA_TITULARIDADE
 
 
 def volume_do_adversario(cur, team_id: int, coluna: str, mando: str,
