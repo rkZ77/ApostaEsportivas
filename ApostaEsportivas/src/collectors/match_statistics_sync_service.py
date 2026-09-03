@@ -200,7 +200,7 @@ class MatchStatisticsSyncService:
               -- VERMELHO entra na definicao de "folha completa" desde
               -- 2026-08-26. Sem ele, o jogo cuja unica lacuna era o vermelho
               -- era pulado PRA SEMPRE (a coleta so' volta em folha
-              -- incompleta) -- e essa era a lacuna de 87% dos jogos.
+              -- incompleta) -- e o vermelho era a lacuna da grande maioria.
               AND total_red_cards IS NOT NULL
               AND home_fouls IS NOT NULL
               AND home_total_shots IS NOT NULL

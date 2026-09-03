@@ -334,7 +334,8 @@ class PlayerStatsCollectorService:
                         --
                         -- 1. RECOLETA QUE VOLTA VAZIA NAO PODE APAGAR. A API
                         --    manda `null` em campo que ela nao tem -- medido:
-                        --    "saves" volta null em 59% das atuacoes de goleiro,
+                        --    "saves" volta null na maioria das atuacoes de
+                        --    goleiro (medido: 8.115 nulls contra 169 zeros),
                         --    e no MESMO jogo ela manda 1 pra um goleiro e null
                         --    pro outro. Com `saves = EXCLUDED.saves` cru, uma
                         --    recoleta trocava o numero certo por nada.
