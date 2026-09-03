@@ -47,6 +47,10 @@ function InstagramIcon({ className }: { className?: string }) {
  */
 const LINKS: Array<{ label: string; to?: string; href?: string }> = [
   { label: 'Picks do dia',      to: '/picks' },
+  /* Entra no rodapé, e não só no sitemap, porque é a página que responde a
+     busca ("palpites de futebol hoje"): sem um link em todas as telas, ela
+     seria a única página pública sem nada apontando pra ela. */
+  { label: 'Palpites de hoje',  to: '/palpites-de-futebol-hoje' },
   { label: 'Resultados da IA',  to: '/resultados' },
   { label: 'Como funciona',     to: '/como-funciona' },
   { label: 'Planos',            to: '/planos' },

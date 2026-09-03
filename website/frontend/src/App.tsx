@@ -78,6 +78,8 @@ const ComoFunciona   = lazy(() => import('./pages/ComoFunciona'))
 const PickPublico         = lazy(() => import('./pages/PickPublico'))
 const ResultadosPublicos  = lazy(() => import('./pages/ResultadosPublicos'))
 const PerformanceIA       = lazy(() => import('./pages/PerformanceIA'))
+const PalpitesHoje        = lazy(() => import('./pages/PalpitesHoje'))
+const PalpitesLiga        = lazy(() => import('./pages/PalpitesLiga'))
 const Blog                = lazy(() => import('./pages/Blog'))
 const BlogPost            = lazy(() => import('./pages/BlogPost'))
 
@@ -268,6 +270,11 @@ export default function App() {
                 <Route path="/p/:pick_type/:pick_id" element={<PickPublico />} />
                 <Route path="/resultados" element={<ResultadosPublicos />} />
                 <Route path="/performance" element={<PerformanceIA />} />
+                {/* Landing pages de busca. A URL e a palavra-chave: e o unico
+                    endereco do site que uma pessoa consegue adivinhar. */}
+                <Route path="/palpites-de-futebol-hoje" element={<PalpitesHoje />} />
+                <Route path="/palpites" element={<Navigate to="/palpites-de-futebol-hoje" replace />} />
+                <Route path="/palpites/:slug" element={<PalpitesLiga />} />
                 <Route path="/blog" element={<Blog />} />
                 <Route path="/blog/:slug" element={<BlogPost />} />
                 <Route path="*" element={<NotFound />} />

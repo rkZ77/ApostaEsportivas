@@ -415,7 +415,16 @@ function StickyMobileCTA({ onDismiss, titulo, sub, acao, destino }: {
 
 /* ── Página ─────────────────────────────────────────────────────────────── */
 
-const HEADLINE = ['Inteligência artificial', 'que encontra valor', 'antes do mercado.']
+/*
+ * O H1 carrega a palavra-chave do negócio, e não a descrição do produto.
+ *
+ * A versão anterior era "Inteligência artificial que encontra valor antes do
+ * mercado" -- verdadeira, e sem uma única palavra que alguém digita no Google.
+ * Quem procura este produto escreve "palpites de futebol", nunca "pick". O
+ * termo do mercado fica no nome da marca e no resto da página; o título da
+ * home fala a língua da busca.
+ */
+const HEADLINE = ['Palpites de futebol', 'com valor calculado,', 'não com achismo.']
 
 export default function Home() {
   const [data, setData] = useState<PublicData | null>(null)
@@ -522,10 +531,10 @@ export default function Home() {
   return (
     <div className={`min-h-screen bg-surface-0 text-ink-1 overflow-x-hidden flex flex-col ${ctaDismissed || !ctaFaixa ? '' : 'pb-20 sm:pb-0'}`}>
       <Helmet>
-        <title>Pick IA | Inteligência artificial para apostas de valor no futebol</title>
+        <title>Palpites de Futebol Hoje com IA | Pick IA</title>
         <meta
           name="description"
-          content="Plataforma de análise esportiva com IA. Estatística real, probabilidade calculada e apenas picks com valor esperado positivo. Histórico público e auditável. Teste grátis por 2 dias."
+          content="Palpites de futebol gerados por inteligência artificial. Estatística real de cada jogo, probabilidade calculada e apenas entradas com valor esperado positivo. Histórico público e auditável. Teste grátis por 2 dias."
         />
         <link rel="canonical" href="https://pickia.com.br/" />
         <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
@@ -587,8 +596,8 @@ export default function Home() {
                 className="text-ink-2 text-base leading-relaxed mb-7 max-w-lg"
               >
                 A Pick IA lê estatística real de cada jogo, calcula a probabilidade de cada
-                mercado e compara com a odd que a casa está pagando. Só vira pick o que tem
-                valor esperado positivo.
+                mercado e compara com a odd que a casa está pagando. Só vira palpite o que
+                tem valor esperado positivo.
               </motion.p>
 
               <motion.div

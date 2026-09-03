@@ -578,6 +578,7 @@ def sitemap_xml() -> str:
 
     urls: list[tuple[str, str, str]] = [
         ("/", "daily", "1.0"),
+        ("/palpites-de-futebol-hoje", "daily", "0.9"),
         ("/como-funciona", "monthly", "0.8"),
         ("/planos", "monthly", "0.8"),
         ("/resultados", "daily", "0.9"),
@@ -596,6 +597,19 @@ def sitemap_xml() -> str:
         linhas.append(f"    <loc>{escape(SITE + caminho)}</loc>")
         linhas.append(f"    <changefreq>{freq}</changefreq>")
         linhas.append(f"    <priority>{prioridade}</priority>")
+        linhas.append("  </url>")
+
+    # Uma URL por liga coberta. Sao as paginas que respondem a busca real
+    # ("palpites brasileirao"), e o conteudo delas muda todo dia sozinho --
+    # dai o changefreq diario. Catalogo vem do banco; se ele estiver fora,
+    # `slugs_publicos` devolve lista vazia e o sitemap sai sem elas em vez de
+    # nao sair.
+    from routers.palpites import slugs_publicos
+    for liga in slugs_publicos():
+        linhas.append("  <url>")
+        linhas.append(f"    <loc>{escape(f'{SITE}/palpites/' + liga['slug'])}</loc>")
+        linhas.append("    <changefreq>daily</changefreq>")
+        linhas.append(f"    <priority>{'0.8' if liga['ativa'] else '0.4'}</priority>")
         linhas.append("  </url>")
 
     for post in posts_do_blog():

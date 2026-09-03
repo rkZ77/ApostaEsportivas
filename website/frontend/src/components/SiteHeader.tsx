@@ -20,6 +20,10 @@ import ThemeToggle from './ThemeToggle'
 const LINKS = [
   { href: '/#produtos',     label: 'Produtos' },
   { href: '/#como-funciona', label: 'Como funciona' },
+  /* A página que responde a busca por "palpites de futebol hoje". Está no
+     cabeçalho da home porque link em menu vale mais, pro Google e pra pessoa,
+     do que link em rodapé. */
+  { href: '/palpites-de-futebol-hoje', label: 'Palpites de hoje' },
   { href: '/resultados',     label: 'Resultados' },
   { href: '/performance',    label: 'Performance' },
   { href: '/planos',         label: 'Planos' },
