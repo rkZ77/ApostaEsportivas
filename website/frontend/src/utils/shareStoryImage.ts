@@ -638,7 +638,10 @@ export async function buildResultsStoryImage(input: ResultsStoryInput): Promise<
 
   // Altura do conteúdo é fixa nesse card (não depende de nenhum dado
   // variável de input) -- mirror dos incrementos de cursorY usados abaixo.
-  const contentBottomUnshifted = (logoImg ? 290 : 170) + 56 + 64 + 180 + 150 + 220 + 90 + FOOTER_HEIGHT
+  const contentBottomUnshifted = (logoImg ? 290 : 170) + 56 + 64 + 180 + 150
+    // A barra de GREEN x RED e a legenda dela tomaram o lugar do respiro de
+    // 220px que havia entre os ladrilhos e o rodapé (02/09).
+    + 150 + 150 + 90 + FOOTER_HEIGHT
   ctx.save()
   ctx.translate(0, computeShiftY(contentBottomUnshifted))
 
@@ -700,7 +703,44 @@ export async function buildResultsStoryImage(input: ResultsStoryInput): Promise<
     ctx.fillText(s.value, cx, cursorY + 64)
   })
 
-  cursorY += 220
+  /* A BARRA DE GREEN x RED (02/09).
+   *
+   * A imagem anunciava "63% de win rate" e mostrava PICKS, GREENS e LUCRO ·
+   * o número de REDs, que é a outra metade da conta, não aparecia em lugar
+   * nenhum. Post de aposta que só mostra acerto é o formato que todo mundo
+   * desconfia, com razão.
+   *
+   * A barra resolve as duas coisas de uma vez: enche o vazio que sobrava no
+   * meio da imagem e diz o placar completo de um jeito que se lê antes de ler
+   * -- a proporção verde/vermelha É o win rate, desenhado. */
+  cursorY += 150
+  const totalLiquidado = Math.max(1, input.greens + input.reds)
+  const barraW = W - 200
+  const barraX = W / 2 - barraW / 2
+  const barraH = 26
+  const verdeW = Math.round(barraW * (input.greens / totalLiquidado))
+
+  drawRoundedRect(ctx, barraX, cursorY, barraW, barraH, barraH / 2)
+  ctx.fillStyle = 'rgba(248,113,113,0.85)'
+  ctx.fill()
+  if (verdeW > barraH) {
+    // O verde por cima, arredondado só o suficiente pra não virar um bico
+    // quando ele ocupa quase tudo.
+    drawRoundedRect(ctx, barraX, cursorY, verdeW, barraH, barraH / 2)
+    ctx.fillStyle = resultGreen
+    ctx.fill()
+  }
+
+  ctx.font = fontSans(700, 26)
+  ctx.textAlign = 'left'
+  ctx.fillStyle = resultGreen
+  ctx.fillText(`${input.greens} GREEN`, barraX, cursorY + barraH + 40)
+  ctx.textAlign = 'right'
+  ctx.fillStyle = '#f87171'
+  ctx.fillText(`${input.reds} RED`, barraX + barraW, cursorY + barraH + 40)
+  ctx.textAlign = 'center'
+
+  cursorY += 150
   ctx.font = fontSans(600, 28)
   ctx.fillStyle = '#52525b'
   ctx.fillText(input.footerText ?? 'Histórico 100% auditável e público', W / 2, cursorY)
@@ -792,31 +832,56 @@ export async function buildTodayGamesStoryImage(input: TodayGamesStoryInput): Pr
 
     const boxHalf = (rowH - 16) / 2
     const midY = rowY + boxHalf
-    drawCircularLogo(ctx, homeLogo, 70 + 70, midY, logoSize)
-    drawCircularLogo(ctx, awayLogo, W - 70 - 70, midY, logoSize)
 
-    // Posições proporcionais à altura real da caixa (não fixas) -- com
-    // valores fixos, o nome da liga estourava pra fora da caixa (achado
-    // real comparando com >6 jogos no card, onde a caixa é mais baixa).
-    const nameFont   = games.length > 6 ? '800 26px' : '800 30px'
-    const vsFont     = games.length > 6 ? '600 20px' : '600 24px'
-    const leagueFont = games.length > 6 ? '600 17px' : '600 20px'
+    /* O ESCUDO COLADO NO NOME, E O CONFRONTO NUMA LINHA SÓ (02/09).
+     *
+     * Antes os dois escudos ficavam presos nas bordas da caixa e os nomes
+     * empilhados no centro com um "vs" no meio: três linhas de texto pra dizer
+     * um jogo, e cada escudo a 300px do time dele -- ninguém liga um ao outro
+     * de relance, que é o único jeito que um post é lido.
+     *
+     * Numa linha só, o par escudo+nome fica junto e o "x" separa os dois lados
+     * como num placar. Sobra altura pra liga respirar embaixo. */
+    const nameFont   = games.length > 6 ? 26 : 30
+    const leagueFont = games.length > 6 ? 17 : 20
+    const escudo = games.length > 6 ? 44 : 52
+    const nomeY = g.leagueName ? midY - 6 : midY + 4
 
     ctx.textAlign = 'center'
-    ctx.font = `${nameFont} ${DISPLAY}`
-    ctx.fillStyle = '#ffffff'
-    ctx.fillText(fitText(ctx, g.homeTeamName, 300), W / 2, midY - boxHalf * 0.62)
-    ctx.font = `${vsFont} ${SANS}`
-    ctx.fillStyle = '#52525b'
-    ctx.fillText('vs', W / 2, midY - boxHalf * 0.04)
-    ctx.font = `${nameFont} ${DISPLAY}`
-    ctx.fillStyle = '#ffffff'
-    ctx.fillText(fitText(ctx, g.awayTeamName, 300), W / 2, midY + boxHalf * 0.5)
+    ctx.font = fontDisplay(800, nameFont)
+    const larguraMax = (W - 320) / 2
+    const nomeCasa = fitText(ctx, g.homeTeamName, larguraMax)
+    const nomeFora = fitText(ctx, g.awayTeamName, larguraMax)
+    const wCasa = ctx.measureText(nomeCasa).width
+    const wFora = ctx.measureText(nomeFora).width
+    ctx.font = fontSans(700, nameFont - 6)
+    const wX = ctx.measureText('x').width
+    const gap = 16
+    const larguraTotal = escudo + gap + wCasa + gap * 1.5 + wX + gap * 1.5 + wFora + gap + escudo
+    let x = W / 2 - larguraTotal / 2
 
+    drawCircularLogo(ctx, homeLogo, x + escudo / 2, nomeY - nameFont * 0.32, escudo)
+    x += escudo + gap
+    ctx.textAlign = 'left'
+    ctx.font = fontDisplay(800, nameFont)
+    ctx.fillStyle = '#ffffff'
+    ctx.fillText(nomeCasa, x, nomeY)
+    x += wCasa + gap * 1.5
+    ctx.font = fontSans(700, nameFont - 6)
+    ctx.fillStyle = '#52525b'
+    ctx.fillText('x', x, nomeY)
+    x += wX + gap * 1.5
+    ctx.font = fontDisplay(800, nameFont)
+    ctx.fillStyle = '#ffffff'
+    ctx.fillText(nomeFora, x, nomeY)
+    x += wFora + gap
+    drawCircularLogo(ctx, awayLogo, x + escudo / 2, nomeY - nameFont * 0.32, escudo)
+
+    ctx.textAlign = 'center'
     if (g.leagueName) {
-      ctx.font = `${leagueFont} ${SANS}`
+      ctx.font = fontSans(600, leagueFont)
       ctx.fillStyle = '#71717a'
-      ctx.fillText(fitText(ctx, g.leagueName, 260), W / 2, midY + boxHalf * 0.86)
+      ctx.fillText(fitText(ctx, g.leagueName, 400), W / 2, midY + boxHalf * 0.62)
     }
   })
 
@@ -925,6 +990,23 @@ export async function buildLeagueResultsStoryImage(input: LeagueResultsStoryInpu
     ctx.fillStyle = lg.profit >= 0 ? resultGreen : '#f87171'
     ctx.fillText(`${lg.profit >= 0 ? '+' : ''}${lg.profit.toFixed(1)}u`, W - 70 - 40, midY + 26)
     ctx.textAlign = 'center'
+
+    /* A BARRA DO APROVEITAMENTO, embaixo do nome da liga.
+     *
+     * É a mesma leitura que a barra de probabilidade dá no card do site: o
+     * número exige comparar mentalmente três linhas, a barra deixa a ordem
+     * óbvia num relance. Quem passa o dedo no feed não lê 67% contra 58%; vê
+     * uma barra mais cheia que a outra. */
+    const barraX = 70 + 66 + logoSize / 2 + 30
+    const barraW = 300
+    const barraY = midY + 34
+    drawRoundedRect(ctx, barraX, barraY, barraW, 8, 4)
+    ctx.fillStyle = 'rgba(255,255,255,0.10)'
+    ctx.fill()
+    const cheia = Math.max(8, Math.round(barraW * Math.min(1, lg.winRatePct / 100)))
+    drawRoundedRect(ctx, barraX, barraY, cheia, 8, 4)
+    ctx.fillStyle = lg.winRatePct >= 55 ? resultGreen : '#a1a1aa'
+    ctx.fill()
   })
 
   cursorY += leagues.length * rowH + 60
@@ -1058,18 +1140,30 @@ export async function buildAlavancagemStoryImage(input: AlavancagemStoryInput): 
     ctx.lineWidth = 1.5
     ctx.stroke()
 
-    // Número do jogo dentro do bilhete, à esquerda: sem ele três caixas
-    // parecidas viram uma lista sem ordem.
+    /* O NÚMERO DA PERNA NUM CÍRCULO, na cor do produto · a mesma peça que o
+     * card do site usa desde 02/09.
+     *
+     * Era um dígito cinza solto a 100px da borda, do tamanho de uma legenda:
+     * ele existia pra ordenar as caixas e não conseguia nem isso. No círculo
+     * ele vira marcador, e com o bilhete GREEN vira ✓ · que é a leitura que
+     * alguém faz do post sem parar pra ler. */
     const midY = rowY + boxH / 2
-    ctx.textAlign = 'left'
-    ctx.font = fontMono(700, 22)
-    ctx.fillStyle = '#52525b'
-    ctx.fillText(`${i + 1}`, 100, midY + 6)
-    drawCircularLogo(ctx, homeLogo, 182, midY - 12, 62)
-    drawCircularLogo(ctx, awayLogo, 258, midY - 12, 62)
+    const legGreen = input.result === 'GREEN'
+    ctx.textAlign = 'center'
+    ctx.beginPath()
+    ctx.arc(112, midY - 12, 22, 0, Math.PI * 2)
+    ctx.fillStyle = legGreen ? 'rgba(74,222,128,0.18)' : `${accentHex}22`
+    ctx.fill()
+    ctx.font = fontDisplay(900, legGreen ? 24 : 22)
+    ctx.fillStyle = legGreen ? '#4ade80' : accentHex
+    ctx.fillText(legGreen ? '✓' : `${i + 1}`, 112, midY - 4)
 
     ctx.textAlign = 'left'
-    const textoX = 320
+    drawCircularLogo(ctx, homeLogo, 196, midY - 12, 62)
+    drawCircularLogo(ctx, awayLogo, 268, midY - 12, 62)
+
+    ctx.textAlign = 'left'
+    const textoX = 330
     // Reserva a coluna da odd (desenhada em W-106, alinhada à direita): sem
     // essa folga um confronto longo como "Olimpia Asunción x Vasco da Gama"
     // encostava no número.
@@ -1079,11 +1173,26 @@ export async function buildAlavancagemStoryImage(input: AlavancagemStoryInput): 
     const confronto = l.awayTeamName ? `${l.homeTeamName} x ${l.awayTeamName}` : l.homeTeamName
     ctx.fillText(fitText(ctx, confronto, largura), textoX, midY - 14)
 
-    const mercado = [l.market, l.line].filter(Boolean).join(', ')
-    if (mercado) {
-      ctx.font = fontSans(600, 26)
-      ctx.fillStyle = '#a1a1aa'
-      ctx.fillText(fitText(ctx, mercado, largura), textoX, midY + 30)
+    /* A LINHA APOSTADA EM BRANCO, o mercado em cinza.
+     *
+     * Os dois saíam no mesmo cinza, no mesmo tamanho: "Gols Mais/Menos, Mais
+     * de 0.5" lia como uma frase só, e a parte que decide a aposta -- o "Mais
+     * de 0.5" -- tinha o mesmo peso do nome do mercado. É a mesma hierarquia
+     * que o card do site passou a ter, com a linha em destaque. */
+    if (l.market || l.line) {
+      let mx = textoX
+      if (l.market) {
+        ctx.font = fontSans(600, 24)
+        ctx.fillStyle = '#71717a'
+        const nomeMercado = fitText(ctx, l.market, largura * 0.55)
+        ctx.fillText(nomeMercado, mx, midY + 30)
+        mx += ctx.measureText(nomeMercado).width + 14
+      }
+      if (l.line) {
+        ctx.font = fontDisplay(800, 26)
+        ctx.fillStyle = '#ffffff'
+        ctx.fillText(fitText(ctx, l.line, textoX + largura - mx), mx, midY + 30)
+      }
     }
 
     if (l.odd) {
