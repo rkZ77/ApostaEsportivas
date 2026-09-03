@@ -826,6 +826,34 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         cur.execute("ALTER TABLE picks_player_stats "
                     "ADD COLUMN IF NOT EXISTS void_reason TEXT")
 
+        # ── POR QUE DEU ISSO, E COM QUAL NÚMERO (02/09) ──────────────────
+        #
+        # "Esse resultado está errado" era uma frase impossível de responder: o
+        # card mostrava PUSH e mais nada. Anulação por falta de estatística,
+        # anulação por prorrogação e empate técnico em linha cheia (12
+        # escanteios numa linha de 12.0) chegam todos na tela como o mesmo
+        # "PUSH, +0.00u", e a única diferença entre "a casa devolveu porque
+        # empatou" e "nós anulamos porque o provedor não publicou o número"
+        # ficava num log do Railway.
+        #
+        # `settled_value` é o contador que decidiu (12 escanteios, 3 cartões) e
+        # `void_reason` é o motivo, quando existe. Com os dois na tela, a
+        # conferência deixa de depender de nós: o usuário compara com a súmula.
+        for _t in ("picks_vip", "picks_free", "picks_faltas", "picks_goleiros",
+                   "picks_boost", "picks_multiplas", "picks_alavancagem",
+                   "picks_live", "picks_player_stats"):
+            try:
+                cur.execute(f"SELECT to_regclass('public.{_t}') IS NOT NULL AS existe")
+                if not cur.fetchone()["existe"]:
+                    continue
+                cur.execute(f"ALTER TABLE {_t} ADD COLUMN IF NOT EXISTS void_reason TEXT")
+                cur.execute(f"ALTER TABLE {_t} ADD COLUMN IF NOT EXISTS settled_value NUMERIC")
+            except Exception:
+                # Tabela do MOTOR (picks_live nasce lá), instância sem
+                # permissão: nenhuma delas pode impedir o site de subir.
+                logger.warning("[MIGRATION] %s sem colunas de auditoria", _t, exc_info=True)
+                conn.rollback()
+
         # Índice composto que o pipeline ao vivo (live_pipeline.py) usa em
         # todas as queries de baseline: baselines_por_liga, baseline_do_arbitro,
         # baseline_do_mando, baseline_do_confronto consultam match_statistics

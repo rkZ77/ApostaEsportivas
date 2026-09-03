@@ -1536,6 +1536,8 @@ interface MercadoPick {
   /* Escalação e anulação · só Player Stats. Ver SuggestionCard. */
   escalacao?: 'titular' | 'banco' | 'fora' | 'indefinida' | null
   void_reason?: string | null
+  /** O contador que decidiu o resultado, como a liquidação o leu. */
+  settled_value?: number | null
   odd: number; bet_house?: string
   prob_real?: number; edge?: number
   /* Só Player Stats · nele a odd é faixa de sanidade e quem ordena é o Score
@@ -1633,6 +1635,7 @@ function mercadoParaSuggestion(p: MercadoPick, tipo: TipoMercado) {
     line_value: p.line_value != null ? Number(p.line_value) : null,
     escalacao: p.escalacao ?? null,
     void_reason: p.void_reason ?? null,
+    settled_value: p.settled_value != null ? Number(p.settled_value) : null,
     market: tipo === 'player_stats'
       ? (LABEL_DO_METODO[p.method ?? ''] ?? p.method ?? p.market)
       /* O Boost tem DUAS pernas e uma odd só. `market` continua com a
@@ -1774,6 +1777,11 @@ function liveParaSuggestion(p: any) {
     confidence: p.confidence != null ? Number(p.confidence) : 0,
     probability: p.probability != null ? Number(p.probability) : null,
     market_type: p.market_type ?? 'live',
+    /* A conferência do resultado vale principalmente aqui: o pick ao vivo é de
+       contagem (escanteios, cartões) e é o que mais gera "esse resultado está
+       errado". Ver settled_value em SuggestionCard. */
+    void_reason: p.void_reason ?? null,
+    settled_value: p.settled_value != null ? Number(p.settled_value) : null,
     ev: p.ev != null ? Number(p.ev) : undefined,
     match_date: p.match_date,
     match_datetime: null,

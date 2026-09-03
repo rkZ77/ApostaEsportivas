@@ -160,6 +160,34 @@ def _safe_query_one(cur, sql, params=()):
 #:                   campo, e ele ainda pode entrar;
 #:   'fora'       -- nem foi relacionado (o pick ja' foi anulado pela
 #:                   varredura, e `void_reason` diz por que).
+#: O que decidiu o resultado, anexado a uma lista de picks já carregada.
+#:
+#: MESMA REGRA DA ESCALAÇÃO, e pelo mesmo motivo: campo opcional NÃO entra na
+#: consulta que traz os picks. `settled_value` e `void_reason` são colunas
+#: novas, e `picks_live` nasce no motor -- uma instância sem elas faria o
+#: `_safe_query` devolver lista vazia e o produto inteiro sumir da tela, que é
+#: exatamente o defeito que já aconteceu com o pick de jogador em 02/09.
+#:
+#: Falhando aqui, os picks aparecem sem a linha de conferência. Degrada o
+#: recurso novo, não esconde o antigo.
+def _juntar_auditoria(cur, picks: list, tabela: str) -> None:
+    """Anexa `settled_value` e `void_reason` a cada pick, se as colunas existirem."""
+    ids = [p["id"] for p in picks or [] if p.get("id") is not None]
+    if not ids:
+        return
+    linhas = _safe_query(cur, f"""
+        SELECT id, settled_value, void_reason
+          FROM {tabela}
+         WHERE id = ANY(%s)
+    """, (ids,))
+    por_id = {r["id"]: r for r in linhas}
+    for p in picks:
+        extra = por_id.get(p.get("id"))
+        p["settled_value"] = (float(extra["settled_value"])
+                              if extra and extra.get("settled_value") is not None else None)
+        p["void_reason"] = extra["void_reason"] if extra else None
+
+
 def _juntar_escalacao(cur, picks: list) -> None:
     """Anexa `escalacao` e `void_reason` a cada pick de jogador, se der."""
     ids = [p["id"] for p in picks or [] if p.get("id") is not None]
@@ -241,12 +269,16 @@ def _picks_live_do_dia(cur, where: str, params: tuple) -> list:
     nao existe. `_safe_query` devolve lista vazia nesse caso, que e' o
     comportamento certo (o produto some da aba, nao derruba a tela).
     """
-    return [dict(r) for r in _safe_query(cur, f"""
+    picks = [dict(r) for r in _safe_query(cur, f"""
         SELECT {_LIVE_COLUNAS}
           FROM picks_live pl
          WHERE {where}
          ORDER BY (pl.result IS NOT NULL), pl.created_at DESC
     """, params)]
+    # O número que decidiu o resultado, numa consulta separada · ver
+    # _juntar_auditoria.
+    _juntar_auditoria(cur, picks, "picks_live")
+    return picks
 
 
 def _compute_suggested_stake_units(
@@ -788,6 +820,7 @@ def get_today_suggestions(
             # _juntar_escalacao: e' informacao opcional, e informacao opcional
             # nao pode participar da consulta que traz os picks.
             _juntar_escalacao(cur, result["player_stats"])
+            _juntar_auditoria(cur, result["player_stats"], "picks_player_stats")
 
             # PICK BOOST (28/08) · Over 1.5 FT + Under 2.5 HT, combinacao fixa.
             #

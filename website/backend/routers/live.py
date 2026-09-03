@@ -1008,6 +1008,15 @@ def _substitutos_de(fixture_id: int, player_id: int) -> list:
     return cadeia
 
 
+#: Motivo da última anulação decidida por `_anulacao_sem_estatistica`.
+#:
+#: Existe porque a função é chamada dentro de um `res = res or ...` em cinco
+#: lugares, e mudar a assinatura para devolver tupla obrigaria a reescrever os
+#: cinco -- cada um com um `_save_*` diferente. O motivo é lido logo depois da
+#: chamada, na mesma passada e na mesma thread da varredura.
+_ultimo_motivo_anulacao: str | None = None
+
+
 def _anulacao_sem_estatistica(leg: dict) -> str | None:
     """PUSH pra perna encerrada que NUNCA vai poder ser liquidada.
 
@@ -1045,6 +1054,8 @@ def _anulacao_sem_estatistica(leg: dict) -> str | None:
     Qualquer outro pick que nao resolveu continua pendente e visivel de
     proposito: isso e' bug pra investigar, nao pick pra anular.
     """
+    global _ultimo_motivo_anulacao
+    _ultimo_motivo_anulacao = None
     if leg.get("status") not in FT_STATUSES:
         return None
     if not leg.get("precisa_stats"):
@@ -1065,6 +1076,7 @@ def _anulacao_sem_estatistica(leg: dict) -> str | None:
         "[AUTO-RESULT] fixture %s (%s %s) anulada como PUSH: %s",
         leg.get("fixture_id"), leg.get("market"), leg.get("line"), motivo,
     )
+    _ultimo_motivo_anulacao = motivo
     return settlement.PUSH
 
 
@@ -1176,12 +1188,43 @@ def _sync_followed_result(pick_id: int, pick_type: str, result: str, c) -> None:
     notify_pick_result(c, pick_id, pick_type, result)
 
 
-def _save_single_result(pick_id: int, pick_type: str, result: str, odd: float, conn) -> None:
+#: O que decidiu o resultado, gravado junto dele.
+#:
+#: `valor` é o contador que a folha do jogo publicou (12 escanteios), e `motivo`
+#: só existe quando o pick foi ANULADO por uma causa nossa (provedor sem
+#: estatística, prorrogação sem recorte de 90). Empate técnico em linha cheia
+#: não tem motivo: ele é a regra do mercado, e o número explica sozinho.
+#:
+#: Os dois entram por `COALESCE` sobre a coluna: uma segunda passada não pode
+#: apagar o que a primeira gravou, e instância sem as colunas ainda não
+#: migradas cai no `except` e grava só o resultado, como antes.
+def _colunas_de_auditoria(valor, motivo) -> tuple:
+    extra = ""
+    args: list = []
+    if valor is not None:
+        extra += ", settled_value=%s"
+        args.append(valor)
+    if motivo:
+        extra += ", void_reason=%s"
+        args.append(motivo)
+    return extra, args
+
+
+def _save_single_result(pick_id: int, pick_type: str, result: str, odd: float, conn,
+                        valor=None, motivo: str | None = None) -> None:
     profit = _profit_for_result(result, odd)
     tbl = "picks_vip" if pick_type == "vip" else "picks_free"
     c = conn.cursor()
-    c.execute(f"UPDATE {tbl} SET result=%s, profit=%s WHERE id=%s AND result IS NULL",
-              (result, profit, pick_id))
+    extra, args = _colunas_de_auditoria(valor, motivo)
+    try:
+        c.execute(f"UPDATE {tbl} SET result=%s, profit=%s{extra} "
+                  "WHERE id=%s AND result IS NULL",
+                  (result, profit, *args, pick_id))
+    except Exception:
+        conn.rollback()
+        c = conn.cursor()
+        c.execute(f"UPDATE {tbl} SET result=%s, profit=%s WHERE id=%s AND result IS NULL",
+                  (result, profit, pick_id))
     _sync_followed_result(pick_id, pick_type, result, c)
     conn.commit()
     c.close()
@@ -1189,7 +1232,8 @@ def _save_single_result(pick_id: int, pick_type: str, result: str, odd: float, c
 
 
 def _save_market_pick_result(tabela: str, pick_id: int, pick_type: str,
-                             result: str, odd: float, conn) -> None:
+                             result: str, odd: float, conn,
+                             valor=None, motivo: str | None = None) -> None:
     """Grava resultado nas tabelas de mercado proprio (picks_faltas,
     picks_goleiros).
 
@@ -1201,15 +1245,24 @@ def _save_market_pick_result(tabela: str, pick_id: int, pick_type: str,
     """
     profit = _profit_for_result(result, odd)
     c = conn.cursor()
-    c.execute(f"UPDATE {tabela} SET result=%s, profit=%s WHERE id=%s AND result IS NULL",
-              (result, profit, pick_id))
+    extra, args = _colunas_de_auditoria(valor, motivo)
+    try:
+        c.execute(f"UPDATE {tabela} SET result=%s, profit=%s{extra} "
+                  "WHERE id=%s AND result IS NULL",
+                  (result, profit, *args, pick_id))
+    except Exception:
+        conn.rollback()
+        c = conn.cursor()
+        c.execute(f"UPDATE {tabela} SET result=%s, profit=%s WHERE id=%s AND result IS NULL",
+                  (result, profit, pick_id))
     _sync_followed_result(pick_id, pick_type, result, c)
     conn.commit()
     c.close()
     logger.info("[AUTO-RESULT] %s #%s → %s (%+.4fu)", pick_type, pick_id, result, profit)
 
 
-def _save_live_pick_result(pick_id: int, result: str, odd: float, conn) -> None:
+def _save_live_pick_result(pick_id: int, result: str, odd: float, conn,
+                           valor=None, motivo: str | None = None) -> None:
     """Grava resultado de pick Ao Vivo.
 
     Nao usa _save_market_pick_result porque picks_live tem duas colunas de
@@ -1223,11 +1276,21 @@ def _save_live_pick_result(pick_id: int, result: str, odd: float, conn) -> None:
     """
     profit = _profit_for_result(result, odd)
     c = conn.cursor()
-    c.execute("""
-        UPDATE picks_live
-        SET result = %s, profit = %s, status = 'SETTLED', settled_at = NOW()
-        WHERE id = %s AND result IS NULL
-    """, (result, profit, pick_id))
+    extra, args = _colunas_de_auditoria(valor, motivo)
+    try:
+        c.execute(f"""
+            UPDATE picks_live
+            SET result = %s, profit = %s, status = 'SETTLED', settled_at = NOW(){extra}
+            WHERE id = %s AND result IS NULL
+        """, (result, profit, *args, pick_id))
+    except Exception:
+        conn.rollback()
+        c = conn.cursor()
+        c.execute("""
+            UPDATE picks_live
+            SET result = %s, profit = %s, status = 'SETTLED', settled_at = NOW()
+            WHERE id = %s AND result IS NULL
+        """, (result, profit, pick_id))
     _sync_followed_result(pick_id, "live", result, c)
     conn.commit()
     c.close()
@@ -2435,7 +2498,9 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
                                            went_to_extra_time=leg.get("went_to_extra_time", False))
                         res = res or _anulacao_sem_estatistica(leg)
                         if res:
-                            _save_single_result(p["id"], "vip", res, odd, conn)
+                            _save_single_result(p["id"], "vip", res, odd, conn,
+                                                valor=leg.get("current_val"),
+                                                motivo=_ultimo_motivo_anulacao)
                             resolved["vip"] += 1
                 except Exception as e:
                     logger.error("[AUTO-RESULT] vip #%s erro: %s", p["id"], e)
@@ -2470,7 +2535,9 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
                                            went_to_extra_time=leg.get("went_to_extra_time", False))
                         res = res or _anulacao_sem_estatistica(leg)
                         if res:
-                            _save_single_result(p["id"], "free", res, odd, conn)
+                            _save_single_result(p["id"], "free", res, odd, conn,
+                                                valor=leg.get("current_val"),
+                                                motivo=_ultimo_motivo_anulacao)
                             resolved["free"] += 1
                 except Exception as e:
                     logger.error("[AUTO-RESULT] free #%s erro: %s", p["id"], e)
@@ -2519,7 +2586,9 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
                                            went_to_extra_time=leg.get("went_to_extra_time", False))
                         res = res or _anulacao_sem_estatistica(leg)
                         if res:
-                            _save_live_pick_result(p["id"], res, odd, conn)
+                            _save_live_pick_result(p["id"], res, odd, conn,
+                                                   valor=leg.get("current_val"),
+                                                   motivo=_ultimo_motivo_anulacao)
                             resolved["live"] += 1
                 except Exception as e:
                     logger.error("[AUTO-RESULT] live #%s erro: %s", p["id"], e)
@@ -2707,7 +2776,10 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
                                            went_to_extra_time=leg.get("went_to_extra_time", False))
                         res = res or _anulacao_sem_estatistica(leg)
                         if res:
-                            _save_market_pick_result("picks_faltas", p["id"], "faltas", res, odd, conn)
+                            _save_market_pick_result("picks_faltas", p["id"], "faltas",
+                                                     res, odd, conn,
+                                                     valor=leg.get("current_val"),
+                                                     motivo=_ultimo_motivo_anulacao)
                             resolved["faltas"] += 1
                 except Exception as e:
                     logger.error("[AUTO-RESULT] faltas #%s erro: %s", p["id"], e)

@@ -433,6 +433,28 @@ export function translateLine(line?: string): string {
 }
 
 /*
+ * O NÚMERO QUE DECIDIU O PICK, escrito como se lê.
+ *
+ * A liquidação grava o contador que a folha do jogo publicou (`settled_value`),
+ * e a tela mostrava só GREEN, RED ou PUSH. "Esse resultado está errado" era uma
+ * frase que ninguém conseguia conferir: PUSH por empate técnico numa linha
+ * cheia (12 escanteios numa linha de 12.0) e PUSH por anulação chegavam com a
+ * mesma cara.
+ *
+ * Com o número na tela, a conferência não depende mais de nós: dá pra comparar
+ * com a súmula. A unidade sai do próprio catálogo de mercados, então
+ * escanteios não viram "12 unidades".
+ */
+export function valorLiquidado(market?: string, valor?: number | null): string {
+  if (valor == null) return ''
+  const [singular, plural] = unidadeDoMercado(sujeitoDoMercado(chaveCanonica(market)))
+  const n = Number(valor)
+  const inteiro = Number.isInteger(n) ? String(n) : n.toFixed(1).replace('.', ',')
+  if (!plural) return inteiro
+  return `${inteiro} ${Math.abs(n) === 1 ? singular : plural}`
+}
+
+/*
  * "MERCADO, LINHA" NUMA STRING SÓ.
  *
  * Metade das telas escrevia isso à mão, e cada uma de um jeito: umas com

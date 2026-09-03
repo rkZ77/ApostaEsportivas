@@ -8,7 +8,7 @@ import { pctProb, capitalizarFrase } from '../utils/format'
 import { calcVipStake, calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import { stakeDe, contaEmUnidades } from '../utils/stakePlan'
 import ApostaModal from './ApostaModal'
-import { translateMarket, translateLine, translateTeamName, linhaDoJogador } from '../utils/marketTranslate'
+import { translateMarket, translateLine, translateTeamName, linhaDoJogador, valorLiquidado } from '../utils/marketTranslate'
 import { PICK_TYPE_BORDER } from '../utils/resultStyle'
 import AnalysisModal from './AnalysisModal'
 import { Badge, PickTypeBadge, ResultBadge } from './ui'
@@ -85,6 +85,11 @@ interface Suggestion {
   escalacao?: 'titular' | 'banco' | 'fora' | 'indefinida' | null
   /** Por que o pick foi anulado. Só existe em PUSH, e é sempre nomeado. */
   void_reason?: string | null
+  /* O NÚMERO QUE DECIDIU (02/09). O contador que a folha do jogo publicou, tal
+     como a liquidação leu: 12 escanteios, 3 cartões, 2 chutes no alvo. Sem ele
+     o card dizia GREEN, RED ou PUSH e mais nada, e "esse resultado está
+     errado" virava uma frase que ninguém conseguia conferir. */
+  settled_value?: number | null
   /** Pernas de um pick COMBINADO. Hoje só o Pick Boost usa (Over 1.5 FT +
    *  Under 2.5 HT), mas o formato é genérico de propósito: qualquer produto
    *  que junte mais de um mercado numa odd só cai aqui sem card novo. */
@@ -687,6 +692,13 @@ function SuggestionCard({
                   {linhaDoJogador(s.line, s.line_value, s.player_name)}
                 </dd>
               </CampoDoPick>
+              {s.result && s.settled_value != null && (
+                <CampoDoPick rotulo="Deu">
+                  <dd className="text-xs font-semibold text-ink-1 truncate">
+                    {valorLiquidado(s.market, s.settled_value)}
+                  </dd>
+                </CampoDoPick>
+              )}
             </dl>
           </div>
         ) : (
@@ -703,14 +715,28 @@ function SuggestionCard({
                 <dd className="text-xs text-ink-2 truncate">{translateLine(s.line)}</dd>
               </CampoDoPick>
             )}
+            {/* O QUE DEU NO JOGO, do lado da linha que foi apostada.
+              *
+              * É a conferência que faltava: com 12 escanteios contra uma linha
+              * de 12.0 o PUSH deixa de parecer erro e passa a se explicar
+              * sozinho. Só aparece com o pick liquidado, porque antes disso o
+              * número ainda está mudando. */}
+            {s.result && s.settled_value != null && (
+              <CampoDoPick rotulo="Deu">
+                <dd className="text-xs font-semibold text-ink-1 truncate">
+                  {valorLiquidado(s.market, s.settled_value)}
+                </dd>
+              </CampoDoPick>
+            )}
           </dl>
         )}
 
-        {/* PICK ANULADO, E O CARD FICA.
+        {/* PICK ANULADO, E O CARD FICA, DIZENDO POR QUÊ.
           *
-          * Sumir com ele responderia "cadê o pick do Pedro?" com nada. Quem
-          * seguiu a aposta precisa entender por que a casa devolveu a entrada,
-          * e a explicação é uma linha: ele não começou.
+          * Vale pra qualquer produto, não só pro de jogador: anulação por
+          * escalação, por estatística que o provedor não publicou e por
+          * prorrogação sem recorte de 90 minutos chegavam todas na tela como o
+          * mesmo "PUSH, +0.00u", e a diferença entre elas ficava num log.
           *
           * PUSH não é derrota: a entrada volta, e o /admin não conta anulação
           * no denominador de acerto. O texto evita a palavra "perdeu" de
