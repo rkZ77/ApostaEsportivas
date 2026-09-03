@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import api from '../services/api'
 import AdminAmostra, { type AlvoAmostra } from './AdminAmostra'
+import AdminLacunasJogador from './AdminLacunasJogador'
 import { sinalizarNavegacao } from '../services/progressBus'
 import {
   Button, EmptyState, ErrorState, Pagination, Skeleton, SkeletonRows, SpinnerBlock, StatTile,
@@ -306,6 +307,34 @@ const msgErro = (e: unknown, padrao: string) => {
   // 422 do Pydantic chega como lista de erros; a mensagem útil é a do validador.
   if (Array.isArray(r) && r[0]?.msg) return String(r[0].msg).replace(/^Value error, /, '')
   return padrao
+}
+
+/* Explicação que só aparece quando alguém pede.
+ *
+ * Esta aba nasceu documentando cada decisão dentro do próprio cartão: por que o
+ * buraco importa, o que o coletor fazia errado antes, qual coluna prova a
+ * contradição. Tudo isso é verdade e vale estar escrito -- mas empurrava o
+ * NÚMERO, que é o que se olha, para o topo de um bloco de seis linhas, e no
+ * celular o cartão virava parede de texto.
+ *
+ * Aqui o texto continua inteiro, atrás de um "por quê". Quem opera vê número e
+ * ação; quem quer entender clica. */
+function PorQue({ children }: { children: React.ReactNode }) {
+  const [aberto, setAberto] = useState(false)
+  return (
+    <div className="mt-1.5">
+      <button
+        type="button"
+        onClick={() => setAberto(x => !x)}
+        className="text-[10px] font-semibold text-ink-4 hover:text-ink-2 underline underline-offset-4"
+      >
+        {aberto ? 'esconder' : 'por quê'}
+      </button>
+      {aberto && (
+        <p className="text-[11px] text-ink-3 mt-1.5 leading-relaxed">{children}</p>
+      )}
+    </div>
+  )
 }
 
 export default function AdminDados() {
@@ -889,7 +918,14 @@ export default function AdminDados() {
 
       {/* Quantos alertas estão abertos. É o que faz a navegação não esconder
         * problema: o número vive no botão, não dentro da seção. */}
-      <div className="flex gap-1.5 overflow-x-auto">
+      {/* QUEBRA EM VEZ DE ROLAR NA HORIZONTAL (02/09).
+        *
+        * Eram cinco botoes em `overflow-x-auto`: em 390px os dois ultimos
+        * ("Partidas" e "Pessoas") ficavam fora da tela, sem nenhuma pista de
+        * que existiam -- rolagem horizontal dentro de uma pagina que ja rola na
+        * vertical e' o gesto que ninguem descobre. Num painel de cinco itens,
+        * deixar quebrar a linha mostra todos de uma vez. */}
+      <div className="flex flex-wrap gap-1.5">
         {SECOES.map(([chave, rotulo]) => {
           const n = chave === 'problemas' ? abertos
             : chave === 'times' ? (medias?.total ?? 0)
@@ -1037,7 +1073,7 @@ export default function AdminDados() {
               <p className="text-sm font-bold text-ink-1">
                 {numero(placar.total)} partida(s) gravadas 0x0 sem terem terminado 0x0
               </p>
-              <p className="text-[11px] text-ink-3 mt-1 leading-relaxed">
+              <PorQue>
                 O coletor lia placar ausente como zero. Zero não é ausência: essas linhas entram
                 na média de gols como jogo real, e como o campo está "preenchido" elas não
                 aparecem em nenhuma contagem de cobertura nem na varredura automática. O placar
@@ -1047,7 +1083,7 @@ export default function AdminDados() {
                   <> {numero(placar.so_recoleta)} delas foram para a prorrogação, e aí o placar
                   de 90 minutos não responde pelo final, essas só voltam pela recoleta.</>
                 )}
-              </p>
+              </PorQue>
 
               {!!placar.partidas?.length && (
                 <div className="mt-2.5 border-t border-line/60 divide-y divide-line/60">
@@ -1094,7 +1130,7 @@ export default function AdminDados() {
               <p className="text-sm font-bold text-ink-1">
                 {numero(vermelho.alvo)} partida(s) com o cartão vermelho apagado
               </p>
-              <p className="text-[11px] text-ink-3 mt-1 leading-relaxed">
+              <PorQue>
                 A folha está completa no resto e o buraco é só no vermelho, essa combinação
                 só sai do coletor antigo lendo uma folha publicada, ou seja, a API respondeu
                 e disse que não houve expulsão. Jogo sem os dois contadores de cartão cai
@@ -1104,7 +1140,7 @@ export default function AdminDados() {
                   <> Outras {numero(vermelho.folha_incompleta)} partida(s) estão de fato sem
                   folha e continuam em branco, essas voltam pela coleta.</>
                 )}
-              </p>
+              </PorQue>
               <Button
                 size="sm" variant="ghost" className="mt-3"
                 loading={corrigindoVermelho}
@@ -1248,12 +1284,12 @@ export default function AdminDados() {
           <p className="text-[11px] font-semibold text-ink-2 mt-4 mb-1.5">
             Jogos <span className="text-yellow-400">sem</span> cada estatística
           </p>
-          <p className="text-[11px] text-ink-4 mb-2 leading-relaxed">
+          <PorQue>
             Quanto maior o número, maior o buraco. Estatística que só passou a existir depois
             aparece alta aqui de propósito: gols do 1º tempo e dos 90 minutos são colunas novas,
             e jogo coletado antes delas nunca vai ter o número, a data ao lado é a do jogo mais
             antigo sem ela.
-          </p>
+          </PorQue>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {diagnostico.familias.map(f => (
               <button
@@ -1286,12 +1322,12 @@ export default function AdminDados() {
             * parava ali · e a recoleta em lote, logo abaixo, só resolve o caso
             * em que a API AINDA tem a folha. Folha velha ela não publica, e aí
             * o único caminho honesto é digitar olhando a súmula. */}
-          <p className="text-[10px] text-ink-4 mt-2 leading-relaxed">
+          <PorQue>
             Toque em qualquer número acima para ver as partidas por trás dele, com os botões de
             Rodar e Preencher à mão. Recoletar resolve o caso em que a API ainda publica a folha;
             quando ela não publica (e folha velha ela não publica), digitar olhando a súmula é o
             único caminho que sobra, e o motor lê o número da mão igual ao coletado.
-          </p>
+          </PorQue>
 
           {/* Recoleta em lote · o botão Rodar aplicado à lista inteira. */}
           <div className="border-t border-line/60 mt-4 pt-3">
@@ -1334,13 +1370,13 @@ export default function AdminDados() {
                     Recoletar as mais recentes
                   </Button>
                 </div>
-                <p className="text-[10px] text-ink-4 mt-2 leading-relaxed">
+                <PorQue>
                   Pega as partidas mais recentes com folha furada ou sem linha nenhuma, nos
                   últimos 3 meses. Mais recente primeiro de propósito: a API publica folha de
                   jogo velho cada vez menos, então gastar o lote em agosto rende mais que
                   gastá-lo em março. Só o cartão vermelho se conserta sem cota, o resto é
                   API ou digitação.
-                </p>
+                </PorQue>
                 {recoleta?.terminada_em && (
                   <p className="text-[11px] text-green-400 mt-1.5">
                     Último lote: {recoleta.gravadas} de {recoleta.total} gravada(s)
@@ -2116,6 +2152,18 @@ export default function AdminDados() {
 
       {secao === 'pessoas' && (<>
 
+      {/* Lacuna de estatística POR JOGADOR, e o campo pra preencher.
+        *
+        * Primeiro da seção de propósito: é o único bloco aqui que pede AÇÃO --
+        * os de árbitro e jogador abaixo são consulta. E é o buraco que o motor
+        * sente: `defesas` chega vazia em parte das atuações de goleiro, e sem
+        * ela o método de defesas não tem amostra pra avaliar.
+        *
+        * Componente próprio, em arquivo próprio: este arquivo já passa de 2.400
+        * linhas e onze endpoints, e foi exatamente somar bloco aqui dentro que
+        * o deixou difícil de mexer. */}
+      <AdminLacunasJogador />
+
       {/* Árbitros. Renderiza mesmo com a página vazia desde 27/08: com busca e
         * paginação, lista vazia é resultado de filtro, não ausência de dado ·
         * sumir com o card inteiro esconderia o campo de busca junto e prenderia
@@ -2256,14 +2304,14 @@ export default function AdminDados() {
                   <User className="w-4 h-4" />
                   Jogadores, temporada {jogadores.season}
                 </h3>
-                <p className="text-[11px] text-ink-4 mt-0.5 leading-relaxed">
+                <PorQue>
                   Média por atuação de cada contador que vira mercado. Só entram atuações de{' '}
                   {jogadores.min_minutos} minutos ou mais, que é o corte do motor, entrada de
                   doze minutos e jogo inteiro não são a mesma observação, e misturar as duas
                   derruba toda média. Sem filtro de competição, o jogador que atuou em duas na
                   mesma temporada aparece com as duas somadas, e a linha vem marcada em amarelo.
                   Toque no jogador para ver as atuações.
-                </p>
+                </PorQue>
               </div>
               {jogadores.temporadas?.length > 1 && (
                 <select

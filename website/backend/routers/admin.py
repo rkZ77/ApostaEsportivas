@@ -4796,6 +4796,236 @@ _MANDO_SQL = {
 }
 
 
+class AtuacaoManualBody(BaseModel):
+    """{"valores": {"defesas": 4, "faltas": 2}}
+
+    Um numero por familia -- diferente da partida, que leva o par [casa, fora],
+    porque atuacao de jogador nao tem lado. `null` desfaz um valor digitado
+    errado sem inventar zero no lugar.
+    """
+    valores: dict[str, Optional[float]]
+
+    @field_validator("valores")
+    @classmethod
+    def validar_valores(cls, v):
+        if not v:
+            raise ValueError("nada para gravar")
+        validas = {chave for chave, _r, _c in STATS_DO_JOGADOR}
+        for chave, valor in v.items():
+            if chave not in validas:
+                raise ValueError(f"familia desconhecida: {chave}")
+            if valor is not None and (valor < 0 or valor > 999):
+                raise ValueError(f"{chave}: valor fora do razoavel")
+        return v
+
+
+#: Familias que o Player Stats realmente LE pra decidir pick (ver
+#: player_stats_engine/methods.py). As outras estao na tela porque cobertura e'
+#: informacao, mas so' estas mudam pick -- e e' por elas que vale gastar tempo
+#: preenchendo a mao.
+_FAMILIAS_DO_MOTOR = frozenset({"defesas", "chutes_alvo", "chutes",
+                                "faltas", "desarmes", "passes"})
+
+#: Familias em que `null` provavelmente quer dizer ZERO, e nao "a fonte nao
+#: publicou". Chamar isso de buraco seria mentir na tela.
+#:
+#: MEDIDO EM PROD (2026-09-02), sobre atuacoes com 60+ minutos:
+#:   goals_total   NULL em 11.135 e 0 explicito em 555
+#: Se o NULL fosse ausencia de verdade, o banco nao saberia quem fez gol em
+#: onze mil atuacoes -- e sabe: 1.090 com um gol, 101 com dois. A leitura certa
+#: e' que a API so' preenche o campo quando houve gol.
+#:
+#: Nao ha' como PROVAR a diferenca linha a linha, e por isso o projeto nunca
+#: converte NULL em 0 no motor (ver stats_model._tem_folha_da_familia e a
+#: correcao do `or 0`). A tela tambem nao converte: ela apenas para de chamar
+#: esses casos de buraco, porque mandar alguem digitar 0 em onze mil atuacoes
+#: seria trabalho inventado.
+_ZERO_IMPLICITO = frozenset({"gols", "amarelos"})
+
+
+@router.get("/dados/jogadores/lacunas")
+def lacunas_de_jogador(meses: int = 6, current_user: dict = Depends(require_admin)):
+    """Onde a estatistica POR JOGADOR nao veio, por familia.
+
+    Gemeo de /dados/diagnostico, que faz isto pra folha do JOGO. A tabela de
+    jogador nao tinha equivalente, e era justamente onde estava o buraco maior:
+    `saves` chega em 41% das atuacoes de goleiro, contra 100% do placar.
+
+    IMPORTANTE, E MUDA O QUE FAZER: aqui recoletar quase nunca resolve. Medido
+    contra a API no fixture 1557377, os dois goleiros com 90 minutos: ela
+    devolve "saves": 1 pra um e "saves": null pro outro. `null` nao e' folha
+    atrasada, e' dado que a fonte nao tem -- recoletar traz o mesmo null. Por
+    isso esta tela leva a EDITAR, e nao a Rodar.
+
+    So' conta atuacao que o motor leria: quem entrou em campo tempo suficiente
+    (`min_minutos`). Jogador que nao jogou nao e' lacuna.
+    """
+    meses = max(1, min(int(meses or 6), 60))
+    min_minutos = _min_minutos_do_motor()
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        onde_base = ("WHERE match_date >= (CURRENT_DATE - (%s || ' months')::interval) "
+                     "AND COALESCE(minutes, 0) >= %s")
+        cur.execute(f"SELECT COUNT(*) AS n FROM player_match_stats {onde_base}",
+                    (meses, min_minutos))
+        total = int((cur.fetchone() or {}).get("n") or 0)
+
+        familias = []
+        for chave, rotulo, coluna in STATS_DO_JOGADOR:
+            # Goleiro so' e' cobrado de `defesas`; jogador de linha so' e'
+            # cobrado do resto. Sem esse recorte, "defesas faltando" contaria
+            # todo atacante do banco e o numero nao queria dizer nada.
+            recorte = ("AND position = 'G'" if chave == "defesas"
+                       else "AND position <> 'G'")
+            cur.execute(
+                f"""SELECT COUNT(*) FILTER (WHERE {coluna} IS NULL) AS faltando,
+                           COUNT(*) AS elegiveis
+                      FROM player_match_stats {onde_base} {recorte}""",
+                (meses, min_minutos))
+            linha = dict(cur.fetchone() or {})
+            faltando = int(linha.get("faltando") or 0)
+            elegiveis = int(linha.get("elegiveis") or 0)
+            familias.append({
+                "chave": chave, "rotulo": rotulo, "coluna": coluna,
+                "faltando": faltando, "elegiveis": elegiveis,
+                "pct": round(100.0 * faltando / elegiveis, 1) if elegiveis else 0.0,
+                "so_goleiro": chave == "defesas",
+                "usada_pelo_motor": chave in _FAMILIAS_DO_MOTOR,
+                "zero_implicito": chave in _ZERO_IMPLICITO,
+            })
+    finally:
+        cur.close()
+        conn.close()
+
+    return {"meses": meses, "total": total, "min_minutos": min_minutos,
+            "familias": sorted(familias, key=lambda f: f["faltando"], reverse=True)}
+
+
+@router.get("/dados/jogadores/atuacoes")
+def atuacoes_com_lacuna(
+    familia: str = "defesas",
+    meses: int = 6,
+    pagina: int = 0,
+    por_pagina: int = 15,
+    current_user: dict = Depends(require_admin),
+):
+    """As atuacoes concretas em que aquela familia veio vazia -- a lista que a
+    pessoa preenche a mao."""
+    por_chave = {c: (r, col) for c, r, col in STATS_DO_JOGADOR}
+    if familia not in por_chave:
+        raise HTTPException(400, "familia desconhecida")
+    rotulo, coluna = por_chave[familia]
+    meses = max(1, min(int(meses or 6), 60))
+    pagina = max(0, pagina)
+    por_pagina = min(max(1, por_pagina), 100)
+    min_minutos = _min_minutos_do_motor()
+    recorte = "AND p.position = 'G'" if familia == "defesas" else "AND p.position <> 'G'"
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        onde = f"""WHERE p.{coluna} IS NULL
+                     AND p.match_date >= (CURRENT_DATE - (%s || ' months')::interval)
+                     AND COALESCE(p.minutes, 0) >= %s {recorte}"""
+        cur.execute(f"SELECT COUNT(*) AS n FROM player_match_stats p {onde}",
+                    (meses, min_minutos))
+        total = int((cur.fetchone() or {}).get("n") or 0)
+
+        cur.execute(f"""
+            SELECT p.fixture_id, p.player_id, p.player_name, p.team_name,
+                   p.position, p.minutes, p.match_date, p.last_updated,
+                   p.manual_stats, l.name AS league_name
+              FROM player_match_stats p
+              LEFT JOIN leagues l ON l.league_id = p.league_id
+              {onde}
+             ORDER BY p.match_date DESC, p.player_name
+             LIMIT %s OFFSET %s
+        """, (meses, min_minutos, por_pagina, pagina * por_pagina))
+        atuacoes = [dict(r) for r in cur.fetchall()]
+    finally:
+        cur.close()
+        conn.close()
+
+    return {"familia": familia, "rotulo": rotulo, "meses": meses,
+            "total": total, "pagina": pagina, "por_pagina": por_pagina,
+            "min_minutos": min_minutos, "atuacoes": atuacoes}
+
+
+@router.put("/dados/jogadores/{player_id}/atuacoes/{fixture_id}")
+def editar_atuacao_manual(
+    player_id: int,
+    fixture_id: int,
+    body: AtuacaoManualBody,
+    current_user: dict = Depends(require_admin),
+):
+    """Preenche a mao a estatistica de jogador que a API nao entregou.
+
+    Mesmo desenho do gemeo de partida, e pelos mesmos motivos:
+      · o valor vai pra coluna, que e' o que o motor le'
+      · `manual_stats` guarda o que foi digitado, POR QUEM e QUANDO
+      · `last_updated` sobe junto
+
+    So' edita linha existente: criar a linha exigiria time, posicao e minutos,
+    que tem que vir de /fixtures/players. Linha inventada entra na media do
+    jogador, e media errada decide pick.
+
+    O QUE PROTEGE ISTO DE SER APAGADO: o ON CONFLICT do coletor passou a usar
+    COALESCE em 02/09 (player_stats_collector_service). Antes,
+    `saves = EXCLUDED.saves` cru fazia o `null` da proxima coleta apagar o que
+    tinha sido digitado -- sem aviso, e so' naquele jogo. Editar sem aquela
+    correcao seria prometer uma coisa que o banco desfazia sozinho.
+    """
+    valores = body.valores
+    por_chave = {c: col for c, _r, col in STATS_DO_JOGADOR}
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""SELECT 1 FROM player_match_stats
+                        WHERE player_id = %s AND fixture_id = %s""",
+                    (player_id, fixture_id))
+        if not cur.fetchone():
+            raise HTTPException(
+                404, "Esta atuacao nao existe em player_match_stats. A linha "
+                     "precisa vir da coleta - time, posicao e minutos nao se "
+                     "inventam.")
+
+        agora = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        quem = current_user.get("email") or current_user.get("name") or "admin"
+
+        sets, params, marca = [], [], {}
+        for chave, valor in valores.items():
+            coluna = por_chave[chave]
+            sets.append(f"{coluna} = %s")
+            params.append(None if valor is None else int(valor))
+            marca[chave] = {"valor": valor, "por": quem, "em": agora}
+
+        sets.append("manual_stats = COALESCE(manual_stats, '{}'::jsonb) || %s::jsonb")
+        params.append(json.dumps(marca))
+        sets.append("last_updated = NOW()")
+        params += [player_id, fixture_id]
+
+        cur.execute(
+            f"""UPDATE player_match_stats SET {', '.join(sets)}
+                 WHERE player_id = %s AND fixture_id = %s""",
+            tuple(params))
+        conn.commit()
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(500, f"Nao deu pra gravar: {str(e)[:200]}")
+    finally:
+        cur.close()
+        conn.close()
+
+    return {"ok": True, "familias": list(valores.keys()),
+            "mensagem": f"{len(valores)} estatistica(s) gravada(s) a mao."}
+
+
 @router.get("/dados/jogadores")
 def lista_de_jogadores(
     season: int | None = None,
