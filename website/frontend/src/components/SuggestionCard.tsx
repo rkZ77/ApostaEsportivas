@@ -664,17 +664,13 @@ function SuggestionCard({
                     {s.escalacao === 'titular' ? (
                       <Badge tone="green">Escalado para começar</Badge>
                     ) : s.escalacao === 'banco' ? (
-                      <>
-                        {/* BANCO NÃO É ANULAÇÃO. A aposta de estatística
-                            individual vale se ele entrar em campo, mesmo
-                            saindo do banco · quem entra aos 60' e dá dois
-                            chutes bateu uma linha de dois chutes. O que muda é
-                            a chance, e é isso que o âmbar comunica. */}
-                        <Badge tone="amber">Começa no banco</Badge>
-                        <span className="text-[10px] text-ink-4 truncate">
-                          vale se ele entrar
-                        </span>
-                      </>
+                      /* Estado de passagem: o pick de quem não é confirmado no
+                         XI é anulado na mesma passada que lê a escalação (ver
+                         lineups_sweep), e aí quem fala é a caixa de anulado.
+                         O badge cobre a janela entre uma coisa e outra, e não
+                         promete nada · entrar no decorrer não faz o pick
+                         voltar a valer. */
+                      <Badge tone="amber">Fora do time titular</Badge>
                     ) : (
                       <Badge tone="neutral">Ainda não saiu</Badge>
                     )}

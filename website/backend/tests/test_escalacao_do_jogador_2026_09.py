@@ -11,12 +11,11 @@ são elas que este arquivo trava:
      titulares vazia (o provedor devolve isso enquanto o clube não confirma),
      não pode virar "ninguém foi escalado" -- isso anularia todos os picks da
      partida de uma vez.
-  2. ANULAR SÓ QUEM NEM FOI RELACIONADO, e como PUSH. Quem começa no BANCO
-     não é anulado: aposta de estatística individual vale se o jogador entrar
-     em campo, e quem entra aos 60' e dá dois chutes bateu uma linha de dois
-     chutes. Anular ali tiraria do apostador uma aposta que a casa dele pagou.
-     (A primeira versão anulava todo mundo fora do XI inicial · corrigido em
-     02/09, antes de ir pra produção.)
+  2. ANULAR QUEM NÃO É CONFIRMADO NO XI INICIAL, e como PUSH. O mercado é do
+     TITULAR e acompanha a VAGA dele: entrar no decorrer não faz o pick voltar
+     a valer, e sair no meio não o mata (o substituto soma · ver
+     test_soma_do_substituto). RED puniria o apostador por decisão do técnico.
+     A regra é a do usuário, fechada em 02/09 depois de duas voltas.
   3. NÃO REESCREVER RESULTADO. O UPDATE tem `result IS NULL`, senão uma
      passada tardia transformaria um GREEN já liquidado em anulação.
 
@@ -96,22 +95,89 @@ class _CursorFalso:
         return [{"id": i} for i in self.ids]
 
 
-def test_quem_comeca_no_banco_nao_e_anulado():
-    """A REGRA QUE ESTAVA ERRADA.
-
-    O `_anular_fora_do_xi` recebe a RELAÇÃO INTEIRA (titulares + banco), e não
-    só o XI. Passar só os titulares anularia todo reserva no instante em que a
-    escalação sai · e reserva que entra e chuta faz o pick pagar.
-
-    Quem está no banco e acaba não entrando é anulado DEPOIS do jogo, pelo
-    caminho que já existia: sem folha do jogador, vira PUSH (routers/live.py).
-    """
+def test_anula_quem_nao_e_confirmado_no_xi():
+    """A anulação olha o XI INICIAL, e é a decisão do usuário: o pick é do time
+    titular, e entrar no decorrer não faz a aposta voltar a valer."""
     fonte = open(os.path.join(_BACKEND, "lineups_sweep.py"), encoding="utf-8").read()
     bloco = fonte[fonte.index("anulados = _anular_fora_do_xi("):]
     bloco = bloco[:bloco.index("\n\n")]
-    assert "titulares + reservas" in bloco, (
-        "a anulação voltou a olhar só o XI inicial: reserva que entra em campo "
-        "faz a aposta valer, e anular ali tira do usuário um pick que pagou")
+    assert "titulares)" in bloco and "reservas" not in bloco
+    assert "escalação inicial" in ls.MOTIVO_FORA
+
+
+# ── 2b. a outra metade da mesma regra: a vaga ───────────────────────────────
+def _eventos(pares):
+    """Substituições no formato da API, com os dois jogadores no evento."""
+    return {"response": [{"type": "subst", "player": {"id": a}, "assist": {"id": b}}
+                         for a, b in pares]}
+
+
+def _fingir_api(monkeypatch, payload, status=200):
+    import routers.live as live
+
+    class _R:
+        status_code = status
+        headers: dict = {}
+
+        @staticmethod
+        def json():
+            return payload
+
+    monkeypatch.setattr(live.requests, "get", lambda *a, **k: _R())
+    return live
+
+
+def test_soma_do_substituto_segue_a_vaga(monkeypatch):
+    """O titular #10 sai e o #20 entra: a vaga é do #20.
+
+    Não importa qual campo do evento é "entrou" e qual é "saiu" -- a
+    documentação diverge e o provedor não é explícito. Como o pick é sempre de
+    um TITULAR, o OUTRO jogador do evento é necessariamente quem entrou no
+    lugar dele. Este teste passa nas duas ordens de propósito.
+    """
+    live = _fingir_api(monkeypatch, _eventos([(10, 20)]))
+    assert live._substitutos_de(1, 10) == [20]
+
+    live = _fingir_api(monkeypatch, _eventos([(20, 10)]))
+    assert live._substitutos_de(1, 10) == [20]
+
+
+def test_a_vaga_atravessa_mais_de_uma_troca(monkeypatch):
+    """#10 sai pro #20, e depois o #20 sai pro #30. A vaga continua a mesma."""
+    live = _fingir_api(monkeypatch, _eventos([(10, 20), (20, 30)]))
+    assert live._substitutos_de(1, 10) == [20, 30]
+
+
+def test_substituicao_de_outro_jogador_nao_entra_na_conta(monkeypatch):
+    live = _fingir_api(monkeypatch, _eventos([(7, 8), (9, 11)]))
+    assert live._substitutos_de(1, 10) == []
+
+
+def test_sem_eventos_a_liquidacao_segue_com_o_titular(monkeypatch):
+    """Falha de rede ou resposta ruim não pode inventar substituto nenhum: o
+    pick é liquidado pelo número do titular, que é o comportamento de antes."""
+    live = _fingir_api(monkeypatch, {"response": []})
+    assert live._substitutos_de(1, 10) == []
+
+    live = _fingir_api(monkeypatch, {}, status=500)
+    assert live._substitutos_de(1, 10) == []
+
+    import routers.live as l2
+
+    def _explode(*a, **k):
+        raise RuntimeError("timeout")
+    monkeypatch.setattr(l2.requests, "get", _explode)
+    assert l2._substitutos_de(1, 10) == []
+
+
+def test_a_soma_so_e_tentada_quando_pode_mudar_o_resultado():
+    """Cada chamada dessas é uma requisição à API. Pick que já bateu a linha
+    não precisa de substituto, e titular que jogou os 90 não tem um."""
+    fonte = open(os.path.join(_BACKEND, "routers", "live.py"), encoding="utf-8").read()
+    bloco = fonte[fonte.index("# A VAGA, E NAO SO' A PESSOA"):]
+    bloco = bloco[:bloco.index("res = \"GREEN\"")]
+    assert "valor < linha" in bloco
+    assert "int(minutos) < 90" in bloco
 
 
 def test_anula_como_push_e_avisa_quem_seguiu(monkeypatch):

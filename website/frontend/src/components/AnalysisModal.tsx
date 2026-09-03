@@ -144,20 +144,19 @@ function regraDoJogador(
     red: lineValue >= 1
       ? `Ele ficar em ${lineValue - 1} ou menos.`
       : 'Ele não registrar nenhum.',
-    /* A REGRA DA SUBSTITUIÇÃO, dita como ela é.
+    /* A REGRA DA VAGA, nas duas metades que ela tem.
      *
-     * O que vale em toda casa: quem não entra em campo tem a aposta devolvida,
-     * e quem entra no decorrer conta normalmente · sair do banco aos 60' e dar
-     * dois chutes bate uma linha de dois chutes.
+     * O mercado é do TITULAR e acompanha a vaga dele: não confirmado na
+     * escalação, a aposta é anulada; confirmado e substituído, o que o jogador
+     * que entrou no lugar dele fizer soma na mesma linha.
      *
-     * O que NÃO vale em toda casa, e por isso aparece como aviso e não como
-     * promessa: algumas somam o que o substituto fez depois de entrar no lugar
-     * do apostado. Isso muda de casa pra casa e de mercado pra mercado, então
-     * o site não afirma nem finge que sabe qual é a da pessoa. */
-    devolve: 'Se ele não entrar em campo, a aposta é anulada e a entrada volta. '
-           + 'Entrando no decorrer do jogo, ela vale normalmente. Algumas casas '
-           + 'ainda somam o que o substituto dele fizer depois da troca, e essa '
-           + 'parte muda de casa para casa: confira a regra da sua.',
+     * As duas metades andam juntas e é assim que o site liquida (ver
+     * lineups_sweep.py e o bloco de Player Stats em routers/live.py). Dizer só
+     * a primeira deixaria o usuário achando que uma substituição no primeiro
+     * tempo mata o pick, quando ela não mata. */
+    devolve: 'Se ele não for confirmado na escalação inicial, a aposta é anulada '
+           + 'e a entrada volta. Se ele começar jogando e for substituído, o que '
+           + 'o jogador que entrar no lugar dele fizer conta na mesma linha.',
   }
 }
 

@@ -17,35 +17,25 @@ Quatro estados, e os quatro aparecem no card:
 
   · escalação ainda não publicada  -> o card avisa que ainda não saiu;
   · jogador no XI inicial          -> o card confirma que ele começa;
-  · jogador no BANCO               -> o card avisa, e o pick CONTINUA DE PÉ;
-  · jogador fora da relação        -> o pick é ANULADO (PUSH) e o card fica no
+  · jogador FORA do XI inicial     -> o pick é ANULADO (PUSH) e o card fica no
     lugar dizendo isso.
 
-BANCO NÃO É ANULAÇÃO (corrigido em 02/09, antes de ir pra produção).
---------------------------------------------------------------------
-A primeira versão anulava todo mundo que não estivesse no XI inicial, e isso
-está errado na regra das casas: aposta de estatística individual vale se o
-jogador ENTRAR EM CAMPO, mesmo saindo do banco. Quem entra aos 60' e dá dois
-chutes bateu uma linha de dois chutes -- anular ali tiraria do apostador uma
-aposta que a casa dele pagou.
+A REGRA É O TIME TITULAR (decisão do usuário, 02/09)
+----------------------------------------------------
+O pick vale para quem COMEÇA JOGANDO. Não confirmado na escalação inicial, a
+aposta é anulada assim que a escalação sai -- é o que as casas fazem, e entrar
+no decorrer do jogo não faz o pick voltar a valer.
 
-Há ainda uma segunda regra, que varia por casa e por mercado: algumas somam as
-estatísticas do jogador que ENTROU NO LUGAR do apostado (a "seleção" passa pro
-substituto). Isso NÃO está implementado aqui de propósito -- o critério muda de
-casa pra casa e de mercado pra mercado, e liquidar por uma regra que a casa do
-usuário não segue é pior que não liquidar. O que está implementado é o que vale
-em todas elas: quem não entra em campo tem a aposta devolvida.
+A contrapartida é a outra metade da mesma regra, que mora na liquidação
+(routers/live.py): se o nosso jogador começa e é SUBSTITUÍDO, o que o
+substituto fizer depois da troca soma na conta dele. A "seleção" passa pro
+jogador que entrou no lugar. As duas coisas andam juntas: ou o mercado é do
+titular e acompanha a vaga dele, ou não é.
 
-ANULAR, E NÃO DEIXAR PERDER. É o que a casa faz com quem não joga: anula e
-devolve a entrada. Marcar RED puniria o apostador por uma decisão do técnico,
-que não é o que o pick previu -- o pick previu o que ELE faria jogando. E some
-com a evidência: uma sequência de REDs "do motor" que na verdade é escalação, e
-ninguém investigaria a diferença.
-
-E ANULA CEDO SÓ QUEM NEM FOI RELACIONADO. Aí não há substituição possível: ele
-não está no banco, não vai entrar, e a partida inteira já pode ser respondida
-antes do apito. Quem está no banco e acaba não entrando é anulado depois do
-jogo, pelo caminho que já existia (routers/live.py, folha do jogador ausente).
+ANULAR, E NÃO DEIXAR PERDER. Marcar RED puniria o apostador por uma decisão do
+técnico, que não é o que o pick previu -- o pick previu o que ELE faria
+jogando. E some com a evidência: uma sequência de REDs "do motor" que na
+verdade é escalação, e ninguém investigaria a diferença.
 
 O CARD FICA. Sumir com ele no dia seguinte ao "cadê o pick do Pedro" é pior que
 mostrar o pick anulado: quem seguiu a aposta precisa entender por que a casa
@@ -104,7 +94,7 @@ _TETO = int(os.getenv("LINEUP_SWEEP_MAX_FIXTURES", "10"))
 #: corte ela seria reconsultada a cada passada até o fim da janela.
 _MAX_TENTATIVAS = int(os.getenv("LINEUP_SWEEP_MAX_TENTATIVAS", "12"))
 
-MOTIVO_FORA = "jogador não foi relacionado para a partida"
+MOTIVO_FORA = "jogador não foi confirmado na escalação inicial"
 
 _lock = threading.Lock()
 _estado: dict = {"ultima": 0.0, "rodando": False, "ultimo_resultado": None}
@@ -238,13 +228,13 @@ def _gravar(cur, fixture_id: int, titulares: list, reservas: list) -> None:
     """, (fixture_id, titulares, reservas))
 
 
-def _anular_fora_do_xi(cur, fixture_id: int, relacionados: list) -> int:
-    """Anula os picks pendentes de quem NEM FOI RELACIONADO. Devolve quantos.
+def _anular_fora_do_xi(cur, fixture_id: int, titulares: list) -> int:
+    """Anula os picks pendentes de quem não começa jogando. Devolve quantos.
 
-    `relacionados` são os titulares MAIS o banco. Quem está no banco não entra
-    aqui: aposta de estatística individual vale se o jogador entrar em campo, e
-    ele ainda pode entrar. Se não entrar, quem anula é a varredura de resultado
-    depois do jogo (routers/live.py: sem folha do jogador, vira PUSH).
+    Só o XI inicial: o pick é sobre o time titular, e entrar no decorrer não
+    faz a aposta voltar a valer (ver a docstring do módulo). Quem começa no
+    banco é anulado aqui mesmo, no instante em que a escalação sai, e não fica
+    pendurado até o fim do jogo.
 
     `profit = 0` porque PUSH devolve a entrada: nem ganho nem perda. É o mesmo
     tratamento da anulação por falta de estatística (routers/live.py), e é o
@@ -265,7 +255,7 @@ def _anular_fora_do_xi(cur, fixture_id: int, relacionados: list) -> int:
            AND result IS NULL
            AND (player_id IS NULL OR NOT (player_id = ANY(%s)))
      RETURNING id
-    """, (MOTIVO_FORA, fixture_id, relacionados))
+    """, (MOTIVO_FORA, fixture_id, titulares))
     ids = [r["id"] if isinstance(r, dict) else r[0] for r in cur.fetchall()]
 
     if ids:
@@ -304,10 +294,9 @@ def _passada() -> None:
                 else:
                     titulares, reservas = escalacao
                     _gravar(cur, fixture_id, titulares, reservas)
-                    # A RELAÇÃO INTEIRA, e não só o XI: quem está no banco
-                    # ainda pode entrar, e entrando a aposta vale.
-                    anulados = _anular_fora_do_xi(cur, fixture_id,
-                                                  titulares + reservas)
+                    # SÓ O XI INICIAL. Ver a docstring do módulo: o pick é
+                    # do titular, e quem não é confirmado tem a aposta anulada.
+                    anulados = _anular_fora_do_xi(cur, fixture_id, titulares)
                     resumo["publicadas"] += 1
                     resumo["anulados"] += anulados
                     if anulados:

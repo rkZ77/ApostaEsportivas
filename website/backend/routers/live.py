@@ -939,6 +939,75 @@ def _calc_result(market: str, line: str, cur_val: float | None,
 _HORAS_PARA_ANULAR = int(os.getenv("PICK_VOID_SEM_ESTATISTICA_HORAS", "12"))
 
 
+#: Quantas trocas seguidas a "vaga" pode atravessar. A entra, sai; B entra,
+#: sai; C entra. Três é folga de sobra para 90 minutos e impede que um dado
+#: estranho vire laço infinito.
+_MAX_TROCAS = 3
+
+
+def _substitutos_de(fixture_id: int, player_id: int) -> list:
+    """Quem entrou no lugar de `player_id`, e quem entrou no lugar desse.
+
+    A REGRA QUE ISTO ATENDE (decisão do usuário, 02/09)
+    ---------------------------------------------------
+    Mercado de estatística de jogador é do TITULAR e acompanha a VAGA dele:
+    quando ele sai, o que o substituto fizer depois da troca conta na mesma
+    aposta. É a mesma regra que faz o pick ser anulado quando ele não é
+    confirmado no XI (lineups_sweep) -- as duas metades andam juntas.
+
+    POR QUE NÃO PRECISO SABER QUAL CAMPO É "ENTROU" E QUAL É "SAIU"
+    --------------------------------------------------------------
+    O evento de substituição da API-Football traz dois jogadores (`player` e
+    `assist`), e qual deles é o que entra muda conforme a documentação que se
+    lê. Aqui isso não importa: o pick é sempre de um TITULAR, então dentro do
+    evento em que ele aparece, o OUTRO é necessariamente quem entrou no lugar
+    dele. A dedução não depende da convenção do provedor -- e depender dela
+    seria creditar estatística ao jogador errado, que é o pior erro possível
+    numa liquidação.
+
+    Uma requisição por partida, e só para pick que ainda pode virar com a soma.
+    Nunca levanta: sem os eventos, a liquidação segue com o número do titular,
+    que é o comportamento de antes.
+    """
+    try:
+        r = requests.get(f"{API_BASE}/fixtures/events", headers=_headers(),
+                         params={"fixture": fixture_id}, timeout=12)
+        api_quota.registrar(r.headers, origem="events-subst")
+        if r.status_code != 200:
+            return []
+        eventos = (r.json() or {}).get("response") or []
+    except Exception as e:
+        logger.warning("[AUTO-RESULT] eventos da fixture %s falharam: %s", fixture_id, e)
+        return []
+
+    trocas = []
+    for ev in eventos:
+        if (ev.get("type") or "").lower() != "subst":
+            continue
+        a = ((ev.get("player") or {}) or {}).get("id")
+        b = ((ev.get("assist") or {}) or {}).get("id")
+        if a is None or b is None:
+            continue
+        trocas.append((int(a), int(b)))
+
+    cadeia, atual = [], int(player_id)
+    for _ in range(_MAX_TROCAS):
+        proximo = None
+        for a, b in trocas:
+            if atual == a:
+                proximo = b
+            elif atual == b:
+                proximo = a
+            if proximo is not None and proximo not in cadeia and proximo != int(player_id):
+                break
+            proximo = None
+        if proximo is None:
+            break
+        cadeia.append(proximo)
+        atual = proximo
+    return cadeia
+
+
 def _anulacao_sem_estatistica(leg: dict) -> str | None:
     """PUSH pra perna encerrada que NUNCA vai poder ser liquidada.
 
@@ -2714,8 +2783,9 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
                        if r["stat_column"] in _COLUNAS_PLAYER_STATS]
             for coluna in colunas:
                 cur.execute(f"""
-                    SELECT pp.id, pp.line_value, pp.odd, pp.player_name, pp.method,
-                           pms.{coluna} AS valor
+                    SELECT pp.id, pp.fixture_id, pp.player_id, pp.line_value,
+                           pp.odd, pp.player_name, pp.method,
+                           pms.{coluna} AS valor, pms.minutes
                     FROM picks_player_stats pp
                     JOIN player_match_stats pms
                       ON pms.fixture_id = pp.fixture_id
@@ -2728,10 +2798,41 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
                 for p in cur.fetchall():
                     try:
                         linha = int(p["line_value"] or 0)
+                        valor = int(p["valor"])
+
+                        # A VAGA, E NAO SO' A PESSOA (02/09).
+                        #
+                        # O pick e' do titular e acompanha a vaga dele: saindo,
+                        # o que o substituto fizer depois da troca soma aqui.
+                        # E' a outra metade da regra que anula o pick de quem
+                        # nao e' confirmado no XI (lineups_sweep).
+                        #
+                        # A conta so' e' feita quando ela pode MUDAR o
+                        # resultado: pick que ja' bateu a linha nao precisa de
+                        # ninguem, e titular que jogou os 90 nao tem
+                        # substituto. Cada consulta dessas e' uma chamada de
+                        # API, entao o filtro nao e' detalhe.
+                        minutos = p["minutes"]
+                        if valor < linha and minutos is not None and int(minutos) < 90:
+                            for suplente in _substitutos_de(p["fixture_id"], p["player_id"]):
+                                cur.execute(f"""
+                                    SELECT {coluna} AS valor
+                                      FROM player_match_stats
+                                     WHERE fixture_id = %s AND player_id = %s
+                                """, (p["fixture_id"], suplente))
+                                linha_sup = cur.fetchone()
+                                if linha_sup and linha_sup["valor"] is not None:
+                                    valor += int(linha_sup["valor"])
+                            if valor >= linha:
+                                logger.info(
+                                    "[AUTO-RESULT] player_stats #%s (%s): linha batida "
+                                    "somando o substituto da vaga (%s de %s)",
+                                    p["id"], p["player_name"], valor, linha)
+
                         # "N ou mais": GREEN quando valor >= N. Nunca empata --
                         # a linha e' inteira e o mercado e' "ou mais", entao
                         # nao existe PUSH aqui (mesma regra do pick de defesas).
-                        res = "GREEN" if int(p["valor"]) >= linha else "RED"
+                        res = "GREEN" if valor >= linha else "RED"
                         _save_market_pick_result(
                             "picks_player_stats", p["id"], "player_stats", res,
                             float(p["odd"] or 1), conn)
