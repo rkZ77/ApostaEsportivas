@@ -27,16 +27,26 @@
     </script>
 
     <!--
-      Fontes. Estavam num @import dentro do index.css, o que serializa o
-      download: o navegador só descobria o Google Fonts depois de baixar e
-      parsear o CSS inteiro. Aqui elas entram já no HTML, com preconnect,
-      e o handshake acontece em paralelo com o resto.
+      Fontes. Elas sao NOSSAS, de /fonts (ver src/fontes.css e
+      scripts/baixar-fontes.mjs).
+
+      O <link> pro fonts.googleapis.com que morava aqui era CSS bloqueante em
+      outro dominio: antes do primeiro pixel o celular pagava DNS + TLS pro
+      googleapis, baixava o CSS, descobria o gstatic la' dentro e pagava DNS +
+      TLS de novo pra so' entao comecar o woff2. Tres idas e voltas em serie,
+      a maior fatia dos 750 ms de bloqueio de renderizacao medidos no PageSpeed.
+
+      O preload abaixo e' so' da Nunito latin, que e' a fonte de tudo o que
+      aparece na primeira tela. A Inter (usada apenas nos numeros, ver
+      .font-mono) e o latin-ext ficam de fora: preload demais compete por banda
+      com o proprio JavaScript e atrasa o que ele deveria adiantar.
     -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap"
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      href="/fonts/nunito-latin.woff2"
+      crossorigin
     />
 
     <!--
@@ -151,13 +161,34 @@
     -->
 
     <!--
-      Google Analytics. O segundo script estava sem atributo nenhum, então
-      bloqueava o parse do HTML até baixar · medição não pode atrasar o
-      primeiro pixel. `defer` mantém a ordem entre os dois (o gtag.js local
-      depende do dataLayer criado pelo de fora) e roda depois do documento.
+      Google Analytics · CARREGADO DEPOIS DO SITE ESTAR DE PE'.
+
+      O gtag.js sao ~95 KB de JavaScript que nao pintam um pixel: enquanto ele
+      baixava e executava (mesmo com `async`), disputava banda e thread com o
+      bundle do app. Era a maior parte do "JavaScript nao usado" e do trabalho
+      de thread principal apontados no PageSpeed.
+
+      A fila (`dataLayer`) e o `gtag()` sao criados aqui, sincronos e de graca,
+      entao nada se perde: os eventos disparados antes da hora ficam
+      empilhados e o gtag.js os processa quando chega. O que foi adiado e' so'
+      o download, pro `load` da pagina · momento em que a primeira tela ja'
+      esta' pintada e a medicao nao custa nada ao usuario.
+
+      Isto substitui o public/gtag.js, que existia so' pra rodar estas quatro
+      linhas num arquivo separado (mais um pedido de rede pelo mesmo efeito).
     -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-L801QMZ5ZS"></script>
-    <script defer src="/gtag.js"></script>
+    <script>
+      window.dataLayer = window.dataLayer || []
+      function gtag() { dataLayer.push(arguments) }
+      gtag('js', new Date())
+      gtag('config', 'G-L801QMZ5ZS')
+      addEventListener('load', function () {
+        var s = document.createElement('script')
+        s.async = true
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=G-L801QMZ5ZS'
+        document.head.appendChild(s)
+      })
+    </script>
 
     <!-- PWA -->
     <link rel="manifest" href="/manifest.json" />

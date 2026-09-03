@@ -61,7 +61,12 @@ export default function SiteHeader() {
       <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
 
         <Link to="/" className="flex items-center gap-2.5 shrink-0" aria-label="Pick IA, início">
-          <img src="/logo.png" alt="" width={32} height={32} className="w-8 h-8 rounded-full object-cover" />
+          {/* logo-64.webp, e nao logo.png: o PNG tem 320 px e 9,3 KB para
+              aparecer em 32 · e' a "entrega de imagens" que o PageSpeed
+              cobrava. O webp de 64 px pesa 2,6 KB e ainda cobre tela 2x.
+              O logo.png fica para o apple-touch-icon e para os cartoes de
+              compartilhamento, que precisam do tamanho grande. */}
+          <img src="/logo-64.webp" alt="" width={32} height={32} className="w-8 h-8 rounded-full object-cover" />
           <span className="font-display font-semibold text-lg tracking-tight text-ink-1">
             Pick<span className="text-accent-ink">IA</span>
           </span>

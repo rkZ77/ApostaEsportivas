@@ -785,7 +785,10 @@ def test_pagina_publica_tem_barra_com_logo_e_duas_saidas():
     "Entrar" fantasma: quem chegava por busca nao tinha como voltar pra home
     nem um caminho obvio pra criar conta."""
     barra = _front_codigo("components/PublicNav.tsx")
-    assert "logo.png" in barra
+    # Nome do arquivo generico: o logotipo virou /logo-64.webp em 03/09 (o PNG
+    # de 320 px pesava 9,3 KB pra aparecer em 32). O que o teste guarda e' que a
+    # barra tem logotipo, nao qual arquivo.
+    assert "/logo" in barra
     assert '/login?mode=register' in barra
     for tela in ("pages/ResultadosPublicos.tsx", "pages/PerformanceIA.tsx"):
         assert "PublicNav" in _front_codigo(tela), tela

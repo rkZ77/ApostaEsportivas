@@ -1,4 +1,6 @@
 import asyncio
+import base64
+import hashlib
 import io
 import logging
 import mimetypes
@@ -144,6 +146,48 @@ async def superficie_de_agente(request: Request, call_next):
     return response
 
 
+#: Regex do <script> SEM src (inline). O `type` opcional captura tambem os
+#: `application/ld+json`, que sao dados e nao executam -- incluir o hash deles
+#: nao custa nada e evita ter que adivinhar quais o navegador vai cobrar.
+_SCRIPT_INLINE_RE = re.compile(
+    r"<script(?![^>]*src=)[^>]*>(.*?)</script>", re.S | re.I
+)
+
+
+def _hashes_de_scripts_inline() -> list[str]:
+    """Hash SHA-256 de cada <script> inline do index.html, no formato do CSP.
+
+    POR QUE ISTO EXISTE.
+
+    O `script-src` nao tem 'unsafe-inline' -- e nao deve ter, e' justamente ele
+    que segura XSS refletido. So' que o index.html TEM script inline: o que le'
+    o tema do localStorage antes do CSS (senao quem escolheu o claro comeca a
+    visita com um flash de tela preta) e o que enfileira os eventos do
+    Analytics antes do gtag.js chegar. Sem hash, o navegador bloqueava os dois
+    calado em producao: o flash de tema voltou a acontecer sem ninguem ver erro.
+
+    Os hashes saem do proprio arquivo do build, uma vez no startup. Editar o
+    inline do index.html nao exige lembrar de mexer aqui: o hash e' recalculado
+    no deploy seguinte, junto com o arquivo que ele descreve.
+
+    Em dev (sem `dist/`) volta lista vazia -- quem serve o HTML ali e' o Vite,
+    em outra porta, sem passar por este middleware.
+    """
+    indice = pathlib.Path(__file__).parent / "dist" / "index.html"
+    if not indice.is_file():
+        return []
+    html = indice.read_text(encoding="utf-8")
+    return [
+        "'sha256-" + base64.b64encode(
+            hashlib.sha256(corpo.encode("utf-8")).digest()
+        ).decode() + "'"
+        for corpo in _SCRIPT_INLINE_RE.findall(html)
+    ]
+
+
+_CSP_SCRIPT_INLINE = " ".join(_hashes_de_scripts_inline())
+
+
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
     response = await call_next(request)
@@ -159,14 +203,28 @@ async def security_headers(request: Request, call_next):
         # endpoint de sessao (connect) e desenha o proprio botao e o popup
         # dentro de um iframe (frame). Faltando uma delas o botao some sem
         # erro visivel -- o CSP bloqueia calado.
-        "script-src 'self' https://accounts.google.com https://www.googletagmanager.com https://www.google-analytics.com https://challenges.cloudflare.com; "
+        "script-src 'self' https://accounts.google.com https://www.googletagmanager.com "
+        "https://www.google-analytics.com https://challenges.cloudflare.com"
+        + (" " + _CSP_SCRIPT_INLINE if _CSP_SCRIPT_INLINE else "") + "; "
         # accounts.google.com tambem no style-src: o GIS busca a folha de estilo
         # do proprio botao em /gsi/style. Bloqueada, o botao aparece mas sem
         # o CSS dele -- moldura branca em volta, visivel em dev antes disto.
-        "style-src 'self' 'unsafe-inline' https://accounts.google.com https://fonts.googleapis.com; "
+        "style-src 'self' 'unsafe-inline' https://accounts.google.com; "
         "img-src 'self' data: https:; "
-        "connect-src 'self' https://accounts.google.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com https://challenges.cloudflare.com; "
-        "font-src 'self' data: https://fonts.gstatic.com; "
+        # stats.g.doubleclick.net e www.google.com sao do GA4, nao do Ads: o
+        # gtag manda o mesmo page_view pros tres. Sem eles no connect-src o
+        # console de toda visita ganhava tres erros de CSP vermelhos -- era o
+        # "erros do navegador registrados no console" das Praticas Recomendadas
+        # do PageSpeed, e escondia erro de verdade no meio.
+        "connect-src 'self' https://accounts.google.com https://www.google-analytics.com "
+        "https://analytics.google.com https://region1.google-analytics.com "
+        "https://stats.g.doubleclick.net https://www.google.com "
+        "https://challenges.cloudflare.com; "
+        # As fontes sao servidas pelo proprio dominio desde 03/09 (ver
+        # frontend/src/fontes.css). O fonts.gstatic.com saiu daqui e o
+        # fonts.googleapis.com saiu do style-src junto: dominio que ninguem
+        # mais usa e' superficie de graca.
+        "font-src 'self' data:; "
         "frame-src https://accounts.google.com https://challenges.cloudflare.com; "
         "frame-ancestors 'none'"
     )
@@ -577,6 +635,13 @@ elif _gsc_token:
     logger.warning("[SEO] GOOGLE_SITE_VERIFICATION com formato inesperado, rota nao registrada.")
 
 
+# O mimetypes do Python 3.12 nao conhece woff2 (nem woff): sem isto as fontes
+# proprias sairiam como application/octet-stream, e o navegador descartaria o
+# <link rel="preload" as="font"> por tipo divergente -- a fonte seria baixada
+# de novo, depois do CSS, que e' exatamente o que o preload existe pra evitar.
+mimetypes.add_type("font/woff2", ".woff2")
+mimetypes.add_type("font/woff", ".woff")
+
 _dist = _base_dir / "dist"
 
 # O Vite assina cada arquivo de /assets com o hash do conteudo
@@ -593,6 +658,19 @@ _dist = _base_dir / "dist"
 # sempre.
 _ASSET_CACHE = {"Cache-Control": "public, max-age=31536000, immutable"}
 _HTML_CACHE  = {"Cache-Control": "no-cache"}
+
+#: Estatico de nome FIXO: fonte, icone, manifesto. Nome fixo nao pode ser
+#: immutable (trocar a logo nunca chegaria em quem ja' visitou), mas tambem nao
+#: merece uma revalidacao por visita -- era isso que o PageSpeed cobrava em
+#: "ciclos de vida eficientes de cache". Uma semana de cache com trinta dias de
+#: stale-while-revalidate: a troca chega no dia seguinte pra quem volta, e
+#: ninguem paga ida e volta pelo favicon.
+_ESTATICO_CACHE = {"Cache-Control": "public, max-age=604800, stale-while-revalidate=2592000"}
+
+#: O sw.js e o index.html sao os dois arquivos que APONTAM pros outros: se
+#: ficarem em cache, o navegador continua obedecendo o deploy antigo.
+_SEM_CACHE = {"sw.js", "index.html"}
+_EXT_ESTATICA = {".woff2", ".woff", ".png", ".jpg", ".jpeg", ".svg", ".webp", ".ico", ".webmanifest", ".json"}
 
 def _codificacoes_aceitas(request: Request) -> set[str]:
     """Tokens de Accept-Encoding, sem os parametros de qualidade.
@@ -654,8 +732,15 @@ if _dist.exists():
         # que diz isso.
         pedido_comprimido = candidate.suffix in (".br", ".gz")
         if candidate.is_relative_to(_dist) and candidate.is_file() and not pedido_comprimido:
-            eterno = full_path.startswith("assets/") and candidate.suffix != ".html"
-            return _resposta_de_arquivo(request, candidate, _ASSET_CACHE if eterno else {})
+            if full_path.startswith("assets/") and candidate.suffix != ".html":
+                cache = _ASSET_CACHE          # nome assinado por hash pelo Vite
+            elif candidate.name in _SEM_CACHE:
+                cache = _HTML_CACHE
+            elif candidate.suffix.lower() in _EXT_ESTATICA:
+                cache = _ESTATICO_CACHE
+            else:
+                cache = {}
+            return _resposta_de_arquivo(request, candidate, cache)
         # SOFT 404: QUEM PEDE ARQUIVO E NAO ACHA RECEBE 404 DE VERDADE.
         #
         # Tudo o que nao e' arquivo real cai aqui e recebia o index.html com

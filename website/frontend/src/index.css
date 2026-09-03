@@ -1,6 +1,8 @@
-/* As fontes são carregadas por <link> no index.html, com preconnect.
-   Um @import aqui obrigaria o navegador a baixar e parsear este CSS inteiro
-   antes de sequer descobrir que existe uma fonte pra buscar. */
+/* As fontes sao nossas, servidas de /fonts. O @import entra no mesmo arquivo
+   de CSS no build (o Vite resolve em tempo de compilacao, nao vira um segundo
+   pedido em tempo de execucao), e o preload do index.html garante que o woff2
+   comece a baixar sem esperar este CSS terminar. Ver src/fontes.css. */
+@import './fontes.css';
 
 @tailwind base;
 @tailwind components;

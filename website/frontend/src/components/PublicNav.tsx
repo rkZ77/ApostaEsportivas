@@ -30,7 +30,7 @@ export default function PublicNav({
     <nav className="border-b border-line/60 bg-surface-0/80 backdrop-blur-sm sticky top-0 z-40">
       <div className={`mx-auto h-14 flex items-center justify-between gap-3 ${PAGE_WIDTH[width]}`}>
         <Link to="/" className="flex items-center gap-2 min-w-0" aria-label="Ir para a página inicial">
-          <img src="/logo.png" alt="" width={32} height={32} className="w-8 h-8 shrink-0" />
+          <img src="/logo-64.webp" alt="" width={32} height={32} className="w-8 h-8 shrink-0" />
           <span className="font-display text-ink-1 font-semibold text-lg tracking-tight">
             Pick<span className="text-accent-ink">IA</span>
           </span>

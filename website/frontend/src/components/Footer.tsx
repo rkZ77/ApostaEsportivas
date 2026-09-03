@@ -69,7 +69,7 @@ export default function Footer() {
           {/* Marca */}
           <div className="min-w-0">
             <Link to="/" className="inline-flex items-center gap-2.5 mb-2 py-1" aria-label="Pick IA, início">
-              <img src="/logo.png" alt="" width={28} height={28} className="w-7 h-7 rounded-full object-cover" />
+              <img src="/logo-64.webp" alt="" width={28} height={28} className="w-7 h-7 rounded-full object-cover" />
               <span className="font-display text-base font-semibold text-ink-1">
                 Pick<span className="text-accent-ink">IA</span>
               </span>

@@ -1,8 +1,91 @@
-import { defineConfig } from 'vite'
+import { defineConfig, Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 
+/*
+ * PRELOAD DOS CHUNKS DA PRIMEIRA ROTA.
+ *
+ * O index.html so' conhece o `index.js`. Quem sabe que a `/` precisa de
+ * `Home.js` (e do PageShell, do cn, do marketTranslate que ele importa) e' o
+ * proprio index.js, DEPOIS de baixar e executar. Em 4G lento isso e' uma ida e
+ * volta inteira parada entre "o bundle chegou" e "o navegador descobriu o que
+ * faltava" · era o que o PageSpeed mostrava como arvore de dependencia de rede
+ * com tres niveis.
+ *
+ * Este plugin acha, no bundle pronto, o chunk de cada pagina de entrada e a
+ * arvore estatica dela, e injeta os <link rel=modulepreload> no HTML. Como o
+ * mesmo index.html serve TODAS as rotas do SPA, os links sao criados por um
+ * script curto que olha o pathname: quem abre a `/` nao baixa o chunk do Login
+ * e vice-versa.
+ *
+ * So' as duas rotas de entrada de verdade entram aqui. Preload e' banda
+ * gasta antes da hora: listar tudo faria a Home competir consigo mesma.
+ */
+function preloadDaRota(): Plugin {
+  const ROTAS: Record<string, string> = {
+    '/':      'src/pages/Home.tsx',
+    '/login': 'src/pages/Login.tsx',
+  }
+
+  return {
+    name: 'preload-da-rota',
+    enforce: 'post',
+    transformIndexHtml: {
+      order: 'post',
+      handler(html, ctx) {
+        if (!ctx.bundle) return html
+
+        // Fecho transitivo dos imports ESTATICOS do chunk · sao exatamente os
+        // que o navegador pediria em seguida de qualquer jeito. Os dinamicos
+        // ficam de fora: sao o que a pagina busca sob demanda depois.
+        const arvore = (nome: string, visto = new Set<string>()): string[] => {
+          const chunk = ctx.bundle![nome]
+          if (!chunk || chunk.type !== 'chunk' || visto.has(nome)) return []
+          visto.add(nome)
+          return [nome, ...chunk.imports.flatMap((i) => arvore(i, visto))]
+        }
+
+        // O que o index.html ja' traz sozinho nao precisa ser repetido.
+        const jaNoHtml = new Set(
+          [...html.matchAll(/(?:src|href)="\/([^"]+\.js)"/g)].map((m) => m[1]),
+        )
+
+        const mapa: Record<string, string[]> = {}
+        for (const [rota, fonte] of Object.entries(ROTAS)) {
+          const entrada = Object.values(ctx.bundle).find(
+            (c) =>
+              c.type === 'chunk' &&
+              // No Windows o facadeModuleId vem com barra invertida.
+              c.facadeModuleId?.replace(/\\/g, '/').endsWith(fonte),
+          )
+          if (!entrada || entrada.type !== 'chunk') continue
+          const arquivos = [...new Set(arvore(entrada.fileName))].filter(
+            (f) => !jaNoHtml.has(f),
+          )
+          if (arquivos.length) mapa[rota] = arquivos
+        }
+
+        if (!Object.keys(mapa).length) return html
+
+        return {
+          html,
+          tags: [
+            {
+              tag: 'script',
+              injectTo: 'head',
+              children:
+                `(function(){var m=${JSON.stringify(mapa)}[location.pathname];if(!m)return;` +
+                `for(var i=0;i<m.length;i++){var l=document.createElement('link');` +
+                `l.rel='modulepreload';l.crossOrigin='';l.href='/'+m[i];document.head.appendChild(l)}})()`,
+            },
+          ],
+        }
+      },
+    },
+  }
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), preloadDaRota()],
   build: {
     rollupOptions: {
       output: {

@@ -89,7 +89,7 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
               forma) e o nome aparecendo também no celular · uma palavra
               legível identifica melhor que um selo borrado. */}
           <Link to="/picks" className="flex items-center gap-2.5 shrink-0">
-            <img src="/logo.png" alt="" width={32} height={32} className="w-8 h-8 rounded-full object-cover" />
+            <img src="/logo-64.webp" alt="" width={32} height={32} className="w-8 h-8 rounded-full object-cover" />
             <span className="font-display font-semibold text-lg tracking-tight leading-none">
               <span className="text-ink-1">Pick</span>
               <span className="text-accent-ink">IA</span>
