@@ -2937,10 +2937,29 @@ STATS_DA_PARTIDA = [
 #
 # Zero nao e' NULL, entao a contagem de "quantas vieram preenchidas" passa
 # batido nessas linhas. So' olhando o valor da' pra ver.
+#
+# CORRIGIDO EM 2026-09-02: o `COALESCE(x, 0) = 0` fazia AUSENCIA contar como
+# zero, e o filtro virou o oposto do que promete. Medido em PROD no dia: das 32
+# partidas listadas como "coletada zerada", 30 tinham escanteio/chute/falta em
+# NULL -- folha que nunca chegou, que e' o outro filtro (`folha_incompleta`) e
+# tem outra saida (Rodar, nao digitar). Zero de verdade eram 2.
+#
+# E' o mesmo erro que o motor levou o dia inteiro pra fechar nos contadores de
+# jogador: NULL nao e' zero. Aqui a distincao e' o proprio criterio -- "gravado
+# como zero" so' existe se o numero ESTA la'.
+#
+# `manual_stats` sai da lista porque quem digitou ja' respondeu a pergunta: a
+# tela existe pra achar o que ninguem olhou, e insistir num jogo ja' conferido e'
+# ruido que empurra o resto pra baixo. A marca "tem numero a mao" continua
+# aparecendo na linha.
 _SQL_SUSPEITA = """
-    COALESCE(home_corners, 0) + COALESCE(away_corners, 0) = 0
-AND COALESCE(home_total_shots, 0) + COALESCE(away_total_shots, 0) = 0
-AND COALESCE(home_fouls, 0) + COALESCE(away_fouls, 0) = 0
+    home_corners IS NOT NULL AND away_corners IS NOT NULL
+AND home_total_shots IS NOT NULL AND away_total_shots IS NOT NULL
+AND home_fouls IS NOT NULL AND away_fouls IS NOT NULL
+AND home_corners + away_corners = 0
+AND home_total_shots + away_total_shots = 0
+AND home_fouls + away_fouls = 0
+AND manual_stats IS NULL
 """
 
 
