@@ -9,6 +9,7 @@ export default function Privacidade() {
       revelacao={false}
       title="Política de Privacidade | Pick IA"
       description="Política de Privacidade do Pick IA: quais dados coletamos, como usamos e seus direitos."
+      canonical="https://pickia.com.br/privacidade"
       width="prose"
       nav={false}
       bar={{ back: '/', title: 'Política de Privacidade', sub: 'Última atualização: junho de 2026' }}

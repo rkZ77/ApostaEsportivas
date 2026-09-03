@@ -170,8 +170,9 @@ export default function ComoFunciona() {
 
   return (
     <PageShell
-      title="Como funciona"
-      description="Entenda como a IA do Pick IA analisa cada jogo, gera os picks e como usar cada parte da plataforma."
+      title="Como funciona o Pick IA | Picks de futebol com inteligência artificial"
+      description="Entenda como a IA do Pick IA analisa cada jogo, gera os picks de futebol e como usar cada parte da plataforma."
+      canonical="https://pickia.com.br/como-funciona"
       width="full"
       bar={{
         title: 'Como funciona',

@@ -9,6 +9,7 @@ export default function Termos() {
       revelacao={false}
       title="Termos de Uso | Pick IA"
       description="Termos de Uso do Pick IA: regras de uso da plataforma, assinaturas e responsabilidades."
+      canonical="https://pickia.com.br/termos"
       width="prose"
       nav={false}
       bar={{ back: '/', title: 'Termos de Uso', sub: 'Última atualização: junho de 2026' }}

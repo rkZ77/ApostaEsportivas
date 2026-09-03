@@ -1,5 +1,6 @@
 import asyncio
 import io
+import json
 import logging
 import mimetypes
 import os
@@ -536,59 +537,10 @@ def get_version():
     return {"v": _SERVER_VERSION}
 
 
-_SITEMAP_BASE = "https://pickia.com.br"
-_SITEMAP_PICK_TABLES = [
-    ("vip",         "picks_vip"),
-    ("free",        "picks_free"),
-    ("multipla",    "picks_multiplas"),
-    ("alavancagem", "picks_alavancagem"),
-]
-
-
-@app.get("/sitemap.xml", include_in_schema=False)
-def dynamic_sitemap():
-    """Sitemap gerado a partir do banco -- inclui as paginas publicas de
-    resultado/pick individual (/resultados, /p/:tipo/:id), que ja existem e
-    sao publicas mas antes ficavam de fora do sitemap estatico."""
-    from database import get_connection
-
-    static_urls = [
-        (f"{_SITEMAP_BASE}/", "weekly", "1.0"),
-        (f"{_SITEMAP_BASE}/planos", "weekly", "0.9"),
-        (f"{_SITEMAP_BASE}/como-funciona", "monthly", "0.7"),
-        (f"{_SITEMAP_BASE}/resultados", "daily", "0.8"),
-        (f"{_SITEMAP_BASE}/login", "monthly", "0.6"),
-        (f"{_SITEMAP_BASE}/termos", "yearly", "0.3"),
-        (f"{_SITEMAP_BASE}/privacidade", "yearly", "0.3"),
-    ]
-
-    pick_urls: list[tuple[str, str]] = []
-    conn = get_connection()
-    cur = conn.cursor()
-    for pick_type, table in _SITEMAP_PICK_TABLES:
-        try:
-            cur.execute(
-                f"SELECT id, match_date FROM {table} WHERE result IS NOT NULL ORDER BY match_date DESC LIMIT 200"
-            )
-            pick_urls += [
-                (f"{_SITEMAP_BASE}/p/{pick_type}/{row[0]}", str(row[1]))
-                for row in cur.fetchall()
-            ]
-        except Exception:
-            logger.warning("[SITEMAP] falha ao ler %s", table, exc_info=True)
-            conn.rollback()
-    cur.close()
-    conn.close()
-
-    parts = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
-    for loc, changefreq, priority in static_urls:
-        parts.append(f"  <url><loc>{loc}</loc><changefreq>{changefreq}</changefreq><priority>{priority}</priority></url>")
-    for loc, lastmod in pick_urls:
-        parts.append(f"  <url><loc>{loc}</loc><lastmod>{lastmod}</lastmod><changefreq>monthly</changefreq><priority>0.5</priority></url>")
-    parts.append("</urlset>")
-
-    return Response(content="\n".join(parts), media_type="application/xml")
-
+# O /sitemap.xml e servido por agent_web.router, incluido antes deste ponto.
+# Havia aqui um segundo gerador (com as paginas /p/<tipo>/<id>) que nunca
+# chegava a responder, porque o FastAPI casa a primeira rota registrada.
+# Se as paginas de pick voltarem ao sitemap, o lugar e agent_web.sitemap_xml.
 
 _dist = _base_dir / "dist"
 
