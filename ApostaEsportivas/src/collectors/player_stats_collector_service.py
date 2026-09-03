@@ -105,6 +105,58 @@ MAPA_DE_CAMPOS: tuple = (
 )
 
 
+#: Contadores em que `null` na folha de um jogador que ENTROU EM CAMPO quer
+#: dizer ZERO, e nao "a fonte nao publicou".
+#:
+#: MEDIDO EM PROD (2026-09-02), sobre atuacoes de 60+ minutos cuja folha existe
+#: (`passes_total` preenchido -- 100% delas):
+#:
+#:     coluna            0 explicito     null
+#:     shots_on                  169     8115
+#:     shots_total                88     5561
+#:     tackles_total              55     3465
+#:     fouls_committed            73     4219
+#:     saves (goleiro)             0       98
+#:
+#: A API praticamente nao escreve zero: ela OMITE. Com 169 zeros contra 8.115
+#: nulls no mesmo campo, tratar null como ausencia significa jogar fora todas
+#: as atuacoes em que o jogador nao chutou -- e ficar so' com as que ele
+#: chutou. O efeito medido no motor: a media de chutes no alvo sai 1.443 quando
+#: deveria ser 0.969, ou seja **inflada em 1,49x**, e a amostra cai de 7.9 pra
+#: 4.8 atuacoes por jogador. `shots_on` e' justamente o metodo que gera pick.
+#:
+#: POR QUE ISTO NAO CONTRARIA A REGRA DA CASA ("null nunca vira zero"). Aquela
+#: regra existe pro caso de FOLHA AUSENTE -- jogo que a API nao cobriu, onde
+#: zero seria invencao. Aqui a folha existe e esta' completa no resto (minutos,
+#: passes, cartoes); o que falta e' um contador que a fonte so' escreve quando
+#: e' diferente de zero. E' a mesma distincao que `stats_model.
+#: _tem_folha_da_familia` faz do outro lado: folha parcial e' erro, folha
+#: inteira sem o campo e' zero.
+#:
+#: A GUARDA E' `minutes`: sem minuto registrado, nao ha' folha nenhuma e nada
+#: vira zero -- jogador que nao entrou continua com null em tudo.
+_ZERO_QUANDO_HA_FOLHA = frozenset({
+    "shots_total", "shots_on", "goals_conceded", "assists", "saves",
+    "passes_key", "tackles_total", "blocks", "interceptions",
+    "duels_total", "duels_won", "dribbles_attempts", "dribbles_success",
+    "fouls_drawn", "fouls_committed", "cards_yellow", "cards_red",
+})
+
+
+def _valor_do_campo(stats: dict, coluna: str, caminho: tuple, tem_folha: bool):
+    """O numero do contador, com o zero implicito resolvido.
+
+    `goals_total` fica de fora de `_ZERO_QUANDO_HA_FOLHA` de proposito: la' o
+    null tambem quer dizer "nao marcou", mas gol e' o unico contador que o
+    projeto le' de `match_statistics` (placar oficial, 100% de cobertura), e
+    reescrever aqui so' criaria uma segunda fonte pro mesmo numero.
+    """
+    valor = _num(stats, *caminho)
+    if valor is None and tem_folha and coluna in _ZERO_QUANDO_HA_FOLHA:
+        return 0
+    return valor
+
+
 def conferir_mapeamento(stats: dict) -> dict:
     """O mapeamento bate com ESTA resposta da API? Uma fixture responde.
 
@@ -238,7 +290,12 @@ class PlayerStatsCollectorService:
                     # uma lista de 19 chamadas escritas na mao, paralela a lista
                     # de colunas do INSERT. Duas listas posicionais que
                     # precisavam concordar e nada garantia que concordassem.
-                    *[_num(stats, *caminho) for _coluna, caminho in MAPA_DE_CAMPOS],
+                    # Zero implicito resolvido aqui, e nao no INSERT: a folha
+                    # e' desta atuacao, e so' quem esta lendo o bloco sabe se
+                    # ela existe. Ver `_ZERO_QUANDO_HA_FOLHA`.
+                    *[_valor_do_campo(stats, coluna, caminho,
+                                      _num(stats, "games", "minutes") is not None)
+                      for coluna, caminho in MAPA_DE_CAMPOS],
                     json.dumps(stats, ensure_ascii=False),
                 ))
         return linhas
