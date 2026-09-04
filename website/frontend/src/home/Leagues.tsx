@@ -1,5 +1,6 @@
 import { SectionHead } from '../components/ui'
 import LeagueMarquee from '../components/LeagueMarquee'
+import { usePertoDaTela } from '../hooks/usePertoDaTela'
 
 /*
  * Ligas cobertas, como seção da Home.
@@ -19,8 +20,12 @@ import LeagueMarquee from '../components/LeagueMarquee'
  * tem mais chance de acontecer de verdade, em vez de ser preenchimento.
  */
 export default function Leagues() {
+  // A lista de ligas só é buscada quando a seção se aproxima da tela · ela
+  // fica abaixo da dobra e a chamada dela competia com as do topo.
+  const [secao, perto] = usePertoDaTela<HTMLElement>()
+
   return (
-    <section className="section-tight overflow-hidden">
+    <section ref={secao} className="section-tight overflow-hidden">
       <div className="shell">
         <SectionHead
           title="As ligas que a IA analisa"
@@ -28,7 +33,7 @@ export default function Leagues() {
         />
       </div>
 
-      <LeagueMarquee />
+      <LeagueMarquee carregar={perto} />
     </section>
   )
 }

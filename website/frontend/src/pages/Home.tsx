@@ -19,6 +19,7 @@ import { MODULOS_FREE, MODULOS_VIP } from '../lib/oferta'
 import { fmtUnits } from '../utils/format'
 import { PICK_TYPE_LABEL } from '../utils/resultStyle'
 import { useAuth } from '../context/AuthContext'
+import { usePertoDaTela } from '../hooks/usePertoDaTela'
 import { encerrarBarraInicial } from '../lib/barraInicial'
 
 import FreePickHero from '../home/FreePickHero'
@@ -72,6 +73,16 @@ interface PublicData {
 const PAGE_SIZE = 10
 
 function RecentResults({ summary }: { summary: PublicSummary | null }) {
+  /*
+   * As duas chamadas desta seção só saem quando ela chega perto da tela.
+   *
+   * Ela vive lá embaixo, depois do hero, da dica do dia, da fila de jogos e
+   * dos indicadores · ninguém a está lendo no primeiro segundo. Enquanto elas
+   * saíam no `mount`, disputavam o mesmo worker com as três chamadas do topo,
+   * e o PageSpeed de 04/09 mediu o resultado disso: seis requisições públicas
+   * simultâneas, todas entre 4,6s e 6,3s, que sozinhas custam menos de 2s.
+   */
+  const [secao, perto] = usePertoDaTela<HTMLElement>()
   const [page, setPage]       = useState(0)
   const [produto, setProduto] = useState<string | null>(null)
   const [recent, setRecent]   = useState<RecentTip[]>([])
@@ -87,6 +98,7 @@ function RecentResults({ summary }: { summary: PublicSummary | null }) {
 
   /* Toda vez que página ou filtro de produto mudam, busca no backend. */
   useEffect(() => {
+    if (!perto) return
     setPageLoading(true)
     const params: Record<string, unknown> = {
       recent_limit:  PAGE_SIZE,
@@ -101,7 +113,7 @@ function RecentResults({ summary }: { summary: PublicSummary | null }) {
       })
       .catch(() => { setRecent([]); setTotal(0) })
       .finally(() => setPageLoading(false))
-  }, [page, produto])
+  }, [page, produto, perto])
 
   /* Ao trocar filtro de produto, volta pra página 0. */
   const handleProduto = (p: string | null) => {
@@ -118,13 +130,14 @@ function RecentResults({ summary }: { summary: PublicSummary | null }) {
    */
   const [curva, setCurva] = useState<Array<{ match_date: string; source: string; profit: number }>>([])
   useEffect(() => {
+    if (!perto) return
     api.get('/public/profit-curve', { params: { days: 180 } })
       .then(r => setCurva(r.data ?? []))
       .catch(() => setCurva([]))
-  }, [])
+  }, [perto])
 
   return (
-    <section id="resultados" className="section section-alt">
+    <section id="resultados" ref={secao} className="section section-alt">
       <div className="shell">
         <SectionHead
           title="Resultados reais, verificáveis"
@@ -563,49 +576,46 @@ export default function Home() {
           <div className="grid lg:grid-cols-2 gap-12 lg:gap-10 items-center">
 
             <div>
-              <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4 }}
-                className="inline-flex items-center gap-2 border border-line rounded-full pl-2 pr-3 py-1 mb-6"
-              >
+              {/*
+                  ESTE BLOCO NAO USA FRAMER-MOTION, E E' DE PROPOSITO.
+
+                  O paragrafo abaixo e' o elemento de LCP da Home (medido no
+                  PageSpeed de 04/09). Com `initial={{ opacity: 0 }}` do framer
+                  ele so' comecava a aparecer depois da biblioteca montar MAIS
+                  os 300 ms de `delay` · e elemento invisivel nao conta como
+                  pintado, entao essa espera era o LCP inteiro.
+
+                  As classes `entra`/`entra-N` (index.css) fazem o mesmo fade-up
+                  em CSS: ja' correndo no primeiro quadro, sem esperar JS. O
+                  resto da Home continua no framer, que e' onde ele paga o
+                  proprio peso (gesto, presenca, saida).
+              */}
+              <div className="entra entra-1 inline-flex items-center gap-2 border border-line rounded-full pl-2 pr-3 py-1 mb-6">
                 <LiveDot />
                 <span className="text-[11px] font-medium text-ink-2">
                   Análise rodando nas ligas em temporada
                 </span>
-              </motion.div>
+              </div>
 
               <h1 className="font-display text-4xl md:text-5xl font-bold leading-[1.08] tracking-tight mb-5">
                 {HEADLINE.map((line, i) => (
-                  <motion.span
+                  <span
                     key={line}
-                    className={`block ${i === 1 ? 'text-accent-ink' : ''}`}
-                    initial={{ opacity: 0, y: 14 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: i * 0.08, ease: 'easeOut' }}
+                    className={`entra block ${i === 1 ? 'text-accent-ink' : ''}`}
+                    style={{ animationDelay: `${i * 40}ms` }}
                   >
                     {line}
-                  </motion.span>
+                  </span>
                 ))}
               </h1>
 
-              <motion.p
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.5, delay: 0.3 }}
-                className="text-ink-2 text-base leading-relaxed mb-7 max-w-lg"
-              >
+              <p className="entra entra-2 text-ink-2 text-base leading-relaxed mb-7 max-w-lg">
                 A Pick IA lê estatística real de cada jogo, calcula a probabilidade de cada
                 mercado e compara com a odd que a casa está pagando. Só vira palpite o que
                 tem valor esperado positivo.
-              </motion.p>
+              </p>
 
-              <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.38 }}
-                className="flex flex-col sm:flex-row gap-3 mb-4"
-              >
+              <div className="entra entra-3 flex flex-col sm:flex-row gap-3 mb-4">
                 {/* O rótulo lidera pelo que a pessoa GANHA, não pelo trabalho
                     que ela tem. "Criar conta · 2 dias VIP grátis" abria com a
                     tarefa (criar conta) e empurrava a recompensa pro fim, atrás
@@ -618,7 +628,7 @@ export default function Home() {
                 <Button to="/resultados" variant="ghost" size="lg">
                   Ver resultados reais
                 </Button>
-              </motion.div>
+              </div>
 
             </div>
 

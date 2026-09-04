@@ -33,7 +33,9 @@ def test_resumo_publico_quebra_vip_e_free_na_mesma_varredura():
     banco (154ms) pra ela -- entao a quebra entra como coluna condicional no
     proprio resumo, mesmo padrao do `leagues_count`.
     """
-    corpo = _codigo("routers/public.py", "public_results")
+    # O SQL saiu de public_results e foi pra _resultados_publicos em 04/09: o
+    # endpoint agora so agenda as varreduras e delega a parte cacheada.
+    corpo = _codigo("routers/public.py", "_resultados_publicos")
     for coluna in ("AS vip_profit", "AS vip_total", "AS free_profit", "AS free_total"):
         assert coluna in corpo, f"{coluna} sumiu do resumo"
 
@@ -183,7 +185,7 @@ def test_premissa_de_stake_aparece_junto_do_numero():
     from stake_plan import rotulo_curto
 
     assert "4u" in rotulo_curto() and "1u" in rotulo_curto()
-    assert '"stake_label": rotulo_curto()' in _codigo("routers/public.py", "public_results")
+    assert '"stake_label": rotulo_curto()' in _codigo("routers/public.py", "_resultados_publicos")
     for tela in ("home/StatsBand.tsx", "pages/ResultadosPublicos.tsx", "pages/PerformanceIA.tsx"):
         assert "stake_label" in _front(tela) or "STAKE_LABEL_PADRAO" in _front(tela),             f"{tela} mostra unidade sem dizer a stake"
 
@@ -506,7 +508,7 @@ def test_quebra_por_produto_sai_de_uma_consulta_so():
 
     E fica fora do caminho slim -- a Home nao usa nada disto.
     """
-    corpo = _codigo("routers/public.py", "public_results")
+    corpo = _codigo("routers/public.py", "_resultados_publicos")
     assert "by_source_day = [] if slim else" in corpo
     assert "GROUP BY match_date, source" in corpo
     # O agregado nao pode ser uma segunda consulta.

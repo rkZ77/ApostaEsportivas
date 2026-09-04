@@ -253,6 +253,35 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /*
+   * ENTRADA DO HERO, EM CSS E NAO EM FRAMER-MOTION.
+   *
+   * O PageSpeed de 04/09 apontou o paragrafo do hero como elemento de LCP, com
+   * 2,34 s de "atraso de renderizacao". Ele comecava em `opacity: 0` esperando
+   * o framer-motion montar, e so' entao esperava mais 300 ms de `delay` antes
+   * de comecar a aparecer · o Chrome nao conta um elemento invisivel como
+   * pintado, entao o LCP era literalmente o fim dessa espera.
+   *
+   * Em CSS a animacao ja esta correndo no primeiro quadro em que o elemento
+   * existe: nao depende de biblioteca montada, de estado do React nem de
+   * relogio de JS. O efeito visto e' o mesmo fade-up de antes, com a escada de
+   * atrasos encurtada (0 / 60 / 120 / 180 ms no lugar de 0 / 80 / 300 / 380).
+   *
+   * Fica em `utilities` pra poder ser sobreposto por classe de posicao, e o
+   * bloco global de prefers-reduced-motion la de cima ja' a desliga.
+   */
+  .entra {
+    animation: entra-suave 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .entra-1 { animation-delay: 60ms; }
+  .entra-2 { animation-delay: 120ms; }
+  .entra-3 { animation-delay: 180ms; }
+
+  @keyframes entra-suave {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: none; }
+  }
+
   .scrollbar-none {
     scrollbar-width: none;
     -ms-overflow-style: none;
@@ -458,6 +487,40 @@
     @apply relative overflow-hidden bg-surface-0 border rounded-lg
            flex flex-col h-full
            transition-colors duration-1 ease-smooth;
+  }
+
+  /*
+   * O RESULTADO PINTA O CARD INTEIRO (04/09, pedido do usuario).
+   *
+   * Antes so' o selo no canto superior direito dizia GREEN ou RED: um retangulo
+   * de 60px numa tela de lista, e no celular ele sai do campo de visao assim que
+   * a pessoa rola meio card. O degrade de cima pra baixo faz o card se anunciar
+   * inteiro, sem trocar nenhum texto de lugar.
+   *
+   * `background-image` e nao `background-color`: a cor de fundo continua sendo
+   * o token `--surface-0`, entao a mesma regra serve no tema claro e no escuro
+   * sem redefinir nada.
+   *
+   * O vermelho e' MAIS FRACO que o verde de proposito. Verde e' comemoracao e
+   * pode ocupar espaco; vermelho no mesmo peso transforma o historico numa
+   * parede de derrota, e o historico e' justamente onde os RED se acumulam.
+   * A escala e a mesma dos selos (RESULT_STYLE), so' que diluida.
+   */
+  .pick-card--green {
+    background-image: linear-gradient(to bottom,
+      rgb(74 222 128 / 0.14) 0%, rgb(74 222 128 / 0.05) 38%, transparent 72%);
+  }
+  .pick-card--red {
+    background-image: linear-gradient(to bottom,
+      rgb(248 113 113 / 0.08) 0%, rgb(248 113 113 / 0.03) 38%, transparent 72%);
+  }
+  .pick-card--half-win {
+    background-image: linear-gradient(to bottom,
+      rgb(45 212 191 / 0.12) 0%, rgb(45 212 191 / 0.04) 38%, transparent 72%);
+  }
+  .pick-card--half-loss {
+    background-image: linear-gradient(to bottom,
+      rgb(251 146 60 / 0.08) 0%, rgb(251 146 60 / 0.03) 38%, transparent 72%);
   }
 
   /*

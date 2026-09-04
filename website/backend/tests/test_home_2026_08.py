@@ -129,7 +129,9 @@ def test_fila_tem_indice_pra_nao_varrer_a_tabela():
 def test_dica_do_dia_usa_data_brasileira():
     """CURRENT_DATE e' a data UTC: entre 21h e meia-noite de Brasilia o banco
     ja virou o dia e o Brasil nao, e a dica sumia da Home no horario de pico."""
-    corpo = _codigo("routers/public.py", "public_free_pick_today")
+    # A consulta saiu de public_free_pick_today e foi pra _free_pick_do_dia em
+    # 04/09 (cache); o endpoint ficou com o recorte por usuario.
+    corpo = _codigo("routers/public.py", "_free_pick_do_dia")
     assert "HOJE_BR" in corpo
     assert "CURRENT_DATE" not in corpo
 
@@ -140,7 +142,7 @@ def test_dica_cai_na_anterior_quando_o_dia_ainda_nao_tem_pick():
     Nao existe horario fixo de publicacao desde 01/08, entao esse buraco podia
     durar o dia inteiro.
     """
-    corpo = _codigo("routers/public.py", "public_free_pick_today")
+    corpo = _codigo("routers/public.py", "_free_pick_do_dia")
     assert "match_date <" in corpo, "falta a consulta de reserva"
     assert 'd["is_previous"] = is_previous' in corpo
     # a reserva tem que ser a MAIS RECENTE das antigas
@@ -154,6 +156,8 @@ def test_reserva_nao_derruba_o_bloqueio_de_mercado():
     consulta de reserva entrou logo acima dele e um `else` novo no caminho
     quebraria o corte sem quebrar nenhum teste de la.
     """
+    # Este mora no ENDPOINT, e nao na funcao cacheada: o recorte por usuario
+    # ficou de fora do cache de proposito (ver cache_publico.py).
     corpo = _codigo("routers/public.py", "public_free_pick_today")
     ramo_anon = corpo[corpo.index("else:"):]
     assert 'd.pop("market", None)' in ramo_anon

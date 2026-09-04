@@ -28,6 +28,7 @@ load_dotenv(os.path.join(_env_dir, ".env.dev"), override=False)
 load_dotenv(os.path.join(_env_dir, ".env.prod"), override=False)
 
 import agent_web
+import cache_publico
 from migrations import run_startup_migrations
 from routers import admin, auth, banca, chat, explorer, fixtures, leaderboard, live, live_picks, notifications, palpites, payments, personal, public, social, suggestions
 from runtime_env import side_effects_note
@@ -189,6 +190,29 @@ _CSP_SCRIPT_INLINE = " ".join(_hashes_de_scripts_inline())
 
 
 @app.middleware("http")
+async def invalidar_cache_publico(request: Request, call_next):
+    """Escrita no /admin derruba o cache das rotas publicas.
+
+    As rotas publicas da Home guardam a resposta por 1 a 10 minutos (ver
+    cache_publico.py). Esperar esse tempo e' aceitavel pro relogio, mas nao pra
+    uma acao humana: publicar a dica do dia, corrigir um resultado ou anular um
+    pick pelo /admin e a Home continuar mostrando o estado anterior parece
+    site quebrado, e o proximo passo de quem esta no /admin e' clicar de novo.
+
+    So' metodo de escrita, so' no /admin, e so' quando deu certo: um GET nao
+    muda nada e um 4xx tambem nao. Limpar tudo em vez de escolher a chave e'
+    de proposito -- a alternativa e' uma lista de chaves por rota do admin, que
+    envelhece errado e falha calada quando alguem esquece de atualizar.
+    """
+    resposta = await call_next(request)
+    if (request.method != "GET"
+            and request.url.path.startswith("/api/admin")
+            and resposta.status_code < 400):
+        cache_publico.invalidar()
+    return resposta
+
+
+@app.middleware("http")
 async def security_headers(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
@@ -333,7 +357,11 @@ _avatars_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
 
 _LOGO_BASE = "https://media.api-sports.io/football"
-_LOGO_CACHE_HEADERS = {"Cache-Control": "public, max-age=604800, stale-while-revalidate=86400"}
+# Trinta dias, e nao sete: escudo de time e de liga praticamente nao muda, e
+# o PageSpeed conta cada revalidacao como "ciclo de vida de cache
+# ineficiente" -- sao ate 24 escudos numa visita da Home. A versao no nome do
+# arquivo em disco (_LOGO_CACHE_V) continua sendo o jeito de forcar troca.
+_LOGO_CACHE_HEADERS = {"Cache-Control": "public, max-age=2592000, stale-while-revalidate=2592000"}
 
 # LADO MAXIMO DO ESCUDO SERVIDO.
 #
@@ -662,10 +690,10 @@ _HTML_CACHE  = {"Cache-Control": "no-cache"}
 #: Estatico de nome FIXO: fonte, icone, manifesto. Nome fixo nao pode ser
 #: immutable (trocar a logo nunca chegaria em quem ja' visitou), mas tambem nao
 #: merece uma revalidacao por visita -- era isso que o PageSpeed cobrava em
-#: "ciclos de vida eficientes de cache". Uma semana de cache com trinta dias de
-#: stale-while-revalidate: a troca chega no dia seguinte pra quem volta, e
-#: ninguem paga ida e volta pelo favicon.
-_ESTATICO_CACHE = {"Cache-Control": "public, max-age=604800, stale-while-revalidate=2592000"}
+#: "ciclos de vida eficientes de cache". Trinta dias de cache com mais trinta
+#: de stale-while-revalidate: a troca chega na visita seguinte a' primeira que
+#: passar do prazo, e ninguem paga ida e volta pelo favicon.
+_ESTATICO_CACHE = {"Cache-Control": "public, max-age=2592000, stale-while-revalidate=2592000"}
 
 #: O sw.js e o index.html sao os dois arquivos que APONTAM pros outros: se
 #: ficarem em cache, o navegador continua obedecendo o deploy antigo.

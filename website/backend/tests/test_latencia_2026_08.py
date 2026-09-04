@@ -191,7 +191,9 @@ def test_home_pede_a_versao_enxuta():
 
 
 def test_slim_pula_os_blocos_que_a_home_nao_usa():
-    corpo = _codigo("routers/public.py", "public_results")
+    # O SQL saiu de public_results e foi pra _resultados_publicos em 04/09: o
+    # endpoint agora so agenda as varreduras e delega a parte cacheada.
+    corpo = _codigo("routers/public.py", "_resultados_publicos")
     for bloco in ("months_rows", "by_day", "by_league", "counts_row"):
         assert f"{bloco} = [] if slim" in corpo or f"{bloco} = None if slim" in corpo \
             or f"{bloco} = [] if slim else" in corpo, bloco
@@ -201,13 +203,13 @@ def test_contagem_de_ligas_sai_do_proprio_resumo():
     """A Home lia `by_league.length`, e so' por esse numero a rota tinha que
     montar a quebra por liga inteira: mais uma varredura do historico e mais uma
     consulta pros nomes das ligas."""
-    corpo = _codigo("routers/public.py", "public_results")
+    corpo = _codigo("routers/public.py", "_resultados_publicos")
     assert "AS leagues_count" in corpo
     assert "summary?.leagues_count" in _front("pages/Home.tsx")
 
 
 def test_nome_da_liga_vem_por_join_e_nao_por_segunda_consulta():
-    corpo = _codigo("routers/public.py", "public_results")
+    corpo = _codigo("routers/public.py", "_resultados_publicos")
     assert "LEFT JOIN leagues l ON l.league_id = t.league_id" in corpo
     assert "SELECT league_id, name FROM leagues" not in corpo
 

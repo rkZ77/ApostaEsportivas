@@ -51,7 +51,8 @@ def test_pagina_e_total_saem_da_mesma_consulta(fonte):
 
 def test_endpoint_nao_chama_mais_o_caminho_de_12_consultas(fonte):
     """A regressao a evitar: alguem reintroduzir a dupla antiga no endpoint."""
-    corpo = ast.unparse(_funcao(fonte, "public_results"))
+    # Ver nota em test_latencia: o corpo mudou de funcao em 04/09.
+    corpo = ast.unparse(_funcao(fonte, "_resultados_publicos"))
     assert "_pagina_de_resultados" in corpo
     assert "_count_recent" not in corpo
     assert "_collect_results" not in corpo

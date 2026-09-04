@@ -74,6 +74,20 @@ export default function Marquee({
   const [vezes, setVezes] = useState(1)
   const [semMovimento, setSemMovimento] = useState(false)
   const [arrastando, setArrastando] = useState(false)
+  /*
+   * A fita só liga quando chega perto da tela.
+   *
+   * Medir custa layout: `scrollWidth` da cópia e `clientWidth` da caixa, com
+   * o ResizeObserver refazendo a conta a cada mudança. No PageSpeed de 04/09
+   * esse trabalho apareceu como 56ms de reflow forçado DURANTE o
+   * carregamento · pago por uma fita que, no celular, ainda estava abaixo da
+   * dobra. O laço de rAF tinha o mesmo problema do outro lado: continuava
+   * empurrando a rolagem de uma fita fora da tela, quadro após quadro.
+   *
+   * Os 200px de folga fazem a medida acontecer antes de a fita aparecer, então
+   * ela nunca é vista parada esperando a própria conta.
+   */
+  const [perto, setPerto] = useState(false)
 
   /* Largura de UMA cópia do trilho · o ponto onde a rolagem volta pro começo.
      Fica em ref, e não em estado, porque quem lê é o laço de animação: passar
@@ -102,8 +116,27 @@ export default function Marquee({
 
   useEffect(() => {
     const c = caixa.current
+    if (!c) return
+    // Sem IntersectionObserver (jsdom, navegador antigo) a fita liga na hora ·
+    // o comportamento de antes, que é o seguro.
+    if (typeof IntersectionObserver === 'undefined') { setPerto(true); return }
+
+    const io = new IntersectionObserver(
+      ([entrada]) => {
+        if (!entrada.isIntersecting) return
+        setPerto(true)
+        io.disconnect()          // uma vez ligada, fica ligada
+      },
+      { rootMargin: '200px' },
+    )
+    io.observe(c)
+    return () => io.disconnect()
+  }, [])
+
+  useEffect(() => {
+    const c = caixa.current
     const um = copia.current
-    if (!c || !um) return
+    if (!c || !um || !perto) return
 
     /*
      * Mede a primeira cópia e divide por `vezes` para chegar na largura de uma
@@ -124,9 +157,9 @@ export default function Marquee({
     ro.observe(c)
     ro.observe(um)
     return () => ro.disconnect()
-  }, [items.length, vezes])
+  }, [items.length, vezes, perto])
 
-  const andando = !semMovimento && items.length > 0
+  const andando = !semMovimento && items.length > 0 && perto
 
   /* Devolve a rolagem pra dentro da primeira cópia. Vale pro laço e pro dedo:
      quem arrasta até o fim do trilho reencontra o começo sem esbarrar numa

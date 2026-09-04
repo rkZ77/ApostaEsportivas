@@ -51,19 +51,28 @@ export default function LeagueMarquee({
   className,
   /** Roda no sentido contrário. Usado pra cruzar duas fitas. */
   reverse,
+  /*
+   * Quem manda buscar. Existe porque esta fita fica lá embaixo na Home e a
+   * chamada dela saía junto com as três do topo, disputando o único worker do
+   * servidor (ver hooks/usePertoDaTela.ts). O padrão é `true` para que qualquer
+   * outro lugar que monte a fita continue funcionando como antes.
+   */
+  carregar = true,
 }: {
   className?: string
   reverse?: boolean
+  carregar?: boolean
 }) {
   const [leagues, setLeagues] = useState<LeagueTeaser[]>([])
 
   useEffect(() => {
+    if (!carregar) return
     let vivo = true
     fetchLeagues()
       .then(l => { if (vivo) setLeagues(Array.isArray(l) ? l : []) })
       .catch(() => {})
     return () => { vivo = false }
-  }, [])
+  }, [carregar])
 
   if (leagues.length === 0) return null
 

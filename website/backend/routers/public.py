@@ -3,6 +3,7 @@ import traceback
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
 from typing import Optional
 from auth_utils import get_current_user_optional
+import cache_publico
 from database import get_connection
 from data_br import HOJE_BR, TZ_BR, data_br
 from stake_plan import STAKE_PADRAO, stake_de, rotulo_curto
@@ -25,6 +26,9 @@ LOCAL_LOGOS: dict[int, str] = {
 
 
 @router.get("/leagues")
+# Liga entra ou sai por temporada, nao por minuto · 10 min de atraso aqui e'
+# invisivel, e sao 10 min em que nenhuma visita paga a consulta de novo.
+@cache_publico.rota(600)
 def public_leagues():
     """Ligas cadastradas no sistema · sem autenticação.
 
@@ -494,6 +498,20 @@ def public_results(
 
     background.add_task(_gatilhos_em_background)
 
+    return _resultados_publicos(month, source, recent_limit, recent_offset, slim)
+
+
+# O cache fica AQUI, e nao no endpoint, por causa dos gatilhos acima: eles
+# precisam ser agendados em toda visita (e' a visita que resolve resultado
+# pendente e expira plano), enquanto os NUMEROS que a tela mostra podem ser os
+# mesmos por um minuto. Um cache no endpoint inteiro pararia as varreduras no
+# primeiro acerto de cache.
+#
+# Um minuto e' o atraso maximo entre um pick ser liquidado e o placar publico
+# mostrar isso. O /admin invalida na hora quando publica ou corrige um pick
+# (ver cache_publico.invalidar).
+@cache_publico.rota(60)
+def _resultados_publicos(month, source, recent_limit, recent_offset, slim):
     conn = get_connection()
     cur  = conn.cursor()
     try:
@@ -921,6 +939,9 @@ def public_fixtures_today(days_ahead: int = Query(0, ge=0, le=7)):
 
 
 @router.get("/profit-curve")
+# A serie termina ONTEM (o dia corrente ainda esta liquidando), entao o unico
+# momento em que ela muda e' a virada do dia. Cinco minutos e' conservador.
+@cache_publico.rota(300)
 def public_profit_curve(days: int = Query(180, ge=7, le=1095)):
     """Lucro em unidades por dia e por produto · série crua, sem agregado.
 
@@ -1001,6 +1022,9 @@ def _partidas_por_time(cur, team_ids: list) -> dict:
 
 
 @router.get("/next-fixtures")
+# Jogo futuro so' muda quando a tabela muda de verdade (adiamento, novo
+# fixture importado). Dois minutos mantem a fila viva sem recalcular por visita.
+@cache_publico.rota(120)
 def public_next_fixtures(limit: int = Query(6, ge=1, le=30),
                          date: Optional[str] = Query(None, description="YYYY-MM-DD · dia inteiro em vez de 'daqui pra frente'")):
     """Proximos jogos que a IA ainda vai analisar · sem login.
@@ -1153,6 +1177,30 @@ def public_free_pick_today(request: Request):
       resultado dela, que e' prova, nao enfeite.
     """
     user = get_current_user_optional(request)
+    d = _free_pick_do_dia()
+    if d is None:
+        return None
+
+    # Copia porque o recorte abaixo MUTA o dicionario, e o original mora no
+    # cache: sem isto, a primeira visita anonima apagaria `market` e `line`
+    # para todo mundo que chegasse depois, logado inclusive.
+    d = dict(d)
+    if user:
+        d["locked"] = False
+    else:
+        # Anonimo: o mercado nem entra na resposta.
+        d.pop("market", None)
+        d.pop("line", None)
+        d["locked"] = True
+    return d
+
+
+# So' a CONSULTA e' cacheada · o recorte por usuario (`locked`) fica de fora,
+# senao a resposta de um visitante anonimo vazaria pro logado seguinte, ou o
+# contrario. Um minuto: publicar a dica do dia e' manual, e o /admin invalida.
+@cache_publico.rota(60)
+def _free_pick_do_dia():
+    """Linha crua da dica do dia (ou a ultima publicada), sem recorte."""
     conn = get_connection()
     cur  = conn.cursor()
     try:
@@ -1180,13 +1228,6 @@ def public_free_pick_today(request: Request):
         if d.get("match_datetime") and hasattr(d["match_datetime"], "isoformat"):
             d["match_datetime"] = d["match_datetime"].isoformat()
 
-        if user:
-            d["locked"] = False
-        else:
-            # Anonimo: o mercado nem entra na resposta.
-            d.pop("market", None)
-            d.pop("line", None)
-            d["locked"] = True
         return d
     finally:
         cur.close()
