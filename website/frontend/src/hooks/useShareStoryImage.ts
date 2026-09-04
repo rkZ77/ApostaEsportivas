@@ -209,12 +209,52 @@ export function useShareLeagueResultsImage() {
 }
 
 /**
+ * Compartilha um BILHETE (múltipla ou Pick Boost) com as pernas uma a uma.
+ *
+ * Existe pelo mesmo motivo da alavancagem: o card de pick comum desenha UM
+ * confronto, então uma múltipla de três saía por ali anunciando só a primeira
+ * perna com a odd das três ao lado dela. Quem via lia uma aposta simples
+ * pagando 3,20 e nem sabia dos outros dois jogos.
+ *
+ * O desenho é o mesmo dos três produtos combinados; o que muda é a cor, o selo
+ * e o bloco de baixo (ver `composto` em buildAlavancagemStoryImage).
+ */
+export function useShareBilheteImage() {
+  const [sharing, setSharing] = useState(false)
+  const [shared, setShared] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const share = async (
+    input: Omit<AlavancagemStoryInput, 'shareUrl'> & { pickId: number; pickTypeRoute: string },
+  ) => {
+    setSharing(true)
+    setError(null)
+    try {
+      const refCode = await getReferralCode()
+      const { pickId, pickTypeRoute, ...imgInput } = input
+      const shareUrl = `${window.location.origin}/p/${pickTypeRoute}/${pickId}${refCode ? `?ref=${refCode}` : ''}`
+      const blob = await buildAlavancagemStoryImage({ ...imgInput, shareUrl })
+      const quantas = imgInput.legs.length
+      const resultado = imgInput.result ? `, ${imgInput.result}` : ''
+      const texto = `Pick IA${resultado}: bilhete de ${quantas} ${quantas === 1 ? 'seleção' : 'seleções'} a ${imgInput.oddCombined.toFixed(2)}.`
+      await dispatchShare(blob, `pick-ia-${pickTypeRoute}.png`, 'Pick IA', texto, shareUrl)
+      setShared(true)
+      setTimeout(() => setShared(false), 2500)
+    } catch (err: any) {
+      if (err?.name !== 'AbortError') {
+        setError('Não foi possível gerar a imagem. Tente novamente.')
+      }
+    } finally {
+      setSharing(false)
+    }
+  }
+
+  return { share, sharing, shared, error }
+}
+
+/**
  * Compartilha um pick de alavancagem com as informações do produto: as pernas
  * uma a uma, o composto em unidades e o degrau do caminho.
- *
- * Existe separado de `useShareStoryImage` porque o card de pick comum desenha
- * UM confronto · uma tripla saía por ali mostrando só a primeira perna, com a
- * odd das três ao lado dela.
  */
 export function useShareAlavancagemImage() {
   const [sharing, setSharing] = useState(false)

@@ -46,7 +46,7 @@ import api from '../services/api'
 import ApostaModal from './ApostaModal'
 import { Badge, Button, ComoFunciona, EmptyState, ErrorState, LiveDot, Marquee, PickTypeBadge,
          ResultBadge, Skeleton, SkeletonPickGrid } from './ui'
-import { PickExplainButton, PickProbability } from './PickCardParts'
+import { CampoDoPick, PickExplainButton, PickProbability, SequenciaBadge } from './PickCardParts'
 import LiveAnalysisModal from './LiveAnalysisModal'
 import { translateLine, translateMarket } from '../utils/marketTranslate'
 import { LeagueLogo, TeamLogo } from './TeamLogo'
@@ -578,7 +578,7 @@ function unidadesSugeridas(
   // mesmo número que o pick carrega no /admin.
   return Math.min(pick.stake_units ?? 1, MAX_UNIDADES_LIVE)
 }
-import { PICK_TYPE_BORDER } from '../utils/resultStyle'
+import { PICK_TYPE_BORDER, pickCardResultBg } from '../utils/resultStyle'
 
 
 
@@ -852,7 +852,7 @@ const CardLive = forwardRef<HTMLDivElement, {
       layout
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`pick-card ${PICK_TYPE_BORDER.live} ${encerrado ? 'opacity-75' : ''}`}
+      className={`pick-card ${pickCardResultBg(pick.result)} ${PICK_TYPE_BORDER.live} ${encerrado ? 'opacity-75' : ''}`}
     >
       {/* Cabeçalho · tipo, liga e minuto à esquerda; estado à direita. Mesma
           divisão do card VIP, e o minuto ocupa ali o lugar do horário do jogo:
@@ -860,6 +860,7 @@ const CardLive = forwardRef<HTMLDivElement, {
       <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-3 border-b border-line/60">
         <div className="flex items-center gap-2 flex-wrap min-w-0">
           <PickTypeBadge type="live" />
+          <SequenciaBadge source="live" />
           {(pick.league_id || pick.league_name) && (
             <div className="flex items-center gap-1 min-w-0">
               <LeagueLogo id={pick.league_id} name={pick.league_name} />
@@ -904,11 +905,7 @@ const CardLive = forwardRef<HTMLDivElement, {
           {pick.is_followed && Math.abs(Number(oddEfetiva) - Number(pick.odd)) > 0.001 && (
             <div className="text-[9px] text-ink-4 mt-0.5">pick: {Number(pick.odd).toFixed(2)}</div>
           )}
-          {(pick.user_bet_house || pick.bet_house) && (
-            <div className="text-[10px] text-ink-4 mt-0.5 truncate">
-              {pick.user_bet_house || pick.bet_house}
-            </div>
-          )}
+
         </div>
 
         {encerrado ? (
@@ -976,10 +973,33 @@ const CardLive = forwardRef<HTMLDivElement, {
           <span className="text-sm font-bold text-ink-1 truncate">{pick.away_team_name}</span>
           <TeamLogo id={pick.away_team_id} name={pick.away_team_name} size={18} />
         </div>
-        <div className="flex items-center gap-2 text-xs text-ink-3">
-          <span className="font-semibold text-ink-2">{translateMarket(pick.market)}</span>
-          {pick.line && <span>{translateLine(pick.line)}</span>}
-        </div>
+        {/* CAMPOS ROTULADOS, COMO NO CARD DA ABA HOJE (04/09, pedido do
+            usuário) · aqui o mercado e a linha saíam soltos na mesma frase
+            ("Escanteios Mais/Menos Menos de 11.0"), e o card ao vivo era o
+            único produto do site que ainda escrevia a aposta assim. Com o
+            rótulo, cada pergunta tem um lugar: O QUÊ, QUANTO e ONDE PEGAR.
+
+            "Deu" não entra: o contador ainda está correndo, e a barra logo
+            abaixo já mostra onde o jogo está em relação à linha. */}
+        <dl className="space-y-0.5">
+          <CampoDoPick rotulo="Mercado">
+            <dd className="text-xs font-semibold text-ink-2 truncate">
+              {translateMarket(pick.market)}
+            </dd>
+          </CampoDoPick>
+          {pick.line && (
+            <CampoDoPick rotulo="Linha">
+              <dd className="text-xs text-ink-2 truncate">{translateLine(pick.line)}</dd>
+            </CampoDoPick>
+          )}
+          {(pick.user_bet_house || pick.bet_house) && (
+            <CampoDoPick rotulo="Casa">
+              <dd className="text-xs text-ink-3 truncate">
+                {pick.user_bet_house || pick.bet_house}
+              </dd>
+            </CampoDoPick>
+          )}
+        </dl>
       </div>
 
       <PickProbability confidence={pick.confidence} probability={pick.probability} />

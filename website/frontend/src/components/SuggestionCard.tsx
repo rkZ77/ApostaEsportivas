@@ -9,13 +9,13 @@ import { calcVipStake, calcFreeStake, calcMultiplaStake, calcProfitUnits } from 
 import { stakeDe, contaEmUnidades } from '../utils/stakePlan'
 import ApostaModal from './ApostaModal'
 import { translateMarket, translateLine, translateTeamName, linhaDoJogador, valorLiquidado } from '../utils/marketTranslate'
-import { PICK_TYPE_BORDER } from '../utils/resultStyle'
+import { PICK_TYPE_BORDER, pickCardResultBg } from '../utils/resultStyle'
 import AnalysisModal from './AnalysisModal'
 import { Badge, PickTypeBadge, ResultBadge } from './ui'
 import {
-  CampoDoPick, PickCardFooter, PickExplainButton, PickProbability,
+  CampoDoPick, PickCardFooter, PickExplainButton, PickProbability, SequenciaBadge,
 } from './PickCardParts'
-import { useShareStoryImage } from '../hooks/useShareStoryImage'
+import { useShareStoryImage, useShareBilheteImage } from '../hooks/useShareStoryImage'
 import { useOddAtualizada } from '../hooks/useOddAtualizada'
 import { TeamLogo, LeagueLogo, PlayerPhoto } from './TeamLogo'
 import { Ban, Clock } from 'lucide-react'
@@ -103,9 +103,18 @@ interface Suggestion {
      *  ("Mais de 1.5 gols"). Sem isto a perna sai como nome técnico de mercado
      *  + linha em duas colunas, e no celular as duas truncam. */
     label?: string
-    /** Quando vale: "Jogo inteiro", "1º tempo". É o que diferencia as duas
-     *  pernas do Boost -- as duas são de gols, o que muda é o período. */
+    /* O PERÍODO SAIU DO CARD (04/09, decisão do usuário).
+     *
+     * Ele continua chegando porque o "Entenda esta análise" o usa na frase de
+     * cada perna. No card ele era um selo cinza a mais numa linha que já tem
+     * número, rótulo e odd -- e não acrescentava nada: o mercado da perna do
+     * primeiro tempo já se chama "Gols Mais/Menos - 1º Tempo", e o da outra é
+     * o mercado de jogo inteiro. O selo repetia em cinza o que a linha de
+     * baixo diz por extenso. */
     periodo?: string
+    /** Casa onde a odd desta perna foi encontrada · o mesmo campo que a
+     *  alavancagem sempre mostrou, agora em todo bilhete. */
+    house?: string | null
     odd?: number | null
     probability?: number | null
     result?: string | null
@@ -198,6 +207,8 @@ function SuggestionCard({
   const oddSeguida   = registrado?.actualOdd ?? s.user_actual_odd ?? null
   const casaSeguida  = registrado?.betHouse ?? s.user_bet_house ?? null
   const { share: shareStory, sharing, shared } = useShareStoryImage()
+  /* Pick com pernas compartilha como BILHETE · ver handleShare. */
+  const { share: shareBilhete, sharing: sharingBilhete, shared: sharedBilhete } = useShareBilheteImage()
   const { odd: buscarOdd, buscando: buscandoOdd } = useOddAtualizada()
   // Prioridade: 1) suggested_stake_units do backend (já usa banca real)
   //             2) função específica por tipo como fallback
@@ -227,6 +238,51 @@ function SuggestionCard({
   const handleShare = (e: React.MouseEvent) => {
     e.stopPropagation()
     const pickTypeRoute = (s.pick_type ?? 'vip').replace('multiplas', 'multipla')
+
+    /*
+     * PICK COMBINADO COMPARTILHA COMO BILHETE (04/09, pedido do usuário).
+     *
+     * O Boost tem duas seleções e uma odd só. Pela imagem genérica ele saía
+     * como uma aposta simples pagando 1.51, com o mercado escrito na frase
+     * combinada que o pipeline monta -- os dois mercados de verdade, cada um
+     * com a sua odd e a sua casa, não apareciam em lugar nenhum.
+     *
+     * É o mesmo desenho da alavancagem e da múltipla, com uma diferença: aqui
+     * as pernas são do MESMO jogo, então o confronto sobe pro topo uma vez só
+     * (`mesmoJogo`) em vez de repetir os dois escudos em cada caixa.
+     */
+    if (s.legs && s.legs.length > 0) {
+      shareBilhete({
+        pickId: s.id,
+        pickTypeRoute,
+        pickType: pickTypeRoute,
+        tipoLabel: `${s.legs.length} ${s.legs.length === 1 ? 'seleção' : 'seleções'}`,
+        leagueName: s.league_name,
+        mesmoJogo: {
+          homeTeamName: translateTeamName(s.home_team_name),
+          awayTeamName: translateTeamName(s.away_team_name),
+          homeTeamId: s.home_team_id,
+          awayTeamId: s.away_team_id,
+        },
+        legs: s.legs.map(leg => ({
+          homeTeamName: translateTeamName(s.home_team_name),
+          market: translateMarket(leg.market),
+          line: leg.label ?? translateLine(leg.line ?? undefined),
+          odd: leg.odd != null ? Number(leg.odd) : undefined,
+          house: leg.house ?? null,
+        })),
+        oddCombined: Number(s.odd),
+        probabilityPct: pctProb(s.probability ?? s.confidence),
+        result: s.result,
+        profit: s.result && (stakeSeguida != null || contaEmUnidades(pickTypeRoute))
+          ? calcProfitUnits(s.result, Number(s.odd),
+                            stakeSeguida ?? stakeDe(pickTypeRoute),
+                            stakeSeguida != null ? oddSeguida : null)
+          : null,
+      })
+      return
+    }
+
     shareStory({
       pickId: s.id,
       pickTypeRoute,
@@ -328,6 +384,21 @@ function SuggestionCard({
 
   const probPct = s.probability != null ? Number(s.probability) * 100 : null
 
+  /* A CASA, ROTULADA, EM TODO PICK (04/09) · é o desenho que a alavancagem já
+     tinha em cada perna. Mostra a casa de quem registrou quando ela existe,
+     senão a que o motor encontrou a odd. */
+  const casaDoPick = (seguido && casaSeguida) ? casaSeguida : (s.bet_house || null)
+
+  /*
+   * "DEU" NÃO ENTRA NO PICK AO VIVO (04/09, decisão do usuário).
+   *
+   * Ao vivo o contador ainda está correndo e o card já mostra onde o jogo está
+   * em relação à linha. Repetir o número liquidado no meio dos campos fazia o
+   * card ao vivo ter um campo a mais que todos os outros, e logo abaixo da
+   * linha apostada · lia como se a aposta fosse aquele número.
+   */
+  const mostraDeu = !!s.result && s.settled_value != null && pickType !== 'live'
+
   // Sugestão nunca pode nascer acima do teto: em mercado com teto baixo
   // (faltas/goleiros) o Kelly do calcVipStake chegava a pedir mais unidades
   // do que o backend aceita.
@@ -352,7 +423,7 @@ function SuggestionCard({
          querer o tempo todo: dentro dele já moram "Apostar", "Compartilhar",
          "Entenda esta análise", o coração de favorito e o ícone de informação.
          Errar o alvo entre eles abria uma tela cheia por engano. */
-      className={`pick-card hover-elev group ${onClick ? 'cursor-pointer' : ''} ${isCopa ? 'border-yellow-500/20' + (onClick ? ' hover:border-yellow-500/40' : '') : PICK_TYPE_BORDER[pickType] ?? PICK_TYPE_BORDER.vip}`}
+      className={`pick-card hover-elev group ${pickCardResultBg(s.result)} ${onClick ? 'cursor-pointer' : ''} ${isCopa ? 'border-yellow-500/20' + (onClick ? ' hover:border-yellow-500/40' : '') : PICK_TYPE_BORDER[pickType] ?? PICK_TYPE_BORDER.vip}`}
       onClick={onClick}
       /* Âncora do tour: o passo "Encontre seus picks" destaca o PRIMEIRO card
          que existir na tela, e não um desenho de card. Ver
@@ -363,6 +434,8 @@ function SuggestionCard({
       <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-3 border-b border-line/60">
         <div className="flex items-center gap-2 flex-wrap min-w-0">
           <PickTypeBadge type={pickType} />
+          {/* A sequência do produto, colada no selo dele · ver SequenciaBadge. */}
+          <SequenciaBadge source={pickType} />
           {(s.league_id || s.league_name) && (
             <div className="flex items-center gap-1 min-w-0">
               <LeagueLogo id={s.league_id} name={s.league_name} />
@@ -403,9 +476,14 @@ function SuggestionCard({
           {seguido && oddSeguida != null && Math.abs(oddSeguida - Number(s.odd)) > 0.001 && (
             <div className="text-[9px] text-ink-4 mt-0.5">pick: {Number(s.odd).toFixed(2)}</div>
           )}
-          <div className="text-[10px] text-ink-4 mt-0.5">
-            {seguido && casaSeguida ? casaSeguida : s.bet_house}
-          </div>
+          {/* A CASA SUGERIDA DESCEU PRO CORPO, como campo rotulado "Casa"
+              (04/09) · era a única informação do card que aparecia sem nome,
+              em 10px, e quem não conhece a marca lia "Superbet" embaixo da odd
+              sem saber o que aquilo era. Aqui em cima fica só a casa de quem
+              JÁ registrou, que é parte da aposta dele e não uma sugestão. */}
+          {seguido && casaSeguida && (
+            <div className="text-[10px] text-ink-4 mt-0.5">{casaSeguida}</div>
+          )}
         </div>
         {!s.result && seguido && stakeSeguida != null ? (
           <>
@@ -592,12 +670,6 @@ function SuggestionCard({
                     <span className="text-xs text-ink-2 font-semibold truncate">
                       Seleção {i + 1}
                     </span>
-                    {leg.periodo && (
-                      <span className="shrink-0 px-1.5 py-px rounded bg-surface-3 border border-line
-                                       text-[10px] text-ink-4 whitespace-nowrap">
-                        {leg.periodo}
-                      </span>
-                    )}
                     {leg.odd != null && (
                       <span className={`ml-auto font-mono font-black text-sm shrink-0 ${
                         lr === 'GREEN' ? 'text-green-400'
@@ -625,6 +697,11 @@ function SuggestionCard({
                         <dd className="text-xs text-ink-2 truncate">
                           {leg.label ?? translateLine(leg.line ?? undefined)}
                         </dd>
+                      </CampoDoPick>
+                    )}
+                    {leg.house && (
+                      <CampoDoPick rotulo="Casa">
+                        <dd className="text-xs text-ink-3 truncate">{leg.house}</dd>
                       </CampoDoPick>
                     )}
                     {leg.probability != null && (
@@ -698,10 +775,15 @@ function SuggestionCard({
                   {linhaDoJogador(s.line, s.line_value, s.player_name)}
                 </dd>
               </CampoDoPick>
-              {s.result && s.settled_value != null && (
+              {casaDoPick && (
+                <CampoDoPick rotulo="Casa">
+                  <dd className="text-xs text-ink-3 truncate">{casaDoPick}</dd>
+                </CampoDoPick>
+              )}
+              {mostraDeu && (
                 <CampoDoPick rotulo="Deu">
                   <dd className="text-xs font-semibold text-ink-1 truncate">
-                    {valorLiquidado(s.market, s.settled_value)}
+                    {valorLiquidado(s.market, s.settled_value!)}
                   </dd>
                 </CampoDoPick>
               )}
@@ -727,10 +809,15 @@ function SuggestionCard({
               * de 12.0 o PUSH deixa de parecer erro e passa a se explicar
               * sozinho. Só aparece com o pick liquidado, porque antes disso o
               * número ainda está mudando. */}
-            {s.result && s.settled_value != null && (
+            {casaDoPick && (
+              <CampoDoPick rotulo="Casa">
+                <dd className="text-xs text-ink-3 truncate">{casaDoPick}</dd>
+              </CampoDoPick>
+            )}
+            {mostraDeu && (
               <CampoDoPick rotulo="Deu">
                 <dd className="text-xs font-semibold text-ink-1 truncate">
-                  {valorLiquidado(s.market, s.settled_value)}
+                  {valorLiquidado(s.market, s.settled_value!)}
                 </dd>
               </CampoDoPick>
             )}
@@ -796,7 +883,8 @@ function SuggestionCard({
         betState={following || buscandoOdd ? 'loading' : followed ? 'done' : 'idle'}
         hasBanca={!!banca}
         onShare={handleShare}
-        shareState={sharing ? 'loading' : shared ? 'done' : 'idle'}
+        shareState={(sharing || sharingBilhete) ? 'loading'
+                    : (shared || sharedBilhete) ? 'done' : 'idle'}
       />
     </motion.div>
 

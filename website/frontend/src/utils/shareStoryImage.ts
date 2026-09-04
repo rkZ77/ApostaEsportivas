@@ -1026,6 +1026,8 @@ export interface AlavancagemLeg {
   market?: string
   line?: string
   odd?: number
+  /** Casa onde a odd da perna foi encontrada · mesmo campo do card. */
+  house?: string | null
 }
 
 export interface AlavancagemStoryInput {
@@ -1039,6 +1041,39 @@ export interface AlavancagemStoryInput {
   degrau?: number | null
   /** Greens que fecham o caminho (ALAV_META_PADRAO no backend). */
   meta?: number | null
+  /*
+   * BILHETE DE QUALQUER PRODUTO, NÃO SÓ ALAVANCAGEM (04/09).
+   *
+   * Múltipla e Pick Boost são a mesma ideia: várias seleções, uma odd só. Os
+   * dois saíam pelo card genérico de UM confronto -- a múltipla anunciava a
+   * primeira perna com a odd das três ao lado, exatamente o defeito que fez
+   * esta função existir. Agora os três produtos passam por aqui e o que muda
+   * é a cor, o selo e o bloco de baixo.
+   */
+  pickType?: string
+  /**
+   * Bloco de baixo em COMPOSTO ("1 unidade vira 4.20u"), que é a promessa da
+   * alavancagem. Múltipla e Boost usam a faixa de odd, lucro e chance, que é
+   * a mesma do card de pick comum.
+   */
+  composto?: boolean
+  /** Probabilidade estimada do BILHETE (0-100) · vai na faixa de baixo. */
+  probabilityPct?: number | null
+  /** Lucro já realizado em unidades, quando o bilhete está liquidado. */
+  profit?: number | null
+  /**
+   * Pick Boost: as duas pernas são do MESMO jogo. O confronto sobe uma vez
+   * para o topo e as pernas ficam só com mercado, linha e odd · repetir os
+   * mesmos dois escudos em cada caixa gastava metade da largura dizendo duas
+   * vezes a mesma coisa.
+   */
+  mesmoJogo?: {
+    homeTeamName: string
+    awayTeamName?: string
+    homeTeamId?: number | null
+    awayTeamId?: number | null
+  } | null
+  leagueName?: string
 }
 
 /**
@@ -1063,9 +1098,12 @@ export async function buildAlavancagemStoryImage(input: AlavancagemStoryInput): 
   if (!ctx) throw new Error('Canvas 2D não suportado')
 
   const rs = getResultStyle(input.result)
-  const accentHex = rs?.hex ?? PICK_TYPE_HEX['alavancagem'] ?? '#fb923c'
+  const tipo = input.pickType ?? 'alavancagem'
+  const composto = input.composto ?? tipo === 'alavancagem'
+  const accentHex = rs?.hex ?? PICK_TYPE_HEX[tipo] ?? '#fb923c'
   const legs = input.legs.slice(0, 3)
   const temMeta = input.degrau != null && input.meta != null && input.meta > 0
+  const mesmoJogo = input.mesmoJogo ?? null
 
   await ensureFonts()
   drawBackground(ctx, accentHex)
@@ -1076,7 +1114,8 @@ export async function buildAlavancagemStoryImage(input: AlavancagemStoryInput): 
   // mais o composto e o selo passavam do rodapé.
   const rowH = legs.length >= 3 ? 168 : 196
   const alturaConteudo = (logoImg ? 290 : 170) + 130 + (temMeta ? 118 : 0)
-    + legs.length * rowH + 96 + 122 + 150 + FOOTER_HEIGHT
+    + (input.leagueName ? 44 : 0) + (mesmoJogo ? 190 : 0)
+    + legs.length * rowH + (composto ? 96 : 150) + 122 + 150 + FOOTER_HEIGHT
 
   ctx.save()
   ctx.translate(0, computeShiftY(alturaConteudo))
@@ -1084,8 +1123,11 @@ export async function buildAlavancagemStoryImage(input: AlavancagemStoryInput): 
   const brandY = drawBrandHeader(ctx, logoImg)
   let cursorY = brandY + 56
 
-  // Badge: ALAVANCAGEM · TRIPLA
-  const badgeLabel = `ALAVANCAGEM, ${input.tipoLabel.toUpperCase()}`
+  // Badge: ALAVANCAGEM, TRIPLA · MÚLTIPLA, 3 SELEÇÕES · BOOST, 2 SELEÇÕES
+  const nomeDoProduto = (PICK_TYPE_LABEL[tipo] ?? 'Alavancagem').toUpperCase()
+  const badgeLabel = input.tipoLabel
+    ? `${nomeDoProduto}, ${input.tipoLabel.toUpperCase()}`
+    : nomeDoProduto
   ctx.font = fontDisplay(800, 30)
   const badgeW = ctx.measureText(badgeLabel).width + 80
   drawRoundedRect(ctx, W / 2 - badgeW / 2, cursorY, badgeW, 64, 32)
@@ -1097,6 +1139,40 @@ export async function buildAlavancagemStoryImage(input: AlavancagemStoryInput): 
   ctx.fillStyle = accentHex
   ctx.fillText(badgeLabel, W / 2, cursorY + 43)
   cursorY += 64 + 66
+
+  if (input.leagueName) {
+    ctx.font = fontSans(600, 28)
+    ctx.fillStyle = '#71717a'
+    ctx.fillText(fitText(ctx, input.leagueName, W - 160), W / 2, cursorY - 22)
+    cursorY += 44
+  }
+
+  /* O CONFRONTO NO TOPO quando as pernas são do mesmo jogo (Pick Boost).
+   *
+   * É a informação que as duas caixas compartilham, e no lugar delas ela vira
+   * o título da imagem · quem vê o post precisa saber de que jogo se trata
+   * antes de ler qualquer mercado. */
+  if (mesmoJogo) {
+    const [hLogo, aLogo] = await Promise.all([
+      mesmoJogo.homeTeamId ? loadImage(`/api/proxy/team/${mesmoJogo.homeTeamId}.png`) : Promise.resolve(null),
+      mesmoJogo.awayTeamId ? loadImage(`/api/proxy/team/${mesmoJogo.awayTeamId}.png`) : Promise.resolve(null),
+    ])
+    drawCircularLogo(ctx, hLogo, W / 2 - 240, cursorY + 20, 96)
+    drawCircularLogo(ctx, aLogo, W / 2 + 240, cursorY + 20, 96)
+    ctx.textAlign = 'center'
+    ctx.font = fontDisplay(900, 40)
+    ctx.fillStyle = '#ffffff'
+    ctx.fillText(fitText(ctx, mesmoJogo.homeTeamName, 320), W / 2, cursorY + 6)
+    ctx.font = fontSans(700, 26)
+    ctx.fillStyle = '#52525b'
+    ctx.fillText('vs', W / 2, cursorY + 44)
+    if (mesmoJogo.awayTeamName) {
+      ctx.font = fontDisplay(900, 40)
+      ctx.fillStyle = '#ffffff'
+      ctx.fillText(fitText(ctx, mesmoJogo.awayTeamName, 320), W / 2, cursorY + 88)
+    }
+    cursorY += 190
+  }
 
   // Escada até a meta · segmentos discretos, iguais aos da tela: a meta é
   // contada em greens inteiros, e barra contínua sugeriria meio degrau.
@@ -1159,18 +1235,26 @@ export async function buildAlavancagemStoryImage(input: AlavancagemStoryInput): 
     ctx.fillText(legGreen ? '✓' : `${i + 1}`, 112, midY - 4)
 
     ctx.textAlign = 'left'
-    drawCircularLogo(ctx, homeLogo, 196, midY - 12, 62)
-    drawCircularLogo(ctx, awayLogo, 268, midY - 12, 62)
+    /* Sem escudo na perna quando o jogo é o mesmo em todas: ele já está no
+       topo, e repetido aqui só empurraria o texto pra direita. */
+    if (!mesmoJogo) {
+      drawCircularLogo(ctx, homeLogo, 196, midY - 12, 62)
+      drawCircularLogo(ctx, awayLogo, 268, midY - 12, 62)
+    }
 
     ctx.textAlign = 'left'
-    const textoX = 330
+    const textoX = mesmoJogo ? 168 : 330
     // Reserva a coluna da odd (desenhada em W-106, alinhada à direita): sem
     // essa folga um confronto longo como "Olimpia Asunción x Vasco da Gama"
     // encostava no número.
     const largura = W - textoX - 230
     ctx.font = fontDisplay(800, 34)
     ctx.fillStyle = '#ffffff'
-    const confronto = l.awayTeamName ? `${l.homeTeamName} x ${l.awayTeamName}` : l.homeTeamName
+    /* Com o confronto no topo, a linha de cima da caixa é a SELEÇÃO ("Seleção
+       1"), que é o vocabulário do card do site pra perna de bilhete. */
+    const confronto = mesmoJogo
+      ? `Seleção ${i + 1}`
+      : l.awayTeamName ? `${l.homeTeamName} x ${l.awayTeamName}` : l.homeTeamName
     ctx.fillText(fitText(ctx, confronto, largura), textoX, midY - 14)
 
     /* A LINHA APOSTADA EM BRANCO, o mercado em cinza.
@@ -1199,7 +1283,16 @@ export async function buildAlavancagemStoryImage(input: AlavancagemStoryInput): 
       ctx.textAlign = 'right'
       ctx.font = fontMono(900, 38)
       ctx.fillStyle = accentHex
-      ctx.fillText(l.odd.toFixed(2), W - 106, midY + 2)
+      ctx.fillText(l.odd.toFixed(2), W - 106, midY - 8)
+    }
+    /* A CASA EMBAIXO DA ODD · odd sem casa é preço sem lugar onde pegar, e
+       era o campo que a imagem perdia em relação ao card (que mostra "Casa"
+       em toda perna desde 04/09). */
+    if (l.house) {
+      ctx.textAlign = 'right'
+      ctx.font = fontSans(600, 22)
+      ctx.fillStyle = '#71717a'
+      ctx.fillText(fitText(ctx, l.house, 220), W - 106, midY + 26)
     }
     ctx.textAlign = 'center'
   })
@@ -1212,19 +1305,57 @@ export async function buildAlavancagemStoryImage(input: AlavancagemStoryInput): 
   // cima de um pick já resolvido, e num RED o valor do composto não é o que
   // aconteceu · ali o número verdadeiro é a unidade perdida.
   const perdeu = input.result === 'RED'
-  const rotuloComposto = perdeu ? 'RESULTADO'
-    : input.result === 'GREEN' ? '1 UNIDADE VIROU'
-    : '1 UNIDADE VIRA'
-  const valorComposto = perdeu ? '−1,00u' : `${input.oddCombined.toFixed(2)}u`
-  ctx.font = fontMono(700, 24)
-  ctx.fillStyle = '#71717a'
-  ctx.fillText(rotuloComposto, W / 2, cursorY)
-  ctx.font = fontMono(900, 96)
-  withGlow(ctx, `${accentHex}66`, 22, () => {
-    ctx.fillStyle = accentHex
-    ctx.fillText(valorComposto, W / 2, cursorY + 88)
-  })
-  cursorY += 96 + 60
+  if (composto) {
+    const rotuloComposto = perdeu ? 'RESULTADO'
+      : input.result === 'GREEN' ? '1 UNIDADE VIROU'
+      : '1 UNIDADE VIRA'
+    const valorComposto = perdeu ? '−1,00u' : `${input.oddCombined.toFixed(2)}u`
+    ctx.font = fontMono(700, 24)
+    ctx.fillStyle = '#71717a'
+    ctx.fillText(rotuloComposto, W / 2, cursorY)
+    ctx.font = fontMono(900, 96)
+    withGlow(ctx, `${accentHex}66`, 22, () => {
+      ctx.fillStyle = accentHex
+      ctx.fillText(valorComposto, W / 2, cursorY + 88)
+    })
+    cursorY += 96 + 60
+  } else {
+    /* MÚLTIPLA E BOOST FECHAM COM A MESMA FAIXA DO CARD DE PICK COMUM: odd,
+       lucro e chance, nessa ordem. O composto em unidades é vocabulário da
+       alavancagem (lá 1u é a entrada por regra do produto) · numa múltipla a
+       stake é escolha de quem aposta, e o número que fala é a odd. */
+    const lucroTexto = input.profit != null
+      ? `${input.profit >= 0 ? '+' : ''}${input.profit.toFixed(2)}u`
+      : `+${(input.oddCombined - 1).toFixed(2)}u`
+    const lucroCor = input.profit != null
+      ? (input.profit >= 0 ? '#4ade80' : '#f87171') : '#a1a1aa'
+    const faixa = [
+      { label: 'ODD COMBINADA', value: input.oddCombined.toFixed(2), color: '#4ade80' },
+      { label: input.profit != null ? 'LUCRO' : 'LUCRO POT.', value: lucroTexto, color: lucroCor },
+      ...(input.probabilityPct != null
+        ? [{ label: 'CHANCE', value: `${Math.round(input.probabilityPct)}%`, color: '#facc15' }]
+        : []),
+    ]
+    const totalW = W - 200
+    const colW = totalW / faixa.length
+    const faixaX = W / 2 - totalW / 2
+    faixa.forEach((s, i) => {
+      const cx = faixaX + colW * i + colW / 2
+      if (i > 0) {
+        ctx.fillStyle = 'rgba(255,255,255,0.10)'
+        ctx.fillRect(faixaX + colW * i, cursorY - 26, 1, 92)
+      }
+      ctx.font = fontMono(700, 22)
+      ctx.fillStyle = '#71717a'
+      ctx.fillText(s.label, cx, cursorY)
+      ctx.font = fontMono(900, 52)
+      withGlow(ctx, `${s.color}66`, 18, () => {
+        ctx.fillStyle = s.color
+        ctx.fillText(s.value, cx, cursorY + 58)
+      })
+    })
+    cursorY += 150
+  }
 
   // Selo de resultado
   const resultLabel = rs ? rs.label : 'EM ANDAMENTO'

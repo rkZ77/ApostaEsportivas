@@ -150,6 +150,15 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         for _n in (1, 2, 3):
             cur.execute(f"ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS home_team_id_{_n} INTEGER;")
             cur.execute(f"ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS away_team_id_{_n} INTEGER;")
+            # A CHANCE DE CADA PERNA, que o card passou a mostrar em 04/09.
+            #
+            # A coluna nasce no CREATE TABLE do motor (alavancagem_pipeline),
+            # e CREATE TABLE IF NOT EXISTS nao adiciona coluna em tabela que ja
+            # existe -- e' o mesmo gap de migracao ja documentado la. Sem este
+            # ALTER, a consulta da alavancagem em suggestions.py falharia
+            # inteira e, como ela passa por `_safe_query_one`, o card sumiria
+            # da tela em silencio em vez de dar erro.
+            cur.execute(f"ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS prob_real_{_n} NUMERIC;")
 
         # Backfills de team_id em picks_alavancagem foram REMOVIDOS daqui em
         # 2026-08-xx (otimizacao de startup). Ja' rodaram uma vez contra a base

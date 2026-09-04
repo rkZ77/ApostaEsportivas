@@ -20,6 +20,24 @@ export const RESULT_STYLE: Record<PickResult, ResultStyle> = {
   'HALF-LOSS':{ bg: 'bg-orange-500/15', border: 'border-orange-500/40', text: 'text-orange-400', label: '½ LOSS', hex: '#fb923c' },
 }
 
+/**
+ * Degradê de fundo do card conforme o resultado (ver `.pick-card--*` em
+ * index.css). Vale pra TODOS os cards de pick · o selo do canto some da tela
+ * ao rolar no celular, o fundo não.
+ *
+ * PUSH fica de fora: anulado não é acerto nem erro, e pintar o card de
+ * qualquer cor tomaria partido. A caixa "Pick anulado" já explica ali dentro.
+ */
+export function pickCardResultBg(result?: string | null): string {
+  switch (result) {
+    case 'GREEN':      return 'pick-card--green'
+    case 'RED':        return 'pick-card--red'
+    case 'HALF-WIN':   return 'pick-card--half-win'
+    case 'HALF-LOSS':  return 'pick-card--half-loss'
+    default:           return ''
+  }
+}
+
 export function getResultStyle(result?: string | null): ResultStyle | null {
   if (!result) return null
   return RESULT_STYLE[result as PickResult] ?? null

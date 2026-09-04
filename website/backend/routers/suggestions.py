@@ -719,11 +719,11 @@ def get_today_suggestions(
                 SELECT pa.id, pa.match_date, pa.tipo,
                        pa.fixture_id_1, pa.fixture_id_2,
                        pa.home_team_1, pa.away_team_1, pa.market_1, pa.line_1, pa.odd_1, pa.bet_house_1,
-                       pa.confidence_1, pa.reasoning_1,
+                       pa.confidence_1, pa.prob_real_1, pa.reasoning_1,
                        pa.home_team_2, pa.away_team_2, pa.market_2, pa.line_2, pa.odd_2, pa.bet_house_2,
-                       pa.confidence_2, pa.reasoning_2,
+                       pa.confidence_2, pa.prob_real_2, pa.reasoning_2,
                        pa.home_team_3, pa.away_team_3, pa.market_3, pa.line_3, pa.odd_3, pa.bet_house_3,
-                       pa.confidence_3, pa.reasoning_3,
+                       pa.confidence_3, pa.prob_real_3, pa.reasoning_3,
                        pa.odd_combined, pa.confidence_media,
                        pa.result, pa.profit, pa.created_at,
                        {_sql_escudos_alav(3)}
@@ -2519,9 +2519,9 @@ def get_alavancagem(
         rows = _safe_query(cur, f"""
             SELECT pa.id, pa.match_date, pa.tipo,
                    pa.home_team_1, pa.away_team_1, pa.market_1, pa.line_1, pa.odd_1, pa.bet_house_1,
-                   pa.confidence_1, pa.reasoning_1,
+                   pa.confidence_1, pa.prob_real_1, pa.reasoning_1,
                    pa.home_team_2, pa.away_team_2, pa.market_2, pa.line_2, pa.odd_2, pa.bet_house_2,
-                   pa.confidence_2, pa.reasoning_2,
+                   pa.confidence_2, pa.prob_real_2, pa.reasoning_2,
                    pa.odd_combined, pa.confidence_media,
                    pa.result, pa.profit, pa.created_at,
                    {_sql_escudos_alav(2)}
@@ -2580,9 +2580,9 @@ def get_alavancagem_today(current_user: dict = Depends(require_vip)):
         row = _safe_query_one(cur, f"""
             SELECT pa.id, pa.match_date, pa.tipo,
                    pa.home_team_1, pa.away_team_1, pa.market_1, pa.line_1, pa.odd_1, pa.bet_house_1,
-                   pa.confidence_1, pa.reasoning_1,
+                   pa.confidence_1, pa.prob_real_1, pa.reasoning_1,
                    pa.home_team_2, pa.away_team_2, pa.market_2, pa.line_2, pa.odd_2, pa.bet_house_2,
-                   pa.confidence_2, pa.reasoning_2,
+                   pa.confidence_2, pa.prob_real_2, pa.reasoning_2,
                    pa.odd_combined, pa.confidence_media,
                    pa.result, pa.profit, pa.created_at,
                    {_sql_escudos_alav(2)}

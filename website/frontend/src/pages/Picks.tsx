@@ -20,7 +20,7 @@ import { aplicarFiltro, FILTRO_INICIAL } from '../lib/mercadoFiltro'
 import EngineStatus from '../components/EngineStatus'
 import AnalysisModal from '../components/AnalysisModal'
 import {
-  CampoDoPick, PickCardFooter, PickExplainButton, PickProbability,
+  CampoDoPick, PickCardFooter, PickExplainButton, PickProbability, SequenciaBadge,
 } from '../components/PickCardParts'
 /*
  * As duas abas mais pesadas não entram no chunk desta página.
@@ -43,8 +43,8 @@ import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, Br
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import { stakeDe } from '../utils/stakePlan'
 import { fmtUnits, pctProb, capitalizarFrase, plural } from '../utils/format'
-import { getResultStyle, PICK_TYPE_CLS, PICK_TYPE_BORDER } from '../utils/resultStyle'
-import { useShareStoryImage, useShareAlavancagemImage } from '../hooks/useShareStoryImage'
+import { getResultStyle, PICK_TYPE_CLS, PICK_TYPE_BORDER, pickCardResultBg } from '../utils/resultStyle'
+import { useShareStoryImage, useShareAlavancagemImage, useShareBilheteImage } from '../hooks/useShareStoryImage'
 import { useOddAtualizada } from '../hooks/useOddAtualizada'
 import { translateMarket, translateLine, translateTeamName } from '../utils/marketTranslate'
 import FilterPanel, { FilterGroup } from '../components/FilterPanel'
@@ -513,7 +513,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
          agora e' o CSS · o `y` continua com a mola daqui. */
       whileTap={onClick ? { scale: 0.985 } : undefined}
       transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-      className={`pick-card hover-elev group ${isCopa ? 'border-yellow-500/20' + (onClick ? ' hover:border-yellow-500/40' : '') : PICK_TYPE_BORDER.free} ${onClick ? 'cursor-pointer' : ''}`}
+      className={`pick-card hover-elev group ${pickCardResultBg(dica.result)} ${isCopa ? 'border-yellow-500/20' + (onClick ? ' hover:border-yellow-500/40' : '') : PICK_TYPE_BORDER.free} ${onClick ? 'cursor-pointer' : ''}`}
       onClick={onClick}
       /* Mesma âncora do card VIP. Este vem antes na página e aparece para
          qualquer plano, então é ele que o tour costuma destacar. */
@@ -528,6 +528,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
       <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-3 border-b border-line/60">
         <div className="flex items-center gap-2 flex-wrap min-w-0">
           <PickTypeBadge type="free" />
+          <SequenciaBadge source="free" />
           {(dica.league_id || dica.league_name) && (
             <div className="flex items-center gap-1 min-w-0">
               <LeagueLogo id={dica.league_id} name={dica.league_name} />
@@ -562,7 +563,11 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
           {seguido && oddSeguida != null && Math.abs(oddSeguida - Number(dica.odd)) > 0.001 && (
             <div className="text-[9px] text-ink-4 mt-0.5">pick: {Number(dica.odd).toFixed(2)}</div>
           )}
-          <div className="text-[10px] text-ink-4 mt-0.5">{seguido && casaSeguida ? casaSeguida : dica.bet_house}</div>
+          {/* Só a casa de quem JÁ registrou fica colada na odd · a sugerida
+              desceu pro corpo como campo rotulado "Casa" (04/09). */}
+          {seguido && casaSeguida && (
+            <div className="text-[10px] text-ink-4 mt-0.5">{casaSeguida}</div>
+          )}
         </div>
         {!dica.result && seguido && stakeSeguida != null ? (
           <>
@@ -686,6 +691,13 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
               <dd className="text-xs text-ink-2 truncate">{translateLine(dica.line)}</dd>
             </CampoDoPick>
           )}
+          {((seguido && casaSeguida) || dica.bet_house) && (
+            <CampoDoPick rotulo="Casa">
+              <dd className="text-xs text-ink-3 truncate">
+                {(seguido && casaSeguida) ? casaSeguida : dica.bet_house}
+              </dd>
+            </CampoDoPick>
+          )}
         </dl>
       </div>
 
@@ -802,7 +814,7 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
   const seguido      = registrado != null || !!m.is_followed
   const stakeSeguida = registrado?.stakeUnits ?? m.user_stake_units ?? null
   const oddSeguida   = registrado?.actualOdd ?? m.user_actual_odd ?? null
-  const { share: shareStory, sharing, shared } = useShareStoryImage()
+  const { share: shareBilhete, sharing, shared } = useShareBilheteImage()
   const { oddBilhete, buscando: buscandoBilhete } = useOddAtualizada()
   // Prioridade: suggested_stake_units do backend, senão calcMultiplaStake fallback (max 2.5%)
   const stakeSuggestion = (() => {
@@ -822,18 +834,34 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
     ? (stakeSuggestion.amountR * Number(m.total_odd)).toFixed(2)
     : null
 
+  /*
+   * A IMAGEM DA MÚLTIPLA MOSTRA AS PERNAS (04/09, pedido do usuário).
+   *
+   * Ela saía pelo card genérico de UM confronto: o título era o primeiro jogo,
+   * o subtítulo era um "+2 jogos" inventado ali na hora, e o mercado dizia só
+   * "Múltipla, 3 seleções". Nenhum dos mercados apostados aparecia -- o post
+   * anunciava uma odd de 3,20 sem dizer em que ela foi apostada, que é
+   * justamente o que a alavancagem já resolvia desde que ganhou imagem
+   * própria. Agora os dois usam o mesmo desenho.
+   */
   const handleShare = (e: React.MouseEvent) => {
     e.stopPropagation()
-    shareStory({
+    shareBilhete({
       pickId: m.id,
       pickTypeRoute: 'multipla',
-      homeTeamName: translateTeamName(legs[0]?.home ?? legs[0]?.home_team) || 'Múltipla',
-      awayTeamName: legs.length > 1 ? `+${legs.length - 1} jogo${legs.length - 1 > 1 ? 's' : ''}` : undefined,
-      homeTeamId: legs[0]?.home_team_id,
-      awayTeamId: legs[0]?.away_team_id,
       pickType: 'multipla',
-      market: `Múltipla, ${legs.length} seleções`,
-      odd: Number(m.total_odd),
+      tipoLabel: `${legs.length} ${legs.length === 1 ? 'seleção' : 'seleções'}`,
+      legs: legs.map((l: any) => ({
+        homeTeamName: translateTeamName(l.home ?? l.home_team) || 'Time',
+        awayTeamName: translateTeamName(l.away ?? l.away_team),
+        homeTeamId: l.home_team_id,
+        awayTeamId: l.away_team_id,
+        market: translateMarket(l.market),
+        line: translateLine(l.line),
+        odd: Number(l.odd) || undefined,
+        house: l.bet_house ?? null,
+      })),
+      oddCombined: Number(m.total_odd),
       probabilityPct: pctProb(m.probability ?? m.confidence),
       result: m.result,
       profit: m.result
@@ -890,7 +918,7 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
          agora e' o CSS · o `y` continua com a mola daqui. */
       whileTap={onClick ? { scale: 0.985 } : undefined}
       transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-      className={`pick-card hover-elev group ${onClick ? 'cursor-pointer' : ''} ${PICK_TYPE_BORDER.multipla}`}
+      className={`pick-card hover-elev group ${pickCardResultBg(m.result)} ${onClick ? 'cursor-pointer' : ''} ${PICK_TYPE_BORDER.multipla}`}
       onClick={onClick}
     >
       {/* Accent bar */}
@@ -900,6 +928,7 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
       <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-line/60">
         <div className="flex items-center gap-2">
           <span className="text-xs font-black text-blue-400">Múltipla</span>
+          <SequenciaBadge source="multiplas" />
           <span className="badge-vip">VIP</span>
           <span className="text-[10px] text-ink-4">
             {new Date(m.match_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
@@ -1087,6 +1116,24 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
                   <dd className="text-xs text-ink-2 truncate">{translateLine(leg.line)}</dd>
                 </CampoDoPick>
               )}
+              {/* A CASA E A CHANCE DA PERNA (04/09) · o JSONB de `games` já
+                  guardava as duas (bet_house e prob_real, ver
+                  multipla_pipeline), e a múltipla era o único bilhete que não
+                  mostrava nem uma nem outra. Sem a casa, "1.36" é um preço sem
+                  lugar onde pegar; sem a chance, não dá pra ver qual das
+                  pernas está segurando o bilhete. */}
+              {leg.bet_house && (
+                <CampoDoPick rotulo="Casa">
+                  <dd className="text-xs text-ink-3 truncate">{leg.bet_house}</dd>
+                </CampoDoPick>
+              )}
+              {(leg.prob_real ?? leg.confidence) != null && (
+                <CampoDoPick rotulo="Chance">
+                  <dd className="text-xs text-ink-3">
+                    {Math.round(Number(leg.prob_real ?? leg.confidence) * 100)}% nesta perna
+                  </dd>
+                </CampoDoPick>
+              )}
             </dl>
           </div>
           )
@@ -1230,9 +1277,9 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
   }
 
   const legs: any[] = []
-  if (pick.home_team_1) legs.push({ home: pick.home_team_1, away: pick.away_team_1, homeId: pick.home_team_id_1, awayId: pick.away_team_id_1, market: pick.market_1, line: pick.line_1, odd: pick.odd_1, house: pick.bet_house_1 })
-  if (isCombo && pick.home_team_2) legs.push({ home: pick.home_team_2, away: pick.away_team_2, homeId: pick.home_team_id_2, awayId: pick.away_team_id_2, market: pick.market_2, line: pick.line_2, odd: pick.odd_2, house: pick.bet_house_2 })
-  if (pick.home_team_3) legs.push({ home: pick.home_team_3, away: pick.away_team_3, homeId: pick.home_team_id_3, awayId: pick.away_team_id_3, market: pick.market_3, line: pick.line_3, odd: pick.odd_3, house: pick.bet_house_3 })
+  if (pick.home_team_1) legs.push({ home: pick.home_team_1, away: pick.away_team_1, homeId: pick.home_team_id_1, awayId: pick.away_team_id_1, market: pick.market_1, line: pick.line_1, odd: pick.odd_1, house: pick.bet_house_1, prob: pick.prob_real_1 ?? pick.confidence_1 })
+  if (isCombo && pick.home_team_2) legs.push({ home: pick.home_team_2, away: pick.away_team_2, homeId: pick.home_team_id_2, awayId: pick.away_team_id_2, market: pick.market_2, line: pick.line_2, odd: pick.odd_2, house: pick.bet_house_2, prob: pick.prob_real_2 ?? pick.confidence_2 })
+  if (pick.home_team_3) legs.push({ home: pick.home_team_3, away: pick.away_team_3, homeId: pick.home_team_id_3, awayId: pick.away_team_id_3, market: pick.market_3, line: pick.line_3, odd: pick.odd_3, house: pick.bet_house_3, prob: pick.prob_real_3 ?? pick.confidence_3 })
 
   const handleShare = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -1254,6 +1301,7 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
         market: translateMarket(l.market),
         line: translateLine(l.line),
         odd: Number(l.odd) || undefined,
+        house: l.house ?? null,
       })),
       oddCombined,
       result: pick.result,
@@ -1275,7 +1323,7 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
          agora e' o CSS · o `y` continua com a mola daqui. */
       whileTap={onClick ? { scale: 0.985 } : undefined}
       transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-      className={`pick-card hover-elev group ${onClick ? 'cursor-pointer' : ''} ${PICK_TYPE_BORDER.alavancagem}`}
+      className={`pick-card hover-elev group ${pickCardResultBg(pick.result)} ${onClick ? 'cursor-pointer' : ''} ${PICK_TYPE_BORDER.alavancagem}`}
       onClick={onClick}
     >
       <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-orange-500 to-transparent" />
@@ -1284,6 +1332,7 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
       <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-line/60">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs font-black text-orange-400">Alavancagem</span>
+          <SequenciaBadge source="alavancagem" />
           <span className="badge-vip">VIP</span>
           {isCombo && <span className="text-[10px] text-blue-400 border border-blue-400/20 bg-blue-400/10 px-2 py-0.5 rounded-md font-bold">{comboLabel}</span>}
         </div>
@@ -1386,6 +1435,17 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
               {leg.house && (
                 <CampoDoPick rotulo="Casa">
                   <dd className="text-xs text-ink-3 truncate">{leg.house}</dd>
+                </CampoDoPick>
+              )}
+              {/* A chance da perna · `prob_real_N` é a probabilidade que o
+                  motor calculou pra aquele mercado, e `confidence_N` é a
+                  reserva pros picks antigos, gravados antes da coluna existir.
+                  Mesmo campo que a múltipla e o Boost mostram. */}
+              {leg.prob != null && (
+                <CampoDoPick rotulo="Chance">
+                  <dd className="text-xs text-ink-3">
+                    {Math.round(Number(leg.prob) * 100)}% nesta perna
+                  </dd>
                 </CampoDoPick>
               )}
             </dl>
@@ -1557,6 +1617,7 @@ interface MercadoPick {
      e resultado próprios. O backend já devolve tudo isto (suggestions.py); o
      card é que mostrava só a odd combinada. */
   odd_ft?: number | null; odd_ht?: number | null
+  bet_house_ft?: string | null; bet_house_ht?: string | null
   prob_ft?: number | null; prob_ht?: number | null
   result_ft?: string | null; result_ht?: string | null
 }
@@ -1577,6 +1638,7 @@ function pernasDoBoost(p: MercadoPick) {
       line: 'Over 1.5',
       label: 'Mais de 1.5 gols',
       periodo: 'Jogo inteiro',
+      house: p.bet_house_ft ?? null,
       odd: p.odd_ft != null ? Number(p.odd_ft) : null,
       probability: p.prob_ft != null ? Number(p.prob_ft) : null,
       result: p.result_ft ?? null,
@@ -1586,6 +1648,7 @@ function pernasDoBoost(p: MercadoPick) {
       line: 'Under 2.5',
       label: 'Menos de 2.5 gols',
       periodo: '1º tempo',
+      house: p.bet_house_ht ?? null,
       odd: p.odd_ht != null ? Number(p.odd_ht) : null,
       probability: p.prob_ht != null ? Number(p.prob_ht) : null,
       result: p.result_ht ?? null,

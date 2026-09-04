@@ -1,5 +1,6 @@
-import { BrainCircuit, Check as CheckIcon, Loader2, Share2 } from 'lucide-react'
+import { BrainCircuit, Check as CheckIcon, Flame, Loader2, Share2, Zap } from 'lucide-react'
 import { cn } from '../lib/cn'
+import { useSequenciaDoProduto } from '../hooks/useSequenciaDoProduto'
 
 /*
  * Peças comuns dos cards de pick.
@@ -259,3 +260,51 @@ export function CampoDoPick({ rotulo, children, className }: {
  * ficava.
  */
 
+
+
+/* ── Sequência do produto ───────────────────────────────────────────────── */
+
+/*
+ * Os dois degraus de sequência. Só isto, e nada entre eles: um selo que muda
+ * a cada green vira contador, e contador no cabeçalho do card disputa leitura
+ * com a odd. Três é a sequência que já se nota; seis é a que se conta pra
+ * alguém.
+ */
+const DEGRAUS = [
+  { minimo: 6, Icone: Zap,   cls: 'text-yellow-300 bg-yellow-400/10 border-yellow-400/25' },
+  { minimo: 3, Icone: Flame, cls: 'text-orange-300 bg-orange-400/10 border-orange-400/25' },
+]
+
+/**
+ * "Este produto está numa sequência de N greens", no cabeçalho do card.
+ *
+ * É a sequência DO PRODUTO (todos os picks de Boost, de múltipla, de free...),
+ * não deste pick · pick sozinho não tem sequência. Onde o produto publica
+ * vários por dia, como o Boost, o mesmo selo aparece em todos os cards do dia,
+ * e isso está certo: eles fazem parte da mesma sequência.
+ *
+ * Some abaixo de 3, e some por completo em sequência de RED · o selo existe
+ * pra celebrar uma boa fase, e o placar honesto de cada produto continua a um
+ * toque de distância, no "O que é" da aba, com win rate, lucro e a sequência
+ * ruim inclusive.
+ */
+export function SequenciaBadge({ source, className }: { source?: string | null; className?: string }) {
+  const { streak, streakType } = useSequenciaDoProduto(source)
+  if (streakType !== 'green') return null
+  const degrau = DEGRAUS.find(d => streak >= d.minimo)
+  if (!degrau) return null
+  const { Icone } = degrau
+  return (
+    <span
+      title={`${streak} greens seguidos neste produto`}
+      className={cn(
+        'shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border',
+        'font-mono text-[10px] font-black tabular-nums leading-none',
+        degrau.cls, className,
+      )}
+    >
+      <Icone className="w-3 h-3 shrink-0" />
+      {streak}
+    </span>
+  )
+}
