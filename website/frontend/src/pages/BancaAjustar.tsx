@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Spinner } from '../components/ui'
 import PageShell from '../components/PageShell'
+import BancaTabs from '../components/BancaTabs'
 import api from '../services/api'
 import { fmtBRL } from '../utils/format'
 import NumberTicker from '../components/ui/NumberTicker'
@@ -111,6 +112,7 @@ export default function BancaAjustar() {
         sub: 'Sem esperar o fechamento do mês, e sem mexer no que já passou',
       }}
     >
+      <BancaTabs />
       {loading ? (
         <div className="card p-16 flex items-center justify-center">
           <Spinner size="lg" />

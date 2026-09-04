@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { TrendingDown, TrendingUp } from 'lucide-react'
 import api from '../services/api'
 import PageShell from '../components/PageShell'
+import BancaTabs from '../components/BancaTabs'
 import { PillGroup, Spinner } from '../components/ui'
 import LucroBarChart from '../components/LucroBarChart'
 import { fmtBRL, fmtSigned, fmtUnits } from '../utils/format'
@@ -154,6 +155,7 @@ export default function BancaFechamentos() {
       }}
       mainClassName="space-y-5"
     >
+      <BancaTabs />
       {rows !== null && rows.length > 0 && anos.length > 1 && (
         <PillGroup
           options={[{ value: 'tudo', label: 'Todos os anos' },

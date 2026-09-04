@@ -5,6 +5,7 @@ import { ArrowUpRight, Flag, Target, TrendingDown } from 'lucide-react'
 import api from '../services/api'
 import { Spinner } from './ui'
 import LucroBarChart from './LucroBarChart'
+import CaminhosDaIA from './CaminhosDaIA'
 import { fmtBRL, fmtSigned, fmtUnits } from '../utils/format'
 
 /*
@@ -63,24 +64,6 @@ interface Serie {
   realized_total?: number
   realized_units?: number
   history?: CaminhoEncerrado[]
-}
-
-interface CaminhoDaIA {
-  encerrou_em: string
-  passos: number
-  motivo: 'meta' | 'red'
-  unidades: number
-}
-
-interface HistoricoDaIA {
-  meta: number
-  fechados: number
-  na_meta: number
-  no_red: number
-  unidades: number
-  melhor_sequencia: number
-  passos_em_aberto: number
-  caminhos: CaminhoDaIA[]
 }
 
 const MOTIVO: Record<string, { label: string; cor: string; Icone: typeof Flag }> = {
@@ -189,90 +172,6 @@ function LinhaCaminho({ c }: { c: CaminhoEncerrado }) {
           {fmtUnits(c.units, 2)}
         </p>
       </div>
-    </div>
-  )
-}
-
-/*
- * COMO A IA FOI NOS CAMINHOS · o histórico que a aba não tinha.
- *
- * A aba só sabia falar do caminho de QUEM JÁ CONFIGUROU. Quem nunca pegou um
- * via uma tela vazia com um convite e nada mais; quem já tinha um não tinha
- * com o que comparar. E a amostra pessoal nunca vai responder "isso costuma
- * dar certo?": um caminho de seis passos leva ~28 dias, então em três meses
- * cabem uns poucos.
- *
- * O QUE ESTE BLOCO PRECISA MOSTRAR é a forma do produto, e ela é
- * contraintuitiva: a maioria dos caminhos MORRE. O que sustenta a conta é que
- * morrer custa 1u e chegar ao fim paga dez. Um número só ("+42,9u") esconde
- * isso e vende bem demais; a lista inteira, com os vermelhos todos visíveis,
- * conta a verdade e ainda assim é um bom argumento.
- *
- * Por isso o gráfico é de barras por caminho e não uma curva acumulada: a
- * curva acumulada é a fotografia mais bonita e a menos honesta que existe
- * aqui.
- */
-function CaminhosDaIA({ compacto = false }: { compacto?: boolean }) {
-  const [ia, setIa] = useState<HistoricoDaIA | null>(null)
-
-  useEffect(() => {
-    api.get('/public/alavancagem/caminhos')
-      .then(r => setIa(r.data))
-      .catch(() => setIa(null))
-  }, [])
-
-  if (!ia || ia.fechados === 0) return null
-
-  const naMeta = ia.caminhos.filter(c => c.motivo === 'meta')
-  const pagamentos = naMeta.map(c => c.unidades).sort((a, b) => a - b)
-  const barras = ia.caminhos
-    .slice()
-    .reverse()
-    .map(c => ({
-      label: `${c.encerrou_em.slice(8, 10)}/${c.encerrou_em.slice(5, 7)}`,
-      value: c.unidades,
-      meta: c.motivo === 'meta' ? `${c.passos} greens` : `RED no ${c.passos}º`,
-    }))
-
-  return (
-    <div className="card p-5">
-      <div className="flex items-start justify-between gap-3 mb-4">
-        <div>
-          <p className="text-xs text-ink-3 font-semibold">Como a IA foi nos caminhos</p>
-          <p className="text-[11px] text-ink-4 mt-0.5">
-            todos os caminhos encerrados desde o primeiro pick de alavancagem
-          </p>
-        </div>
-        <div className="text-right shrink-0">
-          <p className={`font-mono text-lg font-black tabular-nums ${ia.unidades >= 0 ? 'text-accent-ink' : 'text-red-400'}`}>
-            {fmtUnits(ia.unidades, 1)}
-          </p>
-          <p className="text-[10px] text-ink-4">em {ia.fechados} caminhos</p>
-        </div>
-      </div>
-
-      {/* A frase que o gráfico sozinho não diz. Sem ela, quem bate o olho no
-          total lê "produto que só ganha" · que é o oposto do que aconteceu. */}
-      <p className="text-[11px] text-ink-3 leading-relaxed mb-4">
-        {ia.no_red} {ia.no_red === 1 ? 'caminho morreu' : 'caminhos morreram'} no
-        meio e {ia.no_red === 1 ? 'custou' : 'custaram'} a entrada, 1u cada.
-        {naMeta.length > 0 && (
-          <> {ia.na_meta} {ia.na_meta === 1 ? 'chegou' : 'chegaram'} aos {ia.meta} greens
-          e {ia.na_meta === 1 ? 'pagou' : 'pagaram'} de {fmtUnits(pagamentos[0], 1)} a{' '}
-          {fmtUnits(pagamentos[pagamentos.length - 1], 1)}. É assim que o produto
-          funciona: perder é o caso comum, e o que fecha paga por vários que não
-          fecharam.</>
-        )}
-      </p>
-
-      {!compacto && <LucroBarChart data={barras} height={170} />}
-
-      {ia.passos_em_aberto > 0 && (
-        <p className="text-[11px] text-ink-4 mt-4">
-          Há um caminho em andamento, no {ia.passos_em_aberto}º passo. Ele não
-          entra em nenhuma soma acima enquanto não encerrar.
-        </p>
-      )}
     </div>
   )
 }
@@ -430,11 +329,27 @@ export default function AlavancagemPanel() {
         </p>
       </div>
 
-      {/* O histórico da IA vem ANTES do histórico pessoal de propósito: com
-          poucos caminhos fechados, o pessoal não responde "isso costuma dar
-          certo?" e o da IA responde. Quando o usuário acumular caminhos, o
-          dele é que passa a ser a leitura principal · e ele está logo abaixo. */}
-      <CaminhosDaIA />
+      {/* O HISTORICO DA IA MUDOU DE ENDERECO EM 04/09 (pedido do usuario).
+          Ele nasceu aqui, e o lugar estava errado: esta tela e' a banca DELE,
+          e o resultado da IA e' resultado da IA -- mora em /resultados, junto
+          com o dos outros produtos, agora numa aba propria. Duas telas
+          mostrando o mesmo bloco fariam a pessoa achar que sao numeros
+          diferentes.
+
+          Fica o atalho, porque a pergunta "e a IA, como foi?" nasce
+          justamente aqui, olhando o proprio caminho. */}
+      <button
+        onClick={() => navigate('/resultados')}
+        className="card p-4 w-full flex items-center gap-3 text-left hover-elev"
+      >
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-ink-1">Como a IA foi nos caminhos</p>
+          <p className="text-[11px] text-ink-3 mt-0.5">
+            todos os caminhos encerrados, na aba Alavancagem dos Resultados
+          </p>
+        </div>
+        <ArrowUpRight className="w-4 h-4 text-ink-3 shrink-0" />
+      </button>
 
       {/* Histórico · barra por caminho encerrado. Em unidades e não em reais
           porque o valor da unidade muda ao longo do tempo, e o gráfico existe

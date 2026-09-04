@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { Spinner } from '../components/ui'
 import { AnimatePresence, motion } from 'framer-motion'
 import PageShell from '../components/PageShell'
+import BancaTabs from '../components/BancaTabs'
 import api from '../services/api'
 import { fmtBRL } from '../utils/format'
 import NumberTicker from '../components/ui/NumberTicker'
@@ -62,6 +63,7 @@ export default function BancaSaque() {
         sub: 'O valor sai da sua banca e fica registrado no histórico',
       }}
     >
+      <BancaTabs />
         {loading ? (
           <div className="card p-16 flex items-center justify-center">
             <Spinner size="lg" />

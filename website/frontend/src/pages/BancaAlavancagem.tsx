@@ -1,4 +1,5 @@
 import PageShell from '../components/PageShell'
+import BancaTabs from '../components/BancaTabs'
 import AlavancagemPanel from '../components/AlavancagemPanel'
 
 /*
@@ -23,6 +24,7 @@ export default function BancaAlavancagem() {
       }}
       mainClassName="space-y-5"
     >
+      <BancaTabs />
       <AlavancagemPanel />
     </PageShell>
   )

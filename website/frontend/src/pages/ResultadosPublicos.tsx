@@ -11,6 +11,7 @@ import { TeamLogo, LeagueLogo } from '../components/TeamLogo'
 import FilterPanel, { FilterGroup } from '../components/FilterPanel'
 import { useAuth } from '../context/AuthContext'
 import PageShell from '../components/PageShell'
+import CaminhosDaIA from '../components/CaminhosDaIA'
 import { PAGE_WIDTH } from '../lib/pageWidth'
 import { Button, SelectMenu, Spinner } from '../components/ui'
 import SuggestionDetail from '../components/SuggestionDetail'
@@ -458,7 +459,7 @@ export default function ResultadosPublicos() {
   const [recentLeagueFilter, setRecentLeagueFilter] = useState<string>('')
 
   const { user } = useAuth()
-  const [tab, setTab] = useState<'resumo' | 'por_liga' | 'por_jogo' | 'por_mes'>('resumo')
+  const [tab, setTab] = useState<'resumo' | 'por_liga' | 'por_jogo' | 'por_mes' | 'alavancagem'>('resumo')
 
   // "Picks recentes" · paginação (server-side, ver recent_limit/recent_offset em /public/results)
   const RECENT_PAGE_SIZE = 30
@@ -710,11 +711,35 @@ export default function ResultadosPublicos() {
             {([
               ['resumo', 'Resumo'], ['por_liga', 'Por Liga'],
               ['por_jogo', 'Por Jogo'], ['por_mes', 'Por Mês'],
+              /* Alavancagem tem aba PRÓPRIA porque ela não cabe nas outras: as
+                 quatro somam pick a pick, e a alavancagem só faz sentido
+                 caminho a caminho. Ela aparece no total desta página (desde
+                 04/09 o placar a conta pelo caminho fechado), mas o "como foi"
+                 dela é uma leitura diferente da dos outros produtos. */
+              ['alavancagem', 'Alavancagem'],
             ] as [typeof tab, string][]).map(([k, l]) => (
               <button key={k} onClick={() => { if (k !== tab) sinalizarNavegacao(); setTab(k) }}
                 className={`tab px-5 py-3 text-sm font-semibold ${tab === k ? 'tab-active' : ''}`}>{l}</button>
             ))}
           </div>
+
+          {tab === 'alavancagem' && (
+            <div className="space-y-5">
+              <CaminhosDaIA />
+              <div className="card p-5">
+                <p className="text-xs text-ink-3 font-semibold mb-2">Por que ela conta diferente</p>
+                <p className="text-[11px] text-ink-3 leading-relaxed">
+                  Os outros produtos são pick independente: cada um arrisca a
+                  própria stake e o lucro do período é a soma deles. A
+                  alavancagem é um caminho, o dinheiro entra uma vez e rola de
+                  pick em pick, então ela entra no placar por caminho encerrado:
+                  1u de entrada, o multiplicador menos 1 quando bate a meta, e
+                  1u de custo quando morre no meio. Caminho em andamento vale
+                  zero até fechar.
+                </p>
+              </div>
+            </div>
+          )}
 
           {tab === 'resumo' && (loading ? (
             <div className="flex justify-center py-20">

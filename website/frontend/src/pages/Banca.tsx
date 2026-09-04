@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext'
 import { useOnboarding } from '../context/OnboardingContext'
 import { EVENTO_CONFIGURAR_BANCA } from '../components/onboarding/constantes'
 import PageShell from '../components/PageShell'
+import BancaTabs from '../components/BancaTabs'
 import { rotuloDoMercado } from '../utils/marketTranslate'
 import ProfitChart from '../components/ProfitChart'
 import SuggestionDetail from '../components/SuggestionDetail'
@@ -339,6 +340,7 @@ export default function Banca() {
         ),
       }}
     >
+      <BancaTabs />
       <AnimatePresence>
       {showSetup && (
         <SetupModal
@@ -447,19 +449,18 @@ export default function Banca() {
                 duas versões diziam o que a alavancagem NÃO é sem dar onde
                 vê-la, e link dentro de texto corrido não lê como destino. O
                 aviso continua, agora com a porta ao lado dele. */}
+            {/* O BOTAO SAIU EM 04/09, o aviso ficou. Com a alavancagem virando
+                aba da banca (BancaTabs, no topo), o botao aqui era a segunda
+                porta pro mesmo lugar -- e a que ninguem via, porque fica no
+                meio da rolagem. A FRASE continua, e continua aqui: ela diz o
+                que a alavancagem NAO e', e precisa estar junto do numero que
+                ela nao compoe. */}
             <div className="card p-4 flex items-center gap-3 -mt-2">
               <Info className="w-4 h-4 text-ink-4 shrink-0 hidden sm:block" />
               <p className="text-[11px] text-ink-3 leading-relaxed flex-1">
                 Alavancagem entra nesta banca só quando você encerra o caminho.
-                O que está rodando fica de fora.
+                O que está rodando fica de fora, e aparece na aba Alavancagem.
               </p>
-              <button
-                onClick={() => navigate('/banca/alavancagem')}
-                className="flex items-center gap-1.5 text-xs font-semibold text-ink-2 hover:text-ink-1 border border-line-strong hover:border-orange-400/40 px-3 py-2 rounded-md transition-colors shrink-0 min-h-[36px]"
-              >
-                <TrendingUp className="w-3.5 h-3.5 shrink-0 text-orange-400" />
-                Ver alavancagem
-              </button>
             </div>
 
             {/*
