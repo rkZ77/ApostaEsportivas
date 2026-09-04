@@ -72,10 +72,26 @@ function preloadDaRota(): Plugin {
             {
               tag: 'script',
               injectTo: 'head',
+              /*
+               * DEPOIS DO PRIMEIRO PAINT, E NAO NA HORA.
+               *
+               * `modulepreload` e' pedido de prioridade ALTA. Disparado no
+               * head, ele disputa banda com o CSS · que e' bloqueante · e com
+               * a fonte, e em 4G lento adia justamente o quadro que ele
+               * deveria adiantar. Medido em 04/09: com os preloads imediatos,
+               * FCP de 5,0s; o texto do hero ja estava no DOM em 500ms e
+               * esperava so' o CSS que ficou na fila atras deles.
+               *
+               * O rAF duplo espera o primeiro quadro pintado (que so'
+               * acontece depois do CSS chegar). Dai em diante a banda e'
+               * toda do JavaScript, e a cascata que este plugin existe pra
+               * evitar continua evitada.
+               */
               children:
                 `(function(){var m=${JSON.stringify(mapa)}[location.pathname];if(!m)return;` +
-                `for(var i=0;i<m.length;i++){var l=document.createElement('link');` +
-                `l.rel='modulepreload';l.crossOrigin='';l.href='/'+m[i];document.head.appendChild(l)}})()`,
+                `function p(){for(var i=0;i<m.length;i++){var l=document.createElement('link');` +
+                `l.rel='modulepreload';l.crossOrigin='';l.href='/'+m[i];document.head.appendChild(l)}}` +
+                `requestAnimationFrame(function(){requestAnimationFrame(p)})})()`,
             },
           ],
         }

@@ -34,7 +34,10 @@ export function pickCardResultBg(result?: string | null): string {
     case 'RED':        return 'pick-card--red'
     case 'HALF-WIN':   return 'pick-card--half-win'
     case 'HALF-LOSS':  return 'pick-card--half-loss'
-    default:           return ''
+    /* Pendente e PUSH nao tem cor de fundo, mas TEM luz: a branca fraca, que
+       e' a de "ainda vai acontecer". Ver `.pick-card--pendente` em index.css.
+       Sem esta classe o card ficaria sem `--luz-cor` e a luz sumiria. */
+    default:           return 'pick-card--pendente'
   }
 }
 

@@ -188,7 +188,11 @@ def test_home_nao_baixa_mais_do_que_renderiza():
     O que precisa continuar valendo e' a regra, nao a implementacao: nenhuma
     das duas chamadas baixa lista que a tela nao mostra.
     """
-    src = _front("pages/Home.tsx")
+    # As duas chamadas vivem em arquivos diferentes desde 04/09: a lista
+    # paginada saiu do Home.tsx para home/RecentResults.tsx, que virou lazy()
+    # (ela fica abaixo da dobra e arrastava grafico e escudos pro chunk da
+    # primeira tela). A regra abaixo continua sendo sobre as duas juntas.
+    src = _front("pages/Home.tsx") + _front("home/RecentResults.tsx")
 
     # 1. A faixa de indicadores nao arrasta lista nenhuma. `slim=1` corta os
     #    blocos que esta tela nao le, e recent_limit=1 porque a rota nao aceita

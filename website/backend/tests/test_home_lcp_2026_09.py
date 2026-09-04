@@ -49,9 +49,13 @@ def test_o_hero_nao_anima_com_framer():
     CSS a animacao ja' esta correndo no primeiro quadro em que o elemento
     existe.
     """
-    hero = _hero(_front_codigo("pages/Home.tsx"))
+    # O texto do hero mora em home/HeroTexto.tsx desde 04/09 · e o unico
+    # componente que o build pre-renderiza em HTML (scripts/prerender-hero.mjs).
+    hero = _hero(_front_codigo("home/HeroTexto.tsx"))
     assert "motion." not in hero
-    assert "<p className=\"entra" in hero
+    # As classes vem por template porque o hero pre-renderizado nao reanima ao
+    # montar (prop `animar`) · o que importa e' que a entrada seja CSS.
+    assert "entra-2" in hero
 
 
 def test_a_entrada_do_hero_existe_em_css():
@@ -81,11 +85,10 @@ def test_secoes_de_baixo_so_buscam_quando_chegam_perto():
     Enquanto elas buscavam no `mount`, disputavam o unico worker com as tres
     chamadas do topo -- e o topo e' o que a pessoa esta olhando.
     """
-    home = _front_codigo("pages/Home.tsx")
-    assert "usePertoDaTela" in home
-    assert "if (!perto) return" in home
-    # As duas chamadas da secao de resultados dependem do gatilho.
-    assert home.count("if (!perto) return") >= 2
+    resultados = _front_codigo("home/RecentResults.tsx")
+    assert "usePertoDaTela" in resultados
+    # As duas chamadas da secao (lista paginada e curva) dependem do gatilho.
+    assert resultados.count("if (!perto) return") >= 2
 
     leagues = _front_codigo("home/Leagues.tsx")
     assert "usePertoDaTela" in leagues

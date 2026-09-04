@@ -58,7 +58,20 @@ const Login          = lazy(() => import('./pages/Login'))
 const Picks          = lazy(() => import('./pages/Picks'))
 const Admin          = lazy(() => import('./pages/Admin'))
 const Fixtures       = lazy(() => import('./pages/Fixtures'))
-const Home           = lazy(() => import('./pages/Home'))
+/*
+ * A HOME NAO E' lazy(), E AS OUTRAS SAO.
+ *
+ * Ela e' a rota de entrada do site e a unica com hero pre-renderizado no HTML
+ * (scripts/prerender-hero.mjs). Como lazy, o React subia, renderizava o
+ * fallback nulo, e so' entao ia buscar o chunk dela · medido em 04/09, o hero
+ * de verdade so' aparecia 2s depois do bundle principal, e o Chrome registrava
+ * esse segundo paint como o LCP.
+ *
+ * Estatica, ela e' avaliada junto com o bundle e pinta no primeiro render. O
+ * custo e' o chunk dela viajar tambem para quem entra por outra rota; ele e'
+ * pequeno perto do que se ganha na rota que recebe a maior parte das visitas.
+ */
+import Home from './pages/Home'
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
 const Profile        = lazy(() => import('./pages/Profile'))
 const Planos         = lazy(() => import('./pages/Planos'))

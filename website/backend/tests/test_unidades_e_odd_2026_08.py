@@ -717,7 +717,9 @@ def test_curva_da_home_tem_rota_propria():
     assert "GROUP BY match_date, source" in corpo
     assert corpo.count("_q(cur") == 1, "a rota da curva tem que ser UMA consulta"
 
-    home = _front_codigo("pages/Home.tsx")
+    # A curva e o grafico moram em home/RecentResults.tsx desde 04/09 (a secao
+    # saiu do Home.tsx para poder ser lazy).
+    home = _front_codigo("home/RecentResults.tsx")
     assert "/public/profit-curve" in home
     assert "PipelineProfitChart" in home
 

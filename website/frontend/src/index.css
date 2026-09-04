@@ -506,53 +506,130 @@
    * parede de derrota, e o historico e' justamente onde os RED se acumulam.
    * A escala e a mesma dos selos (RESULT_STYLE), so' que diluida.
    */
+  /*
+   * A COR MORA NO CABECALHO, e o resto do card e' preto (04/09).
+   *
+   * As paradas sao em PIXEL, nao em porcentagem, e e' o ponto todo: em
+   * porcentagem a faixa colorida acompanha a altura do card, entao num card
+   * curto ela cobria a tira de Odd/Lucro/Aposta inteira e o card ficava verde
+   * de ponta a ponta. Em pixel a cor termina onde o cabecalho termina (~46px),
+   * em qualquer card -- de dois centimetros ou de meia tela. Abaixo disso o
+   * fundo desce pro preto e fica preto.
+   */
   .pick-card--green {
     background-image: linear-gradient(180deg,
-      rgb(34 197 94 / 0.45) 0%, rgb(21 128 61 / 0.20) 32%,
-      rgb(0 0 0 / 0.55) 72%, rgb(0 0 0 / 0.85) 100%);
+      rgb(34 197 94 / 0.42) 0px, rgb(21 128 61 / 0.16) 46px,
+      rgb(0 0 0 / 0.50) 130px, rgb(0 0 0 / 0.85) 100%);
   }
   .pick-card--red {
     background-image: linear-gradient(180deg,
-      rgb(220 38 38 / 0.24) 0%, rgb(153 27 27 / 0.10) 32%,
-      rgb(0 0 0 / 0.55) 72%, rgb(0 0 0 / 0.85) 100%);
+      rgb(220 38 38 / 0.24) 0px, rgb(153 27 27 / 0.09) 46px,
+      rgb(0 0 0 / 0.50) 130px, rgb(0 0 0 / 0.85) 100%);
   }
   .pick-card--half-win {
     background-image: linear-gradient(180deg,
-      rgb(20 184 166 / 0.34) 0%, rgb(15 118 110 / 0.15) 32%,
-      rgb(0 0 0 / 0.55) 72%, rgb(0 0 0 / 0.85) 100%);
+      rgb(20 184 166 / 0.32) 0px, rgb(15 118 110 / 0.12) 46px,
+      rgb(0 0 0 / 0.50) 130px, rgb(0 0 0 / 0.85) 100%);
   }
   .pick-card--half-loss {
     background-image: linear-gradient(180deg,
-      rgb(249 115 22 / 0.24) 0%, rgb(154 52 18 / 0.10) 32%,
-      rgb(0 0 0 / 0.55) 72%, rgb(0 0 0 / 0.85) 100%);
+      rgb(249 115 22 / 0.24) 0px, rgb(154 52 18 / 0.09) 46px,
+      rgb(0 0 0 / 0.50) 130px, rgb(0 0 0 / 0.85) 100%);
   }
 
   /*
    * NO TEMA CLARO A CAUDA NAO E' PRETA.
    *
-   * A cauda escura e' metade do efeito no tema escuro -- e' ela que faz o card
-   * "descer pro preto" e destacar o verde do topo. Sobre #ffffff ela viraria
-   * uma mancha cinza na metade de baixo de todo card liquidado, com o texto
-   * caindo de 10:1 pra perto do limite. Aqui o degrade so' clareia ate' sumir,
-   * e a cor do topo baixa junto: o mesmo pigmento pesa muito mais sobre branco
-   * do que sobre #0a0a0c.
+   * A cauda escura e' metade do efeito no tema escuro. Sobre #ffffff ela
+   * viraria uma mancha cinza na metade de baixo de todo card liquidado, com o
+   * texto caindo de 10:1 pra perto do limite. Aqui a cor do cabecalho so'
+   * clareia ate' sumir, e entra mais fraca: o mesmo pigmento pesa muito mais
+   * sobre branco do que sobre #0a0a0c.
    */
   :root[data-theme="light"] .pick-card--green {
     background-image: linear-gradient(180deg,
-      rgb(34 197 94 / 0.20) 0%, rgb(34 197 94 / 0.07) 38%, transparent 82%);
+      rgb(34 197 94 / 0.20) 0px, rgb(34 197 94 / 0.07) 46px, transparent 150px);
   }
   :root[data-theme="light"] .pick-card--red {
     background-image: linear-gradient(180deg,
-      rgb(239 68 68 / 0.11) 0%, rgb(239 68 68 / 0.04) 38%, transparent 82%);
+      rgb(239 68 68 / 0.11) 0px, rgb(239 68 68 / 0.04) 46px, transparent 150px);
   }
   :root[data-theme="light"] .pick-card--half-win {
     background-image: linear-gradient(180deg,
-      rgb(20 184 166 / 0.16) 0%, rgb(20 184 166 / 0.06) 38%, transparent 82%);
+      rgb(20 184 166 / 0.16) 0px, rgb(20 184 166 / 0.06) 46px, transparent 150px);
   }
   :root[data-theme="light"] .pick-card--half-loss {
     background-image: linear-gradient(180deg,
-      rgb(249 115 22 / 0.12) 0%, rgb(249 115 22 / 0.04) 38%, transparent 82%);
+      rgb(249 115 22 / 0.12) 0px, rgb(249 115 22 / 0.04) 46px, transparent 150px);
   }
+
+  /*
+   * A LUZ QUE CORRE EM VOLTA DO CARD (04/09, pedido do usuario).
+   *
+   * O degrade diz o resultado enquanto o card esta parado. Isto diz enquanto
+   * ele esta na tela: um facho percorre a borda inteira, sem parar, e e' o que
+   * faz o olho voltar pro card numa lista rolando -- e' o mesmo recurso do
+   * card de sala de jogo que o usuario mandou de referencia.
+   *
+   * COMO FUNCIONA, e por que assim: um conic-gradient girando por um angulo
+   * animado, recortado em anel por duas mascaras (a de fora menos a de
+   * dentro). E' a unica forma de animar uma borda inteira sem desenhar quatro
+   * elementos, um por lado, e sem tocar no layout -- o `::before` e'
+   * absoluto, tem `pointer-events: none` e nao ocupa espaco nenhum.
+   *
+   * `@property` e' o que permite o navegador INTERPOLAR um angulo: custom
+   * property sem tipo e' texto, e texto nao anima. Onde ele nao existir, a
+   * luz simplesmente fica parada no topo em vez de girar -- degrada pra um
+   * brilho estatico, nunca pra um card quebrado.
+   *
+   * A luz de PENDENTE e' branca e fraca de proposito: ela esta em todo card
+   * que ainda vai acontecer, que numa aba cheia e' quase a tela toda. Verde e
+   * vermelho aparecem sozinhos, um por card liquidado, e por isso podem ser
+   * mais fortes. O vermelho gira mais devagar que o verde pela razao de
+   * sempre: derrota nao precisa chamar atencao.
+   */
+  @property --luz-ang {
+    syntax: "<angle>";
+    initial-value: 0deg;
+    inherits: false;
+  }
+
+  @keyframes girar-luz {
+    to { --luz-ang: 360deg; }
+  }
+
+  .pick-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1.5px;
+    background: conic-gradient(from var(--luz-ang),
+      transparent 0deg, transparent 232deg,
+      var(--luz-cor) 312deg, var(--luz-cor) 330deg, transparent 360deg);
+    /* O anel: mascara de fora menos mascara de dentro. `content-box` respeita
+       o padding acima, entao a espessura da luz e' a espessura do padding. */
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+            mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    animation: girar-luz 6s linear infinite;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .pick-card--pendente { --luz-cor: rgb(255 255 255 / 0.30); }
+  .pick-card--green    { --luz-cor: rgb(74 222 128 / 0.95); }
+  .pick-card--red      { --luz-cor: rgb(248 113 113 / 0.55); }
+  .pick-card--half-win { --luz-cor: rgb(45 212 191 / 0.85); }
+  .pick-card--half-loss{ --luz-cor: rgb(251 146 60 / 0.55); }
+
+  .pick-card--green::before    { animation-duration: 3.6s; }
+  .pick-card--red::before      { animation-duration: 8s; }
+  .pick-card--half-loss::before{ animation-duration: 8s; }
+
+  /* No tema claro a luz branca some no fundo branco · vira cinza de linha. */
+  :root[data-theme="light"] .pick-card--pendente { --luz-cor: rgb(90 90 100 / 0.35); }
 
   /*
    * O SELO DE SEQUENCIA PULSA (04/09, pedido do usuario).
