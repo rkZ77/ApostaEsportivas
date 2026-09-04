@@ -524,6 +524,49 @@
   }
 
   /*
+   * O SELO DE SEQUENCIA PULSA (04/09, pedido do usuario).
+   *
+   * O selo estatico se perde entre o badge do produto e o da liga: e' mais um
+   * retangulo de 10px na mesma fila. O que ele anuncia -- uma boa fase que o
+   * produto esta vivendo AGORA -- nao e' um rotulo, e' um estado, e estado
+   * chama o olho pelo movimento.
+   *
+   * Duas camadas, e nenhuma delas mexe no layout: `box-shadow` e o brilho em
+   * volta, `opacity` no icone. Animar tamanho (scale) faria a fila inteira de
+   * badges tremer no celular a cada quadro.
+   *
+   * O bloco global de `prefers-reduced-motion` la em cima ja' desliga as duas.
+   * O raio pulsa mais forte e mais rapido que o fogo: sao dois degraus (3 e 6
+   * greens seguidos), e a diferenca entre eles precisa ser sentida antes de
+   * lida.
+   */
+  @keyframes pulso-selo {
+    0%, 100% { box-shadow: 0 0 0 0 var(--pulso-cor); }
+    50%      { box-shadow: 0 0 10px 1px var(--pulso-cor); }
+  }
+  @keyframes pulso-icone {
+    0%, 100% { opacity: 0.75; }
+    50%      { opacity: 1; }
+  }
+
+  .selo-sequencia {
+    animation: pulso-selo 2.2s ease-in-out infinite;
+  }
+  .selo-sequencia > svg {
+    animation: pulso-icone 2.2s ease-in-out infinite;
+  }
+  .selo-sequencia--fogo {
+    --pulso-cor: rgb(251 146 60 / 0.35);
+  }
+  .selo-sequencia--raio {
+    --pulso-cor: rgb(253 224 71 / 0.5);
+    animation-duration: 1.3s;
+  }
+  .selo-sequencia--raio > svg {
+    animation-duration: 1.3s;
+  }
+
+  /*
    * A levantada do card no hover.
    *
    * A sombra vinha do `whileHover` do framer-motion, em preto fixo a 50% · o

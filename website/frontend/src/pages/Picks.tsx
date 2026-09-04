@@ -43,7 +43,7 @@ import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, Br
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import { stakeDe } from '../utils/stakePlan'
 import { fmtUnits, pctProb, capitalizarFrase, plural } from '../utils/format'
-import { getResultStyle, PICK_TYPE_CLS, PICK_TYPE_BORDER, pickCardResultBg } from '../utils/resultStyle'
+import { getResultStyle, PICK_TYPE_CLS, PICK_TYPE_BORDER, pickCardResultBg, pickCardResultBorder } from '../utils/resultStyle'
 import { useShareStoryImage, useShareAlavancagemImage, useShareBilheteImage } from '../hooks/useShareStoryImage'
 import { useOddAtualizada } from '../hooks/useOddAtualizada'
 import { translateMarket, translateLine, translateTeamName } from '../utils/marketTranslate'
@@ -513,7 +513,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
          agora e' o CSS · o `y` continua com a mola daqui. */
       whileTap={onClick ? { scale: 0.985 } : undefined}
       transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-      className={`pick-card hover-elev group ${pickCardResultBg(dica.result)} ${isCopa ? 'border-yellow-500/20' + (onClick ? ' hover:border-yellow-500/40' : '') : PICK_TYPE_BORDER.free} ${onClick ? 'cursor-pointer' : ''}`}
+      className={`pick-card hover-elev group ${pickCardResultBg(dica.result)} ${pickCardResultBorder(dica.result) || (isCopa ? 'border-yellow-500/20' + (onClick ? ' hover:border-yellow-500/40' : '') : PICK_TYPE_BORDER.free)} ${onClick ? 'cursor-pointer' : ''}`}
       onClick={onClick}
       /* Mesma âncora do card VIP. Este vem antes na página e aparece para
          qualquer plano, então é ele que o tour costuma destacar. */
@@ -918,7 +918,7 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
          agora e' o CSS · o `y` continua com a mola daqui. */
       whileTap={onClick ? { scale: 0.985 } : undefined}
       transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-      className={`pick-card hover-elev group ${pickCardResultBg(m.result)} ${onClick ? 'cursor-pointer' : ''} ${PICK_TYPE_BORDER.multipla}`}
+      className={`pick-card hover-elev group ${pickCardResultBg(m.result)} ${onClick ? 'cursor-pointer' : ''} ${pickCardResultBorder(m.result) || PICK_TYPE_BORDER.multipla}`}
       onClick={onClick}
     >
       {/* Accent bar */}
@@ -1323,7 +1323,7 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
          agora e' o CSS · o `y` continua com a mola daqui. */
       whileTap={onClick ? { scale: 0.985 } : undefined}
       transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-      className={`pick-card hover-elev group ${pickCardResultBg(pick.result)} ${onClick ? 'cursor-pointer' : ''} ${PICK_TYPE_BORDER.alavancagem}`}
+      className={`pick-card hover-elev group ${pickCardResultBg(pick.result)} ${onClick ? 'cursor-pointer' : ''} ${pickCardResultBorder(pick.result) || PICK_TYPE_BORDER.alavancagem}`}
       onClick={onClick}
     >
       <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-orange-500 to-transparent" />

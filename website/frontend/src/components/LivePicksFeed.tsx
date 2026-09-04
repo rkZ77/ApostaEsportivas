@@ -578,7 +578,7 @@ function unidadesSugeridas(
   // mesmo número que o pick carrega no /admin.
   return Math.min(pick.stake_units ?? 1, MAX_UNIDADES_LIVE)
 }
-import { PICK_TYPE_BORDER, pickCardResultBg } from '../utils/resultStyle'
+import { PICK_TYPE_BORDER, pickCardResultBg, pickCardResultBorder } from '../utils/resultStyle'
 
 
 
@@ -852,7 +852,7 @@ const CardLive = forwardRef<HTMLDivElement, {
       layout
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`pick-card ${pickCardResultBg(pick.result)} ${PICK_TYPE_BORDER.live} ${encerrado ? 'opacity-75' : ''}`}
+      className={`pick-card ${pickCardResultBg(pick.result)} ${pickCardResultBorder(pick.result) || PICK_TYPE_BORDER.live} ${encerrado ? 'opacity-75' : ''}`}
     >
       {/* Cabeçalho · tipo, liga e minuto à esquerda; estado à direita. Mesma
           divisão do card VIP, e o minuto ocupa ali o lugar do horário do jogo:

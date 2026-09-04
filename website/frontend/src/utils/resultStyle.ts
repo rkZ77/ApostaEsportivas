@@ -38,6 +38,31 @@ export function pickCardResultBg(result?: string | null): string {
   }
 }
 
+/**
+ * A BORDA SEGUE O DEGRADÊ (04/09, pedido do usuário).
+ *
+ * Com o fundo do card pintado pelo resultado, a borda de PRODUTO virava um
+ * anel de outra cor em volta: card RED com contorno verde de VIP, card GREEN
+ * de alavancagem com contorno laranja. O olho lia dois estados no mesmo card.
+ *
+ * Enquanto o pick está pendente a borda continua sendo a do produto -- é ela
+ * que distingue VIP de Boost de múltipla numa lista misturada. Ao liquidar, o
+ * que importa passa a ser o resultado, e aí produto já está dito pelo selo do
+ * cabeçalho.
+ *
+ * Devolve '' onde não há cor de resultado (pendente e PUSH), pra quem chama
+ * cair na borda de produto.
+ */
+export function pickCardResultBorder(result?: string | null): string {
+  switch (result) {
+    case 'GREEN':      return 'border-green-500/35'
+    case 'RED':        return 'border-red-500/25'
+    case 'HALF-WIN':   return 'border-teal-500/30'
+    case 'HALF-LOSS':  return 'border-orange-500/25'
+    default:           return ''
+  }
+}
+
 export function getResultStyle(result?: string | null): ResultStyle | null {
   if (!result) return null
   return RESULT_STYLE[result as PickResult] ?? null

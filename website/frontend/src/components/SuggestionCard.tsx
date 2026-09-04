@@ -9,7 +9,7 @@ import { calcVipStake, calcFreeStake, calcMultiplaStake, calcProfitUnits } from 
 import { stakeDe, contaEmUnidades } from '../utils/stakePlan'
 import ApostaModal from './ApostaModal'
 import { translateMarket, translateLine, translateTeamName, linhaDoJogador, valorLiquidado } from '../utils/marketTranslate'
-import { PICK_TYPE_BORDER, pickCardResultBg } from '../utils/resultStyle'
+import { PICK_TYPE_BORDER, pickCardResultBg, pickCardResultBorder } from '../utils/resultStyle'
 import AnalysisModal from './AnalysisModal'
 import { Badge, PickTypeBadge, ResultBadge } from './ui'
 import {
@@ -423,7 +423,7 @@ function SuggestionCard({
          querer o tempo todo: dentro dele já moram "Apostar", "Compartilhar",
          "Entenda esta análise", o coração de favorito e o ícone de informação.
          Errar o alvo entre eles abria uma tela cheia por engano. */
-      className={`pick-card hover-elev group ${pickCardResultBg(s.result)} ${onClick ? 'cursor-pointer' : ''} ${isCopa ? 'border-yellow-500/20' + (onClick ? ' hover:border-yellow-500/40' : '') : PICK_TYPE_BORDER[pickType] ?? PICK_TYPE_BORDER.vip}`}
+      className={`pick-card hover-elev group ${pickCardResultBg(s.result)} ${onClick ? 'cursor-pointer' : ''} ${pickCardResultBorder(s.result) || (isCopa ? 'border-yellow-500/20' + (onClick ? ' hover:border-yellow-500/40' : '') : PICK_TYPE_BORDER[pickType] ?? PICK_TYPE_BORDER.vip)}`}
       onClick={onClick}
       /* Âncora do tour: o passo "Encontre seus picks" destaca o PRIMEIRO card
          que existir na tela, e não um desenho de card. Ver

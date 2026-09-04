@@ -271,8 +271,8 @@ export function CampoDoPick({ rotulo, children, className }: {
  * alguém.
  */
 const DEGRAUS = [
-  { minimo: 6, Icone: Zap,   cls: 'text-yellow-300 bg-yellow-400/10 border-yellow-400/25' },
-  { minimo: 3, Icone: Flame, cls: 'text-orange-300 bg-orange-400/10 border-orange-400/25' },
+  { minimo: 6, Icone: Zap,   cls: 'text-yellow-300 bg-yellow-400/10 border-yellow-400/25 selo-sequencia--raio' },
+  { minimo: 3, Icone: Flame, cls: 'text-orange-300 bg-orange-400/10 border-orange-400/25 selo-sequencia--fogo' },
 ]
 
 /**
@@ -300,7 +300,11 @@ export function SequenciaBadge({ source, className }: { source?: string | null; 
       className={cn(
         'shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border',
         'font-mono text-[10px] font-black tabular-nums leading-none',
-        degrau.cls, className,
+        /* O pulso mora no CSS (`.selo-sequencia` em index.css) e não numa
+           classe de animação do Tailwind: são duas camadas com tempos
+           diferentes por degrau, e o `prefers-reduced-motion` global já
+           desliga as duas de uma vez. */
+        'selo-sequencia', degrau.cls, className,
       )}
     >
       <Icone className="w-3 h-3 shrink-0" />
