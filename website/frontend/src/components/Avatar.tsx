@@ -54,7 +54,19 @@ export default function Avatar({ name, imageUrl, size = 'md', className = '' }: 
      que so' liga uma flag nunca chega na segunda. */
   const [tentativa, setTentativa] = useState(0)
 
-  const initials = name
+  /* NOME AUSENTE NÃO PODE DERRUBAR A PÁGINA.
+   *
+   * `name` é obrigatório no tipo, mas `PickSocial` passa `c.user_name` vindo da
+   * API, e comentário de conta apagada chega sem nome. Um `undefined.split`
+   * aqui estoura no render e leva a TELA INTEIRA para o "Algo deu errado" --
+   * uma lista de comentários derrubando a página de picks por causa de um
+   * campo vazio.
+   *
+   * Sem nome, mostra o círculo sem iniciais: é feio e é honesto, e o resto da
+   * tela continua de pé. */
+  const nome = typeof name === 'string' ? name : ''
+
+  const initials = nome
     .split(' ')
     .slice(0, 2)
     .map(w => w[0]?.toUpperCase() ?? '')
@@ -70,7 +82,7 @@ export default function Avatar({ name, imageUrl, size = 'md', className = '' }: 
     return (
       <img
         src={src}
-        alt={name}
+        alt={nome}
         width={SIZE_PX[size]}
         height={SIZE_PX[size]}
         className={`${SIZE[size]} rounded-full object-cover shrink-0 ${className}`}
@@ -82,7 +94,7 @@ export default function Avatar({ name, imageUrl, size = 'md', className = '' }: 
   }
 
   return (
-    <div className={`${SIZE[size]} ${nameColor(name)} rounded-full flex items-center justify-center font-black text-ink-1 shrink-0 select-none ${className}`}>
+    <div className={`${SIZE[size]} ${nameColor(nome)} rounded-full flex items-center justify-center font-black text-ink-1 shrink-0 select-none ${className}`}>
       {initials}
     </div>
   )

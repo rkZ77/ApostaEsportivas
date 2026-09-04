@@ -3452,46 +3452,33 @@ export default function Picks() {
             <ComoFunciona titulo="O que é a Alavancagem?" cor="text-orange-400"
                           borda="border-orange-500/20" fundo="bg-orange-500/5">
               <>
+                {/* TEXTO CURTO E PLACAR DO SITE (2026-09-04, pedido do usuário).
+                
+                    Este bloco tinha quatro parágrafos e três números que não
+                    eram placar: "Odd por etapa", "Meta" e "Risco" descrevem o
+                    PARÂMETRO do produto, e todas as outras abas usam aquele
+                    espaço para a pergunta "e isso funciona?" -- picks, green,
+                    red, acerto e lucro. Duas linguagens no mesmo lugar da tela.
+
+                    O placar dela só passou a existir hoje: até de manhã a
+                    alavancagem valia zero no plano de stake, e um "Lucro 0,0u"
+                    ao lado de "120 picks" seria mentira com cara de número.
+                    Agora ela conta por CAMINHO fechado, e `stats/quick` já
+                    devolve esse número -- o mesmo do placar público. */}
                 <p>
                   Não é uma aposta por dia, é um{' '}
-                  <span className="text-ink-1 font-bold">caminho</span>. Você define o valor de
-                  entrada e, a cada green, reaposta o bolo inteiro no pick do dia seguinte. Cada
-                  etapa tem odd combinada entre{' '}
-                  <span className="text-ink-1 font-bold">1.40 e 1.55</span>.
+                  <span className="text-ink-1 font-bold">caminho</span>: você define a entrada e,
+                  a cada green, reaposta o bolo inteiro no pick seguinte.
                 </p>
                 <p>
-                  O caminho fecha sozinho ao chegar em{' '}
+                  Ele fecha sozinho em{' '}
                   <span className="text-green-400 font-bold">{userAlavSerie?.meta ?? 6} greens</span>,
-                  que multiplicam a entrada por cerca de 10. Aí o lucro vira dinheiro e entra na sua
-                  banca. Você também pode encerrar antes, a qualquer momento.
+                  que multiplicam a entrada por cerca de 10. Se der{' '}
+                  <span className="text-red-400 font-bold">red</span> em qualquer etapa, você perde{' '}
+                  <span className="text-ink-1 font-bold">só o valor de entrada</span> e um caminho
+                  novo começa.
                 </p>
-                <p>
-                  Se der <span className="text-red-400 font-bold">red</span> em qualquer etapa, o
-                  caminho acaba e você perde <span className="text-ink-1 font-bold">apenas o valor
-                  de entrada</span>, nunca o acumulado, o bolo que estava em jogo nunca saiu da
-                  mesa, então nunca foi seu para perder. Um caminho novo começa em seguida.
-                </p>
-                <p className="text-ink-3">
-                  É por isso que o valor em andamento não conta na sua banca: ele está inteiro
-                  apostado na próxima etapa.
-                </p>
-                <div className="grid grid-cols-3 gap-3 mt-3">
-                  {[
-                    { label: 'Odd por etapa', value: '1.40 a 1.55', color: 'text-orange-400' },
-                    { label: 'Meta',          value: `${userAlavSerie?.meta ?? 6} greens`, color: 'text-green-400' },
-                    { label: 'Risco',         value: '1u',        color: 'text-ink-1'      },
-                    /* Sem placar em unidades aqui de propósito: a alavancagem
-                       vale zero no plano de stake (ver stake_plan.py) porque o
-                       composto em andamento não é dinheiro, e um "Lucro 0,0u"
-                       ao lado de "120 picks" seria mentira com cara de número.
-                       O resultado dela vive na banca de quem apostou. */
-                  ].map(({ label, value, color }) => (
-                    <div key={label} className="bg-surface-1 rounded-md p-3 text-center">
-                      <div className={`text-lg font-black ${color}`}>{value}</div>
-                      <div className="text-xs text-ink-4 mt-0.5">{label}</div>
-                    </div>
-                  ))}
-                </div>
+                <PlacarDoProduto source="alavancagem" tom="text-orange-400/70" />
               </>
             </ComoFunciona>
 
