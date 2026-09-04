@@ -505,12 +505,35 @@ export default function ResultadosPublicos() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, user, source, month])
 
+  /* CADA ABA BAIXA O QUE ELA USA (2026-09-04).
+     
+     A página baixava os blocos das CINCO abas ao abrir, mesmo quem só ia olhar
+     o Resumo. `by_league` é de uma aba, `by_source_day` de outra, e cada bloco
+     é uma ida ao banco onde a consulta custa 0,4ms e ABRIR A CONEXÃO custa
+     perto de 1s. Num container frio isso vira fila, a fila estoura o timeout de
+     15s do cliente e aparece o alerta vermelho de "o servidor demorou" -- com o
+     log do servidor mostrando 200 em tudo, porque ele respondeu, só que tarde.
+
+     `available_months` entra SEMPRE: ele alimenta o filtro de mês, que fica
+     acima das abas e vale pra todas. Pedir só na aba que o usa faria o filtro
+     aparecer vazio e depois se preencher sozinho.
+
+     A aba Alavancagem não pede nada daqui: ela tem rota própria. */
+  const blocosDaAba = (t: typeof tab): string => {
+    const comuns = ['months']
+    if (t === 'resumo')    return [...comuns, 'by_day'].join(',')
+    if (t === 'por_liga')  return [...comuns, 'by_league'].join(',')
+    if (t === 'por_mes')   return [...comuns, 'by_source_day', 'by_day'].join(',')
+    return comuns.join(',')
+  }
+
   useEffect(() => {
     setLoading(true)
     setError(false)
     const params: Record<string, string | number> = {
       recent_limit:  RECENT_PAGE_SIZE,
       recent_offset: recentPage * RECENT_PAGE_SIZE,
+      blocos: blocosDaAba(tab),
     }
     if (source !== 'all') params.source = source
     if (month) params.month = month
@@ -518,7 +541,8 @@ export default function ResultadosPublicos() {
       .then(r => setData(r.data))
       .catch(() => { setData(null); setError(true) })
       .finally(() => setLoading(false))
-  }, [source, month, recentPage])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source, month, recentPage, tab])
 
   const s = data?.summary
   const winRatePct = calcWinRate(s?.greens ?? 0, s?.total ?? 0)

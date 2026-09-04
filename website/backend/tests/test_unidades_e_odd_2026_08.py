@@ -525,7 +525,9 @@ def test_quebra_por_produto_sai_de_uma_consulta_so():
     E fica fora do caminho slim -- a Home nao usa nada disto.
     """
     corpo = _codigo("routers/public.py", "_resultados_publicos")
-    assert "by_source_day = [] if slim else" in corpo
+    # `if slim` virou `if not _quer("by_source_day")` em 04/09 · a pagina pede
+    # o bloco so' na aba que o usa, e `_quer` mantem o corte do slim por cima.
+    assert 'by_source_day = [] if not _quer("by_source_day") else' in corpo
     assert "GROUP BY match_date, source" in corpo
     # O agregado nao pode ser uma segunda consulta.
     assert corpo.count("GROUP BY match_date, source") == 1

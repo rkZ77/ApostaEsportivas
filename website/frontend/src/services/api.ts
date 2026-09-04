@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { notifyError } from './errorToast'
 import { chaveDaPrecarga, consumir } from './precarga'
+import { chaveDoGet, compartilhar, limparDedupe } from './dedupeGet'
 import { requisicaoIniciou, requisicaoTerminou } from './progressBus'
 
 // withCredentials envia/recebe cookies httpOnly automaticamente
@@ -111,6 +112,15 @@ api.interceptors.response.use(
     // demorou. Mandar o usuário conferir o wi-fi quando a fila é nossa faz ele
     // procurar defeito no lugar errado · e some com o único sinal de que o
     // site está devagar.
+    // Requisição CANCELADA não é falha do servidor. Ela acontece o tempo todo
+    // em navegação normal (o componente desmonta antes da resposta chegar), e
+    // como ela também chega aqui sem `response`, caía no mesmo ramo e pintava
+    // um alerta vermelho de "não foi possível falar com o servidor" para quem
+    // só trocou de aba.
+    if (axios.isCancel(err) || err.code === 'ERR_CANCELED') {
+      return Promise.reject(err)
+    }
+
     if (!err.response) {
       const semRede = typeof navigator !== 'undefined' && navigator.onLine === false
       notifyError(
@@ -126,5 +136,30 @@ api.interceptors.response.use(
     return Promise.reject(err)
   }
 )
+
+/*
+ * GET idêntico e concorrente vira UM · ver services/dedupeGet.ts.
+ *
+ * Envolve o `api.get` em vez de virar interceptor porque interceptor não sabe
+ * devolver "a resposta daquela outra requisição": ele roda POR requisição, e a
+ * economia aqui é justamente não criar a segunda.
+ *
+ * Escrita esvazia a janela: depois de um POST, o próximo GET tem que ver o
+ * mundo novo, mesmo que alguém tenha lido o antigo meio segundo antes.
+ */
+const _get = api.get.bind(api)
+api.get = ((url: string, config?: any) => {
+  const chave = chaveDoGet(url, config?.params)
+  if (!chave) return _get(url, config)
+  return compartilhar(chave, () => _get(url, config))
+}) as typeof api.get
+
+for (const metodo of ['post', 'put', 'patch', 'delete'] as const) {
+  const original = (api[metodo] as any).bind(api)
+  ;(api[metodo] as any) = (...args: any[]) => {
+    limparDedupe()
+    return original(...args)
+  }
+}
 
 export default api

@@ -193,10 +193,17 @@ def test_home_pede_a_versao_enxuta():
 def test_slim_pula_os_blocos_que_a_home_nao_usa():
     # O SQL saiu de public_results e foi pra _resultados_publicos em 04/09: o
     # endpoint agora so agenda as varreduras e delega a parte cacheada.
+    # A CONDICAO MUDOU DE FORMA EM 04/09, e nao de efeito. Os blocos pesados
+    # passaram a olhar `_quer(bloco)`, que a pagina de Resultados usa pra pedir
+    # so' os da aba aberta. `_quer` comeca com `not slim and ...`, entao slim
+    # continua cortando tudo -- ele e' mais forte que o pedido, e ha' caso
+    # proprio cobrando isso em test_carga_por_aba_2026_09.
     corpo = _codigo("routers/public.py", "_resultados_publicos")
-    for bloco in ("months_rows", "by_day", "by_league", "counts_row"):
-        assert f"{bloco} = [] if slim" in corpo or f"{bloco} = None if slim" in corpo \
-            or f"{bloco} = [] if slim else" in corpo, bloco
+    assert "return not slim and" in corpo, "slim tem que continuar cortando por cima do pedido"
+    for bloco, nome in (("months_rows", "months"), ("by_day", "by_day"),
+                        ("by_league", "by_league")):
+        assert f'{bloco} = [] if not _quer("{nome}") else' in corpo, bloco
+    assert "counts_row = None if slim" in corpo or "counts_row = [] if slim" in corpo
 
 
 def test_contagem_de_ligas_sai_do_proprio_resumo():

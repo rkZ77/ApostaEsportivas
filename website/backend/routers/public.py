@@ -476,6 +476,7 @@ def public_results(
     recent_limit:  int = Query(10, ge=1, le=50, description="Itens por página em 'recent'"),
     recent_offset: int = Query(0, ge=0, description="Offset de paginação em 'recent'"),
     slim: bool = Query(False, description="Pula os blocos que só a página de Resultados usa"),
+    blocos: Optional[str] = Query(None, description="Lista separada por vírgula dos blocos pesados desejados; ausente = todos"),
 ):
     """Resultados públicos consolidados para a Landing page.
 
@@ -488,6 +489,20 @@ def public_results(
 
     Com slim a rota cai de sete consultas pra tres. Sem ele, nada muda: a
     pagina de Resultados continua recebendo a resposta inteira.
+
+    `blocos` E' O MEIO-TERMO QUE FALTAVA (2026-09-04)
+    -------------------------------------------------
+    A pagina de Resultados tem cinco abas e baixava os blocos das CINCO ao
+    abrir, mesmo quem so' ia olhar o Resumo. `by_league` e `by_source_day` sao
+    de uma aba cada e nunca aparecem nas outras -- e cada bloco e' uma ida ao
+    banco onde a consulta custa 0,4ms e ABRIR A CONEXAO custa perto de 1s. Num
+    container frio isso vira fila, a fila estoura o timeout de 15s do cliente e
+    o usuario ve' "o servidor demorou" enquanto o log mostra 200 em tudo.
+
+    `slim` nao servia aqui porque ele corta demais: leva junto `by_day` e
+    `available_months`, que o Resumo usa. Entao `blocos` nomeia o que se quer,
+    e o padrao (ausente) continua sendo TUDO -- nenhum chamador antigo muda de
+    comportamento.
 
     OS TRES EFEITOS COLATERAIS RODAM EM BACKGROUND (2026-08-xx)
     -----------------------------------------------------------
@@ -525,7 +540,7 @@ def public_results(
 
     background.add_task(_gatilhos_em_background)
 
-    return _resultados_publicos(month, source, recent_limit, recent_offset, slim)
+    return _resultados_publicos(month, source, recent_limit, recent_offset, slim, blocos)
 
 
 # O cache fica AQUI, e nao no endpoint, por causa dos gatilhos acima: eles
@@ -538,7 +553,15 @@ def public_results(
 # mostrar isso. O /admin invalida na hora quando publica ou corrige um pick
 # (ver cache_publico.invalidar).
 @cache_publico.rota(60)
-def _resultados_publicos(month, source, recent_limit, recent_offset, slim):
+def _resultados_publicos(month, source, recent_limit, recent_offset, slim, blocos=None):
+    # `blocos` ausente = tudo, que e' o contrato antigo. Bloco nao citado e'
+    # pulado exatamente como o `slim` ja' pulava: devolve vazio, e a tela que
+    # nao pediu tambem nao le.
+    _pedidos = None if not blocos else {b.strip() for b in blocos.split(",") if b.strip()}
+
+    def _quer(bloco: str) -> bool:
+        return not slim and (_pedidos is None or bloco in _pedidos)
+
     conn = get_connection()
     cur  = conn.cursor()
     try:
@@ -551,7 +574,7 @@ def _resultados_publicos(month, source, recent_limit, recent_offset, slim):
         # inalcancaveis por uma tela que os TINHA. Derivar do union faz o
         # seletor e o conteudo nascerem juntos.
         meses_union = _build_union(_builders(cur), "", None)
-        months_rows = [] if slim else _q(cur, f"""
+        months_rows = [] if not _quer("months") else _q(cur, f"""
             SELECT TO_CHAR(match_date, 'YYYY-MM') AS month, COUNT(*) AS total
             FROM ({meses_union}) t
             WHERE match_date IS NOT NULL
@@ -629,7 +652,7 @@ def _resultados_publicos(month, source, recent_limit, recent_offset, slim):
         """, p)
 
         # ── Por dia (gráfico) ─────────────────────────────────────────────────
-        by_day = [] if slim else _q(cur, f"""
+        by_day = [] if not _quer("by_day") else _q(cur, f"""
             SELECT
                 match_date,
                 COUNT(*) AS total,
@@ -654,7 +677,7 @@ def _resultados_publicos(month, source, recent_limit, recent_offset, slim):
         #
         # O nome da liga vem por LEFT JOIN, nao por uma segunda consulta a
         # `leagues` montando dicionario em Python. Mesma saida, uma ida a menos.
-        by_league = [] if slim else [dict(r) for r in _q(cur, f"""
+        by_league = [] if not _quer("by_league") else [dict(r) for r in _q(cur, f"""
             SELECT
                 t.league_id,
                 COUNT(*)                                  AS total,
@@ -679,7 +702,7 @@ def _resultados_publicos(month, source, recent_limit, recent_offset, slim):
         # ver database.py:71-82) pra refazer uma soma que já está na mão.
         #
         # Fora do caminho slim: a Home não usa nada disto.
-        by_source_day = [] if slim else _q(cur, f"""
+        by_source_day = [] if not _quer("by_source_day") else _q(cur, f"""
             SELECT match_date, source,
                    COUNT(*)                                 AS total,
                    COUNT(*) FILTER (WHERE result = 'GREEN') AS greens,
