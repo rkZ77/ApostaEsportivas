@@ -51,6 +51,8 @@ export interface StoryImageInput {
    * que o card mostra em "Deu".
    */
   settledLabel?: string | null
+  /** Casa onde a odd foi encontrada · o mesmo campo "Casa" do card. */
+  house?: string | null
 }
 
 // ── Tipografia ───────────────────────────────────────────────────────────
@@ -254,6 +256,75 @@ function drawPlayerPhoto(ctx: CanvasRenderingContext2D, img: HTMLImageElement | 
 }
 
 
+/*
+ * OS CAMPOS DO PICK, ROTULADOS · a mesma leitura do card do site (04/09).
+ *
+ * A imagem escrevia mercado e linha grudados numa pastilha só ("Escanteios
+ * Mais/Menos, Mais de 9.5"), e a casa não aparecia em lugar nenhum. Quem
+ * recebe o print no WhatsApp precisa das três coisas separadas pra conseguir
+ * repetir a aposta: O QUÊ, QUANTO e ONDE. É exatamente o que o card resolveu
+ * em 02/09 com CampoDoPick, e a imagem tinha ficado pra trás.
+ */
+function drawCamposDoPick(
+  ctx: CanvasRenderingContext2D, y: number,
+  campos: Array<[string, string]>,
+): number {
+  const alturaLinha = 52
+  const boxH = 32 + campos.length * alturaLinha
+  drawRoundedRect(ctx, 70, y, W - 140, boxH, 24)
+  ctx.fillStyle = 'rgba(255,255,255,0.05)'
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)'
+  ctx.lineWidth = 2
+  ctx.stroke()
+
+  campos.forEach(([rotulo, valor], i) => {
+    const ly = y + 32 + i * alturaLinha + 10
+    ctx.textAlign = 'left'
+    ctx.font = fontSans(600, 27)
+    ctx.fillStyle = '#71717a'
+    ctx.fillText(rotulo, 118, ly)
+    ctx.font = fontDisplay(800, 31)
+    ctx.fillStyle = '#ffffff'
+    ctx.fillText(fitText(ctx, valor, W - 500), 360, ly)
+  })
+  ctx.textAlign = 'center'
+  return boxH
+}
+
+/*
+ * A BARRA DE PROBABILIDADE, igual à do card.
+ *
+ * O número já ia na faixa de baixo, como mais uma coluna de "CHANCE 78%". Na
+ * tela ele não é uma coluna: é uma barra, e a barra é o que se lê sem ler --
+ * mais da metade cheia, quase cheia. Os cortes de cor (75 e 60) são os mesmos
+ * de PickProbability, senão a imagem chamaria de verde uma chance que o site
+ * pinta de amarelo.
+ */
+function drawBarraProbabilidade(
+  ctx: CanvasRenderingContext2D, y: number, pct: number, rotulo = 'Probabilidade',
+): number {
+  const cor = pct >= 75 ? '#00CC00' : pct >= 60 ? '#eab308' : '#75757f'
+  ctx.textAlign = 'left'
+  ctx.font = fontSans(600, 26)
+  ctx.fillStyle = '#71717a'
+  ctx.fillText(rotulo, 70, y)
+  ctx.textAlign = 'right'
+  ctx.font = fontMono(900, 30)
+  ctx.fillStyle = cor
+  ctx.fillText(`${Math.round(pct)}%`, W - 70, y)
+  ctx.textAlign = 'center'
+
+  const barY = y + 20
+  drawRoundedRect(ctx, 70, barY, W - 140, 14, 7)
+  ctx.fillStyle = 'rgba(255,255,255,0.10)'
+  ctx.fill()
+  const largura = Math.max(14, (W - 140) * Math.min(100, Math.max(0, pct)) / 100)
+  drawRoundedRect(ctx, 70, barY, largura, 14, 7)
+  withGlow(ctx, `${cor}66`, 14, () => { ctx.fillStyle = cor; ctx.fill() })
+  return 60
+}
+
 export async function buildStoryImage(input: StoryImageInput): Promise<Blob> {
   const canvas = document.createElement('canvas')
   canvas.width = W
@@ -276,11 +347,14 @@ export async function buildStoryImage(input: StoryImageInput): Promise<Blob> {
 
   // Mirror dos incrementos de cursorY usados abaixo (876 = soma dos fixos;
   // leagueName/market são as duas únicas seções opcionais que mudam a altura).
+  const nCampos = (input.market ? 1 : 0) + (input.line ? 1 : 0) + (input.house ? 1 : 0)
+    + (input.settledLabel && input.result ? 1 : 0)
   const contentBottomUnshifted = (logoImg ? 290 : 170) + 876
-    + (input.leagueName ? 58 : 0) + (input.market ? 80 : 0)
+    + (input.leagueName ? 58 : 0)
+    + (nCampos > 0 ? nCampos * 52 + 44 : 0)
     // O bloco do jogador (foto + nome + time) é 60px mais alto que o "vs".
     + (input.playerName ? 60 : 0)
-    + (input.settledLabel && input.result ? 46 : 0) + FOOTER_HEIGHT
+    + (input.probabilityPct != null ? 116 : 0) + FOOTER_HEIGHT
   ctx.save()
   ctx.translate(0, computeShiftY(contentBottomUnshifted))
 
@@ -388,39 +462,34 @@ export async function buildStoryImage(input: StoryImageInput): Promise<Blob> {
 
   cursorY += temJogador ? 250 : 190
 
-  if (input.market) {
-    const marketText = input.line ? `${input.market}, ${input.line}` : input.market
-    ctx.font = fontDisplay(800, 36)
-    const fitted = fitText(ctx, marketText, W - 240)
-    const textW = ctx.measureText(fitted).width
-    const boxW = Math.min(textW + 80, W - 120)
-    const boxH = 76
-    const boxY = cursorY - 52
-    drawRoundedRect(ctx, W / 2 - boxW / 2, boxY, boxW, boxH, 22)
-    ctx.fillStyle = 'rgba(255,255,255,0.07)'
-    ctx.fill()
-    ctx.strokeStyle = 'rgba(255,255,255,0.18)'
-    ctx.lineWidth = 2
-    ctx.stroke()
-    ctx.fillStyle = '#ffffff'
-    ctx.fillText(fitted, W / 2, boxY + 51)
-    cursorY += 80
+  /* MERCADO, LINHA, CASA E "DEU", CADA UM COM O SEU RÓTULO.
+   *
+   * Antes era uma pastilha só, com mercado e linha grudados por vírgula, e a
+   * casa não aparecia. O "Deu" continua entrando só em pick liquidado: é a
+   * linha que transforma o selo em prova -- com "Menos de 12.0" e um PUSH,
+   * quem vê precisa dos 12 escanteios pra entender que a casa devolveu porque
+   * empatou, e não porque erramos. */
+  const campos: Array<[string, string]> = []
+  if (input.market) campos.push(['Mercado', input.market])
+  if (input.line) campos.push(['Linha', input.line])
+  if (input.house) campos.push(['Casa', input.house])
+  if (input.settledLabel && input.result) campos.push(['Deu', input.settledLabel])
+  if (campos.length > 0) {
+    /* A caixa começa ABAIXO do nome do visitante, não em cima dele: o `-52`
+       daqui era a folga da pastilha antiga, de 76px de altura, e com a caixa
+       de campos o nome do time caía dentro da borda de cima. */
+    cursorY += drawCamposDoPick(ctx, cursorY - 4, campos) + 12
   }
 
-  /* O QUE DEU NO JOGO, logo abaixo da linha apostada.
-   *
-   * Só em pick liquidado, e é a linha que transforma o selo em prova: com
-   * "Menos de 12.0" e um PUSH, quem vê a imagem precisa dos 12 escanteios pra
-   * entender que a casa devolveu porque empatou, e não porque erramos. */
-  if (input.settledLabel && input.result) {
-    ctx.font = fontSans(700, 30)
-    ctx.fillStyle = '#a1a1aa'
-    ctx.fillText(fitText(ctx, `Deu ${input.settledLabel}`, W - 200), W / 2, cursorY + 26)
-    cursorY += 46
+  // A barra de probabilidade, no mesmo lugar em que o card a põe: depois dos
+  // campos e antes do rodapé.
+  if (input.probabilityPct != null) {
+    cursorY += 56
+    cursorY += drawBarraProbabilidade(ctx, cursorY, input.probabilityPct)
   }
 
   // Selo de resultado
-  cursorY += 44
+  cursorY += 28
   const resultLabel = rs ? rs.label : 'A CONFIRMAR'
   ctx.font = fontDisplay(900, 72)
   const resultTextW = ctx.measureText(resultLabel).width
@@ -444,8 +513,8 @@ export async function buildStoryImage(input: StoryImageInput): Promise<Blob> {
   })
   cursorY += 122
 
-  // Estatísticas: odd, lucro e a chance estimada deste pick.
-  cursorY += 90
+  // Estatísticas: odd e lucro. A chance virou barra, logo acima.
+  cursorY += 74
   const prob = input.probabilityPct ?? null
   const hasWinRate = prob == null && input.winRatePct != null
   const profitText = input.profit != null
@@ -459,11 +528,13 @@ export async function buildStoryImage(input: StoryImageInput): Promise<Blob> {
     // Prioridade pra probabilidade DO PICK · "ACERTO 30D" fica so' de reserva,
     // pra quando o pick nao carrega probabilidade, e com rotulo que diz de
     // quem e o numero.
-    ...(prob != null
-      ? [{ label: 'CHANCE', value: `${Math.round(prob)}%`, color: '#facc15' }]
-      : hasWinRate
-        ? [{ label: 'ACERTO DO SITE', value: `${Math.round(input.winRatePct!)}%`, color: '#facc15' }]
-        : []),
+    /* A CHANCE SAIU DAQUI e virou barra, logo acima dos times · o mesmo
+       lugar e o mesmo desenho do card. Sem probabilidade do pick, a terceira
+       coluna volta a ser o acerto do site, com o rótulo dizendo de quem é o
+       número. */
+    ...(prob == null && hasWinRate
+      ? [{ label: 'ACERTO DO SITE', value: `${Math.round(input.winRatePct!)}%`, color: '#facc15' }]
+      : []),
   ]
   const totalW = W - 200
   const colW = totalW / stats.length

@@ -457,6 +457,10 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
       pickType: 'free',
       market: translateMarket(dica.market),
       line: translateLine(dica.line),
+      /* A casa entra na imagem como campo rotulado, igual no card: sem ela o
+         print diz o preço e não diz onde pegar. Quem já registrou vê a casa
+         DELE, que é a que vale pra conta dele. */
+      house: (seguido && casaSeguida) ? casaSeguida : (dica.bet_house || null),
       odd: Number(dica.odd),
       probabilityPct: pctProb(dica.probability ?? dica.confidence),
       result: dica.result,

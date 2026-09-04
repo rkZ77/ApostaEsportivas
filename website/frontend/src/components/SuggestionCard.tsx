@@ -303,8 +303,10 @@ function SuggestionCard({
       playerId: s.player_id ?? undefined,
       playerName: s.player_name ?? undefined,
       playerTeamName: s.player_team ?? undefined,
-      settledLabel: s.settled_value != null
-        ? valorLiquidado(s.market, s.settled_value) : undefined,
+      /* Mesma regra do card: a casa de quem registrou vence a sugerida. */
+      house: casaDoPick,
+      /* Mesma regra do card: "Deu" não entra no pick ao vivo (ver mostraDeu). */
+      settledLabel: mostraDeu ? valorLiquidado(s.market, s.settled_value!) : undefined,
       odd: Number(s.odd),
       probabilityPct: pctProb(s.probability ?? s.confidence),
       result: s.result,
