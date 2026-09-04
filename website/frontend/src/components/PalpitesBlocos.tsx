@@ -218,15 +218,19 @@ export function ChamadaFinal() {
 export function LinksDeLigas({
   ligas,
   atual,
+  /* A tela de slug inválido já usa "Palpites por campeonato" na barra, e o
+     mesmo texto duas vezes na mesma tela lê como erro de montagem. */
+  titulo = 'Palpites por campeonato',
 }: {
   ligas: Array<{ slug: string; name: string }>
   atual?: string
+  titulo?: string
 }) {
   if (!ligas.length) return null
   return (
     <section>
       <h2 className="font-display text-base font-semibold text-ink-1 mb-4">
-        Palpites por campeonato
+        {titulo}
       </h2>
       <div className="flex flex-wrap gap-2">
         {ligas.map(l => (

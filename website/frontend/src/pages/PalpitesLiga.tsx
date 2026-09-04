@@ -91,7 +91,7 @@ export default function PalpitesLiga() {
           description="Escolha um dos campeonatos abaixo para ver os jogos do dia e o histórico da IA."
           action={{ children: 'Ver palpites de hoje', to: '/palpites-de-futebol-hoje' }}
         />
-        <LinksDeLigas ligas={data?.ligas ?? []} />
+        <LinksDeLigas ligas={data?.ligas ?? []} titulo="Campeonatos cobertos" />
       </PageShell>
     )
   }
