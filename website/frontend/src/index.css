@@ -618,6 +618,67 @@
     z-index: 1;
   }
 
+  /*
+   * OS RAIOS CAINDO NO FUNDO (04/09, pedido do usuario).
+   *
+   * A luz da borda diz que o card esta vivo; isto diz de que HUMOR ele esta.
+   * Sao riscos finos na diagonal, na cor do resultado, descendo devagar --
+   * chuva de energia, o mesmo recurso do card de sala de jogo da referencia.
+   *
+   * TRES DECISOES QUE SEGURAM O EFEITO NO LUGAR:
+   *
+   * 1. So' em card LIQUIDADO. No pendente o fundo fica limpo, com a luz branca
+   *    da borda e o selo de sequencia pulsando -- eles ja' sao dois elementos
+   *    em movimento, e uma aba cheia de pendentes com chuva atras do texto
+   *    vira um letreiro.
+   * 2. A chuva MORRE indo pra baixo (`mask-image`). Ela e' companheira da cor
+   *    do cabecalho: as duas abrem no topo e somem antes do miolo, que e' onde
+   *    mercado, linha e casa precisam ser lidos sem concorrencia.
+   * 3. Anima `background-position`, nao `transform`. O elemento nao se move --
+   *    o desenho e' que escorre por dentro dele, entao nao ha' o que estourar
+   *    a borda arredondada nem o que recalcular de layout.
+   *
+   * O vermelho vem na metade da opacidade do verde e mais devagar, pela razao
+   * de sempre: derrota nao precisa chamar atencao.
+   */
+  @keyframes cair-raios {
+    to { background-position: 84px 240px; }
+  }
+
+  .pick-card--green::after,
+  .pick-card--red::after,
+  .pick-card--half-win::after,
+  .pick-card--half-loss::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background-image: repeating-linear-gradient(160deg,
+      transparent 0 26px,
+      var(--raio-cor) 26px 27px,
+      transparent 27px 33px,
+      var(--raio-cor) 33px 33.6px,
+      transparent 34px 84px);
+    -webkit-mask-image: linear-gradient(to bottom, #000 0, rgb(0 0 0 / 0.35) 30%, transparent 62%);
+            mask-image: linear-gradient(to bottom, #000 0, rgb(0 0 0 / 0.35) 30%, transparent 62%);
+    animation: cair-raios 7s linear infinite;
+  }
+
+  .pick-card--green    { --raio-cor: rgb(74 222 128 / 0.30); }
+  .pick-card--red      { --raio-cor: rgb(248 113 113 / 0.14); }
+  .pick-card--half-win { --raio-cor: rgb(45 212 191 / 0.24); }
+  .pick-card--half-loss{ --raio-cor: rgb(251 146 60 / 0.14); }
+
+  .pick-card--red::after,
+  .pick-card--half-loss::after { animation-duration: 11s; }
+
+  /* No claro o risco tem que ser mais escuro que o fundo, nao mais claro. */
+  :root[data-theme="light"] .pick-card--green    { --raio-cor: rgb(22 163 74 / 0.16); }
+  :root[data-theme="light"] .pick-card--red      { --raio-cor: rgb(185 28 28 / 0.09); }
+  :root[data-theme="light"] .pick-card--half-win { --raio-cor: rgb(15 118 110 / 0.14); }
+  :root[data-theme="light"] .pick-card--half-loss{ --raio-cor: rgb(154 52 18 / 0.09); }
+
   .pick-card--pendente { --luz-cor: rgb(255 255 255 / 0.30); }
   .pick-card--green    { --luz-cor: rgb(74 222 128 / 0.95); }
   .pick-card--red      { --luz-cor: rgb(248 113 113 / 0.55); }
