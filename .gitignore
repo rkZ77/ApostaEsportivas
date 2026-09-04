@@ -27,6 +27,19 @@ website/scripts/video/templates/
 # sessao.json e' credencial: cookie de sessao logada em producao.
 website/scripts/video/sessao.json
 
+# ...e menos as ferramentas do motor, terceira vitima da mesma armadilha
+# (2026-09-04). `ApostaEsportivas/src/scripts/` sao 18 arquivos de codigo --
+# backfill, backtest e medicao -- e o BACKEND IMPORTA UM DELES EM RUNTIME:
+# routers/admin.py faz `from scripts.backfill_cartao_vermelho import _ALVO` nos
+# dois endpoints de /dados/vermelho-legado. Como a pasta nunca foi versionada,
+# ela nao existe na imagem: em producao os dois botoes so' sabem responder
+# "Script de backfill indisponivel", e o teste que cobre a regra so' passava na
+# maquina de quem tinha o arquivo solto.
+#
+# Nao ha' segredo neles: os 16 que falam com banco ou API leem tudo de
+# variavel de ambiente.
+!ApostaEsportivas/src/scripts/
+
 # Venv do ApostaEsportivas
 ApostaEsportivas/venv/
 *.key
