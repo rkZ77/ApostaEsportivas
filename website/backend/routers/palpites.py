@@ -58,6 +58,9 @@ _APELIDOS: dict = {
     "uefa-champions-league": "champions-league",
     "uefa-europa-league": "europa-league",
     "serie-a": "serie-a-italia",
+    # Como o nome esta gravado no banco de PROD. Corrigido antes de qualquer
+    # indexacao: trocar slug depois que o Google leu custa o ranking da URL.
+    "italy-serie-a": "serie-a-italia",
     "bundesliga-1": "bundesliga",
     "copa-libertadores": "libertadores",
     "conmebol-libertadores": "libertadores",
