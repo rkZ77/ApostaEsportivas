@@ -48,7 +48,8 @@ Planos: **Free** (Dica do Dia) e **VIP** (mensal, trimestral, anual — ver `/pl
   "como". Evita jargão de apostas sem definir.
 - Evitar: hype vazio, promessas de lucro garantido, números e depoimentos inventados,
   linguagem de "fica rico rápido".
-- **Proibido travessão** (`—`/`–`). Usar `·` ou reescrever a frase.
+- **Proibido travessão** (`—`/`–`) **e proibido o ponto do meio** (`·`) no texto publicado.
+  Reescrever a frase com a pontuação normal do português (vírgula, dois-pontos, ponto).
 - **Proibido emoji** em qualquer contexto.
 - Regra de compliance (não negociável, é aposta esportiva): **nunca prometer ganho garantido**.
   Todo artigo que fale de estratégia/EV precisa deixar claro que aposta envolve risco e variância.
@@ -58,6 +59,9 @@ Planos: **Free** (Dica do Dia) e **VIP** (mensal, trimestral, anual — ver `/pl
 ## Palavras-chave de SEO
 
 **Primárias** (cada artigo mira exatamente uma):
+- palpites de futebol (termo principal do negócio: é o que o público digita na busca,
+  enquanto "pick" é vocabulário interno. Usar nos artigos de topo de funil, e nas páginas
+  públicas `/palpites-de-futebol-hoje` e `/palpites/<liga>`)
 - gestão de banca em apostas esportivas
 - o que é Kelly Criterion
 - o que é EV positivo em apostas
