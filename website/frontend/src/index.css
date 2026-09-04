@@ -619,30 +619,41 @@
   }
 
   /*
-   * OS RAIOS CAINDO NO FUNDO (04/09, pedido do usuario).
+   * O %3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 300' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%23fff' stroke-linejoin='round' stroke-linecap='round'%3E%3Cpath d='M84 -6 L46 96 L70 103 L28 208 L52 214 L10 306' stroke-width='3.2'/%3E%3Cpath d='M70 103 L104 172' stroke-width='1.9'/%3E%3Cpath d='M52 214 L88 268' stroke-width='1.6'/%3E%3Cpath d='M46 96 L14 140' stroke-width='1.4'/%3E%3C/g%3E%3C/svg%3E ATRAVESSANDO O CARD (04/09, com o print da referencia).
    *
-   * A luz da borda diz que o card esta vivo; isto diz de que HUMOR ele esta.
-   * Sao riscos finos na diagonal, na cor do resultado, descendo devagar --
-   * chuva de energia, o mesmo recurso do card de sala de jogo da referencia.
+   * A primeira tentativa foi chuva de riscos na diagonal, e nao era isso: no
+   * card que ele mandou existe UM raio, bifurcado, cortando a peca de cima a
+   * baixo. Riscos repetidos viram textura de fundo; um raio so' vira desenho,
+   * e desenho e' o que se reconhece de longe numa lista rolando.
    *
-   * TRES DECISOES QUE SEGURAM O EFEITO NO LUGAR:
+   * COMO: o traco e' um SVG em `mask-image`, e a cor vem do
+   * `background-color`. Mascara e nao imagem colorida porque assim o MESMO
+   * desenho serve verde, vermelho, teal e laranja -- trocar de estado e' trocar
+   * uma variavel, nao gerar outro arquivo. `preserveAspectRatio: none` deixa
+   * ele esticar pra altura do card, que varia de um pick simples a uma
+   * alavancagem tripla.
    *
-   * 1. So' em card LIQUIDADO. No pendente o fundo fica limpo, com a luz branca
-   *    da borda e o selo de sequencia pulsando -- eles ja' sao dois elementos
-   *    em movimento, e uma aba cheia de pendentes com chuva atras do texto
-   *    vira um letreiro.
-   * 2. A chuva MORRE indo pra baixo (`mask-image`). Ela e' companheira da cor
-   *    do cabecalho: as duas abrem no topo e somem antes do miolo, que e' onde
-   *    mercado, linha e casa precisam ser lidos sem concorrencia.
-   * 3. Anima `background-position`, nao `transform`. O elemento nao se move --
-   *    o desenho e' que escorre por dentro dele, entao nao ha' o que estourar
-   *    a borda arredondada nem o que recalcular de layout.
+   * TRES DECISOES QUE SEGURAM O EFEITO:
    *
-   * O vermelho vem na metade da opacidade do verde e mais devagar, pela razao
-   * de sempre: derrota nao precisa chamar atencao.
+   * 1. So' em card LIQUIDADO. No pendente o fundo fica limpo: ali ja' correm a
+   *    luz branca da borda e o selo de sequencia pulsando.
+   * 2. Ele MORRE indo pra baixo (`mask-composite` com um degrade). E'
+   *    companheiro da cor do cabecalho -- os dois abrem no topo e somem antes
+   *    do miolo, que e' onde mercado, linha e casa precisam ser lidos sem
+   *    concorrencia.
+   * 3. Fica na direita, longe da coluna de rotulos, que e' na esquerda.
+   *
+   * O relampago nao e' pisca-pisca: fica quase todo o ciclo num brilho baixo e
+   * so' de vez em quando da' os dois estalos, que e' como raio se comporta. O
+   * vermelho vem na metade da opacidade do verde e mais lento, pela razao de
+   * sempre: derrota nao precisa chamar atencao.
    */
-  @keyframes cair-raios {
-    to { background-position: 84px 240px; }
+  @keyframes relampejar {
+    0%, 84%, 100% { opacity: 0.34; }
+    86%           { opacity: 1; }
+    88%           { opacity: 0.45; }
+    91%           { opacity: 0.9; }
+    94%           { opacity: 0.34; }
   }
 
   .pick-card--green::after,
@@ -654,30 +665,37 @@
     inset: 0;
     border-radius: inherit;
     pointer-events: none;
-    background-image: repeating-linear-gradient(160deg,
-      transparent 0 26px,
-      var(--raio-cor) 26px 27px,
-      transparent 27px 33px,
-      var(--raio-cor) 33px 33.6px,
-      transparent 34px 84px);
-    -webkit-mask-image: linear-gradient(to bottom, #000 0, rgb(0 0 0 / 0.35) 30%, transparent 62%);
-            mask-image: linear-gradient(to bottom, #000 0, rgb(0 0 0 / 0.35) 30%, transparent 62%);
-    animation: cair-raios 7s linear infinite;
+    background-color: var(--raio-cor);
+    /* Duas mascaras multiplicadas: a forma do raio e o esvaecimento pra baixo.
+       Sem a segunda, o traco chegava inteiro no rodape e cruzava o botao. */
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 300' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%23fff' stroke-linejoin='round' stroke-linecap='round'%3E%3Cpath d='M84 -6 L46 96 L70 103 L28 208 L52 214 L10 306' stroke-width='9'/%3E%3Cpath d='M70 103 L104 172' stroke-width='5'/%3E%3Cpath d='M52 214 L88 268' stroke-width='4'/%3E%3Cpath d='M46 96 L14 140' stroke-width='3.5'/%3E%3C/g%3E%3C/svg%3E"),
+                        linear-gradient(to bottom, #000 0, rgb(0 0 0 / 0.4) 42%, transparent 78%);
+            mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 300' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%23fff' stroke-linejoin='round' stroke-linecap='round'%3E%3Cpath d='M84 -6 L46 96 L70 103 L28 208 L52 214 L10 306' stroke-width='9'/%3E%3Cpath d='M70 103 L104 172' stroke-width='5'/%3E%3Cpath d='M52 214 L88 268' stroke-width='4'/%3E%3Cpath d='M46 96 L14 140' stroke-width='3.5'/%3E%3C/g%3E%3C/svg%3E"),
+                        linear-gradient(to bottom, #000 0, rgb(0 0 0 / 0.4) 42%, transparent 78%);
+    -webkit-mask-repeat: no-repeat;
+            mask-repeat: no-repeat;
+    -webkit-mask-position: 88% top, center;
+            mask-position: 88% top, center;
+    -webkit-mask-size: 34% 100%, 100% 100%;
+            mask-size: 34% 100%, 100% 100%;
+    -webkit-mask-composite: source-in;
+            mask-composite: intersect;
+    animation: relampejar 9s ease-in-out infinite;
   }
 
-  .pick-card--green    { --raio-cor: rgb(74 222 128 / 0.30); }
-  .pick-card--red      { --raio-cor: rgb(248 113 113 / 0.14); }
-  .pick-card--half-win { --raio-cor: rgb(45 212 191 / 0.24); }
-  .pick-card--half-loss{ --raio-cor: rgb(251 146 60 / 0.14); }
+  .pick-card--green    { --raio-cor: rgb(134 239 172 / 0.55); }
+  .pick-card--red      { --raio-cor: rgb(252 165 165 / 0.24); }
+  .pick-card--half-win { --raio-cor: rgb(45 212 191 / 0.45); }
+  .pick-card--half-loss{ --raio-cor: rgb(253 186 116 / 0.24); }
 
   .pick-card--red::after,
-  .pick-card--half-loss::after { animation-duration: 11s; }
+  .pick-card--half-loss::after { animation-duration: 14s; }
 
-  /* No claro o risco tem que ser mais escuro que o fundo, nao mais claro. */
-  :root[data-theme="light"] .pick-card--green    { --raio-cor: rgb(22 163 74 / 0.16); }
-  :root[data-theme="light"] .pick-card--red      { --raio-cor: rgb(185 28 28 / 0.09); }
-  :root[data-theme="light"] .pick-card--half-win { --raio-cor: rgb(15 118 110 / 0.14); }
-  :root[data-theme="light"] .pick-card--half-loss{ --raio-cor: rgb(154 52 18 / 0.09); }
+  /* No claro o raio tem que ser mais ESCURO que o fundo, nao mais claro. */
+  :root[data-theme="light"] .pick-card--green    { --raio-cor: rgb(22 163 74 / 0.22); }
+  :root[data-theme="light"] .pick-card--red      { --raio-cor: rgb(185 28 28 / 0.12); }
+  :root[data-theme="light"] .pick-card--half-win { --raio-cor: rgb(15 118 110 / 0.20); }
+  :root[data-theme="light"] .pick-card--half-loss{ --raio-cor: rgb(154 52 18 / 0.12); }
 
   .pick-card--pendente { --luz-cor: rgb(255 255 255 / 0.30); }
   .pick-card--green    { --luz-cor: rgb(74 222 128 / 0.95); }
