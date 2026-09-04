@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { assinarNavegacao, assinarPendentes, pendentesAgora } from '../services/progressBus'
+import { assinarLentidao, assinarNavegacao, assinarPendentes, pendentesAgora } from '../services/progressBus'
 
 /*
  * Barra de carregamento no topo da página, no estilo YouTube/Kick.
@@ -57,6 +57,11 @@ export default function TopProgressBar() {
   const [gatilhoManual, setGatilhoManual] = useState(0)
 
   useEffect(() => assinarNavegacao(() => setGatilhoManual(g => g + 1)), [])
+
+  /* O terceiro caso: a tela já está montada e uma consulta está demorando. Ele
+     reusa o MESMO ciclo da navegação (o gatilho manual), então a barra tem um
+     comportamento só -- e não duas animações competindo pelo topo da tela. */
+  useEffect(() => assinarLentidao(() => setGatilhoManual(g => g + 1)), [])
 
   useEffect(() => {
     /* A primeira renderização já tem o Suspense de tela cheia do App. Somar a

@@ -48,6 +48,55 @@ export function assinarPendentes(ouvinte: Ouvinte): () => void {
 }
 
 /*
+ * REQUISIÇÃO QUE DEMORA ACENDE A BARRA, mesmo sem navegação e sem toque.
+ *
+ * A barra cobria os dois casos em que o usuário SABE que pediu algo: trocar de
+ * rota e clicar. Ficava de fora o terceiro, que é o que mais incomoda -- a tela
+ * já montou, o esqueleto está lá, e um número demora porque a consulta ao banco
+ * está lenta. Nada na tela dizia "ainda estou buscando", e a leitura natural
+ * disso é "travou".
+ *
+ * O LIMIAR É O QUE IMPEDE A BARRA DE PISCAR SOZINHA. Várias telas fazem polling
+ * em segundo plano (o sino, o "está ao vivo?", o Admin de 3 em 3 segundos), e
+ * acender por requisição deixaria a barra em movimento perpétuo enquanto a
+ * pessoa lê a tela parada -- o oposto do que ela comunica. Poll saudável
+ * responde em dezenas de milissegundos e nunca chega no limiar; o que chega é
+ * justamente a espera que o usuário percebe.
+ */
+const LIMIAR_LENTIDAO_MS = 700
+
+let desdeQuandoOcupado: number | null = null
+let vigia: ReturnType<typeof setInterval> | null = null
+const ouvintesLentos = new Set<() => void>()
+
+function conferirLentidao() {
+  if (pendentes === 0) {
+    desdeQuandoOcupado = null
+    return
+  }
+  if (desdeQuandoOcupado === null) {
+    desdeQuandoOcupado = Date.now()
+    return
+  }
+  if (Date.now() - desdeQuandoOcupado >= LIMIAR_LENTIDAO_MS) {
+    // Uma vez por rajada: zera o relógio pra não reacender a cada tique.
+    desdeQuandoOcupado = null
+    for (const o of ouvintesLentos) o()
+  }
+}
+
+export function assinarLentidao(ouvinte: () => void): () => void {
+  ouvintesLentos.add(ouvinte)
+  if (!vigia && typeof window !== 'undefined') {
+    vigia = setInterval(conferirLentidao, 200)
+  }
+  return () => {
+    ouvintesLentos.delete(ouvinte)
+    if (ouvintesLentos.size === 0 && vigia) { clearInterval(vigia); vigia = null }
+  }
+}
+
+/*
  * Navegação que não troca de rota.
  *
  * As abas de /picks são estado, não rota (só leem o hash no deep link), então
