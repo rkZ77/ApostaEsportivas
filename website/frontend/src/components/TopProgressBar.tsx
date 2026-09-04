@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { assinarLentidao, assinarNavegacao, assinarPendentes, pendentesAgora } from '../services/progressBus'
+import { assinarNavegacao, assinarPendentes, pendentesAgora } from '../services/progressBus'
 
 /*
  * Barra de carregamento no topo da página, no estilo YouTube/Kick.
@@ -44,13 +44,6 @@ const TEMPO_MINIMO_MS = 400
  *  muito depois de a página já estar lá · quem lê isso conclui que o site é
  *  lento, não que uma requisição ficou pendurada. */
 const TEMPO_MAXIMO_MS = 6_000
-/** Quanto tempo a fila precisa ficar VAZIA pra a barra aceitar que acabou.
- *
- *  É o que absorve a cascata: dado A chega, componente B monta e pede o dele.
- *  Curto demais e a barra fecha no respiro entre os dois; longo demais e ela
- *  fica no ar depois de a tela já estar pronta. */
-const SILENCIO_MS = 350
-
 /** Tempo pro salto até 100% ser visto antes do fade. */
 const SAIDA_MS = 260
 
@@ -64,20 +57,6 @@ export default function TopProgressBar() {
   const [gatilhoManual, setGatilhoManual] = useState(0)
 
   useEffect(() => assinarNavegacao(() => setGatilhoManual(g => g + 1)), [])
-
-  /* O terceiro caso: a tela já está montada e uma consulta está demorando.
-   *
-   * SÓ ABRE UM CICLO NOVO SE NÃO HOUVER UM RODANDO (corrigido em 2026-09-04, no
-   * mesmo dia). Sem esta guarda cada disparo remontava o efeito, a barra voltava
-   * a 8% e recomeçava · numa tela com várias consultas lentas em sequência ela
-   * ia e voltava várias vezes, que é o oposto de "acabou a barra, carregou
-   * tudo". Uma rajada nova enquanto a barra está no ar NÃO reinicia: ela é
-   * absorvida pelo ciclo que já está correndo, porque o ciclo só fecha quando
-   * não há mais nada em voo. */
-  const rodando = useRef(false)
-  useEffect(() => assinarLentidao(() => {
-    if (!rodando.current) setGatilhoManual(g => g + 1)
-  }), [])
 
   useEffect(() => {
     /* A primeira renderização já tem o Suspense de tela cheia do App. Somar a
@@ -105,7 +84,6 @@ export default function TopProgressBar() {
     const finalizar = () => {
       if (encerrado) return
       encerrado = true
-      rodando.current = false
       limpar()
       setProgresso(100)
       saida = window.setTimeout(() => {
@@ -128,33 +106,10 @@ export default function TopProgressBar() {
      * quando a navegação começou. */
     const herdadas = pendentesAgora()
 
-    /* SILÊNCIO CONTÍNUO, e não um instante de silêncio.
-     *
-     * A condição era só "o contador voltou ao nível de antes". Entre uma
-     * resposta e o pedido seguinte existe um respiro de milissegundos, e nesse
-     * respiro a barra fechava · a requisição seguinte então abria outra, e o
-     * usuário via a barra ir e voltar numa tela que ainda estava carregando.
-     *
-     * Exigindo que a fila fique vazia por um tempo CONTÍNUO, uma tela que pede
-     * em cascata (o dado A chega, o componente B monta e pede o dele) fecha uma
-     * vez só, no fim de tudo. É o que faz "a barra acabou" significar
-     * "carregou". */
-    let quietoDesde: number | null = null
+    const podeFinalizar = () =>
+      Date.now() - inicio >= Math.max(ESPERA_INICIAL_MS, TEMPO_MINIMO_MS) &&
+      pendentesAgora() <= herdadas
 
-    const podeFinalizar = () => {
-      if (Date.now() - inicio < Math.max(ESPERA_INICIAL_MS, TEMPO_MINIMO_MS)) return false
-      if (pendentesAgora() > herdadas) {
-        quietoDesde = null
-        return false
-      }
-      if (quietoDesde === null) {
-        quietoDesde = Date.now()
-        return false
-      }
-      return Date.now() - quietoDesde >= SILENCIO_MS
-    }
-
-    rodando.current = true
     setVisivel(true)
     setProgresso(8)
 
@@ -170,7 +125,6 @@ export default function TopProgressBar() {
 
     return () => {
       encerrado = true
-      rodando.current = false
       limpar()
       window.clearTimeout(saida)
     }
