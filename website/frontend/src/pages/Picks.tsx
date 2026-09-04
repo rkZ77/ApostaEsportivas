@@ -20,7 +20,7 @@ import { aplicarFiltro, FILTRO_INICIAL } from '../lib/mercadoFiltro'
 import EngineStatus from '../components/EngineStatus'
 import AnalysisModal from '../components/AnalysisModal'
 import {
-  CampoDoPick, PickCardFooter, PickExplainButton, PickProbability, SequenciaBadge,
+  CampoDoPick, PickCardFooter, PickExplainButton, PickProbability,
 } from '../components/PickCardParts'
 /*
  * As duas abas mais pesadas não entram no chunk desta página.
@@ -43,7 +43,7 @@ import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, Br
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import { stakeDe } from '../utils/stakePlan'
 import { fmtUnits, pctProb, capitalizarFrase, plural } from '../utils/format'
-import { getResultStyle, PICK_TYPE_CLS, PICK_TYPE_BORDER, pickCardResultBg, pickCardResultBorder } from '../utils/resultStyle'
+import { getResultStyle, PICK_TYPE_CLS, PICK_TYPE_BORDER } from '../utils/resultStyle'
 import { useShareStoryImage, useShareAlavancagemImage, useShareBilheteImage } from '../hooks/useShareStoryImage'
 import { useOddAtualizada } from '../hooks/useOddAtualizada'
 import { translateMarket, translateLine, translateTeamName } from '../utils/marketTranslate'
@@ -517,7 +517,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
          agora e' o CSS · o `y` continua com a mola daqui. */
       whileTap={onClick ? { scale: 0.985 } : undefined}
       transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-      className={`pick-card hover-elev group ${pickCardResultBg(dica.result)} ${pickCardResultBorder(dica.result) || (isCopa ? 'border-yellow-500/20' + (onClick ? ' hover:border-yellow-500/40' : '') : PICK_TYPE_BORDER.free)} ${onClick ? 'cursor-pointer' : ''}`}
+      className={`pick-card hover-elev group ${isCopa ? 'border-yellow-500/20' + (onClick ? ' hover:border-yellow-500/40' : '') : PICK_TYPE_BORDER.free} ${onClick ? 'cursor-pointer' : ''}`}
       onClick={onClick}
       /* Mesma âncora do card VIP. Este vem antes na página e aparece para
          qualquer plano, então é ele que o tour costuma destacar. */
@@ -532,7 +532,6 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
       <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-3 border-b border-line/60">
         <div className="flex items-center gap-2 flex-wrap min-w-0">
           <PickTypeBadge type="free" />
-          <SequenciaBadge source="free" />
           {(dica.league_id || dica.league_name) && (
             <div className="flex items-center gap-1 min-w-0">
               <LeagueLogo id={dica.league_id} name={dica.league_name} />
@@ -922,7 +921,7 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
          agora e' o CSS · o `y` continua com a mola daqui. */
       whileTap={onClick ? { scale: 0.985 } : undefined}
       transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-      className={`pick-card hover-elev group ${pickCardResultBg(m.result)} ${onClick ? 'cursor-pointer' : ''} ${pickCardResultBorder(m.result) || PICK_TYPE_BORDER.multipla}`}
+      className={`pick-card hover-elev group ${onClick ? 'cursor-pointer' : ''} ${PICK_TYPE_BORDER.multipla}`}
       onClick={onClick}
     >
       {/* Accent bar */}
@@ -932,7 +931,6 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
       <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-line/60">
         <div className="flex items-center gap-2">
           <span className="text-xs font-black text-blue-400">Múltipla</span>
-          <SequenciaBadge source="multiplas" />
           <span className="badge-vip">VIP</span>
           <span className="text-[10px] text-ink-4">
             {new Date(m.match_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
@@ -1327,7 +1325,7 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
          agora e' o CSS · o `y` continua com a mola daqui. */
       whileTap={onClick ? { scale: 0.985 } : undefined}
       transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-      className={`pick-card hover-elev group ${pickCardResultBg(pick.result)} ${onClick ? 'cursor-pointer' : ''} ${pickCardResultBorder(pick.result) || PICK_TYPE_BORDER.alavancagem}`}
+      className={`pick-card hover-elev group ${onClick ? 'cursor-pointer' : ''} ${PICK_TYPE_BORDER.alavancagem}`}
       onClick={onClick}
     >
       <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-orange-500 to-transparent" />
@@ -1336,7 +1334,6 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
       <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-line/60">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs font-black text-orange-400">Alavancagem</span>
-          <SequenciaBadge source="alavancagem" />
           <span className="badge-vip">VIP</span>
           {isCombo && <span className="text-[10px] text-blue-400 border border-blue-400/20 bg-blue-400/10 px-2 py-0.5 rounded-md font-bold">{comboLabel}</span>}
         </div>

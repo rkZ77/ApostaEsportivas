@@ -46,7 +46,7 @@ import api from '../services/api'
 import ApostaModal from './ApostaModal'
 import { Badge, Button, ComoFunciona, EmptyState, ErrorState, LiveDot, Marquee, PickTypeBadge,
          ResultBadge, Skeleton, SkeletonPickGrid } from './ui'
-import { CampoDoPick, PickExplainButton, PickProbability, SequenciaBadge } from './PickCardParts'
+import { CampoDoPick, PickExplainButton, PickProbability } from './PickCardParts'
 import LiveAnalysisModal from './LiveAnalysisModal'
 import { translateLine, translateMarket } from '../utils/marketTranslate'
 import { LeagueLogo, TeamLogo } from './TeamLogo'
@@ -578,7 +578,7 @@ function unidadesSugeridas(
   // mesmo número que o pick carrega no /admin.
   return Math.min(pick.stake_units ?? 1, MAX_UNIDADES_LIVE)
 }
-import { PICK_TYPE_BORDER, pickCardResultBg, pickCardResultBorder } from '../utils/resultStyle'
+import { PICK_TYPE_BORDER } from '../utils/resultStyle'
 
 
 
@@ -852,7 +852,7 @@ const CardLive = forwardRef<HTMLDivElement, {
       layout
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`pick-card ${pickCardResultBg(pick.result)} ${pickCardResultBorder(pick.result) || PICK_TYPE_BORDER.live} ${encerrado ? 'opacity-75' : ''}`}
+      className={`pick-card ${PICK_TYPE_BORDER.live} ${encerrado ? 'opacity-75' : ''}`}
     >
       {/* Cabeçalho · tipo, liga e minuto à esquerda; estado à direita. Mesma
           divisão do card VIP, e o minuto ocupa ali o lugar do horário do jogo:
@@ -860,7 +860,6 @@ const CardLive = forwardRef<HTMLDivElement, {
       <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-3 border-b border-line/60">
         <div className="flex items-center gap-2 flex-wrap min-w-0">
           <PickTypeBadge type="live" />
-          <SequenciaBadge source="live" />
           {(pick.league_id || pick.league_name) && (
             <div className="flex items-center gap-1 min-w-0">
               <LeagueLogo id={pick.league_id} name={pick.league_name} />

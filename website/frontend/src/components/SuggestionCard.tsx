@@ -9,11 +9,11 @@ import { calcVipStake, calcFreeStake, calcMultiplaStake, calcProfitUnits } from 
 import { stakeDe, contaEmUnidades } from '../utils/stakePlan'
 import ApostaModal from './ApostaModal'
 import { translateMarket, translateLine, translateTeamName, linhaDoJogador, valorLiquidado } from '../utils/marketTranslate'
-import { PICK_TYPE_BORDER, pickCardResultBg, pickCardResultBorder } from '../utils/resultStyle'
+import { PICK_TYPE_BORDER } from '../utils/resultStyle'
 import AnalysisModal from './AnalysisModal'
 import { Badge, PickTypeBadge, ResultBadge } from './ui'
 import {
-  CampoDoPick, PickCardFooter, PickExplainButton, PickProbability, SequenciaBadge,
+  CampoDoPick, PickCardFooter, PickExplainButton, PickProbability,
 } from './PickCardParts'
 import { useShareStoryImage, useShareBilheteImage } from '../hooks/useShareStoryImage'
 import { useOddAtualizada } from '../hooks/useOddAtualizada'
@@ -425,7 +425,7 @@ function SuggestionCard({
          querer o tempo todo: dentro dele já moram "Apostar", "Compartilhar",
          "Entenda esta análise", o coração de favorito e o ícone de informação.
          Errar o alvo entre eles abria uma tela cheia por engano. */
-      className={`pick-card hover-elev group ${pickCardResultBg(s.result)} ${onClick ? 'cursor-pointer' : ''} ${pickCardResultBorder(s.result) || (isCopa ? 'border-yellow-500/20' + (onClick ? ' hover:border-yellow-500/40' : '') : PICK_TYPE_BORDER[pickType] ?? PICK_TYPE_BORDER.vip)}`}
+      className={`pick-card hover-elev group ${onClick ? 'cursor-pointer' : ''} ${isCopa ? 'border-yellow-500/20' + (onClick ? ' hover:border-yellow-500/40' : '') : PICK_TYPE_BORDER[pickType] ?? PICK_TYPE_BORDER.vip}`}
       onClick={onClick}
       /* Âncora do tour: o passo "Encontre seus picks" destaca o PRIMEIRO card
          que existir na tela, e não um desenho de card. Ver
@@ -436,8 +436,6 @@ function SuggestionCard({
       <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-3 border-b border-line/60">
         <div className="flex items-center gap-2 flex-wrap min-w-0">
           <PickTypeBadge type={pickType} />
-          {/* A sequência do produto, colada no selo dele · ver SequenciaBadge. */}
-          <SequenciaBadge source={pickType} />
           {(s.league_id || s.league_name) && (
             <div className="flex items-center gap-1 min-w-0">
               <LeagueLogo id={s.league_id} name={s.league_name} />
