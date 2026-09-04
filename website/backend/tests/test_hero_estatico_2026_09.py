@@ -171,3 +171,48 @@ def test_a_home_nao_e_lazy():
     # mao do code splitting.
     for outra in ("Picks", "Admin", "Planos", "Banca"):
         assert f"lazy(() => import('./pages/{outra}'))" in app, outra
+
+# ─────────────────────── Pre-carga das chamadas do topo ──────────────────
+
+def test_o_html_dispara_as_chamadas_do_topo():
+    """Elas saiam so' depois de o bundle baixar, avaliar e montar · ~1,2s de
+    servidor ocioso esperando o navegador ler JavaScript. Medido depois da
+    mudanca: partem em 226ms."""
+    indice = os.path.join(_FRONTEND, "index.html")
+    with open(indice, encoding="utf-8") as f:
+        html = f.read()
+    assert "__pickia_precarga" in html
+    assert "credentials: 'include'" in html          # a sessao e' cookie httpOnly
+    assert "location.pathname === '/'" in html       # em outra rota seria lixo
+
+    # E o cliente HTTP consome o que ja' veio, em vez de pedir de novo.
+    api = _front("services/api.ts")
+    assert "chaveDaPrecarga" in api
+    assert "consumir" in api
+
+
+def test_a_dica_do_dia_nao_e_precarregada_para_quem_tem_sessao():
+    """E' a unica das quatro que muda conforme quem pergunta.
+
+    Com o access token vencido, a pre-carga voltaria a versao anonima
+    (`locked`) e o assinante veria o proprio pick bloqueado ate recarregar · o
+    refresh do token acontece depois, ja dentro do app.
+    """
+    indice = os.path.join(_FRONTEND, "index.html")
+    with open(indice, encoding="utf-8") as f:
+        html = f.read()
+    trecho = html[html.index("__pickia_precarga"):html.index("</script>", html.index("__pickia_precarga"))]
+    assert "localStorage.getItem('user')" in trecho
+    assert "free-pick-today" in trecho
+    # A dica entra pela condicao, e nao na lista fixa das publicas.
+    lista = trecho[trecho.index("var alvos"):trecho.index("]", trecho.index("var alvos"))]
+    assert "free-pick-today" not in lista
+
+
+def test_a_precarga_serve_uma_vez_so():
+    """Paginacao e refetch depois de agir na tela tem que falar com o servidor:
+    pre-carga e' para a PRIMEIRA pintura, nao e' cache."""
+    precarga = _front("services/precarga.ts")
+    assert "delete m[chave]" in precarga
+    # Falha de rede/HTTP cai fora e a chamada normal acontece.
+    assert "return undefined" in precarga

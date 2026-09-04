@@ -27,6 +27,53 @@
     </script>
 
     <!--
+      AS QUATRO CHAMADAS DO TOPO DA HOME COMECAM AQUI, E NAO NO REACT.
+
+      Elas desenham a primeira tela: dica do dia, fila de jogos, indicadores e
+      preco. Saindo do React, so' partiam depois de o bundle baixar, avaliar e
+      montar · medido em 04/09, ~1,2 s depois do primeiro byte num celular em
+      4G. Nesse tempo todo o servidor estava ocioso, esperando o navegador
+      terminar de ler JavaScript pra so' entao ser perguntado.
+
+      `credentials: 'include'` porque a sessao e' cookie httpOnly: a resposta
+      que chega aqui e' a MESMA que o axios receberia, logado ou nao. Resposta
+      ruim (401, 500, rede) e' descartada e a chamada normal acontece como se
+      nada tivesse sido pre-carregado · ver src/services/precarga.ts.
+
+      So' na Home. Em outra rota isto seriam quatro requisicoes jogadas fora.
+    -->
+    <script>
+      if (location.pathname === '/') {
+        window.__pickia_precarga = {}
+        var alvos = [
+          '/api/public/next-fixtures?limit=30',
+          '/api/public/results?recent_limit=1&slim=1',
+          '/api/payments/plans',
+        ]
+        /*
+         * A DICA DO DIA SO' ENTRA PRA QUEM NAO TEM SESSAO GUARDADA.
+         *
+         * Ela e' a unica das quatro que muda conforme quem pergunta: anonimo
+         * recebe o mercado como `locked`. Se o access token estiver vencido
+         * (o refresh acontece depois, no app), esta chamada voltaria a versao
+         * anonima e o assinante veria o proprio pick bloqueado ate recarregar
+         * a pagina. As outras tres sao iguais para todo mundo.
+         */
+        try {
+          if (!localStorage.getItem('user')) alvos.unshift('/api/public/free-pick-today')
+        } catch (e) {}
+        alvos.forEach(function (u) {
+          window.__pickia_precarga[u] = fetch(u, { credentials: 'include' })
+            .then(function (r) { return r.ok ? r.json() : undefined })
+            // `undefined` em vez de rejeitar: ninguem esta esperando esta
+            // Promise ainda, e uma rejeicao sem dono vira erro vermelho no
+            // console de toda visita com a rede ruim.
+            .catch(function () { return undefined })
+        })
+      }
+    </script>
+
+    <!--
       Fontes. Elas sao NOSSAS, de /fonts (ver src/fontes.css e
       scripts/baixar-fontes.mjs).
 

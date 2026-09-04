@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { notifyError } from './errorToast'
+import { chaveDaPrecarga, consumir } from './precarga'
 import { requisicaoIniciou, requisicaoTerminou } from './progressBus'
 
 // withCredentials envia/recebe cookies httpOnly automaticamente
@@ -28,7 +29,35 @@ const AUTH_NO_RETRY = ['/auth/login', '/auth/register', '/auth/google', '/auth/r
    refresh · aquele reenvio passa por este mesmo interceptor e é contado como
    uma requisição nova, com o erro original já descontado. */
 api.interceptors.request.use(
-  (config) => { requisicaoIniciou(); return config },
+  (config) => {
+    requisicaoIniciou()
+
+    /*
+     * Se o index.html já foi buscar esta resposta, usa a dele.
+     *
+     * As quatro chamadas do topo da Home saem do HTML, antes de o bundle
+     * existir (ver services/precarga.ts). Trocar o `adapter` desta requisição
+     * é o que faz o axios devolver aquela resposta sem tocar na rede · o
+     * resto do cliente (interceptor de erro, contagem da barra de progresso,
+     * o `.then` de quem chamou) continua funcionando igual.
+     *
+     * Pré-carga ausente, vencida ou que falhou cai fora daqui e a requisição
+     * acontece normalmente: `consumir` devolve undefined e nós devolvemos o
+     * adapter padrão.
+     */
+    const chave = chaveDaPrecarga(config.url, config.params)
+    if (chave) {
+      const padrao = config.adapter
+      config.adapter = async (cfg) => {
+        const dados = await consumir(chave)
+        if (dados === undefined) {
+          return axios.getAdapter(padrao ?? axios.defaults.adapter)(cfg)
+        }
+        return { data: dados, status: 200, statusText: 'OK', headers: {}, config: cfg, request: null }
+      }
+    }
+    return config
+  },
   (error) => { requisicaoTerminou(); return Promise.reject(error) },
 )
 
