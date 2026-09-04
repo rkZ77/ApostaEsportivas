@@ -4,9 +4,9 @@ O QUE ACONTECEU (2026-09-04)
 ----------------------------
 A Bet365 publicava "Player Shots On Target" (mercado 242), uma lista so' com os
 jogadores dos dois times. Passou a publicar o mesmo produto separado por mando:
-269 "Home Player Shots On Target Total" e 275 "Away Player Shots On Target
-Total" -- e o mesmo para chutes (240/241). O `value_name` nao mudou: continua
-"Fulano - 2".
+269 "Home Player Shots On Target Total" -- e o mesmo para chutes, agora em
+240 "Home Player Shots" e 241 "Away Player Shots". O `value_name` nao mudou:
+continua "Fulano - 2".
 
 O catalogo casa mercado POR NOME, entao a mudanca zerou os metodos `shots` e
 `shots_on` sem erro nenhum: medido em PROD no dia, 2.765 ofertas de prop de
@@ -16,12 +16,19 @@ jogador foram descartadas antes da primeira conta e a auditoria registrou
 Por isso os casos daqui sao NOMES DE MERCADO, e nao probabilidade: o ponto onde
 o motor cegou fica antes de qualquer modelo.
 
-A ARMADILHA DO NOME PARECIDO
-----------------------------
-"Away Player Shots Total" (276, Betano) e "Away Player Shots On Target Total"
-(275, Bet365) diferem por tres palavras e sao produtos diferentes: o primeiro e'
-o total de chutes do TIME, publicado como "Over 3.5". Aceitar os dois faria o
-motor tratar linha de time como prop de jogador.
+AS ARMADILHAS DO NOME PARECIDO
+------------------------------
+Tres mercados do mesmo dia tem nome de prop de jogador e nao sao:
+
+  275 "Away Player Shots On Target Total" -- escolha unica ("quem finaliza mais
+      no alvo"): value_name e' o nome puro, sem linha, e as probabilidades
+      implicitas do jogo somam 1.01. E' o nome simetrico ao 269, que E' prop;
+  276 "Away Player Shots Total"           -- total de chutes do TIME ("Over 3.5");
+  215 "Player Singles"                    -- copia de 240+241 sob nome generico.
+
+Os tres passariam por um casamento frouxo de nome, e cada um estraga de um
+jeito diferente: o primeiro compara contagem com produto de escolha unica, o
+segundo trata linha de time como prop, o terceiro duplica o candidato.
 """
 from engine_pipelines.player_stats_pipeline import _ofertas_do_metodo
 from services.player_stats_engine import methods as cat
@@ -35,16 +42,21 @@ def _oferta(market_name, value_name, odd=1.50, market_id=999):
 
 
 # ── chutes no alvo ────────────────────────────────────────────────────────
-def test_chutes_no_alvo_por_mando_da_bet365():
-    cruas = [
-        _oferta("Home Player Shots On Target Total", "Eduardo Pepe - 1", market_id=269),
-        _oferta("Away Player Shots On Target Total", "Pedro Jesus - 2", market_id=275),
-    ]
-    ofertas = _ofertas_do_metodo(cruas, cat.SHOTS_ON)
+def test_chutes_no_alvo_do_mandante_da_bet365():
+    ofertas = _ofertas_do_metodo(
+        [_oferta("Home Player Shots On Target Total", "Eduardo Pepe - 1", market_id=269)],
+        cat.SHOTS_ON)
     assert [(o["nome_ofertado"], o["n"], o["lado"]) for o in ofertas] == [
-        ("Eduardo Pepe", 1, "home"),
-        ("Pedro Jesus", 2, "away"),
-    ]
+        ("Eduardo Pepe", 1, "home")]
+
+
+def test_quem_finaliza_mais_no_alvo_nao_e_prop():
+    """275 tem o nome simetrico ao 269 e e' outro produto: escolha unica, sem
+    linha. O value_name e' o nome puro, e a soma das probabilidades implicitas
+    do jogo da' 1.01."""
+    cruas = [_oferta("Away Player Shots On Target Total", "Guilherme Liberato",
+                     odd=101.0, market_id=275)]
+    assert _ofertas_do_metodo(cruas, cat.SHOTS_ON) == []
 
 
 def test_o_nome_antigo_continua_valendo():
@@ -62,11 +74,26 @@ def test_chutes_por_mando_da_bet365():
     assert len(_ofertas_do_metodo(cruas, cat.SHOTS)) == 2
 
 
+def test_player_singles_e_o_mesmo_produto_de_240_241():
+    """215 republica 240+241 sob nome generico -- as 1.797 linhas batem fixture,
+    jogador, linha e odd. Aceitar os tres duplicaria cada candidato."""
+    cruas = [_oferta("Player Singles", "Pedro Jesus - 1", market_id=215)]
+    assert _ofertas_do_metodo(cruas, cat.SHOTS) == []
+
+
 def test_total_do_time_nao_e_prop_de_jogador():
     """"Away Player Shots Total" e' linha de TIME, apesar do nome."""
     cruas = [_oferta("Away Player Shots Total", "Over 3.5", market_id=276)]
     assert _ofertas_do_metodo(cruas, cat.SHOTS) == []
     assert _ofertas_do_metodo(cruas, cat.SHOTS_ON) == []
+
+
+def test_o_lado_do_mercado_restringe_a_busca_de_nome():
+    """"Away Player Shots" so' lista jogador do visitante, e o motor usa isso
+    pra nao confundir dois homonimos do mesmo jogo."""
+    ofertas = _ofertas_do_metodo(
+        [_oferta("Away Player Shots", "Pedro Jesus - 2", market_id=241)], cat.SHOTS)
+    assert ofertas[0]["lado"] == "away"
 
 
 # ── o mercado de um metodo nao vaza pro outro ─────────────────────────────

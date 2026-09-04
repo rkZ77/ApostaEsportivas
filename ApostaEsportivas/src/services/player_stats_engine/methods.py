@@ -133,16 +133,26 @@ SHOTS_ON = Metodo(
                              "player shots on goal", "shots on target by player",
                              # POR LADO (2026-09-04). A Bet365 parou de publicar
                              # o mercado 242 ("Player Shots On Target", os dois
-                             # times numa lista so') e passou a publicar 269/275,
-                             # um por mando. Sao as MESMAS ofertas, no mesmo
-                             # formato de value_name ("Fulano - 2"); so' o nome
-                             # do mercado mudou. Sem estes quatro nomes o motor
-                             # jogava fora 968 ofertas de chute no alvo num dia
-                             # so' e registrava "nenhuma casa ofereceu mercado".
-                             "home player shots on target total",
-                             "away player shots on target total",
-                             "home player shots on target",
-                             "away player shots on target"}),
+                             # times numa lista so') e passou a publicar 269, o
+                             # mesmo produto restrito ao mandante: mesmo formato
+                             # de value_name ("Fulano - 2"), mesmas linhas (1 a
+                             # 6), so' o nome do mercado mudou. Sem este nome o
+                             # motor jogava fora 460 ofertas de chute no alvo
+                             # num dia so' e registrava "nenhuma casa ofereceu
+                             # mercado de jogador".
+                             "home player shots on target total"}),
+    # O QUE NAO ENTRA, E POR QUE (medido em PROD, 2026-09-04):
+    #
+    #   275 "Away Player Shots On Target Total" -- apesar do nome simetrico ao
+    #   269, NAO e' o mesmo produto. Nao ha' linha: o value_name e' o nome do
+    #   jogador puro ("Guilherme Liberato"), e a soma das probabilidades
+    #   implicitas de todos os jogadores do jogo da' 1.01. E' mercado de escolha
+    #   unica ("quem finaliza mais no alvo"), nao prop com "N ou mais". Aceitar
+    #   pelo nome faria o motor comparar uma probabilidade de contagem com uma
+    #   odd de outro produto.
+    #
+    #   Consequencia aceita: hoje so' ha' oferta de chute no alvo pro lado de
+    #   CASA. Nao e' filtro do motor, e' o que a casa publica.
     min_atuacoes=4,
     rotulo_linha="{n} ou mais chutes no alvo",
     diario=True,
@@ -153,11 +163,17 @@ SHOTS = Metodo(
     # "home/away player shots" e' o par de 240/241, o mesmo desdobramento por
     # mando descrito em SHOTS_ON.
     #
-    # "home/away player shots TOTAL" (276 e o par dele) fica DE FORA de
-    # proposito: apesar do nome quase igual, e' o total de chutes do TIME,
-    # publicado pela Betano como "Over 3.5" e nao como "Fulano - 3". Nao e' prop
-    # de jogador -- e o `parse_valor` ja' descartaria a linha, mas o mercado
-    # ainda contaria como oferecido e mentiria na auditoria.
+    # DOIS NOMES PARECIDOS QUE FICAM DE FORA (medido em PROD, 2026-09-04):
+    #
+    #   276 "Away Player Shots Total" -- e' o total de chutes do TIME, publicado
+    #   como "Over 3.5" e nao como "Fulano - 3". O `parse_valor` ja' descartaria
+    #   a linha, mas o mercado ainda contaria como oferecido e mentiria na
+    #   auditoria.
+    #
+    #   215 "Player Singles" -- e' o MESMO produto de 240+241, republicado sob um
+    #   nome generico: 1.797 linhas, e as 1.797 batem fixture, jogador, linha e
+    #   odd com a uniao dos dois (937 + 860). Aceitar os tres duplicaria cada
+    #   candidato e faria a contagem da auditoria valer o dobro do que existe.
     nomes_mercado=frozenset({"player shots", "total shots by player",
                              "player total shots", "shots",
                              "home player shots", "away player shots"}),
