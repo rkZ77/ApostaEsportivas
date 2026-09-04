@@ -124,3 +124,33 @@ def test_o_motivo_do_descarte_e_por_metodo():
 
     assert candidatos == []
     assert motivos == {m.slug: P.MOTIVO_SEM_ODDS for m in cat.METODOS}
+
+
+# ── a faixa de odd ────────────────────────────────────────────────────────
+def test_o_piso_de_odd_e_1_44_e_nao_ha_teto():
+    """Decisão do usuário em 04/09. O teto de 2.00 protegia contra o erro do
+    modelo na cauda; quem segura isso agora são PROB_MINIMA e EDGE_MINIMO, que
+    olham a probabilidade em vez do preço."""
+    from services.player_stats_engine import config as cfg
+    assert cfg.ODD_MIN == 1.44
+    assert cfg.ODD_MAX is None
+
+
+def test_sem_teto_a_odd_alta_chega_no_modelo():
+    cruas = [_oferta("Home Player Shots", "Gabriel Veron - 5", odd=7.5, market_id=240)]
+    assert len(_ofertas_do_metodo(cruas, cat.SHOTS)) == 1
+
+
+def test_o_piso_continua_cortando():
+    cruas = [_oferta("Home Player Shots", "Gabriel Veron - 1", odd=1.20, market_id=240)]
+    assert _ofertas_do_metodo(cruas, cat.SHOTS) == []
+
+
+def test_o_score_ainda_tem_uma_faixa_pra_ordenar():
+    """Teto de PONTUAÇÃO não é teto de corte: sem uma referência o termo de
+    segurança pontuaria toda odd como fora da faixa, que é onde a função
+    despenca."""
+    from services.player_stats_engine import config as cfg
+    assert cfg.SCORE_ODD_ALTA == 2.00
+    assert cfg.SCORE_CONFIG.conservative_odd_high == cfg.SCORE_ODD_ALTA
+    assert cfg.SCORE_CONFIG.conservative_odd_low == cfg.ODD_MIN

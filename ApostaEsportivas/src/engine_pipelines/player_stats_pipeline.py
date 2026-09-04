@@ -101,7 +101,11 @@ def _ofertas_do_metodo(odds_cruas: list, metodo: cat.Metodo) -> list:
             odd = float(o.get("odd") or 0)
         except (TypeError, ValueError):
             continue
-        if odd < cfg.ODD_MIN or odd > cfg.ODD_MAX:
+        # Teto opcional: `ODD_MAX` e' None desde 04/09 e o motor deixa a odd
+        # alta passar pro modelo decidir. Quem reprova evento raro sao
+        # PROB_MINIMA e EDGE_MINIMO, que olham a probabilidade -- o teto olhava
+        # so' o preco.
+        if odd < cfg.ODD_MIN or (cfg.ODD_MAX is not None and odd > cfg.ODD_MAX):
             continue
         parsed = name_match.parse_valor(o.get("value_name"))
         if not parsed:
@@ -550,7 +554,7 @@ def run_player_stats_engine(metodos: tuple | None = None):
     for metodo in alvos:
         with EngineRun(MOTOR, metodo.slug, resumo={
             "prob_minima": cfg.PROB_MINIMA, "edge_minimo": cfg.EDGE_MINIMO,
-            "faixa_odd": [cfg.ODD_MIN, cfg.ODD_MAX],
+            "faixa_odd": [cfg.ODD_MIN, cfg.ODD_MAX],   # teto None = sem teto
             "calibragem": calibragem.get(metodo.slug),
             "jogos_do_dia": len(fixtures),
         }) as run:
