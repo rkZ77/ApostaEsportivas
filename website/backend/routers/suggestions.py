@@ -19,6 +19,7 @@ try:
     from services.pick_engine import competition_profile as _competicao
 except Exception:  # pragma: no cover
     _competicao = None
+import alavancagem_caminho
 from stake_plan import STAKE_PADRAO
 from pick_sources import tabela_existe
 
@@ -2072,6 +2073,32 @@ def _fontes(source: str | None, cur=None) -> list[tuple[str, str]]:
     return [f for f in disponiveis if f[0] == alvo] or disponiveis
 
 
+def _sql_do_lucro(chave: str, tabela: str) -> str:
+    """`(result, profit)` de uma fonte, ja' no peso do placar.
+
+    ALAVANCAGEM NAO TEM PESO POR LINHA (04/09). Ela e' um caminho: o lucro sai
+    do caminho FECHADO, e nao da soma das pernas. Ate' aqui ela entrava como
+    `profit * 0` e sumia do numero -- e como /public/results ja' passou a
+    conta-la pelo caminho, as duas telas do site diziam lucros diferentes da
+    mesma IA. E' exatamente a divergencia silenciosa que o topo de stake_plan.py
+    avisa que aconteceria se a tabela fosse escrita duas vezes.
+
+    LEFT JOIN e nao JOIN: a subconsulta do caminho so' conhece pick liquidado,
+    e um INNER derrubaria o pick do dia que ainda nao tem resultado. Ele nao
+    muda soma nenhuma (todo agregado aqui filtra `result IS NOT NULL`), mas
+    some da CONTAGEM de linhas -- e contagem de linha e' o que a proxima pessoa
+    usa pra conferir se a fonte esta' inteira.
+    """
+    if chave == "alavancagem":
+        return (f"                SELECT pa.result,"
+                f" COALESCE(cam.caminho_profit, 0) AS profit"
+                f" FROM {tabela} pa"
+                f" LEFT JOIN {alavancagem_caminho.subquery_dos_caminhos()} cam"
+                f" ON cam.pick_id = pa.id")
+    return (f"                SELECT result, profit * {STAKE_PADRAO[chave]} AS profit"
+            f" FROM {tabela}")
+
+
 @router.get("/stats/quick")
 def get_quick_stats(
     source: str | None = None,
@@ -2109,9 +2136,7 @@ def get_quick_stats(
         # discordar sobre o lucro da IA sem ninguem perceber.
         fontes = _fontes(source, cur)
         uniao = "\n                UNION ALL\n".join(
-            f"                SELECT result, profit * {STAKE_PADRAO[chave]} AS profit"
-            f" FROM {tabela}"
-            for chave, tabela in fontes
+            _sql_do_lucro(chave, tabela) for chave, tabela in fontes
         )
         month_row = _safe_query_one(cur, f"""
             SELECT

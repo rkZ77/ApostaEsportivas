@@ -952,8 +952,17 @@ def test_performance_da_ia_conta_todos_os_pipelines():
     tabelas = {tabela for _chave, tabela in sug._FONTES_DO_PLACAR}
     assert tabelas == _SEIS, "stats/quick nao soma todas as fontes do placar"
     # E o UNION continua sendo montado desta lista, e nao de outra.
+    #
+    # O PESO SAIU DO CORPO em 04/09: a alavancagem deixou de ter peso por linha
+    # (o lucro dela vem do caminho fechado) e cada fonte passou a montar o
+    # proprio SELECT em `_sql_do_lucro`. A exigencia e' a mesma -- o peso vem do
+    # dicionario compartilhado, e nao de um numero escrito aqui --, so' mudou de
+    # funcao.
     corpo = _codigo("routers/suggestions.py", "get_quick_stats")
-    assert "fontes" in corpo and "STAKE_PADRAO[chave]" in corpo
+    assert "fontes" in corpo and "_sql_do_lucro(chave, tabela)" in corpo
+    montador = _codigo("routers/suggestions.py", "_sql_do_lucro")
+    assert "STAKE_PADRAO[chave]" in montador
+    assert "caminho_profit" in montador, "alavancagem tem que entrar pelo caminho"
 
 
 def test_sequencia_atual_usa_a_mesma_base_do_total():

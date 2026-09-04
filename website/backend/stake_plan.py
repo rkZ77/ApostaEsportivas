@@ -152,9 +152,18 @@ def rotulo_curto() -> str:
     Sai daqui pra que mudar o plano mude a legenda junto. Uma legenda velha
     grudada num numero novo e' pior do que nao ter legenda.
 
-    A alavancagem nao aparece na legenda porque nao entra na conta que a
-    legenda explica -- citar "0u" convidaria a leitura errada de que ela deu
-    zero de lucro.
+    A ALAVANCAGEM ENTROU NA LEGENDA EM 04/09, junto com o dia em que ela passou
+    a entrar na conta. Ela ficava de fora enquanto valia zero, e com razao:
+    citar "0u" convidaria a leitura errada de que ela deu zero de lucro. Agora
+    o que confundiria e' o contrario -- ela move o numero e a legenda que o
+    explica nao a citava.
+
+    "1u por caminho" e nao "1u", porque a unidade dela conta outra coisa: cada
+    caminho arrisca uma entrada, e um caminho sao varios picks.
+
+    Separador por VIRGULA, e nao pelo ponto do meio que estava aqui. Ele foi
+    varrido do texto do site em 01/09 e esta linha tinha passado batido.
     """
-    return (f"VIP e ao vivo {STAKE_PADRAO['vip']}u · free e mercados "
-            f"{STAKE_PADRAO['free']}u · múltipla {STAKE_PADRAO['multiplas']}u")
+    return (f"VIP e ao vivo {STAKE_PADRAO['vip']}u, free e mercados "
+            f"{STAKE_PADRAO['free']}u, múltipla {STAKE_PADRAO['multiplas']}u, "
+            f"alavancagem 1u por caminho")

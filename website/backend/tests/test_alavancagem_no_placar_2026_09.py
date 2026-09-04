@@ -150,3 +150,34 @@ def _fonte_da_funcao(fn):
     import inspect
     alvo = getattr(fn, "__wrapped__", fn)
     return inspect.getsource(alvo)
+
+
+# ── as duas telas tem que dizer o mesmo numero ────────────────────────────
+def test_a_tela_de_picks_conta_pelo_caminho_tambem():
+    """/suggestions/stats/quick monta o placar dela por fora do UNION de
+    /public/results. Com a alavancagem entrando por caminho num lado e como
+    `profit * 0` no outro, as duas telas anunciariam lucros diferentes da mesma
+    IA · a divergência silenciosa que o topo de stake_plan.py descreve."""
+    from routers.suggestions import _sql_do_lucro
+
+    alav = _sql_do_lucro("alavancagem", "picks_alavancagem")
+    assert "caminho_profit" in alav
+    assert "profit * 0" not in alav
+    # LEFT, pra o pick do dia sem resultado nao sumir da contagem de linhas.
+    assert "LEFT JOIN" in alav
+
+    vip = _sql_do_lucro("vip", "picks_vip")
+    assert f"profit * {STAKE_PADRAO['vip']}" in vip
+
+
+def test_a_legenda_cita_a_alavancagem():
+    """Ela move o número; a legenda que explica o número tem que dizer como."""
+    from stake_plan import rotulo_curto
+    assert "alavancagem" in rotulo_curto().lower()
+    assert "caminho" in rotulo_curto().lower()
+
+
+def test_a_legenda_nao_usa_ponto_do_meio():
+    """Varrido do texto do site em 01/09."""
+    from stake_plan import rotulo_curto
+    assert "·" not in rotulo_curto()
