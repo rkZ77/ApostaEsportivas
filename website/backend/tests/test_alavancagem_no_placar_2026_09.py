@@ -114,3 +114,39 @@ def test_a_subquery_e_fechada_em_parenteses():
     bruto = alavancagem_caminho.subquery_dos_caminhos().strip()
     assert bruto.startswith("(") and bruto.endswith(")")
     assert "WITH RECURSIVE" in bruto
+
+
+# ── a rota publica do historico ───────────────────────────────────────────
+def test_a_rota_publica_nao_vaza_o_pick():
+    """A aba mostra o histórico da IA pra quem ainda não pegou um caminho. Isso
+    é RESULTADO, e resultado é público no site inteiro. O que não pode sair é o
+    pick: mercado, linha e odd de perna continuam atrás do paywall."""
+    from routers import public
+    fonte = _fonte_da_funcao(public.public_alavancagem_caminhos)
+    for proibido in ("market_1", "line_1", "odd_1", "odd_combined", "reasoning"):
+        assert proibido not in fonte, proibido
+
+
+def test_a_rota_publica_usa_a_mesma_conta_do_placar():
+    """Duas contas de caminho seriam dois produtos com o mesmo nome."""
+    from routers import public
+    fonte = _fonte_da_funcao(public.public_alavancagem_caminhos)
+    assert "alavancagem_caminho.subquery_dos_caminhos()" in fonte
+    assert "alavancagem_caminho.META_PADRAO" in fonte
+
+
+def test_caminho_aberto_fica_fora_das_somas():
+    """Ele aparece como contagem de passos, nunca somado: composto em andamento
+    não é dinheiro, e essa é a invariante do produto inteiro."""
+    from routers import public
+    fonte = _fonte_da_funcao(public.public_alavancagem_caminhos)
+    assert "WHERE cam.encerra" in fonte          # o que soma
+    assert "WHERE NOT cam.encerra" in fonte      # o que so' conta passo
+    somatorio = fonte[fonte.index('"unidades": round'):]
+    assert "aberto" not in somatorio.split("\n")[0]
+
+
+def _fonte_da_funcao(fn):
+    import inspect
+    alvo = getattr(fn, "__wrapped__", fn)
+    return inspect.getsource(alvo)

@@ -1261,6 +1261,90 @@ def _free_pick_do_dia():
         conn.close()
 
 
+@router.get("/alavancagem/caminhos")
+# Muda quando um caminho encerra, o que acontece no maximo uma vez por dia --
+# e so' depois de a resolucao do pick rodar. Dez minutos e' folgado.
+@cache_publico.rota(600)
+def public_alavancagem_caminhos():
+    """Como a IA foi nos caminhos de alavancagem · publico, so' leitura.
+
+    POR QUE ESTA ROTA EXISTE
+    ------------------------
+    A aba Alavancagem so' sabia falar do caminho de QUEM JA' CONFIGUROU. Quem
+    nunca pegou um via uma tela vazia com um convite, e quem ja' tinha um nao
+    tinha com o que comparar: um caminho de seis passos leva ~28 dias, entao a
+    amostra pessoal e' de um punhado de caminhos e nao responde "isso costuma
+    dar certo?".
+
+    O historico da IA responde, e ele ja' existia -- o mesmo calculo que o
+    placar publico passou a usar em 04/09 (`alavancagem_caminho.py`). Aqui ele
+    e' devolvido caminho a caminho em vez de somado.
+
+    E' RESULTADO, e nao pick: sai a data de encerramento, quantos passos e
+    quanto rendeu. Nenhum mercado, nenhuma linha, nenhuma odd de perna -- o
+    conteudo pago continua atras do paywall, como no resto de /public.
+    """
+    conn = get_connection()
+    cur  = conn.cursor()
+    try:
+        # A subconsulta do caminho ja' marca `encerra` e o que cada encerramento
+        # rendeu. Aqui so' falta dizer QUANDO e POR QUE, e o "por que" sai do
+        # proprio resultado do pick que fechou: RED fecha em RED, o resto so'
+        # fecha por ter chegado na meta.
+        caminhos = _q(cur, f"""
+            SELECT pa.match_date                       AS encerrou_em,
+                   cam.passos                          AS passos,
+                   CASE WHEN pa.result = 'RED' THEN 'red' ELSE 'meta' END AS motivo,
+                   cam.caminho_profit                  AS unidades
+              FROM picks_alavancagem pa
+              JOIN {alavancagem_caminho.subquery_dos_caminhos()} cam
+                ON cam.pick_id = pa.id
+             WHERE cam.encerra
+             ORDER BY pa.match_date DESC
+        """)
+        caminhos = [dict(r) for r in caminhos]
+
+        # O caminho ABERTO e' a cauda depois do ultimo encerramento. Ele nao
+        # entra em nenhuma soma -- composto em andamento nao e' dinheiro --,
+        # mas dizer quantos passos ele ja' tem e' o que faz a tela mostrar uma
+        # sequencia em curso em vez de esconde-la ate' acabar.
+        aberto = _q1(cur, f"""
+            SELECT cam.passos
+              FROM picks_alavancagem pa
+              JOIN {alavancagem_caminho.subquery_dos_caminhos()} cam
+                ON cam.pick_id = pa.id
+             WHERE NOT cam.encerra
+             ORDER BY pa.match_date DESC, pa.id DESC
+             LIMIT 1
+        """)
+
+        na_meta = [c for c in caminhos if c["motivo"] == "meta"]
+        unidades = sum(float(c["unidades"] or 0) for c in caminhos)
+        passos_abertos = int(aberto["passos"]) if aberto else 0
+        return {
+            "meta": alavancagem_caminho.META_PADRAO,
+            "fechados": len(caminhos),
+            "na_meta": len(na_meta),
+            "no_red": len(caminhos) - len(na_meta),
+            "unidades": round(unidades, 4),
+            # Em quantos passos o caminho mais longo chegou, contando o aberto:
+            # esconder a sequencia em curso apagaria a melhor marca justamente
+            # enquanto ela acontece. Mesmo criterio do painel do usuario.
+            "melhor_sequencia": max([passos_abertos]
+                                    + [int(c["passos"]) for c in na_meta] or [0]),
+            "passos_em_aberto": passos_abertos,
+            "caminhos": [{
+                "encerrou_em": str(c["encerrou_em"]),
+                "passos": int(c["passos"]),
+                "motivo": c["motivo"],
+                "unidades": round(float(c["unidades"] or 0), 4),
+            } for c in caminhos],
+        }
+    finally:
+        cur.close()
+        conn.close()
+
+
 @router.get("/leaderboard")
 def public_leaderboard():
     """Top 5 usuarios por yield ROI · anonimizados para landing page (min 5 picks resolvidos)."""

@@ -115,14 +115,31 @@ export default function LucroBarChart({
 
   const ticks = [0, 0.25, 0.5, 0.75, 1].map(p => minV + span * p)
 
+  /* RALEIA O RÓTULO QUANDO ELE NÃO CABE.
+     Cada rótulo é uma data ("31/08") e pede ~30px pra ser lido. Com 14 barras
+     em 280px de celular eles se sobrepõem e viram um borrão contínuo, que é
+     pior que rótulo nenhum: some a informação E fica sujo. Aqui um a cada N
+     aparece, e o último é sempre um deles · a barra mais recente é a que o
+     leitor procura primeiro. As barras continuam todas desenhadas; quem quiser
+     a data de uma delas passa o mouse (ou toca) e lê no rodapé. */
+  const LARGURA_DO_ROTULO = 30
+  const passoRotulo = Math.max(1, Math.ceil(LARGURA_DO_ROTULO / Math.max(passo, 1)))
+  const mostraRotulo = (i: number) =>
+    passoRotulo === 1 || (data.length - 1 - i) % passoRotulo === 0
+
   return (
     <div ref={caixa} className="w-full select-none">
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} className="block"
            onMouseLeave={() => setHover(null)}>
         {ticks.map((v, i) => (
           <g key={i}>
-            <line x1={PL} y1={y(v)} x2={W - PR} y2={y(v)} stroke="#1f1f23" strokeWidth="0.8" />
-            <text x={PL - 5} y={y(v) + 3} fill="#52525b" fontSize="8" textAnchor="end"
+            {/* Token, e nao hexadecimal: o #1f1f23 daqui era quase invisivel no
+                tema escuro e virava uma grade preta forte sobre o branco,
+                atravessando o grafico inteiro. Cor de linha e' decisao do tema
+                desde 23/08, e grade de grafico nao e' excecao. */}
+            <line x1={PL} y1={y(v)} x2={W - PR} y2={y(v)}
+                  className="stroke-line" strokeWidth="0.8" />
+            <text x={PL - 5} y={y(v) + 3} className="fill-ink-4" fontSize="8" textAnchor="end"
                   fontFamily="Inter, -apple-system, sans-serif"
                   style={{ fontVariantNumeric: 'tabular-nums' }}>
               {v.toFixed(0)}u
@@ -132,7 +149,8 @@ export default function LucroBarChart({
 
         {/* Zero só quando há prejuízo · sem barra negativa ele é a própria base. */}
         {minV < 0 && (
-          <line x1={PL} y1={yZero} x2={W - PR} y2={yZero} stroke="#52525b" strokeWidth="1" />
+          <line x1={PL} y1={yZero} x2={W - PR} y2={yZero}
+                className="stroke-line-strong" strokeWidth="1" />
         )}
 
         {data.map((d, i) => {
@@ -158,7 +176,7 @@ export default function LucroBarChart({
           )
         })}
 
-        {data.map((d, i) => (
+        {data.map((d, i) => mostraRotulo(i) && (
           <text key={d.label} x={x(i) + barW / 2} y={H - 10} className="fill-ink-4" fontSize="8"
                 textAnchor="middle" fontFamily="Inter, -apple-system, sans-serif">
             {d.label}
