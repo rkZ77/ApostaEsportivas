@@ -22,8 +22,11 @@ Defesas apareceram em 0.86% das atuacoes medidas. Chutes no alvo e passes sao
 muito mais frequentes NA BASE, mas dependem de a casa OFERECER o mercado, que
 e' outra coisa -- e prop de jogador e' oferta escassa fora dos grandes jogos.
 Dia sem pick e' o caso comum deste motor, nao falha. A auditoria distingue os
-dois: `analisados` alto com `selecionados` zero e' limiar; `analisados` zero e'
-mercado ausente na coleta.
+dois pelo MOTIVO de cada jogo descartado, e nao pela contagem: desde 04/09 todo
+jogo do dia aparece na execucao de todo metodo, com o motivo daquele metodo
+("nenhuma casa ofereceu mercado de jogador" e' oferta ausente; "abaixo do
+minimo" e' limiar). `analisados` zero passou a significar so' uma coisa:
+nenhum jogo de hoje tinha odds coletadas.
 """
 import json
 import textwrap
@@ -88,6 +91,12 @@ def _ofertas_do_metodo(odds_cruas: list, metodo: cat.Metodo) -> list:
         nome_mercado = (o.get("market_name") or "").strip().lower()
         if nome_mercado not in metodo.nomes_mercado:
             continue
+        # O MANDO VEM NO NOME DO MERCADO (2026-09-04). "Home Player Shots" so'
+        # lista jogador do mandante. Guardar isso restringe a busca de nome ao
+        # lado certo -- e' a mesma protecao que o `resolver` ja' da' contra dois
+        # "Weverton" no mesmo jogo, so' que uma etapa antes.
+        lado = ("home" if nome_mercado.startswith("home ")
+                else "away" if nome_mercado.startswith("away ") else None)
         try:
             odd = float(o.get("odd") or 0)
         except (TypeError, ValueError):
@@ -99,7 +108,7 @@ def _ofertas_do_metodo(odds_cruas: list, metodo: cat.Metodo) -> list:
             continue
         nome, n = parsed
         ofertas.append({
-            "nome_ofertado": nome, "n": n, "odd": odd,
+            "nome_ofertado": nome, "n": n, "odd": odd, "lado": lado,
             "bookmaker": o.get("bookmaker_name") or o.get("bookmaker"),
             "market_id": o.get("market_id"),
             "market_name": o.get("market_pt") or o.get("market_name"),
@@ -211,10 +220,19 @@ def _avaliar_fixture(fixture: dict, cur, odds_service: OddsService,
                      match_stats: MatchStatsService,
                      calibragem: dict, constantes_saves: dict,
                      standings_service: StandingsService | None = None) -> tuple:
-    """(candidatos, motivo_se_vazio) de uma partida, em todos os metodos."""
+    """(candidatos, motivo_por_metodo) de uma partida.
+
+    O motivo e' POR METODO, e nao um so' pro jogo inteiro (corrigido em
+    2026-09-04). Antes, um jogo que rendia candidato em QUALQUER metodo saia da
+    lista de descartados de TODOS -- entao a execucao de `shots_on` num dia em
+    que so' `saves` achou oferta terminava com `analisados = 0`, que a propria
+    docstring do modulo ensina a ler como "mercado ausente na coleta". A
+    auditoria dizia que o jogo nao existiu, em vez de dizer por que aquele
+    metodo nao aproveitou o jogo.
+    """
     odds_cruas = odds_service.load_odds_by_fixture(fixture["fixture_id"])
     if not odds_cruas:
-        return ([], MOTIVO_SEM_ODDS)
+        return ([], {m.slug: MOTIVO_SEM_ODDS for m in cat.METODOS})
 
     # CONTEXTO DE COMPETICAO · uma vez por jogo, pros seis metodos.
     #
@@ -252,13 +270,13 @@ def _avaliar_fixture(fixture: dict, cur, odds_service: OddsService,
         match_stats, fixture, league_table=league_table)
 
     candidatos = []
-    houve_mercado = False
+    motivos: dict = {}
 
     for metodo in cat.METODOS:
         ofertas = _ofertas_do_metodo(odds_cruas, metodo)
         if not ofertas:
+            motivos[metodo.slug] = MOTIVO_SEM_MERCADO
             continue
-        houve_mercado = True
 
         jogadores = player_history.jogadores_dos_times(
             cur, [fixture["home_team_id"], fixture["away_team_id"]],
@@ -287,13 +305,25 @@ def _avaliar_fixture(fixture: dict, cur, odds_service: OddsService,
             print(f"[PLAYER_STATS] {metodo.slug}: {antes - len(jogadores)} de {antes} "
                   f"jogador(es) fora por titularidade baixa.")
         if not jogadores:
+            motivos[metodo.slug] = MOTIVO_SEM_JOGADORES
             continue
 
         phi = (calibragem.get(metodo.slug) or {}).get("phi") or metodo.phi_congelado
 
+        do_metodo = []
         for oferta in ofertas:
+            # Mercado publicado por mando so' lista jogador daquele lado -- ver
+            # o comentario em `_ofertas_do_metodo`. Sem lado declarado, procura
+            # nos dois times, que e' o comportamento de sempre.
+            if oferta.get("lado"):
+                time_do_lado = (fixture["home_team_id"] if oferta["lado"] == "home"
+                                else fixture["away_team_id"])
+                elegiveis = [j for j in jogadores if j.get("team_id") == time_do_lado]
+            else:
+                elegiveis = jogadores
+
             jogador = name_match.resolver(
-                oferta["nome_ofertado"], jogadores,
+                oferta["nome_ofertado"], elegiveis,
                 fixture["home_team_id"], fixture["away_team_id"])
             if not jogador:
                 # Jogador que ainda nao aparece na base por nenhum dos dois
@@ -323,7 +353,7 @@ def _avaliar_fixture(fixture: dict, cur, odds_service: OddsService,
                         else "away"),
                 direcao="over", linha=oferta["n"] - 0.5,
                 lambda_esperado=avaliado["analise"].get("esperado"))
-            candidatos.append({
+            do_metodo.append({
                 "fixture": fixture, "metodo": metodo, "jogador": jogador,
                 "oferta": oferta, "analise": analise,
                 "serie": avaliado["serie"], "adversario": avaliado.get("adversario"),
@@ -339,9 +369,14 @@ def _avaliar_fixture(fixture: dict, cur, odds_service: OddsService,
                     config=cfg.SCORE_CONFIG),
             })
 
-    if not candidatos:
-        return ([], MOTIVO_SEM_MERCADO if not houve_mercado else MOTIVO_SEM_JOGADORES)
-    return (candidatos, None)
+        if not do_metodo:
+            # Houve oferta e houve jogador, mas nenhuma das duas pontas casou:
+            # nome que a casa publica e a base nao tem, ou historico curto
+            # demais na competicao de hoje.
+            motivos[metodo.slug] = MOTIVO_SEM_JOGADORES
+        candidatos.extend(do_metodo)
+
+    return (candidatos, motivos)
 
 
 def _aprovado(c: dict) -> tuple:
@@ -489,14 +524,14 @@ def run_player_stats_engine(metodos: tuple | None = None):
     match_stats = MatchStatsService()
 
     # UMA passada pelos jogos, para todos os metodos. `por_metodo` guarda os
-    # candidatos e `sem_candidato` guarda, por jogo, o motivo de nao ter saido
-    # nada -- os dois alimentam a auditoria de cada metodo depois.
+    # candidatos e `sem_candidato` guarda, por jogo, o motivo POR METODO de nao
+    # ter saido nada -- os dois alimentam a auditoria de cada metodo depois.
     por_metodo: dict = {m.slug: [] for m in alvos}
     sem_candidato: list = []
     falhas: list = []
     for fixture in fixtures:
         try:
-            do_jogo, motivo = _avaliar_fixture(
+            do_jogo, motivos = _avaliar_fixture(
                 fixture, cur, odds_service, match_stats, calibragem,
                 constantes_saves, standings_service)
         except Exception as e:
@@ -509,8 +544,8 @@ def run_player_stats_engine(metodos: tuple | None = None):
             continue
         for c in do_jogo:
             por_metodo.setdefault(c["metodo"].slug, []).append(c)
-        if not do_jogo:
-            sem_candidato.append((fixture, motivo or MOTIVO_SEM_MERCADO))
+        if motivos:
+            sem_candidato.append((fixture, motivos))
 
     for metodo in alvos:
         with EngineRun(MOTOR, metodo.slug, resumo={
@@ -532,8 +567,9 @@ def run_player_stats_engine(metodos: tuple | None = None):
 
             candidatos = por_metodo.get(metodo.slug) or []
             fixtures_com_candidato = {c["fixture"]["fixture_id"] for c in candidatos}
-            for fixture, motivo in sem_candidato:
-                if fixture["fixture_id"] not in fixtures_com_candidato:
+            for fixture, motivos in sem_candidato:
+                motivo = motivos.get(metodo.slug)
+                if motivo and fixture["fixture_id"] not in fixtures_com_candidato:
                     run.analisado(fixture, selecionado=False, motivo=motivo)
 
             aprovados, reprovados = [], []

@@ -130,7 +130,19 @@ SHOTS_ON = Metodo(
     slug="shots_on", label="Chutes no alvo", coluna="shots_on",
     familia_contexto="shots_on_target",
     nomes_mercado=frozenset({"player shots on target", "shots on target",
-                             "player shots on goal", "shots on target by player"}),
+                             "player shots on goal", "shots on target by player",
+                             # POR LADO (2026-09-04). A Bet365 parou de publicar
+                             # o mercado 242 ("Player Shots On Target", os dois
+                             # times numa lista so') e passou a publicar 269/275,
+                             # um por mando. Sao as MESMAS ofertas, no mesmo
+                             # formato de value_name ("Fulano - 2"); so' o nome
+                             # do mercado mudou. Sem estes quatro nomes o motor
+                             # jogava fora 968 ofertas de chute no alvo num dia
+                             # so' e registrava "nenhuma casa ofereceu mercado".
+                             "home player shots on target total",
+                             "away player shots on target total",
+                             "home player shots on target",
+                             "away player shots on target"}),
     min_atuacoes=4,
     rotulo_linha="{n} ou mais chutes no alvo",
     diario=True,
@@ -138,8 +150,17 @@ SHOTS_ON = Metodo(
 
 SHOTS = Metodo(
     slug="shots", label="Chutes", coluna="shots_total",
+    # "home/away player shots" e' o par de 240/241, o mesmo desdobramento por
+    # mando descrito em SHOTS_ON.
+    #
+    # "home/away player shots TOTAL" (276 e o par dele) fica DE FORA de
+    # proposito: apesar do nome quase igual, e' o total de chutes do TIME,
+    # publicado pela Betano como "Over 3.5" e nao como "Fulano - 3". Nao e' prop
+    # de jogador -- e o `parse_valor` ja' descartaria a linha, mas o mercado
+    # ainda contaria como oferecido e mentiria na auditoria.
     nomes_mercado=frozenset({"player shots", "total shots by player",
-                             "player total shots", "shots"}),
+                             "player total shots", "shots",
+                             "home player shots", "away player shots"}),
     min_atuacoes=4,
     rotulo_linha="{n} ou mais chutes",
     diario=True,
