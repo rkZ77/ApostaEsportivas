@@ -2951,6 +2951,17 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
         # A INVARIANTE NAO MUDA: estatistica ausente nunca vira zero. Sem o
         # placar do intervalo nos dois caminhos, o pick fica PENDENTE. Foi
         # violar isso que gravou RED num pick GREEN em 05/08.
+        # A JANELA PRECISA DE PREFIXO AQUI (corrigido em 2026-09-04, mesmo dia).
+        #
+        # `_janela` nasce como "AND match_date >= %s", sem tabela, porque os
+        # outros blocos consultam UMA tabela e ali nao ha' ambiguidade. Este
+        # passou a fazer LEFT JOIN em `match_statistics`, que tambem tem
+        # `match_date` -- e o Postgres recusa a consulta inteira com "column
+        # reference match_date is ambiguous". Pior que recusar: o erro aborta a
+        # TRANSACAO, e os dois blocos de anulacao que vem depois morrem junto
+        # com "current transaction is aborted". Um JOIN derrubou tres blocos.
+        _janela_pb = _janela.replace("match_date", "pb.match_date") if _janela else ""
+
         def _fecha_boost(pid, odd, gols_ft, gols_ht):
             res_ft = "GREEN" if gols_ft > 1.5 else "RED"
             res_ht = "GREEN" if gols_ht < 2.5 else "RED"
@@ -2973,7 +2984,7 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
                  WHERE pb.result IS NULL
                    AND pb.fixture_id IS NOT NULL
                    AND pb.match_date <= %s
-                   {_janela}
+                   {_janela_pb}
             """, _args())
             pendentes_boost = [p for p in cur.fetchall()
                                if p["fixture_id"] not in nao_iniciados]

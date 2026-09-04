@@ -74,3 +74,35 @@ def test_respeita_a_janela_da_varredura():
 def test_nao_liquida_jogo_que_nao_comecou():
     bloco = _bloco_do_boost()
     assert "nao_iniciados" in bloco
+
+
+def test_a_janela_vem_qualificada_por_causa_do_join():
+    """`_janela` nasce sem tabela ("AND match_date >= %s"), porque os outros
+    blocos consultam UMA tabela e ali não há ambiguidade.
+
+    Este passou a fazer LEFT JOIN em `match_statistics`, que também tem
+    `match_date`. Sem prefixo o Postgres recusa a consulta inteira com "column
+    reference match_date is ambiguous" -- e o erro ABORTA A TRANSAÇÃO, então os
+    dois blocos de anulação que vêm depois morrem junto com "current transaction
+    is aborted". Um JOIN derrubou três blocos, em produção, no mesmo dia em que
+    o JOIN entrou.
+    """
+    bloco = _bloco_do_boost()
+    assert "_janela_pb = _janela.replace" in bloco
+    assert "{_janela_pb}" in bloco
+    # E o `{_janela}` cru não pode ter sobrado neste bloco.
+    corpo_sem_definicao = bloco.replace("_janela_pb = _janela.replace", "")
+    assert "{_janela}" not in corpo_sem_definicao
+
+
+def test_todo_bloco_com_join_qualifica_a_janela():
+    """A regra, e não só o caso: bloco que faz JOIN e usa a janela tem que
+    qualificar a coluna. É a varredura que pega o próximo JOIN adicionado."""
+    fonte = inspect.getsource(live.resolve_all_pending)
+    # Cada `cur.execute(f"""...` que contenha JOIN e a janela crua é suspeito.
+    import re
+    for consulta in re.findall(r'cur\.execute\(f"""(.*?)"""', fonte, re.S):
+        if "JOIN" in consulta.upper() and "{_janela}" in consulta:
+            raise AssertionError(
+                "consulta com JOIN usando a janela sem prefixo de tabela:\n"
+                + consulta[:300])

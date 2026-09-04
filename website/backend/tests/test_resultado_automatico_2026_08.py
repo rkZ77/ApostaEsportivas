@@ -254,7 +254,11 @@ def test_o_boost_tem_janela_porque_chama_a_api():
     corpo = _codigo("routers/live.py", "resolve_all_pending")
     bloco = corpo[corpo.index("PICK BOOST"):corpo.index("ANULACAO POR FALTA")]
     assert "_fetch_fixtures_bulk" in bloco
-    assert "{_janela}" in bloco
+    # `_janela_pb` e nao `_janela`: este bloco faz LEFT JOIN em
+    # `match_statistics`, que tambem tem `match_date`, entao a coluna precisa do
+    # prefixo da tabela. Sem ele o Postgres recusa a consulta e ABORTA A
+    # TRANSACAO -- ver test_boost_liquida_sozinho_2026_09.
+    assert "{_janela_pb}" in bloco
 
 
 # ─────────────────────── Bilhete combinado ───────────────────────
