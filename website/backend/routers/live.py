@@ -2929,36 +2929,80 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
         # intervalo nao estiverem publicados, o pick fica pendente. E' a
         # primeira invariante do settlement, e foi violar ela que gravou RED
         # num pick GREEN em 05/08.
+        # ELE LE A PARTIDA, COMO TODOS OS OUTROS (corrigido em 2026-09-04).
+        #
+        # Ate' aqui o Boost era o UNICO tipo que so' sabia liquidar por
+        # `match_statistics` -- um JOIN obrigatorio, sem plano B. VIP, free,
+        # mercados e ao vivo leem o fixture da API (`_fetch_fixtures_bulk`) e
+        # fecham assim que o jogo aparece como FT.
+        #
+        # `match_statistics` nao e' preenchida por esta varredura: ela vem do
+        # `stats_sweep`, que tem freios proprios, ou do botao "Atualizar Jogos"
+        # do /admin. Entao o Boost ficava pendente horas depois de o VIP do
+        # MESMO dia ja' ter fechado, e a saida era resolver na mao -- que e'
+        # exatamente o que o produto nao deveria pedir. Medido em PROD hoje: o
+        # pick #6 estava GREEN sem nenhuma linha em `match_statistics`, ou seja,
+        # alguem teve que fechar a mao.
+        #
+        # A ordem agora e' fixture primeiro, `match_statistics` como segunda
+        # chance. Os dois dao o mesmo numero; o segundo so' cobre o caso de a
+        # API nao publicar o placar do intervalo.
+        #
+        # A INVARIANTE NAO MUDA: estatistica ausente nunca vira zero. Sem o
+        # placar do intervalo nos dois caminhos, o pick fica PENDENTE. Foi
+        # violar isso que gravou RED num pick GREEN em 05/08.
+        def _fecha_boost(pid, odd, gols_ft, gols_ht):
+            res_ft = "GREEN" if gols_ft > 1.5 else "RED"
+            res_ht = "GREEN" if gols_ht < 2.5 else "RED"
+            res = "GREEN" if (res_ft == "GREEN" and res_ht == "GREEN") else "RED"
+            c = conn.cursor()
+            c.execute("""UPDATE picks_boost
+                            SET result_ft = %s, result_ht = %s
+                          WHERE id = %s AND result IS NULL""", (res_ft, res_ht, pid))
+            c.close()
+            _save_market_pick_result("picks_boost", pid, "boost", res, float(odd or 1), conn)
+            resolved["boost"] += 1
+
         try:
-            cur.execute("""
-                SELECT pb.id, pb.odd,
-                       ms.total_goals,
-                       ms.home_goals_ht, ms.away_goals_ht
+            cur.execute(f"""
+                SELECT pb.id, pb.odd, pb.fixture_id,
+                       ms.total_goals, ms.home_goals_ht, ms.away_goals_ht,
+                       ms.status AS ms_status
                   FROM picks_boost pb
-                  JOIN match_statistics ms ON ms.fixture_id = pb.fixture_id
+                  LEFT JOIN match_statistics ms ON ms.fixture_id = pb.fixture_id
                  WHERE pb.result IS NULL
+                   AND pb.fixture_id IS NOT NULL
                    AND pb.match_date <= %s
-                   AND ms.status IN ('FT','AET','PEN')
-                   AND ms.total_goals   IS NOT NULL
-                   AND ms.home_goals_ht IS NOT NULL
-                   AND ms.away_goals_ht IS NOT NULL
-            """, (today_br,))
-            for p in cur.fetchall():
+                   {_janela}
+            """, _args())
+            pendentes_boost = [p for p in cur.fetchall()
+                               if p["fixture_id"] not in nao_iniciados]
+            _fetch_fixtures_bulk([p["fixture_id"] for p in pendentes_boost])
+            for p in pendentes_boost:
                 try:
-                    gols_ft = int(p["total_goals"])
-                    gols_ht = int(p["home_goals_ht"]) + int(p["away_goals_ht"])
-                    res_ft = "GREEN" if gols_ft > 1.5 else "RED"
-                    res_ht = "GREEN" if gols_ht < 2.5 else "RED"
-                    res = "GREEN" if (res_ft == "GREEN" and res_ht == "GREEN") else "RED"
-                    c = conn.cursor()
-                    c.execute("""UPDATE picks_boost
-                                    SET result_ft = %s, result_ht = %s
-                                  WHERE id = %s AND result IS NULL""",
-                              (res_ft, res_ht, p["id"]))
-                    c.close()
-                    _save_market_pick_result(
-                        "picks_boost", p["id"], "boost", res, float(p["odd"] or 1), conn)
-                    resolved["boost"] += 1
+                    fix_data = _fetch_fixture(p["fixture_id"])
+                    fix = fix_data.get("fixture") or {}
+                    status = (fix.get("status") or {}).get("short")
+                    gols_ft = gols_ht = None
+                    if status in FT_STATUSES:
+                        score = fix_data.get("score") or {}
+                        ht = score.get("halftime") or {}
+                        if ht.get("home") is not None and ht.get("away") is not None:
+                            gols_ht = int(ht["home"]) + int(ht["away"])
+                        # AET/PEN: `goals` ja' traz o tempo extra somado, e a
+                        # casa liquida pelos 90. Mesma regra de `_enrich_leg`.
+                        base = (score.get("fulltime") or {}) if status in ("AET", "PEN")                                else (fix_data.get("goals") or {})
+                        if base.get("home") is not None and base.get("away") is not None:
+                            gols_ft = int(base["home"]) + int(base["away"])
+
+                    # Segunda chance: a folha que o site ja' tem.
+                    if (gols_ft is None or gols_ht is None)                        and p["ms_status"] in ("FT", "AET", "PEN")                        and p["total_goals"] is not None                        and p["home_goals_ht"] is not None                        and p["away_goals_ht"] is not None:
+                        gols_ft = int(p["total_goals"])
+                        gols_ht = int(p["home_goals_ht"]) + int(p["away_goals_ht"])
+
+                    if gols_ft is None or gols_ht is None:
+                        continue          # pendente, e nao zero
+                    _fecha_boost(p["id"], p["odd"], gols_ft, gols_ht)
                 except Exception as e:
                     logger.error("[AUTO-RESULT] boost #%s erro: %s", p["id"], e)
         except Exception as e:

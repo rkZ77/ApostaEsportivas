@@ -231,10 +231,30 @@ def test_varredura_automatica_tem_janela_e_o_botao_do_admin_nao():
 def test_defesas_de_goleiro_ficam_fora_da_janela():
     """Goleiros resolve por player_match_stats, sem nenhuma chamada de API --
     entao nao ha cota a proteger, e a estatistica do jogador as vezes so' entra
-    horas depois."""
+    horas depois.
+
+    O RECORTE E' DOS DOIS BLOCOS, e nao "de goleiros ate' o fim da funcao"
+    (ajustado em 04/09). A regra sempre foi "quem NAO chama a API nao precisa da
+    janela", e ela vale por bloco. Ler ate' o fim so' funcionava porque goleiros
+    e player_stats por acaso eram os ultimos -- e deixou de funcionar quando o
+    Boost, que passou a ler o fixture da API, entrou depois deles e ganhou a
+    janela com razao.
+    """
     corpo = _codigo("routers/live.py", "resolve_all_pending")
-    trecho = corpo[corpo.index("picks_goleiros"):]
+    inicio = corpo.index("picks_goleiros")
+    fim = corpo.index("PICK BOOST")
+    trecho = corpo[inicio:fim]
+    assert "picks_player_stats" in trecho, "o recorte tem que cobrir os dois"
     assert "{_janela}" not in trecho
+
+
+def test_o_boost_tem_janela_porque_chama_a_api():
+    """A outra metade da mesma regra: desde 04/09 o Boost le' o fixture, entao
+    ha' cota a proteger e ele entra na janela junto com VIP e free."""
+    corpo = _codigo("routers/live.py", "resolve_all_pending")
+    bloco = corpo[corpo.index("PICK BOOST"):corpo.index("ANULACAO POR FALTA")]
+    assert "_fetch_fixtures_bulk" in bloco
+    assert "{_janela}" in bloco
 
 
 # ─────────────────────── Bilhete combinado ───────────────────────
