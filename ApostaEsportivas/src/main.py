@@ -44,7 +44,25 @@ import traceback
 from dataclasses import dataclass
 from typing import Callable
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+_AQUI = os.path.dirname(os.path.abspath(__file__))
+if _AQUI not in sys.path:
+    # APPEND, e nao insert(0) -- corrigido em 2026-09-04.
+    #
+    # Este arquivo nao roda so' como CLI. O /admin do site carrega ele POR
+    # CAMINHO (`routers/admin.py::_passos_do_motor`, via exec_module) pra ler
+    # `COMANDOS` e montar a sequencia do botao "Rodar Tudo" -- e um insert(0)
+    # de modulo e' permanente no processo que fez isso. Dentro do backend, o
+    # `src/` do motor na frente do path sombreia os modulos de topo do site
+    # com nome igual: `main`, `run_dev`. A partir dai `import main` devolvia
+    # ESTE arquivo em vez do app FastAPI, e 22 testes de tres arquivos
+    # quebravam com "module 'main' has no attribute 'app'".
+    #
+    # Rodando como CLI o efeito e' o mesmo de antes: `python main.py` ja' poe
+    # o proprio diretorio em sys.path[0] sozinho, entao a linha nunca foi o
+    # que fazia `services`/`utils` resolverem -- ela so' cobria o caso de
+    # alguem importar este arquivo de fora, que e' exatamente o caso que ela
+    # estragava.
+    sys.path.append(_AQUI)
 os.environ.setdefault("PYTHONUNBUFFERED", "1")
 if hasattr(sys.stdout, "reconfigure"):
     try:

@@ -93,7 +93,10 @@ def _no_path() -> None:
     exatamente o que aconteceu.
     """
     if _PIPELINE_DIR and _PIPELINE_DIR not in sys.path:
-        sys.path.insert(0, _PIPELINE_DIR)
+        # APPEND pelo mesmo motivo de settlement_bridge: na frente, o `main.py`
+        # do motor sombreia o do site em todo `import main` posterior. Aqui e'
+        # pior que la', porque `_no_path` e' o que NAO desfaz.
+        sys.path.append(_PIPELINE_DIR)
 
 
 @contextmanager
@@ -112,7 +115,7 @@ def _motor_no_path():
     """
     ja_estava = (not _PIPELINE_DIR) or (_PIPELINE_DIR in sys.path)
     if not ja_estava:
-        sys.path.insert(0, _PIPELINE_DIR)
+        sys.path.append(_PIPELINE_DIR)
     try:
         yield
     finally:

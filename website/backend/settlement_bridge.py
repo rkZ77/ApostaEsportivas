@@ -39,7 +39,25 @@ def _pipeline_dir() -> str:
 
 _DIR = _pipeline_dir()
 if _DIR and _DIR not in sys.path:
-    sys.path.insert(0, _DIR)
+    # APPEND, NUNCA insert(0) -- corrigido em 2026-09-04.
+    #
+    # Este import monta o caminho do motor e NAO desmonta: e' um efeito de
+    # import de modulo, permanente no processo. Na frente do sys.path ele
+    # SOMBREIA os modulos de topo do proprio backend que tem nome igual, e ha'
+    # tres: `main`, `run_dev` e `__pycache__`. A partir daqui, qualquer
+    # `import main` no processo devolvia
+    # ApostaEsportivas/src/main.py -- o CLI do motor -- em vez do app FastAPI.
+    #
+    # Em producao passava batido porque o `main` do site ja' esta' em
+    # sys.modules antes de qualquer router ser importado. Na suite nao: 22
+    # testes de tres arquivos quebravam com "module 'main' has no attribute
+    # 'app'", e eles passavam quando rodados sozinhos -- o sintoma classico de
+    # ordem, que faz procurar o defeito no arquivo errado.
+    #
+    # No fim do path resolve os dois lados: o backend continua achando o
+    # proprio `main`, e `services`/`utils`/`collectors`/`engine_pipelines` so'
+    # existem do lado do motor, entao para eles a posicao e' indiferente.
+    sys.path.append(_DIR)
 
 from services import settlement          # noqa: E402
 from utils import stat_sheet             # noqa: E402

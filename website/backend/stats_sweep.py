@@ -115,7 +115,9 @@ def _coletar() -> dict:
 
     caminho = _pipeline_dir()
     if caminho not in sys.path:
-        sys.path.insert(0, caminho)
+        # Append, nao insert(0) · ver settlement_bridge: o motor na frente do
+        # path sombreia o `main` do proprio backend.
+        sys.path.append(caminho)
 
     from collectors.match_statistics_sync_service import MatchStatisticsSyncService
     from services.team_stats_aggregator_service import TeamStatsAggregatorService
