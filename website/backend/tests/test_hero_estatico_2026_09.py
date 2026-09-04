@@ -136,3 +136,38 @@ def test_o_espaco_da_secao_e_reservado_antes_de_montar():
     alturas = [int(n) for n in re.findall(r"alturaMinima=\{(\d+)\}", home)]
     assert len(alturas) >= 7
     assert all(a >= 200 for a in alturas), alturas
+
+def test_o_hero_estatico_vive_fora_do_root():
+    """Dentro do #root, `createRoot().render()` o apaga assim que o React sobe.
+
+    Medido em 04/09: o texto aparecia em 700ms, sumia em 1,1s (React montou) e
+    so' voltava quando a Home terminava de carregar · dois segundos de tela
+    vazia no meio. Fora do container, quem o remove e' a propria Home, quando
+    ja' tem o hero dela pronto para pintar no lugar.
+    """
+    script = _script("prerender-hero.mjs")
+    # O div do hero vem ANTES do container, nao dentro dele.
+    assert 'data-hero-estatico' in script
+    assert script.index('data-hero-estatico') < script.index('<div id="root"></div>')
+
+    home = _front("pages/Home.tsx")
+    # useLayoutEffect, e nao useEffect: o efeito comum roda depois da pintura,
+    # entao existia um quadro com os DOIS heros na tela e a remocao seguinte
+    # puxava a pagina inteira pra cima · CLS de 1,0, medido.
+    assert "useLayoutEffect(() => { document.querySelector('[data-hero-estatico]')?.remove() }" in home
+
+
+def test_a_home_nao_e_lazy():
+    """Ela e' a rota de entrada e a unica com hero no HTML.
+
+    Como lazy(), o React subia, renderizava o fallback nulo e so' entao ia
+    buscar o chunk dela: o hero de verdade aparecia 2s depois do bundle, e o
+    Chrome registrava esse segundo paint como o LCP.
+    """
+    app = _front("App.tsx")
+    assert "import Home from './pages/Home'" in app
+    assert "lazy(() => import('./pages/Home'))" not in app
+    # As outras continuam sob demanda · o ponto e' a rota de entrada, nao abrir
+    # mao do code splitting.
+    for outra in ("Picks", "Admin", "Planos", "Banca"):
+        assert f"lazy(() => import('./pages/{outra}'))" in app, outra
