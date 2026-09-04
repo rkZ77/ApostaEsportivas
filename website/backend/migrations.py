@@ -474,6 +474,35 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         """)
         cur.execute("CREATE INDEX IF NOT EXISTS idx_banca_deposits_user ON banca_deposits(user_id, created_at DESC);")
 
+        # AVATAR NO BANCO, e nao so' no disco (2026-09-04).
+        #
+        # Ele era gravado em `static/avatars/<id>.<ext>` DENTRO DO CONTAINER, e
+        # o container do Railway e' efemero: todo deploy sobe um container novo
+        # e leva os arquivos junto. O sintoma era o usuario perder a foto a cada
+        # atualizacao do site e voltar pro circulo de iniciais -- "sempre que
+        # tem deploy o avatar sai estranho".
+        #
+        # POR QUE NO BANCO E NAO NUM VOLUME. Volume do Railway e' por AMBIENTE e
+        # e' cobrado; seriam tres (prod, noprod, dev) pra resolver o mesmo
+        # problema, e dev/noprod continuariam quebrados ate' alguem lembrar. O
+        # banco ja' e' persistente, ja' tem backup e ja' e' o mesmo em todo
+        # ambiente. Foto de perfil e' pequena (teto de 3 MB na entrada, e o
+        # tipico fica em dezenas de KB) -- e' o caso em que blob em Postgres e'
+        # a resposta simples, nao o cheiro.
+        #
+        # O DISCO CONTINUA SENDO USADO como cache: `/static/avatars/<id>.<ext>`
+        # e' servido direto pelo StaticFiles, sem passar por Python. O banco e'
+        # a fonte, o disco e' a copia rapida, e a rota de leitura reescreve a
+        # copia quando ela nao existe (container novo).
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS user_avatars (
+                user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+                ext        VARCHAR(8) NOT NULL,
+                bytes      BYTEA NOT NULL,
+                updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+        """)
+
         # A UNIDADE CONGELA NA APOSTA (2026-09-04).
         #
         # `user_followed_picks` guardava so' `stake_units`, e o R$ de toda

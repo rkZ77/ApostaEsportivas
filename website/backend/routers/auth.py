@@ -26,6 +26,7 @@ def _detect_device(user_agent: str) -> str:
 import resend
 logger = logging.getLogger(__name__)
 from datetime import datetime, timedelta, timezone
+import psycopg2
 from fastapi import APIRouter, HTTPException, Request, Response, status, Depends, UploadFile, File, BackgroundTasks
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
@@ -1466,12 +1467,68 @@ def upload_avatar(
     conn = get_connection()
     cur  = conn.cursor()
     try:
+        # O BANCO E' A FONTE, O DISCO E' CACHE (2026-09-04). O container do
+        # Railway e' efemero: gravar so' em disco fazia o usuario perder a foto
+        # em TODO deploy e voltar pro circulo de iniciais.
+        cur.execute("""
+            INSERT INTO user_avatars (user_id, ext, bytes, updated_at)
+            VALUES (%s, %s, %s, NOW())
+            ON CONFLICT (user_id) DO UPDATE
+                SET ext = EXCLUDED.ext, bytes = EXCLUDED.bytes, updated_at = NOW()
+        """, (uid, ext, psycopg2.Binary(contents)))
         cur.execute("UPDATE users SET avatar_url = %s WHERE id = %s", (avatar_url, uid))
         conn.commit()
     finally:
         cur.close(); conn.close()
 
     return {"avatar_url": avatar_url}
+
+
+@router.get("/avatar/{user_id}")
+def get_avatar(user_id: int):
+    """A foto, vinda do banco · e o disco reescrito de passagem.
+
+    QUEM CHAMA ESTA ROTA. Ninguem, no caminho feliz: `avatar_url` aponta pra
+    `/static/avatars/<id>.<ext>`, que o StaticFiles serve sem passar por Python.
+    Esta rota e' o que o front pede quando aquele arquivo devolve 404 -- que e'
+    exatamente o estado de todo container recem-criado, antes de alguem ter
+    reenviado a foto.
+
+    E ela REESCREVE o arquivo ao servir: o primeiro visitante depois do deploy
+    paga uma consulta, e todos os outros voltam a ser servidos pelo caminho
+    estatico. Sem isso a rota viraria o caminho normal de toda imagem de todo
+    usuario, que e' trocar um problema por outro.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT ext, bytes FROM user_avatars WHERE user_id = %s", (user_id,))
+        row = cur.fetchone()
+    finally:
+        cur.close(); conn.close()
+    if not row:
+        raise HTTPException(404, "Sem avatar.")
+
+    ext = row["ext"]
+    dados = bytes(row["bytes"])
+    try:
+        _AVATARS_DIR.mkdir(parents=True, exist_ok=True)
+        (_AVATARS_DIR / f"{uid_seguro(user_id)}.{ext}").write_bytes(dados)
+    except Exception:
+        # Disco cheio ou so' leitura: servir a imagem continua funcionando, so'
+        # nao fica em cache. Falhar aqui seria trocar uma foto por um erro.
+        pass
+
+    tipo = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
+            "webp": "image/webp"}.get(ext, "application/octet-stream")
+    return Response(content=dados, media_type=tipo,
+                    headers={"Cache-Control": "public, max-age=86400"})
+
+
+def uid_seguro(user_id: int) -> int:
+    """O nome do arquivo vem de um INTEIRO, nunca de texto de fora · o path e'
+    montado por concatenacao e um `..` ali sairia da pasta."""
+    return int(user_id)
 
 
 @router.get("/me")

@@ -29,8 +29,30 @@ const SIZE_PX = {
   lg: 64,
 }
 
+/* O ARQUIVO ESTATICO SOME A CADA DEPLOY, E O BANCO NAO (2026-09-04).
+ *
+ * `avatar_url` aponta pra `/static/avatars/<id>.<ext>`, gravado no disco do
+ * container -- e container do Railway e' efemero: todo deploy sobe um novo e
+ * leva os arquivos junto. O sintoma era todo mundo perder a foto e voltar pro
+ * circulo de iniciais sempre que o site atualizava.
+ *
+ * Agora a foto tambem vive no banco, e esta funcao e' a segunda tentativa: o
+ * 404 do arquivo estatico cai em `/api/auth/avatar/<id>`, que serve do banco E
+ * reescreve o arquivo de passagem. Ou seja, o primeiro visitante depois do
+ * deploy paga uma consulta e restaura o cache pra todos os outros.
+ *
+ * So' o proprio `<id>` do caminho e' reaproveitado: nada de texto de fora entra
+ * na URL nova. */
+function rotaDoBanco(imageUrl: string): string | null {
+  const m = imageUrl.match(/\/static\/avatars\/(\d+)\.[a-z]+$/i)
+  return m ? `/api/auth/avatar/${m[1]}` : null
+}
+
 export default function Avatar({ name, imageUrl, size = 'md', className = '' }: AvatarProps) {
-  const [imgError, setImgError] = useState(false)
+  /* 0 = a URL que veio; 1 = a rota do banco; 2 = desistiu, mostra as iniciais.
+     Um contador e nao um booleano porque sao DUAS tentativas, e um `onError`
+     que so' liga uma flag nunca chega na segunda. */
+  const [tentativa, setTentativa] = useState(0)
 
   const initials = name
     .split(' ')
@@ -39,9 +61,10 @@ export default function Avatar({ name, imageUrl, size = 'md', className = '' }: 
     .join('')
 
   // URL relativa funciona tanto em dev (proxy Vite /static -> 8000) quanto em prod (mesmo domínio)
-  const src = imageUrl && !imgError
-    ? (imageUrl.startsWith('http') ? imageUrl : imageUrl)
-    : null
+  const doBanco = imageUrl ? rotaDoBanco(imageUrl) : null
+  const src = !imageUrl || tentativa >= 2 ? null
+            : tentativa === 0 ? imageUrl
+            : doBanco
 
   if (src) {
     return (
@@ -51,7 +74,9 @@ export default function Avatar({ name, imageUrl, size = 'md', className = '' }: 
         width={SIZE_PX[size]}
         height={SIZE_PX[size]}
         className={`${SIZE[size]} rounded-full object-cover shrink-0 ${className}`}
-        onError={() => setImgError(true)}
+        /* Sem rota do banco (avatar do Google, por exemplo) a primeira falha ja'
+           vai direto pras iniciais · nao ha' segunda fonte pra tentar. */
+        onError={() => setTentativa(t => (t === 0 && doBanco ? 1 : 2))}
       />
     )
   }
