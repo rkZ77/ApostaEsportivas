@@ -15,7 +15,15 @@
  * Aqui fica a lista e a conta. As telas escolhem só COMO desenhar.
  */
 
-export type PeriodoKey = 'tudo' | 'hoje' | 'ontem' | '7d' | '30d' | 'mes' | 'mes_passado'
+/* `mes:YYYY-MM` e' o recorte de um mes ESPECIFICO, escolhido numa lista
+   suspensa (2026-09-04). Ele nao entra em PERIODOS: as pills sao janelas
+   RELATIVAS a hoje ("7 dias", "Este mes"), e mes especifico e' outra pergunta
+   -- "como foi agosto". Misturar os dois na mesma fila faria a fila crescer um
+   item por mes, que foi o que tirou os meses das pills na pagina de Resultados.
+
+   `Este mes` e `Mes passado` continuam nas pills: elas respondem sem exigir que
+   o leitor saiba em que mes esta'. */
+export type PeriodoKey = 'tudo' | 'hoje' | 'ontem' | '7d' | '30d' | 'mes' | 'mes_passado' | `mes:${string}`
 
 export const PERIODOS: Array<{ key: PeriodoKey; label: string }> = [
   { key: 'tudo',        label: 'Tudo' },
@@ -75,7 +83,26 @@ export function janelaDoPeriodo(p: PeriodoKey): { de: string; ate: string } | nu
 
 /** true se a data "YYYY-MM-DD" cai dentro do período. */
 export function dentroDoPeriodo(dia: string, p: PeriodoKey): boolean {
+  // Mes especifico: comparacao de prefixo, sem construir Date. O dia ja' vem
+  // como "YYYY-MM-DD" em Brasilia (ver hojeBR), entao os sete primeiros
+  // caracteres SAO o mes -- e nenhuma conversao de fuso entra no meio.
+  if (typeof p === 'string' && p.startsWith('mes:')) return dia.slice(0, 7) === p.slice(4)
   const j = janelaDoPeriodo(p)
   if (!j) return true
   return dia >= j.de && dia <= j.ate
+}
+
+
+/** "2026-09" -> "Setembro de 2026" (ou "set/26" com `curto`).
+ *
+ * Mora aqui, e nao em cada tela, porque agora ha' DOIS leitores: a lista
+ * suspensa de meses da pagina de Resultados e a de Meus Picks. Duas copias
+ * escreveriam o mesmo mes de dois jeitos na primeira divergencia de formato.
+ */
+export function nomeDoMes(mes: string, curto = false): string {
+  const [y, mo] = mes.split('-').map(Number)
+  const texto = new Date(y, mo - 1).toLocaleDateString('pt-BR', curto
+    ? { month: 'short', year: '2-digit' }
+    : { month: 'long', year: 'numeric' })
+  return texto.charAt(0).toUpperCase() + texto.slice(1)
 }

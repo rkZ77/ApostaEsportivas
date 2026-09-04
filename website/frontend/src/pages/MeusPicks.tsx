@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
-import { PillGroup, Spinner } from '../components/ui'
-import { PERIODOS, PERIODO_PADRAO, dentroDoPeriodo, type PeriodoKey } from '../lib/periodo'
+import { PillGroup, SelectMenu, Spinner } from '../components/ui'
+import { PERIODOS, PERIODO_PADRAO, dentroDoPeriodo, nomeDoMes, type PeriodoKey } from '../lib/periodo'
 import { ChevronLeft, ChevronRight, Trash2, RotateCcw } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -168,6 +168,23 @@ export default function MeusPicks() {
     : new Date(key + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })
 
   // Entradas filtradas pelo período selecionado (para stats + lista)
+  /* Os meses que a lista suspensa oferece, com o saldo de cada um.
+     
+     Sai das PROPRIAS apostas, e nao de uma lista fixa: mes sem aposta nenhuma
+     nao vira opcao, entao a lista nunca oferece um recorte que abre vazio. */
+  const mesesDisponiveis = (() => {
+    const por: Record<string, number> = {}
+    for (const e of allEntries as any[]) {
+      if (!e.followed_at) continue
+      const mes = new Date(e.followed_at)
+        .toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }).slice(0, 7)
+      por[mes] = (por[mes] ?? 0) + (typeof e.pnl === 'number' ? e.pnl : 0)
+    }
+    return Object.entries(por)
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([mes, pnl]) => ({ mes, pnl }))
+  })()
+
   const filteredByPeriod = daysBack === 'tudo'
     ? allEntries
     : allEntries.filter((e: any) => {
@@ -339,11 +356,35 @@ export default function MeusPicks() {
                 diferentes: "Todos" contra "Tudo", "Semana" contra "7 dias", e
                 um recorte de 30 dias que só existia lá. */}
             {allEntries.length > 0 && (
-              <PillGroup
-                options={PERIODOS.map(p => ({ value: p.key, label: p.label }))}
-                value={daysBack}
-                onChange={v => { setDaysBack(v); setDayOffset(0); setTodayPage(0) }}
-              />
+              <div className="flex flex-wrap items-center gap-3">
+                <PillGroup
+                  options={PERIODOS.map(p => ({ value: p.key, label: p.label }))}
+                  value={PERIODOS.some(p => p.key === daysBack) ? daysBack : ''}
+                  onChange={v => { setDaysBack(v as PeriodoKey); setDayOffset(0); setTodayPage(0) }}
+                />
+                {/* MES ESPECIFICO EM LISTA SUSPENSA (2026-09-04, pedido do
+                    usuario) · mesmo componente e mesma leitura da pagina de
+                    Resultados, com o saldo do mes ao lado do nome, pra achar o
+                    mes bom sem abrir um por um.
+
+                    Fora das pills de proposito: elas sao janelas RELATIVAS a
+                    hoje e a fila cresceria um item por mes. Escolher um mes
+                    desmarca as pills, e vice-versa -- os dois respondem a mesma
+                    pergunta ("qual recorte"), entao so' um pode estar ativo. */}
+                {mesesDisponiveis.length > 0 && (
+                  <SelectMenu
+                    ariaLabel="Mês"
+                    options={[{ value: '', label: 'Escolher mês' },
+                              ...mesesDisponiveis.map(m => ({
+                                value: `mes:${m.mes}`,
+                                label: nomeDoMes(m.mes),
+                                meta: fmtSigned(m.pnl),
+                              }))]}
+                    value={String(daysBack).startsWith('mes:') ? daysBack : ''}
+                    onChange={(v: string) => { setDaysBack((v || PERIODO_PADRAO) as PeriodoKey); setDayOffset(0); setTodayPage(0) }}
+                  />
+                )}
+              </div>
             )}
 
             {/* Resumo · filtra pelo período selecionado */}

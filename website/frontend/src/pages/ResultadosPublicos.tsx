@@ -8,9 +8,9 @@ import { Helmet } from 'react-helmet-async'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { winRate as calcWinRate, fmtUnits, STAKE_LABEL_PADRAO } from '../utils/format'
 import { TeamLogo, LeagueLogo } from '../components/TeamLogo'
-import FilterPanel, { FilterGroup } from '../components/FilterPanel'
 import { useAuth } from '../context/AuthContext'
 import PageShell from '../components/PageShell'
+import { nomeDoMes } from '../lib/periodo'
 import CaminhosDaIA from '../components/CaminhosDaIA'
 import { PAGE_WIDTH } from '../lib/pageWidth'
 import { Button, SelectMenu, Spinner } from '../components/ui'
@@ -21,11 +21,6 @@ import PipelineProfitChart from '../components/PipelineProfitChart'
 import LucroBarChart from '../components/LucroBarChart'
 import { sinalizarNavegacao } from '../services/progressBus'
 
-const RESULTADO_OPTIONS = [
-  { value: 'all', label: 'Todos' }, { value: 'GREEN', label: 'Green' }, { value: 'RED', label: 'Red' },
-  { value: 'PUSH', label: 'Push' }, { value: 'HALF-WIN', label: '½ Win' }, { value: 'HALF-LOSS', label: '½ Loss' },
-  { value: 'pending', label: 'Pendente' },
-]
 const GAMES_PAGE_SIZE = 10
 
 interface Summary {
@@ -86,8 +81,6 @@ const SRC_LBL: Record<string, string> = {
   faltas: 'Faltas', goleiros: 'Defesas', player_stats: 'Jogador',
   boost: 'Boost', live: 'Ao Vivo',
 }
-const SOURCES = ['all', 'vip', 'free', 'multiplas', 'alavancagem', 'faltas',
-                 'player_stats', 'boost', 'live', 'goleiros']
 const SOURCE_LABELS: Record<string, string> = {
   all: 'Todos', vip: 'VIP', free: 'Free', multiplas: 'Múltiplas',
   alavancagem: 'Alavancagem', faltas: 'Faltas', goleiros: 'Defesas',
@@ -179,13 +172,6 @@ const PISO_AMOSTRA = 5
    sobe a inicial de CADA palavra, e "setembro de 2026" virava "Setembro De
    2026" -- errado em portugues. */
 const capitalizar = (t: string) => t.charAt(0).toUpperCase() + t.slice(1)
-
-function nomeDoMes(mes: string, curto = false): string {
-  const [y, mo] = mes.split('-').map(Number)
-  return capitalizar(new Date(y, mo - 1).toLocaleDateString('pt-BR', curto
-    ? { month: 'short', year: '2-digit' }
-    : { month: 'long', year: 'numeric' }))
-}
 
 /** So' o mes, sem o ano. O ano ja' esta' na pilha de meses logo acima, e o
  *  titulo inteiro nao cabia numa linha de celular. */
@@ -328,20 +314,10 @@ function AbaFechamento({ linhas, grafico, stakeLabel }: {
           fechamento pra fora da tela do celular. O menu ainda mostra o lucro de
           cada mes ao lado do nome, entao da' pra achar o mes bom sem abrir um
           por um. Mesmo componente do filtro longo do site (SelectMenu). */}
-      {meses.length > 1 && (
-        <div className="mb-5">
-          <SelectMenu
-            ariaLabel="Mês do fechamento"
-            options={meses.map(m => ({
-              value: m.mes,
-              label: nomeDoMes(m.mes),
-              meta: fmtUnits(m.profit, 1),
-            }))}
-            value={mesAtivo.mes}
-            onChange={setMesSel}
-          />
-        </div>
-      )}
+      {/* O SELETOR DE MES SUBIU pra cima das abas em 04/09 e vale pra pagina
+          inteira · ter um aqui e outro la' era dois controles pro mesmo
+          recorte. Quando a pagina esta' em "Todos os meses", esta aba precisa
+          escolher UM pra montar o fechamento, e ai' ela usa o mais recente. */}
 
       <AbaStats tiles={[
         { label: 'Picks no mês', value: String(mesAtivo.total) },
@@ -464,7 +440,6 @@ export default function ResultadosPublicos() {
   // "Picks recentes" · paginação (server-side, ver recent_limit/recent_offset em /public/results)
   const RECENT_PAGE_SIZE = 30
   const [recentPage, setRecentPage] = useState(0)
-  const handleSourceChange = (v: string) => { setSource(v); setRecentPage(0); setRecentLeagueFilter('') }
   const handleMonthChange = (v: string) => { setMonth(v); setRecentPage(0); setRecentLeagueFilter('') }
 
   // "Por Jogo" · exige login (mesmos dados detalhados que antes só existiam em /results)
@@ -686,46 +661,34 @@ export default function ResultadosPublicos() {
         )}
         </AnimatePresence>
 
-          {/* Filtros · UM painel pra pagina inteira.
-              A aba Por Jogo tinha o proprio FilterPanel logo abaixo das abas,
-              e a tela ficava com DOIS botoes escritos "Filtros", um em cima e
-              outro embaixo, sem nada distinguindo os dois. Pior: os chips do
-              que estava filtrado ficavam divididos entre eles, e o "Limpar
-              tudo" de cada um so' limpava a metade dele.
-
-              O grupo "Resultado" e' da aba Por Jogo, entao ele entra aqui
-              SO' quando ela esta aberta -- filtro que nao filtra nada na aba
-              atual e' ruido. */}
-          <FilterPanel
-            accent="green"
-            groups={[
-              {
-                key: 'source', label: 'Fonte',
-                options: SOURCES.map(src => ({ value: src, label: SOURCE_LABELS[src] })),
-                value: source, onChange: handleSourceChange,
-              },
-              ...(months.length > 0 ? [{
-                key: 'month', label: 'Mês',
-                /* O rotulo era o proprio "2026-09": formato de banco na cara
-                   do usuario. `nomeDoMes` ja' existe pro fechamento. */
-                options: [{ value: '', label: 'Todos os meses' },
-                          ...months.map(m => ({ value: m, label: nomeDoMes(m) }))],
-                value: month, onChange: handleMonthChange,
-              } as FilterGroup] : []),
-              ...(tab === 'por_jogo' ? [{
-                key: 'resultado', label: 'Resultado',
-                /* Sem sessao o backend ignora `pending`, entao oferecer a
-                   opcao seria um filtro que nao filtra nada. */
-                options: user ? RESULTADO_OPTIONS : RESULTADO_OPTIONS.filter(o => o.value !== 'pending'),
-                value: gamesFilter,
-                onChange: (v: string) => { setGamesFilter(v); setGamesPage(0); fetchGames(0, v, source, month) },
-              } as FilterGroup] : []),
-            ]}
-            /* A contagem segue a aba: em Por Jogo o painel prometia "N
-               resultados" contando os picks recentes do Resumo, que e' outra
-               lista. */
-            resultado={tab === 'por_jogo' ? gamesTotal : recentTotal}
-          />
+          {/* FILTRO DE MES, E SO' ELE (2026-09-04, pedido do usuario).
+     
+              Aqui havia um painel de filtros com Fonte, Mes e (na aba Por Jogo)
+              Resultado, dentro de um acordeao "Filtros" que abria por cima das
+              abas. Duas coisas competiam pela mesma regiao da tela: o painel
+              aberto empurrava as abas pra baixo, e a aba Por Mes ainda tinha o
+              PROPRIO seletor de mes logo abaixo -- dois controles de mes na
+              mesma tela, um deles escondido atras de um clique.
+     
+              Ficou um so', no lugar do que estava embaixo: o mesmo `SelectMenu`
+              que a aba Por Mes ja' usava, agora valendo pra pagina inteira. Ele
+              mostra o lucro de cada mes ao lado do nome, entao da' pra achar o
+              mes bom sem abrir um por um.
+     
+              O FILTRO DE FONTE SAIU. Ele existia pra ler um produto de cada vez,
+              e a aba Por Mes ja' faz isso melhor: ela quebra o mes por produto
+              numa lista so', sem obrigar a escolher um e recarregar. */}
+          {months.length > 0 && (
+            <div className="mb-5">
+              <SelectMenu
+                ariaLabel="Mês"
+                options={[{ value: '', label: 'Todos os meses' },
+                          ...months.map((m: string) => ({ value: m, label: nomeDoMes(m) }))]}
+                value={month}
+                onChange={handleMonthChange}
+              />
+            </div>
+          )}
 
           {/* Abas · Por Liga e' publica; Por Jogo/Por Mes exigem login (dado detalhado por usuario) */}
           <div className="flex border-b border-line mb-6 overflow-x-auto">

@@ -122,8 +122,14 @@ def test_o_placar_publico_oferece_toda_fonte_que_ele_soma():
                          "ResultadosPublicos.tsx")
     with open(front, encoding="utf-8") as fh:
         tela = fh.read()
+    # A SUPERFICIE MUDOU EM 04/09, a garantia nao. O filtro de Fonte saiu da
+    # tela (pedido do usuario: so' o seletor de mes fica no topo), e quem
+    # responde "como foi o produto X" passou a ser a quebra por produto da aba
+    # Por Mes -- que sai do MESMO union e lista todos, sem obrigar a escolher um
+    # e recarregar. `SOURCE_LABELS` e' o mapa que ela usa pra nomear cada um,
+    # entao fonte que soma e nao esta' ali continua sendo historico inalcancavel.
     for chave in public._SUB_BUILDERS:
-        assert f"'{chave}'" in tela, f"{chave} soma no placar e nao aparece no filtro"
+        assert f"{chave}:" in tela or f"'{chave}'" in tela,             f"{chave} soma no placar e nao aparece em lugar nenhum da tela"
 
 
 def test_o_seletor_de_mes_deriva_do_mesmo_union_da_tela():

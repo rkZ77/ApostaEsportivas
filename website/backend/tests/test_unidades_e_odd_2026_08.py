@@ -792,9 +792,11 @@ def test_pendente_continua_exigindo_sessao():
     assert "pode_ver_pendente = current_user is not None" in corpo
     assert 'resultado == "pending" and pode_ver_pendente' in corpo
 
-    # E a tela nem oferece a opcao pra quem nao tem sessao.
-    tela = _front_codigo("pages/ResultadosPublicos.tsx")
-    assert "RESULTADO_OPTIONS.filter(o => o.value !== 'pending')" in tela
+    # A CHECAGEM DA TELA SAIU EM 04/09 junto com o filtro de Resultado, que
+    # vivia no painel removido a pedido do usuario. Ela nunca foi a protecao --
+    # era conveniencia, pra nao oferecer um filtro que nao filtra. A trava e' o
+    # servidor, e sao as duas linhas acima: `?resultado=pending` sem sessao e'
+    # ignorado no backend, entao a URL continua nao entregando o pick de hoje.
 
 
 def test_stake_pessoal_nao_vaza_sem_sessao():

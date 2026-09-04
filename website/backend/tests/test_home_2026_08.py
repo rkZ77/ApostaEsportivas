@@ -766,7 +766,10 @@ def test_painel_de_filtro_diz_quantos_sobraram():
     """Lista vazia por filtro apertado fica igualzinha a lista vazia por nao
     existir dado. So' a aba Mercados respondia isso."""
     assert "resultado?: number" in _front("components/FilterPanel.tsx")
-    for pagina in ("pages/Picks.tsx", "pages/ResultadosPublicos.tsx"):
+    # ResultadosPublicos saiu da lista em 04/09: ela nao tem mais painel de
+    # filtro, so' um seletor de mes (pedido do usuario). A exigencia continua
+    # valendo pra toda tela que AINDA usa o painel.
+    for pagina in ("pages/Picks.tsx",):
         assert "resultado={" in _front(pagina), f"{pagina} nao passa a contagem"
 
 
