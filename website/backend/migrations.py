@@ -449,6 +449,57 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
             )
         """)
         cur.execute("CREATE INDEX IF NOT EXISTS idx_banca_withdrawals_user ON banca_withdrawals(user_id, created_at DESC);")
+
+        # DEPOSITO · o espelho do saque (2026-09-04).
+        #
+        # Nao existia caminho pra por dinheiro na banca. Quem aumentava de R$500
+        # pra R$1.000 no meio do mes so' tinha o /setup, que SOBRESCREVE
+        # bankroll_start sem deixar rastro -- e por isso ele e' travado em uma
+        # vez por mes. Ou seja: a operacao legitima mais comum do produto nao
+        # tinha porta, e a porta que existia estava fechada com a chave certa
+        # pelo motivo errado.
+        #
+        # Com registro (data, valor, banca antes/depois) a mudanca no meio do
+        # mes deixa de distorcer o historico de risco: ela vira um EVENTO
+        # explicado, do mesmo jeito que o saque ja' era.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS banca_deposits (
+                id              SERIAL PRIMARY KEY,
+                user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                amount          NUMERIC(10,2) NOT NULL,
+                bankroll_before NUMERIC(10,2) NOT NULL,
+                bankroll_after  NUMERIC(10,2) NOT NULL,
+                created_at      TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_banca_deposits_user ON banca_deposits(user_id, created_at DESC);")
+
+        # A UNIDADE CONGELA NA APOSTA (2026-09-04).
+        #
+        # `user_followed_picks` guardava so' `stake_units`, e o R$ de toda
+        # aposta passada era recalculado com o `unit_value` de HOJE. Trocar a
+        # unidade de R$10 pra R$20 dobrava, retroativamente, o valor de tudo o
+        # que ja' tinha sido apostado -- o P&L em reais, a banca atual, o
+        # fechamento do mes. E' esse o "erro de calculo" que a trava de uma
+        # configuracao por mes estava tentando evitar por fora.
+        #
+        # Com a unidade gravada na aposta, aposta velha continua valendo o que
+        # valia e a unidade nova so' vale daqui pra frente. Ai' mudar de ideia
+        # no meio do mes deixa de ser perigoso.
+        #
+        # BACKFILL COM O VALOR ATUAL, e nao com 1.0: ate' hoje o sistema
+        # calculava exatamente assim (unidade de agora aplicada a tudo), entao
+        # copiar o valor de agora e' o unico backfill que NAO muda nenhum numero
+        # ja' exibido. Comecar do zero reescreveria o passado de todo mundo.
+        cur.execute("ALTER TABLE user_followed_picks ADD COLUMN IF NOT EXISTS unit_value NUMERIC(10,2)")
+        cur.execute("""
+            UPDATE user_followed_picks uf
+               SET unit_value = ub.unit_value
+              FROM user_banca ub
+             WHERE ub.user_id = uf.user_id
+               AND uf.unit_value IS NULL
+               AND ub.unit_value IS NOT NULL
+        """)
         # Estado do acompanhamento continuo do Motor Ao Vivo.
         #
         # POR QUE PRECISA DE TABELA. O estado vivia so' na memoria do processo.

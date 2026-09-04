@@ -24,12 +24,13 @@ const SOURCE_LBL: Record<string, string> = {
 
 // lock overlay para free
 // modal de setup
-function SetupModal({ current, locked, onSave, onClose, onWithdraw }: {
+function SetupModal({ current, locked, onSave, onClose, onWithdraw, onAjustar }: {
   current: { start: number; unitValue: number }
   locked?: boolean
   onSave: (start: number, unitValue: number) => void
   onClose: () => void
   onWithdraw: () => void
+  onAjustar: () => void
 }) {
   const [start,     setStart]     = useState(String(current.start))
   const [unitValue, setUnitValue] = useState(String(current.unitValue))
@@ -79,13 +80,21 @@ function SetupModal({ current, locked, onSave, onClose, onWithdraw }: {
         <motion.div variants={dialogScale} className="bg-surface-1 border border-line-strong rounded-lg p-6 max-w-sm w-full overflow-y-auto max-h-[92dvh]"
           onClick={e => e.stopPropagation()}>
           <h2 className="text-ink-1 font-bold text-lg mb-2">Já configurada este mês</h2>
+          {/* A trava é da RECONFIGURAÇÃO DO ZERO, que reescreve a banca inicial
+              sem dizer por quê. As mudanças que a pessoa costuma querer no meio
+              do mês têm porta própria e ficam registradas · antes esta tela só
+              oferecia "Sacar" e mandava esperar, o que fazia a trava parecer
+              mais dura do que ela é. */}
           <p className="text-ink-2 text-sm leading-relaxed mb-4">
-            Pra manter o histórico de risco confiável, a banca só pode ser configurada uma vez por
-            mês. Se você quer tirar um valor agora, use o botão "Sacar" (fica registrado no
-            histórico). Pra reconfigurar do zero, espera o fechamento mensal automático.
+            Reconfigurar do zero é uma vez por mês, pra o histórico de risco continuar
+            confiável. Mas você não precisa esperar pra mexer nos números: dá pra depositar,
+            sacar ou mudar o valor da unidade agora, e as três coisas ficam registradas.
           </p>
           <div className="flex flex-col gap-2">
-            <button onClick={() => { onClose(); onWithdraw() }} className="btn-primary w-full py-2.5 text-sm">
+            <button onClick={() => { onClose(); onAjustar() }} className="btn-primary w-full py-2.5 text-sm">
+              Depositar ou mudar a unidade
+            </button>
+            <button onClick={() => { onClose(); onWithdraw() }} className="btn-ghost w-full py-2.5 text-sm">
               Sacar da banca
             </button>
             <button onClick={onClose} className="btn-ghost w-full py-2.5 text-sm">Entendi</button>
@@ -310,6 +319,9 @@ export default function Banca() {
         ),
         actions: (
           <>
+            <Button variant="ghost" size="sm" onClick={() => navigate('/banca/ajustar')}>
+              Ajustar
+            </Button>
             <Button variant="ghost" size="sm" onClick={() => navigate('/banca/saque')}>
               Sacar
             </Button>
@@ -335,6 +347,7 @@ export default function Banca() {
           onSave={handleSave}
           onClose={() => { setShowSetup(false); retomarTour() }}
           onWithdraw={() => navigate('/banca/saque')}
+          onAjustar={() => navigate('/banca/ajustar')}
         />
       )}
       </AnimatePresence>

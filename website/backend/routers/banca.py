@@ -50,6 +50,14 @@ class BancaWithdraw(BaseModel):
     amount: float
 
 
+class BancaDeposit(BaseModel):
+    amount: float
+
+
+class BancaUnidade(BaseModel):
+    unit_value: float
+
+
 class FollowPick(BaseModel):
     pick_id: int
     pick_type: str
@@ -332,6 +340,20 @@ def _compute_follow_pnl(pick: dict, follow: dict, unit_value: float):
     cashout_amount = float(follow["cashout_amount"]) if follow.get("cashout_amount") is not None else None
     stake_units = float(follow["stake_units"])
 
+    # A UNIDADE DA APOSTA MANDA, quando ela existe (2026-09-04).
+    #
+    # `unit_value` chega aqui como o valor de HOJE. Usa-lo em aposta antiga
+    # reescreve o passado: trocar a unidade de R$10 pra R$20 dobrava o R$ de
+    # tudo o que ja' tinha sido apostado, e com ele o P&L, a banca atual e o
+    # fechamento do mes. Agora cada aposta carrega a unidade que valia quando
+    # ela foi feita.
+    #
+    # `or unit_value` cobre a linha antiga que a migracao nao alcancou (usuario
+    # sem `user_banca`): o comportamento dela continua sendo o de antes, que e'
+    # o unico que nao inventa numero novo.
+    if follow.get("unit_value") is not None:
+        unit_value = float(follow["unit_value"]) or unit_value
+
     if cashout_amount is not None:
         stake_r = stake_units * unit_value
         pnl_r = cashout_amount - stake_r
@@ -562,7 +584,7 @@ def _compute_bankroll_current(cur, user_id: int, bankroll_start: float, unit_val
     cond = f" AND {data_br('uf.followed_at')} >= %s" if epoch is not None else ""
     params: list = [user_id] + ([epoch] if epoch is not None else [])
     cur.execute(f"""
-        SELECT uf.pick_id, uf.pick_type, uf.stake_units, uf.actual_odd, uf.cashout_amount
+        SELECT uf.pick_id, uf.pick_type, uf.stake_units, uf.actual_odd, uf.cashout_amount, uf.unit_value
         FROM user_followed_picks uf
         WHERE uf.user_id = %s AND uf.pick_type != 'alavancagem' {cond}
     """, params)
@@ -608,7 +630,7 @@ def _compute_month_stats(cur, user_id: int, month_start: str, month_end: str, un
     """P&L e contagem de resultados (vip/free/multipla) de um usuário dentro de [month_start, month_end)."""
     cur.execute(f"""
         SELECT uf.id, uf.pick_id, uf.pick_type, uf.stake_units,
-               uf.actual_odd, uf.cashout_amount
+               uf.actual_odd, uf.cashout_amount, uf.unit_value
         FROM user_followed_picks uf
         WHERE uf.user_id = %s
           AND uf.pick_type != 'alavancagem'
@@ -717,7 +739,7 @@ def get_banca(
 
         cur.execute(f"""
             SELECT uf.id, uf.pick_id, uf.pick_type, uf.stake_units, uf.followed_at,
-                   uf.actual_odd, uf.cashout_amount
+                   uf.actual_odd, uf.cashout_amount, uf.unit_value
             FROM user_followed_picks uf
             WHERE uf.user_id = %s AND uf.pick_type != 'alavancagem' {date_cond}
             ORDER BY uf.followed_at ASC
@@ -949,10 +971,10 @@ def setup_banca(body: BancaSetup, current_user: dict = Depends(get_current_user)
             if prev_row and prev_row["last_manual_setup_month"] == _current_month_key():
                 raise HTTPException(
                     400,
-                    "Você já configurou sua banca este mês. Isso evita mudar os números no "
-                    "meio do mês e distorcer o histórico de risco. Pra tirar dinheiro agora, "
-                    "use o botão \"Sacar\", pra reconfigurar de novo, espera o fechamento "
-                    "mensal automático."
+                    "Você já reconfigurou sua banca do zero este mês. Mas não precisa esperar "
+                    "o fechamento pra mexer nos números: use \"Depositar\" pra aumentar a banca, "
+                    "\"Sacar\" pra tirar dinheiro e \"Valor da unidade\" pra mudar quanto vale "
+                    "1u. Os três guardam data e valor, então o histórico continua batendo."
                 )
 
         if body.monthly_close_month_key:
@@ -1066,6 +1088,147 @@ def withdraw_banca(body: BancaWithdraw, current_user: dict = Depends(get_current
         conn.close()
 
 
+@router.post("/deposit")
+def deposit_banca(body: BancaDeposit, current_user: dict = Depends(get_current_user)):
+    """Soma um valor à banca e registra o depósito.
+
+    POR QUE ELE FALTAVA, E POR QUE ISSO ERA UM BURACO
+    -------------------------------------------------
+    Só havia o `/setup`, que SOBRESCREVE `bankroll_start` sem deixar rastro do
+    porquê. Justamente por isso ele é travado em uma vez por mês: sem registro,
+    trocar o número no meio do mês distorce o histórico de risco em silêncio.
+
+    O efeito colateral era que a operação legítima mais comum do produto ("subi
+    minha banca de R$500 pra R$1.000") não tinha porta nenhuma, e a única porta
+    existente estava fechada com a chave certa pelo motivo errado.
+
+    Com data, valor e banca antes/depois gravados, a mudança no meio do mês
+    deixa de ser uma reescrita e vira um EVENTO explicado, que é o que o saque
+    já era desde que nasceu.
+    """
+    _check_banca_rate(current_user["id"])
+    if body.amount <= 0:
+        raise HTTPException(400, "Valor do depósito deve ser maior que zero.")
+    if body.amount > 1_000_000:
+        raise HTTPException(400, "Valor do depósito acima do limite.")
+
+    user_id = current_user["id"]
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        # Mesmo lock consultivo do saque: dois depósitos concorrentes leriam a
+        # mesma banca atual antes de qualquer commit e o segundo apagaria o
+        # primeiro.
+        cur.execute("SELECT pg_advisory_xact_lock(%s)", (user_id,))
+
+        cur.execute("SELECT bankroll_start, unit_value FROM user_banca WHERE user_id = %s", (user_id,))
+        row = cur.fetchone()
+        bankroll_start = float(row["bankroll_start"]) if row else 100.0
+        unit_value     = float(row["unit_value"])     if row and row["unit_value"] else 1.0
+
+        bankroll_current = _compute_bankroll_current(cur, user_id, bankroll_start, unit_value)
+        new_start = round(bankroll_current + body.amount, 2)
+
+        cur.execute("""
+            INSERT INTO banca_deposits (user_id, amount, bankroll_before, bankroll_after)
+            VALUES (%s, %s, %s, %s)
+        """, (user_id, body.amount, bankroll_current, new_start))
+
+        cur.execute("""
+            INSERT INTO user_banca (user_id, bankroll_start, unit_value)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (user_id) DO UPDATE
+                SET bankroll_start = EXCLUDED.bankroll_start,
+                    updated_at     = NOW()
+        """, (user_id, new_start, unit_value))
+        conn.commit()
+        return {"ok": True, "bankroll_start": new_start}
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.post("/unidade")
+def trocar_unidade(body: BancaUnidade, current_user: dict = Depends(get_current_user)):
+    """Muda quanto vale 1u daqui pra frente. Sem trava mensal, de propósito.
+
+    A trava do `/setup` existe porque mudar a unidade REESCREVIA o passado: o
+    R$ de toda aposta já feita era recalculado com a unidade de hoje, então
+    passar de R$10 pra R$20 dobrava o P&L histórico, a banca atual e o
+    fechamento do mês. Era um erro de cálculo de verdade, e travar a tela era a
+    forma indireta de evitá-lo.
+
+    Desde 04/09 cada aposta guarda a unidade que valia quando foi feita
+    (`user_followed_picks.unit_value`). Aposta velha continua valendo o que
+    valia, a unidade nova vale daqui pra frente, e mudar de ideia no meio do mês
+    deixou de mexer em qualquer número já fechado. Sem o efeito, a trava perde a
+    razão de existir.
+
+    O PISO DE 20 UNIDADES CONTINUA, e ele não é burocracia: com menos que isso
+    uma sequência ruim normal já quebra a banca. É o mesmo limite do `/setup`.
+    """
+    _check_banca_rate(current_user["id"])
+    if body.unit_value <= 0:
+        raise HTTPException(400, "Valor da unidade deve ser maior que zero.")
+
+    user_id = current_user["id"]
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT pg_advisory_xact_lock(%s)", (user_id,))
+        cur.execute("SELECT bankroll_start, unit_value FROM user_banca WHERE user_id = %s", (user_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(400, "Configure sua banca antes de mudar o valor da unidade.")
+        bankroll_start = float(row["bankroll_start"])
+        unit_atual     = float(row["unit_value"]) if row["unit_value"] else 1.0
+
+        # O piso é medido contra a banca ATUAL, e não contra a inicial: é a
+        # banca de hoje que a próxima aposta arrisca.
+        bankroll_current = _compute_bankroll_current(cur, user_id, bankroll_start, unit_atual)
+        total_units = bankroll_current / body.unit_value
+        if total_units < 20:
+            max_unit = round(bankroll_current / 20, 2)
+            raise HTTPException(
+                400,
+                f"Unidade muito alta pra sua banca. Com R${bankroll_current:.2f} e "
+                f"R${body.unit_value:.2f} por unidade você teria {total_units:.0f} unidades, "
+                f"o que quebra numa sequência ruim normal. O máximo é R${max_unit:.2f}."
+            )
+
+        cur.execute("""
+            UPDATE user_banca SET unit_value = %s, updated_at = NOW() WHERE user_id = %s
+        """, (body.unit_value, user_id))
+        conn.commit()
+        return {"ok": True, "unit_value": body.unit_value,
+                "bankroll_current": round(bankroll_current, 2)}
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.get("/deposits")
+def get_deposits(current_user: dict = Depends(get_current_user), limit: int = Query(20, ge=1, le=100)):
+    """Histórico de depósitos, mais recente primeiro. Espelha /withdrawals."""
+    user_id = current_user["id"]
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT id, amount, bankroll_before, bankroll_after, created_at
+              FROM banca_deposits WHERE user_id = %s
+             ORDER BY created_at DESC LIMIT %s
+        """, (user_id, limit))
+        return [{"id": r["id"], "amount": float(r["amount"]),
+                 "bankroll_before": float(r["bankroll_before"]),
+                 "bankroll_after": float(r["bankroll_after"]),
+                 "created_at": r["created_at"].isoformat() if r["created_at"] else None}
+                for r in cur.fetchall()]
+    finally:
+        cur.close()
+        conn.close()
+
+
 @router.get("/withdrawals")
 def get_withdrawals(current_user: dict = Depends(get_current_user), limit: int = Query(20, ge=1, le=100)):
     """Historico de saques da banca do usuario, mais recente primeiro."""
@@ -1162,10 +1325,13 @@ def follow_pick(body: FollowPick, current_user: dict = Depends(get_current_user)
         if cur.fetchone():
             return {"ok": True, "already_followed": True}
         cur.execute("""
-            INSERT INTO user_followed_picks (user_id, pick_id, pick_type, stake_units, actual_odd, bet_house)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO user_followed_picks (user_id, pick_id, pick_type, stake_units,
+                                             actual_odd, bet_house, unit_value)
+            VALUES (%s, %s, %s, %s, %s, %s,
+                    (SELECT unit_value FROM user_banca WHERE user_id = %s))
             ON CONFLICT (user_id, pick_id, pick_type) DO NOTHING
-        """, (user_id, body.pick_id, body.pick_type, body.stake_units, body.actual_odd, body.bet_house))
+        """, (user_id, body.pick_id, body.pick_type, body.stake_units,
+              body.actual_odd, body.bet_house, user_id))
         conn.commit()
         return {"ok": True, "already_followed": False}
     finally:
@@ -1604,7 +1770,7 @@ def get_banca_summary(current_user: dict = Depends(get_current_user)):
         params = [user_id] + ([epoch] if epoch is not None else [])
 
         cur.execute(f"""
-            SELECT uf.pick_id, uf.pick_type, uf.stake_units, uf.actual_odd, uf.cashout_amount
+            SELECT uf.pick_id, uf.pick_type, uf.stake_units, uf.actual_odd, uf.cashout_amount, uf.unit_value
             FROM user_followed_picks uf
             WHERE uf.user_id = %s AND uf.pick_type != 'alavancagem' {date_cond}
         """, params)
@@ -2002,7 +2168,7 @@ def get_fechamentos_resumo(current_user: dict = Depends(get_current_user)):
         unit_value = float(row["unit_value"]) if row and row["unit_value"] else 1.0
 
         cur.execute("""
-            SELECT uf.pick_id, uf.pick_type, uf.stake_units, uf.actual_odd, uf.cashout_amount
+            SELECT uf.pick_id, uf.pick_type, uf.stake_units, uf.actual_odd, uf.cashout_amount, uf.unit_value
             FROM user_followed_picks uf
             WHERE uf.user_id = %s
         """, (user_id,))
