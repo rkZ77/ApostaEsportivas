@@ -6,6 +6,7 @@ from auth_utils import get_current_user_optional
 import cache_publico
 from database import get_connection
 from data_br import HOJE_BR, TZ_BR, data_br
+import alavancagem_caminho
 from stake_plan import STAKE_PADRAO, stake_de, rotulo_curto
 from pick_sources import fontes, joins_sql, case_sql, tabela_existe
 
@@ -14,7 +15,10 @@ from pick_sources import fontes, joins_sql, case_sql, tabela_existe
 _P_VIP  = STAKE_PADRAO['vip']
 _P_FREE = STAKE_PADRAO['free']
 _P_MULT = STAKE_PADRAO['multiplas']
-_P_ALAV = STAKE_PADRAO['alavancagem']
+# Alavancagem nao tem peso por linha: o lucro dela sai do CAMINHO, em
+# `alavancagem_caminho`. `STAKE_PADRAO['alavancagem']` continua 0 e continua
+# certo -- ele responde "quanto vale UM pick de alavancagem sozinho", e a
+# resposta e' nada: um passo de caminho nao e' uma aposta independente.
 
 logger = logging.getLogger(__name__)
 
@@ -196,6 +200,27 @@ def _sub_alav(date_cond: str) -> str:
     #
     # Multipla continua com id nulo, e ali e' o certo: ela nao tem UM confronto
     # pra ilustrar.
+    #
+    # LUCRO PELO CAMINHO, E NAO PERNA A PERNA (2026-09-04, pedido do usuario).
+    #
+    # Ate' aqui a alavancagem entrava com peso 0: aparecia no historico e na
+    # taxa de acerto, mas nao movia lucro nem ROI. O peso zero nao era desprezo
+    # pelo produto, era a falta da conta certa -- ela e' um CAMINHO, e a soma
+    # perna a perna descreve 6 entradas independentes onde existe UMA.
+    #
+    # Agora o lucro vem de `alavancagem_caminho`, que aplica aos picks
+    # publicados a MESMA conta que a banca de quem apostou ja' usava: o caminho
+    # arrisca 1u, bater a meta paga (multiplicador - 1)u e o RED custa a
+    # entrada. O numero cai no dia em que o caminho ENCERRA, e passo de caminho
+    # aberto vale zero -- composto em andamento nao e' dinheiro.
+    #
+    # `stake` acompanha pelo motivo de sempre (regra 1 de stake_plan): 1u no
+    # passo que encerra, 0 nos outros. Sem isso o ROI saltaria por um fator que
+    # nao existe.
+    #
+    # O JOIN e' na CTE construida sobre a tabela INTEIRA, e o `date_cond` so'
+    # entra depois. Filtrar antes recomecaria a contagem no primeiro dia do
+    # recorte e inventaria um caminho que nunca existiu.
     return f"""
         SELECT pa.match_date,
                COALESCE(fx.match_datetime, ms.match_datetime) AS match_datetime,
@@ -203,12 +228,14 @@ def _sub_alav(date_cond: str) -> str:
                COALESCE(pa.home_team_id_1, fx.home_team_id) AS home_team_id,
                COALESCE(pa.away_team_id_1, fx.away_team_id) AS away_team_id,
                pa.market_1 AS market, pa.line_1 AS line, pa.odd_combined AS odd,
-               pa.result, pa.profit * {_P_ALAV} AS profit,
-               {_P_ALAV}::numeric AS stake,
+               pa.result,
+               COALESCE(cam.caminho_profit, 0) AS profit,
+               COALESCE(cam.caminho_stake, 0)  AS stake,
                'alavancagem' AS source,
                NULL::INTEGER AS league_id,
                'Alavancagem' AS league_name
         FROM picks_alavancagem pa
+        JOIN {alavancagem_caminho.subquery_dos_caminhos()} cam ON cam.pick_id = pa.id
         LEFT JOIN fixtures fx ON fx.fixture_id = pa.fixture_id_1
         LEFT JOIN match_statistics ms ON ms.fixture_id = pa.fixture_id_1
         WHERE pa.result IS NOT NULL {_qualificar(date_cond, "pa")}

@@ -167,11 +167,27 @@ def test_peso_multiplica_lucro_e_stake_juntos():
     # de proposito: o que ele verifica e' o peso de CADA fonte declarada, nao
     # o que uma instancia especifica tem.
     sql = _build_union(_SUB_BUILDERS, "", None)
-    for bloco in sql.split("UNION ALL"):
+    # A alavancagem tem o UNION ALL do proprio caminho recursivo dentro dela,
+    # entao cortar a string por "UNION ALL" parte o bloco dela no meio. Costura
+    # de volta: bloco de verdade e' o que declara a fonte.
+    blocos, atual = [], ""
+    for pedaco in sql.split("UNION ALL"):
+        atual += pedaco
+        if re.search(r"'\w+' AS source", atual):
+            blocos.append(atual)
+            atual = ""
+    for bloco in blocos:
         fonte = re.search(r"'(\w+)' AS source", bloco)
+        assert fonte, bloco[:120]
+        if fonte.group(1) == "alavancagem":
+            # Ela nao tem peso por linha: o lucro sai do CAMINHO fechado (ver
+            # alavancagem_caminho.py). A exigencia e' a mesma -- lucro e stake
+            # da MESMA origem, sempre juntos --, so' que a origem e' a CTE.
+            assert "cam.caminho_profit" in bloco and "cam.caminho_stake" in bloco
+            continue
         lucro = re.search(r"profit \* (\d+) AS profit", bloco)
         stake = re.search(r"(\d+)(?:::numeric)? AS stake", bloco)
-        assert fonte and lucro and stake, bloco[:120]
+        assert lucro and stake, bloco[:120]
         assert lucro.group(1) == stake.group(1),             f"{fonte.group(1)}: lucro x{lucro.group(1)} mas stake {stake.group(1)}u"
 
 

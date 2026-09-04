@@ -12,7 +12,7 @@ lugar:
     VIP ................................................ 4u
     free, faltas, defesas, player stats, pick boost .... 3u
     multipla ........................................... 1u
-    alavancagem ........................................ nao entra
+    alavancagem ........... 1u POR CAMINHO, nao por pick (ver abaixo)
 
 O VIP fica um degrau acima porque e' o produto de maior convicção do motor: e'
 onde o filtro e' mais duro e onde a assinatura e' cobrada. Free, faltas e
@@ -24,19 +24,33 @@ Combinada leva 1u pelo motivo de sempre: a variancia de um bilhete e' outra
 coisa, e igualar a stake inflaria tanto o lucro nos meses bons quanto o buraco
 nos ruins.
 
-POR QUE A ALAVANCAGEM VALE ZERO AQUI (decisao do usuario, 2026-08-19)
----------------------------------------------------------------------
+POR QUE A ALAVANCAGEM NAO TEM PESO POR PICK
+-------------------------------------------
 Ela nao e' um pick que se liquida em unidade: e' um CAMINHO. O bilhete em
 andamento nao e' dinheiro, o resultado so' vira unidade quando o caminho
-encerra, e o RED custa so' a entrada -- essa conta ja existe e mora em
-`alavancagem_series` (banca.py::_alav_unidades), na banca de quem de fato
-apostou. Somar o `profit` dela no placar publico contava a mesma coisa por uma
-regra que nao e' a dela.
+encerra, e o RED custa so' a entrada.
 
-Peso zero, e nao remocao da fonte, de proposito: a alavancagem CONTINUA
-aparecendo no historico publico, com o resultado dela, na quebra por fonte e na
-taxa de acerto. O que ela deixa de fazer e' mover o lucro e o ROI em unidades.
-Tirar do UNION apagaria o produto da tela.
+Entre 19/08 e 04/09 isso a deixou valendo ZERO no placar. O zero nunca foi
+desprezo pelo produto -- era a falta da conta certa: somar o `profit` perna a
+perna descreve seis entradas independentes de 1u num produto onde existe UMA,
+e contar errado e' pior que nao contar. Nos dados de PROD de 04/09 a soma
+ingenua daria +14,6u contra os +42,9u que o caminho de fato rendeu.
+
+Desde 04/09 (pedido do usuario) ela CONTA, pela conta dela: 1u de entrada por
+caminho, (multiplicador - 1)u quando bate a meta de 6, -1u no RED, e zero
+enquanto esta' aberta. Quem faz isso e' `alavancagem_caminho.py`, que aplica
+aos picks publicados a mesma conta que `alavancagem_series`
+(banca.py::_alav_unidades) ja' usava na banca de quem apostou.
+
+A ENTRADA DE VERDADE: 1u = uma entrada. Com os R$50 que o produto sugere como
+padrao, 1u = R$50 e o placar em unidades vira reais multiplicando. O valor em
+reais nao entra aqui de proposito -- ele e' escolha de cada usuario, e o placar
+tem que ser comparavel entre gente que aposta valores diferentes.
+
+`STAKE_PADRAO["alavancagem"]` continua 0, e continua certo: ele responde
+"quanto vale UM pick de alavancagem sozinho", e a resposta e' nada. O peso por
+linha e a participacao no placar sao duas perguntas diferentes, e so' agora
+elas tem respostas diferentes.
 
 DUAS REGRAS PRA NAO QUEBRAR O NUMERO:
 
@@ -102,7 +116,9 @@ STAKE_PADRAO: dict[str, int] = {
     # abaixo do free.
     "boost":       3,
     "multiplas":   1,
-    # Zero = fora do placar de unidades. Ver o bloco no topo deste arquivo.
+    # Zero = NAO tem peso por pick. Isso nao significa mais "fora do placar":
+    # desde 04/09 a alavancagem entra por caminho, em alavancagem_caminho.py.
+    # Ver o bloco no topo deste arquivo.
     "alavancagem": 0,
 }
 
@@ -115,11 +131,17 @@ def stake_de(source: str) -> int:
 
 
 def conta_em_unidades(source: str) -> bool:
-    """Se esta fonte move o lucro em unidades do placar publico.
+    """Se UM PICK desta fonte tem lucro proprio em unidades.
 
     Existe pra tela poder dizer "nao conta em unidades" em vez de estampar um
     `+0,0u` que parece defeito. Quem le' o peso pra CALCULAR usa `stake_de`;
     quem le' pra ESCREVER na tela pergunta aqui.
+
+    NAO E' "a fonte entra no placar" -- as duas coisas se separaram em 04/09.
+    Alavancagem responde False aqui, e com razao: o card de um passo de caminho
+    nao pode anunciar lucro proprio, porque ele nao tem. Ainda assim ela move o
+    placar, pelo caminho fechado (ver alavancagem_caminho.py). Quem quiser
+    saber se a FONTE conta olha o placar, nao esta funcao.
     """
     return stake_de(source) > 0
 

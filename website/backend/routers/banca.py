@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
+import alavancagem_caminho
 from data_br import data_br
 from database import get_connection
 from auth_utils import get_current_user
@@ -1204,7 +1205,13 @@ ALAV_END_META   = "meta"
 #: A consequência prática de 6 é que a amostra demora: ~13 caminhos completos
 #: por ano contra ~52 em 3. Se depois de uns meses o número de caminhos fechados
 #: for baixo demais pra concluir qualquer coisa, encurtar é o caminho.
-ALAV_META_PADRAO = 6
+#:
+#: MUDOU DE ENDEREÇO EM 04/09, e não de valor. Desde que o placar público
+#: também passou a contar a alavancagem por caminho, a meta tem dois
+#: consumidores — a banca de cada usuário e o placar — e escrita nos dois
+#: lugares viraria dois produtos diferentes com o mesmo nome no primeiro
+#: ajuste. O nome daqui fica como apelido para não mexer nos ~30 usos.
+ALAV_META_PADRAO = alavancagem_caminho.META_PADRAO
 
 
 def _alav_unidades(entrada: float, final: float) -> float:
