@@ -82,6 +82,20 @@ BASELINE_PADRAO = {
     # referee_model usa pra encolher a media do arbitro, e duas constantes
     # diferentes pro mesmo conceito divergiriam no primeiro ajuste.
     "cards": referee_model._REFEREE_CARD_POINTS_BASELINE,
+    # MEDIDOS EM 2026-09-04, contra 1.173 partidas encerradas de
+    # `match_statistics` nas ligas do projeto. Entraram porque a ausencia deles
+    # era o que segurava a familia de chutes fora da V1 ("Chutes e o resto
+    # continuam fora ate' o residual estar medido", live_odds.FAMILIAS_V1) --
+    # e porque o mercado ao vivo de chute de JOGADOR (148/153) so' pode ser
+    # precificado sobre o residual do time.
+    #
+    #   chutes       26.04 por partida, dispersao (var/media) 2.07
+    #   no alvo       8.54 por partida, dispersao 1.24
+    #
+    # Estar aqui NAO liga a familia: `FAMILIAS_V1` continua sem eles. E' o
+    # insumo, nao a decisao.
+    "shots": 26.04,
+    "shots_on_target": 8.54,
 }
 
 

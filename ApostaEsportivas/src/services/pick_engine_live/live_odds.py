@@ -28,6 +28,8 @@ lado contrario cotado nao produz par e cai pra probabilidade implicita crua
 """
 from __future__ import annotations
 
+import re
+
 from services.pick_engine import market_model
 
 #: Nome do mercado ao vivo -> familia interna. Minusculo, comparacao exata
@@ -84,6 +86,139 @@ def _familia_do_mercado(nome: str | None) -> str | None:
         if limpo in nomes:
             return familia
     return None
+
+
+# ── PROP DE JOGADOR AO VIVO ──────────────────────────────────────────────
+#
+# A API cota prop de jogador ao vivo, e o motor nao enxergava nada disso --
+# nem pra cotar, nem pra RELATAR. `mercados_nao_lidos`, que existe justamente
+# pra responder "que mercado da' pra abrir?", filtra por value == "over"/
+# "under", e prop de jogador nao tem essa forma: o nome do jogador e a direcao
+# vem grudados num campo so' ("Deniz Undav/Over 1.5"), com `handicap` nulo.
+# Entao o mercado existia, era baixado junto e sumia em silencio.
+#
+# LEVANTADO CONTRA A API REAL EM 2026-09-04, e nao deduzido de nome: dos 266
+# tipos de aposta que /odds/live/bets declara, tres sao contador individual --
+# 148 "Player Shots", 153 "Player Shots on Targets" e 155 "Player Assists".
+# Numa amostra de 6 jogos ao vivo em ligas do projeto, 148 e 153 apareceram em
+# 1 (Bundesliga, 95 e 50 valores) e 155 em 4. Oferta escassa, como no pre-jogo.
+#
+# Assistencia fica de fora: e' evento raro (nao contagem com media utilizavel)
+# e o motor nao tem residual pra ela.
+
+#: Rotulo em portugues, no mesmo vocabulario que o pre-jogo ja' usa pro card.
+ROTULO_PT_JOGADOR = {
+    "shots": "Chutes do jogador",
+    "shots_on_target": "Chutes no alvo do jogador",
+}
+
+CONTADORES_DE_JOGADOR = {
+    "shots": {"player shots"},
+    "shots_on_target": {"player shots on targets", "player shots on target"},
+}
+
+#: "Deniz Undav/Over 1.5" -> ("Deniz Undav", "over", 1.5). Formato proprio do
+#: /odds/live: no pre-jogo a mesma aposta chega como "Deniz Undav - 2"
+#: ("2 ou mais"), aqui como linha Over de verdade. Sao notacoes do mesmo
+#: produto, e por isso a conversao mora no ponto de leitura de cada um.
+_VALOR_DE_JOGADOR = re.compile(
+    r"^(?P<nome>.+?)\s*/\s*(?P<direcao>over|under)\s+(?P<linha>\d+(?:[.,]\d+)?)$",
+    re.IGNORECASE)
+
+
+def parse_valor_de_jogador(valor: str | None) -> tuple | None:
+    """(nome, direcao, linha) do value ao vivo. None quando o formato nao bate.
+
+    Nunca adivinha, pelo mesmo motivo do `name_match.parse_valor` do pre-jogo:
+    formato inesperado vira descarte, nao um pick com a linha errada.
+    """
+    m = _VALOR_DE_JOGADOR.match((valor or "").strip())
+    if not m:
+        return None
+    nome = m.group("nome").strip()
+    linha = _decimal(m.group("linha"))
+    if not nome or linha is None:
+        return None
+    return (nome, m.group("direcao").lower(), linha)
+
+
+def _contador_do_mercado(nome: str | None) -> str | None:
+    limpo = (nome or "").strip().lower()
+    if not limpo or "half" in limpo or "1st" in limpo or "2nd" in limpo:
+        return None
+    for contador, nomes in CONTADORES_DE_JOGADOR.items():
+        if limpo in nomes:
+            return contador
+    return None
+
+
+def extrair_linhas_de_jogador(odds_brutas: list) -> list[dict]:
+    """Uma entrada por (jogador, contador, linha, direcao) cotada e ativa.
+
+    Mesma forma de saida de `extrair_linhas`, com `jogador` a mais -- inclusive
+    o no-vig, que aqui pareia Over e Under DO MESMO JOGADOR na MESMA linha. Par
+    de jogadores diferentes nao e' par: sao dois eventos que podem acontecer
+    juntos, e tratar um como complemento do outro produziria uma probabilidade
+    que nao descreve nenhum dos dois.
+
+    NA PRATICA O PAR NAO EXISTE, e isso importa. Medido contra jogo ao vivo em
+    2026-09-04 (Bundesliga, 11 minutos): 53 entradas, 10 jogadores, e nenhuma
+    linha com o lado Under cotado. Prop de jogador ao vivo sai so' em Over,
+    entao `prob_mercado` cai sempre na implicita crua, que carrega a margem da
+    casa -- a ancora de mercado deste caminho e' pior que a das familias de
+    partida, e quem for calcular edge sobre ela precisa saber disso. O campo
+    `origem_prob_mercado` diz qual dos dois casos aconteceu.
+
+    NAO decide nada e nao gasta requisicao: as odds ao vivo ja' foram baixadas
+    pra cotar as familias de partida. Enquanto o modelo de jogador ao vivo nao
+    estiver medido, isto serve pra RELATAR o que a casa oferece.
+    """
+    pares: dict[tuple, dict] = {}
+    for mercado in odds_brutas or []:
+        contador = _contador_do_mercado(mercado.get("name"))
+        if contador is None:
+            continue
+        for valor in mercado.get("values", []) or []:
+            if valor.get("suspended"):
+                continue
+            lido = parse_valor_de_jogador(valor.get("value"))
+            odd = _decimal(valor.get("odd"))
+            if not lido or odd is None or odd <= 1.0:
+                continue
+            nome, direcao, linha = lido
+            alvo = pares.setdefault((nome, contador, linha), {})
+            if direcao not in alvo or odd > alvo[direcao]:
+                alvo[direcao] = odd
+
+    saida: list[dict] = []
+    for (nome, contador, linha), lados in sorted(pares.items()):
+        over, under = lados.get("over"), lados.get("under")
+        prob_over = prob_under = None
+        origem = "implied"
+        if over and under:
+            prob_over, prob_under = market_model.no_vig_pair_prob(over, under)
+            if prob_over is not None:
+                origem = "no_vig"
+        for direcao, odd in (("over", over), ("under", under)):
+            if not odd:
+                continue
+            prob = ((prob_over if direcao == "over" else prob_under)
+                    if origem == "no_vig" else market_model.implied_prob(odd))
+            saida.append({
+                "jogador": nome,
+                "contador": contador,
+                "familia": contador,
+                "market_type": f"player_{contador}",
+                "market": ROTULO_PT_JOGADOR.get(contador, contador),
+                "linha": linha,
+                "direcao": direcao,
+                "line": f"{direcao.capitalize()} {linha}",
+                "odd": round(odd, 2),
+                "prob_mercado": prob,
+                "origem_prob_mercado": origem,
+                "tem_par": bool(over and under),
+            })
+    return saida
 
 
 def extrair_linhas(odds_brutas: list, familias: tuple = FAMILIAS_V1) -> list[dict]:
@@ -179,6 +314,12 @@ def mercados_nao_lidos(odds_brutas: list) -> list[dict]:
         nome = (mercado.get("name") or "").strip()
         limpo = nome.lower()
         if not limpo or _familia_do_mercado(nome) is not None:
+            continue
+        # Prop de jogador tem forma propria e sai por `extrair_linhas_de_jogador`
+        # -- listar aqui tambem faria o relatorio contar o mesmo mercado duas
+        # vezes. O que ele NAO pode e' sumir: ate' 04/09 sumia, porque o filtro
+        # de value == "over"/"under" logo abaixo nao casa com "Fulano/Over 1.5".
+        if _contador_do_mercado(nome) is not None:
             continue
         if any(termo in limpo for termo in _FORA_DO_ESCOPO):
             continue
