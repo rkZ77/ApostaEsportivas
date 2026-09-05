@@ -216,9 +216,19 @@ def test_serie_do_arbitro_nao_filtra_por_liga():
     mesma temporada. E' o mesmo recorte de RefereeStatsService.get_stats
     (arbitro + temporada), entao card e motor olham a mesma amostra."""
     corpo = _codigo("routers/suggestions.py", "_jogos_do_arbitro")
-    assert "ms.referee = %s" in corpo
+    # O nome casa NORMALIZADO desde 04/09: a API grava ora "Fulano" ora
+    # "Fulano, Brazil", e com `=` cru a serie sumia sem dizer por que.
+    assert "split_part(ms.referee" in corpo
     assert "AND ms.season = %s" in corpo
     assert "league_id" not in corpo
+
+
+def test_arbitro_completa_a_amostra_fora_da_temporada():
+    """No comeco de temporada o arbitro tem 1 ou 2 jogos na season atual, e a
+    serie inteira sumia -- justo quando a media de cartoes dele e' o dado mais
+    dificil de obter de outro jeito. Temporada virou preferencia."""
+    corpo = _codigo("routers/suggestions.py", "_jogos_do_arbitro")
+    assert "_buscar(False)" in corpo
 
 
 def test_arbitro_sobrevive_a_fixture_apagada():

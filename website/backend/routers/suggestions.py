@@ -3323,23 +3323,47 @@ def _jogos_do_arbitro(cur, referee: str, season, excluir_fixture, limit: int) ->
     mesma pessoa nas tres. E' o mesmo recorte que o motor ja' usa
     (RefereeStatsService.get_stats agrega por arbitro + temporada, sem liga) --
     filtrar aqui faria o card mostrar uma amostra que o motor nunca olhou."""
-    filtro_season, params_season = "", []
-    if season:
-        filtro_season = "AND ms.season = %s"
-        params_season = [season]
+    # NOME NORMALIZADO, e nao igualdade crua (2026-09-04).
+    #
+    # A API devolve o arbitro ora como "Anderson Daronco" ora como "Anderson
+    # Daronco, Brazil", e as duas formas convivem no banco -- `fixtures` e
+    # `match_statistics` sao coletas diferentes. Com `=` puro, um pick de
+    # cartoes cujo fixture guardou a forma com pais nao casava com NENHUM jogo
+    # anterior, e a secao do arbitro simplesmente nao aparecia. Sumico silencioso:
+    # a tela nao tinha como distinguir "arbitro sem historico" de "nome escrito
+    # de outro jeito". Aqui os dois lados perdem o sufixo de pais, o espaco em
+    # volta e a caixa antes de comparar.
+    alvo_normalizado = "lower(btrim(split_part(%s, ',', 1)))"
+    coluna_normalizada = "lower(btrim(split_part(ms.referee, ',', 1)))"
 
-    cur.execute(f"""
-        SELECT {_COLUNAS_DA_SERIE},
-               {_nome_do_time("home")} || ' x ' || {_nome_do_time("away")} AS opponent
-          FROM match_statistics ms
-         WHERE ms.referee = %s
-           AND ms.status IN ('FT','AET','PEN')
-           AND ms.fixture_id <> COALESCE(%s, -1)
-           {filtro_season}
-      ORDER BY ms.match_date DESC
-         LIMIT %s
-    """, (referee, excluir_fixture, *params_season, limit))
-    return [dict(r) for r in cur.fetchall()]
+    def _buscar(com_season: bool) -> list:
+        filtro_season, params_season = "", []
+        if com_season and season:
+            filtro_season = "AND ms.season = %s"
+            params_season = [season]
+        cur.execute(f"""
+            SELECT {_COLUNAS_DA_SERIE},
+                   {_nome_do_time("home")} || ' x ' || {_nome_do_time("away")} AS opponent
+              FROM match_statistics ms
+             WHERE {coluna_normalizada} = {alvo_normalizado}
+               AND ms.status IN ('FT','AET','PEN')
+               AND ms.fixture_id <> COALESCE(%s, -1)
+               {filtro_season}
+          ORDER BY ms.match_date DESC
+             LIMIT %s
+        """, (referee, excluir_fixture, *params_season, limit))
+        return [dict(r) for r in cur.fetchall()]
+
+    jogos = _buscar(True)
+    # TEMPORADA E' PREFERENCIA, NAO REQUISITO. No comeco de temporada o arbitro
+    # tem 1 ou 2 jogos na season atual, e o card ficava sem a serie inteira --
+    # justamente no periodo em que a media de cartoes dele e' a informacao mais
+    # dificil de obter de outro jeito. Se a temporada corrente nao enche a
+    # amostra, completa com o que ele apitou antes; `amostra_curta` ja avisa
+    # quando vier menos que o pedido.
+    if season and len(jogos) < limit:
+        jogos = _buscar(False)
+    return jogos
 
 
 #: Contadores de `player_match_stats` que a serie de jogador sabe ler, e o

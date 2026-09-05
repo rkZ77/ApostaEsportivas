@@ -61,7 +61,7 @@ export default function DailyGreensChart({
 
   const W = larguraMedida || 600
   const H = height
-  const PL = 28, PR = 8, PT = 12, PB = 28
+  const PL = 28, PR = 8, PT = 18, PB = 28
   const innerW = W - PL - PR
   const innerH = H - PT - PB
 
@@ -70,6 +70,9 @@ export default function DailyGreensChart({
   const barX   = (i: number) => PL + i * gap + (gap - barW) / 2
   const barH   = (v: number) => (v / maxTotal) * innerH
   const barY   = (v: number) => PT + innerH - barH(v)
+
+  // Dois digitos pedem ~16px; abaixo disso os numeros se encostam.
+  const mostraValor = gap >= 18
 
   const maxXTicks = Math.max(2, Math.min(Math.floor(innerW / 120), sorted.length))
   const xTicks = Array.from({ length: maxXTicks }, (_, i) =>
@@ -147,6 +150,25 @@ export default function DailyGreensChart({
                   animate={{ height: greenH, y: barY(d.greens) }}
                   transition={{ duration: 0.4, delay: i * 0.015 + 0.1, ease: [0.16, 1, 0.3, 1] }}
                 />
+              )}
+              {/* NUMERO EM CIMA DA COLUNA. Mesma razao do grafico de lucro por
+                  mes: no celular nao ha' hover, e sem o rotulo o total do dia
+                  so' existia pra quem passasse o mouse. E' o TOTAL de picks --
+                  o topo da barra que ele rotula --, e some quando a coluna fica
+                  estreita demais pro numero caber sem encostar na vizinha. */}
+              {mostraValor && (
+                <text
+                  x={tx + barW / 2}
+                  y={barY(d.total) - 4}
+                  fontSize="8"
+                  fontWeight="700"
+                  textAnchor="middle"
+                  className={isHov ? 'fill-ink-1' : 'fill-ink-3'}
+                  fontFamily="Inter, -apple-system, sans-serif"
+                  style={{ fontVariantNumeric: 'tabular-nums' }}
+                >
+                  {d.total}
+                </text>
               )}
               {/* Hit area */}
               <rect
