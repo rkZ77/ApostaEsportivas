@@ -223,7 +223,9 @@ const PRODUTOS_DA_BANCA: Array<[string, string]> = [
   ['free', 'Free'],
   ['player_stats', 'Jogadores'],
   ['faltas', 'Faltas'],
-  ['goleiros', 'Defesas'],
+  /* Defesas saiu da lista: picks_goleiros parou de crescer quando o Player
+     Stats nasceu. Quem seguiu um no passado continua com ele somado no total,
+     so' nao ha' mais o que filtrar. */
 ]
 
 export default function Banca() {

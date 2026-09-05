@@ -503,6 +503,18 @@ async def proxy_player_photo(player_id: int):
     return await _serve_logo("player", player_id, paletizar=False)
 
 
+# FOTO DO ARBITRO. Mesmo bucket e mesma rota dos outros (media.api-sports.io/
+# football/referees/<id>.png). O provedor NAO tem foto pra todo arbitro -- pra
+# muitos nao tem nenhuma --, e e' por isso que a tela desenha as iniciais
+# embaixo e deixa a imagem entrar por cima: 404 aqui e' o caso comum, nao o
+# caso de erro.
+@app.get("/api/proxy/referee/{referee_id}.png", include_in_schema=False)
+async def proxy_referee_photo(referee_id: int):
+    if not (1 <= referee_id <= 9999999):
+        return Response(status_code=400)
+    return await _serve_logo("referee", referee_id, paletizar=False)
+
+
 app.include_router(auth.router)
 app.include_router(suggestions.router)
 app.include_router(admin.router)

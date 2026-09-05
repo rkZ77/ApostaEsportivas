@@ -170,9 +170,13 @@ interface FechamentoMes {
  * a linha da multipla saia escrita "multipla", em minuscula e sem acento. */
 /* Ordem do filtro de produto: os pagos primeiro, vitrine depois. `all` abre a
    lista porque e' o estado normal da pagina. */
+/* DEFESAS FICOU DE FORA (05/09, pedido do usuario). O produto nao existe mais:
+   picks_goleiros parou de crescer quando o Player Stats nasceu, e o mercado
+   aparecia em menos de 1% dos jogos ate' la'. O historico dele continua no
+   placar somado -- so' nao vale uma linha num menu que a pessoa le' hoje. */
 const PRODUTOS_DO_FILTRO = [
   'all', 'vip', 'live', 'boost', 'multiplas', 'alavancagem',
-  'free', 'player_stats', 'faltas', 'goleiros',
+  'free', 'player_stats', 'faltas',
 ] as const
 
 const PRODUTO_LABELS: Record<string, string> = {

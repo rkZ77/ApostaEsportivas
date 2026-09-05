@@ -56,7 +56,15 @@ function iniciaisDoNome(nome: string): string {
  * em liga pequena é comum) não deixa buraco nem quadrado quebrado no card, e
  * não é preciso saber de antemão quem tem foto.
  */
-export function PlayerPhoto({ id, name, size = 36 }: { id?: number | null; name: string; size?: number }) {
+export function PlayerPhoto({ id, name, size = 36, fonte = 'player' }: {
+  id?: number | null
+  name: string
+  size?: number
+  /** De qual bucket do provedor vem a foto. `referee` (2026-09-05) reusa o
+   *  mesmo componente porque o problema é o mesmo: uma PESSOA identificada por
+   *  nome, com foto que às vezes existe e às vezes não. */
+  fonte?: 'player' | 'referee'
+}) {
   const [falhou, setFalhou] = useState(false)
   return (
     <span
@@ -70,7 +78,7 @@ export function PlayerPhoto({ id, name, size = 36 }: { id?: number | null; name:
       </span>
       {id != null && !falhou && (
         <img
-          src={`/api/proxy/player/${id}.png`}
+          src={`/api/proxy/${fonte}/${id}.png`}
           alt={name}
           width={size}
           height={size}

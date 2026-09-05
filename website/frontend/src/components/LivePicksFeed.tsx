@@ -1191,22 +1191,37 @@ export default function LivePicksFeed({ isActive, banca }: {
     }
   }
 
-  /* A ABA É SÓ O QUE ESTÁ DE PÉ (2026-08-27, pedido do usuário).
+  /* O QUE ESTÁ DE PÉ VEM PRIMEIRO (2026-08-27), E O ENCERRADO VOLTOU DEPOIS
+   * DELE (2026-09-05) · as duas decisões do usuário, e elas convivem.
    *
-   * Ela tinha uma segunda seção com os encerrados do dia, e isso confundia as
-   * duas perguntas que a tela responde. "Ao vivo" é uma tela de DECISÃO: o
-   * usuário abre com o jogo rolando, e o que ele precisa é do que ainda dá pra
-   * apostar. Pick liquidado é histórico, e histórico já tem duas casas melhores
-   * (Minhas Apostas e Resultados), com filtro, paginação e P&L.
+   * A de agosto tirou os encerrados porque eles empurravam o pick vivo pra
+   * baixo numa noite movimentada, e a odd ao vivo dura minutos. Isso continua
+   * valendo, e é por isso que a lista de baixo é a última coisa da aba.
    *
-   * Pior: encerrado empurrava o pick vivo pra baixo numa noite movimentada, e a
-   * odd ao vivo dura minutos.
+   * O que a ausência custava: num dia em que os picks já fecharam, a aba dizia
+   * "nenhuma entrada agora" e não mostrava os greens que o produto acabou de
+   * fazer. Quem abre à noite via uma tela vazia de um dia que teve resultado.
    *
    * O corte é pelo RESULTADO, não pelo status. Odd vencida não encerra pick:
    * ele segue sendo acompanhado e liquidado como qualquer outro (ver o
    * cabeçalho deste arquivo). Cortar por status mandava pra fora um pick de um
    * jogo que ainda estava no 38'. */
   const emAndamento = useMemo(() => (picks ?? []).filter(p => !p.result), [picks])
+
+  /* OS ENCERRADOS DE HOJE VOLTARAM (2026-09-05, pedido do usuario).
+  
+     Eles saíram em agosto porque empurravam o pick vivo pra baixo numa noite
+     movimentada, e a odd ao vivo dura minutos. A razao continua valendo -- por
+     isso eles ficam NO FIM, depois das suas apostas e das oportunidades, e
+     nunca antes.
+  
+     O que a ausencia deles custava: numa noite em que os tres picks do dia ja'
+     fecharam, a aba dizia "nenhuma entrada agora" e nao mostrava os greens que
+     acabaram de sair. O produto tinha trabalhado o dia inteiro e a tela dele
+     estava vazia. `feed` ja' devolve os liquidados (incluir_encerrados nasce
+     true), entao isto nao custa consulta nenhuma. */
+  const encerrados = useMemo(() => (picks ?? []).filter(p => !!p.result), [picks])
+  const greensDeHoje = useMemo(() => encerrados.filter(p => p.result === 'GREEN').length, [encerrados])
 
   /* SUAS APOSTAS PRIMEIRO, E SEPARADAS (2026-08-29, pedido do usuário).
    *
@@ -1309,7 +1324,7 @@ export default function LivePicksFeed({ isActive, banca }: {
         * achou nada -- que é o caso NORMAL, e uma boa notícia sobre o filtro --
         * ou o motor simplesmente não está rodando. Na primeira vale esperar; na
         * segunda, esperar é perder a noite. */}
-      {emAndamento.length === 0 && (
+      {emAndamento.length === 0 && encerrados.length === 0 && (
         motor?.ligado && motor.hibernando ? (
           <EmptyState
             Icon={Clock}
@@ -1391,6 +1406,27 @@ export default function LivePicksFeed({ isActive, banca }: {
                 <CardLive key={p.id} pick={p} onSeguir={setAlvo} banca={banca} />
               ))}
             </AnimatePresence>
+          </div>
+        </>
+      )}
+
+      {encerrados.length > 0 && (
+        <>
+          <TituloDeSecao
+            cor="bg-line-strong"
+            texto="Já encerrados hoje"
+            contagem={encerrados.length}
+          />
+          <p className="text-[11px] text-ink-4 mb-3">
+            {greensDeHoje > 0
+              ? `${greensDeHoje} ${greensDeHoje === 1 ? 'green' : 'greens'} até agora. `
+              : ''}
+            Estes já foram liquidados e não aceitam mais entrada.
+          </p>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {encerrados.map(p => (
+              <CardLive key={p.id} pick={p} onSeguir={setAlvo} banca={banca} />
+            ))}
           </div>
         </>
       )}

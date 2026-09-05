@@ -3629,6 +3629,10 @@ def _series_da_perna(cur, perna: dict, limit: int) -> dict | None:
         "line": perna.get("line"),
         "home_team": perna.get("home_team"),
         "away_team": perna.get("away_team"),
+        # Ids pro escudo no cabecalho da perna: o modal falava do confronto sem
+        # mostra-lo, e era a unica tela do site assim.
+        "home_team_id": perna.get("home_team_id"),
+        "away_team_id": perna.get("away_team_id"),
         "label": series[0]["label"],
         "line_value": series[0]["line"],
         "op": series[0]["op"],
@@ -3687,8 +3691,20 @@ def _serie_do_arbitro(cur, perna: dict, escopo: str, limit: int) -> dict | None:
             m["result"] = None
         serie["hit_rate"] = None
         serie["greens"] = 0
+    # ID do arbitro, so' pra tela ter o que pedir de foto ao provedor (o proxy
+    # /api/proxy/referee/<id>.png). Casamento normalizado pelo mesmo motivo da
+    # consulta acima: o nome vem com e sem o sufixo de pais. Sem id, a tela
+    # mostra as iniciais e nada quebra.
+    cur.execute("""
+        SELECT referee_id FROM referees
+         WHERE lower(btrim(split_part(name, ',', 1))) = lower(btrim(split_part(%s, ',', 1)))
+         LIMIT 1
+    """, (referee,))
+    linha_id = cur.fetchone()
+
     return {
         "name": referee,
+        "referee_id": int(linha_id["referee_id"]) if linha_id else None,
         "amostra_curta": len(jogos) < limit,
         "amostra_pedida": limit,
         "contexto": so_contexto,

@@ -39,6 +39,7 @@ const LivePicks     = lazy(() => import('../components/LivePicks'))
 const LivePicksFeed = lazy(() => import('../components/LivePicksFeed'))
 import PicksPendingCard from '../components/PicksPendingCard'
 import CalendarioDePicks from '../components/ui/CalendarioDePicks'
+import SelectMenu from '../components/ui/SelectMenu'
 import { LIVE_PICKS_ENABLED } from '../config'
 import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2, TrendingUp, X as XIcon, Lock, Ticket } from 'lucide-react'
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
@@ -48,7 +49,6 @@ import { getResultStyle, PICK_TYPE_CLS, PICK_TYPE_BORDER } from '../utils/result
 import { useShareStoryImage, useShareAlavancagemImage, useShareBilheteImage } from '../hooks/useShareStoryImage'
 import { useOddAtualizada } from '../hooks/useOddAtualizada'
 import { translateMarket, translateLine, translateTeamName } from '../utils/marketTranslate'
-import FilterPanel, { FilterGroup } from '../components/FilterPanel'
 // Copa do Mundo 2026 · fase pelo match_date
 function wcPhase(dateStr?: string): string | null {
   if (!dateStr) return null
@@ -2316,6 +2316,161 @@ function PlacarDoProduto({ source, tom }: { source: string; tom: string }) {
   )
 }
 
+/* O MESMO CONTROLE DE DIA EM TODAS AS ABAS (2026-09-05, pedido do usuario).
+ *
+ * Ele nasceu so' na aba Hoje, e as outras leem exatamente o mesmo `today` --
+ * filtrar o dia numa e nao nas outras fazia o recorte sumir quando a pessoa
+ * trocava de aba, sem nada dizendo que tinha sumido.
+ *
+ * FORA do componente de pagina, e nao uma funcao declarada dentro dele: uma
+ * funcao nova a cada render e' um TIPO novo pro React, que desmonta e remonta a
+ * subarvore -- e o calendario tem estado proprio (o mes aberto), entao ele
+ * fecharia sozinho a cada polling de status da tela.
+ */
+function BarraDoDia({ offset, setOffset, diasComPick, isoDoOffset, rotuloLongo, dataPorExtenso }: {
+  offset: number
+  setOffset: (n: number) => void
+  diasComPick: Set<string>
+  isoDoOffset: (n: number) => string
+  rotuloLongo: string
+  dataPorExtenso: string
+}) {
+  return (
+    <div className="flex items-center gap-3 flex-wrap">
+      <CalendarioDePicks
+        valor={isoDoOffset(offset)}
+        diasComPick={diasComPick}
+        maxISO={isoDoOffset(0)}
+        onChange={dia => {
+          /* De volta pro offset que a tela inteira usa: a diferenca em dias
+             entre o escolhido e hoje, contada ao meio-dia pra que horario de
+             verao nao vire 23h e arredonde pra menos. */
+          const hoje = new Date(`${isoDoOffset(0)}T12:00:00`)
+          const alvo = new Date(`${dia}T12:00:00`)
+          setOffset(Math.round((alvo.getTime() - hoje.getTime()) / 86_400_000))
+        }}
+      />
+      {/* A data por extenso some no celular: o botao ao lado ja' diz o dia, e
+          em 390px ela empurrava o atalho "voltar para hoje" pra outra linha. */}
+      <span className="hidden sm:inline text-xs text-ink-3 truncate">
+        {offset === 0 ? capitalizarFrase(rotuloLongo) : dataPorExtenso}
+      </span>
+      {offset < 0 && (
+        <button
+          onClick={() => setOffset(0)}
+          className="text-[11px] font-bold text-accent-ink hover:text-accent-hover transition-colors shrink-0"
+        >
+          Voltar para hoje
+        </button>
+      )}
+    </div>
+  )
+}
+
+/* FILTRO DAS ABAS DE PICK (2026-09-05, pedido do usuario).
+ *
+ * Menu a' vista, o mesmo componente do filtro de mes dos Resultados. Cada aba
+ * tinha o seu jeito: a VIP escondia liga, resultado, busca e ordem atras de um
+ * acordeao, e Free, Boost, Multiplas e Jogadores nao tinham filtro nenhum --
+ * num sabado de 12 picks a unica saida era rolar.
+ *
+ * A LISTA DE LIGAS SAI DOS PICKS DA PROPRIA ABA, entao ela nunca oferece um
+ * recorte que abre vazio. Some quando ha' uma liga so': um menu com uma opcao
+ * e' decoracao.
+ *
+ * `ordenar` reordena, nunca filtra · e o default e' a ordem do motor, a unica
+ * que carrega julgamento dele.
+ */
+type OrdemDePick = 'rank' | 'prob' | 'odd' | 'hora'
+
+function FiltrosDePicks({
+  picks, liga, setLiga, resultado, setResultado, ordem, setOrdem, mostrados,
+}: {
+  picks: any[]
+  liga: string; setLiga: (v: string) => void
+  resultado: string; setResultado: (v: string) => void
+  ordem?: OrdemDePick; setOrdem?: (v: OrdemDePick) => void
+  /** Quantos sobraram depois do filtro · só aparece com filtro ativo. */
+  mostrados?: number
+}) {
+  const ligas = Array.from(new Set(picks.map(p => p.league_name).filter(Boolean))) as string[]
+  if (picks.length < 2) return null
+
+  const porLiga = (lg: string) => picks.filter(p => p.league_name === lg).length
+  const ativo = Boolean(liga || resultado)
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {ligas.length > 1 && (
+        <SelectMenu
+          ariaLabel="Liga"
+          options={[{ value: '', label: 'Todas as ligas' },
+                    ...ligas.map(lg => ({ value: lg, label: lg, meta: String(porLiga(lg)) }))]}
+          value={liga}
+          onChange={setLiga}
+        />
+      )}
+      <SelectMenu
+        ariaLabel="Resultado"
+        options={[
+          { value: '', label: 'Todos os resultados' },
+          { value: 'pending', label: 'Pendentes' },
+          { value: 'GREEN', label: 'Green' },
+          { value: 'RED', label: 'Red' },
+        ]}
+        value={resultado}
+        onChange={setResultado}
+      />
+      {setOrdem && (
+        <SelectMenu
+          ariaLabel="Ordenar"
+          options={[
+            { value: 'rank', label: 'Ordem do motor' },
+            { value: 'prob', label: 'Maior probabilidade' },
+            { value: 'odd', label: 'Maior odd' },
+            { value: 'hora', label: 'Horário do jogo' },
+          ]}
+          value={ordem ?? 'rank'}
+          onChange={v => setOrdem(v as OrdemDePick)}
+        />
+      )}
+      {ativo && (
+        <button
+          onClick={() => { setLiga(''); setResultado('') }}
+          className="text-[11px] font-bold text-accent-ink hover:text-accent-hover transition-colors"
+        >
+          Limpar
+        </button>
+      )}
+      {ativo && mostrados != null && (
+        <span className="text-[11px] text-ink-4">{mostrados} de {picks.length}</span>
+      )}
+    </div>
+  )
+}
+
+/** Aplica liga + resultado, na ordem em que a tela oferece. */
+function filtrarPicks(picks: any[], liga: string, resultado: string): any[] {
+  return picks.filter(p => {
+    if (liga && p.league_name !== liga) return false
+    if (!resultado) return true
+    return resultado === 'pending' ? !p.result : p.result === resultado
+  })
+}
+
+/** Reordena sem filtrar. `rank` devolve a lista como o motor entregou. */
+function ordenarPicks(picks: any[], ordem: OrdemDePick): any[] {
+  if (ordem === 'rank') return picks
+  return [...picks].sort((a, b) => {
+    if (ordem === 'prob') return Number(b.probability ?? b.confidence ?? 0) - Number(a.probability ?? a.confidence ?? 0)
+    if (ordem === 'odd') return Number(b.odd ?? 0) - Number(a.odd ?? 0)
+    // horário: sem match_datetime o pick vai pro fim, não pro topo.
+    const ha = a.match_datetime ? String(a.match_datetime).slice(11, 16) : '99:99'
+    const hb = b.match_datetime ? String(b.match_datetime).slice(11, 16) : '99:99'
+    return ha.localeCompare(hb)
+  })
+}
+
 export default function Picks() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -2424,6 +2579,14 @@ export default function Picks() {
    * Agora sai de /suggestions/today, a mesma resposta que alimenta VIP,
    * múltipla e alavancagem, então os cinco tipos falam sempre do mesmo dia.
    */
+  /* Um par de estados por aba: o recorte de uma nao pode valer na outra -- as
+     listas sao de produtos diferentes e as ligas nem sempre coincidem. */
+  const [boostLiga, setBoostLiga] = useState(''); const [boostResultado, setBoostResultado] = useState('')
+  const [jogLiga, setJogLiga] = useState(''); const [jogResultado, setJogResultado] = useState('')
+  const [multLiga, setMultLiga] = useState(''); const [multResultado, setMultResultado] = useState('')
+  const [boostOrdem, setBoostOrdem] = useState<OrdemDePick>('rank')
+  const [jogOrdem, setJogOrdem] = useState<OrdemDePick>('rank')
+
   const faltas   = (today?.faltas   ?? null) as MercadoPick[] | null
   const goleiros = (today?.goleiros ?? null) as MercadoPick[] | null
   /* Player Stats · o backend devolve a chave desde 27/08 e a tela nunca leu.
@@ -2469,6 +2632,20 @@ export default function Picks() {
     [liveDoDia])
   const boostFree = useMemo(() => (boost ?? []).filter(p => p.plano !== 'vip'), [boost])
   const boostVip = useMemo(() => (boost ?? []).filter(p => p.plano === 'vip'), [boost])
+  /* Listas da ABA (com liga/resultado/ordem aplicados). A aba Hoje continua
+     lendo as originais: lá o bloco é resumo do dia, e um recorte feito noutra
+     aba mudaria o resumo sem nada na tela explicando por quê. */
+  const boostDaAba = useMemo(
+    () => ordenarPicks(filtrarPicks(boost ?? [], boostLiga, boostResultado), boostOrdem),
+    [boost, boostLiga, boostResultado, boostOrdem])
+  const boostFreeF = useMemo(() => boostDaAba.filter(p => p.plano !== 'vip'), [boostDaAba])
+  const boostVipF  = useMemo(() => boostDaAba.filter(p => p.plano === 'vip'),  [boostDaAba])
+  const jogadoresDaAba = useMemo(
+    () => ordenarPicks(filtrarPicks(playerStatsOrdenados ?? [], jogLiga, jogResultado), jogOrdem),
+    [playerStatsOrdenados, jogLiga, jogResultado, jogOrdem])
+  const multiplasDaAba = useMemo(
+    () => filtrarPicks((today?.multiplas ?? []) as any[], multLiga, multResultado),
+    [today?.multiplas, multLiga, multResultado])
   /* Defesas parou de crescer em 27/08 (virou o método `saves` do Player
      Stats). A seção continua existindo pro dia antigo, mas desenhar todo dia
      um bloco que nunca mais vai ter pick é ruído · ela só aparece quando tem
@@ -2905,41 +3082,6 @@ export default function Picks() {
              card nenhum publicado no dia, o tour ilumina a área onde eles
              aparecem em vez de desenhar um card de exemplo. */
           <motion.div key="hoje" data-tour="picks-area" variants={tabFade} initial="hidden" animate="visible" exit="exit">
-            {/* O DIA VIROU CALENDARIO (2026-09-05, pedido do usuario).
-            
-                Antes era um par de setas na barra do topo, junto do lucro
-                geral: um clique POR DIA -- voltar duas semanas custava catorze
-                cliques e catorze buscas -- e nada dizia onde havia pick, entao
-                a pessoa clicava no vazio sem saber. O mes inteiro de uma vez, com
-                os dias que tiveram pick em verde, faz a escolha ser sobre o que
-                existe. A barra do topo saiu junto: o lucro e o acerto que ela
-                mostrava estao logo abaixo, nos cards de performance. */}
-            <div className="flex items-center gap-3 mb-4">
-              <CalendarioDePicks
-                valor={getBrasiliaDateIso(selectedOffset)}
-                diasComPick={diasComPick}
-                maxISO={getBrasiliaDateIso(0)}
-                onChange={dia => {
-                  /* De volta pro offset que a tela inteira usa: a diferenca em
-                     dias entre o escolhido e hoje, contada ao meio-dia pra que
-                     horario de verao nao vire 23h e arredonde pra menos. */
-                  const hoje = new Date(`${getBrasiliaDateIso(0)}T12:00:00`)
-                  const alvo = new Date(`${dia}T12:00:00`)
-                  setSelectedOffset(Math.round((alvo.getTime() - hoje.getTime()) / 86_400_000))
-                }}
-              />
-              <span className="text-xs text-ink-3 truncate">
-                {selectedOffset === 0 ? capitalizarFrase(todayLabel) : todayDateStr}
-              </span>
-              {selectedOffset < 0 && (
-                <button
-                  onClick={() => setSelectedOffset(0)}
-                  className="text-[11px] font-bold text-accent-ink hover:text-accent-hover transition-colors shrink-0"
-                >
-                  Voltar para hoje
-                </button>
-              )}
-            </div>
             {!topoPronto ? <PickLoading /> : todayError ? (
             <div className="card p-10 text-center">
               <p className="text-ink-2 font-semibold mb-1">Erro ao carregar picks</p>
@@ -2987,6 +3129,41 @@ export default function Picks() {
                       não existe card de Kelly pra contradizer. */}
                 </div>
               )}
+
+              {/* O DIA, DEPOIS DO PLACAR (2026-09-05, pedido do usuario).
+              
+                  Antes das quatro caixas de performance ele era a primeira
+                  coisa da aba, e a primeira coisa da aba tem que ser o
+                  resultado: o recorte de dia e' controle, e controle vem depois
+                  do que ele recorta. */}
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <BarraDoDia offset={selectedOffset} setOffset={setSelectedOffset}
+                        diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
+                        rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />
+              </div>
+
+              <ComoFunciona titulo="O que aparece nesta tela?" cor="text-accent-ink"
+                            borda="border-line" fundo="bg-surface-1">
+                <>
+                  <p>
+                    Tudo que a IA publicou <span className="text-ink-1 font-bold">no dia escolhido</span>,
+                    produto por produto: Pick do Dia free, os VIP, Pick Boost,
+                    múltiplas, alavancagem e jogadores. As abas acima abrem cada
+                    um deles separado, com a explicação do que ele é.
+                  </p>
+                  <p>
+                    O calendário marca de <span className="text-accent-ink font-bold">verde</span> os dias
+                    que tiveram pick, então dá pra voltar direto num dia com
+                    conteúdo em vez de procurar às cegas.
+                  </p>
+                  <p>
+                    Cada card traz a odd, a linha, a casa e a chance calculada.
+                    Em <span className="text-ink-1 font-bold">Entenda esta análise</span> você vê os
+                    últimos jogos dos times naquele mercado e a amostra que o
+                    motor leu para escolher.
+                  </p>
+                </>
+              </ComoFunciona>
 
               {/* Progresso da geração / countdown quando picks ainda não chegaram.
               
@@ -3238,6 +3415,9 @@ export default function Picks() {
 
         {tab === 'pick_seguro' && (
           <motion.div key="pick_seguro" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6">
+            <BarraDoDia offset={selectedOffset} setOffset={setSelectedOffset}
+                        diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
+                        rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />
             {/* Fechado por padrão · ver ComoFunciona. */}
             <ComoFunciona titulo="O que é o Pick do Dia Free?" cor="text-green-400"
                           borda="border-green-500/20" fundo="bg-green-500/5">
@@ -3272,6 +3452,9 @@ export default function Picks() {
 
         {tab === 'vip' && (
           <motion.div key="vip" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6">
+            <BarraDoDia offset={selectedOffset} setOffset={setSelectedOffset}
+                        diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
+                        rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />
             <ComoFunciona titulo="O que são os Picks VIP?" cor="text-yellow-400"
                           borda="border-yellow-400/20" fundo="bg-yellow-400/5">
               <>
@@ -3326,39 +3509,31 @@ export default function Picks() {
                   const hb = b.match_datetime ? String(b.match_datetime).slice(11, 16) : '99:99'
                   return ha.localeCompare(hb)
                 })
-                const filterGroups: FilterGroup[] = [
-                  ...(leagues.length > 1 ? [{
-                    key: 'league', label: 'Liga',
-                    options: [{ value: '', label: 'Todas' }, ...leagues.map(lg => ({ value: lg, label: lg }))],
-                    value: leagueFilter, onChange: setLeagueFilter,
-                  }] : []),
-                  ...(vips.length > 1 ? [{
-                    key: 'resultado', label: 'Resultado',
-                    options: [{ value: '', label: 'Todos' }, { value: 'pending', label: 'Pendentes' }, { value: 'GREEN', label: 'Green' }, { value: 'RED', label: 'Red' }],
-                    value: vipResultFilter, onChange: setVipResultFilter,
-                  }] : []),
-                ]
                 return (
                   <>
+                    {/* MENU A' VISTA, e nao acordeao (2026-09-05, pedido do
+                        usuario): o mesmo controle do filtro de mes dos
+                        Resultados, agora igual em todas as abas de pick. A
+                        busca fica ao lado porque com 20 picks ela responde o
+                        que o menu de liga nao responde ("o do Palmeiras"). */}
                     {vips.length > 1 && (
-                      <FilterPanel
-                        accent="yellow"
-                        groups={filterGroups}
-                        resultado={filteredVips.length}
-                        busca={{
-                          value: vipBusca, onChange: setVipBusca,
-                          placeholder: 'Buscar time, liga ou mercado',
-                        }}
-                        ordem={{
-                          value: vipOrdem, onChange: setVipOrdem,
-                          options: [
-                            { value: 'rank', label: 'Ordem do motor' },
-                            { value: 'prob', label: 'Maior probabilidade' },
-                            { value: 'odd', label: 'Maior odd' },
-                            { value: 'hora', label: 'Horário do jogo' },
-                          ],
-                        }}
-                      />
+                      <div className="flex flex-wrap items-center gap-2">
+                        <FiltrosDePicks
+                          picks={vips} liga={leagueFilter} setLiga={setLeagueFilter}
+                          resultado={vipResultFilter} setResultado={setVipResultFilter}
+                          ordem={vipOrdem as OrdemDePick} setOrdem={v => setVipOrdem(v)}
+                          mostrados={filteredVips.length}
+                        />
+                        <input
+                          value={vipBusca}
+                          onChange={e => setVipBusca(e.target.value)}
+                          placeholder="Buscar time, liga ou mercado"
+                          aria-label="Buscar pick"
+                          className="flex-1 min-w-[180px] bg-surface-1 border border-line rounded-md
+                                     px-3 py-2 min-h-[36px] text-xs text-ink-1 placeholder:text-ink-4
+                                     focus:outline-none focus:border-line-strong transition-colors"
+                        />
+                      </div>
                     )}
                     {filteredVips.length > 0 ? (
                       <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
@@ -3415,6 +3590,9 @@ export default function Picks() {
 
         {tab === 'multiplas' && (
           <motion.div key="multiplas" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6">
+            <BarraDoDia offset={selectedOffset} setOffset={setSelectedOffset}
+                        diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
+                        rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />
             <ComoFunciona titulo="O que são as Múltiplas VIP?" cor="text-blue-400"
                           borda="border-blue-400/20" fundo="bg-blue-400/5">
               <>
@@ -3435,9 +3613,16 @@ export default function Picks() {
               <SectionHeader color="bg-blue-400" label={`Múltiplas do Dia, ${todayDateStr}`} />
               {!canSeeVip ? <VipLockOverlay color="blue" resumo={today?.bloqueados?.multipla} rotulo="múltiplas" /> : todayLoading ? <PickLoading /> : (
                 today?.multiplas?.length > 0 ? (
-                  <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-4">
-                    {today.multiplas.map((m: any) => <MultiplaCard key={m.id} m={m} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isMultiplaLive(m)} />)}
-                  </motion.div>
+                  <>
+                    <FiltrosDePicks
+                      picks={(today?.multiplas ?? []) as any[]} liga={multLiga} setLiga={setMultLiga}
+                      resultado={multResultado} setResultado={setMultResultado}
+                      mostrados={multiplasDaAba.length}
+                    />
+                    <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-4 mt-4">
+                      {multiplasDaAba.map((m: any) => <MultiplaCard key={m.id} m={m} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isMultiplaLive(m)} />)}
+                    </motion.div>
+                  </>
                 ) : (
                   <div className="card p-8 text-center border-dashed">
                     <p className="text-ink-3 text-sm font-semibold">Múltipla do dia ainda não gerada.</p>
@@ -3457,6 +3642,9 @@ export default function Picks() {
 
         {tab === 'alavancagem' && (
           <motion.div key="alavancagem" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6">
+            <BarraDoDia offset={selectedOffset} setOffset={setSelectedOffset}
+                        diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
+                        rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />
             {/* UMA explicação só, e a certa.
               *
               * Havia DUAS, e elas se contradiziam: esta caixa descrevia o
@@ -3936,6 +4124,9 @@ export default function Picks() {
             vários jogos na mesma rodada, dar um não esvazia o resto. */}
         {tab === 'boost' && (
           <motion.div key="boost" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6">
+            <BarraDoDia offset={selectedOffset} setOffset={setSelectedOffset}
+                        diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
+                        rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />
             <ComoFunciona titulo="O que é o Pick Boost?" cor="text-cyan-400"
                           borda="border-cyan-400/20" fundo="bg-cyan-400/5">
               <>
@@ -3950,16 +4141,23 @@ export default function Picks() {
               </>
             </ComoFunciona>
 
+            <FiltrosDePicks
+              picks={boost ?? []} liga={boostLiga} setLiga={setBoostLiga}
+              resultado={boostResultado} setResultado={setBoostResultado}
+              ordem={boostOrdem} setOrdem={setBoostOrdem}
+              mostrados={boostDaAba.length}
+            />
+
             {/* O gratuito do dia · fora do bloqueio, com selo próprio. */}
             <div>
               <SectionHeader color="bg-green-400" label="Grátis de hoje" badge="FREE" />
               {boost === null && todayLoading ? (
                 <PickLoading />
-              ) : boostFree.length === 0 ? (
+              ) : boostFreeF.length === 0 ? (
                 <SecaoVazia texto="Sem Pick Boost hoje. A IA só publica quando o jogo é forte nas duas pernas ao mesmo tempo." />
               ) : (
                 <div className="lista-longa grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                  {boostFree.map(p => (
+                  {boostFreeF.map(p => (
                     <SuggestionCard
                       key={p.id}
                       s={mercadoParaSuggestion(p, 'boost')}
@@ -3973,17 +4171,17 @@ export default function Picks() {
             {/* O resto do dia · VIP. Não aparece quando não há, pelo mesmo
                 critério do resto da página. */}
             {!canSeeVip ? (
-              (boostVip.length > 0 || (today?.bloqueados?.mercados?.length ?? 0) > 0) && (
+              (boostVipF.length > 0 || (today?.bloqueados?.mercados?.length ?? 0) > 0) && (
                 <div>
                   <SectionHeader color="bg-cyan-400" label="Os outros do dia" badge="VIP" />
                   <VipLockOverlay color="blue" picks={today?.bloqueados?.mercados} rotulo="Pick Boost" />
                 </div>
               )
-            ) : boostVip.length > 0 && (
+            ) : boostVipF.length > 0 && (
               <div>
-                <SectionHeader color="bg-cyan-400" label="Os outros do dia" contagem={boostVip.length} badge="VIP" />
+                <SectionHeader color="bg-cyan-400" label="Os outros do dia" contagem={boostVipF.length} badge="VIP" />
                 <div className="lista-longa grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                  {boostVip.map(p => (
+                  {boostVipF.map(p => (
                     <SuggestionCard
                       key={p.id}
                       s={mercadoParaSuggestion(p, 'boost')}
@@ -4007,6 +4205,9 @@ export default function Picks() {
             ATUAÇÕES dele, não de partidas entre dois times. */}
         {tab === 'jogadores' && (
           <motion.div key="jogadores" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6">
+            <BarraDoDia offset={selectedOffset} setOffset={setSelectedOffset}
+                        diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
+                        rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />
             {!canSeeVip ? (
               <div>
                 <SectionHeader color="bg-amber-400" label="Jogadores" />
@@ -4039,12 +4240,18 @@ export default function Picks() {
                   </>
                 </ComoFunciona>
 
+                <FiltrosDePicks
+                  picks={playerStatsOrdenados ?? []} liga={jogLiga} setLiga={setJogLiga}
+                  resultado={jogResultado} setResultado={setJogResultado}
+                  ordem={jogOrdem} setOrdem={setJogOrdem}
+                  mostrados={jogadoresDaAba.length}
+                />
                 <MercadoSecao
                   tipo="player_stats"
                   titulo="Jogadores"
                   cor="bg-amber-400"
                   explicacao="Cada pick é sobre uma pessoa, num jogo. A linha traz o nome junto porque o jogador faz parte da aposta."
-                  picks={playerStatsOrdenados}
+                  picks={jogadoresDaAba}
                   carregando={todayLoading}
                   banca={bancaSummary?.has_banca ? bancaSummary : null}
                 />

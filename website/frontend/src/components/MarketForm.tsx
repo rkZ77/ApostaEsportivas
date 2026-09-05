@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Activity, AlertTriangle, Gavel } from 'lucide-react'
 import api from '../services/api'
 import { Skeleton } from './ui'
-import { TeamLogo } from './TeamLogo'
+import { TeamLogo, PlayerPhoto } from './TeamLogo'
 import { translateLine, translateMarket } from '../utils/marketTranslate'
 
 /*
@@ -85,6 +85,8 @@ interface TeamSerie extends Serie {
 
 interface RefereeSerie extends Serie {
   name: string
+  /** Só existe quando o árbitro está em `referees` · sem ele, iniciais. */
+  referee_id?: number | null
 }
 
 interface Leg {
@@ -95,6 +97,8 @@ interface Leg {
   line_value: number | null
   home_team: string | null
   away_team: string | null
+  home_team_id?: number | null
+  away_team_id?: number | null
   teams: TeamSerie[]
   referee: RefereeSerie | null
 }
@@ -115,7 +119,7 @@ function corDaTaxa(taxa: number) {
 }
 
 function Grafico({
-  titulo, contexto, prefixo, serie, teto, logoId, Icone,
+  titulo, contexto, prefixo, serie, teto, logoId, Icone, foto,
 }: {
   titulo: string
   /** Completa "últimos N jogos ___" · "em casa", "fora", "apitados". */
@@ -126,6 +130,9 @@ function Grafico({
   teto: number
   logoId?: number
   Icone?: React.ComponentType<{ className?: string }>
+  /** Avatar de PESSOA (árbitro): foto quando o provedor tem, iniciais quando
+   *  não tem · e a maioria dos árbitros não tem. */
+  foto?: { id?: number | null; nome: string }
 }) {
   // A API devolve do mais recente pro mais antigo; o gráfico é lido da
   // esquerda pra direita, então inverte.
@@ -138,7 +145,8 @@ function Grafico({
       <div className="flex items-center justify-between gap-2 mb-1">
         <div className="flex items-center gap-2 min-w-0">
           {logoId != null && <TeamLogo id={logoId} name={titulo} size={18} />}
-          {Icone && <Icone className="w-3.5 h-3.5 text-ink-4 shrink-0" />}
+          {foto && <PlayerPhoto id={foto.id} name={foto.nome} size={22} fonte="referee" />}
+          {Icone && !foto && <Icone className="w-3.5 h-3.5 text-ink-4 shrink-0" />}
           <span className="text-xs font-bold text-ink-1 truncate">{titulo}</span>
         </div>
         {taxa != null && (
@@ -243,8 +251,14 @@ function BlocoDaPerna({ leg, numero }: { leg: Leg; numero: number | null }) {
       {numero != null && (
         <div className="flex items-baseline gap-2">
           <span className="font-mono text-[10px] font-bold text-ink-4 shrink-0">{numero}</span>
-          <p className="text-[11px] font-semibold text-ink-1 min-w-0">
-            {leg.home_team} x {leg.away_team}
+          <p className="flex items-center gap-1.5 text-[11px] font-semibold text-ink-1 min-w-0 flex-wrap">
+            {/* Os escudos identificam o jogo mais rápido que o nome, e o modal
+                era a única tela do site que falava do confronto sem mostrá-lo. */}
+            <TeamLogo id={leg.home_team_id ?? undefined} name={leg.home_team ?? ''} size={16} />
+            {leg.home_team}
+            <span className="text-ink-4 font-normal">x</span>
+            <TeamLogo id={leg.away_team_id ?? undefined} name={leg.away_team ?? ''} size={16} />
+            {leg.away_team}
             <span className="text-ink-3 font-normal">
               {', '}{translateMarket(leg.market ?? '')}
               {leg.line && <> {translateLine(leg.line)}</>}
@@ -274,6 +288,7 @@ function BlocoDaPerna({ leg, numero }: { leg: Leg; numero: number | null }) {
             contexto="apitados"
             prefixo=""
             Icone={Gavel}
+            foto={{ id: leg.referee.referee_id, nome: leg.referee.name }}
             serie={leg.referee}
             teto={teto}
           />

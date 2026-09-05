@@ -1410,9 +1410,15 @@ def test_defaults_viraram_o_comportamento_certo(monkeypatch):
     nada. E' a mesma escolha que o pre-jogo ja' fez com `SIDE_EFFECTS=on`:
     esquecer a variavel nao pode DESLIGAR producao.
 
-    O que NAO mudou: `ai_review` continua False (nao gasta token) e os tetos de
-    partidas e requisicoes continuam apertados. Ligar o motor nao e' o mesmo
-    que soltar o consumo.
+    Os tetos de partidas e requisicoes continuam apertados: ligar o motor nao
+    e' o mesmo que soltar o consumo.
+
+    `ai_review` DEIXOU DE SER A EXCECAO (2026-09-04). Ele nascia False porque a
+    chamada era por partida analisada, e ai' um motor ligado gastava token a
+    cada rodada, com ou sem pick. Hoje o gate fica depois da duplicata e do dry
+    run (live_pipeline): a chamada e' por pick GRAVADO, entao rodada sem pick
+    nao custa nada -- e o ao vivo era um dos dois unicos motores dos oito sem
+    revisao. A flag continua desligando quem quiser (LIVE_AI_REVIEW=false).
     """
     for var in ("LIVE_ENGINE_ENABLED", "LIVE_ENGINE_DRY_RUN", "LIVE_AI_REVIEW",
                 "LIVE_MAX_MATCHES", "LIVE_MAX_API_REQUESTS_PER_RUN", "LIVE_LEAGUES",
@@ -1421,7 +1427,7 @@ def test_defaults_viraram_o_comportamento_certo(monkeypatch):
     c = LiveEngineConfig.do_ambiente()
     assert c.habilitado is True    # produto publicado nasce ligado
     assert c.dry_run is False      # dry run que nasce ligado = aba sem pick
-    assert c.ai_review is False    # continua sem gastar token
+    assert c.ai_review is True     # gasta por pick gravado, nao por rodada
     assert (c.max_partidas, c.max_requisicoes) == (3, 15)
 
 
@@ -1454,8 +1460,20 @@ def test_config_le_o_ambiente(monkeypatch):
     assert c.buscar_eventos is False
 
 
-def test_ia_generativa_esta_desligada_na_v1():
-    assert LiveEngineConfig().ai_review is False
+def test_o_gate_de_ia_nasce_ligado_e_a_flag_ainda_desliga(monkeypatch):
+    """Era "desligada na v1", e a v1 acabou em 2026-09-04.
+
+    O motivo do desligado nunca foi desconfianca do parecer: era o custo, que
+    na epoca corria por partida ANALISADA. Com o gate depois da duplicata e do
+    dry run ele corre por pick GRAVADO, e a razao caiu junto -- o ao vivo e o
+    Player Stats eram os dois unicos motores dos oito sem revisao.
+
+    O que este teste guarda agora e' a saida de emergencia: a flag continua
+    valendo, entao um ambiente que nao pode gastar token desliga sem deploy."""
+    assert LiveEngineConfig().ai_review is True
+
+    monkeypatch.setenv("LIVE_AI_REVIEW", "false")
+    assert LiveEngineConfig.do_ambiente().ai_review is False
 
 
 # ═════════════════════════════════════════════════════════════════════════
