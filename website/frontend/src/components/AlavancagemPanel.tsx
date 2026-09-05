@@ -7,6 +7,8 @@ import { Spinner } from './ui'
 import LucroBarChart from './LucroBarChart'
 import CaminhosDaIA from './CaminhosDaIA'
 import { fmtBRL, fmtSigned, fmtUnits } from '../utils/format'
+import SelectMenu from './ui/SelectMenu'
+import { PERIODOS, PERIODO_PADRAO, dentroDoPeriodo, nomeDoMes, type PeriodoKey } from '../lib/periodo'
 
 /*
  * Alavancagem · contabilidade e leitura do caminho, num painel só.
@@ -180,6 +182,16 @@ export default function AlavancagemPanel() {
   const navigate = useNavigate()
   const [serie, setSerie] = useState<Serie | null>(null)
   const [erro, setErro] = useState(false)
+  /* Os dois recortes desta tela.
+  
+     Periodo e' o mesmo da Visao geral, com o mesmo componente e o mesmo
+     vocabulario (lib/periodo). PRODUTO nao existe aqui -- e' tudo alavancagem
+     --, e no lugar dele entra o recorte que so' este produto tem: UM CAMINHO.
+     Ele e' a unidade de conta da alavancagem (1u de entrada, o RED custa a
+     entrada), entao "como foi aquele caminho de agosto" e' a pergunta que a
+     lista de oito linhas nao respondia sem contar no dedo. */
+  const [periodo, setPeriodo] = useState<PeriodoKey>(PERIODO_PADRAO)
+  const [caminhoSel, setCaminhoSel] = useState('')
 
   useEffect(() => {
     api.get('/banca/alavancagem-serie')
@@ -221,20 +233,42 @@ export default function AlavancagemPanel() {
     )
   }
 
-  const historico = serie.history ?? []
+  const todos     = serie.history ?? []
   const steps     = serie.steps ?? []
-  const realizado = serie.realized_total ?? 0
-  const unidades  = serie.realized_units ?? 0
   const emAberto  = serie.open_profit ?? 0
   const meta      = serie.meta ?? 6
   const feitos    = serie.greens_no_caminho ?? 0
+
+  const diaDoCaminho = (c: CaminhoEncerrado) => (c.ended_at ?? '').slice(0, 10)
+  const semFiltro = periodo === 'tudo' && !caminhoSel
+  const historico = todos.filter(c => {
+    if (caminhoSel) return String(c.id) === caminhoSel
+    const dia = diaDoCaminho(c)
+    return dia ? dentroDoPeriodo(dia, periodo) : false
+  })
+
+  /* Com recorte ativo os números saem da soma do que sobrou; sem recorte, do
+     servidor. Não é a mesma conta por preciosismo: `realized_total` é a
+     verdade da banca e não deve ser recalculada no cliente enquanto ninguém
+     pediu um pedaço dela. */
+  const realizado = semFiltro ? (serie.realized_total ?? 0)
+    : historico.reduce((a, c) => a + c.realized, 0)
+  const unidades  = semFiltro ? (serie.realized_units ?? 0)
+    : historico.reduce((a, c) => a + c.units, 0)
   const fechados  = historico.length
   const noVerde   = historico.filter(c => c.realized > 0).length
 
   /* Melhor sequência já alcançada · o número que o usuário pediu pra destacar.
      Sai do histórico (greens de cada caminho encerrado) junto com o caminho
-     ABERTO, senão a melhor marca sumiria justamente enquanto ela acontece. */
-  const melhorSequencia = Math.max(feitos, ...historico.map(c => c.greens), 0)
+     ABERTO, senão a melhor marca sumiria justamente enquanto ela acontece · o
+     aberto só entra quando não há recorte, senão ele apareceria dentro de um
+     mês em que não terminou. */
+  const melhorSequencia = Math.max(semFiltro ? feitos : 0, ...historico.map(c => c.greens), 0)
+
+  /* Meses com caminho ENCERRADO. Saem de `todos`, nunca do filtrado: uma lista
+     que encolhe ao escolher um mês deixa de servir pra trocar de mês. */
+  const meses = Array.from(new Set(todos.map(diaDoCaminho).filter(Boolean).map(d => d.slice(0, 7))))
+    .sort((a, b) => b.localeCompare(a))
 
   const barrasHistorico = historico
     .slice()
@@ -247,6 +281,40 @@ export default function AlavancagemPanel() {
 
   return (
     <div className="space-y-5">
+      {todos.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <SelectMenu
+            ariaLabel="Período"
+            options={[
+              ...PERIODOS.map(p => ({ value: p.key as string, label: p.label })),
+              ...meses.map(m => ({ value: `mes:${m}`, label: nomeDoMes(m) })),
+            ]}
+            value={periodo}
+            onChange={v => { setPeriodo(v as PeriodoKey); setCaminhoSel('') }}
+          />
+          <SelectMenu
+            ariaLabel="Caminho"
+            options={[
+              { value: '', label: 'Todos os caminhos' },
+              ...todos.map(c => ({
+                value: String(c.id),
+                label: `Caminho de ${dataBR(c.ended_at)}`,
+                meta: `${c.greens}G, ${fmtSigned(c.realized)}`,
+              })),
+            ]}
+            value={caminhoSel}
+            onChange={v => { setCaminhoSel(v); if (v) setPeriodo('tudo') }}
+          />
+          {!semFiltro && (
+            <span className="text-[11px] text-ink-4">
+              {fechados === 0
+                ? 'nenhum caminho encerrado neste recorte'
+                : `${fechados} de ${todos.length} caminhos`}
+            </span>
+          )}
+        </div>
+      )}
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           {
@@ -365,8 +433,9 @@ export default function AlavancagemPanel() {
         <p className="text-xs text-ink-3 font-semibold mb-1">Caminhos encerrados</p>
         {fechados === 0 ? (
           <p className="text-ink-4 text-xs leading-relaxed py-6 text-center">
-            Nenhum caminho encerrado ainda. O primeiro aparece aqui quando você
-            fechar na mão, bater a meta ou cair num RED.
+            {todos.length > 0
+              ? 'Nenhum caminho encerrado neste recorte. Troque o período ou volte para todos os caminhos.'
+              : 'Nenhum caminho encerrado ainda. O primeiro aparece aqui quando você fechar na mão, bater a meta ou cair num RED.'}
           </p>
         ) : (
           <div className="mt-2">
