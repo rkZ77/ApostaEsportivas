@@ -2438,6 +2438,21 @@ export default function Picks() {
   /* Ao vivo do dia selecionado · vem de /suggestions/today, então a seta de
      dia da aba Hoje já vale pra ele sem nenhuma regra própria. */
   const liveDoDia = useMemo(() => (today?.live ?? []) as any[], [today])
+
+  /* Saiu ALGUMA COISA hoje? Uma lista só, pra o "ainda não saíram" não
+     depender de alguém lembrar de acrescentar o produto novo em cada
+     condição espalhada pela tela. */
+  const temPickHoje = Boolean(
+    today?.dica_do_dia
+    || today?.alavancagem
+    || (today?.vip?.length)
+    || (today?.multiplas?.length)
+    || (today?.faltas?.length)
+    || (today?.goleiros?.length)
+    || (today?.player_stats?.length)
+    || (today?.boost?.length)
+    || liveDoDia.length,
+  )
   const livePendentes = useMemo(() => liveDoDia.filter(p => !p.result), [liveDoDia])
   /* Memo pelo mesmo motivo dos mercados: `liveParaSuggestion` monta objeto novo
      a cada render, e sem isso o memo do SuggestionCard nunca acerta. */
@@ -2979,8 +2994,15 @@ export default function Picks() {
                 </div>
               )}
 
-              {/* Progresso da geração / countdown quando picks ainda não chegaram */}
-              {selectedOffset === 0 && !today?.dica_do_dia && !(today?.vip?.length) && !(today?.multiplas?.length) && !today?.alavancagem && !(today?.faltas?.length) && !(today?.goleiros?.length) && (
+              {/* Progresso da geração / countdown quando picks ainda não chegaram.
+              
+                  A condição lista TODOS os produtos que publicam no dia, e a
+                  lista tinha ficado para trás: Pick Boost (28/08), Player Stats
+                  (27/08) e o ao vivo não estavam nela, então um dia em que só
+                  saísse Boost mostrava os picks E o cartão dizendo que os picks
+                  ainda não saíram, com a lista dos jogos do dia embaixo. Este
+                  cartão é o VAZIO da tela: basta um pick publicado pra ele sair. */}
+              {selectedOffset === 0 && !temPickHoje && (
                 <PipelineStatusCard />
               )}
 
