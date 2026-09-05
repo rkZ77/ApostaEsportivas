@@ -19,14 +19,33 @@ HEADERS = {"x-apisports-key": API_KEY}
 # ============================================================
 # CASAS DE APOSTAS PERMITIDAS
 # 8  = Bet365
+# 11 = 1xBet
 # 32 = Betano
+# 34 = Superbet
+#
+# SO' CASA QUE OPERA NO BRASIL, e essa e' a regra do produto: a odd publicada
+# tem que ser uma odd em que o usuario consegue apostar. O catalogo da API tem
+# 33 casas e a maioria (William Hill, Marathonbet, BetVictor, Pinnacle...) nao
+# atende o Brasil -- elas ficam de fora mesmo cobrindo mais jogos.
+#
+# 1xBet ENTROU EM 2026-09-05, e a razao foi um dia inteiro sem pick:
+#
+#   Betano e Superbet PARARAM de retornar odd na API -- medido em 6 jogos, em
+#   todos elas vieram vazias enquanto a Bet365 trazia 90+ mercados. Sobrando
+#   uma casa so', TODA linha caiu no piso de consenso do motor
+#   (`min_bookmakers_count = 2`): 56 candidatos reprovados por "poucos
+#   bookmakers (1 < 2)" e zero pick no dia.
+#
+#   Das seis casas que a API cobria naqueles jogos, 1xBet e' a UNICA alem da
+#   Bet365 que opera no Brasil, e cobria os 6 de 6 com 51 a 56 mercados. Sem
+#   ela o consenso depende de Betano/Superbet voltarem.
 #
 # PADRAO, nao a lista final: desde 2026-08-13 quem manda e a tabela
 # `bookmakers` (coluna `ativo`), editavel pela tela Casas de aposta do /admin.
 # Este conjunto continua sendo a resposta quando a tabela nao existe ou esta
 # vazia -- ver casas_ativas().
 # ============================================================
-BR_BOOKMAKERS = {8, 32}
+BR_BOOKMAKERS = {8, 11, 32, 34}
 
 
 def casas_ativas() -> set:
@@ -400,6 +419,11 @@ class OddsCollectorService:
         merged: list[dict] = []
         seen: set[int] = set()
 
+        # QUEM RESPONDEU E QUEM VEIO VAZIO, acumulado na rodada inteira ·
+        # `resumo_das_casas()` imprime no fim. Ver o porque la'.
+        if not hasattr(self, "_cobertura"):
+            self._cobertura = {}
+
         for bm_id in sorted(self.casas):
             try:
                 response = requests.get(
@@ -415,15 +439,63 @@ class OddsCollectorService:
                 continue
 
             data = response.json().get("response", [])
+            casas_na_resposta = data[0].get("bookmakers", []) if data else []
+            registro = self._cobertura.setdefault(bm_id, {"com": 0, "sem": 0})
+            if casas_na_resposta:
+                registro["com"] += 1
+            else:
+                registro["sem"] += 1
             if not data:
                 continue
 
-            for bk in data[0].get("bookmakers", []):
+            for bk in casas_na_resposta:
                 if bk["id"] not in seen:
                     seen.add(bk["id"])
                     merged.append(bk)
 
         return {"bookmakers": merged} if merged else None
+
+    #: Abaixo desta fracao de jogos atendidos, a casa entra no aviso.
+    COBERTURA_MINIMA = 0.10
+
+    def resumo_das_casas(self) -> None:
+        """Quantos jogos cada casa ativa atendeu -- e AVISA quando alguma
+        sumiu.
+
+        POR QUE ISTO EXISTE (2026-09-05)
+        --------------------------------
+        Em 05/09 os quatro motores de pre-jogo passaram o dia sem gerar UM
+        pick. A causa nao estava em nenhum deles: Betano e Superbet pararam de
+        retornar odd na API, sobrou a Bet365 sozinha, e o piso de consenso do
+        motor (`min_bookmakers_count = 2`) reprovou TODA linha -- 35.528 linhas
+        coletadas, todas com uma casa so'.
+
+        E a coleta nao disse nada. `if not data: continue` e' a mesma linha
+        para "esta casa nao cobre este jogo" e para "esta casa parou de
+        existir pra nos", entao duas das tres casas sumirem produziu
+        exatamente o mesmo log de um dia normal. O dia inteiro foi gasto
+        procurando o defeito nos motores.
+
+        Nao levanta erro nem interrompe: casa some por motivo legitimo (jogo
+        pequeno, mercado fechado). O que nao pode e' sumir EM SILENCIO.
+        """
+        cobertura = getattr(self, "_cobertura", None)
+        if not cobertura:
+            return
+        print("\n[ODDS] Cobertura por casa nesta rodada:")
+        mudas = []
+        for bm_id in sorted(cobertura):
+            r = cobertura[bm_id]
+            total = r["com"] + r["sem"]
+            fracao = (r["com"] / total) if total else 0.0
+            print(f"   casa {bm_id}: {r['com']}/{total} jogos ({fracao * 100:.0f}%)")
+            if total and fracao < self.COBERTURA_MINIMA:
+                mudas.append(bm_id)
+        if mudas:
+            print(f"[ODDS] ATENCAO: casa(s) {mudas} nao retornaram odd em "
+                  f"praticamente nenhum jogo. Com menos de duas casas por linha "
+                  f"o motor reprova todo candidato "
+                  f"(pick_engine/config.min_bookmakers_count).")
 
     # --------------------------------------------------------
     # DETECTA SIDE (home / away / total)

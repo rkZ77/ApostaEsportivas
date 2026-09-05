@@ -254,6 +254,12 @@ class OddsMain:
         # 3️⃣ Coleta odds
         self.collect_odds(fixtures)
 
+        # Cobertura por casa. Vem DEPOIS da coleta porque e' o acumulado dela
+        # -- e existe porque, em 05/09, duas das tres casas pararam de
+        # retornar odd e a coleta terminou com o mesmo log de um dia normal.
+        # Ver `OddsCollectorService.resumo_das_casas`.
+        self.odds_collector.resumo_das_casas()
+
         global_time = time.perf_counter() - global_start
 
         print(f"\n[TIMER] EXECUÇÃO TOTAL: {global_time:.4f}s")

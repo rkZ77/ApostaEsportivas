@@ -190,5 +190,23 @@ def test_busca_na_api_usa_as_casas_ativas(monkeypatch):
 def test_padrao_nao_mudou():
     """Banco com a tabela intacta (todas ativas, populadas pela migration a
     partir das odds ja coletadas) tem que produzir a MESMA coleta de antes
-    desta mudanca. Se este numero mudar sem decisao, a coleta muda junto."""
-    assert BR_BOOKMAKERS == {8, 32}
+    desta mudanca. Se este numero mudar sem decisao, a coleta muda junto.
+
+    MUDOU EM 2026-09-05, com decisao: entraram 11 (1xBet) e 34 (Superbet).
+
+    Superbet ja' estava na tabela `bookmakers` desde 13/08 e faltava aqui --
+    a constante e' o fallback pra quando a tabela some, entao ela descrevia um
+    conjunto menor do que o real.
+
+    1xBet e' casa nova na lista, e entrou por medicao: em 05/09 Betano e
+    Superbet pararam de retornar odd na API, sobrou a Bet365 sozinha e os
+    quatro motores de pre-jogo passaram o dia sem gerar UM pick -- 35.528
+    linhas coletadas, todas com uma casa so', e o piso de consenso
+    (`min_bookmakers_count = 2`) reprovando tudo. Das seis casas que a API
+    cobria naqueles jogos, 1xBet e' a UNICA alem da Bet365 que opera no
+    Brasil, e cobria 6 de 6 jogos.
+
+    A REGRA NAO MUDOU: so' casa em que o usuario brasileiro consegue apostar.
+    Pinnacle, William Hill, Marathonbet e BetVictor cobriam os mesmos jogos e
+    continuam de fora."""
+    assert BR_BOOKMAKERS == {8, 11, 32, 34}
