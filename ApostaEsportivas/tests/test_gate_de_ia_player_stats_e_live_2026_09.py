@@ -88,3 +88,55 @@ def test_pipeline_openai_sem_variavel_propria_herda_a_do_vip(_env_do_railway, pi
 def test_variavel_propria_ainda_vence_a_heranca(_env_do_railway, monkeypatch):
     monkeypatch.setenv("AI_REVIEW_MODEL_LIVE", "gpt-outro")
     assert AIReviewSettings.from_env("live").model == "gpt-outro"
+
+
+# --- O veto de verdade, com o tradutor no meio -----------------------------
+
+from services.pick_engine.ai_review import AIReviewGate
+
+
+def _gate(decision):
+    return AIReviewGate(AIReviewSettings(mode="enforce"),
+                        call_model=lambda *_: {"decision": decision,
+                                               "risk_level": "high", "reasons": ["teste"]})
+
+
+def _candidato_ps():
+    return {"analise": {"odd": 1.8, "probability": 0.7, "edge": 0.09, "ev": 0.1,
+                        "amostra": 8},
+            "jogador": {"player_name": "Fulano", "team_name": "Time A"},
+            "metodo": _Metodo(), "rotulo_linha": "2 ou mais", "composicao": {}}
+
+
+def test_player_stats_vetado_nao_publica():
+    assert _gate("reject").apply([ps_para_ia(_candidato_ps())], "player_stats") == []
+
+
+def test_player_stats_aprovado_volta_com_o_parecer():
+    saida = _gate("approve").apply([ps_para_ia(_candidato_ps())], "player_stats")
+    assert len(saida) == 1
+    # O parecer precisa VOLTAR: e' ele que o pipeline enxerta no candidato pra
+    # o engine_debug gravar. Sem isso o campo continuaria nascendo None, que
+    # era o defeito original.
+    assert saida[0]["ai_review"]["decision"] == "approve"
+
+
+def test_live_vetado_nao_grava_pick():
+    candidato = {"familia": "cards", "market": "Cartoes Mais/Menos",
+                 "line": "Over 4.5", "linha": 4.5, "odd": 1.9,
+                 "probability": 0.7, "confidence": 0.7, "edge": 0.05, "ev": 0.09}
+    estado = {"minuto": 70, "home_goals": 0, "away_goals": 0, "cards_points_total": 3}
+    assert _gate("reject").apply([live_para_ia(candidato, estado)], "live") == []
+
+
+def test_live_falha_do_provedor_aprova_o_pick_do_motor():
+    """Falha aberto, como nos outros seis: provedor fora do ar nao pode
+    derrubar o pick que o motor ja decidiu."""
+    def explode(*_):
+        raise RuntimeError("provedor fora do ar")
+    gate = AIReviewGate(AIReviewSettings(mode="enforce"), call_model=explode)
+    candidato = {"familia": "fouls", "line": "Over 21.5", "linha": 21.5, "odd": 1.85,
+                 "probability": 0.66, "confidence": 0.6, "edge": 0.05, "ev": 0.07}
+    saida = gate.apply([live_para_ia(candidato, {"minuto": 50, "fouls_total": 12})], "live")
+    assert len(saida) == 1
+    assert saida[0]["ai_review"]["status"] == "unavailable"
