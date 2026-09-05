@@ -124,7 +124,25 @@ class LiveFeed:
             )
             api_quota.registrar(getattr(resposta, "headers", None), "motor_live")
             resposta.raise_for_status()
-            dados = resposta.json().get("response", []) or []
+            corpo = resposta.json() or {}
+            dados = corpo.get("response", []) or []
+            # A API-FOOTBALL RECUSA COM HTTP 200. Cota do dia estourada, plano
+            # sem o endpoint, chave invalida: nada disso vira status de erro --
+            # vem 200 com `response: []` e o motivo dentro de `errors`.
+            #
+            # Ate' 2026-09-05 esse campo era descartado, e a recusa chegava no
+            # motor como "a casa nao cotou este jogo". Foi assim que 211
+            # descartes seguidos em PROD, com ZERO candidatos avaliados no dia
+            # inteiro, ficaram sem causa: `erro` nulo (nao houve excecao) e
+            # zero mercados no retorno diziam exatamente a mesma coisa que um
+            # mercado realmente fechado.
+            #
+            # `errors` vem como dict quando ha' recusa e como lista vazia
+            # quando esta tudo bem -- os dois formatos sao da propria API.
+            recusa = corpo.get("errors")
+            if isinstance(recusa, dict) and recusa:
+                erro = "API recusou com HTTP 200: " + "; ".join(
+                    f"{k}: {v}" for k, v in recusa.items())
         except Exception as e:  # rede, HTTP, JSON -- todos terminam igual aqui
             erro = str(e)
 

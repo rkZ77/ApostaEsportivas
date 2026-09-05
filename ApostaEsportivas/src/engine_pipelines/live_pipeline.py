@@ -1326,6 +1326,17 @@ def run_live_engine(fixture_id: int | None = None,
     h2h_usadas = h2h_api_fetcher.requisicoes_feitas()
     print(f"Requisicoes usadas: {feed.usadas}/{config.max_requisicoes}"
           + (f" (+{h2h_usadas} de H2H, fora do teto)" if h2h_usadas else ""))
+    # RECUSA DA API E' ALARME DE RODADA, nao nota de partida. Quando a cota do
+    # dia estoura, a API responde 200 com `response: []` em TODAS as chamadas
+    # -- e sem esta linha a rodada inteira se descreve como "nenhuma partida
+    # virou pick", que e' a frase de um dia sem oportunidade e nao a de um
+    # motor cego.
+    recusas = [t for t in feed.trilha()
+               if (t.get("erro") or "").startswith("API recusou com HTTP 200")]
+    if recusas:
+        print(f"ATENCAO: a API recusou {len(recusas)} de {feed.usadas} chamada(s) "
+              f"com HTTP 200 -- {recusas[0]['erro']}")
+        relatorio["erros"].append(recusas[0]["erro"])
     print(f"Picks criados:      {len(relatorio['picks_criados'])}"
           + (" (dry run, nada gravado)" if config.dry_run else ""))
     if relatorio["erros"]:

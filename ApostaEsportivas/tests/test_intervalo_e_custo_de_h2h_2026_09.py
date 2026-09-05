@@ -468,3 +468,64 @@ def test_os_pesos_estatisticos_somam_um():
     assert orc.PESO_PROBABILIDADE + orc.PESO_CONFIANCA == pytest.approx(1.0)
     assert not hasattr(orc, "PESO_EV")
     assert not hasattr(orc, "PESO_SEGURANCA_DA_ODD")
+
+
+# ────────── 7 · a API-Football recusa com HTTP 200 ──────────────────────────
+#
+# O caso de PROD em 05/09: 211 descartes por "sem linha ativa" e ZERO
+# candidatos avaliados no dia inteiro. Os campos do descarte diziam `erro_odd`
+# nulo e zero mercados no retorno -- ou seja, exatamente o que uma casa que
+# fechou o mercado tambem diria. A diferenca estava em `errors`, no corpo da
+# resposta 200, e o motor descartava esse campo.
+
+class _RespostaRecusada:
+    status_code = 200
+    headers: dict = {}
+
+    def __init__(self, errors):
+        self._errors = errors
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return {"errors": self._errors, "results": 0, "response": []}
+
+
+@pytest.fixture
+def feed_com_resposta(monkeypatch):
+    from services.pick_engine_live import live_feed as lf
+
+    monkeypatch.setenv("API_FOOTBALL_KEY", "chave-de-teste")
+
+    def montar(payload):
+        monkeypatch.setattr(lf.requests, "get",
+                            lambda *a, **k: _RespostaRecusada(payload))
+        return lf.LiveFeed(limite_requisicoes=5)
+
+    return montar
+
+
+def test_cota_estourada_vira_erro_e_nao_mercado_vazio(feed_com_resposta):
+    """A recusa mais provavel, e a que nao levanta excecao nenhuma."""
+    feed = feed_com_resposta(
+        {"requests": "You have reached the request limit for the day"})
+    assert feed.odds_ao_vivo(123) == []
+    erro = feed.ultimo_erro("odds/live")
+    assert erro is not None
+    assert "HTTP 200" in erro and "request limit" in erro
+
+
+def test_chave_invalida_tambem_e_recusa(feed_com_resposta):
+    feed = feed_com_resposta({"token": "Missing application key"})
+    feed.odds_ao_vivo(123)
+    assert "Missing application key" in feed.ultimo_erro("odds/live")
+
+
+def test_resposta_sadia_e_vazia_continua_sem_erro(feed_com_resposta):
+    """A outra metade: `errors` vem como LISTA vazia quando esta tudo bem, e
+    mercado realmente fechado continua sendo diagnostico valido. Confundir os
+    dois na direcao oposta seria trocar um alarme mudo por um alarme falso."""
+    feed = feed_com_resposta([])
+    assert feed.odds_ao_vivo(123) == []
+    assert feed.ultimo_erro("odds/live") is None
