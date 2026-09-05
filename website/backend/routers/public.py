@@ -1097,7 +1097,14 @@ def _partidas_por_time(cur, team_ids: list) -> dict:
 # Jogo futuro so' muda quando a tabela muda de verdade (adiamento, novo
 # fixture importado). Dois minutos mantem a fila viva sem recalcular por visita.
 @cache_publico.rota(120)
-def public_next_fixtures(limit: int = Query(6, ge=1, le=30),
+# TETO DE 200, e nao de 30 (2026-09-05, pedido do usuario).
+#
+# O card de "picks ainda nao sairam" lista os jogos do DIA que podem virar
+# pick, e o dia de sabado passa de 30 partidas nas ligas cobertas. Com o teto
+# antigo a lista cortava calada: a tela dizia "30 jogos podem virar pick hoje"
+# num dia de 44, e os 14 que sobraram nao existiam pra quem lia. Duzentos cobre
+# qualquer sabado com folga e continua sendo UMA consulta na tabela local.
+def public_next_fixtures(limit: int = Query(6, ge=1, le=200),
                          date: Optional[str] = Query(None, description="YYYY-MM-DD · dia inteiro em vez de 'daqui pra frente'")):
     """Proximos jogos que a IA ainda vai analisar · sem login.
 

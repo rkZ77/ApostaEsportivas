@@ -504,6 +504,17 @@ def test_fila_de_jogos_sai_da_tabela_local():
     assert "match_datetime::date = %s::date" in corpo, "filtro de dia inteiro sumiu"
 
 
+def test_card_de_hoje_pede_o_dia_inteiro():
+    """A lista cortava calada nos 30 primeiros: sabado nas ligas cobertas passa
+    de 40 partidas, e a tela anunciava "30 jogos podem virar pick hoje" num dia
+    de 44. O teto da rota era o mesmo 30, entao pedir mais nao adiantava."""
+    tela = _front_codigo("components/PicksPendingCard.tsx")
+    assert "limit: 30" not in tela, "o card voltou a pedir so' 30 jogos"
+
+    assinatura = _codigo("routers/public.py", "public_next_fixtures").splitlines()[0]
+    assert "le=30" not in assinatura, "o teto da rota voltou pra 30"
+
+
 def test_hora_do_jogo_sai_por_fatia_de_string():
     """`match_datetime` e' horario de Brasilia SEM fuso: `new Date` sobre ele
     reinterpreta no fuso do navegador e desloca a hora pra quem esta fora do

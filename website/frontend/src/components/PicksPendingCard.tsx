@@ -147,7 +147,11 @@ export default function PicksPendingCard() {
    * exatamente uma consulta nela. Uma ida ao banco, zero chamada externa.
    */
   useEffect(() => {
-    api.get('/public/next-fixtures', { params: { date: hojeBR(), limit: 30 } })
+    // TODOS os jogos do dia, nao os 30 primeiros: num sabado as ligas cobertas
+    // passam de 40 partidas, e o corte antigo era mudo -- a tela anunciava "30
+    // jogos podem virar pick hoje" num dia de 44. A lista continua colapsada em
+    // cinco (ver ListaDeJogos), entao mostrar tudo nao vira parede.
+    api.get('/public/next-fixtures', { params: { date: hojeBR(), limit: 200 } })
       .then(r => {
         /* `Array.isArray`, e não `r.data ?? []`: a rota devolve lista, e
            qualquer outra coisa (erro serializado, resposta de proxy, HTML de
@@ -182,7 +186,7 @@ export default function PicksPendingCard() {
    * "ainda vai acontecer".
    */
   useEffect(() => {
-    api.get('/public/next-fixtures', { params: { limit: 30 } })
+    api.get('/public/next-fixtures', { params: { limit: 200 } })
       .then(r => setNextGames((Array.isArray(r.data) ? r.data : []) as Fixture[]))
       .catch(() => setNextGames([]))
   }, [])
