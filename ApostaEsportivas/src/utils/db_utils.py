@@ -59,6 +59,67 @@ def get_connection(env: str = None):
 
 
 # ─────────────────────────────────────────────────────────────
+# Conexao de LOG, reaproveitada
+#
+# MEDIDO EM 2026-09-05: abrir conexao com o Supabase custa ~1,7s, e o INSERT
+# que ela leva roda em milissegundos. Os dois caminhos de log do motor
+# (decision_log._gravar e engine_audit.EngineRun.analisado) abriam UMA conexao
+# NOVA POR JOGO ANALISADO -- num dia de 57 jogos sao mais de cem conexoes, quase
+# tres minutos so' de handshake, e cada uma ocupando um slot que o site precisa.
+#
+# Isto NAO e' um pool: e' uma conexao so', mantida aberta e reaproveitada
+# dentro do processo do motor. Pool de verdade e' outra discussao (o pooler do
+# Supabase ainda nao esta configurado); aqui o ganho vem de nao repetir o
+# handshake cem vezes.
+#
+# A conexao MORRE sozinha -- servidor reinicia, rede cai, o Supabase encerra
+# sessao ociosa. Por isso toda entrega passa por um teste de vida (`SELECT 1`)
+# e reabre em silencio quando ele falha; e por isso vem sempre com rollback
+# antes, senao um erro anterior deixaria a transacao abortada e TODO log
+# seguinte falharia junto.
+# ─────────────────────────────────────────────────────────────
+
+_conexao_de_log = None
+
+
+def get_log_connection(env: str = None):
+    """Conexao compartilhada pros gravadores de log do motor.
+
+    Nao usar pra leitura de dados do motor nem pra gravar pick: aqueles tem
+    transacao propria e nao podem dividir estado com o log, que falha aberto.
+    """
+    global _conexao_de_log
+    conn = _conexao_de_log
+    if conn is not None and not conn.closed:
+        try:
+            conn.rollback()
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+            return conn
+        except Exception:
+            try:
+                conn.close()
+            except Exception:
+                pass
+            _conexao_de_log = None
+    _conexao_de_log = get_connection(env)
+    return _conexao_de_log
+
+
+def fechar_log_connection() -> None:
+    """Fim do processo do motor. Nao e' obrigatorio -- o processo morrendo
+    fecha a conexao do mesmo jeito -- mas deixa o encerramento explicito pra
+    quem roda o motor dentro de outro processo (testes, admin)."""
+    global _conexao_de_log
+    if _conexao_de_log is not None:
+        try:
+            _conexao_de_log.close()
+        except Exception:
+            pass
+        _conexao_de_log = None
+
+
+# ─────────────────────────────────────────────────────────────
 # Linha -> dict
 #
 # Os motores novos (Pick Boost, Player Stats) leem com `linha["coluna"]`, mas

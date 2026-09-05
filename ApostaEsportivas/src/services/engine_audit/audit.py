@@ -45,7 +45,7 @@ from contextvars import ContextVar
 from datetime import datetime
 
 from utils.data_br import HOJE_BR
-from utils.db_utils import get_connection
+from utils.db_utils import get_connection, get_log_connection
 
 from services.engine_audit import registry
 
@@ -352,7 +352,10 @@ class EngineRun:
         if not self.run_id:
             return
         try:
-            conn = get_connection()
+            # Conexao REAPROVEITADA (2026-09-05): este INSERT roda uma vez por
+            # JOGO ANALISADO, e abrir conexao custa ~1,7s contra
+            # milissegundos de INSERT. Ver `get_log_connection`.
+            conn = get_log_connection()
             cur = conn.cursor()
             cur.execute(f"""INSERT INTO engine_decisions
                 (match_date, pipeline, fixture_id, home_team, away_team, status,
@@ -371,7 +374,6 @@ class EngineRun:
                  pick_id if selecionado else None))
             conn.commit()
             cur.close()
-            conn.close()
         except Exception as e:
             print(f"[ENGINE_AUDIT] Aviso: falha ao gravar jogo analisado: {e}")
 

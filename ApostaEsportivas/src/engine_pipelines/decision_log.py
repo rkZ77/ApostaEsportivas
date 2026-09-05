@@ -36,7 +36,7 @@ import os
 import json
 from datetime import datetime
 
-from utils.db_utils import get_connection
+from utils.db_utils import get_connection, get_log_connection
 from utils.data_br import HOJE_BR
 from utils.paths import LOGS_DIR as LOG_DIR, log_path
 
@@ -283,7 +283,10 @@ def _gravar(pipeline: str, fixture: dict | None, status: str, reason: str | None
     _contabilizar_na_execucao(pipeline, status)
     try:
         _ensure_table()
-        conn = get_connection()
+        # Conexao REAPROVEITADA (2026-09-05). Era uma nova por linha de log --
+        # ver o comentario de `get_log_connection`. O commit continua sendo por
+        # linha: o log falha aberto e nao pode segurar transacao.
+        conn = get_log_connection()
         cur = conn.cursor()
         cur.execute(
             f"""INSERT INTO engine_decisions
@@ -300,7 +303,6 @@ def _gravar(pipeline: str, fixture: dict | None, status: str, reason: str | None
         )
         conn.commit()
         cur.close()
-        conn.close()
     except Exception as e:
         print(f"[DECISION_LOG] Aviso: falha ao gravar no banco (não afeta o pick): {e}")
 
