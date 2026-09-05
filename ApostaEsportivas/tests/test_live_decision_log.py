@@ -56,6 +56,12 @@ class _Feed:
     def odds_ao_vivo(self, fid):
         return []
 
+    def ultimo_erro(self, endpoint):
+        """Nenhuma falha de transporte. O pipeline consulta isto pra separar
+        "a casa nao cotou" de "a chamada quebrou" -- aqui e' sempre o
+        primeiro, que e' o cenario que estes testes exercitam."""
+        return None
+
 
 @pytest.fixture
 def gravadas(monkeypatch):

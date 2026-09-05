@@ -1,0 +1,328 @@
+# -*- coding: utf-8 -*-
+"""Tres defeitos do motor ao vivo achados na rodada de 2026-09-05.
+
+O LOG QUE ORIGINOU ESTE ARQUIVO
+-------------------------------
+Uma rodada real: 269 fixtures encontradas, 3 elegiveis, 0 picks. As tres
+partidas morreram, e duas das tres mortes eram do motor e nao do jogo.
+
+    [1] Fiorentina x Torino   minuto 45   STALE "18 min atras do esperado"
+    [2] Hoffenheim x Dortmund minuto 34   "0 linha(s) ativa(s)"
+    [3] Leverkusen x Union    minuto 34   "0 linha(s) ativa(s)"
+    Requisicoes usadas: 9/15
+
+Os tres numeros dessa ultima linha estao errados, e cada bloco abaixo prova
+um deles.
+
+1 · O INTERVALO ERA LIDO COMO FEED TRAVADO
+------------------------------------------
+Fiorentina estava em HT. `freshness` descontava os 15 minutos de intervalo
+quando o status era 2H/ET/BT/P ou o minuto passava de 45 -- e "HT" nao estava
+na lista, e `45 > 45` e' falso. Resultado: 63 minutos de relogio de parede
+contra os 45 do provedor viravam 18 minutos de atraso, STALE, partida
+descartada.
+
+O intervalo e' o melhor momento do jogo pro motor (folha do 1o tempo completa,
+odd ainda aberta) e estava sendo jogado fora por construcao.
+
+2 · TODO 2o TEMPO CARREGAVA O ACRESCIMO DO 1o COMO ATRASO
+---------------------------------------------------------
+Aritmetica, nao suposicao: aos 80' do 2o tempo o relogio de parede marca
+45 + s1 + 15 + 35, onde s1 e' o acrescimo do primeiro tempo. `esperado -
+minuto` da' exatamente s1. Com `atraso_maximo_minutos = 4`, qualquer jogo com
+4+ minutos de acrescimo no 1o tempo virava DELAYED sem nada ter acontecido.
+
+3 · O H2H GASTAVA 7 REQUISICOES INVISIVEIS POR PARTIDA
+-------------------------------------------------------
+`Requisicoes usadas: 9/15` contava so' o que passa por `LiveFeed`. O
+`[CONTEXT_GATE] H2H via API` de cada partida sai por `h2h_api_fetcher`, que
+tem cliente HTTP proprio: 1 chamada de H2H mais 1 de `/fixtures/statistics`
+POR JOGO devolvido (H2H_LIMIT = 6). Sao 7 por partida, 21 na rodada -- o teto
+rigido de 15 nunca poderia conte-las, porque nao as enxerga.
+
+E eram compradas pra nada: a folha de cada confronto tem UM consumidor,
+`rivalry_model`, que devolve "desconhecido" antes de olhar a media quando nao
+ha baseline de cartoes -- e o Live passa `convergencia_cartoes=None` de
+proposito.
+"""
+import pytest
+
+from services.pick_engine_live import live_state
+from services.pick_engine_live.live_state import DELAYED, FRESH, STALE
+
+
+# Folha completa: isola a checagem de minuto da checagem de completude, que
+# senao rebaixaria tudo pra DELAYED e esconderia o que estes testes medem.
+_FOLHA = {"Total Shots": 8, "Shots on Goal": 3, "Corner Kicks": 4}
+
+_APITO = 1_757_000_000.0
+
+
+def _estado(minuto, status, **kw):
+    base = {"minuto": minuto, "status": status, "kickoff_epoch": _APITO,
+            "_folha_home": dict(_FOLHA), "_folha_away": dict(_FOLHA)}
+    base.update(kw)
+    return base
+
+
+# ───────────────────── 1 · o intervalo nao e' atraso ──────────────────────
+def test_intervalo_no_minuto_45_nao_vira_stale():
+    """O caso Fiorentina, com os numeros do log: 63 min de parede, minuto 45."""
+    fresh = live_state.freshness(_estado(45, "HT"),
+                                 agora_epoch=_APITO + 63 * 60)
+    assert fresh["nivel"] == FRESH
+    assert not fresh["motivos"]
+
+
+def test_intervalo_longo_continua_fresh():
+    """Intervalo esticado (VAR, protocolo medico) nao muda o diagnostico: o
+    relogio do jogo esta parado por desenho, nao por falha do feed."""
+    fresh = live_state.freshness(_estado(45, "HT"),
+                                 agora_epoch=_APITO + 75 * 60)
+    assert fresh["nivel"] == FRESH
+
+
+def test_relogio_parado_no_intervalo_nao_acusa_feed_travado():
+    """A outra metade da correcao. Corrigir so' o minuto esperado nao bastava:
+    a checagem 1 procura exatamente a assinatura do intervalo -- minuto que
+    nao avanca enquanto o relogio de parede anda -- e reprovaria a partida
+    pelo mesmo motivo, com outra frase."""
+    anterior = [{"minuto": 45, "epoch": _APITO + 47 * 60}]
+    fresh = live_state.freshness(_estado(45, "HT"), observacoes=anterior,
+                                 agora_epoch=_APITO + 58 * 60)
+    assert fresh["nivel"] == FRESH
+    assert fresh["relogio_congelado_min"] is None
+
+
+def test_feed_travado_no_1o_tempo_continua_sendo_stale():
+    """A guarda vale so' pros status de relogio parado. Em jogo correndo, o
+    minuto que nao anda continua sendo o sinal mais forte que existe."""
+    anterior = [{"minuto": 30, "epoch": _APITO + 30 * 60}]
+    fresh = live_state.freshness(_estado(30, "1H"), observacoes=anterior,
+                                 agora_epoch=_APITO + 39 * 60)
+    assert fresh["nivel"] == STALE
+    assert fresh["relogio_congelado_min"] == 9.0
+
+
+# ───────────────── 2 · o acrescimo do 1o tempo nao e' atraso ───────────────
+def test_acrescimo_do_primeiro_tempo_nao_rebaixa_o_segundo():
+    """Aos 60' do 2o tempo com 3 minutos de acrescimo no 1o, o relogio de
+    parede marca 45+3+15+15 = 78. O atraso aparente e' 3 e nao ha nada de
+    errado com o feed."""
+    fresh = live_state.freshness(_estado(60, "2H"),
+                                 agora_epoch=_APITO + 78 * 60)
+    assert fresh["nivel"] == FRESH
+    # O numero cru continua no rastro -- e' ele que permite calibrar a
+    # tolerancia contra jogo real depois.
+    assert fresh["atraso_estimado"] == 3.0
+
+
+def test_segundo_tempo_realmente_atrasado_ainda_e_stale():
+    """A tolerancia nao pode virar cegueira: 20 minutos de defasagem sao
+    outra partida, com ou sem acrescimo."""
+    fresh = live_state.freshness(_estado(50, "2H"),
+                                 agora_epoch=_APITO + 85 * 60)
+    assert fresh["nivel"] == STALE
+
+
+def test_atraso_intermediario_no_segundo_tempo_e_delayed():
+    """Entre a tolerancia e o dobro dela: nao bloqueia, mas entra na
+    confianca."""
+    fresh = live_state.freshness(_estado(50, "2H"),
+                                 agora_epoch=_APITO + 75 * 60)
+    assert fresh["nivel"] == DELAYED
+
+
+def test_primeiro_tempo_nao_ganha_tolerancia():
+    """A tolerancia existe por causa do intervalo que ja' passou. No 1o tempo
+    nao ha acrescimo anterior nenhum, e o limiar continua sendo o de sempre."""
+    fresh = live_state.freshness(_estado(30, "1H"),
+                                 agora_epoch=_APITO + 36 * 60)
+    assert fresh["nivel"] == DELAYED
+
+
+# ─────────────── 3 · a folha do H2H so' e' comprada com consumidor ──────────
+class _Resposta:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return self._payload
+
+
+def _um_confronto(fid):
+    return {
+        "fixture": {"id": fid, "date": "2026-03-01T20:00:00+00:00",
+                    "status": {"short": "FT"}},
+        "league": {"id": 39},
+        "teams": {"home": {"id": 1}, "away": {"id": 2}},
+        "goals": {"home": 2, "away": 1},
+    }
+
+
+@pytest.fixture
+def api(monkeypatch):
+    """Substitui a rede e registra CADA url chamada, que e' o que estes testes
+    medem -- o numero de requisicoes, nao o conteudo delas."""
+    from services import h2h_api_fetcher
+
+    chamadas = []
+
+    def _get(url, headers=None, params=None, timeout=None):
+        chamadas.append(url)
+        if "headtohead" in url:
+            return _Resposta({"response": [_um_confronto(100 + i) for i in range(6)]})
+        return _Resposta({"response": [
+            {"team": {"id": 1}, "statistics": [{"type": "Yellow Cards", "value": 2}]},
+            {"team": {"id": 2}, "statistics": [{"type": "Yellow Cards", "value": 3}]},
+        ]})
+
+    monkeypatch.setattr(h2h_api_fetcher.requests, "get", _get)
+    monkeypatch.setattr(h2h_api_fetcher, "_API_KEY", "chave-de-teste")
+    monkeypatch.setattr(h2h_api_fetcher, "_cache", {})
+    h2h_api_fetcher.zerar_contador()
+    return chamadas
+
+
+def test_sem_folha_o_h2h_custa_uma_requisicao(api):
+    """Era 7. O caminho ao vivo passa por aqui uma vez por partida
+    analisada."""
+    from services import h2h_api_fetcher
+
+    jogos = h2h_api_fetcher.get_h2h(1, 2, com_estatisticas=False)
+    assert len(jogos) == 6
+    assert len(api) == 1
+    assert h2h_api_fetcher.requisicoes_feitas() == 1
+
+
+def test_sem_folha_os_campos_de_estatistica_ficam_none(api):
+    """None e' ausencia de leitura, nunca zero. Um 0 fabricado aqui viraria
+    'confronto friissimo' no rivalry_model."""
+    from services import h2h_api_fetcher
+
+    jogos = h2h_api_fetcher.get_h2h(1, 2, com_estatisticas=False)
+    assert jogos[0]["total_yellow_cards"] is None
+    assert jogos[0]["total_corners"] is None
+    # O que NAO depende da folha continua vindo: e' disto que o
+    # match_context_model precisa pra achar o jogo de ida.
+    assert jogos[0]["total_goals"] == 3
+    assert jogos[0]["match_date"] == "2026-03-01"
+
+
+def test_com_folha_o_custo_continua_sendo_um_por_jogo(api):
+    """Quem precisa da folha continua recebendo tudo -- os pipelines de
+    pre-jogo passam `convergencia_cartoes` e dependem disso."""
+    from services import h2h_api_fetcher
+
+    jogos = h2h_api_fetcher.get_h2h(1, 2, com_estatisticas=True)
+    assert h2h_api_fetcher.requisicoes_feitas() == 7
+    assert jogos[0]["total_yellow_cards"] == 5
+
+
+def test_o_par_repetido_nao_paga_de_novo(api):
+    """H2H e' fato do passado: nao muda enquanto os dois nao se enfrentarem de
+    novo. O `live_watch` roda em laco e repagava o par a cada passada."""
+    from services import h2h_api_fetcher
+
+    h2h_api_fetcher.get_h2h(1, 2, com_estatisticas=False)
+    h2h_api_fetcher.get_h2h(1, 2, com_estatisticas=False)
+    assert h2h_api_fetcher.requisicoes_feitas() == 1
+
+
+def test_cache_sem_folha_nao_atende_quem_pede_folha(api):
+    """A direcao importa: a lista completa serve pra quem quer a magra, o
+    contrario devolveria None onde ha numero."""
+    from services import h2h_api_fetcher
+
+    h2h_api_fetcher.get_h2h(1, 2, com_estatisticas=False)
+    jogos = h2h_api_fetcher.get_h2h(1, 2, com_estatisticas=True)
+    assert jogos[0]["total_yellow_cards"] == 5
+    assert h2h_api_fetcher.requisicoes_feitas() == 8
+
+
+def test_cache_com_folha_atende_quem_nao_pede(api):
+    from services import h2h_api_fetcher
+
+    h2h_api_fetcher.get_h2h(1, 2, com_estatisticas=True)
+    h2h_api_fetcher.get_h2h(1, 2, com_estatisticas=False)
+    assert h2h_api_fetcher.requisicoes_feitas() == 7
+
+
+class _MatchStats:
+    """Banco sem H2H, que e' a condicao que dispara a busca na API."""
+
+    def get_h2h_matches(self, a, b, before_date=None):
+        return []
+
+
+_FIXTURE = {"fixture_id": 999, "home_team_id": 1, "away_team_id": 2,
+            "league_id": 39, "season": 2026, "round": "Regular Season - 5",
+            "match_datetime": "2026-09-05"}
+
+
+@pytest.fixture
+def pedidos(monkeypatch):
+    """Registra COMO o context_gate pede o H2H, sem tocar a rede."""
+    from services import h2h_api_fetcher
+
+    vistos = []
+
+    def _falso(a, b, before_date=None, com_estatisticas=True):
+        vistos.append(com_estatisticas)
+        return [dict(_um_confronto(1)["goals"], match_date="2026-03-01",
+                     league_id=39, home_team_id=1, away_team_id=2,
+                     home_goals=2, away_goals=1, total_goals=3)]
+
+    monkeypatch.setattr(h2h_api_fetcher, "get_h2h", _falso)
+    return vistos
+
+
+def test_sem_baseline_de_cartoes_o_gate_nao_compra_a_folha(pedidos):
+    """O caminho do motor ao vivo: ele passa `convergencia_cartoes=None` de
+    proposito, e nesse caso `rivalry_signal` responde "desconhecido" antes de
+    olhar a media do confronto. Comprar seis folhas ali era comprar pra
+    descartar."""
+    from services.pick_engine import context_gate
+
+    context_gate.build_for_fixture(_MatchStats(), _FIXTURE,
+                                   convergencia_cartoes=None)
+    assert pedidos == [False]
+
+
+def test_com_baseline_de_cartoes_a_folha_continua_vindo(pedidos):
+    """O caminho do pre-jogo. A rivalidade e' medida contra este baseline, e
+    sem a folha do confronto ela nao existe."""
+    from services.pick_engine import context_gate
+
+    context_gate.build_for_fixture(_MatchStats(), _FIXTURE,
+                                   convergencia_cartoes={"expected_value": 4.1})
+    assert pedidos == [True]
+
+
+# ────────── 4 · falha de chamada nao pode virar "a casa nao cotou" ──────────
+def test_o_feed_devolve_o_erro_da_ultima_chamada_do_endpoint():
+    """`_get` engole rede, HTTP e JSON e devolve []. Sem isto o log acusava o
+    provedor de nao cotar tanto num 429 quanto numa casa sem mercado -- dois
+    diagnosticos com acoes opostas, no unico descarte do motor que gasta
+    requisicao."""
+    from services.pick_engine_live.live_feed import LiveFeed
+
+    feed = LiveFeed(limite_requisicoes=5)
+    feed._trilha.append({"endpoint": "fixtures/statistics", "erro": None})
+    feed._trilha.append({"endpoint": "odds/live", "erro": "429 Too Many Requests"})
+    assert feed.ultimo_erro("odds/live") == "429 Too Many Requests"
+    assert feed.ultimo_erro("fixtures/statistics") is None
+    assert feed.ultimo_erro("fixtures/events") is None
+
+
+def test_chamada_de_odd_bem_sucedida_e_vazia_nao_reporta_erro():
+    """A outra metade: mercado realmente nao cotado continua sendo diagnostico
+    valido, e nao pode virar alarme de falha."""
+    from services.pick_engine_live.live_feed import LiveFeed
+
+    feed = LiveFeed(limite_requisicoes=5)
+    feed._trilha.append({"endpoint": "odds/live", "itens": 0, "erro": None})
+    assert feed.ultimo_erro("odds/live") is None

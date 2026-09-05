@@ -41,6 +41,41 @@ UNKNOWN = "UNKNOWN"
 #: relogio do jogo para no HT e o relogio de parede nao.
 INTERVALO_MINUTOS = 15
 
+#: Status em que o relogio do JOGO esta parado por desenho. Comparar o minuto
+#: do provedor com o relogio de parede nestes casos nao mede atraso nenhum --
+#: mede o intervalo acontecendo.
+#:
+#: CORRIGIDO EM 2026-09-05, e o caso e' concreto: Fiorentina x Torino, minuto
+#: 45, em HT. `esperado` contava 63 minutos de parede contra os 45 do
+#: provedor e devolvia "minuto reportado 18 min atras do esperado" -> STALE ->
+#: partida descartada. O feed estava perfeito; o intervalo e' que nao era
+#: descontado, porque "HT" nao estava na lista de status que descontava o
+#: intervalo e `int(minuto) > 45` e' falso exatamente aos 45.
+#:
+#: O intervalo e' o melhor momento do jogo pro motor: a folha do 1o tempo
+#: esta' completa e a odd ainda esta' aberta. Ele estava sendo jogado fora por
+#: construcao.
+RELOGIO_PARADO = {"HT", "BT", "SUSP", "INT"}
+
+#: Tolerancia, em minutos, pro acrescimo do 1o tempo no calculo do minuto
+#: esperado do 2o tempo.
+#:
+#: NAO E' NUMERO MEDIDO -- e' tolerancia declarada, na mesma categoria dos
+#: pesos de pressao em config.py. O mecanismo e' aritmetico e nao tem nada de
+#: incerto: aos 80' do 2o tempo, o relogio de parede marca 45 + s1 + 15 + 35,
+#: onde s1 e' o acrescimo do 1o tempo. `esperado - minuto` da' exatamente s1.
+#: Ou seja, TODA partida de 2o tempo carrega um atraso aparente igual ao
+#: acrescimo do primeiro, e com `atraso_maximo_minutos = 4` isso empurrava
+#: para DELAYED qualquer jogo com 4+ minutos de acrescimo no 1o tempo -- coisa
+#: rotineira desde a mudanca de criterio de cronometragem.
+#:
+#: A API nao publica o acrescimo do 1o tempo depois que ele acaba, entao o
+#: valor exato nao esta' disponivel. 3 e' o acrescimo tipico. O que fica
+#: HONESTO e' que ela entra so' na COMPARACAO com o limiar: `atraso_estimado`
+#: continua sendo gravado cru no rastro, que e' o numero que permite calibrar
+#: isto contra jogo real depois.
+ACRESCIMO_1T_TOLERADO = 3.0
+
 #: Contadores que precisam existir pra a folha ser considerada completa. Nao
 #: inclui "Dangerous Attacks" nem "expected_goals" de proposito: os dois sao
 #: opcionais na API-Football e exigir os dois reprovaria a folha da maioria
@@ -323,8 +358,14 @@ def freshness(estado: dict, observacoes: list | None = None,
                     estado.get("_folha_home") or {}, estado.get("_folha_away") or {})}
 
     # 1 · relogio congelado
+    #
+    # NAO se aplica quando o relogio esta parado por desenho (RELOGIO_PARADO):
+    # o intervalo dura ~15 minutos de parede com o minuto fixo em 45, o que
+    # e' exatamente a assinatura que esta checagem procura. Sem esta guarda,
+    # corrigir a checagem 2 sozinha nao resolveria nada -- a partida seria
+    # reprovada aqui, pelo mesmo intervalo, com outra frase.
     congelado = None
-    if observacoes:
+    if observacoes and estado.get("status") not in RELOGIO_PARADO:
         anterior = observacoes[0] if isinstance(observacoes[0], dict) else None
         if anterior and anterior.get("minuto") is not None and anterior.get("epoch"):
             decorrido_parede = (agora - float(anterior["epoch"])) / 60.0
@@ -338,17 +379,34 @@ def freshness(estado: dict, observacoes: list | None = None,
     # 2 · minuto esperado a partir do apito
     atraso = None
     kickoff = estado.get("kickoff_epoch")
-    if kickoff:
+    status = estado.get("status")
+    # Relogio parado por desenho nao produz atraso -- ver RELOGIO_PARADO.
+    if kickoff and status not in RELOGIO_PARADO:
         decorrido = (agora - float(kickoff)) / 60.0
         esperado = decorrido
         # Depois do intervalo, o relogio do jogo perdeu ~15 minutos de parede.
-        if estado.get("status") in ("2H", "ET", "BT", "P") or int(minuto) > 45:
+        # O status manda quando existe; `minuto > 45` so' decide quando o
+        # provedor nao publicou status, e continua sendo `>` e nao `>=` porque
+        # aos 45 em jogo o intervalo AINDA NAO aconteceu.
+        segundo_tempo = (status in ("2H", "ET", "P") if status
+                         else int(minuto) > 45)
+        tolerancia = 0.0
+        if segundo_tempo:
             esperado -= INTERVALO_MINUTOS
+            # Ver ACRESCIMO_1T_TOLERADO: o acrescimo do 1o tempo aparece como
+            # atraso em todo jogo de 2o tempo. Entra na comparacao, nao no
+            # numero gravado.
+            tolerancia = ACRESCIMO_1T_TOLERADO
         atraso = round(esperado - int(minuto), 1)
-        if atraso > config.atraso_maximo_minutos * 2:
+        # A tolerancia e' um DESLOCAMENTO fixo, nao um fator: ela representa
+        # minutos de acrescimo que existiram de verdade, e esse numero nao
+        # dobra so' porque o limiar de cima e' o dobro do de baixo. Somar nos
+        # dois mantem a distancia entre DELAYED e STALE que a config declara.
+        limite = config.atraso_maximo_minutos + tolerancia
+        if atraso > config.atraso_maximo_minutos * 2 + tolerancia:
             motivos.append(f"minuto reportado {atraso:.0f} min atras do esperado")
             niveis.append(STALE)
-        elif atraso > config.atraso_maximo_minutos:
+        elif atraso > limite:
             motivos.append(f"minuto reportado {atraso:.0f} min atras do esperado")
             niveis.append(DELAYED)
 

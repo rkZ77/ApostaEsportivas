@@ -374,10 +374,35 @@ def test_minuto_muito_atras_do_esperado_e_stale():
     assert f["atraso_estimado"] > 8
 
 
-def test_atraso_pequeno_e_apenas_delayed():
+def test_atraso_de_seis_minutos_no_segundo_tempo_e_acrescimo_e_nao_atraso():
+    """ESTE TESTE MUDOU DE VEREDITO EM 2026-09-05, e a suposicao que caiu era
+    a linha de comentario dele: "71 min de parede, menos 15 de intervalo = 56
+    esperado contra 50 reportado". A conta esta certa e a conclusao nao, porque
+    ela supunha acrescimo ZERO no primeiro tempo.
+
+    O relogio de parede aos 50' do 2o tempo marca 45 + s1 + 15 + 5, onde s1 e'
+    o acrescimo do 1o tempo. Os 6 minutos que este cenario mede sao exatamente
+    s1 -- e 6 minutos de acrescimo num primeiro tempo e' rotina desde a
+    mudanca de criterio de cronometragem. Marcar isso como DELAYED rebaixava a
+    confianca de partida nenhuma acontecendo.
+
+    Ver ACRESCIMO_1T_TOLERADO em live_state: a tolerancia entra so' na
+    comparacao com o limiar, e `atraso_estimado` continua sendo gravado cru --
+    e' esse numero que permite calibrar isto contra jogo real depois.
+    """
     agora = 1_000_000.0
-    # 71 min de parede, menos 15 de intervalo = 56 esperado contra 50 reportado
     estado = estado_de(minuto=50, kickoff=agora - 71 * 60)
+    f = live_state.freshness(estado, None, CONFIG, agora_epoch=agora)
+    assert f["nivel"] == live_state.FRESH
+    assert f["atraso_estimado"] == 6.0
+
+
+def test_atraso_alem_do_acrescimo_plausivel_continua_delayed():
+    """A tolerancia nao pode virar cegueira. 75 min de parede aos 50' do 2o
+    tempo sao 10 minutos de defasagem -- mais do que qualquer acrescimo de
+    primeiro tempo explica."""
+    agora = 1_000_000.0
+    estado = estado_de(minuto=50, kickoff=agora - 75 * 60)
     f = live_state.freshness(estado, None, CONFIG, agora_epoch=agora)
     assert f["nivel"] == live_state.DELAYED
 

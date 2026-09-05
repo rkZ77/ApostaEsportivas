@@ -75,6 +75,23 @@ class LiveFeed:
         'gastei 12 requisicoes' nao diz onde elas foram."""
         return list(self._trilha)
 
+    def ultimo_erro(self, endpoint: str) -> str | None:
+        """A falha da chamada mais recente a este endpoint, se houve.
+
+        EXISTE PORQUE `_get` DEVOLVE `[]` EM QUALQUER FALHA (rede, HTTP, JSON)
+        e a lista vazia e' indistinguivel de "a API respondeu, nao ha nada".
+        Nos outros endpoints isso e' aceitavel; em `odds/live` nao e': o log
+        imprimia "0 linha(s) ativa(s)" e o descarte ia pro banco como
+        LIVE_SEM_LINHA -- "o provedor nao cotou" -- tanto num 429 de cota
+        estourada quanto numa casa que realmente nao abriu o mercado. Sao dois
+        diagnosticos com acoes opostas, e o unico descarte do motor que gasta
+        requisicao.
+        """
+        for registro in reversed(self._trilha):
+            if registro.get("endpoint") == endpoint:
+                return registro.get("erro")
+        return None
+
     # ── Transporte ───────────────────────────────────────────────────────
     def _headers(self) -> dict:
         chave = os.getenv("API_FOOTBALL_KEY", "")

@@ -183,6 +183,12 @@ def build_for_fixture(match_stats, fixture: dict, convergencia_cartoes: dict | N
     (match_date, home_team_id, away_team_id). Nao persiste nada -- o dado
     e' usado so nesta execucao e descartado.
 
+    A FOLHA DE ESTATISTICA DESSES JOGOS so' e' comprada quando ha'
+    `convergencia_cartoes`, porque ela e' o unico consumidor. Sem baseline,
+    `rivalry_model` ja' responde "desconhecido" sem olhar a folha, e a compra
+    custava 6 requisicoes por partida pra alimentar um numero descartado --
+    era a maior fonte de consumo invisivel do motor ao vivo (2026-09-05).
+
     Nunca levanta: contexto e' sinal auxiliar e nao pode derrubar a geracao de
     pick. Falha -> None -> gate inerte -> motor igual ao de antes.
     """
@@ -196,9 +202,17 @@ def build_for_fixture(match_stats, fixture: dict, convergencia_cartoes: dict | N
         if len(h2h) < _H2H_MIN_BANCO:
             try:
                 from services.h2h_api_fetcher import get_h2h as _api_h2h
+                # A FOLHA DE CADA CONFRONTO CUSTA 1 REQUISICAO, e so' o
+                # rivalry_model a le. Sem baseline de cartoes ele devolve
+                # "desconhecido" antes de olhar a media do confronto
+                # (rivalry_model.rivalry_signal, primeira condicao), entao
+                # comprar seis folhas nesse caso e' comprar pra descartar --
+                # era 7 requisicoes onde 1 resolve. Quem passa
+                # `convergencia_cartoes` continua recebendo tudo.
                 api_jogos = _api_h2h(
                     fixture["home_team_id"], fixture["away_team_id"],
                     before_date=before_date,
+                    com_estatisticas=convergencia_cartoes is not None,
                 )
                 if api_jogos:
                     # Deduplica: chave (data, mandante, visitante)
@@ -212,8 +226,13 @@ def build_for_fixture(match_stats, fixture: dict, convergencia_cartoes: dict | N
                         not in chaves_banco
                     ]
                     if novos:
-                        print(f"[CONTEXT_GATE] H2H via API: {len(novos)} jogo(s) adicionado(s) "
-                              f"ao banco({len(h2h)}) para fixture {fixture.get('fixture_id')}")
+                        # "complementando" e nao "adicionado ao banco": nada
+                        # e' gravado (ver a docstring), e a mensagem antiga
+                        # fazia o log afirmar uma persistencia que nao existe.
+                        print(f"[CONTEXT_GATE] H2H via API: {len(novos)} jogo(s) "
+                              f"complementando os {len(h2h)} do banco para fixture "
+                              f"{fixture.get('fixture_id')}"
+                              + ("" if convergencia_cartoes is not None else " (sem folha)"))
                     h2h = sorted(
                         h2h + novos,
                         key=lambda j: j.get("match_date") or "",

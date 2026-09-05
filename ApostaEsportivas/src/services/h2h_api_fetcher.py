@@ -19,15 +19,33 @@ Mesmo dicionário que MatchStatsService.get_h2h_matches() devolve, campo
 a campo. O rivalry_model, o match_context_model e o context_gate.build_context
 consomem esta lista diretamente, sem saber de onde veio.
 
-CUSTO DE COTA
--------------
-1 requisição por par de times por execução. Os pipelines chamam
-build_for_fixture() uma vez por fixture, e build_for_fixture() chama
-get_h2h() uma vez --- logo 1 requisição por jogo analisado onde o banco
-não tem H2H suficiente. Nenhum fixture de liga precisará disso: os confrontos
-diretos na liga atual são raros, e o banco já tem pelo menos o histórico
-recente de cada time. O custo real é em Copa/mata-mata, onde a amostra
-do banco é curta por definição.
+CUSTO DE COTA --- CORRIGIDO EM 2026-09-05
+-----------------------------------------
+Este bloco dizia "1 requisição por par de times por execução". Estava errado
+desde o dia em que a folha de estatística entrou na função: o H2H em si é 1
+requisição, mas cada jogo devolvido custa mais uma a `/fixtures/statistics`.
+Com H2H_LIMIT = 6, o custo real era 7, não 1 --- e o motor ao vivo, que chama
+isto uma vez por partida analisada, gastava 21 requisições por rodada de 3
+jogos SEM que nenhuma delas aparecesse no seu próprio teto
+(`LiveEngineConfig.max_requisicoes` só conta o que passa por `LiveFeed`).
+
+Duas coisas mudaram por causa disso, e nenhuma delas remove dado de quem
+usava:
+
+  1. `com_estatisticas=False` busca só o H2H (1 requisição). Quem só precisa
+     saber QUAIS foram os confrontos --- `match_context_model.encontrar_jogo_
+     de_ida`, que lê data, times e placar --- não tem uso nenhum pra folha.
+     Quem decide é `context_gate`, pela regra do consumidor: sem baseline de
+     cartões, `rivalry_model.rivalry_signal` devolve "desconhecido" antes de
+     olhar a média do confronto, então a folha seria comprada pra ser jogada
+     fora.
+  2. Cache em processo, com TTL. H2H de dois times é um fato do passado ---
+     não muda enquanto os dois não se enfrentarem de novo. O `live_watch` roda
+     em laço e repagava o par inteiro a cada passada.
+
+O custo continua sendo real em Copa/mata-mata, que é onde a amostra do banco
+é curta por definição. O que não existe mais é pagá-lo em silêncio e duas
+vezes pelo mesmo par.
 
 TRATAMENTO DE FALHA
 -------------------
@@ -39,6 +57,7 @@ Ausência de dado nunca vira evidência de calma.
 from __future__ import annotations
 
 import os
+import time
 
 import requests
 from dotenv import find_dotenv, load_dotenv
@@ -59,22 +78,65 @@ _FINISHED = {"FT", "AET", "PEN"}
 # de 4+ anos atrás que não descrevem mais a rivalidade atual.
 H2H_LIMIT = 6
 
+#: Quanto tempo uma resposta vale em memória. H2H é fato consumado: só muda
+#: quando os dois times jogam de novo, o que não acontece dentro de uma
+#: sessão. 6h é generoso e ainda garante que um processo longo (live_watch)
+#: releia no dia seguinte.
+_CACHE_TTL_SEGUNDOS = 6 * 3600
+
+#: (par, data-limite, com-folha) -> (epoch, resultado). Em processo, de
+#: propósito: persistir isto era o que a decisão de não criar tabela recusou,
+#: e o problema que existia era repetição dentro da mesma execução.
+_cache: dict[tuple, tuple] = {}
+
+#: Requisições que ESTE módulo fez à API-Football. Existe porque o teto do
+#: motor ao vivo não enxerga nada daqui, e um consumo invisível é um consumo
+#: que ninguém corrige. Quem quiser medir uma rodada chama `zerar_contador()`
+#: no início e lê `requisicoes_feitas()` no fim.
+_requisicoes = 0
+
+
+def zerar_contador() -> None:
+    global _requisicoes
+    _requisicoes = 0
+
+
+def requisicoes_feitas() -> int:
+    return _requisicoes
+
 
 def get_h2h(team_a: int, team_b: int,
             limit: int = H2H_LIMIT,
-            before_date: str | None = None) -> list[dict]:
+            before_date: str | None = None,
+            com_estatisticas: bool = True) -> list[dict]:
     """Confrontos diretos entre team_a e team_b via API-Football.
 
     `before_date` (YYYY-MM-DD): não retorna jogos desta data em diante.
     Mantém o mesmo contrato de MatchStatsService.get_h2h_matches() para
     evitar vazamento em backtest.
 
-    Devolve lista no mesmo formato que get_h2h_matches(), incluindo os
-    campos de estatística (cartões, escanteios, faltas) via chamada extra
-    ao endpoint /fixtures/statistics --- 1 requisição por jogo retornado.
+    `com_estatisticas`: quando True (padrão, o comportamento de sempre), busca
+    a folha de cada jogo devolvido --- escanteios, cartões e faltas --- ao
+    custo de 1 requisição POR JOGO. Quando False, devolve os mesmos jogos com
+    esses campos em None e gasta 1 requisição no total. None aqui é ausência
+    de leitura, não zero, exatamente como em toda a base: quem consome já
+    trata `None` como "não sei" (ver `_media_cartoes` em rivalry_model).
+
+    O resultado fica em cache por `_CACHE_TTL_SEGUNDOS`. Uma resposta sem
+    folha NÃO satisfaz um pedido com folha; o contrário sim, porque a lista
+    completa contém a magra.
     """
     if not _API_KEY:
         return []
+
+    global _requisicoes
+    agora = time.time()
+    chave = (min(team_a, team_b), max(team_a, team_b), before_date, limit)
+    guardado = _cache.get(chave)
+    if guardado and agora - guardado[0] < _CACHE_TTL_SEGUNDOS:
+        # Só serve se tiver pelo menos tanto quanto está sendo pedido.
+        if guardado[1] or not com_estatisticas:
+            return guardado[2]
 
     params: dict = {
         "h2h": f"{team_a}-{team_b}",
@@ -85,6 +147,7 @@ def get_h2h(team_a: int, team_b: int,
         params["to"] = before_date
 
     try:
+        _requisicoes += 1
         r = requests.get(_H2H_URL, headers=_HEADERS, params=params, timeout=15)
         r.raise_for_status()
         itens = r.json().get("response", [])
@@ -130,10 +193,13 @@ def get_h2h(team_a: int, team_b: int,
             "away_fouls":           None,
         }
 
-        # Busca folha de estatísticas do jogo (cartões, escanteios, faltas)
+        # Busca folha de estatísticas do jogo (cartões, escanteios, faltas).
+        # 1 requisição por jogo: é o custo que `com_estatisticas=False`
+        # dispensa para quem só precisa saber quais foram os confrontos.
         fx_id = fx.get("id")
-        if fx_id:
+        if fx_id and com_estatisticas:
             try:
+                _requisicoes += 1
                 rs = requests.get(
                     _STATS_URL, headers=_HEADERS,
                     params={"fixture": fx_id}, timeout=15,
@@ -165,4 +231,7 @@ def get_h2h(team_a: int, team_b: int,
 
         matches.append(match)
 
+    # Guarda com a marca de o que foi comprado: uma lista sem folha não pode
+    # servir depois a quem precisa dela.
+    _cache[chave] = (agora, com_estatisticas, matches)
     return matches

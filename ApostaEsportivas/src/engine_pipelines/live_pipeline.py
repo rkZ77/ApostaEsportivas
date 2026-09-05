@@ -50,6 +50,7 @@ if _SRC not in sys.path:
 from utils.db_utils import get_connection  # noqa: E402
 from services.match_stats_service import MatchStatsService
 from services.standings_service import StandingsService
+from services import h2h_api_fetcher
 from services.pick_engine import context_gate, referee_model, stats_model
 from services.pick_engine.ai_review import review_gate
 from services.pick_engine.staking import calculate_stake
@@ -1207,6 +1208,11 @@ def run_live_engine(fixture_id: int | None = None,
         return relatorio
 
     feed = LiveFeed(limite_requisicoes=config.max_requisicoes)
+    # O H2H do context_gate sai por um cliente HTTP proprio e NUNCA passou
+    # pelo teto do `feed`. Zerar aqui e ler no rodape e' o que torna esse
+    # consumo visivel -- em 05/09 ele era 21 requisicoes numa rodada que se
+    # anunciava com 9.
+    h2h_api_fetcher.zerar_contador()
     conn = get_connection()
     cur = conn.cursor()
     # Regulamento de mata-mata das competicoes nao cadastradas a mao, do
@@ -1310,13 +1316,16 @@ def run_live_engine(fixture_id: int | None = None,
             "fixtures_no_radar": relatorio["fixtures_no_radar"],
             "descartes": (relatorio.get("descartes") or {}).get("por_categoria"),
             "requisicoes": relatorio["requisicoes"],
+            "requisicoes_h2h": h2h_api_fetcher.requisicoes_feitas(),
             "limite_requisicoes": relatorio["limite_requisicoes"],
             "erros": relatorio["erros"],
             "partidas": relatorio["partidas"],
         })
 
     print("\n" + "-" * 62)
-    print(f"Requisicoes usadas: {feed.usadas}/{config.max_requisicoes}")
+    h2h_usadas = h2h_api_fetcher.requisicoes_feitas()
+    print(f"Requisicoes usadas: {feed.usadas}/{config.max_requisicoes}"
+          + (f" (+{h2h_usadas} de H2H, fora do teto)" if h2h_usadas else ""))
     print(f"Picks criados:      {len(relatorio['picks_criados'])}"
           + (" (dry run, nada gravado)" if config.dry_run else ""))
     if relatorio["erros"]:
@@ -1407,6 +1416,7 @@ def _processar_partida(indice: int, bruto: dict, cur, conn, feed: LiveFeed,
     # do placar no feed de fixtures. Ou seja, mesmo com o provedor publicando
     # ZERO estatistica, gols continua sendo um numero real -- e o gate antigo
     # jogava fora a partida por causa de escanteio, levando gols junto.
+    familias_iniciais = tuple(config.familias)
     faltando = [f for f in config.familias
                 if orchestrator.observado_da_familia(estado, f) is None]
     disponiveis = [f for f in config.familias if f not in faltando]
@@ -1432,8 +1442,10 @@ def _processar_partida(indice: int, bruto: dict, cur, conn, feed: LiveFeed,
             _contexto_do_log(estado, faltando=faltando, folha_vazia=folha_vazia))
         return resumo
 
-    if faltando:
-        print(f"Analisando so' {', '.join(disponiveis)}")
+    # A lista definitiva so' e' impressa DEPOIS do gate de arbitro (mais
+    # abaixo), porque ele ainda pode tirar cartoes. Ate' 05/09 esta linha saia
+    # aqui e anunciava "corners, goals, cards" numa partida onde cartoes seria
+    # removido tres linhas adiante -- a lista mostrada nunca era a analisada.
 
     observacoes = observacoes_anteriores(cur, fid)
     fresh = live_state.freshness(estado, observacoes, config)
@@ -1490,6 +1502,10 @@ def _processar_partida(indice: int, bruto: dict, cur, conn, feed: LiveFeed,
         arbitro = (estado.get("referee") or "").strip()
         print("Cartoes fora: " + ("arbitro sem amostra minima nesta liga"
                                   if arbitro else "a partida nao publicou o arbitro"))
+
+    analisadas = [f for f in config.familias if f in disponiveis]
+    if len(analisadas) < len(familias_iniciais):
+        print(f"Analisando so' {', '.join(analisadas)}")
     pre_jogo = contexto_pre_jogo(cur, estado)
     analise = orchestrator.analisar(estado, observacoes, config, baselines, eventos, fresh,
                                     baseline_origens=origens,
@@ -1556,8 +1572,15 @@ def _processar_partida(indice: int, bruto: dict, cur, conn, feed: LiveFeed,
 
     odds_brutas = feed.odds_ao_vivo(fid)
     resumo["odd_consultada"] = True
+    # A chamada pode ter FALHADO e devolvido [] -- `_get` engole rede, HTTP e
+    # JSON no mesmo except. Sem isto, "0 linha(s) ativa(s)" acusava o provedor
+    # de nao cotar quando o que houve foi 429, timeout ou plano sem odds ao
+    # vivo. Ver LiveFeed.ultimo_erro.
+    erro_odd = feed.ultimo_erro("odds/live")
     cotacoes = live_odds.extrair_linhas(odds_brutas, tuple(tri["familias"]))
-    print(f"Odd consultada: SIM ({len(cotacoes)} linha(s) ativa(s))")
+    print(f"Odd consultada: SIM ({len(cotacoes)} linha(s) ativa(s)"
+          + (f" · FALHA NA CHAMADA: {erro_odd}" if erro_odd else "")
+          + f" · {len(odds_brutas)} mercado(s) no retorno)")
 
     # O que a casa esta' cotando e o motor nao le. Nao muda decisao nenhuma:
     # e' a unica forma de responder "que outro mercado ao vivo da' pra abrir?"
@@ -1571,15 +1594,28 @@ def _processar_partida(indice: int, bruto: dict, cur, conn, feed: LiveFeed,
               + ", ".join(f"{m['mercado']} ({len(m['linhas'])} linha(s))"
                           for m in nao_lidos[:6]))
     if not cotacoes:
-        print("DECISAO: NO PICK (mercado suspenso ou nao cotado)")
-        resumo.update({"decisao": "NO PICK", "motivo": "sem linha ativa nas familias triadas"})
+        # Tres causas diferentes, e ate' 05/09 as tres imprimiam a mesma frase
+        # e gravavam o mesmo motivo. O que distingue: `erro_odd` diz se a
+        # chamada falhou, e `odds_brutas` vazio sem erro diz que a API
+        # respondeu que nao ha' mercado nenhum -- diferente de haver mercado
+        # e nenhuma linha das familias triadas.
+        if erro_odd:
+            causa = f"a consulta de odd falhou: {erro_odd}"
+        elif not odds_brutas:
+            causa = "a API nao devolveu mercado nenhum para esta partida"
+        else:
+            causa = "sem linha ativa nas familias triadas"
+        print(f"DECISAO: NO PICK ({causa})")
+        resumo.update({"decisao": "NO PICK", "motivo": causa})
         # Este descarte custou uma requisicao de odd. E' o unico que gasta cota
         # sem produzir candidato, entao separa-lo dos outros e' o que diz se a
         # perda vem do modelo ou do provedor.
         decision_log.log_skip(
             PIPELINE_LIVE, _fixture_do_log(estado, nome), LIVE_SEM_LINHA,
             _contexto_do_log(estado, fresh, analise,
-                             familias_triadas=list(tri["familias"])))
+                             familias_triadas=list(tri["familias"]),
+                             erro_odd=erro_odd,
+                             mercados_no_retorno=len(odds_brutas)))
         return resumo
 
     avaliados = orchestrator.avaliar(analise, cotacoes, config)
