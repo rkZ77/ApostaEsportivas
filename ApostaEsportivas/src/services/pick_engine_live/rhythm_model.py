@@ -35,6 +35,11 @@ REFERENCIA_PARTIDA_POR_90 = {
     "shots_on_target": 8.6,
     "goals": 2.72,
     "dangerous_attacks": 90.0,
+    # MEDIDO, ao contrario dos de cima: 24.82 faltas por partida em 1.189
+    # partidas encerradas de `match_statistics` (2026-09-04). Fica junto dos
+    # declarados porque a pergunta e' a mesma; o rastro de origem e' este
+    # comentario.
+    "fouls": 24.82,
 }
 
 RITMO_BAIXO = "BAIXO"
@@ -107,6 +112,7 @@ def ritmo(estado: dict, minuto: int) -> dict:
         ("shots_on_target", estado.get("shots_on_target_total")),
         ("goals", estado.get("goals_total")),
         ("cards", estado.get("cards_points_total")),
+        ("fouls", estado.get("fouls_total")),
         ("dangerous_attacks", estado.get("dangerous_attacks_total")),
     ):
         if observado is None:

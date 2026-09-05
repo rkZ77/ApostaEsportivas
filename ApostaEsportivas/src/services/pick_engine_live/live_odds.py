@@ -42,6 +42,17 @@ NOMES_POR_FAMILIA = {
                 "asian corners", "corners"},
     "cards": {"total cards", "match cards", "cards over/under", "cards",
               "asian cards", "bookings over/under", "bookings"},
+    # Faltas (2026-09-04, pedido do usuario). Os nomes vem do catalogo real da
+    # API (`bet_markets_map` 170/171/173/174: "Fouls. Total", "Fouls. Home
+    # Total", "Fouls. Away Total", "Fouls. Handicap") mais as variantes de
+    # over/under que as casas usam ao vivo.
+    #
+    # OFERTA E' O GARGALO, NAO O MOTOR: na fila de odds de PROD em 2026-09-04
+    # nao havia UMA linha de mercado de faltas, nem de time nem de jogador
+    # (5.609 linhas coletadas, zero com "foul" no nome). A familia entra
+    # cotavel; quantos picks ela produz depende da casa publicar.
+    "fouls": {"total fouls", "match fouls", "fouls over/under", "fouls",
+              "fouls. total", "asian fouls"},
 }
 
 #: Familias que a V1 cota.
@@ -51,7 +62,7 @@ NOMES_POR_FAMILIA = {
 #: nao vem (o feed de eventos publica cartao), e a unica que tem uma terceira
 #: estimativa independente do jogo em si -- a media de quem apita. Chutes e o
 #: resto continuam fora ate' o residual estar medido.
-FAMILIAS_V1 = ("corners", "goals", "cards")
+FAMILIAS_V1 = ("corners", "goals", "cards", "fouls")
 
 #: Rotulo em portugues do mercado, gravado na coluna `market` do pick. Mesmo
 #: vocabulario que o pre-jogo ja usa (BET_ID_PT_MAP em
@@ -61,6 +72,8 @@ ROTULO_PT = {
     "goals": "Gols Mais/Menos",
     "corners": "Escanteios Mais/Menos",
     "cards": "Cartoes Mais/Menos",
+    # Mesmo rotulo que o pre-jogo grava (BET_ID_PT_MAP, bet_id 173).
+    "fouls": "Faltas Mais/Menos",
 }
 
 

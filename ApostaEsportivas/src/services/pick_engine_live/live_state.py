@@ -117,6 +117,9 @@ def montar_estado(fixture_bruto: dict, home_stats: dict, away_stats: dict,
     a_casa, a_fora, a_total = par("Shots on Goal")
     d_casa, d_fora, d_total = par("Dangerous Attacks")
     b_casa, b_fora, b_total = par("Blocked Shots")
+    # Faltas: o feed ja publicava o campo (live_feed.FAMILIAS_DO_FEED), mas ele
+    # morria aqui -- nada do motor conseguia le-lo.
+    fo_casa, fo_fora, fo_total = par("Fouls")
     y_casa, y_fora, _ = par("Yellow Cards")
     r_casa, r_fora, r_total = par("Red Cards")
 
@@ -170,6 +173,7 @@ def montar_estado(fixture_bruto: dict, home_stats: dict, away_stats: dict,
         "dangerous_attacks_total": d_total,
         "blocked_shots_home": b_casa, "blocked_shots_away": b_fora,
         "blocked_shots_total": b_total,
+        "fouls_home": fo_casa, "fouls_away": fo_fora, "fouls_total": fo_total,
         "yellow_home": y_casa, "yellow_away": y_fora,
         "red_home": r_casa, "red_away": r_fora, "red_cards_total": r_total,
         # PONTOS de cartao, nao contagem: amarelo=1, vermelho=2. Mesma

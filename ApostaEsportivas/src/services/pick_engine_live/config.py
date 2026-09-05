@@ -152,14 +152,18 @@ class LiveEngineConfig:
     validade_odd_segundos: int = 180
 
     # ── Mercados da V1 ───────────────────────────────────────────────────
-    #: Escanteios, gols e cartoes. Chutes e o resto entram depois, quando o
-    #: modelo residual estiver medido nestes tres.
+    #: Escanteios, gols, cartoes e faltas. Chutes entra depois: tem o baseline
+    #: residual medido, falta a decisao de liga-lo.
     #:
     #: Cartoes entrou por ultimo e por dois motivos proprios: e' a unica
     #: familia cujo numero ainda chega ao vivo quando a folha de estatistica
     #: nao vem (o feed de eventos publica cartao), e a unica com uma terceira
     #: estimativa independente do jogo -- a media de quem apita.
-    familias: tuple = ("corners", "goals", "cards")
+    #:
+    #: Faltas entrou em 2026-09-04 (pedido do usuario): o feed ja publicava o
+    #: contador e o residual foi medido (24.82 por partida em 1.189). O que ela
+    #: NAO tem hoje e' oferta -- ver a nota em live_odds.NOMES_POR_FAMILIA.
+    familias: tuple = ("corners", "goals", "cards", "fouls")
 
     #: Jogos apitados na liga pra media do arbitro valer de baseline. Mesmo
     #: numero de cards_referee_min_games no pre-jogo, e o mesmo motivo: abaixo

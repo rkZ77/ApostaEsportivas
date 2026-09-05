@@ -96,6 +96,13 @@ BASELINE_PADRAO = {
     # insumo, nao a decisao.
     "shots": 26.04,
     "shots_on_target": 8.54,
+    # MEDIDO EM 2026-09-04, mesma consulta e mesma base dos dois acima:
+    # 24.82 faltas por partida em 1.189 encerradas, dispersao (var/media) 2.13.
+    # O pre-jogo mediu 3.12 pro total (probability_model._DISPERSAO) contra
+    # estas 2.13 -- recortes diferentes da mesma base, e quem manda no residual
+    # continua sendo o _DISPERSAO do pre-jogo, pra as duas metades do projeto
+    # nao divergirem no numero.
+    "fouls": 24.82,
 }
 
 
