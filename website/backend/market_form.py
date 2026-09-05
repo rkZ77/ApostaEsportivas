@@ -139,7 +139,22 @@ def folha_do_jogo(ms: dict) -> tuple[dict, dict]:
     return casa, fora
 
 
-def perspectiva_do_time(ms: dict, team_id: int | None, escopo: str) -> tuple:
+def e_mercado_de_primeiro_tempo(market: str | None, market_type: str | None) -> bool:
+    """Mercado medido no PRIMEIRO TEMPO, nao no jogo inteiro.
+
+    Existe pelo Pick Boost, que e' duas condicoes: Over 1.5 no jogo completo e
+    Under 2.5 ate' o intervalo. A segunda le o mesmo contador da primeira (gols)
+    num recorte diferente do jogo, e `match_statistics` guarda os dois placares
+    (home_goals_ht/away_goals_ht) desde sempre. Sem esta pergunta a serie do HT
+    seria desenhada contra o placar FINAL, o que faria "Under 2.5 HT" parecer
+    ter perdido em jogo que terminou 3x1 no segundo tempo."""
+    m = (market or "").lower()
+    mtype = (market_type or "").lower()
+    return mtype.endswith("_ht") or " ht" in m or "1o tempo" in m or "1º tempo" in m
+
+
+def perspectiva_do_time(ms: dict, team_id: int | None, escopo: str,
+                        primeiro_tempo: bool = False) -> tuple:
     """(casa, fora, gols_casa, gols_fora, jogou_em_casa) do ponto de vista do time.
 
     Num mercado de UM time ("Escanteios Casa Mais/Menos"), `_stat_for_market` le
@@ -157,7 +172,10 @@ def perspectiva_do_time(ms: dict, team_id: int | None, escopo: str) -> tuple:
     Mercado de total nao gira nada: ele soma os dois lados de qualquer jeito.
     """
     casa, fora = folha_do_jogo(ms)
-    gols_casa, gols_fora = ms.get("home_goals"), ms.get("away_goals")
+    if primeiro_tempo:
+        gols_casa, gols_fora = ms.get("home_goals_ht"), ms.get("away_goals_ht")
+    else:
+        gols_casa, gols_fora = ms.get("home_goals"), ms.get("away_goals")
 
     if team_id is None or ms.get("home_team_id") is None:
         return casa, fora, gols_casa, gols_fora, None
@@ -204,11 +222,15 @@ def serie_do_mercado(jogos: list, market: str, market_type: str | None, line: st
     parsed = settlement.parse_line(line)
     op, valor_linha = parsed["op"], parsed["value"]
     escopo = escopo_do_mercado(market)
+    # Recorte do jogo. So' muda de ONDE sai o placar; o dispatch de familia
+    # continua sendo o mesmo `_stat_for_market`, que le gols do parametro.
+    primeiro_tempo = e_mercado_de_primeiro_tempo(market, market_type)
 
     itens: list[dict] = []
     rotulo = ""
     for ms in jogos:
-        casa, fora, gols_casa, gols_fora, em_casa = perspectiva_do_time(ms, team_id, escopo)
+        casa, fora, gols_casa, gols_fora, em_casa = perspectiva_do_time(
+            ms, team_id, escopo, primeiro_tempo)
         valor, rotulo_jogo, _dir = stat_para_mercado(
             market, line, casa, fora,
             gols_casa, gols_fora,
@@ -238,6 +260,12 @@ def serie_do_mercado(jogos: list, market: str, market_type: str | None, line: st
             "is_home": em_casa,
             "opponent": ms.get("opponent"),
         })
+
+    if primeiro_tempo and rotulo:
+        # Sem isto as duas series do Boost sairiam com o mesmo titulo ("Gols"),
+        # uma com linha 1.5 e outra com 2.5, e nada na tela diria que a segunda
+        # e' ate' o intervalo.
+        rotulo = f"{rotulo} no 1º tempo"
 
     linha_grafico = float(valor_linha) if valor_linha is not None else None
     if op in ("yes", "no"):

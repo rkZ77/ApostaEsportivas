@@ -3108,6 +3108,52 @@ def _pernas_de_pick_simples(cur, tabela: str, col_casa: str, col_fora: str,
     return [dict(row)] if row else []
 
 
+def _pernas_de_boost(cur, suggestion_id: int) -> list:
+    """As DUAS pernas de um Pick Boost.
+
+    O boost e' uma aposta so' com duas condicoes -- Over 1.5 no jogo completo e
+    Under 2.5 ate' o intervalo --, e o pipeline grava isso numa linha unica:
+    `market` = "Over 1.5 FT + Under 2.5 HT", `market_type` =
+    "boost_over15_under25ht", `line` = "Over 1.5 FT · Under 2.5 HT".
+
+    Nenhuma dessas tres strings casa com familia nenhuma de `_stat_for_market`
+    ("Over 1.5 FT + Under 2.5 HT" nao tem "gol" nem "goal", e o market_type nao
+    e' "goals"), entao a serie saia sem valor em todo jogo, `_series_da_perna`
+    descartava, e o "Entenda esta analise" do Boost abria SEM a secao "Como esse
+    mercado vem se comportando" -- a unica familia de pick do site sem ela.
+
+    A saida e' a mesma que multipla e alavancagem ja usam: uma serie POR PERNA.
+    Uma serie so' nao existe aqui de qualquer forma -- sao dois recortes
+    diferentes do mesmo jogo, e desenhar as duas condicoes numa fileira de
+    barras diria menos, nao mais.
+    """
+    cur.execute("""
+        SELECT p.fixture_id, p.home_team, p.away_team,
+               COALESCE(p.home_team_id, f.home_team_id) AS home_team_id,
+               COALESCE(p.away_team_id, f.away_team_id) AS away_team_id,
+               COALESCE(f.league_id, ms.league_id) AS league_id,
+               COALESCE(f.season, ms.season)       AS season,
+               COALESCE(f.referee, ms.referee)     AS referee
+          FROM picks_boost p
+     LEFT JOIN fixtures f ON f.fixture_id = p.fixture_id
+     LEFT JOIN match_statistics ms ON ms.fixture_id = p.fixture_id
+         WHERE p.id = %s
+    """, (suggestion_id,))
+    row = cur.fetchone()
+    if not row:
+        return []
+    base = dict(row)
+    # As linhas sao as do metodo, nao do texto gravado: `pick_boost_pipeline`
+    # monta o rotulo com cfg.LINHA_OVER_FT/LINHA_UNDER_HT e nunca varia por
+    # pick. Se um dia variar, o parser da linha e' o mesmo do settlement.
+    return [
+        {**base, "market": "Gols Mais/Menos", "market_type": "goals",
+         "line": "Over 1.5"},
+        {**base, "market": "Gols HT Mais/Menos", "market_type": "goals_ht",
+         "line": "Under 2.5"},
+    ]
+
+
 def _pernas_de_multipla(cur, suggestion_id: int) -> list:
     """Pernas de uma multipla, do JSONB `games`.
 
@@ -3227,6 +3273,10 @@ def _fixture_meta(cur, fixture_id, home_team_id=None, away_team_id=None) -> dict
 # Ao registrar familia nova: coluna AQUI + entrada no _ADAPTADOR. As duas.
 _COLUNAS_DA_SERIE = """
         ms.fixture_id, ms.match_date, ms.home_goals, ms.away_goals,
+        -- Placar do intervalo: e' o que a perna HT do Pick Boost mede. Sem
+        -- estas duas colunas a serie do "Under 2.5 HT" seria desenhada contra
+        -- o placar final.
+        ms.home_goals_ht, ms.away_goals_ht,
         ms.home_team_id, ms.away_team_id,
         ms.home_corners, ms.away_corners,
         ms.home_yellow_cards, ms.away_yellow_cards,
@@ -3726,6 +3776,8 @@ def get_market_form(
             pernas = _pernas_de_multipla(cur, suggestion_id)
         elif pick_type == "alavancagem":
             pernas = _pernas_de_alavancagem(cur, suggestion_id)
+        elif pick_type == "boost":
+            pernas = _pernas_de_boost(cur, suggestion_id)
         else:
             fonte = _PICK_FONTE.get(pick_type)
             if not fonte:
