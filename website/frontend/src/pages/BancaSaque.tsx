@@ -56,7 +56,19 @@ export default function BancaSaque() {
       title="Sacar da banca"
       description="Registre um saque da sua banca. O valor sai do saldo e fica no histórico."
       noindex
-      width="narrow"
+      /* MESMA LARGURA DAS OUTRAS ABAS DA BANCA (2026-09-05).
+      
+         Era `narrow`, e o efeito nao ficava no formulario: a largura da pagina
+         governa tambem a Navbar e a barra de titulo, entao estas duas telas
+         apareciam com o menu do site espremido -- "Meus Picks" quebrando em
+         duas linhas -- e o cabecalho deslocado, enquanto Visao geral,
+         Alavancagem e Fechamentos, que sao as abas vizinhas, ficavam largas.
+         Trocar de aba mudava a casca do site.
+      
+         A casca vira `full` como as vizinhas e o FORMULARIO e' que fica
+         estreito, num wrapper proprio: foco de leitura era o que `narrow`
+         queria dar, e isso ele continua dando onde importa. */
+      width="full"
       bar={{
         back: '/banca',
         title: 'Sacar da banca',
@@ -64,6 +76,11 @@ export default function BancaSaque() {
       }}
     >
       <BancaTabs />
+      {/* Formulario estreito dentro da pagina larga · ver o comentario da
+          largura acima. */}
+      {/* Alinhado a' esquerda, sob as abas · centralizado ele flutuava no meio
+          de um vazio que as abas nao acompanhavam. */}
+      <div className="max-w-2xl">
         {loading ? (
           <div className="card p-16 flex items-center justify-center">
             <Spinner size="lg" />
@@ -137,6 +154,7 @@ export default function BancaSaque() {
             </div>
           </div>
         )}
+      </div>
     </PageShell>
   )
 }

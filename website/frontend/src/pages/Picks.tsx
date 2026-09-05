@@ -38,6 +38,7 @@ import {
 const LivePicks     = lazy(() => import('../components/LivePicks'))
 const LivePicksFeed = lazy(() => import('../components/LivePicksFeed'))
 import PicksPendingCard from '../components/PicksPendingCard'
+import CalendarioDePicks from '../components/ui/CalendarioDePicks'
 import { LIVE_PICKS_ENABLED } from '../config'
 import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2, TrendingUp, X as XIcon, Lock, Ticket } from 'lucide-react'
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
@@ -1759,11 +1760,17 @@ function SecaoVazia({ texto }: { texto: string }) {
   )
 }
 
-function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando, banca }: {
+function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando, banca,
+                       sumirSeVazio = false }: {
   tipo: TipoMercado
   titulo: string; cor: string; explicacao: string
   picks: MercadoPick[] | null; carregando: boolean
   banca?: { bankroll_current: number; unit_value: number } | null
+  /** Sem pick, a seção inteira sai da tela em vez de mostrar o aviso de vazio.
+   *  É o caso de faltas: ela deixou de ser um produto com dia próprio e virou
+   *  um método que publica dentro do VIP, então "sem pick de faltas hoje" é
+   *  uma resposta sobre um produto que não existe mais. */
+  sumirSeVazio?: boolean
 }) {
   // `mercadoParaSuggestion` monta um objeto novo a cada chamada. Chamando-a
   // direto no JSX, a prop `s` mudava de identidade em todo render e o memo do
@@ -1775,6 +1782,7 @@ function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando, banca 
   )
 
   const vazio = !carregando && (!picks || picks.length === 0)
+  if (vazio && sumirSeVazio) return null
 
   return (
     <div>
@@ -2501,6 +2509,10 @@ export default function Picks() {
   const [quickStatsPronto, setQuickStatsPronto] = useState(false)
   const [recentResults, setRecentResults] = useState<any[]>([])
   const [selectedOffset, setSelectedOffset] = useState(0)
+  /* Dias que TIVERAM pick, pro calendário pintar de verde. Sai do `by_day` do
+     placar público -- o mesmo dado que a página de Resultados desenha, e uma
+     rota cacheada -- em vez de uma consulta nova só pra este controle. */
+  const [diasComPick, setDiasComPick] = useState<Set<string>>(new Set())
   const [leagueFilter, setLeagueFilter] = useState<string>('')
   const [vipResultFilter, setVipResultFilter] = useState<string>('')
   /* Busca e ordem da grade VIP.
@@ -2539,6 +2551,16 @@ export default function Picks() {
       .catch(() => setTodayError(true))
       .finally(() => setTodayLoading(false))
   }, [selectedOffset])
+
+  useEffect(() => {
+    api.get('/public/results', { params: { blocos: 'by_day' } })
+      .then(r => setDiasComPick(new Set(
+        ((r.data?.by_day ?? []) as any[])
+          .filter(d => Number(d.total ?? 0) > 0)
+          .map(d => String(d.match_date).slice(0, 10)),
+      )))
+      .catch(() => { /* sem marca no calendário, ele continua funcionando */ })
+  }, [])
 
   useEffect(() => {
     api.get('/suggestions/stats/quick')
@@ -2773,69 +2795,6 @@ export default function Picks() {
       description="Os picks da IA de hoje: VIP, free, múltiplas, alavancagem e mercados de faltas e defesas."
       noindex
       width="full"
-      bar={{
-        title: 'Picks',
-        // O navegador de dia é controle, não legenda: sem isto ele ficava
-        // escondido abaixo de sm, que é onde está a maioria dos usuários.
-        subMobile: true,
-        sub: tab === 'hoje' ? (
-          /* Alvo de toque de verdade no celular. As setas tinham 14px com
-             padding de 2px · abaixo de qualquer minimo de acessibilidade, e
-             este e o controle mais usado da tela num site que vive no celular.
-             No desktop o mouse nao precisa disso, entao o tamanho encolhe. */
-          <span className="flex items-center gap-1 sm:gap-0.5 -my-1 sm:my-0">
-            <button
-              onClick={() => setSelectedOffset(o => o - 1)}
-              aria-label="Dia anterior"
-              className="text-ink-2 hover:text-ink-1 transition-colors p-2 sm:p-0.5 sm:-ml-0.5 rounded-md active:bg-surface-2"
-            >
-              <ChevronLeft className="w-5 h-5 sm:w-3.5 sm:h-3.5" />
-            </button>
-            <span className="text-ink-1 sm:text-ink-2 font-bold sm:font-medium text-sm sm:text-[11px]">
-              {selectedOffset === 0 ? 'Hoje' : capitalizarFrase(todayLabel)}
-            </span>
-            <button
-              onClick={() => setSelectedOffset(o => Math.min(0, o + 1))}
-              disabled={selectedOffset >= 0}
-              aria-label="Próximo dia"
-              className="text-ink-2 hover:text-ink-1 disabled:opacity-20 transition-colors p-2 sm:p-0.5 rounded-md active:bg-surface-2"
-            >
-              <ChevronRight className="w-5 h-5 sm:w-3.5 sm:h-3.5" />
-            </button>
-            {selectedOffset < 0 && (
-              <button
-                onClick={() => setSelectedOffset(0)}
-                className="ml-1 text-[10px] text-accent-ink hover:text-accent-hover font-bold transition-colors"
-              >
-. Hoje
-              </button>
-            )}
-          </span>
-        ) : (
-          <span>{capitalizarFrase(todayLabel)}</span>
-        ),
-        actions: (
-          <>
-            {topoPronto && quickStats && (
-              <span className="hidden sm:flex items-center gap-2 text-xs">
-                <span className="text-ink-4">Lucro geral</span>
-                <span className={`font-mono font-bold text-sm tabular-nums ${lucroUnidades >= 0 ? 'text-accent-ink' : 'text-red-400'}`}>
-                  {fmtUnits(lucroUnidades, 1)}
-                </span>
-                <span className="text-ink-4">. Win rate</span>
-                <span className={`font-mono font-bold text-sm ${(quickStats.win_rate ?? 0) >= 55 ? 'text-accent-ink' : 'text-ink-2'}`}>
-                  {quickStats.win_rate ?? 0}%
-                </span>
-              </span>
-            )}
-            {/* O selo "AO VIVO" da barra saiu. Ele piscava permanentemente,
-                sem depender de existir jogo rolando, entao nao informava nada
-                e ainda competia com o badge AO VIVO de verdade, que fica no
-                card do pick cujo jogo comecou. Dois vermelhos piscando com
-                significados diferentes na mesma tela e' pior que nenhum. */}
-          </>
-        ),
-      }}
     >
       <AnimatePresence>
       </AnimatePresence>
@@ -2946,6 +2905,41 @@ export default function Picks() {
              card nenhum publicado no dia, o tour ilumina a área onde eles
              aparecem em vez de desenhar um card de exemplo. */
           <motion.div key="hoje" data-tour="picks-area" variants={tabFade} initial="hidden" animate="visible" exit="exit">
+            {/* O DIA VIROU CALENDARIO (2026-09-05, pedido do usuario).
+            
+                Antes era um par de setas na barra do topo, junto do lucro
+                geral: um clique POR DIA -- voltar duas semanas custava catorze
+                cliques e catorze buscas -- e nada dizia onde havia pick, entao
+                a pessoa clicava no vazio sem saber. O mes inteiro de uma vez, com
+                os dias que tiveram pick em verde, faz a escolha ser sobre o que
+                existe. A barra do topo saiu junto: o lucro e o acerto que ela
+                mostrava estao logo abaixo, nos cards de performance. */}
+            <div className="flex items-center gap-3 mb-4">
+              <CalendarioDePicks
+                valor={getBrasiliaDateIso(selectedOffset)}
+                diasComPick={diasComPick}
+                maxISO={getBrasiliaDateIso(0)}
+                onChange={dia => {
+                  /* De volta pro offset que a tela inteira usa: a diferenca em
+                     dias entre o escolhido e hoje, contada ao meio-dia pra que
+                     horario de verao nao vire 23h e arredonde pra menos. */
+                  const hoje = new Date(`${getBrasiliaDateIso(0)}T12:00:00`)
+                  const alvo = new Date(`${dia}T12:00:00`)
+                  setSelectedOffset(Math.round((alvo.getTime() - hoje.getTime()) / 86_400_000))
+                }}
+              />
+              <span className="text-xs text-ink-3 truncate">
+                {selectedOffset === 0 ? capitalizarFrase(todayLabel) : todayDateStr}
+              </span>
+              {selectedOffset < 0 && (
+                <button
+                  onClick={() => setSelectedOffset(0)}
+                  className="text-[11px] font-bold text-accent-ink hover:text-accent-hover transition-colors shrink-0"
+                >
+                  Voltar para hoje
+                </button>
+              )}
+            </div>
             {!topoPronto ? <PickLoading /> : todayError ? (
             <div className="card p-10 text-center">
               <p className="text-ink-2 font-semibold mb-1">Erro ao carregar picks</p>
@@ -3384,7 +3378,13 @@ export default function Picks() {
               })()}
             </div>
 
-            {/* Faltas · até 27/08 morava numa aba separada.
+            {/* Faltas · até 27/08 morava numa aba separada, e desde 05/09 ela
+                nem seção fixa é: o método publica DENTRO do VIP, então num dia
+                sem pick de falta não há nada a anunciar -- o aviso "sem pick de
+                faltas hoje" descrevia um produto com agenda própria, que é
+                justamente o que ela deixou de ser. A seção continua existindo
+                pro dia em que sai pick pela tabela dela.
+
                 É um mercado de PARTIDA como os outros picks VIP (um jogo, um
                 mercado, uma odd), sai do mesmo motor e usa o mesmo card · o que
                 a aba dava era distância, não organização.
@@ -3403,6 +3403,7 @@ export default function Picks() {
               picks={faltasOrdenadas}
               carregando={todayLoading}
               banca={bancaSummary?.has_banca ? bancaSummary : null}
+              sumirSeVazio
             />
 
             <button onClick={() => navigate('/resultados')}
