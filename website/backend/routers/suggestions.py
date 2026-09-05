@@ -3396,6 +3396,11 @@ def _serie_do_jogador(cur, perna: dict, limit: int) -> dict | None:
           FROM player_match_stats
          WHERE player_id = %s
            AND {coluna} IS NOT NULL
+           -- So' jogo em que ele ESTEVE EM CAMPO. Reserva que entrou conta
+           -- (um minuto ja' e' atuacao); quem ficou no banco, nao -- senao a
+           -- serie mostra zeros de jogos que ele nao jogou e a media do
+           -- grafico fica abaixo da que o motor usou pra gerar o pick.
+           AND COALESCE(minutes, 0) > 0
            AND (%s IS NULL OR fixture_id <> %s)
          ORDER BY match_date DESC
          LIMIT %s

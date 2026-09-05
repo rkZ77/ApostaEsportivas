@@ -39,3 +39,18 @@ def test_a_lista_cobre_os_contadores_que_o_motor_le():
     for coluna in ("saves", "shots_on", "shots_total", "fouls_committed",
                    "tackles_total"):
         assert coluna in _ZERO_QUANDO_HA_FOLHA, coluna
+
+
+# --- A guarda passou a ser "esteve em campo", nao "tem campo minutes" -------
+
+def test_reserva_que_nao_entrou_nao_vira_atuacao_de_zero():
+    """minutes = 0 e' o relacionado que ficou no banco: nao e' folha."""
+    from collectors.player_stats_collector_service import _tem_folha
+    assert _tem_folha({"games": {"minutes": 0}}) is False
+    assert _tem_folha({"games": {"minutes": None}}) is False
+
+
+def test_reserva_que_entrou_conta():
+    from collectors.player_stats_collector_service import _tem_folha
+    assert _tem_folha({"games": {"minutes": 7}}) is True
+    assert _tem_folha({"games": {"minutes": 90}}) is True

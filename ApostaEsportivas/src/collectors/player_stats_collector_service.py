@@ -133,14 +133,32 @@ MAPA_DE_CAMPOS: tuple = (
 #: _tem_folha_da_familia` faz do outro lado: folha parcial e' erro, folha
 #: inteira sem o campo e' zero.
 #:
-#: A GUARDA E' `minutes`: sem minuto registrado, nao ha' folha nenhuma e nada
-#: vira zero -- jogador que nao entrou continua com null em tudo.
+#: A GUARDA E' `minutes > 0` (ver `_tem_folha`): sem minuto EM CAMPO nao ha'
+#: folha nenhuma e nada vira zero -- quem nao entrou continua com null em tudo.
 _ZERO_QUANDO_HA_FOLHA = frozenset({
     "shots_total", "shots_on", "goals_conceded", "assists", "saves",
     "passes_key", "tackles_total", "blocks", "interceptions",
     "duels_total", "duels_won", "dribbles_attempts", "dribbles_success",
     "fouls_drawn", "fouls_committed", "cards_yellow", "cards_red",
 })
+
+
+def _tem_folha(stats: dict) -> bool:
+    """Ele ENTROU EM CAMPO nesta partida?
+
+    A guarda do zero implicito era `minutes is not None`, e isso deixava passar
+    `minutes = 0` -- relacionado que ficou no banco o jogo inteiro. A API
+    escreve a folha dele mesmo assim, entao todos os contadores viravam zero e
+    o jogador ganhava uma atuacao de valor 0 num jogo que nao jogou, puxando a
+    media pra baixo. Sem minuto em campo nao ha' atuacao: fica tudo null e a
+    linha some das consultas, que filtram `coluna IS NOT NULL`.
+
+    Quem ENTROU de reserva continua contando -- um minuto ja' e' atuacao. O que
+    decide se ela pesa na media e' o piso de minutos de quem consome
+    (player_history.MIN_MINUTOS), nao esta funcao.
+    """
+    minutos = _num(stats, "games", "minutes")
+    return minutos is not None and minutos > 0
 
 
 def _valor_do_campo(stats: dict, coluna: str, caminho: tuple, tem_folha: bool):
@@ -294,7 +312,7 @@ class PlayerStatsCollectorService:
                     # e' desta atuacao, e so' quem esta lendo o bloco sabe se
                     # ela existe. Ver `_ZERO_QUANDO_HA_FOLHA`.
                     *[_valor_do_campo(stats, coluna, caminho,
-                                      _num(stats, "games", "minutes") is not None)
+                                      _tem_folha(stats))
                       for coluna, caminho in MAPA_DE_CAMPOS],
                     json.dumps(stats, ensure_ascii=False),
                 ))
