@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
+import { taxaAcerto } from '../utils/format'
 
 interface DayData {
   match_date: string
@@ -25,6 +26,8 @@ export default function DailyGreensChart({
   const [hoverIdx, setHoverIdx] = useState<number | null>(null)
   const caixa = useRef<HTMLDivElement>(null)
   const [larguraMedida, setLarguraMedida] = useState(0)
+  const tipRef = useRef<HTMLDivElement>(null)
+  const [tipW, setTipW] = useState(0)
 
   /*
    * Mesma correção do ProfitChart: viewBox medido, altura fixa.
@@ -43,6 +46,10 @@ export default function DailyGreensChart({
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
+
+  useLayoutEffect(() => {
+    if (tipRef.current) setTipW(tipRef.current.offsetWidth)
+  }, [hoverIdx])
 
   if (!data || data.length < 2) return null
 
@@ -70,8 +77,23 @@ export default function DailyGreensChart({
   )
 
   const hovered = hoverIdx !== null ? sorted[hoverIdx] : null
-  const wr = hovered && hovered.total > 0
-    ? Math.round((hovered.greens / hovered.total) * 100) : null
+  // Acerto do dia com todos os status: meio-green conta, anulada sai da conta.
+  const wr = hovered ? taxaAcerto(hovered) : null
+
+  /*
+   * Posicao do tooltip em px, presa dentro da caixa.
+   *
+   * Antes era `left: %` mais um `transform: translateX(-110%)` para os dias do
+   * fim virarem pra esquerda. So' que o framer-motion anima `scale`, e ele
+   * escreve o proprio `transform` no elemento · o translateX inline nunca
+   * valia. Resultado: nos ultimos dias o balao ia pra direita e sumia no
+   * `overflow-hidden` do painel. Aqui centraliza na barra e limita nas bordas.
+   */
+  const tipLeft = (i: number) => {
+    const centro = barX(i) + barW / 2
+    const w = tipW || 180
+    return Math.round(Math.max(0, Math.min(centro - w / 2, W - w)))
+  }
 
   return (
     <div ref={caixa} className="w-full relative select-none">
@@ -157,21 +179,33 @@ export default function DailyGreensChart({
       <AnimatePresence>
       {hoverIdx !== null && hovered && (
         <motion.div
+          ref={tipRef}
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.9 }}
           transition={{ duration: 0.12 }}
-          className="pointer-events-none absolute top-1 z-10 bg-surface-1 border border-line-strong rounded-md px-3 py-2 text-xs shadow-xl"
-          style={{
-            left: `${((barX(hoverIdx) + barW / 2) / W) * 100}%`,
-            transform: hoverIdx > sorted.length * 0.65 ? 'translateX(-110%)' : 'translateX(8px)',
-          }}
+          className="pointer-events-none absolute top-1 z-10 bg-surface-1 border border-line-strong rounded-md px-3 py-2 text-xs shadow-xl whitespace-nowrap"
+          style={{ left: tipLeft(hoverIdx) }}
         >
           <p className="text-ink-2 font-semibold mb-1">{fmtDate(hovered.match_date)}</p>
           <div className="font-mono flex items-center gap-2">
             <span className="text-green-400 font-black">{hovered.greens} green</span>
             <span className="text-ink-4">,</span>
             <span className="text-ink-2">{hovered.total} picks</span>
+            {/* Meio-green e anulada so' aparecem no dia em que existem: numa
+                linha fixa elas seriam dois zeros em quase todo dia. */}
+            {(hovered.half_wins ?? 0) > 0 && (
+              <>
+                <span className="text-ink-4">,</span>
+                <span className="text-ink-3">{hovered.half_wins} meio</span>
+              </>
+            )}
+            {(hovered.push ?? 0) > 0 && (
+              <>
+                <span className="text-ink-4">,</span>
+                <span className="text-ink-3">{hovered.push} anul.</span>
+              </>
+            )}
             {wr !== null && (
               <>
                 <span className="text-ink-4">,</span>

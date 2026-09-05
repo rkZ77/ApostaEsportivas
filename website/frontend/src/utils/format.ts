@@ -12,6 +12,29 @@ export function winRate(greens: number, total: number): number | null {
 }
 
 /**
+ * Taxa de acerto com TODOS os status de liquidacao, nao so' GREEN e RED.
+ *
+ * `winRate` acima e' greens/total puro, e ele mente em dois casos que o motor
+ * produz todo dia:
+ *
+ *   HALF-WIN  · linha asiatica que ganhou metade. E' acerto, e sumia.
+ *   PUSH      · anulada (inclusive a anulacao por falta de estatistica). Nao
+ *               ganhou nem perdeu, e ficava no denominador puxando a taxa pra
+ *               baixo como se fosse derrota.
+ *
+ * Aqui meio-green conta como acerto e anulada sai da conta. HALF-LOSS continua
+ * derrota, como deve. Mesma regra do backend (routers/public.py, by_source).
+ */
+export function taxaAcerto(r: {
+  greens: number; total: number
+  half_wins?: number; push?: number
+}): number | null {
+  const resolvidos = r.total - (r.push ?? 0)
+  if (resolvidos <= 0) return null
+  return Math.round(((r.greens + (r.half_wins ?? 0)) / resolvidos) * 100)
+}
+
+/**
  * Legenda do plano de stake, usada enquanto `/public/results` não respondeu.
  * A resposta traz `stake_label` montado em backend/stake_plan.py, que é a
  * fonte da verdade · isto aqui é só o texto de partida.

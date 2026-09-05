@@ -172,10 +172,27 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setProfileOpen(false)} />
                   <div className="absolute right-0 top-full mt-2 w-52 bg-surface-1 border border-line rounded-lg shadow-xl z-50 overflow-hidden">
-                    <div className="px-4 py-3 border-b border-line">
-                      <p className="text-ink-1 text-sm font-bold truncate">{user?.name}</p>
-                      <p className="text-ink-3 text-xs truncate">{user?.email}</p>
-                    </div>
+                    {/* O cabecalho E' a porta do perfil. Antes ele era so'
+                        texto e o acesso ficava num item "Meu perfil" la' em
+                        baixo, com a foto repetida ali · quem clica no proprio
+                        nome espera cair na conta, entao a foto, o nome e o
+                        e-mail viraram um alvo so'. */}
+                    <Link
+                      to="/profile"
+                      onClick={() => setProfileOpen(false)}
+                      className="flex items-center gap-3 px-4 py-3 border-b border-line hover:bg-surface-2 transition-colors"
+                    >
+                      <Avatar name={user?.name ?? ''} imageUrl={user?.avatar_url} size="sm" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-ink-1 text-sm font-bold truncate">{user?.name}</span>
+                        <span className="block text-ink-3 text-xs truncate">{user?.email}</span>
+                      </span>
+                      {emailPendente && (
+                        <span className="shrink-0 text-[10px] font-bold text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 px-1.5 py-0.5 rounded">
+                          E-mail
+                        </span>
+                      )}
+                    </Link>
                     <div className="py-1">
                       {/* Só logado: o tour percorre telas privadas, e para um
                           visitante ele terminaria no login. */}
@@ -206,24 +223,8 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
                         Suporte
                       </a>
                     </div>
-                    {/* Conta e saida na mesma secao, separadas do resto por
-                        linha: as de cima sao NAVEGACAO do produto, estas duas
-                        sao da sua conta. */}
+                    {/* So' a saida: o perfil subiu para o cabecalho. */}
                     <div className="border-t border-line py-1">
-                      <Link to="/profile" className="flex items-center gap-3 px-4 py-2.5 text-sm text-ink-2 hover:text-ink-1 hover:bg-surface-2 transition-colors">
-                        {/* A FOTO, e não só as iniciais. Este era o único
-                            Avatar da tela que não recebia `imageUrl`: quem
-                            tinha foto via o próprio rosto na barra e um círculo
-                            colorido com as iniciais uma linha abaixo, no menu
-                            aberto, como se fossem duas contas. */}
-                        <Avatar name={user?.name ?? ''} imageUrl={user?.avatar_url} size="sm" />
-                        Meu perfil
-                        {emailPendente && (
-                          <span className="ml-auto text-[10px] font-bold text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 px-1.5 py-0.5 rounded">
-                            E-mail
-                          </span>
-                        )}
-                      </Link>
                       <button
                         onClick={async () => { await logout(); navigate('/login') }}
                         className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-ink-2 hover:text-red-400 hover:bg-surface-2 transition-colors"

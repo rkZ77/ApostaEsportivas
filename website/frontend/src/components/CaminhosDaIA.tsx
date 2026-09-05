@@ -62,6 +62,29 @@ export default function CaminhosDaIA({ compacto = false }: { compacto?: boolean 
       meta: c.motivo === 'meta' ? `${c.passos} greens` : `RED no ${c.passos}º`,
     }))
 
+  /* Ate' onde os caminhos chegaram.
+   *
+   * O total e a lista respondem "quanto rendeu" e "quando"; nenhum dos dois
+   * responde a pergunta que decide se vale pegar o produto: ONDE ele costuma
+   * morrer. Se a maioria cai no 1o passo, e' um produto; se a maioria chega ao
+   * 4o e morre perto do fim, e' outro completamente diferente, com o mesmo
+   * lucro no rodape. Sai dos dados que a rota ja' manda (passos + motivo). */
+  const porPasso = Array.from({ length: ia.meta }, (_, i) => {
+    const passo = i + 1
+    const mortos = ia.caminhos.filter(c => c.motivo === 'red' && c.passos === passo).length
+    const fechou = passo === ia.meta ? naMeta.length : 0
+    return { passo, mortos, fechou }
+  })
+  const maxPasso = Math.max(1, ...porPasso.map(p => p.mortos + p.fechou))
+
+  const arriscado   = ia.fechados                      // 1u de entrada por caminho
+  const roi         = arriscado > 0 ? (ia.unidades / arriscado) * 100 : 0
+  const taxaFecha   = ia.fechados > 0 ? (ia.na_meta / ia.fechados) * 100 : 0
+  const passoMedio  = ia.fechados > 0
+    ? ia.caminhos.reduce((a, c) => a + c.passos, 0) / ia.fechados
+    : 0
+  const maiorPagamento = pagamentos.length > 0 ? pagamentos[pagamentos.length - 1] : 0
+
   return (
     <div className="card p-5">
       <div className="flex items-start justify-between gap-3 mb-4">
@@ -93,7 +116,72 @@ export default function CaminhosDaIA({ compacto = false }: { compacto?: boolean 
         )}
       </p>
 
-      {!compacto && <LucroBarChart data={barras} height={170} />}
+      {/* INDICADORES DO PRODUTO. O bloco tinha um numero so' (o total), e ele
+          nao responde nada sozinho: 1u por caminho e' a entrada, entao o que
+          diz se o produto paga e' o retorno sobre o arriscado, e o que diz como
+          ele se comporta e' a taxa de caminhos que fecham. */}
+      {!compacto && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-4">
+          <div className="stat-tile">
+            <div className={`stat-value text-lg ${roi >= 0 ? 'text-accent-ink' : 'text-red-400'}`}>
+              {roi >= 0 ? '+' : ''}{roi.toFixed(0)}%
+            </div>
+            <div className="stat-label">Retorno sobre o arriscado</div>
+          </div>
+          <div className="stat-tile">
+            <div className="stat-value text-lg">{taxaFecha.toFixed(0)}%</div>
+            <div className="stat-label">Caminhos que fecharam</div>
+          </div>
+          <div className="stat-tile">
+            <div className="stat-value text-lg">{passoMedio.toFixed(1)}</div>
+            <div className="stat-label">Passos por caminho</div>
+          </div>
+          <div className="stat-tile">
+            <div className="stat-value text-lg text-accent-ink">{fmtUnits(maiorPagamento, 1)}</div>
+            <div className="stat-label">Maior pagamento</div>
+          </div>
+        </div>
+      )}
+
+      {!compacto && (
+        <>
+          <p className="text-[11px] font-semibold text-ink-3 mb-2">Lucro por caminho encerrado, unidades</p>
+          <LucroBarChart data={barras} height={170} />
+        </>
+      )}
+
+      {/* ONDE O CAMINHO MORRE. Uma barra por passo, com a fatia verde do passo
+          final: e' a forma do produto num desenho so'. */}
+      {!compacto && ia.fechados > 0 && (
+        <div className="mt-6">
+          <p className="text-[11px] font-semibold text-ink-3 mb-2">Até que passo cada caminho foi</p>
+          <div className="space-y-1.5">
+            {porPasso.map(p => {
+              const total = p.mortos + p.fechou
+              return (
+                <div key={p.passo} className="flex items-center gap-2.5">
+                  <span className="text-[10px] text-ink-4 w-12 shrink-0 tabular-nums">{p.passo}º passo</span>
+                  <div className="flex-1 h-2 bg-surface-2 rounded-full overflow-hidden flex min-w-[40px]">
+                    {p.mortos > 0 && (
+                      <div className="h-full bg-red-400/80" style={{ width: `${(p.mortos / maxPasso) * 100}%` }} />
+                    )}
+                    {p.fechou > 0 && (
+                      <div className="h-full bg-green-500" style={{ width: `${(p.fechou / maxPasso) * 100}%` }} />
+                    )}
+                  </div>
+                  <span className="font-mono text-[10px] text-ink-3 w-20 text-right shrink-0 tabular-nums">
+                    {total === 0 ? '--' : p.fechou > 0 ? `${p.fechou} fechou` : `${p.mortos} morreu`}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+          <p className="text-[10px] text-ink-4 mt-2">
+            Vermelho é caminho que morreu naquele passo; verde é caminho que
+            chegou aos {ia.meta} e pagou.
+          </p>
+        </div>
+      )}
 
       {ia.passos_em_aberto > 0 && (
         <p className="text-[11px] text-ink-4 mt-4">

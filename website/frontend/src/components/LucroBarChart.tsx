@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { motion } from 'framer-motion'
 import { fmtUnits } from '../utils/format'
 
@@ -26,6 +26,8 @@ export interface BarraLucro {
   value: number
   /** Linha miúda opcional (contagem de picks, aproveitamento). */
   meta?: string
+  /** Marca à esquerda do rótulo, só no horizontal (escudo da liga). */
+  icon?: ReactNode
 }
 
 const VERDE = '#22c55e'
@@ -74,8 +76,11 @@ export default function LucroBarChart({
           const positivo = v >= 0
           return (
             <div key={d.label} className="flex items-center gap-2.5">
-              <span className="text-[11px] text-ink-3 w-28 sm:w-36 shrink-0 truncate" title={d.label}>
-                {d.label}
+              {/* Escudo junto do nome · numa lista de 17 competicoes o brasao
+                  e' o que a olhada rapida reconhece, o nome truncado nao. */}
+              <span className="flex items-center gap-2 w-28 sm:w-36 shrink-0 min-w-0" title={d.label}>
+                {d.icon}
+                <span className="text-[11px] text-ink-3 truncate">{d.label}</span>
               </span>
               <div className="flex-1 h-2 bg-surface-2 rounded-full overflow-hidden min-w-[40px]">
                 <motion.div
@@ -103,7 +108,7 @@ export default function LucroBarChart({
   /* ── Vertical: SVG, mesma mecânica dos outros gráficos do projeto ────── */
   const W = largura || 600
   const H = height
-  const PL = 34, PR = 8, PT = 12, PB = 30
+  const PL = 34, PR = 8, PT = 20, PB = 30
   const innerW = W - PL - PR
   const innerH = H - PT - PB
 
@@ -126,6 +131,9 @@ export default function LucroBarChart({
   const passoRotulo = Math.max(1, Math.ceil(LARGURA_DO_ROTULO / Math.max(passo, 1)))
   const mostraRotulo = (i: number) =>
     passoRotulo === 1 || (data.length - 1 - i) % passoRotulo === 0
+
+  // "+120,7u" pede ~44px. Abaixo disso o rotulo de valor encosta no vizinho.
+  const mostraValor = passo >= 46
 
   return (
     <div ref={caixa} className="w-full select-none">
@@ -170,6 +178,24 @@ export default function LucroBarChart({
                 viewport={{ once: true }}
                 transition={{ duration: 0.45, delay: i * 0.04, ease: [0.16, 1, 0.3, 1] }}
               />
+              {/* VALOR EM CIMA DA COLUNA. O numero do mes so' existia no
+                  hover, e hover nao existe no celular · a leitura de relance
+                  ("quanto foi agosto?") exigia mira. Some quando a coluna fica
+                  estreita demais pro texto caber sem encostar na vizinha. */}
+              {mostraValor && (
+                <text
+                  x={x(i) + barW / 2}
+                  y={positivo ? topo - 5 : topo + alt + 9}
+                  fontSize="9"
+                  fontWeight="700"
+                  textAnchor="middle"
+                  fill={positivo ? VERDE : VERMELHO}
+                  fontFamily="Inter, -apple-system, sans-serif"
+                  style={{ fontVariantNumeric: 'tabular-nums' }}
+                >
+                  {fmtUnits(v, 1)}
+                </text>
+              )}
               <rect x={PL + i * passo} y={PT} width={passo} height={innerH}
                     fill="transparent" onMouseEnter={() => setHover(i)} />
             </g>

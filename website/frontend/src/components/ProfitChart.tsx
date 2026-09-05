@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 
 interface DayData {
@@ -29,6 +29,8 @@ export default function ProfitChart({
   const [hoverIdx, setHoverIdx] = useState<number | null>(null)
   const caixa = useRef<HTMLDivElement>(null)
   const [larguraMedida, setLarguraMedida] = useState(0)
+  const tipRef = useRef<HTMLDivElement>(null)
+  const [tipW, setTipW] = useState(0)
 
   /*
    * O viewBox acompanha a largura real, e a altura é fixa.
@@ -51,6 +53,10 @@ export default function ProfitChart({
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
+
+  useLayoutEffect(() => {
+    if (tipRef.current) setTipW(tipRef.current.offsetWidth)
+  }, [hoverIdx])
 
   if (!data || data.length < 2) return null
 
@@ -130,6 +136,17 @@ export default function ProfitChart({
   const fillClr  = isGreen ? 'rgb(var(--c-green-400) / 0.09)' : 'rgb(var(--c-red-400) / 0.09)'
 
   const hv = hoverIdx !== null ? points[hoverIdx] : null
+
+  /*
+   * Tooltip em px, preso dentro da caixa. O `transform` inline que invertia o
+   * balao nos ultimos dias nunca valeu: o framer-motion anima `scale` e
+   * reescreve o transform do elemento, entao o balao ia sempre pra direita e
+   * o `overflow-hidden` do painel cortava.
+   */
+  const tipLeft = (i: number) => {
+    const w = tipW || 140
+    return Math.round(Math.max(0, Math.min(px(i) - w / 2, W - w)))
+  }
 
   return (
     <div ref={caixa} className="w-full relative select-none">
@@ -229,10 +246,10 @@ export default function ProfitChart({
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.9 }}
           transition={{ duration: 0.12 }}
-          className="pointer-events-none absolute top-2 text-xs font-black px-2 py-1 rounded-lg border"
+          ref={tipRef}
+          className="pointer-events-none absolute top-2 text-xs font-black px-2 py-1 rounded-lg border whitespace-nowrap"
           style={{
-            left: `${(px(hoverIdx) / W) * 100}%`,
-            transform: hoverIdx > points.length * 0.7 ? 'translateX(-110%)' : 'translateX(8px)',
+            left: tipLeft(hoverIdx),
             background: 'rgb(var(--surface-1))',
             borderColor: hv >= 0 ? 'rgb(var(--c-green-400) / 0.25)' : 'rgb(var(--c-red-400) / 0.25)',
             color: hv >= 0 ? 'rgb(var(--c-green-400))' : 'rgb(var(--c-red-400))',

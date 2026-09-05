@@ -15,8 +15,9 @@ import SuggestionDetail from '../components/SuggestionDetail'
 import { fmtBRL, fmtSigned, fmtUnits } from '../utils/format'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { TeamLogo } from '../components/TeamLogo'
-import { Button, NumberTicker, PillGroup, Spinner } from '../components/ui'
-import { PERIODOS, PERIODO_PADRAO, janelaDoPeriodo, type PeriodoKey } from '../lib/periodo'
+import { Button, NumberTicker, Spinner } from '../components/ui'
+import { PERIODOS, PERIODO_PADRAO, janelaDoPeriodo, nomeDoMes, type PeriodoKey } from '../lib/periodo'
+import SelectMenu from '../components/ui/SelectMenu'
 import MonthlyCloseSection from '../components/MonthlyCloseSection'
 
 const SOURCE_LBL: Record<string, string> = {
@@ -209,6 +210,22 @@ function SetupModal({ current, locked, onSave, onClose, onWithdraw, onAjustar }:
   )
 }
 
+/* Produtos que a banca sabe recortar. Sao os `pick_type` de
+   `user_followed_picks`, e a alavancagem fica de fora porque ela nem entra
+   nesta consulta: caminho em andamento nao e' dinheiro, e ela tem aba propria
+   (backend/routers/banca.py::_quebra_por_pipeline). */
+const PRODUTOS_DA_BANCA: Array<[string, string]> = [
+  ['all', 'Todos os produtos'],
+  ['vip', 'VIP'],
+  ['live', 'Ao Vivo'],
+  ['boost', 'Pick Boost'],
+  ['multipla', 'Múltiplas'],
+  ['free', 'Free'],
+  ['player_stats', 'Jogadores'],
+  ['faltas', 'Faltas'],
+  ['goleiros', 'Defesas'],
+]
+
 export default function Banca() {
   const navigate = useNavigate()
   const { user } = useAuth()
@@ -218,11 +235,12 @@ export default function Banca() {
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(false)
   const [period,  setPeriod]  = useState<PeriodoKey>(PERIODO_PADRAO)
+  const [produto, setProduto] = useState('all')
   const [showSetup, setShowSetup]           = useState(false)
   const [detailPick, setDetailPick] = useState<{ id: number; pick_type: string } | null>(null)
 
 
-  const load = useCallback((p: PeriodoKey) => {
+  const load = useCallback((p: PeriodoKey, src = 'all') => {
     setLoading(true)
     setError(false)
     // Sempre from/to, nunca `days`: a janela sai de lib/periodo, que e' a mesma
@@ -230,6 +248,7 @@ export default function Banca() {
     // calculo de fuso e as duas divergiam na virada da meia-noite.
     const j = janelaDoPeriodo(p)
     const params: Record<string, string> = j ? { from_date: j.de, to_date: j.ate } : {}
+    if (src !== 'all') params.source = src
     api.get('/banca', { params })
       .then(r => setData(r.data))
       .catch(() => setError(true))
@@ -237,14 +256,14 @@ export default function Banca() {
   }, [])
 
   useEffect(() => {
-    load(period)
-  }, [period, load])
+    load(period, produto)
+  }, [period, produto, load])
 
 
   const handleSave = (start: number, unitValue: number) => {
     setShowSetup(false)
     setData((d: any) => d ? { ...d, bankroll_start: start, unit_value: unitValue } : d)
-    load(period)
+    load(period, produto)
     // Configurou pelo tour: o tour volta já no passo seguinte, porque o passo
     // da banca acabou de ser cumprido de verdade. Fora do tour não faz nada.
     retomarTour(true)
@@ -273,6 +292,11 @@ export default function Banca() {
 
   const pnlColor = (v: number | null) =>
     v == null ? 'text-ink-4' : v > 0 ? 'text-accent-ink' : v < 0 ? 'text-red-400' : 'text-ink-2'
+
+  /* Os meses vem do servidor (fora do recorte de data), entao a lista nao
+     encolhe quando um mes esta' escolhido. Guardados aqui pra sobreviverem a
+     uma resposta de erro. */
+  const mesesDisponiveis: string[] = data?.available_months ?? []
 
   const temGrafico = (data?.chart?.length ?? 0) >= 2
   const chartData = (data?.chart ?? []).map((p: any, i: number, arr: any[]) => ({
@@ -372,7 +396,7 @@ export default function Banca() {
           <div className="card p-10 text-center">
             <p className="text-ink-2 font-semibold mb-1">Erro ao carregar sua banca</p>
             <p className="text-ink-4 text-sm mb-4">Não foi possível conectar ao servidor. Verifique sua conexão.</p>
-            <button onClick={() => load(period)} className="text-sm text-green-400 hover:text-green-300 font-semibold transition-colors">
+            <button onClick={() => load(period, produto)} className="text-sm text-green-400 hover:text-green-300 font-semibold transition-colors">
               Tentar novamente
             </button>
           </div>
@@ -386,12 +410,33 @@ export default function Banca() {
                 agora as duas usam a mesma fila e o mesmo vocabulário
                 (lib/periodo). Painel dobrável continua fazendo sentido onde há
                 vários grupos, como em Resultados e Estatísticas. */}
-            <PillGroup
-              options={PERIODOS.map(p => ({ value: p.key, label: p.label }))}
-              value={period}
-              onChange={setPeriod}
-              className="mb-5"
-            />
+            {/* MESMO FILTRO DO RESTO DO SITE (2026-09-04, pedido do usuario).
+                Era uma fila de sete pills, e nenhuma outra tela filtra assim
+                desde que Resultados trocou pelo menu: a fila nao cabia numa
+                linha de celular, nao tinha como oferecer mes especifico sem
+                crescer um item por mes, e nao dava lugar pro recorte por
+                produto. Sao dois menus porque sao duas perguntas -- QUANDO e
+                O QUE -- e as duas se combinam. */}
+            <div className="flex flex-wrap items-center gap-2 mb-5">
+              <SelectMenu
+                ariaLabel="Período"
+                options={[
+                  ...PERIODOS.map(p => ({ value: p.key as string, label: p.label })),
+                  ...mesesDisponiveis.map(m => ({
+                    value: `mes:${m}`,
+                    label: nomeDoMes(m),
+                  })),
+                ]}
+                value={period}
+                onChange={v => setPeriod(v as PeriodoKey)}
+              />
+              <SelectMenu
+                ariaLabel="Produto"
+                options={PRODUTOS_DA_BANCA.map(([v, l]) => ({ value: v, label: l }))}
+                value={produto}
+                onChange={setProduto}
+              />
+            </div>
 
             {/* Stats principais.
                 `data-tour` é a âncora do passo "Acompanhe sua evolução" do

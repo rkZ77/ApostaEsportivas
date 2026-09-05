@@ -6,7 +6,7 @@ import api from '../services/api'
 import { rotuloDoMercado } from '../utils/marketTranslate'
 import { Helmet } from 'react-helmet-async'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
-import { winRate as calcWinRate, fmtUnits, STAKE_LABEL_PADRAO } from '../utils/format'
+import { taxaAcerto, fmtUnits, STAKE_LABEL_PADRAO } from '../utils/format'
 import { TeamLogo, LeagueLogo } from '../components/TeamLogo'
 import { useAuth } from '../context/AuthContext'
 import PageShell from '../components/PageShell'
@@ -25,12 +25,17 @@ const GAMES_PAGE_SIZE = 10
 
 interface Summary {
   total: number; greens: number; reds: number; push: number
+  half_wins?: number; half_losses?: number
   profit: number; stake_total: number; roi: number
 }
-interface DayResult { match_date: string; total: number; greens: number; reds: number; profit: number }
+interface DayResult {
+  match_date: string; total: number; greens: number; reds: number; profit: number
+  half_wins?: number; half_losses?: number; push?: number
+}
 interface LeagueResult {
   league_id: number | null; league_name: string
   total: number; greens: number; reds: number; profit: number; stake_total: number
+  half_wins?: number; half_losses?: number; push?: number
 }
 interface RecentTip {
   match_date: string
@@ -55,6 +60,7 @@ interface SourceResult {
 interface SourceDay {
   match_date: string; source: string; profit: number
   total?: number; greens?: number; reds?: number; stake_total?: number
+  half_wins?: number; half_losses?: number; push?: number
 }
 
 interface PublicData {
@@ -137,6 +143,7 @@ function AbaStats({ tiles }: {
 interface FechamentoFonte {
   source: string
   total: number; greens: number; reds: number
+  half_wins: number; half_losses: number; push: number
   profit: number; stake_total: number
   win_rate: number; roi: number
 }
@@ -161,6 +168,13 @@ interface FechamentoMes {
  * aceita em `?source=` ("multiplas"). `by_source_day.source` vem do UNION do
  * backend e usa o singular ("multipla"), entao o filtro nao servia de legenda:
  * a linha da multipla saia escrita "multipla", em minuscula e sem acento. */
+/* Ordem do filtro de produto: os pagos primeiro, vitrine depois. `all` abre a
+   lista porque e' o estado normal da pagina. */
+const PRODUTOS_DO_FILTRO = [
+  'all', 'vip', 'live', 'boost', 'multiplas', 'alavancagem',
+  'free', 'player_stats', 'faltas', 'goleiros',
+] as const
+
 const PRODUTO_LABELS: Record<string, string> = {
   ...SOURCE_LABELS, multipla: 'Múltiplas',
 }
@@ -180,11 +194,29 @@ function soOMes(mes: string): string {
   return new Date(y, mo - 1).toLocaleDateString('pt-BR', { month: 'long' })
 }
 
-/* Alavancagem tem stake_total zerado de proposito (backend/stake_plan.py): ela
-   e' um caminho, nao uma unidade, e so' vira dinheiro na banca de quem apostou.
-   Ela continua no fechamento com picks e taxa de acerto, mas nao disputa o
-   posto de produto do mes nem move o lucro. */
+/* Fonte que moveu unidade no mes.
+ *
+ * Desde 04/09 a alavancagem CONTA no placar, mas pelo caminho: `stake` so' cai
+ * no passo que ENCERRA o caminho (public.py::_sub_alav). Um mes em que ela
+ * publicou tres passos de um caminho ainda aberto chega aqui com stake 0, e ai'
+ * ela nao entra na soma -- nao porque esteja de fora do produto, e sim porque
+ * composto em andamento nao e' dinheiro. A linha da tela diz qual dos dois
+ * casos e', ver `rotuloSemUnidade`. */
 const contaUnidade = (f: FechamentoFonte) => f.stake_total > 0
+
+/* Por que esta fonte nao tem lucro no mes. Antes era sempre "fora do lucro",
+   que descrevia a regra antiga (peso 0 permanente) e hoje seria mentira. */
+const rotuloSemUnidade = (f: FechamentoFonte) =>
+  f.source === 'alavancagem' ? 'caminho ainda aberto' : 'fora do lucro'
+
+/* Acerto com uma casa decimal, mesma regra de `taxaAcerto`: meio-green conta
+   como acerto e anulada sai do denominador. */
+const taxaAcertoDecimal = (r: { total: number; greens: number; half_wins?: number; push?: number }) => {
+  const resolvidos = r.total - (r.push ?? 0)
+  return resolvidos > 0
+    ? Math.round(((r.greens + (r.half_wins ?? 0)) / resolvidos) * 1000) / 10
+    : 0
+}
 
 function agregarFechamentos(linhas: SourceDay[]): FechamentoMes[] {
   const porMes = new Map<string, Map<string, FechamentoFonte>>()
@@ -196,11 +228,15 @@ function agregarFechamentos(linhas: SourceDay[]): FechamentoMes[] {
     porMes.set(mes, fontes)
     const acc = fontes.get(d.source) ?? {
       source: d.source, total: 0, greens: 0, reds: 0,
+      half_wins: 0, half_losses: 0, push: 0,
       profit: 0, stake_total: 0, win_rate: 0, roi: 0,
     }
     acc.total       += Number(d.total ?? 0)
     acc.greens      += Number(d.greens ?? 0)
     acc.reds        += Number(d.reds ?? 0)
+    acc.half_wins   += Number(d.half_wins ?? 0)
+    acc.half_losses += Number(d.half_losses ?? 0)
+    acc.push        += Number(d.push ?? 0)
     acc.profit      += Number(d.profit ?? 0)
     acc.stake_total += Number(d.stake_total ?? 0)
     fontes.set(d.source, acc)
@@ -211,7 +247,7 @@ function agregarFechamentos(linhas: SourceDay[]): FechamentoMes[] {
     const fontes = [...mapa.values()].map(f => ({
       ...f,
       profit: Math.round(f.profit * 100) / 100,
-      win_rate: f.total > 0 ? Math.round((f.greens / f.total) * 1000) / 10 : 0,
+      win_rate: taxaAcertoDecimal(f),
       roi: f.stake_total > 0 ? Math.round((f.profit / f.stake_total) * 1000) / 10 : 0,
     })).sort((a, b) => b.profit - a.profit)
 
@@ -220,6 +256,8 @@ function agregarFechamentos(linhas: SourceDay[]): FechamentoMes[] {
     const total     = fontes.reduce((a, f) => a + f.total, 0)
     const greens    = fontes.reduce((a, f) => a + f.greens, 0)
     const reds      = fontes.reduce((a, f) => a + f.reds, 0)
+    const halfWins  = fontes.reduce((a, f) => a + f.half_wins, 0)
+    const push      = fontes.reduce((a, f) => a + f.push, 0)
 
     // O produto do mes e' o de maior LUCRO, nao o de maior taxa de acerto: taxa
     // alta com odd baixa perde dinheiro, e o placar aqui e' de resultado.
@@ -231,7 +269,7 @@ function agregarFechamentos(linhas: SourceDay[]): FechamentoMes[] {
       mes, fontes, total, greens, reds,
       profit: Math.round(somaLucro * 100) / 100,
       stake_total: somaStake,
-      win_rate: total > 0 ? Math.round((greens / total) * 1000) / 10 : 0,
+      win_rate: taxaAcertoDecimal({ total, greens, half_wins: halfWins, push }),
       roi: somaStake > 0 ? Math.round((somaLucro / somaStake) * 1000) / 10 : 0,
       campeao,
       amostraCurta: comPiso.length === 0 && campeao != null,
@@ -266,7 +304,7 @@ function LinhaProduto({ f, maxAbs }: { f: FechamentoFonte; maxAbs: number }) {
         )}
         <p className="text-[10px] text-ink-4 mt-1 truncate">
           {f.total} {f.total === 1 ? 'pick' : 'picks'}, {f.greens}G {f.reds}R
-          {unidade ? <>, ROI {f.roi}%</> : <>, fora do lucro</>}
+          {unidade ? <>, ROI {f.roi}%</> : <>, {rotuloSemUnidade(f)}</>}
         </p>
       </div>
 
@@ -326,6 +364,19 @@ function AbaFechamento({ linhas, grafico, stakeLabel }: {
         { label: 'ROI', value: `${mesAtivo.roi}%`, tone: mesAtivo.roi >= 0 ? 'green' : 'red' },
       ]} />
 
+      {/* O GRAFICO SUBIU (04/09, pedido do usuario). Ele fechava a aba, depois
+          do ranking do mes e do historico -- e a pergunta que a aba responde e'
+          "como foi mes a mes", que e' exatamente o desenho. Agora ele vem logo
+          abaixo dos indicadores, com o valor estampado em cima de cada coluna:
+          no celular nao ha' hover, e sem o rotulo o numero do mes so' existia
+          pra quem passasse o mouse. */}
+      {grafico.length > 1 && (
+        <div className="panel p-5 mb-5">
+          <p className="panel-label mb-4">Lucro por mês, unidades</p>
+          <LucroBarChart data={grafico} orientation="vertical" />
+        </div>
+      )}
+
       {/* Destaque do mes. O ranking abaixo tem o mesmo numero, mas quem abre a
           aba quer a resposta antes da tabela, nao depois dela. */}
       {campeao && (
@@ -372,13 +423,6 @@ function AbaFechamento({ linhas, grafico, stakeLabel }: {
           {mesAtivo.fontes.map(f => <LinhaProduto key={f.source} f={f} maxAbs={maxAbs} />)}
         </div>
       </div>
-
-      {grafico.length > 1 && (
-        <div className="panel p-5 mb-5">
-          <p className="panel-label mb-4">Lucro por mês, unidades</p>
-          <LucroBarChart data={grafico} orientation="vertical" />
-        </div>
-      )}
 
       {/* Historico: quem ganhou cada mes. E' o que transforma o fechamento num
           placar de temporada em vez de uma foto do mes aberto. */}
@@ -441,6 +485,7 @@ export default function ResultadosPublicos() {
   const RECENT_PAGE_SIZE = 30
   const [recentPage, setRecentPage] = useState(0)
   const handleMonthChange = (v: string) => { setMonth(v); setRecentPage(0); setRecentLeagueFilter('') }
+  const handleSourceChange = (v: string) => { setSource(v); setRecentPage(0); setRecentLeagueFilter('') }
 
   // "Por Jogo" · exige login (mesmos dados detalhados que antes só existiam em /results)
   const [games, setGames]           = useState<any[]>([])
@@ -520,7 +565,8 @@ export default function ResultadosPublicos() {
   }, [source, month, recentPage, tab])
 
   const s = data?.summary
-  const winRatePct = calcWinRate(s?.greens ?? 0, s?.total ?? 0)
+  // Taxa de acerto de TODOS os status: meio-green conta, anulada sai da conta.
+  const winRatePct = s ? taxaAcerto(s) : null
   const months   = data?.available_months ?? []
   const recent   = data?.recent ?? []
   const recentTotal = data?.recent_total ?? 0
@@ -545,7 +591,7 @@ export default function ResultadosPublicos() {
 
   const statsPorLiga = (() => {
     if (byLeague.length === 0) return []
-    const comWr = byLeague.map(l => ({ ...l, wr: calcWinRate(l.greens, l.total) ?? 0 }))
+    const comWr = byLeague.map(l => ({ ...l, wr: taxaAcerto(l) ?? 0 }))
     // Piso de 5 picks pra uma liga com 1 green em 1 pick nao virar "melhor".
     const elegiveis = comWr.filter(l => l.total >= 5)
     const melhor = [...elegiveis].sort((a, b) => b.wr - a.wr)[0]
@@ -618,6 +664,9 @@ export default function ResultadosPublicos() {
       label: l.league_name,
       value: Math.round(Number(l.profit ?? 0) * 100) / 100,
       meta: `${l.total} picks, ${l.greens}G ${l.reds}R`,
+      icon: l.league_id != null
+        ? <LeagueLogo id={l.league_id} name={l.league_name} />
+        : <span className="w-4.5 h-4.5 rounded-full bg-surface-2 shrink-0" />,
     }))
     .sort((a, b) => b.value - a.value)
 
@@ -627,7 +676,7 @@ export default function ResultadosPublicos() {
   // em 1 pick nao aparecer como "melhor" em 100%.
   const bestLeague = byLeague
     .filter(l => l.total >= 5)
-    .map(l => ({ name: l.league_name, id: l.league_id, wr: calcWinRate(l.greens, l.total) ?? 0 }))
+    .map(l => ({ name: l.league_name, id: l.league_id, wr: taxaAcerto(l) ?? 0 }))
     .sort((a, b) => b.wr - a.wr)[0] ?? null
   // Maior sequencia de dias seguidos com saldo positivo (mais greens que reds).
   const bestStreak = (() => {
@@ -678,8 +727,12 @@ export default function ResultadosPublicos() {
               O FILTRO DE FONTE SAIU. Ele existia pra ler um produto de cada vez,
               e a aba Por Mes ja' faz isso melhor: ela quebra o mes por produto
               numa lista so', sem obrigar a escolher um e recarregar. */}
-          {months.length > 0 && (
-            <div className="mb-5">
+          {/* MES E PRODUTO, lado a lado. O filtro de produto tinha saido junto
+              com o painel de filtros em 04/09 e voltou como menu (pedido do
+              usuario): sao os dois recortes da pagina, e recorte que existe tem
+              que estar visivel, nao atras de um acordeao. */}
+          <div className="flex flex-wrap items-center gap-2 mb-5">
+            {months.length > 0 && (
               <SelectMenu
                 ariaLabel="Mês"
                 options={[{ value: '', label: 'Todos os meses' },
@@ -687,8 +740,16 @@ export default function ResultadosPublicos() {
                 value={month}
                 onChange={handleMonthChange}
               />
-            </div>
-          )}
+            )}
+            <SelectMenu
+              ariaLabel="Produto"
+              options={PRODUTOS_DO_FILTRO.map(v => ({
+                value: v, label: v === 'all' ? 'Todos os produtos' : SOURCE_LABELS[v],
+              }))}
+              value={source}
+              onChange={handleSourceChange}
+            />
+          </div>
 
           {/* Abas · Por Liga e' publica; Por Jogo/Por Mes exigem login (dado detalhado por usuario) */}
           <div className="flex border-b border-line mb-6 overflow-x-auto">
@@ -817,7 +878,7 @@ export default function ResultadosPublicos() {
                   </div>
                   <div className="px-5 py-4 space-y-3">
                     {[...byLeague]
-                      .map(lg => ({ ...lg, wr: calcWinRate(lg.greens, lg.total) ?? 0 }))
+                      .map(lg => ({ ...lg, wr: taxaAcerto(lg) ?? 0 }))
                       .sort((a, b) => b.wr - a.wr)
                       .map(lg => (
                         <div key={`bar-${lg.league_id ?? lg.league_name}`} className="flex items-center gap-3">
@@ -973,7 +1034,7 @@ export default function ResultadosPublicos() {
               </div>
               <div className="divide-y divide-line/50">
                 {byLeague.map((lg) => {
-                  const wr = calcWinRate(lg.greens, lg.total)
+                  const wr = taxaAcerto(lg)
                   return (
                     <div key={`${lg.league_id ?? lg.league_name}`} className="flex items-center gap-3 px-5 py-3">
                       {lg.league_id != null

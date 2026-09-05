@@ -658,6 +658,14 @@ def _resultados_publicos(month, source, recent_limit, recent_offset, slim, bloco
                 COUNT(*) AS total,
                 COUNT(*) FILTER (WHERE result = 'GREEN') AS greens,
                 COUNT(*) FILTER (WHERE result = 'RED')   AS reds,
+                -- Meio-green, meio-red e anulada TAMBEM sao resultado (pedido
+                -- do usuario, 04/09). Sem estas tres colunas a tela so' sabia
+                -- somar GREEN e RED: um HALF-WIN sumia do acerto e um PUSH
+                -- ficava no denominador puxando a taxa pra baixo, mesmo sem
+                -- ninguem ter perdido nada.
+                COUNT(*) FILTER (WHERE result = 'HALF-WIN')  AS half_wins,
+                COUNT(*) FILTER (WHERE result = 'HALF-LOSS') AS half_losses,
+                COUNT(*) FILTER (WHERE result = 'PUSH')      AS push,
                 COALESCE(SUM(profit), 0)                 AS profit
             FROM ({union_sql}) AS t
             GROUP BY match_date
@@ -683,6 +691,9 @@ def _resultados_publicos(month, source, recent_limit, recent_offset, slim, bloco
                 COUNT(*)                                  AS total,
                 COUNT(*) FILTER (WHERE t.result = 'GREEN') AS greens,
                 COUNT(*) FILTER (WHERE t.result = 'RED')   AS reds,
+                COUNT(*) FILTER (WHERE t.result = 'HALF-WIN')  AS half_wins,
+                COUNT(*) FILTER (WHERE t.result = 'HALF-LOSS') AS half_losses,
+                COUNT(*) FILTER (WHERE t.result = 'PUSH')      AS push,
                 COALESCE(SUM(t.profit), 0)                AS profit,
                 COALESCE(SUM(t.stake), 0)                 AS stake_total,
                 COALESCE(l.name, 'Liga ' || t.league_id)  AS league_name
@@ -707,6 +718,9 @@ def _resultados_publicos(month, source, recent_limit, recent_offset, slim, bloco
                    COUNT(*)                                 AS total,
                    COUNT(*) FILTER (WHERE result = 'GREEN') AS greens,
                    COUNT(*) FILTER (WHERE result = 'RED')   AS reds,
+                   COUNT(*) FILTER (WHERE result = 'HALF-WIN')  AS half_wins,
+                   COUNT(*) FILTER (WHERE result = 'HALF-LOSS') AS half_losses,
+                   COUNT(*) FILTER (WHERE result = 'PUSH')      AS push,
                    COALESCE(SUM(profit), 0)                 AS profit,
                    COALESCE(SUM(stake),  0)                 AS stake_total
             FROM ({union_sql}) AS t
@@ -718,11 +732,15 @@ def _resultados_publicos(month, source, recent_limit, recent_offset, slim, bloco
         for linha in by_source_day:
             acc = por_fonte.setdefault(linha["source"], {
                 "source": linha["source"], "total": 0, "greens": 0,
-                "reds": 0, "profit": 0.0, "stake_total": 0.0,
+                "reds": 0, "half_wins": 0, "half_losses": 0, "push": 0,
+                "profit": 0.0, "stake_total": 0.0,
             })
             acc["total"]  += int(linha["total"] or 0)
             acc["greens"] += int(linha["greens"] or 0)
             acc["reds"]   += int(linha["reds"] or 0)
+            acc["half_wins"]   += int(linha["half_wins"] or 0)
+            acc["half_losses"] += int(linha["half_losses"] or 0)
+            acc["push"]        += int(linha["push"] or 0)
             acc["profit"] += float(linha["profit"] or 0)
             acc["stake_total"] += float(linha["stake_total"] or 0)
 
@@ -730,7 +748,11 @@ def _resultados_publicos(month, source, recent_limit, recent_offset, slim, bloco
         for acc in por_fonte.values():
             acc["profit"] = round(acc["profit"], 2)
             acc["stake_total"] = round(acc["stake_total"], 2)
-            acc["win_rate"] = round(acc["greens"] / acc["total"] * 100, 1) if acc["total"] else 0.0
+            # Taxa de acerto com TODOS os status: meio-green conta como acerto,
+            # anulada sai do denominador (ninguem ganhou nem perdeu nela).
+            resolvidos = acc["total"] - acc["push"]
+            acertos    = acc["greens"] + acc["half_wins"]
+            acc["win_rate"] = round(acertos / resolvidos * 100, 1) if resolvidos else 0.0
             acc["roi"] = round(acc["profit"] / acc["stake_total"] * 100, 1) if acc["stake_total"] else 0.0
             by_source.append(acc)
         by_source.sort(key=lambda a: a["profit"], reverse=True)

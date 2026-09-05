@@ -735,10 +735,18 @@ def test_periodo_tem_um_vocabulario_so():
 
 def test_periodo_fica_a_vista_nas_duas_telas():
     """Era painel dobravel com UM grupo dentro na Banca (tres cliques pro
-    filtro principal da tela) e fila aberta em Meus Picks."""
-    for pagina in ("pages/Banca.tsx", "pages/MeusPicks.tsx"):
+    filtro principal da tela) e fila aberta em Meus Picks.
+
+    O QUE CONTINUA VALENDO e' "a vista, sem acordeao"; a FORMA deixou de ser
+    obrigatoriamente a fila de pills em 04/09, quando a Banca passou pro mesmo
+    menu que Resultados usa (pedido do usuario). A fila nao cabia numa linha de
+    celular, nao oferecia mes especifico sem crescer um item por mes e nao
+    tinha lugar pro recorte por produto.
+    """
+    for pagina, controle in (("pages/Banca.tsx", "<SelectMenu"),
+                             ("pages/MeusPicks.tsx", "<PillGroup")):
         src = _front_codigo(pagina)
-        assert "<PillGroup" in src, f"{pagina} devia mostrar o periodo em fila"
+        assert controle in src, f"{pagina} devia mostrar o periodo a vista"
     assert "FilterPanel" not in _front_codigo("pages/Banca.tsx")
 
 

@@ -706,6 +706,7 @@ def get_banca(
     to_date:   Optional[str] = Query(None),  # YYYY-MM-DD
     resolved_offset: int = Query(0, ge=0),
     resolved_limit:  int = Query(100, ge=1, le=500),
+    source: Optional[str] = Query(None, description="Um pick_type ('vip', 'free', ...) ou vazio pra todos"),
 ):
     import json as _json
     user_id = current_user["id"]
@@ -737,11 +738,25 @@ def get_banca(
                 date_cond = f" AND {data_br('uf.followed_at')} >= %s"
                 date_params.append(epoch)
 
+        # FILTRO POR PRODUTO (2026-09-04, pedido do usuario). Ele entra aqui e
+        # em nenhum outro lugar de proposito: `entries` e' a fonte de TUDO que
+        # a tela mostra (resumo, sequencia, curva, quebra por pipeline, melhor
+        # e pior pick), entao recortar a lista recorta a pagina inteira sem
+        # abrir espaco pra dois numeros discordarem.
+        #
+        # `alavancagem` nao e' opcao: ela ja' esta' fora desta consulta por
+        # design (so' entra na banca quando o caminho encerra) e tem aba
+        # propria.
+        fonte_cond = ""
+        if source and source != "all":
+            fonte_cond = " AND uf.pick_type = %s"
+            date_params.append(source)
+
         cur.execute(f"""
             SELECT uf.id, uf.pick_id, uf.pick_type, uf.stake_units, uf.followed_at,
                    uf.actual_odd, uf.cashout_amount, uf.unit_value
             FROM user_followed_picks uf
-            WHERE uf.user_id = %s AND uf.pick_type != 'alavancagem' {date_cond}
+            WHERE uf.user_id = %s AND uf.pick_type != 'alavancagem' {date_cond}{fonte_cond}
             ORDER BY uf.followed_at ASC
         """, date_params)
         followed = [dict(r) for r in cur.fetchall()]
@@ -902,7 +917,19 @@ def get_banca(
         resolved_page = resolved_sorted_desc[resolved_offset:resolved_offset + resolved_limit]
         page_entries = sorted(pending_entries + resolved_page, key=lambda e: e["followed_at"] or "")
 
+        # Meses com movimento, pro menu de mes da tela. Sai FORA do recorte de
+        # data de proposito: uma lista de meses que encolhe quando voce escolhe
+        # um mes deixaria de servir pra trocar de mes.
+        cur.execute(f"""
+            SELECT DISTINCT to_char({data_br('uf.followed_at')}, 'YYYY-MM') AS mes
+            FROM user_followed_picks uf
+            WHERE uf.user_id = %s AND uf.pick_type != 'alavancagem'
+            ORDER BY mes DESC
+        """, (user_id,))
+        available_months = [r["mes"] for r in cur.fetchall() if r["mes"]]
+
         return {
+            "available_months":     available_months,
             "bankroll_start":       bankroll_start,
             "bankroll_current":     bankroll_current_real,
             "unit_value":           unit_value,

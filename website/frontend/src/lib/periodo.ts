@@ -72,6 +72,16 @@ export function limitesDoMes(offset: number): { de: string; ate: string } {
  */
 export function janelaDoPeriodo(p: PeriodoKey): { de: string; ate: string } | null {
   if (p === 'tudo') return null
+  /* Mes ESPECIFICO ("mes:2026-08"). Sem este caso ele caia no `return` la'
+     embaixo e virava "mes passado" em silencio -- a tela pedia agosto e recebia
+     o mes anterior ao atual. So' `dentroDoPeriodo` sabia ler o prefixo, porque
+     Meus Picks filtra em memoria; a Banca manda datas pro servidor. */
+  if (typeof p === 'string' && p.startsWith('mes:')) {
+    const [y, mo] = p.slice(4).split('-').map(Number)
+    const fmt = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    return { de: fmt(new Date(y, mo - 1, 1)), ate: fmt(new Date(y, mo, 0)) }
+  }
   if (p === 'hoje') return { de: hojeBR(), ate: hojeBR() }
   // Janela fechada em ontem, não "de ontem até hoje": senão "Ontem" mostraria
   // os jogos de hoje junto e deixaria de responder o que ele pergunta.
