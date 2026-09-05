@@ -18,7 +18,16 @@ DEFAULT_PROVIDERS = {
     "alavancagem": "anthropic",
     "vip": "openai",
     "multipla": "openai",
+    # `goleiros` continua aqui e nao e' usado por ninguem desde 27/08: o motor
+    # virou o metodo `saves` do Player Stats, que passa por "player_stats".
+    # Fica como rastro de qual provedor aquele produto usava.
     "goleiros": "openai",
+    # PLAYER STATS e AO VIVO ganharam gate em 2026-09-04, os dois no OpenAI
+    # (decisao do usuario). Sao os dois motores que decidem sobre uma aposta
+    # de ALTA VARIANCIA -- prop de um jogador so', e partida em andamento --
+    # e e' onde o parecer independente vale o modelo mais caro.
+    "player_stats": "openai",
+    "live": "openai",
     # Faltas fica no Claude junto com os outros fluxos de volume: o pick sai
     # de tabela empirica medida, nao de score composto, entao o parecer da IA
     # aqui e' checagem de contexto (classico, decisao ja definida, elenco

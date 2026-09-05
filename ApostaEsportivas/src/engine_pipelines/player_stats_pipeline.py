@@ -37,6 +37,7 @@ from services.match_stats_service import MatchStatsService
 from services.standings_service import StandingsService
 from services.odds_service import OddsService
 from services.pick_engine import context_gate, tie_effect
+from services.pick_engine.ai_review import review_gate
 from services.pick_engine.goalkeeper_model import analyze_saves_market
 from services.pick_engine.market_pick_score import pick_score
 from services.pick_engine.saves_calibration import recalibrar as recalibrar_saves
@@ -400,6 +401,33 @@ def _aprovado(c: dict) -> tuple:
     return (True, None)
 
 
+def _pick_para_ia(c: dict) -> dict:
+    """O candidato traduzido pras chaves que `ai_review.build_review_payload` le.
+
+    O payload da revisao nasceu dos motores de MERCADO DE TIME e le nomes que
+    este pipeline nao usa (`market_name`, `taxa_real`, `value_label`). Passar o
+    candidato cru faria a chamada acontecer com quase tudo None -- a IA
+    responderia sobre um pick em branco, e o gate pareceria estar funcionando.
+
+    O que a IA precisa ver aqui e' o que distingue prop de jogador: QUEM e' o
+    jogador, de que time, e sobre quantas atuacoes a media foi tirada.
+    """
+    analise, jogador, metodo = c["analise"], c["jogador"], c["metodo"]
+    return {
+        "market_name": metodo.label,
+        "market_type": metodo.slug,
+        "value_label": f"{jogador['player_name']} ({jogador['team_name']}) · "
+                       f"{c['rotulo_linha']}",
+        "odd": analise.get("odd"),
+        "taxa_real": analise.get("probability"),
+        "confidence": analise.get("probability"),
+        "edge": analise.get("edge"),
+        "ev": analise.get("ev"),
+        "market_sample": analise.get("amostra"),
+        "match_context": c.get("composicao"),
+    }
+
+
 def _engine_debug(c: dict) -> str:
     return json.dumps({
         "modelo": ("goalkeeper_model/binomial_negativa" if c["metodo"].slug == "saves"
@@ -596,8 +624,38 @@ def run_player_stats_engine(metodos: tuple | None = None):
             excedentes = publicaveis[cfg.MAX_PICKS_POR_RODADA:]
             publicaveis = publicaveis[:cfg.MAX_PICKS_POR_RODADA]
 
+            # GATE DE IA (2026-09-04). Ate' aqui este pipeline era o unico
+            # dos sete que nunca chamava a revisao -- e mentia sobre isso: o
+            # rastro ja' gravava um campo `ai_review` (ver `_engine_debug`) que
+            # nascia None sempre, entao a auditoria lia "a IA nao vetou" onde a
+            # verdade era "a IA nunca olhou".
+            #
+            # Um por vez, e nao a lista inteira numa chamada so': aqui cada
+            # candidato e' um JOGADOR diferente, muitas vezes de partidas
+            # diferentes. Vetar em bloco derrubaria picks bons junto com o
+            # ruim, que e' o oposto do que o gate faz nos outros motores (la' a
+            # lista e' UMA selecao: as pernas de uma multipla, um pick de um
+            # jogo). A multipla e' o contraexemplo proposital -- ela chama com
+            # a combinacao inteira porque o veto e' sobre o bilhete.
+            gate = review_gate("player_stats")
             salvos = 0
             for c in publicaveis:
+                revisados = gate.apply([_pick_para_ia(c)], "player_stats", c["fixture"])
+                if not revisados:
+                    print(f"[PLAYER_STATS/{metodo.slug}] "
+                          f"{c['jogador']['player_name']} vetado pela revisao de IA.")
+                    run.analisado(c["fixture"], selecionado=False,
+                                  score=c.get("pick_score"),
+                                  probabilidade=c["analise"].get("probability"),
+                                  odd=c["analise"].get("odd"),
+                                  motivo="vetado pela revisao de IA",
+                                  dados=_dados_da_auditoria(c, "vetado pela revisao de IA"))
+                    continue
+                # O parecer entra no candidato pra `_engine_debug` grava-lo --
+                # e' o campo que ate' hoje ficava vazio. O `c` original
+                # continua sendo o que grava o pick: o dicionario que foi pra
+                # IA e' uma TRADUCAO, nao o candidato.
+                c = {**c, "ai_review": revisados[0].get("ai_review")}
                 pick_id = None
                 try:
                     pick_id = _salvar(cur, c)

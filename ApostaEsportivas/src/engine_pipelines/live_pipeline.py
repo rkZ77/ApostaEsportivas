@@ -51,6 +51,7 @@ from utils.db_utils import get_connection  # noqa: E402
 from services.match_stats_service import MatchStatsService
 from services.standings_service import StandingsService
 from services.pick_engine import context_gate, referee_model, stats_model
+from services.pick_engine.ai_review import review_gate
 from services.pick_engine.staking import calculate_stake
 from services.pick_engine_live import live_odds, live_state, orchestrator
 from services.pick_engine_live.config import (
@@ -1034,6 +1035,42 @@ def montar_engine_debug(analise: dict, candidato: dict, config: LiveEngineConfig
         "confidence_breakdown": candidato["debug"].get("confianca"),
         "decision": "PICK" if candidato["aprovado"] else "NO_PICK",
         "motivos_reprovacao": candidato.get("motivos_reprovacao"),
+        # O parecer inteiro, `status` incluso: e' o que distingue "a IA
+        # aprovou" de "a IA nao foi chamada". Ver o comentario do gate.
+        "ai_review": candidato.get("ai_review"),
+    }
+
+
+def _pick_para_ia(candidato: dict, estado: dict) -> dict:
+    """O candidato ao vivo traduzido pras chaves de `build_review_payload`.
+
+    Mesmo motivo do tradutor do Player Stats: o payload da revisao le nomes dos
+    motores de pre-jogo (`market_name`, `taxa_real`) e passar o candidato cru
+    faria a IA opinar sobre um pick em branco.
+
+    O que ela precisa ver aqui e' o que so' existe AO VIVO: em que minuto o
+    jogo esta', qual o placar e quanto do contador da familia ja' aconteceu --
+    sem isso um "Over 9.5 escanteios" aos 80 minutos com 4 escanteios parece
+    igual ao mesmo pick aos 20.
+    """
+    familia = candidato["familia"]
+    observado = {"corners": "corners_total", "goals": "goals_total",
+                 "cards": "cards_points_total", "fouls": "fouls_total"}.get(familia)
+    return {
+        "market_name": candidato.get("market") or familia,
+        "market_type": familia,
+        "value_label": candidato.get("line"),
+        "odd": candidato.get("odd"),
+        "taxa_real": candidato.get("probability"),
+        "confidence": candidato.get("confidence"),
+        "edge": candidato.get("edge"),
+        "ev": candidato.get("ev"),
+        "match_context": {
+            "minuto": estado.get("minuto"),
+            "placar": f"{estado.get('home_goals')}x{estado.get('away_goals')}",
+            "ja_observado": estado.get(observado) if observado else None,
+            "linha": candidato.get("linha"),
+        },
     }
 
 
@@ -1602,6 +1639,27 @@ def _processar_partida(indice: int, bruto: dict, cur, conn, feed: LiveFeed,
         relatorio["picks_criados"].append({"fixture_id": fid, "dry_run": True,
                                            **_resumo_pick(melhor)})
         return resumo
+
+    # GATE DE IA (2026-09-04, decisao do usuario · OpenAI).
+    #
+    # POR QUE SO' AQUI, e nao junto com a avaliacao: a chamada custa segundos e
+    # o jogo esta' correndo. Neste ponto ja' se sabe que ha' UM pick, que ele
+    # nao e' duplicata e que nao e' dry run -- e' uma chamada por pick gravado,
+    # nao uma por candidato avaliado. A odd tem validade propria
+    # (`config.validade_odd_segundos`) e ela continua valendo do mesmo jeito: o
+    # snapshot foi tirado antes, a IA nao o reescreve.
+    #
+    # FALHA ABERTO, como nos outros seis: provedor fora do ar, teto diario
+    # batido ou modo `off` devolvem aprovacao. Entao "sem veto" nunca prova que
+    # a IA olhou -- quem responde isso e' o campo `status` do parecer, que vai
+    # inteiro pro engine_debug.
+    revisados = review_gate("live").apply(
+        [_pick_para_ia(melhor, estado)], "live", _fixture_do_log(estado, nome))
+    if not revisados:
+        print("DECISAO: NO PICK (vetado pela revisao de IA)")
+        resumo.update({"decisao": "NO PICK", "motivo": "vetado pela revisao de IA"})
+        return resumo
+    melhor = {**melhor, "ai_review": revisados[0].get("ai_review")}
 
     try:
         pick_id = salvar_pick(cur, analise, melhor, config, _data_br_do_jogo(bruto))
