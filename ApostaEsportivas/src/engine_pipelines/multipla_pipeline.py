@@ -64,6 +64,24 @@ ODD_TOTAL_MAX = 4.00  # era 3.00 -- achado real (2026-07-21): com poucos jogos
 # combinations(30, 3) = 4.060 combos, custo irrelevante.
 MAX_CANDIDATES_FOR_COMBO = 30  # limita o espaco de busca das combinacoes
 
+#: Quantos bilhetes o dia pode publicar (2026-09-05, decisao do usuario:
+#: "deixar o motor salvar mais de uma multipla se tiver boa confianca").
+#:
+#: O QUE DECIDE SE O SEGUNDO SAI nao e' um piso de qualidade novo -- e' PERNA
+#: DISPONIVEL. Cada bilhete usa pernas EXCLUSIVAS: nenhuma perna aparece em
+#: dois bilhetes do mesmo dia.
+#:
+#: E a exclusividade nao e' capricho. Dois bilhetes que dividem uma perna nao
+#: sao duas apostas, sao uma aposta com o dobro da exposicao: o RED daquela
+#: perna derruba os dois juntos. Seria concentracao de risco vestida de
+#: variedade, e o usuario apostaria duas vezes achando que diversificou.
+#:
+#: NAO ENTROU UM PISO DE `prob_combinada` PRA OS EXTRAS, e isso e' proposital:
+#: essa ideia ja' foi medida em 2.677 bilhetes e REPROVADA. As pernas destes
+#: bilhetes passaram exatamente pelos mesmos cortes das do primeiro -- o que
+#: muda entre o primeiro e o terceiro e' a ordem, nao o criterio.
+MAX_MULTIPLAS_POR_DIA = 3
+
 
 def _create_table_if_needed(cur):
     cur.execute("""
@@ -118,7 +136,14 @@ def _has_today_multipla(cur) -> bool:
     detectar duplicata). Aqui usa match_date = CURRENT_DATE, mesmo padrao
     ja usado (e correto) em has_today_dica()/has_today_pick()."""
     cur.execute(f"SELECT COUNT(*) FROM picks_multiplas WHERE match_date = {HOJE_BR}")
-    return cur.fetchone()[0] >= 1
+    return cur.fetchone()[0] >= MAX_MULTIPLAS_POR_DIA
+
+
+def _multiplas_de_hoje(cur) -> int:
+    """Quantos bilhetes o dia ja' tem · o teto e' por DIA, nao por execucao,
+    senao rodar o motor duas vezes publicaria o dobro."""
+    cur.execute(f"SELECT COUNT(*) FROM picks_multiplas WHERE match_date = {HOJE_BR}")
+    return int(cur.fetchone()[0])
 
 
 def _today_used_pairs(cur) -> set:
@@ -512,8 +537,10 @@ def run_multipla_engine():
     _create_table_if_needed(cur)
     conn.commit()
 
-    if _has_today_multipla(cur):
-        print("[MULTIPLA_ENGINE] Já existe múltipla de hoje.")
+    ja_publicadas = _multiplas_de_hoje(cur)
+    if ja_publicadas >= MAX_MULTIPLAS_POR_DIA:
+        print(f"[MULTIPLA_ENGINE] Dia já tem {ja_publicadas} múltipla(s), "
+              f"que é o teto ({MAX_MULTIPLAS_POR_DIA}).")
         cur.close()
         conn.close()
         return
@@ -534,38 +561,57 @@ def run_multipla_engine():
         conn.close()
         return
 
-    result = _find_combo(legs)
-    if not result:
-        print(f"[MULTIPLA_ENGINE] Nenhuma combinação bateu a faixa de odd total "
-              f"[{ODD_TOTAL_MIN:.2f}, {ODD_TOTAL_MAX:.2f}].")
-        cur.close()
-        conn.close()
-        return
+    # UM BILHETE POR VOLTA, e a volta seguinte procura na sobra. As pernas
+    # gastas saem do pool: bilhete que divide perna com outro nao e' aposta
+    # nova, e' a mesma exposicao contada duas vezes (ver MAX_MULTIPLAS_POR_DIA).
+    restantes = list(legs)
+    salvas = 0
+    vagas = MAX_MULTIPLAS_POR_DIA - ja_publicadas
+    while salvas < vagas and len(restantes) >= 2:
+        result = _find_combo(restantes)
+        if not result:
+            if salvas == 0:
+                print(f"[MULTIPLA_ENGINE] Nenhuma combinação bateu a faixa de odd total "
+                      f"[{ODD_TOTAL_MIN:.2f}, {ODD_TOTAL_MAX:.2f}].")
+            else:
+                print(f"[MULTIPLA_ENGINE] A sobra do pool não fecha outro bilhete na faixa.")
+            break
 
-    combo, score_combo, odd_total = result
-    reviewed = review_gate("multipla").apply(list(combo), "multipla")
-    if not reviewed:
-        print("[MULTIPLA_ENGINE] Combinacao vetada pela revisao de IA.")
-        cur.close()
-        conn.close()
-        return
-    combo = tuple(reviewed)
-    pick_id = _save_multipla(cur, combo, score_combo, odd_total)
-    conn.commit()
+        combo, score_combo, odd_total = result
+        # As pernas saem do pool ANTES da IA: vetada ou nao, esta combinacao
+        # ja' foi considerada, e reofere-la na volta seguinte daria um laco
+        # infinito com a mesma resposta.
+        usadas = {id(p) for p in combo}
+        restantes = [p for p in restantes if id(p) not in usadas]
+
+        reviewed = review_gate("multipla").apply(list(combo), "multipla")
+        if not reviewed:
+            print("[MULTIPLA_ENGINE] Combinacao vetada pela revisao de IA.")
+            continue
+        combo = tuple(reviewed)
+        pick_id = _save_multipla(cur, combo, score_combo, odd_total)
+        conn.commit()
+        if not pick_id:
+            continue
+        salvas += 1
+
+        pernas = " + ".join(
+            f"{p['_fixture']['home_team']} x {p['_fixture']['away_team']} ({p['market_name']} {p['value_label']} @ {p['odd']})"
+            for p in combo
+        )
+        # As contagens da aba de Auditoria: `contabilizar` ja' somou este jogo
+        # como analisado/descartado quando o decision_log gravou a linha dele;
+        # aqui a pick salva move a contagem pro lado certo.
+        registrar_selecao("MULTIPLA_ENGINE",
+                          [p["_fixture"]["fixture_id"] for p in combo],
+                          pick_id=pick_id)
+        print(f"[MULTIPLA_ENGINE] Salva ({salvas}/{vagas}): {pernas} | "
+              f"odd_total={odd_total} | score_combo={score_combo}")
+
     cur.close()
     conn.close()
-
-    pernas = " + ".join(
-        f"{p['_fixture']['home_team']} x {p['_fixture']['away_team']} ({p['market_name']} {p['value_label']} @ {p['odd']})"
-        for p in combo
-    )
-    # As contagens da aba de Auditoria: `contabilizar` ja' somou este jogo
-    # como analisado/descartado quando o decision_log gravou a linha dele;
-    # aqui a pick salva move a contagem pro lado certo.
-    registrar_selecao("MULTIPLA_ENGINE",
-                      [p["_fixture"]["fixture_id"] for p in combo],
-                      pick_id=pick_id)
-    print(f"[MULTIPLA_ENGINE] Salva: {pernas} | odd_total={odd_total} | score_combo={score_combo}")
+    if not salvas:
+        print("[MULTIPLA_ENGINE] Nenhuma múltipla publicada hoje.")
 
 
 if __name__ == "__main__":

@@ -80,6 +80,19 @@ ODD_INDIVIDUAL_MAX = ODD_COMBINED_MAX
 # por MAX_CANDIDATES_FOR_COMBO abaixo.
 MAX_CANDIDATES_FOR_COMBO = 12
 
+#: Quantos caminhos de alavancagem o dia pode abrir (2026-09-05, decisao do
+#: usuario: "deixar salvar quando tem bastante jogos").
+#:
+#: "BASTANTE JOGOS" VIROU UM NUMERO, e ele nao e' o total do dia: e' quantos
+#: jogos DIFERENTES ainda tem perna elegivel sobrando. Um bilhete de
+#: alavancagem come 2 a 3 jogos, entao e' essa a moeda -- num dia de 4 jogos o
+#: segundo caminho nao cabe, por mais alta que seja a confianca.
+#:
+#: JOGOS_POR_CAMINHO_EXTRA e' o piso pra abrir MAIS UM: o primeiro caminho sai
+#: como sempre saiu, sem exigencia nova.
+MAX_CAMINHOS_POR_DIA = 2
+JOGOS_POR_CAMINHO_EXTRA = 6
+
 _TIPO_POR_TAMANHO = {1: "simples", 2: "dupla", 3: "tripla"}
 
 
@@ -130,7 +143,14 @@ def _create_table_if_needed(cur):
 
 def _has_today_pick(cur) -> bool:
     cur.execute(f"SELECT COUNT(*) FROM picks_alavancagem WHERE match_date = {HOJE_BR}")
-    return cur.fetchone()[0] >= 1
+    return cur.fetchone()[0] >= MAX_CAMINHOS_POR_DIA
+
+
+def _caminhos_de_hoje(cur) -> int:
+    """Quantos caminhos o dia ja' abriu · o teto e' por DIA e nao por
+    execucao, senao rodar o motor duas vezes dobraria a exposicao."""
+    cur.execute(f"SELECT COUNT(*) FROM picks_alavancagem WHERE match_date = {HOJE_BR}")
+    return int(cur.fetchone()[0])
 
 
 def _fixtures_with_odds_today(cur) -> list:
@@ -501,8 +521,10 @@ def run_alavancagem_engine():
     _create_table_if_needed(cur)
     conn.commit()
 
-    if _has_today_pick(cur):
-        print("[ALAVANCAGEM_ENGINE] Já existe pick de hoje.")
+    ja_abertos = _caminhos_de_hoje(cur)
+    if ja_abertos >= MAX_CAMINHOS_POR_DIA:
+        print(f"[ALAVANCAGEM_ENGINE] Dia já tem {ja_abertos} caminho(s), "
+              f"que é o teto ({MAX_CAMINHOS_POR_DIA}).")
         cur.close()
         conn.close()
         return
@@ -539,48 +561,84 @@ def run_alavancagem_engine():
     tentativas = [("jogos livres do VIP", livres)] if livres else []
     tentativas.append(("todos os jogos", legs))
 
-    result = None
-    for rotulo, pool in tentativas:
-        result = _find_combo(pool, ODD_COMBINED_MIN, ODD_COMBINED_MAX)
-        if result:
-            if rotulo != "jogos livres do VIP":
-                print("[ALAVANCAGEM_ENGINE] Sem combo possivel so' com jogo livre · "
-                      "reaproveitando jogo que o VIP ja usou hoje (com outro mercado: "
-                      "o pick do VIP em si ja foi bloqueado antes).")
+    def _jogos_com_perna(pool: list) -> int:
+        """Jogos DIFERENTES ainda representados no pool · a moeda do dia."""
+        return len({p["_fixture"]["fixture_id"] for p in pool})
+
+    gastas: set = set()
+    salvos = 0
+    vagas = MAX_CAMINHOS_POR_DIA - ja_abertos
+    while salvos < vagas:
+        # Perna gasta sai das duas tentativas. Dois caminhos que dividem uma
+        # perna nao sao dois caminhos: o RED daquela perna fecha os dois, e o
+        # usuario teria posto duas entradas na mesma aposta.
+        pools = [(rotulo, [p for p in pool if id(p) not in gastas])
+                 for rotulo, pool in tentativas]
+
+        # "BASTANTE JOGOS" pro caminho EXTRA. O primeiro sai como sempre saiu;
+        # do segundo em diante o dia precisa ter jogo de sobra, senao o motor
+        # so' estaria reciclando o mesmo punhado de partidas.
+        if salvos or ja_abertos:
+            disponiveis = max((_jogos_com_perna(pool) for _, pool in pools), default=0)
+            if disponiveis < JOGOS_POR_CAMINHO_EXTRA:
+                print(f"[ALAVANCAGEM_ENGINE] Só {disponiveis} jogo(s) com perna livre · "
+                      f"abaixo do mínimo pra abrir outro caminho "
+                      f"({JOGOS_POR_CAMINHO_EXTRA}).")
+                break
+
+        result = None
+        for rotulo, pool in pools:
+            if not pool:
+                continue
+            result = _find_combo(pool, ODD_COMBINED_MIN, ODD_COMBINED_MAX)
+            if result:
+                if rotulo != "jogos livres do VIP":
+                    print("[ALAVANCAGEM_ENGINE] Sem combo possivel so' com jogo livre · "
+                          "reaproveitando jogo que o VIP ja usou hoje (com outro mercado: "
+                          "o pick do VIP em si ja foi bloqueado antes).")
+                break
+
+        if not result:
+            motivo = (f"nenhuma combinacao caiu na faixa [{ODD_COMBINED_MIN}, {ODD_COMBINED_MAX}] "
+                      f"(nao existe mais fallback de odd mais alta)")
+            print(f"[ALAVANCAGEM_ENGINE] {motivo}.")
+            if not salvos:
+                log_run("ALAVANCAGEM_ENGINE", motivo)
             break
 
-    if not result:
-        motivo = (f"nenhuma combinacao caiu na faixa [{ODD_COMBINED_MIN}, {ODD_COMBINED_MAX}] "
-                  f"(nao existe mais fallback de odd mais alta)")
-        print(f"[ALAVANCAGEM_ENGINE] {motivo}.")
-        log_run("ALAVANCAGEM_ENGINE", motivo)
-        cur.close()
-        conn.close()
-        return
+        combo, confidence_media, odd_combined = result
+        # Saem do pool ANTES da IA: vetado ou nao, este combo ja' foi
+        # considerado, e reoferece-lo daria um laco com a mesma resposta.
+        gastas.update(id(p) for p in combo)
 
-    combo, confidence_media, odd_combined = result
-    reviewed = review_gate("alavancagem").apply(list(combo), "alavancagem")
-    if not reviewed:
-        print("[ALAVANCAGEM_ENGINE] Combinacao vetada pela revisao de IA.")
-        cur.close()
-        conn.close()
-        return
-    combo = tuple(reviewed)
-    tipo, pick_id = _save_pick(cur, combo, confidence_media, odd_combined)
-    # Aba de Auditoria: fecha a contagem e liga TODAS as pernas ao bilhete --
-    # e' o caminho de volta de um RED ate' o que o motor viu em cada jogo.
-    registrar_selecao("ALAVANCAGEM_ENGINE",
-                      [p["_fixture"]["fixture_id"] for p in combo],
-                      pick_id=pick_id)
-    conn.commit()
+        reviewed = review_gate("alavancagem").apply(list(combo), "alavancagem")
+        if not reviewed:
+            print("[ALAVANCAGEM_ENGINE] Combinacao vetada pela revisao de IA.")
+            continue
+        combo = tuple(reviewed)
+        tipo, pick_id = _save_pick(cur, combo, confidence_media, odd_combined)
+        conn.commit()
+        if not pick_id:
+            continue
+        salvos += 1
+        # Aba de Auditoria: fecha a contagem e liga TODAS as pernas ao bilhete --
+        # e' o caminho de volta de um RED ate' o que o motor viu em cada jogo.
+        registrar_selecao("ALAVANCAGEM_ENGINE",
+                          [p["_fixture"]["fixture_id"] for p in combo],
+                          pick_id=pick_id)
+
+        pernas = " + ".join(
+            f"{p['_fixture']['home_team']} x {p['_fixture']['away_team']} "
+            f"({p['market_name']} {p['value_label']} @ {p['odd']})"
+            for p in combo
+        )
+        print(f"[ALAVANCAGEM_ENGINE] Salva ({tipo}) {salvos}/{vagas}: {pernas} | "
+              f"odd_combined={odd_combined} | confidence_media={confidence_media}")
+
     cur.close()
     conn.close()
-
-    pernas = " + ".join(
-        f"{p['_fixture']['home_team']} x {p['_fixture']['away_team']} ({p['market_name']} {p['value_label']} @ {p['odd']})"
-        for p in combo
-    )
-    print(f"[ALAVANCAGEM_ENGINE] Salva ({tipo}): {pernas} | odd_combined={odd_combined} | confidence_media={confidence_media}")
+    if not salvos:
+        print("[ALAVANCAGEM_ENGINE] Nenhum caminho aberto hoje.")
 
 
 if __name__ == "__main__":
