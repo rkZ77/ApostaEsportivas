@@ -61,6 +61,12 @@ class LiveFeed:
         self.timeout = timeout
         self._memoria: dict[tuple, object] = {}
         self._trilha: list[dict] = []
+        self._paginas: dict[str, int] = {}
+        #: fixture_id -> lista de mercados ao vivo, da chamada global.
+        #: `None` enquanto ela nao foi feita -- e' o que separa "ainda nao
+        #: perguntei" de "perguntei e nao ha' nada", que era exatamente a
+        #: confusao que derrubou o dia 05/09.
+        self._odds_do_mundo: dict | None = None
 
     # ── Contabilidade ────────────────────────────────────────────────────
     @property
@@ -143,6 +149,11 @@ class LiveFeed:
             if isinstance(recusa, dict) and recusa:
                 erro = "API recusou com HTTP 200: " + "; ".join(
                     f"{k}: {v}" for k, v in recusa.items())
+            # Paginacao. So' importa na chamada global de odd ao vivo, que e' a
+            # unica deste motor capaz de passar de uma pagina -- as outras sao
+            # por fixture. Guardada aqui pra o chamador nao precisar do corpo.
+            paginacao = (corpo.get("paging") or {})
+            self._paginas[endpoint] = int(paginacao.get("total") or 1)
         except Exception as e:  # rede, HTTP, JSON -- todos terminam igual aqui
             erro = str(e)
 
@@ -182,12 +193,68 @@ class LiveFeed:
         """
         return self._get("fixtures/events", {"fixture": fixture_id})
 
+    def odds_ao_vivo_do_mundo(self, max_paginas: int = 3) -> dict:
+        """Todas as partidas com odd ao vivo AGORA, indexadas por fixture.
+
+        MESMA IDEIA DE `partidas_ao_vivo`, e pelo mesmo motivo: `/odds/live`
+        sem `fixture` devolve o mundo inteiro, e filtrar em memoria e' de
+        graca. Uma requisicao no lugar de uma por partida.
+
+        O QUE ISSO CONSERTA, alem da cota. Ate' 2026-09-05 cada partida perguntava
+        pela propria odd e recebia lista vazia, e lista vazia por partida nao
+        distingue "esta partida nao tem mercado" de "o provedor nao esta'
+        servindo odd ao vivo pra ninguem". Em PROD isso custou 211 requisicoes
+        num dia inteiro sem UM candidato avaliado, sem que o log conseguisse
+        dizer qual dos dois estava acontecendo. Com a chamada global a
+        pergunta se responde sozinha: se o mundo volta vazio, o problema e' o
+        provedor ou o plano; se o mundo volta cheio e a nossa partida nao esta'
+        nele, e' cobertura daquela partida.
+
+        Nao levanta e nao decide nada: devolve `{}` quando nao ha' nada, e quem
+        pergunta o motivo e' `ultimo_erro("odds/live")`.
+        """
+        por_fixture: dict[int, list] = {}
+        pagina = 1
+        while pagina <= max_paginas and self.tem_orcamento():
+            params = {"page": pagina} if pagina > 1 else {}
+            for item in self._get("odds/live", params) or []:
+                fid = (item.get("fixture") or {}).get("id")
+                if fid is not None:
+                    por_fixture[int(fid)] = item.get("odds") or []
+            if pagina >= self._paginas.get("odds/live", 1):
+                break
+            pagina += 1
+        return por_fixture
+
     def odds_ao_vivo(self, fixture_id: int) -> list:
-        """So' e' chamado DEPOIS de o modelo apontar oportunidade. E' a
-        economia central do desenho: partida sem sinal nao custa esta
-        requisicao."""
-        itens = self._get("odds/live", {"fixture": fixture_id})
-        return itens[0].get("odds", []) if itens else []
+        """Os mercados ao vivo desta partida.
+
+        A PRIMEIRA chamada busca o mundo inteiro e as seguintes leem da
+        memoria -- entao a economia central do desenho continua de pe' (partida
+        sem sinal nao dispara nada), e a rodada inteira custa UMA requisicao de
+        odd em vez de uma por partida triada.
+        """
+        if self._odds_do_mundo is None:
+            self._odds_do_mundo = self.odds_ao_vivo_do_mundo()
+        return self._odds_do_mundo.get(int(fixture_id), [])
+
+    def cobertura_de_odd_ao_vivo(self) -> dict | None:
+        """Quantas partidas o provedor esta' servindo com odd ao vivo agora.
+
+        Espelha `resumo_das_casas()` do coletor de pre-jogo: la' a pergunta e'
+        "quais casas responderam e quais vieram vazias", aqui e' "o provedor
+        esta' servindo alguma coisa". Sem isto, um dia inteiro sem odd nao tem
+        como ser distinguido de um dia inteiro sem oportunidade.
+
+        `None` quando a chamada global ainda nao aconteceu -- nenhuma partida
+        chegou a pedir preco, e afirmar cobertura zero ai seria inventar.
+        """
+        if self._odds_do_mundo is None:
+            return None
+        return {
+            "partidas_com_odd": len(self._odds_do_mundo),
+            "erro": self.ultimo_erro("odds/live"),
+        }
 
 
 # ── Leitura do que a API devolve ─────────────────────────────────────────

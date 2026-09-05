@@ -1337,6 +1337,23 @@ def run_live_engine(fixture_id: int | None = None,
         print(f"ATENCAO: a API recusou {len(recusas)} de {feed.usadas} chamada(s) "
               f"com HTTP 200 -- {recusas[0]['erro']}")
         relatorio["erros"].append(recusas[0]["erro"])
+
+    # COBERTURA DE ODD AO VIVO · a pergunta que 05/09 nao soube responder.
+    #
+    # Espelha `resumo_das_casas()` do coletor de pre-jogo. Enquanto cada
+    # partida perguntava pela propria odd, "nenhuma partida virou pick" era a
+    # unica frase disponivel tanto pra um dia sem oportunidade quanto pra um
+    # provedor que nao esta servindo odd ao vivo pra ninguem.
+    cobertura = feed.cobertura_de_odd_ao_vivo()
+    if cobertura is not None:
+        relatorio["cobertura_odd_ao_vivo"] = cobertura
+        total = cobertura["partidas_com_odd"]
+        if total == 0:
+            print("Odd ao vivo: o provedor NAO esta servindo nenhuma partida agora"
+                  + (f" -- {cobertura['erro']}" if cobertura.get("erro")
+                     else " (sem erro reportado: cobertura ou plano)"))
+        else:
+            print(f"Odd ao vivo: o provedor esta servindo {total} partida(s) no mundo")
     print(f"Picks criados:      {len(relatorio['picks_criados'])}"
           + (" (dry run, nada gravado)" if config.dry_run else ""))
     if relatorio["erros"]:

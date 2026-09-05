@@ -529,3 +529,117 @@ def test_resposta_sadia_e_vazia_continua_sem_erro(feed_com_resposta):
     feed = feed_com_resposta([])
     assert feed.odds_ao_vivo(123) == []
     assert feed.ultimo_erro("odds/live") is None
+
+
+# ─────── 8 · odd ao vivo em UMA chamada, como o coletor de pre-jogo ─────────
+#
+# O coletor de pre-jogo pergunta por (fixture, casa) e mantem `_cobertura`
+# pra saber quem respondeu e quem veio vazio -- e' o que faz "a Betano parou de
+# cotar" ser uma frase possivel la'. O caminho ao vivo perguntava por fixture e
+# nao guardava nada, entao 211 respostas vazias num dia so' nao produziram
+# nenhuma conclusao.
+#
+# `/odds/live` sem `fixture` devolve o mundo inteiro, do mesmo jeito que
+# `/fixtures?live=all`. Uma requisicao no lugar de N, e a cobertura vira um
+# numero em vez de uma suposicao.
+
+class _RespostaComOdds:
+    status_code = 200
+    headers: dict = {}
+
+    def __init__(self, paginas: dict, chamadas: list):
+        self._paginas = paginas
+        self._chamadas = chamadas
+
+    def raise_for_status(self):
+        return None
+
+
+def _feed_do_mundo(monkeypatch, paginas):
+    """`paginas` = {numero_da_pagina: [itens]}. Registra cada params usado."""
+    from services.pick_engine_live import live_feed as lf
+
+    monkeypatch.setenv("API_FOOTBALL_KEY", "chave-de-teste")
+    chamadas = []
+
+    class _R:
+        status_code = 200
+        headers: dict = {}
+
+        def __init__(self, pagina):
+            self.pagina = pagina
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"errors": [], "response": paginas.get(self.pagina, []),
+                    "paging": {"current": self.pagina, "total": len(paginas)}}
+
+    def _get(url, headers=None, params=None, timeout=None):
+        chamadas.append(dict(params or {}))
+        return _R(int((params or {}).get("page", 1)))
+
+    monkeypatch.setattr(lf.requests, "get", _get)
+    return lf.LiveFeed(limite_requisicoes=15), chamadas
+
+
+def _item(fid, mercados):
+    return {"fixture": {"id": fid}, "odds": mercados}
+
+
+def test_uma_chamada_atende_todas_as_partidas(monkeypatch):
+    """O ganho direto: tres partidas, uma requisicao. Antes eram tres."""
+    feed, chamadas = _feed_do_mundo(monkeypatch, {1: [
+        _item(10, [{"name": "Match Goals"}]),
+        _item(20, [{"name": "Total Corners"}]),
+        _item(30, []),
+    ]})
+    assert feed.odds_ao_vivo(10) == [{"name": "Match Goals"}]
+    assert feed.odds_ao_vivo(20) == [{"name": "Total Corners"}]
+    assert feed.odds_ao_vivo(30) == []
+    assert feed.usadas == 1
+    assert len(chamadas) == 1
+
+
+def test_partida_fora_do_mundo_devolve_vazio(monkeypatch):
+    """Sem custo extra: se o provedor nao serve aquela partida, a resposta ja'
+    esta em memoria."""
+    feed, _ = _feed_do_mundo(monkeypatch, {1: [_item(10, [{"name": "Match Goals"}])]})
+    assert feed.odds_ao_vivo(999) == []
+    assert feed.usadas == 1
+
+
+def test_a_busca_so_acontece_quando_alguem_pede_preco(monkeypatch):
+    """A economia central do motor continua de pe': partida sem sinal nao
+    dispara requisicao nenhuma, porque a triagem roda antes."""
+    feed, chamadas = _feed_do_mundo(monkeypatch, {1: [_item(10, [])]})
+    assert feed.usadas == 0
+    assert chamadas == []
+    assert feed.cobertura_de_odd_ao_vivo() is None
+
+
+def test_paginacao_e_seguida_ate_o_total(monkeypatch):
+    """O mundo inteiro pode nao caber numa pagina, e parar na primeira faria o
+    motor concluir que a partida nao tem mercado."""
+    feed, chamadas = _feed_do_mundo(monkeypatch, {
+        1: [_item(10, [{"name": "Match Goals"}])],
+        2: [_item(20, [{"name": "Total Corners"}])],
+    })
+    assert feed.odds_ao_vivo(20) == [{"name": "Total Corners"}]
+    assert feed.usadas == 2
+    assert chamadas[1]["page"] == 2
+
+
+def test_cobertura_conta_o_que_o_provedor_serve(monkeypatch):
+    """O numero que faltava em 05/09: mundo vazio e dia sem oportunidade
+    deixam de ser a mesma frase."""
+    feed, _ = _feed_do_mundo(monkeypatch, {1: [_item(10, []), _item(20, [])]})
+    feed.odds_ao_vivo(10)
+    assert feed.cobertura_de_odd_ao_vivo() == {"partidas_com_odd": 2, "erro": None}
+
+
+def test_mundo_vazio_e_distinguivel_de_partida_sem_mercado(monkeypatch):
+    feed, _ = _feed_do_mundo(monkeypatch, {1: []})
+    feed.odds_ao_vivo(10)
+    assert feed.cobertura_de_odd_ao_vivo()["partidas_com_odd"] == 0
