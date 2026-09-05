@@ -64,23 +64,27 @@ ODD_TOTAL_MAX = 4.00  # era 3.00 -- achado real (2026-07-21): com poucos jogos
 # combinations(30, 3) = 4.060 combos, custo irrelevante.
 MAX_CANDIDATES_FOR_COMBO = 30  # limita o espaco de busca das combinacoes
 
-#: Quantos bilhetes o dia pode publicar (2026-09-05, decisao do usuario:
-#: "deixar o motor salvar mais de uma multipla se tiver boa confianca").
+#: REDE DE SEGURANCA, NAO REGRA DE PRODUTO (2026-09-05).
 #:
-#: O QUE DECIDE SE O SEGUNDO SAI nao e' um piso de qualidade novo -- e' PERNA
-#: DISPONIVEL. Cada bilhete usa pernas EXCLUSIVAS: nenhuma perna aparece em
-#: dois bilhetes do mesmo dia.
+#: Quem limita quantos bilhetes o dia publica NAO e' este numero -- e' PERNA
+#: DISPONIVEL. Cada bilhete usa pernas EXCLUSIVAS, e a faixa de odd total
+#: ([ODD_TOTAL_MIN, ODD_TOTAL_MAX]) ainda precisa fechar com o que sobrou.
+#: Num dia normal a busca para sozinha, muito antes de encostar aqui.
 #:
-#: E a exclusividade nao e' capricho. Dois bilhetes que dividem uma perna nao
-#: sao duas apostas, sao uma aposta com o dobro da exposicao: o RED daquela
+#: A exclusividade nao e' capricho: dois bilhetes que dividem uma perna nao
+#: sao duas apostas, sao uma aposta com o dobro da exposicao -- o RED daquela
 #: perna derruba os dois juntos. Seria concentracao de risco vestida de
 #: variedade, e o usuario apostaria duas vezes achando que diversificou.
+#:
+#: Entao pra que existir? Pelo mesmo motivo que `MAX_PICKS_POR_RODADA` existe
+#: no Player Stats: uma falha de calibragem nao pode publicar cinquenta
+#: bilhetes de uma vez. E' o teto do acidente, nao do dia bom.
 #:
 #: NAO ENTROU UM PISO DE `prob_combinada` PRA OS EXTRAS, e isso e' proposital:
 #: essa ideia ja' foi medida em 2.677 bilhetes e REPROVADA. As pernas destes
 #: bilhetes passaram exatamente pelos mesmos cortes das do primeiro -- o que
-#: muda entre o primeiro e o terceiro e' a ordem, nao o criterio.
-MAX_MULTIPLAS_POR_DIA = 3
+#: muda entre o primeiro e o ultimo e' a ordem, nao o criterio.
+MAX_MULTIPLAS_POR_DIA = 8
 
 
 def _create_table_if_needed(cur):

@@ -80,17 +80,20 @@ ODD_INDIVIDUAL_MAX = ODD_COMBINED_MAX
 # por MAX_CANDIDATES_FOR_COMBO abaixo.
 MAX_CANDIDATES_FOR_COMBO = 12
 
-#: Quantos caminhos de alavancagem o dia pode abrir (2026-09-05, decisao do
-#: usuario: "deixar salvar quando tem bastante jogos").
+#: QUEM SEGURA A ALAVANCAGEM E' `JOGOS_POR_CAMINHO_EXTRA`, o de baixo.
 #:
-#: "BASTANTE JOGOS" VIROU UM NUMERO, e ele nao e' o total do dia: e' quantos
-#: jogos DIFERENTES ainda tem perna elegivel sobrando. Um bilhete de
-#: alavancagem come 2 a 3 jogos, entao e' essa a moeda -- num dia de 4 jogos o
-#: segundo caminho nao cabe, por mais alta que seja a confianca.
+#: "BASTANTE JOGOS" (pedido do usuario, 2026-09-05) VIROU UM NUMERO, e ele nao
+#: e' o total do dia: e' quantos jogos DIFERENTES ainda tem perna elegivel
+#: sobrando. Um caminho come 2 a 3 jogos, entao e' essa a moeda -- num dia de
+#: 4 jogos o segundo nao cabe, por mais alta que seja a confianca. O primeiro
+#: caminho sai como sempre saiu, sem exigencia nova.
 #:
-#: JOGOS_POR_CAMINHO_EXTRA e' o piso pra abrir MAIS UM: o primeiro caminho sai
-#: como sempre saiu, sem exigencia nova.
-MAX_CAMINHOS_POR_DIA = 2
+#: MAX_CAMINHOS_POR_DIA e' so' a rede de seguranca -- o teto do acidente (uma
+#: falha de calibragem abrindo trinta caminhos), nao o do dia bom. Mesmo papel
+#: que `MAX_PICKS_POR_RODADA` tem no Player Stats. Na pratica o piso de jogos
+#: morde primeiro: pra abrir o quarto caminho o dia precisaria de 6 jogos com
+#: perna livre DEPOIS de gastar as pernas dos tres anteriores.
+MAX_CAMINHOS_POR_DIA = 5
 JOGOS_POR_CAMINHO_EXTRA = 6
 
 _TIPO_POR_TAMANHO = {1: "simples", 2: "dupla", 3: "tripla"}
