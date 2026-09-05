@@ -84,10 +84,17 @@ class LiveEngineConfig:
     #: picks_live. E' o modo de validar o modelo sem sujar o historico com
     #: pick que so' existiu pra teste.
     dry_run: bool = True
-    #: Revisao por IA. FALSE na V1 por decisao explicita: a IA custa token por
-    #: partida por ciclo, e antes de gastar isso o motor estatistico precisa
-    #: provar que decide bem sozinho.
-    ai_review: bool = False
+    #: Revisao por IA. TRUE desde 2026-09-04, por decisao do usuario.
+    #:
+    #: Era FALSE na V1 com este argumento: "a IA custa token por partida por
+    #: ciclo, e antes de gastar isso o motor estatistico precisa provar que
+    #: decide bem sozinho". O custo que ele descrevia nao existe mais do jeito
+    #: que existia -- a chamada nao e' por partida analisada, e' por pick
+    #: GRAVADO (ver o gate em live_pipeline, depois da duplicata e do dry run),
+    #: entao uma rodada que nao gera pick nenhum nao gasta nada.
+    #:
+    #: A flag continua servindo pra desligar (LIVE_AI_REVIEW=false).
+    ai_review: bool = True
 
     # ── Teto de consumo ──────────────────────────────────────────────────
     #: Jogos analisados por rodada. E' o teto que mais controla custo: cada
@@ -250,7 +257,7 @@ class LiveEngineConfig:
             # Default GRAVANDO desde 28/08 · dry run que nasce ligado num
             # produto publicado significa aba que nunca recebe pick.
             dry_run=_flag("LIVE_ENGINE_DRY_RUN", False),
-            ai_review=_flag("LIVE_AI_REVIEW", False),
+            ai_review=_flag("LIVE_AI_REVIEW", True),
             max_partidas=_inteiro("LIVE_MAX_MATCHES", 3),
             max_requisicoes=_inteiro("LIVE_MAX_API_REQUESTS_PER_RUN", 15),
             minuto_inicial=_inteiro("LIVE_MINUTE_START", 15),

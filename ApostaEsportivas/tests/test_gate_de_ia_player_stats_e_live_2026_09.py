@@ -140,3 +140,16 @@ def test_live_falha_do_provedor_aprova_o_pick_do_motor():
     saida = gate.apply([live_para_ia(candidato, {"minuto": 50, "fouls_total": 12})], "live")
     assert len(saida) == 1
     assert saida[0]["ai_review"]["status"] == "unavailable"
+
+
+# --- A flag que ja existia -------------------------------------------------
+
+def test_live_ai_review_liga_por_padrao_e_pode_ser_desligada(monkeypatch):
+    """`LIVE_AI_REVIEW` existe desde a V1 e e' impressa no cabecalho de toda
+    rodada. O gate tem que passar por ela: chamar a IA sem olhar pra flag faz
+    o log dizer uma coisa e o motor fazer outra."""
+    from services.pick_engine_live.config import LiveEngineConfig
+    monkeypatch.delenv("LIVE_AI_REVIEW", raising=False)
+    assert LiveEngineConfig.do_ambiente().ai_review is True
+    monkeypatch.setenv("LIVE_AI_REVIEW", "false")
+    assert LiveEngineConfig.do_ambiente().ai_review is False

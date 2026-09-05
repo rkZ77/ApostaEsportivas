@@ -1653,8 +1653,13 @@ def _processar_partida(indice: int, bruto: dict, cur, conn, feed: LiveFeed,
     # batido ou modo `off` devolvem aprovacao. Entao "sem veto" nunca prova que
     # a IA olhou -- quem responde isso e' o campo `status` do parecer, que vai
     # inteiro pro engine_debug.
-    revisados = review_gate("live").apply(
+    # A PORTA E' `config.ai_review` (LIVE_AI_REVIEW), que existe desde a V1 e
+    # e' impressa no cabecalho de toda rodada. Chamar a IA sem olhar pra ela
+    # faria o log dizer "ai_review=False" enquanto o gate roda -- e o cabecalho
+    # e' de onde se le' o que o motor esta' fazendo.
+    revisados = (review_gate("live").apply(
         [_pick_para_ia(melhor, estado)], "live", _fixture_do_log(estado, nome))
+        if config.ai_review else [{"ai_review": None}])
     if not revisados:
         print("DECISAO: NO PICK (vetado pela revisao de IA)")
         resumo.update({"decisao": "NO PICK", "motivo": "vetado pela revisao de IA"})
