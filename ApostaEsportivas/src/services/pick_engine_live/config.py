@@ -114,6 +114,22 @@ class LiveEngineConfig:
 
     # ── Gates de aprovacao ───────────────────────────────────────────────
     ev_minimo: float = 0.05
+    #: PISO DE CONFIANCA. Esta' ACOPLADO a uma formula que subestima o
+    #: desacordo com o mercado, e mexer num sem o outro quebra o motor.
+    #:
+    #: Medido em 2026-09-05: o termo A de `signal_score.live_confidence` compara
+    #: a probabilidade DEPOIS do encolhimento com a do mercado, e o
+    #: encolhimento e' justamente uma aproximacao do mercado -- entao o que
+    #: sobra e' o desacordo real vezes `w = minuto/(minuto+45)`. Nos 7 picks de
+    #: DEV, tres deles discordavam do mercado em ~30 pontos e receberam de 0.39
+    #: a 0.55 no termo que existe pra punir isso.
+    #:
+    #: Trocar A pela divergencia real, sozinho, derruba 6 dos 7 abaixo deste
+    #: 0.58 -- o que nao e' uma correcao, e' desligar o motor sem dizer. Por
+    #: isso a divergencia real hoje e' MEDIDA e gravada
+    #: (`confidence_breakdown.divergencia_modelo` e `A_com_divergencia_real` no
+    #: engine_debug) e nao pontua. Quando houver amostra, os dois mudam na
+    #: mesma mexida: A passa a usar a divergencia real e este piso cai junto.
     confianca_minima: float = 0.58
     #: PISO DE ODD 1.49 desde 2026-08-30 (decisao do usuario). Era 1.40.
     #:

@@ -262,7 +262,11 @@ def avaliar(analise: dict, cotacoes: list, config: LiveEngineConfig = DEFAULT_LI
 
         conf = signal_score.live_confidence(
             prob_final=prob, prob_mercado=entrada["prob_mercado"], minuto=minuto,
-            conv=conv, fresh=analise.get("freshness"), distancia_da_linha=distancia)
+            conv=conv, fresh=analise.get("freshness"), distancia_da_linha=distancia,
+            # Nao entra no score -- entra no rastro. Ver a nota longa em
+            # live_confidence: a divergencia que pontua e' a de depois do
+            # encolhimento, e ela subestima o desacordo real por construcao.
+            prob_modelo_puro=encolhido["prob_pre_encolhimento"])
 
         motivos = _gates(entrada, prob, valor, conf, conv, observado, linha, direcao,
                          analise.get("freshness"), config)

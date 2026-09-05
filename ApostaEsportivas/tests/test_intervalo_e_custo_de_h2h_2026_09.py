@@ -326,3 +326,75 @@ def test_chamada_de_odd_bem_sucedida_e_vazia_nao_reporta_erro():
     feed = LiveFeed(limite_requisicoes=5)
     feed._trilha.append({"endpoint": "odds/live", "itens": 0, "erro": None})
     assert feed.ultimo_erro("odds/live") is None
+
+
+# ───── 5 · a divergencia com o mercado e' medida depois do encolhimento ─────
+#
+# NAO E' UM BUG CORRIGIDO -- e' um vies estrutural MEDIDO e deixado ligado de
+# proposito, porque o piso de confianca esta' calibrado contra ele. Estes
+# testes prendem as duas coisas: que o vies existe e tem a forma que a nota
+# descreve, e que o numero honesto passou a ser gravado.
+#
+# Ver a nota longa em signal_score.live_confidence e em
+# config.confianca_minima. Nos 7 picks de DEV, tres discordavam do mercado em
+# ~30 pontos e receberam de 0.39 a 0.55 no termo que existe pra punir isso;
+# trocar o termo sozinho derruba 6 dos 7 abaixo do piso.
+
+_CONV = {"score": 0.6, "a_favor": 3, "contra": 0}
+_FRESH_OK = {"nivel": FRESH}
+
+
+def test_a_divergencia_que_pontua_e_a_encolhida():
+    """O pick #1 de DEV, com os numeros dele: modelo 0.821, mercado 0.554,
+    final 0.645 aos 23'."""
+    from services.pick_engine_live import signal_score
+
+    c = signal_score.live_confidence(
+        prob_final=0.6447, prob_mercado=0.5544, minuto=23, conv=_CONV,
+        fresh=_FRESH_OK, distancia_da_linha=1.0, prob_modelo_puro=0.8214)
+    assert c["divergencia_mercado"] == pytest.approx(0.0903, abs=1e-4)
+    assert c["A"] == pytest.approx(0.5485, abs=1e-3)
+
+
+def test_a_divergencia_real_e_gravada_mesmo_sem_pontuar():
+    """Sem este numero no rastro, "quanto o modelo discordava de verdade?" nao
+    tem resposta, e a recalibracao do piso nunca sai do lugar."""
+    from services.pick_engine_live import signal_score
+
+    c = signal_score.live_confidence(
+        prob_final=0.6447, prob_mercado=0.5544, minuto=23, conv=_CONV,
+        fresh=_FRESH_OK, distancia_da_linha=1.0, prob_modelo_puro=0.8214)
+    assert c["divergencia_modelo"] == pytest.approx(0.2670, abs=1e-4)
+    # ~30 pontos de desacordo zeram o termo, contra os 0.55 que ele recebeu.
+    assert c["A_com_divergencia_real"] == 0.0
+
+
+def test_o_vies_cresce_quanto_mais_cedo_e_o_minuto():
+    """A forma do defeito: a divergencia medida e' a real vezes
+    w = minuto/(minuto+45), entao a penalidade e' mais fraca justamente cedo --
+    onde a folha e' curta e o mercado esta' mais afiado que o modelo."""
+    from services.pick_engine_live import signal_score
+    from services.pick_engine_live import residual_model as rm
+
+    for minuto, w_esperado in ((20, 0.308), (75, 0.625)):
+        enc = rm.encolher_contra_mercado(0.85, 0.55, minuto)
+        c = signal_score.live_confidence(
+            prob_final=enc["prob"], prob_mercado=0.55, minuto=minuto,
+            conv=_CONV, fresh=_FRESH_OK, prob_modelo_puro=0.85)
+        assert enc["peso_modelo"] == pytest.approx(w_esperado, abs=1e-3)
+        # A divergencia medida e' exatamente a real encolhida pelo mesmo peso.
+        assert c["divergencia_mercado"] == pytest.approx(
+            c["divergencia_modelo"] * enc["peso_modelo"], abs=1e-3)
+
+
+def test_sem_mercado_nao_ha_divergencia_de_nenhum_tipo():
+    """Linha sem par nao tem no-vig. O termo cai no neutro e os dois numeros
+    ficam nulos -- nenhum deles pode virar 0.0, que seria "concorda em cheio"."""
+    from services.pick_engine_live import signal_score
+
+    c = signal_score.live_confidence(
+        prob_final=0.7, prob_mercado=None, minuto=40, conv=_CONV,
+        fresh=_FRESH_OK, prob_modelo_puro=0.7)
+    assert c["A"] == 0.5
+    assert c["divergencia_mercado"] is None
+    assert c["divergencia_modelo"] is None

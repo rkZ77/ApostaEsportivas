@@ -272,7 +272,8 @@ FATOR_FRESHNESS = {FRESH: 1.0, DELAYED: 0.75, UNKNOWN: 0.6, STALE: 0.3}
 
 def live_confidence(prob_final: float, prob_mercado: float | None,
                     minuto: int, conv: dict, fresh: dict,
-                    distancia_da_linha: float | None = None) -> dict:
+                    distancia_da_linha: float | None = None,
+                    prob_modelo_puro: float | None = None) -> dict:
     """Confianca do pick Live. Formula PROPRIA, nao a do pre-jogo.
 
     Cinco termos, e cada um responde uma pergunta diferente:
@@ -292,6 +293,39 @@ def live_confidence(prob_final: float, prob_mercado: float | None,
 
     Quem aprova o pick continua sendo o EV, num gate separado. A confianca diz
     o quanto acreditar nele, e e' ela que decide o stake.
+
+    O TERMO A MEDE A DIVERGENCIA DEPOIS DO ENCOLHIMENTO, E ISSO SUBESTIMA
+    (medido em 2026-09-05, nos 7 picks de DEV)
+    ---------------------------------------------------------------------
+    `prob_final` ja' foi puxada em direcao ao mercado por
+    `residual_model.encolher_contra_mercado`:
+
+        prob_final - prob_mercado = w * (prob_modelo - prob_mercado)
+        w = minuto / (minuto + 45)
+
+    Ou seja, a divergencia medida aqui e' a divergencia REAL multiplicada pelo
+    peso do modelo. Ela e' menor sempre, e e' MUITO menor cedo -- aos 20' o w
+    e' 0.31 --, que e' exatamente o regime em que a docstring acima diz que a
+    divergencia e' mais suspeita. A penalidade e' mais fraca onde ela foi
+    desenhada pra ser mais forte.
+
+    Nos 7 picks gravados em DEV:
+
+        pick  minuto  divergencia real  a medida   A
+          1     23'        0.267          0.090   0.55
+          3     28'        0.306          0.117   0.41
+          7     29'        0.312          0.122   0.39
+
+    Tres picks cujo modelo discordava do mercado em ~30 pontos receberam de
+    0.39 a 0.55 no termo que existe pra punir exatamente isso. Com a
+    divergencia real, os tres iriam a 0.00.
+
+    POR QUE O SCORE NAO MUDOU JUNTO: `confianca_minima = 0.58` foi calibrado
+    CONTRA esta formula. Trocar o numerador sozinho derruba 6 dos 7 picks
+    abaixo do piso -- nao e' uma correcao, e' desligar o motor por efeito
+    colateral. Entao aqui a divergencia real passou a ser MEDIDA e gravada
+    (`divergencia_modelo`), e o score continua o mesmo ate' haver amostra pra
+    recalibrar o piso junto. Ver a nota em config.confianca_minima.
     """
     c = max(0.0, min(1.0, float(prob_final)))
     q = min(1.0, max(0, int(minuto)) / 45.0)
@@ -299,9 +333,16 @@ def live_confidence(prob_final: float, prob_mercado: float | None,
     if prob_mercado is None:
         a = 0.5
         divergencia = None
+        divergencia_modelo = None
     else:
         divergencia = abs(c - float(prob_mercado))
         a = max(0.0, 1.0 - divergencia / 0.20)
+        # O desacordo ANTES do encolhimento -- o numero que a docstring
+        # descreve e que o score ainda nao usa. Sem ele gravado, a pergunta
+        # "quanto o modelo discordava de verdade?" nao tem resposta no rastro,
+        # e a recalibracao do piso nunca sai do lugar.
+        divergencia_modelo = (abs(float(prob_modelo_puro) - float(prob_mercado))
+                              if prob_modelo_puro is not None else None)
 
     v = conv.get("score") if conv and conv.get("score") is not None else 0.5
 
@@ -323,6 +364,11 @@ def live_confidence(prob_final: float, prob_mercado: float | None,
         "fator_freshness": fator,
         "freshness": (fresh or {}).get("nivel"),
         "divergencia_mercado": round(divergencia, 4) if divergencia is not None else None,
+        # A que o score usa e' `divergencia_mercado`; esta e' a real.
+        "divergencia_modelo": (round(divergencia_modelo, 4)
+                               if divergencia_modelo is not None else None),
+        "A_com_divergencia_real": (round(max(0.0, 1.0 - divergencia_modelo / 0.20), 4)
+                                   if divergencia_modelo is not None else None),
         "distancia_da_linha": (round(distancia_da_linha, 3)
                                if distancia_da_linha is not None else None),
     }
