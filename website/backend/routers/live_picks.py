@@ -1007,7 +1007,19 @@ def em_leitura(current_user: dict = Depends(require_live_reader), limit: int = Q
                                   AND p.match_date >= (NOW() AT TIME ZONE
                                       'America/Sao_Paulo')::date) AS tem_pick
                   FROM ultima u
-             LEFT JOIN fixtures f ON f.fixture_id = u.fixture_id
+             -- JOIN, e nao LEFT JOIN, em `fixtures` (2026-09-05).
+             --
+             -- O motor observa o que a API devolve como ao vivo, e nem toda
+             -- partida observada existe na nossa tabela -- a coleta pode nao ter
+             -- trazido aquele jogo. Com LEFT JOIN essas linhas viravam cartao
+             -- "liga ? / Time ? x Time ?", com placar e contadores mas sem
+             -- dizer de que jogo se tratava: metade da tela era isso.
+             --
+             -- Partida que nao da' pra nomear nao e' informacao. Ela sai da
+             -- lista e sai da contagem, que passa a dizer quantos jogos a
+             -- pessoa consegue de fato ler.
+                  JOIN fixtures f ON f.fixture_id = u.fixture_id
+                                 AND f.home_team IS NOT NULL
              LEFT JOIN leagues  l ON l.league_id  = f.league_id
                  WHERE u.status = ANY(%s)
                    -- JOGO QUE JA' ACABOU NAO ESTA' SENDO LIDO (2026-09-05).
