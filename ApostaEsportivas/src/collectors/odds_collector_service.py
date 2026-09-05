@@ -496,6 +496,12 @@ class OddsCollectorService:
                   f"praticamente nenhum jogo. Com menos de duas casas por linha "
                   f"o motor reprova todo candidato "
                   f"(pick_engine/config.min_bookmakers_count).")
+            # Este aviso sabe que a casa nao veio NOS JOGOS QUE PEDIMOS. Ele
+            # nao sabe dizer se ela sumiu pra todo mundo nem ha' quantos dias,
+            # e essas duas perguntas e' que separam "cobertura daquele jogo" de
+            # "a API parou de servir essa casa".
+            print("[ODDS] Pra saber se e' da API: "
+                  "DB_ENV=prod python src/scripts/checar_casas_na_api.py")
 
     # --------------------------------------------------------
     # DETECTA SIDE (home / away / total)
