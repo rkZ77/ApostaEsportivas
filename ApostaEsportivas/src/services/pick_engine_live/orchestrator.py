@@ -367,56 +367,66 @@ def _gates(entrada: dict, prob: float, valor: dict, conf: dict, conv: dict,
     return motivos
 
 
-#: Pesos da escolha entre candidatos aprovados. Espelham a licao que o
-#: pre-jogo pagou pra aprender (pick_engine/config.py, rebalanceamento de
-#: 2026-08-14): nos 65 picks resolvidos dele, edge de 10-20% acertou 57,1% e
-#: edge abaixo de 10% acertou 71,4%. EV maior anunciava pick PIOR, nao melhor,
-#: porque contra mercado liquido um EV grande quase sempre significa que a
-#: probabilidade do modelo esta otimista -- nao que a casa errou.
+#: Pesos da escolha entre candidatos aprovados. 100% ESTATISTICOS: a odd nao
+#: entra, nem direta nem por dentro do EV.
 #:
-#: Lá o peso do edge caiu de 0.25 pra 0.10 e o da taxa subiu pra 0.40. Aqui o
-#: EV valia 100% da escolha ate 2026-08-20, que e' exatamente o que o pre-jogo
-#: abandonou. Os mesmos 0.10 pro termo de preco, e o peso principal na leitura
-#: da partida.
-PESO_PROBABILIDADE = 0.45
-PESO_CONFIANCA = 0.25
-PESO_SEGURANCA_DA_ODD = 0.20
-PESO_EV = 0.10
-
-#: EV a partir do qual o termo de preco satura. Acima disto, mais EV nao
-#: pontua mais -- e' o teto que impede a odd de voltar pela janela.
-EV_DE_SATURACAO = 0.20
+#: A HISTORIA, EM TRES ETAPAS, PORQUE A DO MEIO ENGANA
+#: ---------------------------------------------------
+#: Ate' 2026-08-20 a escolha era 100% EV -- exatamente o que o pre-jogo
+#: abandonou na Fase 5, e pelo motivo que ele mediu (pick_engine/config.py,
+#: 2026-08-14): nos 65 picks resolvidos, edge de 10-20% acertou 57,1% e edge
+#: abaixo de 10% acertou 71,4%. EV maior anuncia pick PIOR contra mercado
+#: liquido, porque um EV grande quase sempre e' a probabilidade do modelo
+#: otimista, e nao a casa errada.
+#:
+#: Em 20/08 isso virou um score misto: probabilidade 0.45, confianca 0.25,
+#: seguranca da odd 0.20, EV 0.10. Melhorou, e por isso passou por auditoria
+#: como resolvido -- mas 30% da escolha continuava sendo PRECO, e o pre-jogo
+#: nao foi pra 10%, foi pra ZERO. La' `ranking.final_score` e' explicitamente
+#: "100% estatistico, SEM EV/odd", e a odd so' decide a LINHA dentro do
+#: mercado ja' escolhido (`select_smart_safe_line`).
+#:
+#: 2026-09-05, por decisao do usuario: aqui tambem vai a zero.
+#:
+#: POR QUE A SEGURANCA DA ODD SAIU, E NAO SO' O EV
+#: -----------------------------------------------
+#: O argumento dela era "odd baixa e' o mercado concordando com o modelo".
+#: Isso e' verdade -- e ja' esta contado duas vezes antes de chegar aqui: o
+#: termo A de `live_confidence` mede acordo com o mercado, e `probability` ja'
+#: foi encolhida CONTRA o mercado por `encolher_contra_mercado`. Somar um
+#: terceiro termo de preco nao era prudencia, era o mesmo sinal pesando tres
+#: vezes -- e o unico dos tres que pontuava o PRECO em vez da leitura.
+#:
+#: O que sobra e' o que descreve a partida. `probability` continua sendo a
+#: encolhida, e isso e' proposital: ela e' estimativa do EVENTO, nao preco --
+#: mesma natureza do prior de mercado que o pre-jogo adotou em 08/08.
+#: `confidence` carrega junto os sinais ao vivo (convergencia, ritmo, folga
+#: ate' a linha, freshness), entao nao ha termo perdido.
+PESO_PROBABILIDADE = 0.60
+PESO_CONFIANCA = 0.40
 
 
 def score_de_selecao(candidato: dict,
                      config: LiveEngineConfig = DEFAULT_LIVE_CONFIG) -> float:
-    """Quanto este candidato merece ser O pick da partida.
+    """Quanto este candidato merece ser O pick da partida. So' estatistica.
 
-    Nao e' gate -- os gates ja' rodaram e este candidato passou. E' so' a
-    ordenacao entre aprovados, e ela deixou de ser "o de maior EV" em
-    2026-08-20 pelo motivo medido em PESO_EV acima.
+    Nao e' gate -- os gates ja' rodaram e este candidato passou, inclusive nos
+    limites de odd e no piso de EV. E' so' a ordenacao entre aprovados, e a
+    pergunta que ela responde e' "qual destes eu li melhor", nunca "qual destes
+    esta mais barato".
 
-    A seguranca da odd segue a mesma logica do `_safety_bonus` do pre-jogo:
-    dentro da faixa permitida, a odd mais baixa vale mais, porque odd baixa e'
-    o mercado concordando com o modelo e odd alta e' o mercado discordando.
-    Ao vivo isso pesa ainda mais que no pre-jogo: a odd se move com o jogo, e
-    uma odd que continua alta aos 60' e' o mercado dizendo que nao viu o que o
-    modelo acha que viu.
+    A odd nao aparece nesta funcao de proposito. Ela ja' fez o trabalho dela
+    em `_gates` (faixa [odd_minima, odd_maxima] e EV minimo): la' ela ELIMINA,
+    que e' o papel certo pra um preco. Deixar que ela tambem ORDENE e' o que
+    faz um mercado estatisticamente mais fraco vencer por estar mais bem
+    cotado -- o defeito que o pre-jogo removeu na Fase 5.
     """
     prob = float(candidato.get("probability") or 0.0)
     conf = float(candidato.get("confidence") or 0.0)
-    ev = float(candidato.get("ev") or 0.0)
-    odd = float(candidato.get("odd") or 0.0)
-
-    faixa = max(config.odd_maxima - config.odd_minima, 1e-9)
-    seguranca = max(0.0, min(1.0, (config.odd_maxima - odd) / faixa))
-    ev_norm = max(0.0, min(ev, EV_DE_SATURACAO)) / EV_DE_SATURACAO
 
     return round(
         prob * PESO_PROBABILIDADE
-        + conf * PESO_CONFIANCA
-        + seguranca * PESO_SEGURANCA_DA_ODD
-        + ev_norm * PESO_EV,
+        + conf * PESO_CONFIANCA,
         4,
     )
 
@@ -436,6 +446,10 @@ def melhor_candidato(avaliados: list[dict],
     Foi assim que o `goals Under 1.5 @3.50` com 31% de probabilidade venceu a
     disputa da propria partida: nenhuma outra linha tinha EV maior, porque
     nenhuma outra tinha odd 3.50.
+
+    Em 2026-09-05 o preco saiu do score inteiro, e nao so' perdeu peso -- ver
+    a nota em PESO_PROBABILIDADE. O desempate por confianca continua sendo
+    estatistico, entao nenhuma odd volta por aqui.
     """
     aprovados = [c for c in avaliados if c["aprovado"]]
     if not aprovados:

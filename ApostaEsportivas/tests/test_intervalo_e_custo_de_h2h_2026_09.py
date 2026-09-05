@@ -398,3 +398,73 @@ def test_sem_mercado_nao_ha_divergencia_de_nenhum_tipo():
     assert c["A"] == 0.5
     assert c["divergencia_mercado"] is None
     assert c["divergencia_modelo"] is None
+
+
+# ─────────── 6 · a escolha entre aprovados e' 100% estatistica ─────────────
+#
+# O pre-jogo removeu o preco do `ranking.final_score` na Fase 5 e deixou a odd
+# so' escolhendo a LINHA dentro do mercado ja' decidido. O motor ao vivo fez
+# metade do caminho em 20/08 (de 100% EV pra 30% preco) e o resto em 05/09.
+#
+# 30% nao e' "quase zero": com prob e conf empatadas, 0.20 de seguranca da odd
+# mais 0.10 de EV bastavam pra a odd decidir sozinha qual pick sai.
+
+def _aprovado(**kw):
+    base = {"aprovado": True, "probability": 0.70, "confidence": 0.70,
+            "ev": 0.08, "odd": 2.00}
+    base.update(kw)
+    return base
+
+
+def test_odd_nao_desempata_leitura_igual():
+    """A prova direta: mesma leitura da partida, odds opostas dentro da faixa.
+    Com o score antigo o de odd 1.55 vencia por 0.20 de "seguranca"; agora os
+    dois empatam e nenhum preco decide."""
+    from services.pick_engine_live import orchestrator as orc
+
+    barato = _aprovado(odd=1.55, id="odd_baixa")
+    caro = _aprovado(odd=3.90, ev=0.19, id="odd_alta")
+    assert orc.score_de_selecao(barato) == orc.score_de_selecao(caro)
+
+
+def test_leitura_melhor_vence_mesmo_com_odd_pior():
+    """O sentido que importa: quem lê melhor a partida ganha, e a odd nao
+    compra posicao."""
+    from services.pick_engine_live import orchestrator as orc
+
+    leitura_boa = _aprovado(probability=0.78, confidence=0.88, ev=0.06, odd=3.90)
+    leitura_fraca = _aprovado(probability=0.60, confidence=0.62, ev=0.19, odd=1.50)
+    escolhido = orc.melhor_candidato([leitura_boa, leitura_fraca])
+    assert escolhido is leitura_boa
+
+
+def test_ev_maior_nao_vence_sozinho():
+    """A forma do pior pick real de DEV: goals Under 1.5 @3.50 com 31% de
+    probabilidade, aprovado por EV, RED. Hoje ele nem seria aprovado (piso de
+    probabilidade), mas a ORDENACAO tambem nao pode preferi-lo."""
+    from services.pick_engine_live import orchestrator as orc
+
+    solido = _aprovado(probability=0.76, confidence=0.80, ev=0.07, odd=1.60)
+    caro = _aprovado(probability=0.56, confidence=0.60, ev=0.35, odd=3.60)
+    assert orc.melhor_candidato([solido, caro]) is solido
+
+
+def test_o_score_nao_le_odd_nem_ev():
+    """Trava estrutural: se alguem reintroduzir um termo de preco, o score
+    passa a mudar quando so' a odd muda, e este teste cai."""
+    from services.pick_engine_live import orchestrator as orc
+
+    base = _aprovado()
+    for odd, ev in ((1.49, 0.05), (2.50, 0.12), (4.00, 0.40)):
+        assert orc.score_de_selecao(dict(base, odd=odd, ev=ev)) == \
+            orc.score_de_selecao(base)
+
+
+def test_os_pesos_estatisticos_somam_um():
+    """Sem isto, tirar um termo no futuro reescala o score em silencio e o
+    piso de qualquer comparacao historica deixa de valer."""
+    from services.pick_engine_live import orchestrator as orc
+
+    assert orc.PESO_PROBABILIDADE + orc.PESO_CONFIANCA == pytest.approx(1.0)
+    assert not hasattr(orc, "PESO_EV")
+    assert not hasattr(orc, "PESO_SEGURANCA_DA_ODD")
