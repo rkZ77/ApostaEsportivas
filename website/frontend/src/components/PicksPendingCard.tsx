@@ -36,10 +36,28 @@ function ListaDeJogos({ jogos, render, rotulo }: {
   const cabeInteira = jogos.length <= JOGOS_VISIVEIS
   const visiveis = aberta || cabeInteira ? jogos : jogos.slice(0, JOGOS_VISIVEIS)
   const ocultos = jogos.length - JOGOS_VISIVEIS
+  const porLiga = agruparPorLiga(visiveis)
 
   return (
     <>
-      <div className="space-y-1.5">{visiveis.map(render)}</div>
+      {/* SEPARADO POR LIGA (2026-09-05, pedido do usuario). Aberta, a lista
+          passa de quarenta linhas num sabado, e "Preston x Blackburn" no meio
+          de trinta e nove outras nao diz de que competicao e' -- o escudo no
+          fim da linha e' pequeno demais pra servir de indice. O cabecalho de
+          liga transforma a parede numa lista de competicoes com poucos jogos
+          cada, que e' como o dia realmente e'. */}
+      <div className="space-y-3">
+        {porLiga.map(grupo => (
+          <div key={grupo.chave}>
+            <p className="flex items-center gap-1.5 mb-1.5">
+              <LeagueLogo id={grupo.league_id} name={grupo.league_name} />
+              <span className="text-[11px] font-semibold text-ink-3 truncate">{grupo.league_name}</span>
+              <span className="text-[10px] text-ink-4 tabular-nums shrink-0">{grupo.jogos.length}</span>
+            </p>
+            <div className="space-y-1.5">{grupo.jogos.map(render)}</div>
+          </div>
+        ))}
+      </div>
       {!cabeInteira && (
         <button
           /* A barra do topo responde a esta espera igual às outras do site
@@ -107,6 +125,22 @@ const diaDoJogo = (iso: string) => (iso ?? '').slice(0, 10)
  * estivesse no Brasil. Mesma leitura de home/NextGames.
  */
 const horaBR = (iso: string) => (iso ?? '').slice(11, 16)
+
+/** Jogos agrupados por competicao, na ordem em que a liga aparece na lista
+ *  (que ja' chega ordenada por horario), e por horario dentro de cada uma. */
+function agruparPorLiga(jogos: Fixture[]): {
+  chave: string; league_id?: number; league_name: string; jogos: Fixture[]
+}[] {
+  const grupos = new Map<string, { chave: string; league_id?: number; league_name: string; jogos: Fixture[] }>()
+  for (const g of jogos) {
+    const chave = String(g.league_id ?? g.league_name)
+    const grupo = grupos.get(chave)
+      ?? { chave, league_id: g.league_id, league_name: g.league_name, jogos: [] }
+    grupo.jogos.push(g)
+    grupos.set(chave, grupo)
+  }
+  return Array.from(grupos.values())
+}
 
 function groupByDate(games: Fixture[]): { dateLabel: string; games: Fixture[] }[] {
   const groups = new Map<string, Fixture[]>()
@@ -316,7 +350,8 @@ export default function PicksPendingCard() {
           {Math.min(g.jogos_casa ?? 0, g.jogos_fora ?? 0)}/{minJogos}
         </span>
       )}
-      <LeagueLogo id={g.league_id} name={g.league_name} />
+      {/* Sem escudo no fim da linha: ele agora encabeca o grupo, e repetir a
+          mesma marca em todas as linhas da competicao e' ruido. */}
     </div>
   )
 
@@ -424,7 +459,19 @@ export default function PicksPendingCard() {
               {groupByDate(outrosDias.slice(0, 8)).map(({ dateLabel, games }) => (
                 <div key={dateLabel}>
                   <p className="text-[10px] text-ink-4 mb-1.5 capitalize">{dateLabel}</p>
-                  <div className="space-y-1.5">{games.map(g => linhaJogo(g))}</div>
+                  {/* Por liga tambem aqui: o escudo saiu da linha, entao sem o
+                      cabecalho estes jogos ficariam sem competicao nenhuma. */}
+                  <div className="space-y-2">
+                    {agruparPorLiga(games).map(grupo => (
+                      <div key={grupo.chave}>
+                        <p className="flex items-center gap-1.5 mb-1">
+                          <LeagueLogo id={grupo.league_id} name={grupo.league_name} />
+                          <span className="text-[11px] font-semibold text-ink-3 truncate">{grupo.league_name}</span>
+                        </p>
+                        <div className="space-y-1.5">{grupo.jogos.map(g => linhaJogo(g))}</div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>
