@@ -224,6 +224,12 @@ class LiveFeed:
             if pagina >= self._paginas.get("odds/live", 1):
                 break
             pagina += 1
+        # GUARDA AQUI, e nao so' no caminho preguicoso de `odds_ao_vivo`:
+        # quem chama esta funcao direto (o pipeline, pra filtrar as elegiveis
+        # antes de gastar estatistica) tambem precisa que `cobertura_de_odd_ao_vivo`
+        # pare de responder "ainda nao perguntei". Sem isto o rodape relatava
+        # cobertura zero em toda rodada, inclusive nas cheias.
+        self._odds_do_mundo = por_fixture
         return por_fixture
 
     def odds_ao_vivo(self, fixture_id: int) -> list:

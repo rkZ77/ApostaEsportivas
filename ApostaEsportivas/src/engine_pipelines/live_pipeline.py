@@ -1243,6 +1243,48 @@ def run_live_engine(fixture_id: int | None = None,
         relatorio["descartes"] = resumo_descartes
         imprimir_descartes(resumo_descartes)
 
+        # ── A ODD VEM ANTES DA ESTATISTICA (2026-09-05) ────────────────────
+        #
+        # A ordem era: escolher 3 partidas por minuto, gastar estatistica e
+        # eventos nas tres, e SO' ENTAO perguntar o preco. Quando o provedor
+        # nao cota a partida, tudo que veio antes foi gasto pra nada -- e em
+        # 05/09 foi o dia inteiro: 211 partidas analisadas, nenhuma com odd,
+        # 6.738 de 7.500 requisicoes da conta queimadas sem um pick.
+        #
+        # A cobertura de odd AO VIVO e' pequena e nao tem nada a ver com a
+        # cobertura de odd de pre-jogo. Medido contra a API neste dia: o feed
+        # global servia 20 partidas no mundo, em 14 ligas, e a interseccao com
+        # as nossas 17 ligas cadastradas era ZERO. Nao era falha, nao era cota
+        # (a conta e' Pro, ativa) e nao era o parser -- os mercados que o motor
+        # le estavam la', 40 de gols e 39 de escanteios, so' que em jogos que
+        # nao sao nossos.
+        #
+        # Entao a odd passou a ser um FILTRO DE ENTRADA, e nao a ultima
+        # pergunta. Custa 1 requisicao por rodada (o feed global e' uma
+        # chamada, ver LiveFeed.odds_ao_vivo_do_mundo) e evita gastar 2 por
+        # partida que nunca poderia virar pick.
+        #
+        # O QUE SE PERDE, dito na cara: partida sem odd deixa de gerar
+        # observacao em `live_match_observations`, entao o historico de ritmo
+        # dela nao e' construido. E' o preco certo a pagar -- essa observacao
+        # so' serviria pra uma proxima passada que tambem nao teria odd.
+        com_odd = feed.odds_ao_vivo_do_mundo() if elegiveis else {}
+        if elegiveis:
+            cobertura = feed.cobertura_de_odd_ao_vivo() or {}
+            print("")
+            print(f"Odd ao vivo: o provedor esta servindo "
+                  f"{cobertura.get('partidas_com_odd', 0)} partida(s) no mundo"
+                  + (f" · {cobertura['erro']}" if cobertura.get("erro") else ""))
+            antes = len(elegiveis)
+            elegiveis = [b for b in elegiveis
+                         if int((b.get("fixture") or {}).get("id") or 0) in com_odd]
+            relatorio["elegiveis_sem_odd"] = antes - len(elegiveis)
+            if antes != len(elegiveis):
+                print(f"  {antes - len(elegiveis)} das nossas partidas nao estao "
+                      f"nesse feed e foram deixadas de fora antes de gastar "
+                      f"estatistica")
+            relatorio["fixtures_elegiveis"] = len(elegiveis)
+
         for indice, bruto in enumerate(elegiveis, start=1):
             relatorio["partidas"].append(
                 _processar_partida(indice, bruto, cur, conn, feed, config, relatorio))

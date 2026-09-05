@@ -643,3 +643,52 @@ def test_mundo_vazio_e_distinguivel_de_partida_sem_mercado(monkeypatch):
     feed, _ = _feed_do_mundo(monkeypatch, {1: []})
     feed.odds_ao_vivo(10)
     assert feed.cobertura_de_odd_ao_vivo()["partidas_com_odd"] == 0
+
+
+# ───────── 9 · a odd e' filtro de entrada, nao a ultima pergunta ────────────
+#
+# MEDIDO CONTRA A API EM 05/09, e e' o numero que explica o dia inteiro sem
+# pick: o feed global de odd ao vivo servia 20 partidas no mundo, em 14 ligas,
+# e a interseccao com as nossas 17 ligas cadastradas era ZERO.
+#
+# Nao era cota (conta Pro, ativa, 6.738 de 7.500), nao era o parser (havia 40
+# mercados de gols e 39 de escanteios naquele feed, todos reconheciveis) e nao
+# era o modelo. Era cobertura: odd AO VIVO cobre um punhado de jogos, e nao tem
+# relacao com a cobertura de odd de pre-jogo, que naquele mesmo dia gravou
+# 2.585 linhas.
+#
+# Com a odd no fim da fila, cada uma dessas partidas custava estatistica e
+# eventos antes de morrer. Com ela na entrada, custa uma requisicao por rodada.
+
+def test_partida_sem_odd_no_feed_nao_gasta_estatistica(monkeypatch):
+    """O ganho que fecha o buraco de 05/09."""
+    feed, _ = _feed_do_mundo(monkeypatch, {1: [_item(10, [{"name": "Match Goals"}])]})
+    mundo = feed.odds_ao_vivo_do_mundo()
+    elegiveis = [{"fixture": {"id": 10}}, {"fixture": {"id": 20}},
+                 {"fixture": {"id": 30}}]
+    sobraram = [b for b in elegiveis if b["fixture"]["id"] in mundo]
+    assert [b["fixture"]["id"] for b in sobraram] == [10]
+    # Uma requisicao pra decidir sobre as tres.
+    assert feed.usadas == 1
+
+
+def test_mundo_vazio_deixa_a_rodada_sem_nenhuma_partida(monkeypatch):
+    """O dia 05/09 inteiro. O certo e' a rodada nao gastar nada, e dizer por
+    que -- nao analisar tres partidas que nunca poderiam virar pick."""
+    feed, _ = _feed_do_mundo(monkeypatch, {1: []})
+    mundo = feed.odds_ao_vivo_do_mundo()
+    assert mundo == {}
+    assert feed.cobertura_de_odd_ao_vivo()["partidas_com_odd"] == 0
+
+
+def test_o_feed_global_reconhece_os_mercados_do_motor(monkeypatch):
+    """A prova de que o parser nunca foi o problema: os nomes que a API usa no
+    feed ao vivo caem nas familias do motor."""
+    from services.pick_engine_live import live_odds
+
+    nomes_reais = ["Match Goals", "Asian Handicap", "Fulltime Result",
+                   "Total Corners", "Double Chance", "Goals Odd/Even"]
+    familias = [live_odds._familia_do_mercado(n) for n in nomes_reais]
+    assert familias.count("goals") == 1
+    assert familias.count("corners") == 1
+    assert familias.count(None) == 4
