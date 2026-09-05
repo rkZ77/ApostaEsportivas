@@ -5,12 +5,56 @@ import psycopg2.extras
 
 
 class OddsService:
+    """As odds de uma fixture, ja estruturadas.
+
+    CONEXAO POR INSTANCIA, NAO POR CHAMADA (2026-09-05). Este metodo roda uma
+    vez POR JOGO dentro do laco dos pipelines de pre-jogo, e abria uma conexao
+    nova toda vez. Medido em DEV com o VIP: 23 das 30 conexoes da execucao
+    saiam daqui, e abrir conexao com o Supabase custa ~1,7s contra a consulta
+    em si, que roda em milissegundos.
+
+    Cada pipeline instancia UM `OddsService` antes do laco (`odds_service =
+    OddsService()`), entao guardar a conexao na instancia dura exatamente o
+    tempo certo: nasce no primeiro jogo, morre com o pipeline.
+
+    Mesma defesa da conexao de log: a conexao pode morrer sozinha, entao toda
+    chamada testa e reabre se preciso. Aqui a instancia e' de leitura e nao
+    compartilha estado com quem grava pick.
+    """
+
+    def __init__(self):
+        self._conn = None
+
+    def _conexao(self):
+        conn = self._conn
+        if conn is not None and not conn.closed:
+            try:
+                conn.rollback()
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+                return conn
+            except Exception:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+                self._conn = None
+        self._conn = get_connection()
+        return self._conn
+
+    def fechar(self) -> None:
+        if self._conn is not None:
+            try:
+                self._conn.close()
+            except Exception:
+                pass
+            self._conn = None
 
     ##########################################################################
     # Carrega odds brutas da fixture
     ##########################################################################
     def load_odds_by_fixture(self, fixture_id):
-        conn = get_connection()
+        conn = self._conexao()
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
         cur.execute("""
@@ -34,7 +78,6 @@ class OddsService:
 
         rows = cur.fetchall()
         cur.close()
-        conn.close()
 
         structured = []
         for r in rows:
