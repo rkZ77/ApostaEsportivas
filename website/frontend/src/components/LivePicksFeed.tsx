@@ -605,6 +605,8 @@ interface TeaserAoVivo {
 interface LivePick {
   id: number
   fixture_id: number
+  /** Dia da partida, "YYYY-MM-DD" em Brasília · é o corte de "hoje". */
+  match_date?: string | null
   /* O feed já mandava o id da liga e a interface não o declarava · sem ele o
      cabeçalho do card mostrava o nome da competição sem o escudo, que é a
      única peça do cabeçalho VIP que faltava aqui. */
@@ -859,7 +861,11 @@ const CardLive = forwardRef<HTMLDivElement, {
           é o "quando" deste pick. */}
       <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-3 border-b border-line/60">
         <div className="flex items-center gap-2 flex-wrap min-w-0">
-          <PickTypeBadge type="live" />
+          {/* Pick JA' LIQUIDADO nao carrega o selo "Ao Vivo" nem o minuto: os
+              dois dizem "esta' acontecendo agora", e na secao de encerrados
+              isso e' uma partida que ja' terminou. Sobra a liga, que continua
+              verdadeira. */}
+          {!encerrado && <PickTypeBadge type="live" />}
           {(pick.league_id || pick.league_name) && (
             <div className="flex items-center gap-1 min-w-0">
               <LeagueLogo id={pick.league_id} name={pick.league_name} />
@@ -868,7 +874,7 @@ const CardLive = forwardRef<HTMLDivElement, {
               )}
             </div>
           )}
-          {pick.elapsed != null && (
+          {pick.elapsed != null && !encerrado && (
             <span className="flex items-center gap-1 text-[10px] text-ink-4 shrink-0 tabular-nums">
               <Clock className="w-3 h-3" />
               {pick.elapsed}&#39;
@@ -1220,7 +1226,15 @@ export default function LivePicksFeed({ isActive, banca }: {
      acabaram de sair. O produto tinha trabalhado o dia inteiro e a tela dele
      estava vazia. `feed` ja' devolve os liquidados (incluir_encerrados nasce
      true), entao isto nao custa consulta nenhuma. */
-  const encerrados = useMemo(() => (picks ?? []).filter(p => !!p.result), [picks])
+  const encerrados = useMemo(() => {
+    /* SO' OS DE HOJE. O feed pede `dias=1` (hoje mais um dia pra tras) porque
+       pick seguido nao pode sair da lista antes do apito, e isso trazia jogo
+       de ONTEM pra uma secao chamada "hoje". O corte e' por `match_date`, que
+       ja' vem em Brasilia, comparado com o dia de Brasilia -- nao por
+       `created_at` nem por `new Date`, que reinterpretaria no fuso do leitor. */
+    const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+    return (picks ?? []).filter(p => !!p.result && String(p.match_date ?? '').slice(0, 10) === hoje)
+  }, [picks])
   const greensDeHoje = useMemo(() => encerrados.filter(p => p.result === 'GREEN').length, [encerrados])
 
   /* SUAS APOSTAS PRIMEIRO, E SEPARADAS (2026-08-29, pedido do usuário).

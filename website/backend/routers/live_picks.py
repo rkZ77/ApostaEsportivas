@@ -30,6 +30,7 @@ import time
 import os
 import uuid
 import sys
+from collections import deque
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -1009,9 +1010,30 @@ def em_leitura(current_user: dict = Depends(require_live_reader), limit: int = Q
              LEFT JOIN fixtures f ON f.fixture_id = u.fixture_id
              LEFT JOIN leagues  l ON l.league_id  = f.league_id
                  WHERE u.status = ANY(%s)
+                   -- JOGO QUE JA' ACABOU NAO ESTA' SENDO LIDO (2026-09-05).
+                   --
+                   -- A observacao e' um retrato: o motor leu a partida aos 90'
+                   -- com status "2H" e nunca mais voltou nela -- ninguem reescreve
+                   -- aquela linha quando o juiz apita. Dentro da janela de 60
+                   -- minutos ela continuava aparecendo, e a tela anunciava como
+                   -- "acompanhando agora" cinco jogos encerrados.
+                   --
+                   -- Duas travas, e as duas custam zero requisicao:
+                   --
+                   --   1. o status ATUAL da fixture, que o coletor mantem. Se
+                   --      ela ja' esta' FT/AET/PEN, acabou, ponto.
+                   --   2. minuto >= 90 com leitura velha. Existe pra quando a
+                   --      fixture ainda nao foi atualizada: 90' e' o fim do
+                   --      tempo normal, e um jogo que segue em campo recebe
+                   --      leitura nova a cada rodada -- entao leitura parada ha'
+                   --      mais de 20 minutos num jogo de 90' e' jogo que acabou.
+                   AND COALESCE(f.status, '') <> ALL(%s)
+                   AND NOT (COALESCE(u.minuto, 0) >= 90
+                            AND EXTRACT(EPOCH FROM (NOW() - u.observed_at)) > 1200)
               ORDER BY u.observed_at DESC, u.minuto DESC NULLS LAST
                  LIMIT %s
-            """, (_JANELA_EM_LEITURA_MIN, list(LIVE_STATUSES), limit))
+            """, (_JANELA_EM_LEITURA_MIN, list(LIVE_STATUSES),
+                  list(FT_STATUSES) + ["PST", "CANC", "ABD", "AWD", "WO"], limit))
             linhas = [dict(r) for r in cur.fetchall()]
         except Exception as e:
             conn.rollback()
@@ -1297,7 +1319,38 @@ def _dev_configurado() -> list[str]:
     return []
 
 
-async def _rodar(body: RunBody) -> None:
+#: HISTORICO DE RODADAS, em memoria (2026-09-05, pedido do usuario).
+#:
+#: `_run_status` guarda a ULTIMA rodada e nada mais -- e a rodada seguinte
+#: sobrescreve. Enquanto o motor era um botao isso bastava; com o
+#: acompanhamento continuo ligado ele dispara sozinho de 8 em 8 minutos, e o
+#: log de uma passada dura ate' a proxima. Quem abre o painel depois de uma
+#: noite de motor ligado nao tinha como saber o que aconteceu nela.
+#:
+#: Em MEMORIA, e nao em tabela: e' diagnostico de operacao, nao dado do
+#: produto. Reiniciar o servico limpa, e limpar e' aceitavel -- o que precisa
+#: sobreviver a um restart ja' vive em `engine_runs` e nos proprios picks.
+_HISTORICO_RODADAS: deque = deque(maxlen=40)
+
+
+def _registrar_rodada(origem: str, body: RunBody, resultado: dict) -> None:
+    """Uma linha do log por rodada. O stdout entra cortado."""
+    _HISTORICO_RODADAS.appendleft({
+        "origem": origem,                       # 'manual' | 'watch'
+        "started_at": resultado.get("started_at"),
+        "finished_at": resultado.get("finished_at"),
+        "status": resultado.get("status"),
+        "returncode": resultado.get("returncode"),
+        "dry_run": _resolver_dry_run(body.dry_run),
+        "fixture_id": body.fixture_id,
+        # 4000 caracteres cobrem uma rodada inteira com folga; o teto existe
+        # pra 40 rodadas guardadas nao virarem megabytes de RAM no container.
+        "log": (resultado.get("log") or "")[-4000:],
+        "error": (resultado.get("error") or "")[-1500:] or None,
+    })
+
+
+async def _rodar(body: RunBody, origem: str = "manual") -> None:
     agora = _relogio_do_watch
     _run_status.update({"status": "running", "started_at": agora(),
                         "finished_at": None, "returncode": None, "error": None})
@@ -1342,6 +1395,8 @@ async def _rodar(body: RunBody) -> None:
     except Exception as e:
         _run_status.update({"status": "error", "finished_at": agora(),
                             "returncode": -1, "error": str(e)})
+    finally:
+        _registrar_rodada(origem, body, _run_status)
 
 
 # ─── Acompanhamento contínuo ────────────────────────────────────────────────
@@ -1597,7 +1652,7 @@ async def _laco_de_acompanhamento(intervalo_min: int, dry_run: bool,
                     restante -= 5
                 continue
 
-            await _rodar(body)
+            await _rodar(body, origem="watch")
             _watch_state["rodadas"] += 1
             _watch_state["ultima_rodada"] = agora()
             # Sinal de vida. E' o que permite dizer DEPOIS "estava rodando ate'
@@ -1713,6 +1768,29 @@ async def rodar_motor(body: RunBody, current_user: dict = Depends(require_admin)
 @router.get("/run-status")
 def status_da_rodada(current_user: dict = Depends(require_admin)):
     return dict(_run_status)
+
+
+@router.get("/log")
+def log_do_motor(
+    limit: int = Query(15, ge=1, le=40),
+    current_user: dict = Depends(require_admin),
+):
+    """As ultimas rodadas do motor, com o log de cada uma.
+
+    Existe porque `/run-status` responde "como foi A ULTIMA", e com o
+    acompanhamento continuo ligado a ultima e' de oito minutos atras -- o que
+    aconteceu na noite inteira nao ficava em lugar nenhum consultavel pela tela.
+
+    Memoria do processo, entao um restart zera. Ver `_HISTORICO_RODADAS`.
+    """
+    return {
+        "rodadas": list(_HISTORICO_RODADAS)[:limit],
+        "total": len(_HISTORICO_RODADAS),
+        "capacidade": _HISTORICO_RODADAS.maxlen,
+        # A rodada EM CURSO nao esta no historico (ele so' recebe no fim), e sem
+        # isto a tela mostraria a lista parada enquanto o motor trabalha.
+        "em_curso": _run_status.get("status") == "running",
+    }
 
 
 @router.get("/diagnostico")

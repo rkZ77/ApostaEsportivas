@@ -75,7 +75,9 @@ class TestOLacoHiberna:
         fonte = inspect.getsource(live_picks._laco_de_acompanhamento)
         assert "_ha_jogo_na_janela" in fonte
         # A checagem vem ANTES da rodada · depois seria pagar pra descobrir.
-        assert fonte.index("_ha_jogo_na_janela") < fonte.index("await _rodar(body)")
+        # `_rodar(body, origem=...)` desde 05/09, quando o log passou a saber
+        # se a rodada foi do botao ou do laco. O que o teste guarda e' a ORDEM.
+        assert fonte.index("_ha_jogo_na_janela") < fonte.index("await _rodar(body")
 
     def test_hibernar_nao_e_desligar(self):
         """O laco continua vivo (`continue`, nao `break`): e o que faz ele

@@ -41,7 +41,7 @@ import PicksPendingCard from '../components/PicksPendingCard'
 import CalendarioDePicks from '../components/ui/CalendarioDePicks'
 import SelectMenu from '../components/ui/SelectMenu'
 import { LIVE_PICKS_ENABLED } from '../config'
-import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2, TrendingUp, X as XIcon, Lock, Ticket } from 'lucide-react'
+import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronDown, BrainCircuit, Share2, Check as CheckIcon, Loader2, TrendingUp, X as XIcon, Lock, Ticket } from 'lucide-react'
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import { stakeDe } from '../utils/stakePlan'
 import { fmtUnits, pctProb, capitalizarFrase, plural } from '../utils/format'
@@ -2686,6 +2686,7 @@ export default function Picks() {
   const [quickStatsPronto, setQuickStatsPronto] = useState(false)
   const [recentResults, setRecentResults] = useState<any[]>([])
   const [selectedOffset, setSelectedOffset] = useState(0)
+  const [placarAberto, setPlacarAberto] = useState(true)
   /* Dias que TIVERAM pick, pro calendário pintar de verde. Sai do `by_day` do
      placar público -- o mesmo dado que a página de Resultados desenha, e uma
      rota cacheada -- em vez de uma consulta nova só pra este controle. */
@@ -3102,10 +3103,31 @@ export default function Picks() {
                   no resultado. Ele já vinha em `/suggestions/stats/quick`
                   (campo `profit`) desde sempre; a tela só mostrava contagem e
                   porcentagem, escondendo justo o resultado. */}
+              {/* O PLACAR ABRE E FECHA (2026-09-05, pedido do usuario). Ele e'
+                  historico do produto INTEIRO, nao do dia, e quem ja' o
+                  conhece nao precisa dele empurrando os picks pra baixo em
+                  toda visita -- no celular sao duas linhas de caixa antes do
+                  primeiro card. Nasce aberto pelo mesmo motivo do "como
+                  funciona": explicacao que so' existe atras de um toque e'
+                  explicacao que a maior parte nao le'. */}
               {quickStats && (
                 <div>
-                  <p className="text-[10px] text-ink-4 font-semibold mb-2">Performance geral da IA</p>
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setPlacarAberto(a => !a)}
+                    aria-expanded={placarAberto}
+                    className="flex items-center gap-1.5 mb-2 text-[10px] text-ink-4 font-semibold
+                               hover:text-ink-2 transition-colors min-h-[28px]"
+                  >
+                    Performance geral da IA
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${placarAberto ? 'rotate-180' : ''}`} />
+                    {!placarAberto && (
+                      <span className="font-mono font-bold text-ink-3 tabular-nums">
+                        {quickStats.win_rate ?? 0}%, {fmtUnits(lucroUnidades, 1)}
+                      </span>
+                    )}
+                  </button>
+                  <div hidden={!placarAberto} className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                     {[
                       { label: 'Picks', value: String(quickStats.total ?? 0), color: 'text-ink-1' },
                       { label: 'Green',  value: String(quickStats.greens ?? 0), color: 'text-accent-ink' },
@@ -3141,29 +3163,6 @@ export default function Picks() {
                         diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
                         rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />
               </div>
-
-              <ComoFunciona titulo="O que aparece nesta tela?" cor="text-accent-ink"
-                            borda="border-line" fundo="bg-surface-1">
-                <>
-                  <p>
-                    Tudo que a IA publicou <span className="text-ink-1 font-bold">no dia escolhido</span>,
-                    produto por produto: Pick do Dia free, os VIP, Pick Boost,
-                    múltiplas, alavancagem e jogadores. As abas acima abrem cada
-                    um deles separado, com a explicação do que ele é.
-                  </p>
-                  <p>
-                    O calendário marca de <span className="text-accent-ink font-bold">verde</span> os dias
-                    que tiveram pick, então dá pra voltar direto num dia com
-                    conteúdo em vez de procurar às cegas.
-                  </p>
-                  <p>
-                    Cada card traz a odd, a linha, a casa e a chance calculada.
-                    Em <span className="text-ink-1 font-bold">Entenda esta análise</span> você vê os
-                    últimos jogos dos times naquele mercado e a amostra que o
-                    motor leu para escolher.
-                  </p>
-                </>
-              </ComoFunciona>
 
               {/* Progresso da geração / countdown quando picks ainda não chegaram.
               

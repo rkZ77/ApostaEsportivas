@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  Activity, AlertTriangle, CheckCircle2, Gavel, Play, RefreshCw, Square, XCircle,
+  Activity, AlertTriangle, CheckCircle2, ChevronDown, Gavel, Play, RefreshCw, Square, XCircle,
 } from 'lucide-react'
 import api from '../services/api'
 import { Spinner } from './ui'
@@ -134,6 +134,19 @@ export default function AdminMotorLive() {
   const [maxPart, setMaxPart] = useState('')
   const [dias, setDias]       = useState<number>(PERIODOS[1].dias)
   const [logAberto, setLogAberto] = useState(false)
+  /* PAGINACAO DA LISTA (2026-09-05, pedido do usuario). O feed do admin vem com
+     ate' 100 picks e a tabela despejava todos: numa janela de 30 dias isso e'
+     uma tela de rolagem antes do proximo bloco. Dez por vez, no cliente -- a
+     resposta ja' esta' na mao, e paginar no servidor custaria uma ida por
+     clique pra reordenar dado que ja' chegou. */
+  const [pagina, setPagina] = useState(0)
+  /* LOG DO MOTOR (2026-09-05, pedido do usuario). O "ver log" ao lado do botao
+     mostra a ULTIMA rodada e some quando a proxima comeca. Com o acompanhamento
+     continuo ligado, o motor roda sozinho de 8 em 8 minutos e a noite inteira
+     nao ficava em lugar nenhum. Aqui sao as ultimas 15, cada uma abrindo o
+     proprio log. */
+  const [rodadas, setRodadas] = useState<any[] | null>(null)
+  const [rodadaAberta, setRodadaAberta] = useState<number | null>(null)
   const [erro, setErro]       = useState('')
   const [cota, setCota] = useState<QuotaAoVivo | null>(null)
   const [carregando, setCarregando] = useState(true)
@@ -151,16 +164,22 @@ export default function AdminMotorLive() {
       api.get('/live-picks/feed', { params: { limit: 100, dias } }),
       api.get('/live-picks/stats'),
     ])
-    if (f.status === 'fulfilled') setPicks(f.value.data?.picks ?? [])
+    if (f.status === 'fulfilled') {
+      setPicks(f.value.data?.picks ?? [])
+      // Janela nova, primeira pagina: ficar na pagina 4 de uma lista que
+      // encolheu pra 12 itens mostraria uma tabela vazia sem explicacao.
+      setPagina(0)
+    }
     if (s.status === 'fulfilled') setStats(s.value.data?.disponivel ? s.value.data : null)
   }, [dias])
 
   const buscarTudo = useCallback(async () => {
     try {
-      const [d, r, w] = await Promise.allSettled([
+      const [d, r, w, lg] = await Promise.allSettled([
         api.get('/live-picks/diagnostico'),
         api.get('/live-picks/run-status'),
         api.get('/live-picks/watch-status'),
+        api.get('/live-picks/log'),
       ])
       if (d.status === 'fulfilled') {
         setDiag(d.value.data)
@@ -179,6 +198,7 @@ export default function AdminMotorLive() {
       }
       if (r.status === 'fulfilled') setRun(r.value.data)
       if (w.status === 'fulfilled') setWatch(w.value.data)
+      if (lg.status === 'fulfilled') setRodadas(lg.value.data?.rodadas ?? [])
       // Cota entra em allSettled próprio: ela é informação lateral, e uma
       // tabela que ainda não existe (banco antigo) não pode derrubar o painel.
       api.get('/admin/api-quota/ao-vivo')
@@ -207,10 +227,12 @@ export default function AdminMotorLive() {
     }
     timer.current = setInterval(async () => {
       try {
-        const [r, w] = await Promise.allSettled([
+        const [r, w, lg] = await Promise.allSettled([
           api.get('/live-picks/run-status'),
           api.get('/live-picks/watch-status'),
+          api.get('/live-picks/log'),
         ])
+        if (lg.status === 'fulfilled') setRodadas(lg.value.data?.rodadas ?? [])
         const rodavaAntes = run?.status === 'running'
         if (r.status === 'fulfilled') {
           setRun(r.value.data)
@@ -282,6 +304,15 @@ export default function AdminMotorLive() {
    * `carregando` continua existindo, mas só pra marcar os números que ainda não
    * chegaram -- não pra segurar a página. */
   const rodando = run?.status === 'running'
+  /* Dez por pagina. A lista e' de conferencia, nao de leitura corrida: quem
+     abre o painel quer o ultimo pick e o que veio antes dele, nao cem linhas. */
+  const POR_PAGINA = 10
+  const totalPaginas = Math.max(1, Math.ceil(picks.length / POR_PAGINA))
+  const paginaSegura = Math.min(pagina, totalPaginas - 1)
+  const picksDaPagina = picks.slice(paginaSegura * POR_PAGINA, paginaSegura * POR_PAGINA + POR_PAGINA)
+  const primeiroDaPagina = picks.length === 0 ? 0 : paginaSegura * POR_PAGINA + 1
+  const ultimoDaPagina = Math.min(picks.length, (paginaSegura + 1) * POR_PAGINA)
+
   const emLaco  = !!watch?.ativo
 
   return (
@@ -623,6 +654,70 @@ export default function AdminMotorLive() {
         )}
       </div>
 
+      {/* ── Log do motor ──────────────────────────────────────────────────── */}
+      {rodadas !== null && rodadas.length > 0 && (
+        <div className="bg-surface-1 border border-line rounded-lg p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-semibold text-ink-3">Log do motor</h3>
+            <span className="text-[10px] text-ink-4">
+              últimas {rodadas.length} {rodadas.length === 1 ? 'rodada' : 'rodadas'}, em memória
+            </span>
+          </div>
+
+          {/* Uma linha por rodada; o log abre embaixo dela. Assim dá pra ver a
+              sequência da noite sem abrir nada, que é a pergunta mais comum
+              ("ele rodou? quantas vezes? deu erro em alguma?"). */}
+          <ul className="divide-y divide-line/60">
+            {rodadas.map((r: any, i: number) => {
+              const aberta = rodadaAberta === i
+              const falhou = r.status === 'error' || (r.returncode !== 0 && r.returncode !== null)
+              return (
+                <li key={`${r.started_at}-${i}`} className="py-2">
+                  <button
+                    onClick={() => setRodadaAberta(aberta ? null : i)}
+                    className="w-full flex items-center gap-2 text-left"
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                      falhou ? 'bg-red-400' : 'bg-green-400'}`} />
+                    <span className="font-mono text-[11px] text-ink-2 tabular-nums shrink-0">
+                      {horaCurta(r.started_at)}
+                    </span>
+                    <span className="text-[10px] text-ink-4 shrink-0">
+                      {r.origem === 'watch' ? 'automática' : 'manual'}
+                    </span>
+                    {r.dry_run && (
+                      <span className="text-[10px] text-amber-400 shrink-0">dry run</span>
+                    )}
+                    {r.fixture_id && (
+                      <span className="text-[10px] text-ink-4 font-mono shrink-0">#{r.fixture_id}</span>
+                    )}
+                    <span className={`text-[10px] ml-auto shrink-0 ${falhou ? 'text-red-400' : 'text-ink-4'}`}>
+                      {falhou ? 'falhou' : 'ok'}
+                      {r.returncode !== null && r.returncode !== 0 ? ` (${r.returncode})` : ''}
+                    </span>
+                    <ChevronDown className={`w-3.5 h-3.5 text-ink-4 shrink-0 transition-transform ${
+                      aberta ? 'rotate-180' : ''}`} />
+                  </button>
+                  {aberta && (
+                    <pre className={`mt-2 text-[10px] bg-surface-0 rounded p-2 whitespace-pre-wrap
+                                     break-all overflow-y-auto max-h-80 ${
+                      falhou ? 'text-red-400' : 'text-ink-2'}`}>
+                      {r.error || r.log || 'Sem saída registrada nesta rodada.'}
+                    </pre>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+
+          <p className="text-[10px] text-ink-4 mt-3 leading-relaxed">
+            O histórico vive na memória do serviço: um deploy ou um restart
+            zeram a lista. O que precisa sobreviver a isso está em picks_live e
+            na auditoria dos motores.
+          </p>
+        </div>
+      )}
+
       {/* ── O que o motor produziu ────────────────────────────────────────── */}
       {stats && (
         <div className="bg-surface-1 border border-line rounded-lg p-4">
@@ -696,7 +791,7 @@ export default function AdminMotorLive() {
               e rolagem lateral dentro de pagina que rola pra baixo faz perder a
               linha que se estava lendo. */}
           <ul className="sm:hidden divide-y divide-line/60">
-            {picks.map(p => (
+            {picksDaPagina.map((p: any) => (
               <li key={`m-${p.id}`} className="py-3">
                 <div className="flex items-start justify-between gap-2">
                   <span className="text-[12px] text-ink-2 font-semibold leading-snug">
@@ -733,7 +828,7 @@ export default function AdminMotorLive() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-line/60">
-                {picks.map(p => (
+                {picksDaPagina.map((p: any) => (
                   <tr key={p.id}>
                     <td className="py-2 pr-2 text-ink-4 font-mono whitespace-nowrap">
                       {diaMes(p.match_date)}
@@ -763,6 +858,37 @@ export default function AdminMotorLive() {
               </tbody>
             </table>
           </div>
+
+          {totalPaginas > 1 && (
+            <div className="flex items-center justify-between gap-2 pt-3 mt-1 border-t border-line/60">
+              <span className="text-[10px] text-ink-4 tabular-nums">
+                {primeiroDaPagina}–{ultimoDaPagina} de {picks.length}
+              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setPagina(p => Math.max(0, p - 1))}
+                  disabled={paginaSegura === 0}
+                  className="text-[11px] px-2 py-1 rounded-md border border-line text-ink-3
+                             hover:text-ink-1 hover:border-line-strong transition-colors
+                             disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  anterior
+                </button>
+                <span className="text-[10px] text-ink-4 tabular-nums px-1">
+                  {paginaSegura + 1}/{totalPaginas}
+                </span>
+                <button
+                  onClick={() => setPagina(p => Math.min(totalPaginas - 1, p + 1))}
+                  disabled={paginaSegura >= totalPaginas - 1}
+                  className="text-[11px] px-2 py-1 rounded-md border border-line text-ink-3
+                             hover:text-ink-1 hover:border-line-strong transition-colors
+                             disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  próxima
+                </button>
+              </div>
+            </div>
+          )}
           </>
         )}
       </div>
