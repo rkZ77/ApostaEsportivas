@@ -3127,7 +3127,12 @@ export default function Picks() {
                       </span>
                     )}
                   </button>
-                  <div hidden={!placarAberto} className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                  {/* Renderização condicional, e NÃO o atributo `hidden`: as duas
+                      coisas definem `display`, e a utility `grid` do Tailwind
+                      vem depois do reset no CSS -- então `[hidden]` perdia e a
+                      faixa não fechava com o clique. */}
+                  {placarAberto && (
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                     {[
                       { label: 'Picks', value: String(quickStats.total ?? 0), color: 'text-ink-1' },
                       { label: 'Green',  value: String(quickStats.greens ?? 0), color: 'text-accent-ink' },
@@ -3141,6 +3146,7 @@ export default function Picks() {
                       </div>
                     ))}
                   </div>
+                  )}
                   {/* A legenda do plano de stake saiu daqui. Ela dizia "4u em
                       picks simples" logo acima de um card que manda apostar 5u,
                       porque os dois números falam de coisas diferentes: o plano
