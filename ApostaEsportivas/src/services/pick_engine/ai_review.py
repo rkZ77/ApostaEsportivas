@@ -116,6 +116,27 @@ class AIReviewSettings:
             raise ValueError("AI_REVIEW_PROVIDER deve ser anthropic ou openai")
 
         model = value("AI_REVIEW_MODEL", DEFAULT_MODELS[provider])
+        if not model and provider == "openai":
+            # HERDA O MODELO DO VIP (2026-09-04). Nao existe default de ID pra
+            # OpenAI (ver o comentario de DEFAULT_MODELS), entao um pipeline
+            # OpenAI sem `AI_REVIEW_MODEL_<SCOPE>` proprio nasce com o gate
+            # DESLIGADO -- silenciosamente, que e' o pior jeito de um gate de
+            # veto nao existir.
+            #
+            # Foi o que aconteceu com `player_stats` e `live` no dia em que
+            # ganharam gate: as tres variaveis do Railway (_VIP, _MULTIPLA,
+            # _GOLEIROS) sao anteriores a eles.
+            #
+            # Herdar do VIP e nao inventar um ID: na pratica essa variavel ja'
+            # e' "o modelo OpenAI do projeto" -- as tres apontam pro mesmo
+            # valor. Um pipeline que quiser outro modelo continua declarando o
+            # seu, que vence por ser mais especifico.
+            # os.getenv direto, e nao `value`: aquela funcao prefixa o scope
+            # do pipeline e procuraria "AI_REVIEW_MODEL_VIP_LIVE", um nome que
+            # nao quer dizer nada. Aqui a unica cascata que faz sentido e' a de
+            # AMBIENTE.
+            model = (os.getenv(f"AI_REVIEW_MODEL_VIP_{environment}")
+                     or os.getenv("AI_REVIEW_MODEL_VIP") or "").strip()
         if mode != "off" and not model:
             # Desliga o gate em vez de deixar toda revisao falhar e "aprovar".
             # Sem modelo, zero evento no painel -- silencio visivel, nao falso ok.

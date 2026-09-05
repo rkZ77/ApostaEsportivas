@@ -51,3 +51,40 @@ def test_live_chega_na_ia_com_o_minuto_e_o_ja_observado():
 def test_os_dois_motores_usam_openai():
     assert DEFAULT_PROVIDERS["player_stats"] == "openai"
     assert DEFAULT_PROVIDERS["live"] == "openai"
+
+
+# --- O modelo OpenAI que o Railway nao declara -----------------------------
+#
+# `player_stats` e `live` ganharam gate depois que as variaveis do Railway
+# foram criadas (so' existem _VIP, _MULTIPLA e _GOLEIROS). Sem heranca eles
+# nasceriam com o gate DESLIGADO em producao, em silencio.
+
+import pytest
+from services.pick_engine.ai_review import AIReviewSettings
+
+
+@pytest.fixture
+def _env_do_railway(monkeypatch):
+    """So' as tres variaveis que existem hoje em producao."""
+    for chave in list(os.environ):
+        if chave.startswith("AI_REVIEW_MODEL"):
+            monkeypatch.delenv(chave, raising=False)
+    monkeypatch.setenv("AI_REVIEW_MODE", "enforce")
+    monkeypatch.setenv("AI_REVIEW_MODEL_VIP", "gpt-5.4-2026-03-05")
+    monkeypatch.setenv("AI_REVIEW_MODEL_MULTIPLA", "gpt-5.4-2026-03-05")
+    monkeypatch.setenv("AI_REVIEW_MODEL_GOLEIROS", "gpt-5.4-2026-03-05")
+
+
+@pytest.mark.parametrize("pipeline", ["player_stats", "live"])
+def test_pipeline_openai_sem_variavel_propria_herda_a_do_vip(_env_do_railway, pipeline):
+    s = AIReviewSettings.from_env(pipeline)
+    assert s.provider == "openai"
+    assert s.model == "gpt-5.4-2026-03-05"
+    # O que importa nao e' o ID: e' o gate continuar LIGADO. Sem modelo,
+    # `from_env` rebaixa o modo pra "off" e o veto deixa de existir.
+    assert s.mode == "enforce"
+
+
+def test_variavel_propria_ainda_vence_a_heranca(_env_do_railway, monkeypatch):
+    monkeypatch.setenv("AI_REVIEW_MODEL_LIVE", "gpt-outro")
+    assert AIReviewSettings.from_env("live").model == "gpt-outro"
