@@ -50,12 +50,63 @@ STATUS_SEM_PICK = "sem_pick"      # pipeline terminou sem candidato (fixture NUL
 _tabela_pronta = False
 
 
+#: Colunas que a auditoria acrescentou em 2026-08-27, e que o INSERT deste
+#: modulo escreve. Vira tambem a CONFERENCIA de "o banco ja esta em dia?".
+_COLUNAS_DA_AUDITORIA = (
+    ("run_id", "TEXT"), ("engine", "TEXT"), ("method", "TEXT"),
+    ("engine_version", "TEXT"), ("score", "NUMERIC"),
+    ("probability", "NUMERIC"), ("odd", "NUMERIC"),
+    ("pick_table", "TEXT"), ("pick_id", "BIGINT"),
+)
+
+
+def _ja_esta_em_dia(cur) -> bool:
+    """A tabela existe e tem todas as colunas? Pergunta barata, SEM LOCK.
+
+    POR QUE ISTO EXISTE (2026-09-05) -- ELE TRAVAVA O SITE
+    ------------------------------------------------------
+    Esta funcao emitia CREATE TABLE IF NOT EXISTS + nove ALTER TABLE ADD COLUMN
+    IF NOT EXISTS + tres CREATE INDEX A CADA EXECUCAO de motor. Os "IF NOT
+    EXISTS" fazem o comando nao ter EFEITO quando esta tudo no lugar, mas nao
+    o impedem de PEDIR o lock: ALTER TABLE pede ACCESS EXCLUSIVE, que nao
+    convive com nada -- nem com leitura.
+
+    O estrago nao e' a lentidao do motor, e' o que acontece com quem le':
+    basta o site ter UMA transacao aberta na tabela (qualquer consulta da aba
+    de Auditoria) pra o ALTER entrar na fila -- e, uma vez na fila, TODA
+    leitura que chega depois fica atras dele. Medido em DEV: leitura simples
+    que roda em 0,2s levou 118,7 segundos, e o proprio ALTER morreu de
+    statement timeout aos 122s.
+
+    Perguntar ao catalogo antes custa uma consulta e nao pega lock nenhum.
+    Num banco que ja esta em dia -- que e' TODA execucao depois da primeira --
+    nenhum DDL e' emitido e o site nao sente o motor rodar.
+    """
+    cur.execute("SELECT to_regclass('public.engine_decisions') IS NOT NULL")
+    if not cur.fetchone()[0]:
+        return False
+    cur.execute("""SELECT column_name FROM information_schema.columns
+                    WHERE table_schema = 'public' AND table_name = 'engine_decisions'""")
+    existentes = {r[0] for r in cur.fetchall()}
+    return all(coluna in existentes for coluna, _ in _COLUNAS_DA_AUDITORIA)
+
+
 def _ensure_table() -> None:
     global _tabela_pronta
     if _tabela_pronta:
         return
     conn = get_connection()
     cur = conn.cursor()
+    if _ja_esta_em_dia(cur):
+        cur.close()
+        conn.close()
+        _tabela_pronta = True
+        return
+    # SO' O CAMINHO DE MIGRACAO CHEGA AQUI, e ele nao pode esperar em fila:
+    # `lock_timeout` faz o DDL desistir em 3s em vez de bloquear o site. Se
+    # desistir, `_tabela_pronta` fica False e a proxima execucao tenta de novo
+    # -- e o INSERT que vem a seguir cai no except que ja existe, com aviso.
+    cur.execute("SET lock_timeout = '3s'")
     cur.execute("""CREATE TABLE IF NOT EXISTS engine_decisions (
         id          BIGSERIAL PRIMARY KEY,
         match_date  DATE NOT NULL,
@@ -70,18 +121,12 @@ def _ensure_table() -> None:
         context     JSONB,
         created_at  TIMESTAMP DEFAULT NOW()
     )""")
-    # Colunas da auditoria (2026-08-27). Ficam aqui e nao so' em
-    # services/engine_audit porque QUEM CHEGA PRIMEIRO no banco cria: um
-    # pipeline de pre-jogo rodando sozinho comeca por este modulo, e o INSERT
-    # logo abaixo ja' escreve run_id/engine/method. Sem os ALTER aqui, um banco
-    # com a tabela antiga quebraria em toda linha de log ate' alguem rodar um
-    # motor novo.
-    for coluna, tipo in (
-        ("run_id", "TEXT"), ("engine", "TEXT"), ("method", "TEXT"),
-        ("engine_version", "TEXT"), ("score", "NUMERIC"),
-        ("probability", "NUMERIC"), ("odd", "NUMERIC"),
-        ("pick_table", "TEXT"), ("pick_id", "BIGINT"),
-    ):
+    # As colunas ficam aqui, e nao so' em services/engine_audit, porque QUEM
+    # CHEGA PRIMEIRO no banco cria: um pipeline de pre-jogo rodando sozinho
+    # comeca por este modulo, e o INSERT logo abaixo ja' escreve
+    # run_id/engine/method. Sem os ALTER aqui, um banco com a tabela antiga
+    # quebraria em toda linha de log ate' alguem rodar um motor novo.
+    for coluna, tipo in _COLUNAS_DA_AUDITORIA:
         cur.execute(f"ALTER TABLE engine_decisions ADD COLUMN IF NOT EXISTS {coluna} {tipo}")
     # A consulta real e' sempre "o que aconteceu no dia X no pipeline Y".
     cur.execute("CREATE INDEX IF NOT EXISTS idx_engine_decisions_dia "
