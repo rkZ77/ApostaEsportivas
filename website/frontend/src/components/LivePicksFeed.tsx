@@ -40,7 +40,7 @@
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Radio, RefreshCw, Timer, CheckCircle2, Clock, PowerOff, Eye,
-         Goal, Flag, Target, Crosshair, Lock, Radar, Ban, Square } from 'lucide-react'
+         Goal, Flag, Target, Crosshair, Lock, Radar, Ban, Square, Share2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { capitalizarFrase } from '../utils/format'
 import api from '../services/api'
@@ -51,6 +51,8 @@ import { CampoDoPick, PickExplainButton, PickProbability } from './PickCardParts
 import LiveAnalysisModal from './LiveAnalysisModal'
 import { translateLine, translateMarket, metadesDaLinha, nomeDoMercadoComGrade } from '../utils/marketTranslate'
 import { LeagueLogo, TeamLogo } from './TeamLogo'
+import { useShareStoryImage } from '../hooks/useShareStoryImage'
+import { pctProb } from '../utils/format'
 import { rotuloDoStatus, escudoDoTime } from '../lib/aoVivo'
 import { calcVipStake } from '../utils/stakeUtils'
 import { sinalizarNavegacao } from '../services/progressBus'
@@ -859,6 +861,30 @@ const CardLive = forwardRef<HTMLDivElement, {
   } | null
 }>(function CardLive({ pick, onSeguir, banca, oddAgora }, ref) {
   const [verAnalise, setVerAnalise] = useState(false)
+  /* Compartilhar, igual ao card de pré-jogo: mesma imagem, mesma rota
+     (`/pick/live/<id>`), mesmo hook. O card ao vivo era o único sem isso. */
+  const { share: compartilhar, sharing: compartilhando, shared: compartilhado } = useShareStoryImage()
+
+  const handleShare = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    compartilhar({
+      pickId: pick.id,
+      pickTypeRoute: 'live',
+      homeTeamName: pick.home_team_name,
+      awayTeamName: pick.away_team_name,
+      homeTeamId: pick.home_team_id,
+      awayTeamId: pick.away_team_id,
+      leagueName: pick.league_name,
+      pickType: 'live',
+      market: translateMarket(pick.market),
+      line: translateLine(pick.line),
+      house: pick.user_bet_house ?? pick.bet_house ?? undefined,
+      odd: Number(pick.odd),
+      probabilityPct: pctProb(pick.probability ?? pick.confidence),
+      result: pick.result ?? undefined,
+      profit: pick.profit != null ? Number(pick.profit) : null,
+    })
+  }
 
   /* Encerrado é só o que tem resultado. `EXPIRED` sem resultado quer dizer que
      a JANELA DA ODD fechou sem ninguém seguir · o jogo continua e o pick
@@ -999,8 +1025,15 @@ const CardLive = forwardRef<HTMLDivElement, {
                 </span>
               </div>
             ) : (
-              <div className="text-[9px] text-amber-400/80 mt-0.5">mercado suspenso</div>
+              <div className="text-[9px] text-amber-400/80 mt-0.5">sem cotação agora</div>
             )
+          )}
+          {/* Odd vencida SEM leitura nenhuma (a rota falhou, ou o pick é de um
+              jogo que a leitura não alcança): o preço da tela é histórico, e
+              dizer isso ao lado dele é o mínimo antes de alguém copiar o
+              número pra casa. */}
+          {!encerrado && !oddAgora && oddVencida && (
+            <div className="text-[9px] text-amber-400/80 mt-0.5">confira o preço na casa</div>
           )}
 
         </div>
@@ -1192,19 +1225,26 @@ const CardLive = forwardRef<HTMLDivElement, {
           <Button size="sm" onClick={() => onSeguir(pick)}>Pegar bilhete</Button>
         ) : null}
 
-        <div className="ml-auto shrink-0">
-          {/* Com a odd vencida o botão continua ali (ver `podeSeguir`), então o
-              lugar do prazo passa a dizer o que mudou: o preço da tela é
-              histórico, e o que vale é o da casa agora. Some o relógio, entra
-              o aviso -- oferecer o botão sem essa linha seria oferecer um
-              número que já não existe. */}
-          {encerrado ? null : oddVencida ? (
-            <span className="text-[10px] text-amber-400 font-semibold">
-              odd vencida, confira o preço atual
-            </span>
-          ) : (
+        <div className="ml-auto shrink-0 flex items-center gap-3">
+          {/* O prazo da odd continua aqui enquanto ele existe. O AVISO de odd
+              vencida saiu deste canto (2026-09-06, pedido do usuário): ele
+              agora mora junto da própria odd, que é o número sobre o qual ele
+              fala -- ver "sem cotação agora" na faixa de cima. */}
+          {!encerrado && !oddVencida && (
             <Contagem segundos={pick.segundos_de_validade} />
           )}
+          {/* Compartilhar, como nos outros cards do site. */}
+          <button
+            onClick={handleShare}
+            disabled={compartilhando}
+            aria-label="Compartilhar este pick"
+            className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-ink-3
+                       hover:text-ink-1 transition-colors disabled:opacity-40 min-h-[36px]"
+          >
+            {compartilhado
+              ? <><CheckCircle2 className="w-3.5 h-3.5 text-accent-ink" /> Pronto</>
+              : <><Share2 className="w-3.5 h-3.5" /> {compartilhando ? 'Gerando...' : 'Compartilhar'}</>}
+          </button>
         </div>
       </div>
     </motion.div>
