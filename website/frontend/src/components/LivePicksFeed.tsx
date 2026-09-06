@@ -1176,7 +1176,7 @@ const CardLive = forwardRef<HTMLDivElement, {
           card VIP põe compartilhar. */}
       <div className="flex items-center gap-2 px-5 py-3 border-t border-line/60 mt-auto">
         {/* MESMO SELO DOS OUTROS CARDS (2026-09-06, pedido do usuário): pick já
-            pego vira "Registrado" no lugar do botão, com a mesma moldura verde
+            pego vira "Bilhete registrado" no lugar do botão, com a moldura verde
             do pré-jogo (ver PickCardFooter). Antes era uma frase solta ("Em
             Minhas Apostas com 1u") que ocupava o lugar do botão sem parecer
             parte da mesma família de cards. A stake fica junto, porque ao vivo
@@ -1185,7 +1185,7 @@ const CardLive = forwardRef<HTMLDivElement, {
           <span className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-md
                            border border-accent/30 text-accent-ink bg-accent/10 min-h-[36px]">
             <CheckCircle2 size={13} />
-            Registrado
+            Bilhete registrado
             {pick.user_stake_units ? `, ${pick.user_stake_units}u` : ''}
           </span>
         ) : podeSeguir ? (

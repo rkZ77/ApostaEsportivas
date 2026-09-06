@@ -42,7 +42,11 @@ export function PickCardFooter({
      entao o card dizia a mesma palavra pra duas coisas diferentes. */
   const betLabel =
     betState === 'loading' ? 'Registrando...'
-    : betState === 'done' ? 'Registrado'
+    /* "Bilhete registrado", nao so' "Registrado" (2026-09-06, pedido do
+       usuario): o botao ao lado convida a PEGAR BILHETE, e o estado depois
+       dele tem que fechar a mesma frase. "Registrado" sozinho nao dizia o que
+       foi registrado. */
+    : betState === 'done' ? 'Bilhete registrado'
     : hasBanca ? 'Pegar bilhete'
     : 'Configurar banca'
 
