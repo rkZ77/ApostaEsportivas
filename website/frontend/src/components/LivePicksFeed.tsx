@@ -651,6 +651,14 @@ interface LivePick {
   expiration_reason?: string
   result?: string | null
   profit?: number | null
+  /** O contador que liquidou o pick (9 escanteios), e o motivo, se foi anulado.
+   *
+   *  As duas colunas existem no banco desde 02/09 com este propósito escrito
+   *  na migração, e o feed do Ao Vivo não as mandava -- então "empatou com a
+   *  linha" e "anulamos porque o provedor não publicou" chegavam na tela como
+   *  o mesmo "PUSH, +0.00u", sem nada que os separasse. */
+  settled_value?: number | null
+  void_reason?: string | null
   /* estado atual, vindo do enriquecimento no backend */
   live_status: string
   elapsed?: number | null
@@ -829,7 +837,12 @@ const CardLive = forwardRef<HTMLDivElement, {
     [pick, banca])
   const direcao: 'over' | 'under' = pick.line.toLowerCase().startsWith('under') ? 'under' : 'over'
   const linhaNum = parseFloat(pick.line.replace(/[^\d.]/g, ''))
-  const temBarra = pick.current_val != null && !isNaN(linhaNum)
+  /* A BARRA "agora X / linha Y" E' DE JOGO EM ANDAMENTO (2026-09-05, pedido do
+     usuario). Ela responde "onde o jogo esta' em relacao ao numero", que e' a
+     leitura de quem decide entrar -- num pick ja' liquidado ela mostra um
+     "agora" que nao existe mais, ao lado do resultado que ja' fechou a
+     conta. */
+  const temBarra = pick.current_val != null && !isNaN(linhaNum) && !encerrado
   /* O QUE FECHA O BOTÃO É O RESULTADO, NÃO O RELÓGIO (29/08, decisão do
    * usuário).
    *
