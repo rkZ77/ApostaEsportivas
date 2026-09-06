@@ -46,6 +46,7 @@ from settlement_bridge import settlement
 # produto precisa -- a alternativa seria duplicar a leitura da API-Football.
 from routers.live import (  # noqa: F401
     FT_STATUSES, LIVE_STATUSES, _anulacao_sem_estatistica, _calc_result,
+    _motivo_da_anulacao, _save_live_pick_result,
     _fetch_fixture, _fetch_fixtures_bulk, _fetch_stats, _leg_needs_stats,
     _parse_stats, _pick_status, _profit_for_result, _stat_for_market,
     _sync_followed_result, _travado_antes_do_apito,
@@ -290,29 +291,27 @@ def liquidar_pendentes(cur, conn, limite: int = 30) -> dict:
 
             odd = float(p["odd"] or 1)
             profit = _profit_for_result(resultado, odd)
-            cur.execute("""
-                UPDATE picks_live
-                SET result = %s, profit = %s, status = %s, settled_at = NOW()
-                WHERE id = %s AND result IS NULL
-            """, (resultado, profit, STATUS_LIQUIDADO, p["id"]))
-            # QUEM SEGUIU PRECISA SER AVISADO (2026-08-29).
+            # O QUE DECIDIU, GRAVADO JUNTO (06/09). Este UPDATE era o unico
+            # caminho de liquidacao do projeto que nao gravava
+            # `settled_value`/`void_reason` -- as duas colunas que todos os
+            # outros produtos escrevem por `_colunas_de_auditoria`.
             #
-            # Aqui havia um UPDATE cru em `user_followed_picks`, e ele pulava
-            # `_sync_followed_result` -- que e' o PONTO UNICO por onde todo
-            # resultado do site passa justamente pra alimentar o sino (ver o
-            # docstring dele em routers/live.py). O efeito pro assinante era o
-            # pior possivel e o mesmo que o /admin ja tinha corrigido: o
-            # dinheiro mudava na banca dele sem nenhum aviso de que o pick
-            # tinha sido resolvido.
-            #
-            # E' pior no Ao Vivo que em qualquer outro produto: o pick nasce e
-            # morre dentro de uma partida, entao ninguem esta com a aba aberta
-            # esperando o apito -- o sino e' a unica forma de ficar sabendo.
-            #
-            # A funcao faz o mesmo UPDATE e mais a notificacao, entao nao ha
-            # escrita a mais: o que muda e' que o aviso deixa de faltar.
-            _sync_followed_result(p["id"], "live", resultado, cur)
-            conn.commit()
+            # No Ao Vivo a falta doia mais que em qualquer outro lugar: o card
+            # ao vivo nao mostra o campo "Deu" (decisao de 04/09) e mostra o
+            # contador de AGORA, relido da API. Sem o valor gravado, um PUSH
+            # por empate com a linha aparecia como "Menos de 9.0", barra em 4 e
+            # selo PUSH, sem nada na tela capaz de explicar -- nem pro usuario,
+            # nem pra quem fosse investigar.
+            _save_live_pick_result(p["id"], resultado, odd, conn,
+                                   valor=valor, motivo=_motivo_da_anulacao())
+            # QUEM SEGUIU PRECISA SER AVISADO (2026-08-29). Vem de graca
+            # junto do `_save_live_pick_result` acima: ele passa por
+            # `_sync_followed_result`, que e' o PONTO UNICO por onde todo
+            # resultado do site alimenta o sino. Aqui havia um UPDATE cru em
+            # `user_followed_picks` que pulava esse ponto, e o dinheiro mudava
+            # na banca do assinante sem nenhum aviso -- pior no Ao Vivo que em
+            # qualquer outro produto, porque o pick nasce e morre dentro de uma
+            # partida e ninguem esta com a aba aberta esperando o apito.
             resumo["liquidados"] += 1
             logger.info("[LIVE-PICKS] #%s -> %s (%+.4fu)", p["id"], resultado, profit)
         except Exception as e:
@@ -608,7 +607,14 @@ def feed(
                    live_signal_score, data_freshness, projected_total,
                    probability, ev, edge, confidence, stake_units, reasoning,
                    odd_at_creation, odd_timestamp, odd_valid_until, status,
-                   expiration_reason, engine_version, result, profit, created_at
+                   expiration_reason, engine_version, result, profit, created_at,
+                   -- O QUE DECIDIU O RESULTADO (06/09). As duas colunas ja'
+                   -- existiam (migrations.py, 02/09: "com os dois na tela, a
+                   -- conferencia deixa de depender de nos") e o feed do Ao Vivo
+                   -- nao as mandava, entao o card nao tinha como distinguir
+                   -- "empatou com a linha" de "anulamos porque o provedor nao
+                   -- publicou": os dois chegavam como o mesmo PUSH, +0.00u.
+                   settled_value, void_reason
             FROM picks_live
             WHERE id IN (SELECT id FROM escopo UNION SELECT id FROM seguidos_vivos)
             ORDER BY (result IS NOT NULL), created_at DESC

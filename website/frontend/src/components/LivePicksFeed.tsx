@@ -40,8 +40,9 @@
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Radio, RefreshCw, Timer, CheckCircle2, Clock, PowerOff, Eye,
-         Goal, Flag, Target, Crosshair, Lock, Radar } from 'lucide-react'
+         Goal, Flag, Target, Crosshair, Lock, Radar, Ban } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { capitalizarFrase } from '../utils/format'
 import api from '../services/api'
 import ApostaModal from './ApostaModal'
 import { Badge, Button, ComoFunciona, EmptyState, ErrorState, LiveDot, Marquee, PickTypeBadge,
@@ -1031,6 +1032,42 @@ const CardLive = forwardRef<HTMLDivElement, {
         </div>
       )}
 
+      {/* POR QUE DEU PUSH · a unica leitura que este card nao entregava.
+        *
+        * PUSH chega na tela como "+0.00u" e mais nada, e ele tem DUAS causas
+        * que nao se parecem: empate com a linha (regra do mercado -- 9
+        * escanteios numa linha de 9.0, a casa devolve a entrada) e anulacao
+        * nossa (o provedor nao publicou o numero, ou o jogo foi pra
+        * prorrogacao e a folha soma 120 minutos). Sem separar as duas, um
+        * resultado legitimo e um defeito nosso ficam identicos na tela -- e e'
+        * o defeito que passa batido, que e' o pior dos dois lados.
+        *
+        * O card de pre-jogo (SuggestionCard) ja' dizia isso desde 02/09. Aqui
+        * nao dizia, apesar de o backend gravar as duas colunas: o feed do Ao
+        * Vivo simplesmente nao as mandava (ver o SELECT em live_picks.feed). */}
+      {pick.result === 'PUSH' && (pick.void_reason || pick.settled_value != null) && (
+        <div className="mx-5 mb-3 flex items-start gap-2 rounded-md border border-line
+                        bg-surface-2/50 px-3 py-2">
+          <Ban className="w-3.5 h-3.5 text-ink-4 shrink-0 mt-px" />
+          <p className="text-[11px] text-ink-3 leading-relaxed">
+            {pick.void_reason ? (
+              <>
+                <span className="font-semibold text-ink-2">Pick anulado.</span>{' '}
+                {capitalizarFrase(pick.void_reason)}, então a aposta é devolvida e
+                não conta como acerto nem como erro.
+              </>
+            ) : (
+              <>
+                <span className="font-semibold text-ink-2">Empatou com a linha.</span>{' '}
+                O jogo fechou em {Number(pick.settled_value)}, exatamente a linha
+                apostada, então a aposta é devolvida e não conta como acerto nem
+                como erro.
+              </>
+            )}
+          </p>
+        </div>
+      )}
+
 
       {/* O ESPAÇADOR QUE O "Fato" ERA.
         *
@@ -1052,7 +1089,7 @@ const CardLive = forwardRef<HTMLDivElement, {
             {pick.user_stake_units ? ` com ${pick.user_stake_units}u` : ''}
           </span>
         ) : podeSeguir ? (
-          <Button size="sm" onClick={() => onSeguir(pick)}>Apostar</Button>
+          <Button size="sm" onClick={() => onSeguir(pick)}>Pegar bilhete</Button>
         ) : null}
 
         <div className="ml-auto shrink-0">

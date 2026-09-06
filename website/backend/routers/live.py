@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends
 from database import get_connection
 from auth_utils import get_current_user
-from settlement_bridge import settlement, stat_sheet
+from settlement_bridge import player_sheet, settlement, stat_sheet
 import market_form
 import api_quota
 
@@ -38,6 +38,7 @@ _TTL_FT           = 300  # segundos · encerrado, dados não mudam
 _fix_cache:   dict[int, tuple[float, dict]] = {}
 _stats_cache: dict[int, tuple[float, list]] = {}
 _odds_live_cache: dict[int, tuple[float, list]] = {}
+_player_sheet_cache: dict[int, tuple[float, list]] = {}
 
 # Tamanho máximo de cada cache em memória. Sem limite o dict cresce sem parar
 # enquanto o processo estiver de pé: cada fixture novo adiciona uma entrada e
@@ -93,6 +94,29 @@ def _headers():
     return {"x-apisports-key": os.getenv("API_FOOTBALL_KEY", "")}
 
 
+def _recusa_da_api(corpo: dict) -> str | None:
+    """A API-Football RECUSOU esta chamada com HTTP 200? Devolve o motivo.
+
+    Cota do dia estourada, plano sem o endpoint e chave invalida nao viram
+    status de erro: vem 200, com `response: []` e o motivo dentro de `errors`
+    (dict quando ha' recusa, lista vazia quando esta' tudo bem -- os dois
+    formatos sao da propria API).
+
+    O motor aprendeu isso em 05/09, depois de 211 descartes seguidos em PROD
+    com ZERO candidatos avaliados no dia (ver live_feed._get). Este lado nao
+    tinha aprendido, e aqui a consequencia e' pior do que um pick que nao
+    nasce: `response: []` chega em `_parse_stats` como folha vazia, o contador
+    fica None, e depois de 12 horas `_anulacao_sem_estatistica` grava PUSH com
+    o motivo "provedor nao publicou a estatistica". Ou seja, a cota estourada
+    do nosso lado era escrita no historico como falha do provedor -- e um pick
+    que tinha ganhado saia como entrada devolvida.
+    """
+    erros = (corpo or {}).get("errors")
+    if isinstance(erros, dict) and erros:
+        return "; ".join(f"{k}: {v}" for k, v in erros.items())
+    return None
+
+
 def _fetch_fixture(fid: int) -> dict:
     now = time.time()
     if fid in _fix_cache:
@@ -104,7 +128,13 @@ def _fetch_fixture(fid: int) -> dict:
         r = requests.get(f"{API_BASE}/fixtures", headers=_headers(),
                          params={"id": fid, "timezone": "America/Sao_Paulo"}, timeout=10)
         api_quota.registrar(getattr(r, "headers", None), "live")
-        items = r.json().get("response", [])
+        corpo = r.json() or {}
+        if motivo := _recusa_da_api(corpo):
+            # Recusa nao vira fixture vazia em cache: `status: NS` fabricado
+            # faz a varredura tratar jogo encerrado como jogo que nao comecou.
+            logger.error("[LIVE] fixture %s: %s", fid, motivo)
+            return _fix_cache.get(fid, (0, {}))[1]
+        items = corpo.get("response", [])
         data  = items[0] if items else {}
     except Exception as e:
         logger.error("[LIVE] fixture %s: %s", fid, e)
@@ -142,7 +172,11 @@ def _fetch_fixtures_bulk(fids: list[int]) -> None:
                              params={"ids": "-".join(str(f) for f in batch),
                                      "timezone": "America/Sao_Paulo"}, timeout=10)
             api_quota.registrar(getattr(r, "headers", None), "live")
-            items = r.json().get("response", [])
+            corpo = r.json() or {}
+            if motivo := _recusa_da_api(corpo):
+                logger.error("[LIVE] bulk fixtures %s: %s", batch, motivo)
+                continue
+            items = corpo.get("response", [])
         except Exception as e:
             logger.error("[LIVE] bulk fixtures %s: %s", batch, e)
             continue
@@ -164,13 +198,111 @@ def _fetch_stats(fid: int, status: str) -> list:
         r = requests.get(f"{API_BASE}/fixtures/statistics", headers=_headers(),
                          params={"fixture": fid}, timeout=10)
         api_quota.registrar(getattr(r, "headers", None), "live")
-        data = r.json().get("response", [])
+        corpo = r.json() or {}
+        if motivo := _recusa_da_api(corpo):
+            # RECUSA NAO E' FOLHA VAZIA, e a diferenca vale um resultado: a
+            # lista vazia percorre `_parse_stats` -> contador None ->
+            # `_anulacao_sem_estatistica` -> PUSH gravado como "provedor nao
+            # publicou". Cai no cache antigo (se houver) e nao grava nada, do
+            # mesmo jeito que um timeout. Ver _recusa_da_api.
+            logger.error("[LIVE STATS] fixture %s: %s", fid, motivo)
+            return _stats_cache.get(fid, (0, []))[1]
+        data = corpo.get("response", [])
     except Exception as e:
         logger.error("[LIVE STATS] fixture %s: %s", fid, e)
         data = _stats_cache.get(fid, (0, []))[1]  # mantém cache antigo em caso de erro
     _evict_cache(_stats_cache)
     _stats_cache[fid] = (now, data)
     return data
+
+
+#: Quantas folhas de jogador uma varredura pode buscar na API.
+#:
+#: A folha por jogador nao e' cotada por partida ao vivo, e' cotada por
+#: PARTIDA ENCERRADA que ainda tem pick de jogador pendente -- uma fila que
+#: cresce quando o coletor do motor nao roda. O teto existe pra que uma fila
+#: grande nao gaste a cota do dia numa unica visita ao site; o resto sai na
+#: proxima passada, porque o pick continua pendente.
+_MAX_FOLHAS_DE_JOGADOR = int(os.getenv("PLAYER_SHEET_MAX_PER_RUN", "8"))
+
+
+def _fetch_player_sheet(fid: int) -> list:
+    """`/fixtures/players` de uma partida, com cache. Lista vazia se nao der.
+
+    POR QUE O SITE PRECISA DISSO (2026-09-06)
+    -----------------------------------------
+    Os dois produtos de jogador (defesas de goleiro e Player Stats) liquidavam
+    lendo `player_match_stats` por JOIN -- e NADA no site escreve nessa tabela.
+    Quem escreve e' `collectors/player_stats_collector_service.py`, que roda
+    dentro do motor, na mao (nao ha' agendador no projeto desde 01/08).
+
+    O efeito era o relatado pelo usuario: "o produto de jogadores nao esta
+    atualizando resultado". Nao havia erro nenhum nos logs, e nao havia como
+    haver -- o JOIN simplesmente nao encontrava linha, o pick nao entrava na
+    lista da varredura e ficava Pendente pra sempre. Pior que um bug barulhento:
+    o produto parecia estar esperando o provedor quando estava esperando um
+    comando manual em outro repositorio.
+
+    A fila do coletor tem ainda dois cortes que o site nao controla: rodizio
+    por liga (cada liga anda algumas partidas por execucao) e `leagues.ativa`.
+    Ou seja, mesmo rodando o motor, a folha de uma partida especifica pode
+    demorar dias pra chegar.
+
+    Este caminho e' o mesmo padrao que `_substitutos_de` ja' usa pra buscar
+    `/fixtures/events`: uma requisicao por partida, so' quando ela pode mudar
+    um resultado, e sem levantar excecao -- sem a folha, o pick continua
+    pendente, que e' o comportamento de antes.
+    """
+    now = time.time()
+    if fid in _player_sheet_cache:
+        ts, cached = _player_sheet_cache[fid]
+        if now - ts < _TTL_FT:
+            return cached
+    try:
+        r = requests.get(f"{API_BASE}/fixtures/players", headers=_headers(),
+                         params={"fixture": fid}, timeout=12)
+        api_quota.registrar(getattr(r, "headers", None), "player-sheet")
+        corpo = r.json() or {}
+        if _recusa_da_api(corpo):
+            # NAO CACHEIA A RECUSA: cota estourada nao e' "folha inexistente",
+            # e guardar a lista vazia por 5 minutos transformaria a recusa em
+            # dado. Ver _recusa_da_api.
+            return []
+        data = corpo.get("response") or []
+    except Exception as e:
+        logger.warning("[AUTO-RESULT] folha de jogador da fixture %s falhou: %s", fid, e)
+        return _player_sheet_cache.get(fid, (0, []))[1]
+    _evict_cache(_player_sheet_cache)
+    _player_sheet_cache[fid] = (now, data)
+    return data
+
+
+def _valor_do_jogador(fid: int, player_id: int, coluna: str) -> tuple[float | None, int | None]:
+    """(valor da coluna, minutos em campo) de um jogador, lido da API.
+
+    A leitura NAO e' feita aqui: ela vem de
+    `collectors/player_stats_collector_service` pelo settlement_bridge, que e'
+    quem sabe que `null` num contador de quem entrou em campo significa zero.
+    Uma segunda leitura do mesmo JSON discordaria do coletor no caso mais
+    comum da folha, e o pick liquidaria diferente dependendo de quem chegou
+    primeiro.
+    """
+    caminho = dict(player_sheet.MAPA_DE_CAMPOS).get(coluna)
+    if caminho is None:
+        return None, None
+    for time_bloco in _fetch_player_sheet(fid):
+        for jogador in (time_bloco.get("players") or []):
+            if ((jogador.get("player") or {}).get("id")) != player_id:
+                continue
+            blocos = jogador.get("statistics") or []
+            if not blocos:
+                return None, None
+            stats = blocos[0] or {}
+            tem_folha = player_sheet._tem_folha(stats)
+            valor = player_sheet._valor_do_campo(stats, coluna, caminho, tem_folha)
+            minutos = player_sheet._num(stats, "games", "minutes")
+            return valor, (int(minutos) if minutos is not None else None)
+    return None, None
 
 
 def _fetch_live_odds(fid: int) -> list:
@@ -1008,6 +1140,97 @@ def _substitutos_de(fixture_id: int, player_id: int) -> list:
     return cadeia
 
 
+#: Quantas folhas de jogador esta varredura ja' buscou na API.
+#:
+#: Zerado no inicio de cada `resolve_all_pending` -- e' um teto por PASSADA, e
+#: nao um teto global, porque a proxima visita ao site tem que poder continuar
+#: de onde esta.
+_folhas_de_jogador_buscadas = 0
+
+
+def _sob_teto_de_folhas() -> bool:
+    global _folhas_de_jogador_buscadas
+    if _folhas_de_jogador_buscadas >= _MAX_FOLHAS_DE_JOGADOR:
+        return False
+    _folhas_de_jogador_buscadas += 1
+    return True
+
+
+def _valor_de_pick_de_jogador(p: dict, coluna: str, valor_do_banco):
+    """O contador que liquida um pick de jogador, do banco ou da API.
+
+    O banco vem primeiro sempre: quando o coletor do motor ja' passou, nao ha'
+    chamada nenhuma e o custo e' zero. A API entra so' pela lacuna -- e so'
+    depois de confirmar que a partida ENCERROU, porque folha de jogo em
+    andamento liquidaria o pick antes do apito (o mesmo erro que este arquivo
+    acabou de corrigir nos mercados de time).
+    """
+    if valor_do_banco is not None:
+        return int(valor_do_banco)
+    fid = p.get("fixture_id")
+    if not fid or not p.get("player_id"):
+        return None
+    status = _fetch_fixture(fid).get("fixture", {}).get("status", {}).get("short", "NS")
+    if status not in FT_STATUSES:
+        return None
+    if not _sob_teto_de_folhas():
+        return None
+    valor, _minutos = _valor_do_jogador(fid, int(p["player_id"]), coluna)
+    return None if valor is None else int(valor)
+
+
+def _minutos_em_campo(p: dict) -> int | None:
+    """Minutos do titular, do banco ou da folha JA' EM CACHE.
+
+    Nao gasta requisicao: se a folha foi buscada por
+    `_valor_de_pick_de_jogador` na mesma passada, ela esta' no cache; se nao
+    foi, `_fetch_player_sheet` devolve o que tiver e o resultado e' None --
+    que e' o mesmo "nao sei" que o banco daria.
+
+    Os minutos decidem se vale procurar substituto da vaga, entao ler `None`
+    aqui apenas deixa de somar o substituto -- nunca inventa numero.
+    """
+    if p.get("minutes") is not None:
+        return int(p["minutes"])
+    fid, pid = p.get("fixture_id"), p.get("player_id")
+    if not fid or not pid:
+        return None
+    _valor, minutos = _valor_do_jogador(int(fid), int(pid), "saves")
+    return minutos
+
+
+def _defesas_do_goleiro(p: dict) -> int | None:
+    return _valor_de_pick_de_jogador(p, "saves", p.get("saves"))
+
+
+def _folha_do_jogador_consultada(fid: int) -> bool:
+    """A folha desta partida ja' foi buscada nesta passada?
+
+    E' a guarda da ANULACAO. O resolvedor de pick de jogador tem teto de
+    requisicoes por passada (`_MAX_FOLHAS_DE_JOGADOR`), e o bloco de anulacao
+    roda depois dele: sem esta pergunta, todo pick que ficou de fora do teto
+    seria anulado como PUSH por "provedor nao publicou" -- quando o que faltou
+    foi a NOSSA consulta, nao o dado.
+
+    E' o mesmo raciocinio da primeira invariante do settlement, um nivel acima:
+    ausencia nunca vira zero, e "nao perguntei" nunca vira "nao existe".
+    """
+    return fid in _player_sheet_cache
+
+
+def _jogador_esta_na_folha(fid: int, player_id: int) -> bool:
+    """Ele aparece na folha JA' consultada desta partida?
+
+    Falso com a folha em maos significa que a fonte nao cobre a atuacao dele --
+    a unica situacao em que anular e' honesto.
+    """
+    for time_bloco in _player_sheet_cache.get(fid, (0, []))[1]:
+        for jogador in (time_bloco.get("players") or []):
+            if ((jogador.get("player") or {}).get("id")) == player_id:
+                return True
+    return False
+
+
 #: Motivo da última anulação decidida por `_anulacao_sem_estatistica`.
 #:
 #: Existe porque a função é chamada dentro de um `res = res or ...` em cinco
@@ -1015,6 +1238,17 @@ def _substitutos_de(fixture_id: int, player_id: int) -> list:
 #: cinco -- cada um com um `_save_*` diferente. O motivo é lido logo depois da
 #: chamada, na mesma passada e na mesma thread da varredura.
 _ultimo_motivo_anulacao: str | None = None
+
+
+def _motivo_da_anulacao() -> str | None:
+    """O motivo da ultima anulacao, pra quem grava o resultado.
+
+    Existe porque `_ultimo_motivo_anulacao` e' modulo-global e quem lida com
+    pick Ao Vivo esta' em outro arquivo (routers/live_picks.py): importar a
+    variavel congelaria o valor no momento do import. A leitura acontece na
+    mesma passada e na mesma thread da varredura, como as outras.
+    """
+    return _ultimo_motivo_anulacao
 
 
 def _anulacao_sem_estatistica(leg: dict) -> str | None:
@@ -1062,9 +1296,12 @@ def _anulacao_sem_estatistica(leg: dict) -> str | None:
         return None
 
     if leg.get("current_val") is None:
-        motivo = "provedor nao publicou a estatistica"
+        # AS DUAS FRASES VAO PRA TELA, nao pro log: elas saem em `void_reason` e
+        # o card as imprime ("Pick anulado. O provedor nao publicou..."). Por
+        # isso levam acento -- o produto e' 100% PT-BR.
+        motivo = "o provedor não publicou a estatística do jogo"
     elif leg.get("went_to_extra_time"):
-        motivo = "prorrogacao sem recorte de 90 minutos"
+        motivo = "o jogo foi para a prorrogação e a folha não separa os 90 minutos"
     else:
         return None
 
@@ -1855,7 +2092,8 @@ def _anular_sem_estatistica(cur, conn, today_br, resolved) -> None:
     # Jogador · a linha do jogador nao existe, ou a coluna do mercado veio NULL.
     try:
         cur.execute("""
-            SELECT pp.id, pp.odd, pp.player_name, pp.method, pp.fixture_id
+            SELECT pp.id, pp.odd, pp.player_name, pp.method, pp.fixture_id,
+                   pp.player_id
               FROM picks_player_stats pp
               JOIN match_statistics ms ON ms.fixture_id = pp.fixture_id
              WHERE pp.result IS NULL
@@ -1868,13 +2106,28 @@ def _anular_sem_estatistica(cur, conn, today_br, resolved) -> None:
         """, (limite,))
         for p in cur.fetchall():
             try:
+                # A FOLHA TEM QUE TER SIDO OLHADA (06/09). A ausencia de linha
+                # em `player_match_stats` deixou de ser evidencia de nada: o
+                # site nunca escreveu nessa tabela, entao ela estava vazia por
+                # construcao e este bloco anulava como PUSH todo pick de
+                # jogador com mais de um dia -- registrando como falha do
+                # provedor o que era falta de coleta nossa.
+                #
+                # Agora a pergunta e' feita a' fonte, e so' anula quem a FONTE
+                # nao cobre. Pick que ficou fora do teto de requisicoes da
+                # passada segue pendente e volta na proxima.
+                if not _folha_do_jogador_consultada(p["fixture_id"]):
+                    continue
+                if _jogador_esta_na_folha(p["fixture_id"], p["player_id"]):
+                    continue
                 logger.warning(
                     "[AUTO-RESULT] player_stats #%s (%s · %s, fixture %s) anulado "
-                    "como PUSH: provedor nao publicou a folha do jogador",
+                    "como PUSH: a folha do jogo nao cobre este jogador",
                     p["id"], p["player_name"], p["method"], p["fixture_id"])
                 _save_market_pick_result(
                     "picks_player_stats", p["id"], "player_stats",
-                    settlement.PUSH, float(p["odd"] or 1), conn)
+                    settlement.PUSH, float(p["odd"] or 1), conn,
+                    motivo="a folha do jogo não cobre a atuação deste jogador")
                 resolved["player_stats"] += 1
             except Exception as e:
                 logger.error("[AUTO-RESULT] anulacao player_stats #%s erro: %s", p["id"], e)
@@ -1897,15 +2150,15 @@ def _anular_sem_estatistica(cur, conn, today_br, resolved) -> None:
         """, (limite,))
         for p in cur.fetchall():
             try:
-                motivo = ("provedor nao publicou o total de gols"
+                motivo = ("o provedor não publicou o total de gols"
                           if p["total_goals"] is None
-                          else "provedor nao publicou o placar do intervalo")
+                          else "o provedor não publicou o placar do intervalo")
                 logger.warning(
                     "[AUTO-RESULT] boost #%s (fixture %s) anulado como PUSH: %s",
                     p["id"], p["fixture_id"], motivo)
                 _save_market_pick_result(
                     "picks_boost", p["id"], "boost",
-                    settlement.PUSH, float(p["odd"] or 1), conn)
+                    settlement.PUSH, float(p["odd"] or 1), conn, motivo=motivo)
                 resolved["boost"] += 1
             except Exception as e:
                 logger.error("[AUTO-RESULT] anulacao boost #%s erro: %s", p["id"], e)
@@ -2446,6 +2699,9 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
     Em ambos os casos jogo que ainda não começou fica de fora (não há o que
     liquidar) e os fixtures são buscados em lote.
     """
+    global _folhas_de_jogador_buscadas
+    _folhas_de_jogador_buscadas = 0  # teto por PASSADA, ver _sob_teto_de_folhas
+
     conn = get_connection()
     cur  = conn.cursor()
     resolved: dict = {"vip": 0, "free": 0, "multipla": 0, "alavancagem": 0,
@@ -2770,29 +3026,37 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
         # nao ha nenhuma chamada de API.
         #
         # Por isso este bloco fica FORA da janela de `max_age_days`: o corte
-        # existe pra nao gastar cota reconsultando pick velho, e aqui nao ha
-        # cota pra gastar. Pick de goleiro atrasado (a estatistica do jogador
-        # as vezes so' entra horas depois) continua sendo resolvido assim que
-        # o dado aparece, em qualquer varredura.
+        # existe pra nao gastar cota reconsultando pick velho.
+        #
+        # O JOIN VIROU LEFT JOIN (06/09). Nada no site escreve em
+        # player_match_stats -- quem escreve e' o coletor do motor, rodado na
+        # mao -- entao o JOIN fechado nao era "esperar o dado", era esperar um
+        # comando em outro repositorio, e o pick ficava Pendente pra sempre.
+        # Sem linha no banco, a folha vem da API por `_valor_do_jogador`, com
+        # teto de chamadas por passada. Ver _fetch_player_sheet.
         try:
             cur.execute("""
-                SELECT pg.id, pg.line_value, pg.odd, pg.player_name,
+                SELECT pg.id, pg.fixture_id, pg.player_id, pg.line_value,
+                       pg.odd, pg.player_name,
                        pms.saves
                 FROM picks_goleiros pg
-                JOIN player_match_stats pms
+                LEFT JOIN player_match_stats pms
                   ON pms.fixture_id = pg.fixture_id
                  AND pms.player_id  = pg.player_id
                 WHERE pg.result IS NULL
                   AND pg.match_date <= %s
-                  AND pms.saves IS NOT NULL
+                ORDER BY pg.match_date DESC
             """, (today_br,))
             for p in cur.fetchall():
                 try:
                     linha = int(p["line_value"] or 0)
+                    saves = _defesas_do_goleiro(p)
+                    if saves is None:
+                        continue  # folha ainda nao existe -- segue pendente
                     # "N ou mais defesas": GREEN quando saves >= N. Nunca
                     # empata (a linha e' inteira e o mercado e' "ou mais"),
                     # entao nao existe PUSH aqui.
-                    res = "GREEN" if int(p["saves"]) >= linha else "RED"
+                    res = "GREEN" if saves >= linha else "RED"
                     _save_market_pick_result(
                         "picks_goleiros", p["id"], "goleiros", res, float(p["odd"] or 1), conn)
                     resolved["goleiros"] += 1
@@ -2829,23 +3093,30 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
             colunas = [r["stat_column"] for r in cur.fetchall()
                        if r["stat_column"] in _COLUNAS_PLAYER_STATS]
             for coluna in colunas:
+                # LEFT JOIN, e nao JOIN -- mesmo motivo do bloco de defesas:
+                # nada no site escreve em player_match_stats, entao o JOIN
+                # fechado deixava o produto inteiro sem resultado enquanto o
+                # coletor do motor nao fosse rodado a mao. Sem linha no banco,
+                # a folha vem da API. Ver _fetch_player_sheet.
                 cur.execute(f"""
                     SELECT pp.id, pp.fixture_id, pp.player_id, pp.line_value,
                            pp.odd, pp.player_name, pp.method,
                            pms.{coluna} AS valor, pms.minutes
                     FROM picks_player_stats pp
-                    JOIN player_match_stats pms
+                    LEFT JOIN player_match_stats pms
                       ON pms.fixture_id = pp.fixture_id
                      AND pms.player_id  = pp.player_id
                     WHERE pp.result IS NULL
                       AND pp.stat_column = %s
                       AND pp.match_date <= %s
-                      AND pms.{coluna} IS NOT NULL
+                    ORDER BY pp.match_date DESC
                 """, (coluna, today_br))
                 for p in cur.fetchall():
                     try:
                         linha = int(p["line_value"] or 0)
-                        valor = int(p["valor"])
+                        valor = _valor_de_pick_de_jogador(p, coluna, p["valor"])
+                        if valor is None:
+                            continue  # folha ainda nao existe -- segue pendente
 
                         # A VAGA, E NAO SO' A PESSOA (02/09).
                         #
@@ -2859,7 +3130,7 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
                         # ninguem, e titular que jogou os 90 nao tem
                         # substituto. Cada consulta dessas e' uma chamada de
                         # API, entao o filtro nao e' detalhe.
-                        minutos = p["minutes"]
+                        minutos = _minutos_em_campo(p)
                         if valor < linha and minutos is not None and int(minutos) < 90:
                             for suplente in _substitutos_de(p["fixture_id"], p["player_id"]):
                                 cur.execute(f"""
@@ -2870,6 +3141,16 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
                                 linha_sup = cur.fetchone()
                                 if linha_sup and linha_sup["valor"] is not None:
                                     valor += int(linha_sup["valor"])
+                                    continue
+                                # A folha da partida ja' esta em cache (foi ela
+                                # que deu o numero do titular), entao o
+                                # substituto sai da MESMA folha sem requisicao
+                                # nova. Sem isto, a regra da vaga valeria so'
+                                # pra partida que o coletor do motor alcancou.
+                                val_sup, _min = _valor_do_jogador(
+                                    int(p["fixture_id"]), int(suplente), coluna)
+                                if val_sup is not None:
+                                    valor += int(val_sup)
                             if valor >= linha:
                                 logger.info(
                                     "[AUTO-RESULT] player_stats #%s (%s): linha batida "
@@ -3113,30 +3394,32 @@ def _ha_pendente_em_jogo() -> bool:
                 """, (desde, datetime.now(_BR_TZ).date()))
                 if cur.fetchone():
                     return True
-            cur.execute("""
-                SELECT 1
-                FROM picks_goleiros pg
-                JOIN player_match_stats pms
-                  ON pms.fixture_id = pg.fixture_id AND pms.player_id = pg.player_id
-                WHERE pg.result IS NULL AND pms.saves IS NOT NULL
-                LIMIT 1
-            """)
-            if cur.fetchone():
-                return True
-            # Motores de 27/08. Sem estas duas perguntas a varredura nunca
-            # disparava por causa deles: `maybe_resolve_pending` so' gasta uma
-            # thread quando ha' o que resolver, e "o que resolver" era uma
-            # lista escrita a mao que nao conhecia as tabelas novas -- os picks
-            # ficariam pendentes ate' alguem abrir outra pendencia por acaso.
-            cur.execute("""
-                SELECT 1 FROM picks_player_stats pp
-                JOIN player_match_stats pms
-                  ON pms.fixture_id = pp.fixture_id AND pms.player_id = pp.player_id
-                WHERE pp.result IS NULL
-                LIMIT 1
-            """)
-            if cur.fetchone():
-                return True
+            # OS DOIS PRODUTOS DE JOGADOR PERGUNTAM PELA HORA DO JOGO, NAO
+            # PELA FOLHA (06/09).
+            #
+            # As duas perguntas eram `JOIN player_match_stats`, e isso fazia do
+            # FREIO uma terceira copia do mesmo defeito que o resolvedor tinha:
+            # nada no site escreve nessa tabela, entao num dia cuja unica
+            # pendencia fosse pick de jogador o freio respondia "nao ha' o que
+            # resolver" e a varredura NEM DISPARAVA. O pick de jogador nao
+            # esperava o provedor -- esperava outra pendencia aparecer por
+            # acaso e carregar ele junto.
+            #
+            # A forma certa e' a mesma do bloco de VIP/Free acima: existe pick
+            # pendente cujo jogo ja' comecou? Falso positivo aqui e' inofensivo
+            # e esta' na docstring -- a varredura roda e nao acha nada.
+            for tabela in ("picks_goleiros", "picks_player_stats"):
+                cur.execute(f"""
+                    SELECT 1
+                    FROM {tabela} p
+                    LEFT JOIN fixtures f ON f.fixture_id = p.fixture_id
+                    WHERE p.result IS NULL
+                      AND p.match_date BETWEEN %s AND %s
+                      AND (f.match_datetime IS NULL OR f.match_datetime <= %s)
+                    LIMIT 1
+                """, (desde, datetime.now(_BR_TZ).date(), agora_br))
+                if cur.fetchone():
+                    return True
             cur.execute("""
                 SELECT 1 FROM picks_boost pb
                 JOIN match_statistics ms ON ms.fixture_id = pb.fixture_id

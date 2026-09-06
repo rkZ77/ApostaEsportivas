@@ -844,6 +844,31 @@ function SuggestionCard({
             </p>
           </div>
         )}
+
+        {/* PUSH SEM MOTIVO É EMPATE COM A LINHA, E ELE TAMBÉM PRECISA DO NÚMERO.
+          *
+          * O backend não grava `void_reason` no empate técnico de propósito:
+          * "ele é a regra do mercado, e o número explica sozinho"
+          * (_colunas_de_auditoria, routers/live.py). Só que no pick AO VIVO o
+          * número não estava em lugar nenhum: `mostraDeu` é falso ali por
+          * decisão de 04/09, e o que o card mostra é o contador de AGORA, que
+          * continua sendo relido da API e pode divergir do que liquidou.
+          *
+          * O resultado era o único PUSH da tela que não tinha como ser lido:
+          * "Menos de 9.0", barra marcando 4, selo PUSH e nenhuma explicação.
+          * Aqui o número que decidiu volta pra tela, e a divergência entre ele
+          * e a barra deixa de ser invisível. */}
+        {s.result === 'PUSH' && !s.void_reason && s.settled_value != null && (
+          <div className="flex items-start gap-2 rounded-md border border-line bg-surface-2/50 px-3 py-2">
+            <Ban className="w-3.5 h-3.5 text-ink-4 shrink-0 mt-px" />
+            <p className="text-[11px] text-ink-3 leading-relaxed">
+              <span className="font-semibold text-ink-2">Empatou com a linha.</span>{' '}
+              O jogo fechou em {valorLiquidado(s.market, s.settled_value)}, exatamente
+              a linha apostada, então a aposta é devolvida e não conta como acerto
+              nem como erro.
+            </p>
+          </div>
+        )}
       </div>
 
       <PickProbability confidence={s.confidence} probability={s.probability} />
