@@ -3072,6 +3072,10 @@ export default function Picks() {
             jogadores:   ([...(today?.player_stats ?? []), ...(today?.goleiros ?? [])]
                             .filter((s: any) => !s.result).length) || undefined,
             boost:       ((today?.boost ?? []).filter((s: any) => !s.result).length) || undefined,
+            /* Ao Vivo tinha o selo VIP e nenhum numero, entao era a unica aba
+               da barra que nao dizia quantos picks tinha dentro. Conta os do
+               DIA que ainda nao foram liquidados -- mesma regra das outras. */
+            ao_vivo:     (livePendentes.length) || undefined,
             multiplas:   (today?.multiplas ?? []).filter((m: any) => !m.result).length || undefined,
             alavancagem: today?.alavancagem && !today.alavancagem.result ? 1 : undefined,
           }}

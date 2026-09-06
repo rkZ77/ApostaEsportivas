@@ -399,6 +399,21 @@ export function tipoDeLinha(line?: string): TipoDeLinha | null {
   return 'asiatica'
 }
 
+/*
+ * Nome do mercado com a grade na frente: "Asiático Gols Mais/Menos".
+ *
+ * O tipo da linha é parte da IDENTIDADE do mercado, não uma nota de rodapé
+ * (2026-09-06, pedido do usuário): quem lê "Gols Mais/Menos, Menos de 1.75"
+ * de relance lê um limiar comum, e só descobre a metade partida quando o
+ * resultado vem meio green. Com o rótulo na frente, a diferença aparece antes
+ * do número.
+ */
+export function nomeDoMercadoComGrade(market?: string, line?: string): string {
+  const nome = translateMarket(market)
+  if (!nome) return ''
+  return tipoDeLinha(line) === 'asiatica' ? `Asiático ${nome}` : nome
+}
+
 /** "1.5 e 2.0" · as duas linhas em que uma asiática se divide. */
 export function metadesDaLinha(line?: string): [string, string] | null {
   if (tipoDeLinha(line) !== 'asiatica') return null

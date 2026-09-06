@@ -49,7 +49,7 @@ import { Badge, Button, ComoFunciona, EmptyState, ErrorState, LiveDot, Marquee, 
          ResultBadge, Skeleton, SkeletonPickGrid } from './ui'
 import { CampoDoPick, PickExplainButton, PickProbability } from './PickCardParts'
 import LiveAnalysisModal from './LiveAnalysisModal'
-import { translateLine, translateMarket, metadesDaLinha } from '../utils/marketTranslate'
+import { translateLine, translateMarket, metadesDaLinha, nomeDoMercadoComGrade } from '../utils/marketTranslate'
 import { LeagueLogo, TeamLogo } from './TeamLogo'
 import { rotuloDoStatus, escudoDoTime } from '../lib/aoVivo'
 import { calcVipStake } from '../utils/stakeUtils'
@@ -1081,7 +1081,7 @@ const CardLive = forwardRef<HTMLDivElement, {
         <dl className="space-y-0.5">
           <CampoDoPick rotulo="Mercado">
             <dd className="text-xs font-semibold text-ink-2 truncate">
-              {translateMarket(pick.market)}
+              {nomeDoMercadoComGrade(pick.market, pick.line)}
             </dd>
           </CampoDoPick>
           {pick.line && (
@@ -1175,11 +1175,18 @@ const CardLive = forwardRef<HTMLDivElement, {
       {/* Rodapé · ação à esquerda e prazo da odd à direita, no lugar onde o
           card VIP põe compartilhar. */}
       <div className="flex items-center gap-2 px-5 py-3 border-t border-line/60 mt-auto">
+        {/* MESMO SELO DOS OUTROS CARDS (2026-09-06, pedido do usuário): pick já
+            pego vira "Registrado" no lugar do botão, com a mesma moldura verde
+            do pré-jogo (ver PickCardFooter). Antes era uma frase solta ("Em
+            Minhas Apostas com 1u") que ocupava o lugar do botão sem parecer
+            parte da mesma família de cards. A stake fica junto, porque ao vivo
+            ela varia mais que no pré-jogo. */}
         {pick.is_followed ? (
-          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-green-400">
-            <CheckCircle2 size={12} />
-            Em Minhas Apostas
-            {pick.user_stake_units ? ` com ${pick.user_stake_units}u` : ''}
+          <span className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-md
+                           border border-accent/30 text-accent-ink bg-accent/10 min-h-[36px]">
+            <CheckCircle2 size={13} />
+            Registrado
+            {pick.user_stake_units ? `, ${pick.user_stake_units}u` : ''}
           </span>
         ) : podeSeguir ? (
           <Button size="sm" onClick={() => onSeguir(pick)}>Pegar bilhete</Button>
