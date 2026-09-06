@@ -1080,12 +1080,30 @@ def _anulacao_sem_estatistica(leg: dict) -> str | None:
     return settlement.PUSH
 
 
-def _locked_leg_result(leg: dict) -> str | None:
+def _teto_da_linha(line_val: float) -> float:
+    """A MAIOR meia-linha que a aposta ainda precisa vencer.
+
+    Linha de quarto-de-bola e' duas apostas: "Over 4.75" e' metade em Over 4.5
+    e metade em Over 5.0. Enquanto o contador nao passar da meia-linha DE CIMA
+    (5.0), o pick ainda pode terminar em meia-vitoria -- entao ele nao esta
+    travado. Linha inteira ou meia tem uma metade so', e o teto e' ela mesma.
+
+    Existe porque a mesma conta estava escrita a mao em tres lugares
+    (_enrich_leg, _locked_leg_result, _travado_antes_do_apito) e um deles
+    discordava dos outros dois -- ver a nota em _travado_antes_do_apito.
     """
-    Retorna resultado definitivo de uma leg se já determinado, else None.
-    FT  → resultado completo via _calc_result.
-    Bloqueado antes do FT (over/under cujo valor já cruzou a linha) → RED ou GREEN antecipado.
-    Linhas fracionárias (.25/.75): early-lock só quando o resultado final é inequivocamente GREEN.
+    return line_val + 0.25 if round(line_val % 1, 2) in (0.25, 0.75) else line_val
+
+
+def _locked_leg_result(leg: dict) -> str | None:
+    """Resultado definitivo de uma perna, ou None se ainda ha' o que esperar.
+
+    FT  → liquidacao completa via `_calc_result` (a matematica de
+          services/settlement.py, com PUSH, HALF-WIN e HALF-LOSS).
+    Antes do apito → SO' `_travado_antes_do_apito`, que e' um subconjunto
+          proprio daquilo: apenas os vereditos que mais nenhum evento do jogo
+          pode mudar. Nunca `_calc_result` com a bola rolando -- ver a nota em
+          `_travado_antes_do_apito`.
     """
     if leg["is_ft"]:
         return _calc_result(
@@ -1097,21 +1115,10 @@ def _locked_leg_result(leg: dict) -> str | None:
             went_to_extra_time=leg.get("went_to_extra_time", False),
         ) or _anulacao_sem_estatistica(leg)
     if leg.get("is_locked"):
-        direction, line_val = _extract_line(leg["line"])
-        cur = leg.get("current_val")
-        if cur is not None and line_val is not None:
-            frac = round(line_val % 1, 2)
-            v    = int(cur)
-            if direction == "under" and cur >= line_val:
-                return "RED"    # Under X com cur >= X: impossível de recuperar
-            if direction == "over":
-                # Só trava como GREEN se o resultado final não pode ser HALF-WIN
-                # .25: GREEN garantido quando v > floor  (v == floor → HALF-LOSS no FT)
-                # .75: GREEN garantido apenas quando v > ceil (v == ceil → HALF-WIN no FT)
-                # .0 / .5: GREEN garantido quando v > line_val
-                if frac == 0.25 and v > int(line_val):   return "GREEN"
-                if frac == 0.75 and v > int(line_val)+1: return "GREEN"
-                if frac not in (0.25, 0.75) and cur > line_val: return "GREEN"
+        return _travado_antes_do_apito(
+            leg["market"], leg["line"], leg.get("current_val"),
+            leg.get("market_type"),
+        )
     return None
 
 
@@ -1122,18 +1129,29 @@ def _travado_antes_do_apito(market: str, line: str, current_val,
     Mesma regra de `_locked_leg_result`, sem precisar montar a `leg` inteira ·
     o motor Live tem o valor observado na mao e nao a estrutura do ticker.
 
-    AS CAUTELAS SAO AS MESMAS, e elas nao sao formalidade:
+    A REGRA E' UMA SO', E E' O TETO DA LINHA (`_teto_da_linha`): o contador
+    tem que ter PASSADO da meia-linha de cima. Encostar nela nao trava.
 
-      Under so' trava pra RED. Um Under 11 com 12 escanteios ja' era; um Under
-      11 com 9 escanteios aos 80' NAO e' GREEN -- ainda cabem dois.
+      Over 4.75 com 5 gols NAO esta travado. Se o jogo acabar 5, termina
+      HALF-WIN; se sair o sexto, termina GREEN. Foi exatamente este o caso
+      relatado em 2026-09-06: o pick apareceu como HALF-WIN com o jogo em
+      andamento, porque a varredura chamava `_calc_result` (a liquidacao de
+      FIM DE JOGO) sobre o placar do minuto -- e a liquidacao de fim de jogo,
+      com 5 gols, esta certissima em dizer HALF-WIN. O erro era a PERGUNTA,
+      nao a conta.
 
-      Linha de quarto so' trava quando o final nao pode ser meia-vitoria. Over
-      11.75 com 12 termina HALF-WIN, nao GREEN, e travar como GREEN pagaria ao
-      seguidor o dobro do que a casa paga.
+      Under 3.0 com 3 gols tambem NAO esta travado, pelo mesmo motivo em
+      espelho: parou em 3 e o pick e' PUSH (linha empatada, entrada
+      devolvida); sai o quarto e e' RED. O `>=` que havia aqui gravava RED na
+      hora, e era o segundo caso que o usuario viu -- o PUSH/RED errado.
 
-      Mercado que nao e' de contagem (resultado, BTTS) nao passa por aqui:
-      `_extract_line` devolve direcao diferente de over/under e a funcao cai no
-      None, que e' esperar o apito.
+      Under so' trava pra RED, nunca pra GREEN: um Under 11 com 9 escanteios
+      aos 80' ainda cabe dois.
+
+      Mercado que nao e' de contagem (resultado, placar exato) nao passa por
+      aqui: `_extract_line` devolve direcao diferente de over/under e a funcao
+      cai no None, que e' esperar o apito. BTTS e' a unica excecao, e trava
+      sozinho -- gol marcado nao desmarca.
     """
     if current_val is None:
         return None
@@ -1143,17 +1161,11 @@ def _travado_antes_do_apito(market: str, line: str, current_val,
     # BTTS trava sozinho: as duas ja marcaram, nao tem como desmarcar.
     if direction in ("yes", "sim") and current_val >= 1.0:
         return settlement.GREEN
-    if direction == "under" and current_val >= line_val:
+    teto = _teto_da_linha(line_val)
+    if direction == "under" and current_val > teto:
         return settlement.RED
-    if direction == "over":
-        frac = round(line_val % 1, 2)
-        v = int(current_val)
-        if frac == 0.25 and v > int(line_val):
-            return settlement.GREEN
-        if frac == 0.75 and v > int(line_val) + 1:
-            return settlement.GREEN
-        if frac not in (0.25, 0.75) and current_val > line_val:
-            return settlement.GREEN
+    if direction == "over" and current_val > teto:
+        return settlement.GREEN
     return None
 
 
@@ -1497,14 +1509,15 @@ def _enrich_leg(fid: int, market: str, line: str,
         if is_btts_market and cur_val >= 1.0:
             is_locked = True
         elif line_val is not None:
-            frac_lv = round(line_val % 1, 2)
-            v_int   = int(cur_val)
-            if direction == "under" and cur_val >= line_val:
-                is_locked = True   # já estourou: impossível de recuperar
-            if direction == "over":
-                if frac_lv == 0.25 and v_int > int(line_val):   is_locked = True
-                elif frac_lv == 0.75 and v_int > int(line_val): is_locked = True
-                elif frac_lv not in (0.25, 0.75) and cur_val > line_val: is_locked = True
+            # MESMA regra de `_travado_antes_do_apito`, e nao uma copia dela:
+            # a copia que existia aqui travava "Over 4.75" com 5 gols (o pick
+            # ainda podia terminar HALF-WIN) e "Under 3.0" com 3 gols (ainda
+            # podia terminar PUSH). O selo de travado na tela e a gravacao do
+            # resultado saem do mesmo lugar de proposito -- ver a nota em
+            # `_travado_antes_do_apito`.
+            teto = _teto_da_linha(line_val)
+            if direction in ("over", "under") and cur_val > teto:
+                is_locked = True
 
     return {
         "fixture_id":   fid,
@@ -2119,17 +2132,12 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
 
             final_result = p["result"]
             # Auto-save quando jogo encerrou OU resultado já irreversível (early lock)
-            if final_result is None and (leg["is_ft"] or leg["is_locked"]):
-                auto_res = _calc_result(
-                    p["market"], p["line"],
-                    leg["current_val"], leg["home_goals"], leg["away_goals"],
-                    market_type=p.get("market_type"),
-                    home_team=p["home_team"], away_team=p["away_team"],
-                    home_stats=leg.get("home_stats"), away_stats=leg.get("away_stats"),
-                    went_to_extra_time=leg.get("went_to_extra_time", False),
-                )
+            if final_result is None:
+                auto_res = _locked_leg_result(leg)
                 if auto_res:
-                    _save_single_result(pick_id, pick_type, auto_res, odd, conn)
+                    _save_single_result(pick_id, pick_type, auto_res, odd, conn,
+                                        valor=leg.get("current_val"),
+                                        motivo=_ultimo_motivo_anulacao)
                     final_result = auto_res
                     if not is_today:
                         continue
@@ -2179,17 +2187,12 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
             )
 
             final_result = p["result"]
-            if final_result is None and (leg["is_ft"] or leg["is_locked"]):
-                auto_res = _calc_result(
-                    p["market"], p["line"],
-                    leg["current_val"], leg["home_goals"], leg["away_goals"],
-                    market_type=p.get("market_type"),
-                    home_team=p["home_team"], away_team=p["away_team"],
-                    home_stats=leg.get("home_stats"), away_stats=leg.get("away_stats"),
-                    went_to_extra_time=leg.get("went_to_extra_time", False),
-                )
+            if final_result is None:
+                auto_res = _locked_leg_result(leg)
                 if auto_res:
-                    _save_live_pick_result(pick_id, auto_res, odd, conn)
+                    _save_live_pick_result(pick_id, auto_res, odd, conn,
+                                           valor=leg.get("current_val"),
+                                           motivo=_ultimo_motivo_anulacao)
                     final_result = auto_res
                     if not is_today:
                         continue
@@ -2489,19 +2492,12 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
                                       p["home_team"], p["away_team"],
                                       p["home_team_id"], p["away_team_id"], odd,
                                       market_type=p.get("market_type"))
-                    if leg["is_ft"] or leg["is_locked"]:
-                        res = _calc_result(p["market"], p["line"],
-                                           leg["current_val"], leg["home_goals"], leg["away_goals"],
-                                           market_type=p.get("market_type"),
-                                           home_team=p["home_team"], away_team=p["away_team"],
-                                           home_stats=leg.get("home_stats"), away_stats=leg.get("away_stats"),
-                                           went_to_extra_time=leg.get("went_to_extra_time", False))
-                        res = res or _anulacao_sem_estatistica(leg)
-                        if res:
-                            _save_single_result(p["id"], "vip", res, odd, conn,
-                                                valor=leg.get("current_val"),
-                                                motivo=_ultimo_motivo_anulacao)
-                            resolved["vip"] += 1
+                    res = _locked_leg_result(leg)
+                    if res:
+                        _save_single_result(p["id"], "vip", res, odd, conn,
+                                            valor=leg.get("current_val"),
+                                            motivo=_ultimo_motivo_anulacao)
+                        resolved["vip"] += 1
                 except Exception as e:
                     logger.error("[AUTO-RESULT] vip #%s erro: %s", p["id"], e)
         except Exception as e:
@@ -2526,19 +2522,12 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
                                       p["home_team"], p["away_team"],
                                       p["home_team_id"], p["away_team_id"], odd,
                                       market_type=p.get("market_type"))
-                    if leg["is_ft"] or leg["is_locked"]:
-                        res = _calc_result(p["market"], p["line"],
-                                           leg["current_val"], leg["home_goals"], leg["away_goals"],
-                                           market_type=p.get("market_type"),
-                                           home_team=p["home_team"], away_team=p["away_team"],
-                                           home_stats=leg.get("home_stats"), away_stats=leg.get("away_stats"),
-                                           went_to_extra_time=leg.get("went_to_extra_time", False))
-                        res = res or _anulacao_sem_estatistica(leg)
-                        if res:
-                            _save_single_result(p["id"], "free", res, odd, conn,
-                                                valor=leg.get("current_val"),
-                                                motivo=_ultimo_motivo_anulacao)
-                            resolved["free"] += 1
+                    res = _locked_leg_result(leg)
+                    if res:
+                        _save_single_result(p["id"], "free", res, odd, conn,
+                                            valor=leg.get("current_val"),
+                                            motivo=_ultimo_motivo_anulacao)
+                        resolved["free"] += 1
                 except Exception as e:
                     logger.error("[AUTO-RESULT] free #%s erro: %s", p["id"], e)
         except Exception as e:
@@ -2577,19 +2566,12 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
                                       p["home_team"], p["away_team"],
                                       p["home_team_id"], p["away_team_id"], odd,
                                       market_type=p.get("market_type"))
-                    if leg["is_ft"] or leg["is_locked"]:
-                        res = _calc_result(p["market"], p["line"],
-                                           leg["current_val"], leg["home_goals"], leg["away_goals"],
-                                           market_type=p.get("market_type"),
-                                           home_team=p["home_team"], away_team=p["away_team"],
-                                           home_stats=leg.get("home_stats"), away_stats=leg.get("away_stats"),
-                                           went_to_extra_time=leg.get("went_to_extra_time", False))
-                        res = res or _anulacao_sem_estatistica(leg)
-                        if res:
-                            _save_live_pick_result(p["id"], res, odd, conn,
-                                                   valor=leg.get("current_val"),
-                                                   motivo=_ultimo_motivo_anulacao)
-                            resolved["live"] += 1
+                    res = _locked_leg_result(leg)
+                    if res:
+                        _save_live_pick_result(p["id"], res, odd, conn,
+                                               valor=leg.get("current_val"),
+                                               motivo=_ultimo_motivo_anulacao)
+                        resolved["live"] += 1
                 except Exception as e:
                     logger.error("[AUTO-RESULT] live #%s erro: %s", p["id"], e)
         except Exception as e:
@@ -2767,20 +2749,13 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
                                       p["home_team"], p["away_team"],
                                       p["home_team_id"], p["away_team_id"], odd,
                                       market_type=p.get("market_type"))
-                    if leg["is_ft"] or leg["is_locked"]:
-                        res = _calc_result(p["market"], p["line"],
-                                           leg["current_val"], leg["home_goals"], leg["away_goals"],
-                                           market_type=p.get("market_type"),
-                                           home_team=p["home_team"], away_team=p["away_team"],
-                                           home_stats=leg.get("home_stats"), away_stats=leg.get("away_stats"),
-                                           went_to_extra_time=leg.get("went_to_extra_time", False))
-                        res = res or _anulacao_sem_estatistica(leg)
-                        if res:
-                            _save_market_pick_result("picks_faltas", p["id"], "faltas",
-                                                     res, odd, conn,
-                                                     valor=leg.get("current_val"),
-                                                     motivo=_ultimo_motivo_anulacao)
-                            resolved["faltas"] += 1
+                    res = _locked_leg_result(leg)
+                    if res:
+                        _save_market_pick_result("picks_faltas", p["id"], "faltas",
+                                                 res, odd, conn,
+                                                 valor=leg.get("current_val"),
+                                                 motivo=_ultimo_motivo_anulacao)
+                        resolved["faltas"] += 1
                 except Exception as e:
                     logger.error("[AUTO-RESULT] faltas #%s erro: %s", p["id"], e)
         except Exception as e:
