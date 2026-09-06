@@ -531,7 +531,7 @@ export default function MeusPicks() {
                   {tab === 'pendentes' ? 'Nenhuma aposta pendente' : 'Nenhuma aposta resolvida ainda'}
                 </p>
                 <p className="text-ink-4 text-xs mb-4">
-                  Clique em "Apostar" nos picks para registrar suas apostas.
+                  Clique em "Pegar bilhete" nos picks para registrar suas apostas.
                 </p>
                 <button onClick={() => navigate('/picks')} className="btn-primary text-sm px-6 py-2.5">
                   Ver picks

@@ -1052,7 +1052,7 @@ const CardLive = forwardRef<HTMLDivElement, {
             {pick.user_stake_units ? ` com ${pick.user_stake_units}u` : ''}
           </span>
         ) : podeSeguir ? (
-          <Button size="sm" onClick={() => onSeguir(pick)}>Apostar</Button>
+          <Button size="sm" onClick={() => onSeguir(pick)}>Pegar bilhete</Button>
         ) : null}
 
         <div className="ml-auto shrink-0">

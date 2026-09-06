@@ -764,7 +764,7 @@ export default function Banca() {
                     <div className="card p-12 text-center border-dashed">
                       <p className="text-ink-3 text-sm font-semibold mb-2">Nenhum pick apostado ainda</p>
                       <p className="text-ink-4 text-xs mb-4">
-                        Clique em "Apostar" nos picks da página Picks para registrar suas apostas aqui.
+                        Clique em "Pegar bilhete" nos picks da página Picks para registrar suas apostas aqui.
                       </p>
                       <button onClick={() => navigate('/picks')} className="btn-primary text-sm px-6 py-2.5">
                         Ver picks
