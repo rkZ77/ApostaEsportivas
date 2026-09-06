@@ -345,8 +345,14 @@ export default function PicksPendingCard() {
         <TeamLogo id={g.away_team_id} name={g.away_team} size={18} />
         <span className={`text-xs font-medium truncate ${apagado ? 'text-ink-3' : 'text-ink-2'}`}>{g.away_team}</span>
       </div>
+      {/* `xs:` NAO EXISTE nesta config do Tailwind (nao ha' `screens.xs`), e
+          classe inexistente nao gera CSS: `hidden xs:inline` escondia a
+          contagem em TODA largura, inclusive no desktop. O numero de jogos que
+          faltam pro time ter amostra e' o que a legenda logo acima promete
+          explicar, entao ele nunca aparecia. `sm:` e' o breakpoint que
+          existe (640px). */}
       {apagado && (
-        <span className="text-[10px] text-ink-4 shrink-0 tabular-nums hidden xs:inline">
+        <span className="text-[10px] text-ink-4 shrink-0 tabular-nums hidden sm:inline">
           {Math.min(g.jogos_casa ?? 0, g.jogos_fora ?? 0)}/{minJogos}
         </span>
       )}
