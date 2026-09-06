@@ -36,7 +36,7 @@ _TTL_NS           = 60   # segundos · jogo ainda não começou
 _TTL_FT           = 300  # segundos · encerrado, dados não mudam
 
 _fix_cache:   dict[int, tuple[float, dict]] = {}
-_stats_cache: dict[int, tuple[float, list]] = {}
+_stats_cache: dict[int, tuple[float, list, str]] = {}
 _odds_live_cache: dict[int, tuple[float, list]] = {}
 _player_sheet_cache: dict[int, tuple[float, list]] = {}
 
@@ -188,11 +188,43 @@ def _fetch_fixtures_bulk(fids: list[int]) -> None:
                 _fix_cache[fid] = (fetched_now, data)
 
 
+def _folha_e_do_jogo_em_andamento(status_na_captura, status_agora: str) -> bool:
+    """A folha em cache foi tirada com a bola rolando e o jogo ja' acabou?
+
+    O CASO REAL (2026-09-06): dois picks Ao Vivo de escanteios gravados PUSH
+    com a linha CHEIA (Under 9.0 e Under 7.0) -- resultado que so' sai quando o
+    contador para exatamente em cima da linha. Dois seguidos, nos dois jogos.
+
+    A causa nao esta na matematica (services/settlement.py resolve 9 contra 9.0
+    como PUSH, e e' o que a casa faz): esta em QUAL numero chegou ate ela. O
+    TTL desta folha era escolhido pelo status DE AGORA e comparado com o
+    carimbo de QUANDO ela foi tirada -- duas coisas diferentes. No apito final
+    o status vira FT, `_stats_ttl` responde 300s, e a folha tirada aos 90
+    minutos, com a bola ainda rolando, passava por fresca por cinco minutos.
+
+    E ela esta SEMPRE quente justamente no Ao Vivo: a tela do ticker busca
+    estatistica a cada 60s enquanto o jogo corre, entao a primeira varredura
+    depois do apito lia a folha do minuto ~90 -- sem os escanteios dos
+    acrescimos. Um escanteio a menos num Under transforma RED em PUSH, e o
+    resultado e' gravado uma vez so' (`WHERE result IS NULL`): fica errado pra
+    sempre.
+
+    `_fetch_fixture` nunca teve esse furo porque le o status de DENTRO do
+    payload em cache, e nao do que o chamador diz. Aqui o status nao vem junto
+    com a folha, entao ele passa a ser guardado com ela.
+    """
+    return status_na_captura in LIVE_STATUSES and status_agora in FT_STATUSES
+
+
 def _fetch_stats(fid: int, status: str) -> list:
     now = time.time()
     if fid in _stats_cache:
-        ts, cached = _stats_cache[fid]
-        if now - ts < _stats_ttl(status):
+        entrada = _stats_cache[fid]
+        ts, cached = entrada[0], entrada[1]
+        # Entrada antiga (2 elementos) so' existe nos testes; sem status
+        # gravado, assume o de agora e cai na regra de TTL de sempre.
+        status_na_captura = entrada[2] if len(entrada) > 2 else status
+        if now - ts < _stats_ttl(status) and                 not _folha_e_do_jogo_em_andamento(status_na_captura, status):
             return cached
     try:
         r = requests.get(f"{API_BASE}/fixtures/statistics", headers=_headers(),
@@ -212,7 +244,7 @@ def _fetch_stats(fid: int, status: str) -> list:
         logger.error("[LIVE STATS] fixture %s: %s", fid, e)
         data = _stats_cache.get(fid, (0, []))[1]  # mantém cache antigo em caso de erro
     _evict_cache(_stats_cache)
-    _stats_cache[fid] = (now, data)
+    _stats_cache[fid] = (now, data, status)
     return data
 
 
@@ -3634,9 +3666,23 @@ def reverify_recent_stats_results(days: int | None = None,
 
     try:
         # ── VIP / FREE (perna única, market_type direto na linha) ──────────────
+        # AO VIVO ENTRA AQUI (2026-09-06). Faltava, e era a ausencia mais cara
+        # da lista: o motor Ao Vivo publica quase so' escanteios -- exatamente
+        # a familia que existe esta funcao, a unica que a API-Football revisa
+        # horas depois do apito. Todos os outros produtos tinham a rede de
+        # seguranca; o produto MAIS exposto a ela era o unico sem.
+        #
+        # Sem isto, uma folha incompleta lida no apito (ver
+        # `_folha_e_do_jogo_em_andamento`) ficava gravada pra sempre, porque
+        # `resolve_all_pending` so' olha pick com `result IS NULL`.
+        #
+        # A tabela vem do motor e pode nao existir; o try/except por tabela que
+        # ja' envolve o bloco cobre isso, com o rollback abaixo pra que uma
+        # tabela ausente nao derrube a transacao das seguintes.
         for table, pick_type, team_cols in (
             ("picks_vip",  "vip",  "home_team_name AS home_team, away_team_name AS away_team"),
             ("picks_free", "free", "home_team, away_team"),
+            ("picks_live", "live", "home_team_name AS home_team, away_team_name AS away_team"),
         ):
             try:
                 cur.execute(f"""
@@ -3678,6 +3724,7 @@ def reverify_recent_stats_results(days: int | None = None,
                     except Exception as e:
                         logger.error("[AUTO-RECHECK] %s #%s erro: %s", pick_type, p["id"], e)
             except Exception as e:
+                conn.rollback()  # tabela ausente nao pode abortar as proximas
                 logger.error("[AUTO-RECHECK] %s query erro: %s", table, e)
 
         # ── MÚLTIPLA (pernas em JSON, resultado combinado) ──────────────────────
