@@ -371,6 +371,44 @@ export function regraDoMercado(market?: string, line?: string): RegraDoMercado |
   }
 }
 
+/*
+ * LINHA ASIÁTICA · o que ela é, para a tela poder dizer (2026-09-06, pedido do
+ * usuário).
+ *
+ * "Menos de 1.75" parece um limiar como "Menos de 1.5", e não é: a aposta é
+ * partida em duas metades, uma em 1.5 e outra em 2.0. Quem lê o card sem saber
+ * disso não entende por que o resultado veio "meio green" -- e a liquidação já
+ * tratava a grade certa desde sempre (services/settlement.py), então quem
+ * estava atrasado era só o texto.
+ *
+ * `null` quando a linha não é da grade asiática (não é múltipla de 0.25) ou
+ * quando não há número nenhum para ler.
+ */
+export type TipoDeLinha = 'inteira' | 'meia' | 'asiatica'
+
+export function tipoDeLinha(line?: string): TipoDeLinha | null {
+  const texto = translateLine(line)
+  const m = texto.match(/^(?:Mais de|Menos de)\s+([\d.,]+)$/)
+  if (!m) return null
+  const valor = parseFloat(m[1].replace(',', '.'))
+  if (!Number.isFinite(valor)) return null
+  const quartos = Math.round(valor * 4)
+  if (Math.abs(valor * 4 - quartos) > 1e-9) return null
+  if (quartos % 4 === 0) return 'inteira'
+  if (quartos % 2 === 0) return 'meia'
+  return 'asiatica'
+}
+
+/** "1.5 e 2.0" · as duas linhas em que uma asiática se divide. */
+export function metadesDaLinha(line?: string): [string, string] | null {
+  if (tipoDeLinha(line) !== 'asiatica') return null
+  const m = translateLine(line).match(/([\d.,]+)$/)
+  if (!m) return null
+  const valor = parseFloat(m[1].replace(',', '.'))
+  const fmt = (n: number) => n.toFixed(n % 1 === 0 ? 1 : 1).replace('.', ',')
+  return [fmt(valor - 0.25), fmt(valor + 0.25)]
+}
+
 /** Explicação curta em português de quando essa aposta (mercado + linha) dá GREEN. */
 export function explainMarket(market?: string, line?: string): string {
   if (!market) return ''

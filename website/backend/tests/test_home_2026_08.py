@@ -743,8 +743,10 @@ def test_periodo_fica_a_vista_nas_duas_telas():
     celular, nao oferecia mes especifico sem crescer um item por mes e nao
     tinha lugar pro recorte por produto.
     """
+    # As duas usam o MESMO menu desde 06/09: a fila de pills era um segundo
+    # controle pra mesma pergunta e nao cabia numa linha de celular.
     for pagina, controle in (("pages/Banca.tsx", "<SelectMenu"),
-                             ("pages/MeusPicks.tsx", "<PillGroup")):
+                             ("pages/MeusPicks.tsx", "<SelectMenu")):
         src = _front_codigo(pagina)
         assert controle in src, f"{pagina} devia mostrar o periodo a vista"
     assert "FilterPanel" not in _front_codigo("pages/Banca.tsx")

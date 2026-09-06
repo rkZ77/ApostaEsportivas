@@ -1,16 +1,25 @@
 import { Activity, BookOpen, Clock, Gauge, Percent, Scale, Target, TrendingUp } from 'lucide-react'
 import Modal from './ui/Modal'
 import { Badge } from './ui'
+import MarketForm from './MarketForm'
 import { explainMarket, regraDoMercado, translateLine, translateMarket } from '../utils/marketTranslate'
 
 /*
  * "Entenda esta análise" · versão AO VIVO.
  *
  * O modal de pré-jogo (AnalysisModal) responde "por que este jogo virou pick
- * hoje": forma recente, amostra do motor, histórico do mercado. Nada disso
- * existe aqui · o motor ao vivo decide com o jogo em andamento, e a pergunta
- * que o assinante faz é outra: POR QUE NESTE MINUTO, e o que mudou desde
- * então.
+ * hoje": forma recente, amostra do motor, histórico do mercado. A pergunta
+ * daqui é outra · o motor ao vivo decide com o jogo em andamento, então o que
+ * o assinante quer saber é POR QUE NESTE MINUTO, e o que mudou desde então.
+ *
+ * O HISTÓRICO DOS TIMES ENTROU DEPOIS (2026-09-06, pedido do usuário). Ele
+ * responde a pergunta que sobra quando o snapshot já foi lido: "esse jogo é
+ * assim mesmo?". Um Over 9.5 escanteios aos 60' com 6 no placar significa uma
+ * coisa se os dois times fazem 11 por jogo na competição, e outra bem
+ * diferente se fazem 7 · e essa leitura é a mesma do pré-jogo, então ela usa o
+ * mesmo componente e a mesma rota (`market-form`, que já sabia responder para
+ * `picks_live`): últimos 10 jogos de cada time, no mando desta partida, na
+ * liga e temporada desta fixture, medidos pelo contador do mercado do pick.
  *
  * Por isso a peça central é a comparação entre dois instantes:
  *   - o SNAPSHOT da criação (minuto, placar, valor observado, ritmo, pressão);
@@ -149,10 +158,12 @@ function Instante({
 }
 
 export default function LiveAnalysisModal({
-  data, onClose,
+  data, onClose, pickId,
 }: {
   data: LiveAnalysisData
   onClose: () => void
+  /** Id em `picks_live` · sem ele a série não tem o que pedir e some. */
+  pickId?: number
 }) {
   const odd = Number(data.odd)
   const implied = impliedProb(odd)
@@ -438,6 +449,11 @@ export default function LiveAnalysisModal({
             </div>
           </div>
         )}
+
+        {/* Depois do snapshot e da conta do valor, na mesma ordem do modal de
+            pré-jogo: primeiro por que ESTE minuto, depois como o jogo dos dois
+            times costuma ser. */}
+        {pickId != null && <MarketForm pickId={pickId} pickType="live" />}
 
         <p className="flex items-start gap-1.5 text-[10px] text-ink-4 leading-relaxed">
           <Gauge className="w-3 h-3 mt-0.5 shrink-0" />

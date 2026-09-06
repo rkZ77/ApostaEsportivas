@@ -335,6 +335,65 @@ def _fetch_live_odds(fid: int) -> list:
 # cards over-under). Familias sem equivalente claro ao vivo (handicap,
 # shots, offsides) nao entram aqui -- _find_live_odd devolve None pra elas,
 # e o front cai pra odd ja salva (mesmo comportamento de antes desta feature).
+#: Leitura GLOBAL de /odds/live, com uma entrada de cache só.
+#:
+#: `_fetch_live_odds` acima pergunta por UMA fixture e custa uma requisição por
+#: partida. Isso serve o modal de aposta (uma partida por vez) e não serve pra
+#: acompanhar a odd de vários picks abertos ao mesmo tempo: com 5 picks e poll
+#: de 1 minuto seriam 300 requisições por hora.
+#:
+#: `/odds/live` SEM `fixture` devolve o mundo inteiro, e filtrar em memória é de
+#: graça -- é a mesma descoberta que o motor fez em 05/09 e que derrubou o custo
+#: da rodada dele. Aqui uma requisição por minuto cobre TODOS os picks abertos,
+#: de todos os usuários: em 4 horas de jogos são ~240 chamadas, contra as 7.500
+#: do plano.
+_odds_mundo_cache: tuple[float, dict] = (0.0, {})
+#: 3 MINUTOS, e nao 1 (2026-09-06, decisao do usuario). Odd ao vivo se move em
+#: minutos, nao em segundos, e o que a leitura precisa responder e' "o mercado
+#: ainda esta' de pe' e por quanto" -- nao acompanhar cada oscilacao. A conta
+#: cai de ~240 requisicoes num dia de 4 horas de jogo pra ~80, sobre as 7.500
+#: do plano.
+_TTL_ODDS_MUNDO = 180
+
+
+def _fetch_live_odds_mundo(max_paginas: int = 3) -> dict:
+    """{fixture_id: [mercados]} de todas as partidas com odd ao vivo agora.
+
+    Erro devolve o cache anterior, nunca dicionário vazio: vazio aqui seria
+    lido como "o mercado suspendeu tudo", e é a diferença entre marcar um pick
+    como sem cotação e admitir que a leitura falhou.
+    """
+    global _odds_mundo_cache
+    agora = time.time()
+    ts, cache = _odds_mundo_cache
+    if agora - ts < _TTL_ODDS_MUNDO and cache:
+        return cache
+
+    por_fixture: dict[int, list] = {}
+    try:
+        pagina = 1
+        while pagina <= max_paginas:
+            params = {"page": pagina} if pagina > 1 else {}
+            r = requests.get(f"{API_BASE}/odds/live", headers=_headers(),
+                             params=params, timeout=12)
+            api_quota.registrar(getattr(r, "headers", None), "live")
+            corpo = r.json() or {}
+            for item in corpo.get("response") or []:
+                fid = (item.get("fixture") or {}).get("id")
+                if fid is not None:
+                    por_fixture[int(fid)] = item.get("odds") or []
+            total = ((corpo.get("paging") or {}).get("total")) or 1
+            if pagina >= int(total):
+                break
+            pagina += 1
+    except Exception as e:
+        logger.error("[LIVE ODDS MUNDO] %s", e)
+        return cache
+
+    _odds_mundo_cache = (agora, por_fixture)
+    return por_fixture
+
+
 _LIVE_OVERUNDER_NAMES = {
     "goals":   {"match goals", "over/under line", "goals over/under"},
     "corners": {"total corners", "match corners"},
