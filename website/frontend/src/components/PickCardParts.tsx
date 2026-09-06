@@ -34,10 +34,16 @@ export function PickCardFooter({
   shareState?: 'idle' | 'loading' | 'done'
   className?: string
 }) {
+  /* "PEGAR BILHETE", e nao "Apostar" (2026-09-05, pedido do usuario).
+  
+     O botao nao aposta nada: ele registra na banca o pick que a pessoa levou
+     pra casa. "Apostar" prometia uma acao que acontece na casa de apostas, e
+     era o mesmo verbo do rotulo da stake sugerida logo acima ("Apostar 2u"),
+     entao o card dizia a mesma palavra pra duas coisas diferentes. */
   const betLabel =
     betState === 'loading' ? 'Registrando...'
     : betState === 'done' ? 'Registrado'
-    : hasBanca ? 'Apostar'
+    : hasBanca ? 'Pegar bilhete'
     : 'Configurar banca'
 
   return (

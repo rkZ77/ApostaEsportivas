@@ -96,7 +96,7 @@ export default function ApostaModal({
         ) : (
           /* ── Tela principal ── */
           <motion.div key="main" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="p-5">
-            <h3 className="text-ink-1 font-bold text-sm mb-1">Registrar aposta</h3>
+            <h3 className="text-ink-1 font-bold text-sm mb-1">Pegar bilhete</h3>
             <p className="text-ink-3 text-xs mb-4">Informe onde e como você apostou.</p>
 
             {/* Casa de aposta */}
@@ -202,7 +202,7 @@ export default function ApostaModal({
                     : 'bg-green-600 hover:bg-green-500 text-white'
                 }`}
               >
-                {loading ? '...' : exceedsSuggested ? `Apostar ${units}u` : 'Registrar aposta'}
+                {loading ? '...' : exceedsSuggested ? `Pegar bilhete de ${units}u` : 'Pegar bilhete'}
               </button>
             </div>
           </motion.div>

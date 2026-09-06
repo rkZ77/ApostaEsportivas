@@ -974,7 +974,7 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
             </div>
           )}
           <p className="text-xs text-ink-3">
-            Clique em "Apostar" em qualquer pick para acompanhar aqui.
+            Clique em "Pegar bilhete" em qualquer pick para acompanhar aqui.
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -1000,7 +1000,7 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
           </div>
           <p className="font-semibold text-ink-2">Nenhum pick sendo acompanhado</p>
           <p className="text-sm text-ink-3 mt-2 max-w-xs mx-auto leading-relaxed">
-            Clique em <span className="text-green-400 font-semibold">Apostar</span> em qualquer pick para acompanhar o resultado ao vivo aqui.
+            Clique em <span className="text-green-400 font-semibold">Pegar bilhete</span> em qualquer pick para acompanhar o resultado ao vivo aqui.
           </p>
         </div>
       ) : (
