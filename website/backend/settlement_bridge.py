@@ -62,6 +62,19 @@ if _DIR and _DIR not in sys.path:
 from services import settlement          # noqa: E402
 from utils import stat_sheet             # noqa: E402
 
+# A folha POR JOGADOR (/fixtures/players) tem regra propria de leitura, e ela
+# ja' existe no coletor do motor: `null` num contador de quem ENTROU EM CAMPO
+# quer dizer zero, porque a API omite o zero em vez de escreve-lo (medido em
+# 2026-09-02: 169 zeros explicitos contra 8.115 nulls no mesmo `shots_on`).
+#
+# Viaja por aqui pelo mesmo motivo dos dois acima: o site passou a buscar essa
+# folha por conta propria pra liquidar pick de jogador, e uma segunda leitura
+# do mesmo JSON discordaria do coletor no caso mais comum da folha inteira --
+# que e' exatamente o erro que inflava a media de chutes em 3,4x.
+#
+# So' as funcoes puras sao usadas; o coletor nao abre banco no import.
+from collectors import player_stats_collector_service as player_sheet  # noqa: E402
+
 # Catalogo de motores e metodos (2026-08-27). Viaja pelo mesmo caminho e pelo
 # mesmo motivo dos dois acima: a aba Auditoria dos Motores precisa dizer QUAL
 # motor, QUAL metodo e QUAL versao gerou cada decisao, e essa lista tem que ser
@@ -78,4 +91,4 @@ try:
 except Exception:                                                  # pragma: no cover
     engine_registry = None
 
-__all__ = ["settlement", "stat_sheet", "engine_registry"]
+__all__ = ["settlement", "stat_sheet", "player_sheet", "engine_registry"]
