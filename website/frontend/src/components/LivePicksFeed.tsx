@@ -40,7 +40,7 @@
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Radio, RefreshCw, Timer, CheckCircle2, Clock, PowerOff, Eye,
-         Goal, Flag, Target, Crosshair, Lock, Radar, Ban, Square, Share2 } from 'lucide-react'
+         Goal, Flag, Target, Crosshair, Lock, Radar, Ban, Square, Share2, Loader2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { capitalizarFrase } from '../utils/format'
 import api from '../services/api'
@@ -1207,7 +1207,7 @@ const CardLive = forwardRef<HTMLDivElement, {
 
       {/* Rodapé · ação à esquerda e prazo da odd à direita, no lugar onde o
           card VIP põe compartilhar. */}
-      <div className="flex items-center gap-2 px-5 py-3 border-t border-line/60 mt-auto">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-2 px-5 py-3 border-t border-line/60 mt-auto">
         {/* MESMO SELO DOS OUTROS CARDS (2026-09-06, pedido do usuário): pick já
             pego vira "Bilhete registrado" no lugar do botão, com a moldura verde
             do pré-jogo (ver PickCardFooter). Antes era uma frase solta ("Em
@@ -1215,11 +1215,14 @@ const CardLive = forwardRef<HTMLDivElement, {
             parte da mesma família de cards. A stake fica junto, porque ao vivo
             ela varia mais que no pré-jogo. */}
         {pick.is_followed ? (
-          <span className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-md
-                           border border-accent/30 text-accent-ink bg-accent/10 min-h-[36px]">
+          <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-bold px-3 py-2
+                           rounded-md border border-accent/30 text-accent-ink bg-accent/10 min-h-[36px]">
             <CheckCircle2 size={13} />
+            {/* Só o rótulo. A stake já aparece na faixa de números do topo
+                ("Apostado 1u"), e repeti-la aqui gastava a largura do botão
+                dizendo de novo o que está três linhas acima -- no celular ela
+                era o que fazia o rodapé quebrar em duas linhas. */}
             Bilhete registrado
-            {pick.user_stake_units ? `, ${pick.user_stake_units}u` : ''}
           </span>
         ) : podeSeguir ? (
           <Button size="sm" onClick={() => onSeguir(pick)}>Pegar bilhete</Button>
@@ -1233,17 +1236,26 @@ const CardLive = forwardRef<HTMLDivElement, {
           {!encerrado && !oddVencida && (
             <Contagem segundos={pick.segundos_de_validade} />
           )}
-          {/* Compartilhar, como nos outros cards do site. */}
+          {/* MESMO BOTAO DOS OUTROS CARDS (2026-09-06, pedido do usuário):
+              marcação, borda, tamanho e estados copiados de PickCardFooter --
+              inclusive o rótulo que some abaixo de 640px, que é como o card de
+              pré-jogo já se comporta no celular. */}
           <button
             onClick={handleShare}
             disabled={compartilhando}
-            aria-label="Compartilhar este pick"
-            className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-ink-3
-                       hover:text-ink-1 transition-colors disabled:opacity-40 min-h-[36px]"
+            title="Compartilhar pick"
+            className="flex items-center gap-1.5 text-xs font-semibold text-ink-2 hover:text-accent-ink
+                       border border-line-strong hover:border-accent/50 px-3 py-2 rounded-md
+                       transition-colors duration-1 ease-smooth disabled:opacity-60 min-h-[36px]"
           >
-            {compartilhado
-              ? <><CheckCircle2 className="w-3.5 h-3.5 text-accent-ink" /> Pronto</>
-              : <><Share2 className="w-3.5 h-3.5" /> {compartilhando ? 'Gerando...' : 'Compartilhar'}</>}
+            {compartilhando
+              ? <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+              : compartilhado
+              ? <CheckCircle2 className="w-3.5 h-3.5 text-accent-ink shrink-0" />
+              : <Share2 className="w-3.5 h-3.5 shrink-0" />}
+            <span className="hidden sm:inline">
+              {compartilhando ? 'Gerando...' : compartilhado ? 'Pronto' : 'Compartilhar'}
+            </span>
           </button>
         </div>
       </div>
