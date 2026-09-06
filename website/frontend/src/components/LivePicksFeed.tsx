@@ -40,15 +40,16 @@
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Radio, RefreshCw, Timer, CheckCircle2, Clock, PowerOff, Eye,
-         Goal, Flag, Target, Crosshair, Lock, Radar } from 'lucide-react'
+         Goal, Flag, Target, Crosshair, Lock, Radar, Ban, Square } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { capitalizarFrase } from '../utils/format'
 import api from '../services/api'
 import ApostaModal from './ApostaModal'
 import { Badge, Button, ComoFunciona, EmptyState, ErrorState, LiveDot, Marquee, PickTypeBadge,
          ResultBadge, Skeleton, SkeletonPickGrid } from './ui'
 import { CampoDoPick, PickExplainButton, PickProbability } from './PickCardParts'
 import LiveAnalysisModal from './LiveAnalysisModal'
-import { translateLine, translateMarket } from '../utils/marketTranslate'
+import { translateLine, translateMarket, metadesDaLinha } from '../utils/marketTranslate'
 import { LeagueLogo, TeamLogo } from './TeamLogo'
 import { rotuloDoStatus, escudoDoTime } from '../lib/aoVivo'
 import { calcVipStake } from '../utils/stakeUtils'
@@ -342,6 +343,7 @@ function FitaDeBusca({ partidas }: { partidas: EmLeitura[] }) {
  * servidor.
  */
 function useEmLeitura(isActive: boolean, recarregar?: number) {
+  const visivel = useJanelaVisivel()
   const [dados, setDados] = useState<{ partidas: EmLeitura[]; disponivel: boolean } | null>(null)
   const [tick, setTick] = useState(0)
   const timer = useRef<number | null>(null)
@@ -353,20 +355,22 @@ function useEmLeitura(isActive: boolean, recarregar?: number) {
   }, [])
 
   useEffect(() => {
-    if (!isActive) {
+    if (!isActive || !visivel) {
       if (timer.current) { clearInterval(timer.current); timer.current = null }
       return
     }
     carregar()
     timer.current = window.setInterval(carregar, POLL_MS)
     return () => { if (timer.current) clearInterval(timer.current) }
-  }, [isActive, carregar])
+  }, [isActive, visivel, carregar])
 
   useEffect(() => {
-    if (!isActive) return
+    // O relógio de "há quantos segundos" também para: ele só existe pra
+    // envelhecer o cartão na tela de quem está olhando.
+    if (!isActive || !visivel) return
     const t = window.setInterval(() => setTick(v => v + 1), 1000)
     return () => clearInterval(t)
-  }, [isActive])
+  }, [isActive, visivel])
 
   /* O botão de atualizar da aba puxa esta busca junto. Sem isto ele
      atualizaria os picks e deixaria a leitura para trás -- e é justamente na
@@ -587,6 +591,31 @@ import { PICK_TYPE_BORDER } from '../utils/resultStyle'
    a cada dois polls. Era 15s, o que com TTL de 20s garantia miss em stats
    a cada visita. Dobrar o intervalo reduz ~50% das requisições de stats
    sem atrasar o placar (fixture atualiza em 30s de qualquer forma). */
+/* O NAVEGADOR ESTA' NA FRENTE? (2026-09-06, pedido do usuario)
+ *
+ * `isActive` diz que a aba do PRODUTO ("Picks Ao Vivo") esta' escolhida, e era
+ * so' isso que segurava o polling. Com o site aberto numa aba do Chrome que
+ * ninguem esta' olhando -- ou com o celular no bolso -- a tela continuava
+ * pedindo feed, leitura e odd a cada intervalo, e cada um desses caminhos
+ * consulta a API-Football do outro lado.
+ *
+ * `visibilitychange` responde a pergunta certa: o usuario esta' vendo isto
+ * AGORA. Escondeu, para tudo; voltou, busca uma vez na hora (a tela nao pode
+ * mostrar dado de dez minutos atras como se fosse de agora) e retoma o ritmo.
+ */
+function useJanelaVisivel(): boolean {
+  const [visivel, setVisivel] = useState(() =>
+    typeof document === 'undefined' || !document.hidden)
+
+  useEffect(() => {
+    const aoMudar = () => setVisivel(!document.hidden)
+    document.addEventListener('visibilitychange', aoMudar)
+    return () => document.removeEventListener('visibilitychange', aoMudar)
+  }, [])
+
+  return visivel
+}
+
 const POLL_MS = 30_000
 
 
@@ -717,6 +746,20 @@ function TituloDeSecao({ cor, texto, contagem }: {
    colados nas posições exatas: com linha 10 e valor 5 eles se sobrepunham, e
    um número em cima do outro não informa nada. A posição continua sendo dada
    pelo desenho · o texto só nomeia. */
+/* Ícone do contador que a barra mede. Mesma família de símbolos que a aba já
+   usa nos ladrilhos de leitura, então escanteio é escanteio nas duas. */
+function IconeDoContador({ rotulo }: { rotulo?: string }) {
+  const r = (rotulo ?? '').toLowerCase()
+  const Icone =
+    r.includes('escanteio') ? Flag
+    : r.includes('gol') ? Goal
+    : r.includes('cart') ? Square
+    : r.includes('alvo') ? Crosshair
+    : r.includes('chute') || r.includes('finaliza') ? Target
+    : null
+  return Icone ? <Icone className="w-3 h-3 shrink-0" /> : null
+}
+
 function BarraDaLinha({ atual, linha, direcao, rotulo }: {
   atual: number; linha: number; direcao: 'over' | 'under'; rotulo?: string
 }) {
@@ -728,14 +771,18 @@ function BarraDaLinha({ atual, linha, direcao, rotulo }: {
 
   return (
     <div className="mt-3">
+      {/* MAIÚSCULA E ÍCONE (2026-09-06, pedido do usuário). O rótulo vinha do
+          `stat_label` em caixa baixa ("escanteios 8"), e nome de contador é
+          início de frase aqui: é o rótulo de um número, não texto corrido. */}
       <div className="flex items-baseline justify-between text-[10px] text-ink-4 mb-1.5">
-        <span>
-          {rotulo ?? 'agora'}{' '}
+        <span className="flex items-center gap-1">
+          <IconeDoContador rotulo={rotulo} />
+          {capitalizarFrase(rotulo ?? 'agora')}{' '}
           <span className={`font-bold tabular-nums ${favoravel ? 'text-green-400' : 'text-red-400'}`}>
             {atual}
           </span>
         </span>
-        <span>linha <span className="font-bold text-ink-2 tabular-nums">{linha}</span></span>
+        <span>Linha <span className="font-bold text-ink-2 tabular-nums">{linha}</span></span>
       </div>
       <div className="relative h-1.5 bg-surface-3/60 rounded-full">
         <div className={`absolute left-0 top-0 h-full rounded-full transition-all duration-700 ${cor}`}
@@ -803,14 +850,27 @@ const CardLive = forwardRef<HTMLDivElement, {
   onSeguir: (p: LivePick) => void
   /** Banca do usuário · sem ela o card mostra unidades e não reais. */
   banca?: { bankroll_current: number; unit_value: number } | null
-}>(function CardLive({ pick, onSeguir, banca }, ref) {
+  /** A odd que a casa está pagando NESTE momento, quando a leitura alcançou
+   *  este pick. `cotado: false` = o mercado está suspenso agora. */
+  oddAgora?: {
+    odd: number | null; cotado: boolean; variacao?: number
+    /** Chance implícita na odd de agora · sem vig quando os dois lados cotam. */
+    prob_mercado?: number | null; prob_sem_vig?: boolean
+  } | null
+}>(function CardLive({ pick, onSeguir, banca, oddAgora }, ref) {
   const [verAnalise, setVerAnalise] = useState(false)
 
   /* Encerrado é só o que tem resultado. `EXPIRED` sem resultado quer dizer que
      a JANELA DA ODD fechou sem ninguém seguir · o jogo continua e o pick
      continua sendo acompanhado (ver o cabeçalho deste arquivo). */
   const encerrado = !!pick.result
-  const oddVencida = pick.status === 'EXPIRED' && !pick.result
+  /* "Odd vencida" só quando o mercado REALMENTE não está mais lá.
+  
+     Antes bastava o relógio: o pick nascia com validade de alguns minutos e,
+     passados eles, o card dizia "odd vencida" mesmo com a casa ainda cotando.
+     Agora a leitura de `/live-picks/odds-agora` responde isso com o mercado na
+     mão -- enquanto ela disser `cotado`, o pick está de pé. */
+  const oddVencida = pick.status === 'EXPIRED' && !pick.result && !oddAgora?.cotado
 
   /* A odd que vale pra CONTA é a que o usuário registrou, quando registrou.
      Ao vivo a linha se move mais que em pré-jogo, então usar a do pick pra
@@ -923,6 +983,25 @@ const CardLive = forwardRef<HTMLDivElement, {
           {pick.is_followed && Math.abs(Number(oddEfetiva) - Number(pick.odd)) > 0.001 && (
             <div className="text-[9px] text-ink-4 mt-0.5">pick: {Number(pick.odd).toFixed(2)}</div>
           )}
+          {/* A ODD DE AGORA, quando a leitura alcançou este pick. O número
+              grande continua sendo o da publicação -- é o que a IA analisou e
+              contra o que o resultado é medido; este aqui é o que a casa paga
+              neste minuto, que é o que decide se ainda vale entrar. */}
+          {!encerrado && oddAgora && (
+            oddAgora.cotado && oddAgora.odd != null ? (
+              <div className="text-[9px] mt-0.5 tabular-nums">
+                <span className="text-ink-4">agora </span>
+                <span className={
+                  (oddAgora.variacao ?? 0) > 0 ? 'text-accent-ink font-bold'
+                  : (oddAgora.variacao ?? 0) < 0 ? 'text-red-400 font-bold'
+                  : 'text-ink-3 font-bold'}>
+                  {Number(oddAgora.odd).toFixed(2)}
+                </span>
+              </div>
+            ) : (
+              <div className="text-[9px] text-amber-400/80 mt-0.5">mercado suspenso</div>
+            )
+          )}
 
         </div>
 
@@ -1007,7 +1086,19 @@ const CardLive = forwardRef<HTMLDivElement, {
           </CampoDoPick>
           {pick.line && (
             <CampoDoPick rotulo="Linha">
-              <dd className="text-xs text-ink-2 truncate">{translateLine(pick.line)}</dd>
+              <dd className="text-xs text-ink-2 truncate">
+                {translateLine(pick.line)}
+                {/* LINHA ASIÁTICA DITA COM ESSE NOME (2026-09-06, pedido do
+                    usuário). "Menos de 1.75" parece um limiar como 1.5, e não
+                    é: a aposta é partida em 1.5 e 2.0, e é daí que sai o meio
+                    green que aparecia no resultado sem nada na tela ter
+                    avisado. A liquidação já tratava a grade certa. */}
+                {metadesDaLinha(pick.line) && (
+                  <span className="block text-[10px] text-ink-4 mt-0.5">
+                    asiática: metade em {metadesDaLinha(pick.line)![0]}, metade em {metadesDaLinha(pick.line)![1]}
+                  </span>
+                )}
+              </dd>
             </CampoDoPick>
           )}
           {(pick.user_bet_house || pick.bet_house) && (
@@ -1020,7 +1111,10 @@ const CardLive = forwardRef<HTMLDivElement, {
         </dl>
       </div>
 
-      <PickProbability confidence={pick.confidence} probability={pick.probability} />
+      <PickProbability confidence={pick.confidence} probability={pick.probability}
+        mercadoAgora={oddAgora?.cotado
+          ? { valor: oddAgora.prob_mercado ?? null, semVig: oddAgora.prob_sem_vig }
+          : null} />
 
       {/* A barra da linha continua no corpo: ao vivo, "onde o jogo está em
           relação ao número" é a leitura que decide entrar. */}
@@ -1028,6 +1122,42 @@ const CardLive = forwardRef<HTMLDivElement, {
         <div className="px-5 pb-3">
           <BarraDaLinha atual={Number(pick.current_val)} linha={linhaNum} direcao={direcao}
             rotulo={pick.stat_label?.toLowerCase()} />
+        </div>
+      )}
+
+      {/* POR QUE DEU PUSH · a unica leitura que este card nao entregava.
+        *
+        * PUSH chega na tela como "+0.00u" e mais nada, e ele tem DUAS causas
+        * que nao se parecem: empate com a linha (regra do mercado -- 9
+        * escanteios numa linha de 9.0, a casa devolve a entrada) e anulacao
+        * nossa (o provedor nao publicou o numero, ou o jogo foi pra
+        * prorrogacao e a folha soma 120 minutos). Sem separar as duas, um
+        * resultado legitimo e um defeito nosso ficam identicos na tela -- e e'
+        * o defeito que passa batido, que e' o pior dos dois lados.
+        *
+        * O card de pre-jogo (SuggestionCard) ja' dizia isso desde 02/09. Aqui
+        * nao dizia, apesar de o backend gravar as duas colunas: o feed do Ao
+        * Vivo simplesmente nao as mandava (ver o SELECT em live_picks.feed). */}
+      {pick.result === 'PUSH' && (pick.void_reason || pick.settled_value != null) && (
+        <div className="mx-5 mb-3 flex items-start gap-2 rounded-md border border-line
+                        bg-surface-2/50 px-3 py-2">
+          <Ban className="w-3.5 h-3.5 text-ink-4 shrink-0 mt-px" />
+          <p className="text-[11px] text-ink-3 leading-relaxed">
+            {pick.void_reason ? (
+              <>
+                <span className="font-semibold text-ink-2">Pick anulado.</span>{' '}
+                {capitalizarFrase(pick.void_reason)}, então a aposta é devolvida e
+                não conta como acerto nem como erro.
+              </>
+            ) : (
+              <>
+                <span className="font-semibold text-ink-2">Empatou com a linha.</span>{' '}
+                O jogo fechou em {Number(pick.settled_value)}, exatamente a linha
+                apostada, então a aposta é devolvida e não conta como acerto nem
+                como erro.
+              </>
+            )}
+          </p>
         </div>
       )}
 
@@ -1076,6 +1206,7 @@ const CardLive = forwardRef<HTMLDivElement, {
     {verAnalise && (
       <LiveAnalysisModal
         onClose={() => setVerAnalise(false)}
+        pickId={pick.id}
         data={{
           market: pick.market,
           line: pick.line,
@@ -1116,6 +1247,10 @@ const CardLive = forwardRef<HTMLDivElement, {
   )
 })
 
+/** De quanto em quanto tempo a tela pede a odd corrente. Casa com o cache de
+ *  3 minutos do servidor: pedir antes disso devolveria a mesma leitura. */
+const INTERVALO_ODD_MS = 3 * 60 * 1000
+
 export default function LivePicksFeed({ isActive, banca }: {
   isActive: boolean
   /* Vem da página, que já a carregou pro resto dos cards · buscar de novo aqui
@@ -1140,6 +1275,16 @@ export default function LivePicksFeed({ isActive, banca }: {
   /* Incrementado pelo botão · é o que faz EmLeituraAgora e o placar buscarem
      de novo. Ver o comentário do prop `recarregar`. */
   const [pedidoDeRecarga, setPedidoDeRecarga] = useState(0)
+  /* ODD DE AGORA (2026-09-06, pedido do usuario). Uma leitura no servidor cobre
+     todos os picks abertos de todos os usuarios (`/odds/live` sem fixture
+     devolve o mundo), e la' o cache de 60s segura o custo mesmo com a aba de
+     varias pessoas pedindo a cada 15 segundos. */
+  const [oddsAgora, setOddsAgora] = useState<Record<string, {
+    odd: number | null; cotado: boolean; variacao?: number
+    prob_mercado?: number | null; prob_sem_vig?: boolean
+  }>>({})
+  const ultimaOdd = useRef(0)
+  const visivel = useJanelaVisivel()
   const timer = useRef<number | null>(null)
   const navigate = useNavigate()
   /* Uma busca só, dois leitores: a fita do topo e o bloco do rodapé. */
@@ -1159,6 +1304,21 @@ export default function LivePicksFeed({ isActive, banca }: {
     } catch {
       setErro(true)
       setPicks([])
+    }
+    /* A ODD DE AGORA ANDA NO PRÓPRIO RITMO: 3 minutos, não os 15 segundos do
+       feed. O cache do servidor já garante que ninguém gasta requisição de API
+       antes disso, e pedir a cada poll só produziria resposta repetida.
+    
+       Fora do try do feed de propósito: a odd é um extra, e uma falha nela não
+       pode apagar os picks da tela · falhou, o card mostra só a odd da
+       publicação, como antes. */
+    const agora = Date.now()
+    if (agora - ultimaOdd.current >= INTERVALO_ODD_MS) {
+      ultimaOdd.current = agora
+      try {
+        const o = await api.get('/live-picks/odds-agora')
+        if (o.data?.disponivel) setOddsAgora(o.data.picks ?? {})
+      } catch { ultimaOdd.current = 0 /* falhou: tenta no próximo poll */ }
     }
   }, [])
 
@@ -1180,17 +1340,18 @@ export default function LivePicksFeed({ isActive, banca }: {
     }
   }, [carregar])
 
-  /* Poll só enquanto a aba está visível. Fora dela não há motivo pra manter
-     a chamada de pé: o backend consulta a API-Football nesse caminho. */
+  /* Poll só com a aba do produto escolhida E a janela na frente do usuário.
+     Fora disso não há motivo pra manter a chamada de pé: o backend consulta a
+     API-Football nesse caminho, e ninguém está lendo a resposta. */
   useEffect(() => {
-    if (!isActive) {
+    if (!isActive || !visivel) {
       if (timer.current) { clearInterval(timer.current); timer.current = null }
       return
     }
     carregar()
     timer.current = window.setInterval(carregar, POLL_MS)
     return () => { if (timer.current) clearInterval(timer.current) }
-  }, [isActive, carregar])
+  }, [isActive, visivel, carregar])
 
   const confirmar = async (oddReal: number, casa: string, unidades: number) => {
     if (!alvo) return
@@ -1392,7 +1553,8 @@ export default function LivePicksFeed({ isActive, banca }: {
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <AnimatePresence mode="popLayout">
               {minhas.map(p => (
-                <CardLive key={p.id} pick={p} onSeguir={setAlvo} banca={banca} />
+                <CardLive key={p.id} pick={p} onSeguir={setAlvo} banca={banca}
+                          oddAgora={oddsAgora[String(p.id)]} />
               ))}
             </AnimatePresence>
           </div>
@@ -1430,7 +1592,8 @@ export default function LivePicksFeed({ isActive, banca }: {
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <AnimatePresence mode="popLayout">
               {oportunidades.map(p => (
-                <CardLive key={p.id} pick={p} onSeguir={setAlvo} banca={banca} />
+                <CardLive key={p.id} pick={p} onSeguir={setAlvo} banca={banca}
+                          oddAgora={oddsAgora[String(p.id)]} />
               ))}
             </AnimatePresence>
           </div>

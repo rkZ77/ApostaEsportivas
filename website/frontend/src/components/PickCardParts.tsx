@@ -157,6 +157,7 @@ export function PickProbability({
   probability,
   label = 'Probabilidade',
   className,
+  mercadoAgora,
 }: {
   /** Fração 0..1. Só é usada quando não há probabilidade. */
   confidence?: number | null
@@ -169,12 +170,24 @@ export function PickProbability({
    */
   label?: string
   className?: string
+  /**
+   * A chance que a CASA está precificando neste minuto (ao vivo).
+   *
+   * Não é um recálculo do nosso modelo: ele lê escanteio, chute e posse por
+   * partida, e refazer isso a cada leitura custaria uma requisição de
+   * estatística por jogo. É o mercado se movendo, que é a outra metade da
+   * pergunta "ainda vale entrar?" -- a nossa estimativa é do instante da
+   * publicação e não muda.
+   */
+  mercadoAgora?: { valor: number | null; semVig?: boolean } | null
 }) {
   const bruto = probability ?? confidence
   if (bruto == null) return null
   const pct = Math.round(Number(bruto) * 100)
   // Sem probabilidade real, o numero e' uma aproximacao: o rotulo avisa.
   const aproximado = probability == null
+  const pctMercado = mercadoAgora?.valor != null
+    ? Math.round(Number(mercadoAgora.valor) * 100) : null
 
   return (
     <div className={cn('px-5 pb-3', className)}>
@@ -195,6 +208,12 @@ export function PickProbability({
           style={{ width: `${pct}%` }}
         />
       </div>
+      {pctMercado != null && (
+        <p className="text-[10px] text-ink-4 mt-1">
+          A casa paga como {pctMercado}% agora
+          {mercadoAgora?.semVig === false && ' (com a margem dela dentro)'}
+        </p>
+      )}
     </div>
   )
 }

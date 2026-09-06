@@ -31,7 +31,7 @@ import os
 import uuid
 import sys
 from collections import deque
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.concurrency import run_in_threadpool
@@ -46,9 +46,11 @@ from settlement_bridge import settlement
 # produto precisa -- a alternativa seria duplicar a leitura da API-Football.
 from routers.live import (  # noqa: F401
     FT_STATUSES, LIVE_STATUSES, _anulacao_sem_estatistica, _calc_result,
+    _motivo_da_anulacao, _save_live_pick_result,
     _fetch_fixture, _fetch_fixtures_bulk, _fetch_stats, _leg_needs_stats,
     _parse_stats, _pick_status, _profit_for_result, _stat_for_market,
     _sync_followed_result, _travado_antes_do_apito,
+    _fetch_live_odds_mundo, _find_live_odd,
 )
 
 logger = logging.getLogger(__name__)
@@ -290,29 +292,27 @@ def liquidar_pendentes(cur, conn, limite: int = 30) -> dict:
 
             odd = float(p["odd"] or 1)
             profit = _profit_for_result(resultado, odd)
-            cur.execute("""
-                UPDATE picks_live
-                SET result = %s, profit = %s, status = %s, settled_at = NOW()
-                WHERE id = %s AND result IS NULL
-            """, (resultado, profit, STATUS_LIQUIDADO, p["id"]))
-            # QUEM SEGUIU PRECISA SER AVISADO (2026-08-29).
+            # O QUE DECIDIU, GRAVADO JUNTO (06/09). Este UPDATE era o unico
+            # caminho de liquidacao do projeto que nao gravava
+            # `settled_value`/`void_reason` -- as duas colunas que todos os
+            # outros produtos escrevem por `_colunas_de_auditoria`.
             #
-            # Aqui havia um UPDATE cru em `user_followed_picks`, e ele pulava
-            # `_sync_followed_result` -- que e' o PONTO UNICO por onde todo
-            # resultado do site passa justamente pra alimentar o sino (ver o
-            # docstring dele em routers/live.py). O efeito pro assinante era o
-            # pior possivel e o mesmo que o /admin ja tinha corrigido: o
-            # dinheiro mudava na banca dele sem nenhum aviso de que o pick
-            # tinha sido resolvido.
-            #
-            # E' pior no Ao Vivo que em qualquer outro produto: o pick nasce e
-            # morre dentro de uma partida, entao ninguem esta com a aba aberta
-            # esperando o apito -- o sino e' a unica forma de ficar sabendo.
-            #
-            # A funcao faz o mesmo UPDATE e mais a notificacao, entao nao ha
-            # escrita a mais: o que muda e' que o aviso deixa de faltar.
-            _sync_followed_result(p["id"], "live", resultado, cur)
-            conn.commit()
+            # No Ao Vivo a falta doia mais que em qualquer outro lugar: o card
+            # ao vivo nao mostra o campo "Deu" (decisao de 04/09) e mostra o
+            # contador de AGORA, relido da API. Sem o valor gravado, um PUSH
+            # por empate com a linha aparecia como "Menos de 9.0", barra em 4 e
+            # selo PUSH, sem nada na tela capaz de explicar -- nem pro usuario,
+            # nem pra quem fosse investigar.
+            _save_live_pick_result(p["id"], resultado, odd, conn,
+                                   valor=valor, motivo=_motivo_da_anulacao())
+            # QUEM SEGUIU PRECISA SER AVISADO (2026-08-29). Vem de graca
+            # junto do `_save_live_pick_result` acima: ele passa por
+            # `_sync_followed_result`, que e' o PONTO UNICO por onde todo
+            # resultado do site alimenta o sino. Aqui havia um UPDATE cru em
+            # `user_followed_picks` que pulava esse ponto, e o dinheiro mudava
+            # na banca do assinante sem nenhum aviso -- pior no Ao Vivo que em
+            # qualquer outro produto, porque o pick nasce e morre dentro de uma
+            # partida e ninguem esta com a aba aberta esperando o apito.
             resumo["liquidados"] += 1
             logger.info("[LIVE-PICKS] #%s -> %s (%+.4fu)", p["id"], resultado, profit)
         except Exception as e:
@@ -608,7 +608,14 @@ def feed(
                    live_signal_score, data_freshness, projected_total,
                    probability, ev, edge, confidence, stake_units, reasoning,
                    odd_at_creation, odd_timestamp, odd_valid_until, status,
-                   expiration_reason, engine_version, result, profit, created_at
+                   expiration_reason, engine_version, result, profit, created_at,
+                   -- O QUE DECIDIU O RESULTADO (06/09). As duas colunas ja'
+                   -- existiam (migrations.py, 02/09: "com os dois na tela, a
+                   -- conferencia deixa de depender de nos") e o feed do Ao Vivo
+                   -- nao as mandava, entao o card nao tinha como distinguir
+                   -- "empatou com a linha" de "anulamos porque o provedor nao
+                   -- publicou": os dois chegavam como o mesmo PUSH, +0.00u.
+                   settled_value, void_reason
             FROM picks_live
             WHERE id IN (SELECT id FROM escopo UNION SELECT id FROM seguidos_vivos)
             ORDER BY (result IS NOT NULL), created_at DESC
@@ -1775,6 +1782,144 @@ async def rodar_motor(body: RunBody, current_user: dict = Depends(require_admin)
         raise HTTPException(500, "Diretorio do motor nao encontrado (PIPELINE_SRC_PATH).")
     asyncio.create_task(_rodar(body))
     return {"ok": True, "iniciado": True, "dry_run": _resolver_dry_run(body.dry_run)}
+
+
+def _lado_oposto(line: str | None) -> str | None:
+    """"Over 9.5" -> "Under 9.5". O par e' o que permite tirar a margem da casa."""
+    if not line:
+        return None
+    texto = str(line).strip()
+    baixo = texto.lower()
+    if baixo.startswith("over"):
+        return "Under" + texto[4:]
+    if baixo.startswith("under"):
+        return "Over" + texto[5:]
+    return None
+
+
+def _prob_do_mercado(odd: float, odd_oposta: float | None) -> dict:
+    """Probabilidade implicita do lado do pick, sem vig quando ha' o par.
+
+    Mesma conta do pre-jogo (market_model.no_vig_pair_prob): 1/odd de cada lado
+    somam mais que 1 -- o excedente e' a margem --, e a proporcao entre elas e'
+    a chance que a casa esta' precificando. Sem o par, devolve a implicita crua
+    e marca `sem_vig=False`, porque ela carrega a margem inteira e nao pode ser
+    comparada com a nossa como se fosse a mesma medida.
+    """
+    if not odd or odd <= 1:
+        return {"valor": None, "sem_vig": False}
+    crua = 1.0 / float(odd)
+    if odd_oposta and float(odd_oposta) > 1:
+        total = crua + 1.0 / float(odd_oposta)
+        if total > 0:
+            return {"valor": round(crua / total, 4), "sem_vig": True}
+    return {"valor": round(crua, 4), "sem_vig": False}
+
+
+#: Quanto tempo a odd de um pick vale depois de a leitura confirmar que ela
+#: continua cotada. Curto porque a odd ao vivo muda em minutos -- o que a
+#: renovacao evita e' o pick morrer com o mercado ABERTO, nao prometer preco.
+_RENOVACAO_DA_ODD_MIN = 5
+
+
+@router.get("/odds-agora")
+def odds_agora(current_user: dict = Depends(require_live_reader)):
+    """A odd de AGORA dos picks ao vivo em aberto.
+
+    POR QUE ISTO EXISTE (2026-09-06, pedido do usuario)
+    ---------------------------------------------------
+    O card mostrava a odd do instante da publicacao e, passados alguns minutos,
+    trocava aquilo por "odd vencida" -- um pick que o mercado ainda estava
+    cotando aparecia morto porque o RELOGIO venceu, nao porque a casa fechou.
+
+    O CUSTO FOI O QUE DECIDIU O DESENHO. `_fetch_live_odds` pergunta por UMA
+    fixture: com 5 picks abertos e leitura por minuto seriam 300 requisicoes por
+    hora. `/odds/live` sem `fixture` devolve o mundo, e uma leitura cobre todos
+    os picks de todos os usuarios: ~60 por hora de jogo, ~240 num dia de 4
+    horas, contra as 7.500 do plano. O cache de 60s no servidor e' o que segura
+    isso mesmo com a aba de dez pessoas abertas pedindo a cada 15 segundos.
+
+    NAO GRAVA PRECO NOVO NO PICK. O `odd` do pick continua sendo o da
+    publicacao -- e' o que a IA analisou e e' contra ele que o resultado e'
+    medido. O que a leitura faz e' (1) devolver a odd corrente pra tela mostrar
+    ao lado, e (2) ADIAR a expiracao enquanto o mercado continuar de pe'.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        if not _tabela_existe(cur):
+            return {"disponivel": False, "picks": {}}
+        # SO' PICK PENDENTE DE JOGO QUE NAO ACABOU (2026-09-06, decisao do
+        # usuario). `result IS NULL` sozinho nao basta: entre o apito final e a
+        # liquidacao o pick fica pendente com a partida encerrada, e perguntar
+        # a odd dele e' trabalho sobre um mercado que nao existe mais. O status
+        # sai de `fixtures`, que o coletor mantem -- custo zero de API.
+        cur.execute("""
+            SELECT pl.id, pl.fixture_id, pl.market_type, pl.line, pl.odd
+              FROM picks_live pl
+              LEFT JOIN fixtures f ON f.fixture_id = pl.fixture_id
+             WHERE pl.result IS NULL
+               AND pl.status = %s
+               AND pl.match_date >= (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
+               AND COALESCE(f.status, '') <> ALL(%s)
+        """, (STATUS_ATIVO, list(FT_STATUSES) + ["PST", "CANC", "ABD", "AWD", "WO"]))
+        abertos = [dict(r) for r in cur.fetchall()]
+        if not abertos:
+            return {"disponivel": True, "picks": {}}
+
+        mundo = _fetch_live_odds_mundo()
+        if not mundo:
+            # Leitura falhou ou o provedor nao esta' servindo: a tela mantem o
+            # que ja' tinha em vez de anunciar que o mercado fechou.
+            return {"disponivel": False, "picks": {}, "motivo": "sem leitura de odd agora"}
+
+        agora = _agora_naive()
+        saida: dict[str, dict] = {}
+        renovar: list[int] = []
+        for p in abertos:
+            mercados = mundo.get(int(p["fixture_id"])) or []
+            odd_agora = _find_live_odd(p.get("market_type"), p.get("line"), mercados)
+            if odd_agora is None:
+                # Sem cotacao AGORA nao e' erro: mercado suspenso no meio de um
+                # ataque perigoso e' rotina, e ele volta minutos depois.
+                saida[str(p["id"])] = {"odd": None, "cotado": False}
+                continue
+            renovar.append(int(p["id"]))
+            # PROBABILIDADE DO MERCADO AGORA (2026-09-06, pedido do usuario).
+            #
+            # E' a chance que a CASA esta' precificando neste minuto, nao um
+            # recalculo do nosso modelo: o modelo le' escanteio, chute e
+            # posse por partida, e refazer isso no site custaria uma
+            # requisicao de estatistica POR JOGO a cada leitura -- exatamente o
+            # consumo que a leitura global de odd existe pra evitar.
+            #
+            # Com os dois lados cotados ela sai SEM VIG (a margem da casa
+            # dividida entre eles); com um lado so', e' a implicita crua e a
+            # tela diz isso. As duas respondem a mesma pergunta util: pra onde
+            # o mercado andou desde que o pick nasceu.
+            oposta = _find_live_odd(p.get("market_type"), _lado_oposto(p.get("line")), mercados)
+            prob = _prob_do_mercado(float(odd_agora), oposta)
+            saida[str(p["id"])] = {
+                "odd": round(float(odd_agora), 2),
+                "cotado": True,
+                "variacao": round(float(odd_agora) - float(p["odd"] or 0), 2),
+                "prob_mercado": prob["valor"],
+                "prob_sem_vig": prob["sem_vig"],
+            }
+
+        if renovar:
+            cur.execute("""
+                UPDATE picks_live
+                   SET odd_valid_until = %s
+                 WHERE id = ANY(%s) AND result IS NULL AND status = %s
+            """, (agora + timedelta(minutes=_RENOVACAO_DA_ODD_MIN), renovar, STATUS_ATIVO))
+            conn.commit()
+
+        return {"disponivel": True, "picks": saida,
+                "atualizado_em": agora.isoformat(timespec="seconds")}
+    finally:
+        cur.close()
+        conn.close()
 
 
 @router.get("/run-status")
