@@ -1854,15 +1854,23 @@ def odds_agora(current_user: dict = Depends(require_live_reader)):
         # liquidacao o pick fica pendente com a partida encerrada, e perguntar
         # a odd dele e' trabalho sobre um mercado que nao existe mais. O status
         # sai de `fixtures`, que o coletor mantem -- custo zero de API.
+        # O EXPIRADO ENTRA JUNTO (2026-09-06, pedido do usuario).
+        #
+        # E' o caso que mais precisa da leitura: pick que NINGUEM pegou e que o
+        # relogio marcou como "odd vencida". Se a casa continua cotando, ele
+        # nao venceu coisa nenhuma -- so' o nosso cronometro achou que sim --,
+        # e deixa-lo fora da consulta congelava o card na frase errada pra
+        # sempre. Pick com resultado nao entra: ai' acabou de verdade.
         cur.execute("""
-            SELECT pl.id, pl.fixture_id, pl.market_type, pl.line, pl.odd
+            SELECT pl.id, pl.fixture_id, pl.market_type, pl.line, pl.odd, pl.status
               FROM picks_live pl
               LEFT JOIN fixtures f ON f.fixture_id = pl.fixture_id
              WHERE pl.result IS NULL
-               AND pl.status = %s
+               AND pl.status = ANY(%s)
                AND pl.match_date >= (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
                AND COALESCE(f.status, '') <> ALL(%s)
-        """, (STATUS_ATIVO, list(FT_STATUSES) + ["PST", "CANC", "ABD", "AWD", "WO"]))
+        """, ([STATUS_ATIVO, STATUS_EXPIRADO],
+              list(FT_STATUSES) + ["PST", "CANC", "ABD", "AWD", "WO"]))
         abertos = [dict(r) for r in cur.fetchall()]
         if not abertos:
             return {"disponivel": True, "picks": {}}
@@ -1908,11 +1916,17 @@ def odds_agora(current_user: dict = Depends(require_live_reader)):
             }
 
         if renovar:
+            # RESSUSCITA O QUE O RELOGIO MATOU. `status` volta pra ACTIVE e o
+            # motivo da expiracao e' apagado: o mercado provou que estava la'.
+            # So' pra quem nao tem resultado -- e sem tocar em pick seguido, que
+            # nunca expira (ver `expirar_vencidos`).
             cur.execute("""
                 UPDATE picks_live
-                   SET odd_valid_until = %s
-                 WHERE id = ANY(%s) AND result IS NULL AND status = %s
-            """, (agora + timedelta(minutes=_RENOVACAO_DA_ODD_MIN), renovar, STATUS_ATIVO))
+                   SET odd_valid_until = %s,
+                       status = %s,
+                       expiration_reason = NULL
+                 WHERE id = ANY(%s) AND result IS NULL
+            """, (agora + timedelta(minutes=_RENOVACAO_DA_ODD_MIN), STATUS_ATIVO, renovar))
             conn.commit()
 
         return {"disponivel": True, "picks": saida,

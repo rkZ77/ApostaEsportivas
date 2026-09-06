@@ -72,3 +72,16 @@ def test_a_tela_para_de_pedir_quando_ninguem_esta_olhando():
     assert "useJanelaVisivel" in tela
     assert "visibilitychange" in tela
     assert "if (!isActive || !visivel)" in tela
+
+
+def test_o_pick_expirado_volta_quando_a_casa_ainda_cota():
+    """O caso que mais precisa da leitura: pick que NINGUEM pegou e que o
+    relogio marcou como "odd vencida". Se a casa continua cotando, ele nao
+    venceu -- so' o nosso cronometro achou que sim. Ficar fora da consulta
+    congelava o card na frase errada pra sempre."""
+    corpo = _codigo("routers/live_picks.py", "odds_agora")
+    assert "pl.status = ANY(%s)" in corpo
+    assert "STATUS_EXPIRADO" in corpo
+    # e a volta: status de novo ativo, motivo da expiracao apagado
+    assert "expiration_reason = NULL" in corpo
+    assert "SET odd_valid_until" in corpo
