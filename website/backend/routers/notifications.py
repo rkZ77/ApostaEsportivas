@@ -412,6 +412,16 @@ def notify_picks_went_live(user_id: int, live_items: list[dict]) -> None:
             pick_id   = item.get("pick_id")
             if pick_id is None:
                 continue
+            # PICK AO VIVO NAO GANHA "COMECOU" (2026-09-06, pedido do usuario).
+            #
+            # O aviso existe pra quem pegou um pick de PRE-JOGO horas antes e
+            # precisa saber que a partida entrou em campo. No ao vivo isso e'
+            # premissa: a pessoa pegou o bilhete com o jogo correndo, olhando o
+            # minuto e o placar na tela. Avisar "comecou" ali e' contar uma
+            # novidade que ela acabou de ver -- e o sino perde valor quando
+            # entrega o que o usuario ja' sabe.
+            if pick_type == "live":
+                continue
             if pick_type == "multipla":
                 label = "Múltipla do dia"
             elif pick_type == "alavancagem":
