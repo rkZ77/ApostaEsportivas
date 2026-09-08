@@ -73,6 +73,11 @@ PRINTS: dict[str, dict] = {
     "mes-live":      {"rota": "/resultados", "mes": True, "fonte": "Ao Vivo",   "rolar": 1200, "altura": 780},
     "mes-free":      {"rota": "/resultados", "mes": True, "fonte": "Free",      "rolar": 1200, "altura": 780},
     "mes-multiplas": {"rota": "/resultados", "mes": True, "fonte": "Múltiplas", "rolar": 1200, "altura": 780},
+    # Jogadores e Boost entraram porque em setembro eles pesam: o de jogadores
+    # e' o pior produto do mes, e um carrossel de produto que nao mostra o pior
+    # nao e' transparencia, e' vitrine.
+    "mes-jogadores": {"rota": "/resultados", "mes": True, "fonte": "Jogadores", "rolar": 1200, "altura": 780},
+    "mes-boost":     {"rota": "/resultados", "mes": True, "fonte": "Pick Boost", "rolar": 1200, "altura": 780},
     "como-funciona":    {"rota": "/como-funciona", "rolar": 0,    "altura": 780},
     "como-funciona-passos": {"rota": "/como-funciona", "rolar": 1200, "altura": 780},
     "planos":           {"rota": "/planos",        "rolar": 300,  "altura": 780},

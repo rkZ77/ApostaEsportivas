@@ -48,6 +48,67 @@ PRINTS = AQUI / "carrossel" / "prints"
 # contagem, porque no meio do carrossel o que a pessoa quer saber é quanto
 # falta.
 CARROSSEIS: dict[str, dict] = {
+    # ------------------------------------------------- o mes que esta correndo
+    # Os prints levam o sufixo do mes porque `prints.py --mes` grava assim: o
+    # carrossel de agosto e o de setembro convivem na mesma pasta, e sem o
+    # sufixo o segundo apagaria o primeiro.
+    "setembro": {
+        "mes": "2026-09",
+        "rotulo": "{Mes} até agora",
+        "capa": ("{Mes} vai\nem {lucro}",
+                 "{picks} picks resolvidos em {dias} dias. O mês ainda está correndo.",
+                 "mes-resumo-2026-09"),
+        "slides": [
+            ("{acerto} de acerto",
+             "{greens} green e {reds} red, em {ligas} ligas diferentes.",
+             "mes-resumo-2026-09"),
+            ("ROI de {roi}",
+             "É o lucro sobre as {stake} arriscadas, não sobre o que deu certo.",
+             "mes-resumo-2026-09"),
+            ("Teve dia no vermelho",
+             "Dois deles. Ficam publicados do mesmo tamanho que os outros.",
+             "mes-lista-2026-09"),
+            ("{liga_melhor} puxa o mês",
+             "{liga_melhor_lucro} só nessa liga.",
+             "mes-ligas-2026-09"),
+            ("{liga_pior} está em {liga_pior_lucro}",
+             "A liga mais coberta do site é a que está devendo.",
+             "mes-ligas-2026-09"),
+        ],
+        "cta": ("Acompanhe em tempo real",
+                "O mês inteiro abre sem conta e sem cartão.",
+                "mes-resumo-2026-09"),
+    },
+    # ----------------------------------------- os produtos do mes que corre
+    "setembro-produtos": {
+        "mes": "2026-09",
+        "rotulo": "Produto por produto",
+        "capa": ("O ao vivo\ncarregou {mes}",
+                 "E dois produtos estão no vermelho. Os dois aparecem aqui.",
+                 "mes-live-2026-09"),
+        "slides": [
+            ("{live_nome}: {live_lucro}",
+             "{live_picks} picks lidos com o jogo rolando, {live_acerto} de acerto.",
+             "mes-live-2026-09"),
+            ("{vip_nome}: {vip_lucro}",
+             "{vip_picks} picks, ROI de {vip_roi}.",
+             "mes-vip-2026-09"),
+            ("{boost_nome}: {boost_lucro}",
+             "{boost_acerto} de acerto em {boost_picks} picks, e mesmo assim "
+             "quase de lado. Odd baixa faz isso.",
+             "mes-boost-2026-09"),
+            ("{player_stats_nome}: {player_stats_lucro}",
+             "O pior produto do mês, com {player_stats_picks} picks. "
+             "Está publicado igual aos outros.",
+             "mes-jogadores-2026-09"),
+            ("{free_nome}: {free_lucro}",
+             "O pick grátis também está devendo. Ninguém esconde o próprio red.",
+             "mes-free-2026-09"),
+        ],
+        "cta": ("Filtre por produto",
+                "Cada um desses números tem uma aba no site.",
+                "mes-resumo-2026-09"),
+    },
     # ---------------------------------------------------------------- dia 1
     "fechamento": {
         "mes": "2026-08",
