@@ -2344,7 +2344,10 @@ function BarraDoDia({ offset, setOffset, diasComPick, isoDoOffset, rotuloLongo, 
   dataPorExtenso: string
 }) {
   return (
-    <div className="flex items-center gap-3 flex-wrap">
+    /* gap-2 igual ao de FiltrosDePicks: as duas metades da barra de controles
+       sao a mesma barra, e com gap-3 aqui e gap-2 ao lado o espacamento
+       mudava no meio da linha. */
+    <div className="flex items-center gap-2 flex-wrap">
       <CalendarioDePicks
         valor={isoDoOffset(offset)}
         diasComPick={diasComPick}
@@ -2358,11 +2361,12 @@ function BarraDoDia({ offset, setOffset, diasComPick, isoDoOffset, rotuloLongo, 
           setOffset(Math.round((alvo.getTime() - hoje.getTime()) / 86_400_000))
         }}
       />
-      {/* A data por extenso some no celular: o botao ao lado ja' diz o dia, e
-          em 390px ela empurrava o atalho "voltar para hoje" pra outra linha. */}
-      <span className="hidden sm:inline text-xs text-ink-3 truncate">
-        {offset === 0 ? capitalizarFrase(rotuloLongo) : dataPorExtenso}
-      </span>
+      {/* A DATA POR EXTENSO SAIU DA BARRA (08/09, pedido do usuario).
+          Ela dizia pela terceira vez a mesma coisa: o titulo da secao logo
+          acima e' "Picks do Dia, 8 de setembro de 2026" e o proprio botao do
+          calendario ja' mostra o dia escolhido. Numa linha que agora tem o dia
+          e os tres menus de lista, ela era o unico elemento que nao era
+          controle -- e o que fazia a barra parecer cheia. */}
       {offset < 0 && (
         <button
           onClick={() => setOffset(0)}
