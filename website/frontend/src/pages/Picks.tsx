@@ -201,21 +201,31 @@ function TabBar({ tab, setTab, canSeeVip, verAoVivo, temFaltasHoje, counts, live
    * ele, deixa a seta da direita acesa pra sempre. */
   const [podeEsq, setPodeEsq] = useState(false)
   const [podeDir, setPodeDir] = useState(false)
-  useEffect(() => {
+  const fitaRef = useRef<HTMLDivElement | null>(null)
+  const medir = useCallback(() => {
     const barra = barraRef.current
     if (!barra) return
-    const medir = () => {
-      setPodeEsq(barra.scrollLeft > 1)
-      setPodeDir(barra.scrollLeft + barra.clientWidth < barra.scrollWidth - 1)
-    }
+    setPodeEsq(barra.scrollLeft > 1)
+    setPodeDir(barra.scrollLeft + barra.clientWidth < barra.scrollWidth - 1)
+  }, [])
+  useEffect(() => {
+    const barra = barraRef.current
+    const fita  = fitaRef.current
+    if (!barra) return
     medir()
     barra.addEventListener('scroll', medir, { passive: true })
-    /* ResizeObserver e nao `resize` da janela: a fita muda de largura tambem
-       quando uma aba entra ou sai (Pick Falta some no dia sem pick). */
+    /* OBSERVA A FITA DE DENTRO, E NAO SO' O CONTAINER (08/09).
+       As setas sumiram por isto: o ResizeObserver estava no elemento que
+       ROLA, e o border-box dele nao muda quando o conteudo cresce -- so' o
+       scrollWidth muda, e isso o observer nao ve. Como as abas entram depois
+       (contador, Pick Falta so' aparece com pick do dia), a unica medicao era
+       a do mount, com a barra ainda curta: `podeDir` nascia falso e ficava.
+       A fita interna, essa sim, muda de largura a cada aba que entra. */
     const ro = new ResizeObserver(medir)
     ro.observe(barra)
+    if (fita) ro.observe(fita)
     return () => { barra.removeEventListener('scroll', medir); ro.disconnect() }
-  }, [])
+  }, [medir])
   const andar = (dir: 1 | -1) => {
     const barra = barraRef.current
     if (!barra) return
@@ -337,7 +347,8 @@ function TabBar({ tab, setTab, canSeeVip, verAoVivo, temFaltasHoje, counts, live
           <ChevronRight className="w-4 h-4" />
         </button>
       )}
-      <div ref={barraRef} className="flex border-b border-line px-4 overflow-x-auto scrollbar-none">
+      <div ref={barraRef} className="flex border-b border-line overflow-x-auto scrollbar-none">
+        <div ref={fitaRef} className="flex px-4">
         {tabs.filter(t => !t.oculta).map(t => {
           const count = counts?.[t.key]
           return (
@@ -387,6 +398,7 @@ function TabBar({ tab, setTab, canSeeVip, verAoVivo, temFaltasHoje, counts, live
             </motion.button>
           )
         })}
+        </div>
       </div>
     </div>
   )
