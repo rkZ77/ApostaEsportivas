@@ -100,10 +100,16 @@ def numeros(mes: str, atualizar: bool = False) -> dict[str, str]:
     s = d["summary"]
     ano, num = mes.split("-")
 
-    # Acerto sobre o TOTAL, que e' a mesma conta do "Win Rate" da pagina de
-    # Resultados. Sobre green+red daria 67,3% em agosto contra os 65% que o
-    # print mostra -- e o slide fica ao lado do print no mesmo post.
-    acerto = (s["greens"] / s["total"] * 100) if s["total"] else 0.0
+    # Acerto pela MESMA conta do "Win Rate" da pagina de Resultados, que e'
+    # `taxaAcerto` em frontend/src/utils/format.ts: meio-green conta como
+    # acerto e anulada sai do denominador.
+    #
+    # Era greens/total ate' aqui, e em agosto os dois davam 65%, entao a
+    # divergencia nao aparecia. Em setembro sao 9 anuladas: greens/total da'
+    # 58,2% contra os 65% que o print mostra, e o slide desmentiria o print
+    # ao lado dele no mesmo post.
+    resolvidos = s["total"] - s.get("push", 0)
+    acerto = ((s["greens"] + s.get("half_wins", 0)) / resolvidos * 100) if resolvidos else 0.0
 
     ligas = sorted(d["by_league"], key=lambda x: x["profit"], reverse=True)
     fontes = {f["source"]: f for f in d["by_source"]}
