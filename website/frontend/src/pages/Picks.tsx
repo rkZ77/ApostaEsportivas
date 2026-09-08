@@ -303,21 +303,28 @@ function TabBar({ tab, setTab, canSeeVip, verAoVivo, temFaltasHoje, counts, live
           surface-0/0, e nao pra `transparent`: transparent e' rgba(0,0,0,0),
           entao o degrade passaria pelo preto no meio e deixaria uma mancha
           escura na ponta da barra em vez de sumir. */}
+      {/* O degrade vai a 20 (era 10): ele e' o que apaga o rotulo ANTES da
+          seta chegar nele. Com 40px a aba de baixo ainda estava legivel
+          debaixo do botao, e as duas coisas competiam no mesmo lugar. */}
       {podeDir && (
-        <div className="pointer-events-none absolute right-0 top-0 h-full w-10 bg-gradient-to-l from-surface-0 to-surface-0/0 z-10" />
+        <div className="pointer-events-none absolute right-0 top-0 h-full w-20 bg-gradient-to-l from-surface-0 via-surface-0 to-surface-0/0 z-10" />
       )}
       {podeEsq && (
-        <div className="pointer-events-none absolute left-0 top-0 h-full w-10 bg-gradient-to-r from-surface-0 to-surface-0/0 z-10" />
+        <div className="pointer-events-none absolute left-0 top-0 h-full w-20 bg-gradient-to-r from-surface-0 via-surface-0 to-surface-0/0 z-10" />
       )}
       {/* As setas ficam FORA do container que rola: dentro dele elas andariam
           junto com as abas e sairiam de cena na primeira arrastada.
           `hidden sm:flex` porque no celular o dedo ja' arrasta a fita, e dois
           alvos de toque em cima das abas custariam mais do que resolvem. */}
+      {/* BOTAO, e nao um chevron solto (08/09). A seta era so' o icone em cima
+          da fita: pousava no meio do rotulo da ultima aba e as duas coisas
+          viravam uma mancha. Agora e' um alvo redondo com fundo proprio e
+          borda, centrado na altura da barra -- le como controle, e nao como
+          parte da aba que esta' embaixo. */}
       {podeEsq && (
         <button
           type="button" aria-label="Abas anteriores" onClick={() => andar(-1)}
-          className="hidden sm:flex absolute left-0 top-0 z-20 h-[calc(100%-1px)] w-8 items-center justify-center
-                     text-ink-3 hover:text-ink-1 transition-colors"
+          className="left-1 hidden sm:flex absolute top-1/2 -translate-y-1/2 z-20 w-7 h-7 items-center justify-center rounded-full border border-line-strong bg-surface-1 text-ink-2 hover:text-ink-1 hover:border-accent/50 shadow-lg shadow-black/40 transition-colors"
         >
           <ChevronLeft className="w-4 h-4" />
         </button>
@@ -325,8 +332,7 @@ function TabBar({ tab, setTab, canSeeVip, verAoVivo, temFaltasHoje, counts, live
       {podeDir && (
         <button
           type="button" aria-label="Próximas abas" onClick={() => andar(1)}
-          className="hidden sm:flex absolute right-0 top-0 z-20 h-[calc(100%-1px)] w-8 items-center justify-center
-                     text-ink-3 hover:text-ink-1 transition-colors"
+          className="right-1 hidden sm:flex absolute top-1/2 -translate-y-1/2 z-20 w-7 h-7 items-center justify-center rounded-full border border-line-strong bg-surface-1 text-ink-2 hover:text-ink-1 hover:border-accent/50 shadow-lg shadow-black/40 transition-colors"
         >
           <ChevronRight className="w-4 h-4" />
         </button>
