@@ -112,9 +112,14 @@ export default function Agente() {
       <div className="bg-surface-0 border-b border-line">
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-3">
           <BackButton />
-          <div className="w-9 h-9 rounded-full bg-accent/10 border border-accent/30 flex items-center justify-center shrink-0">
-            <span className="text-accent-ink text-sm font-bold">AI</span>
-          </div>
+          {/* O mesmo mascote do botao flutuante e do painel · quem atende e' um
+              so', e ate' aqui cada tela desenhava o proprio (icone Bot, bolinha
+              "AI", e agora a arte da marca). */}
+          <img
+            src="/agente-face-128.webp" alt="" aria-hidden="true"
+            width={36} height={36}
+            className="w-9 h-9 rounded-full border border-accent/30 bg-black shrink-0 object-cover"
+          />
           <div>
             <h1 className="font-display text-base font-semibold text-ink-1">Pick<span className="text-accent-ink">IA</span> Agent</h1>
             <p className="text-ink-3 text-xs mt-0.5">Picks. Banca. Alavancagem. Jogos ao vivo</p>

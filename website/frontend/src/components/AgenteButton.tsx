@@ -2,7 +2,6 @@ import { useState, useRef, useEffect, useCallback, lazy, Suspense } from 'react'
 import { Spinner } from './ui'
 import { useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Bot } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 // react-markdown (usado no painel) é pesado -- carrega só quando o usuário
@@ -155,7 +154,21 @@ export default function AgenteButton() {
                 aria-label="Conversar com o Agente IA"
                 className="flex items-center gap-2 bg-green-500 hover:bg-green-400 active:bg-green-600 text-black font-bold shadow-lg shadow-black/40 transition-all hover:scale-105 active:scale-95 rounded-full px-3 py-3 sm:px-4 sm:py-3"
               >
-                <Bot className="w-6 h-6 shrink-0" />
+                {/* O MASCOTE NO LUGAR DO ICONE GENERICO (08/09).
+                    Era o `Bot` do Lucide, o mesmo desenho de qualquer chat da
+                    internet. O agente e' a marca falando, entao quem atende
+                    tem cara. Fundo escuro em volta porque a arte ja' tem o
+                    verde dentro: sobre o botao verde ela sumiria.
+                    E' o ROSTO recortado da arte, nao o selo inteiro: o selo
+                    tem o anel "PICK ESPORTIVO" em volta, e em 28px o desenho
+                    todo virava uma manchinha verde sem leitura nenhuma.
+                    128px de lado e' o dobro do tamanho exibido, o que cobre
+                    tela retina sem carregar o PNG de 1,7MB. */}
+                <img
+                  src="/agente-face-128.webp" alt="" aria-hidden="true" draggable={false}
+                  width={32} height={32}
+                  className="w-8 h-8 shrink-0 rounded-full bg-black/85 ring-1 ring-black/30 object-cover"
+                />
                 <span className="hidden sm:inline text-sm">Agente IA</span>
               </button>
             </div>
