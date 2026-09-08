@@ -96,6 +96,12 @@ _PRODUTOS: tuple = (
     ("multipla",     "picks_multiplas",
      "CONCAT('Multipla · ', JSONB_ARRAY_LENGTH(games::jsonb), ' selecoes') AS casa,"
      " NULL AS fora, 'Multipla' AS market, NULL AS line, total_odd AS odd", False),
+    # Bingo do Dia. `opcional=True` porque a tabela nasce do MOTOR tambem, e
+    # um ambiente que nunca rodou o Bingo nao a tem -- o UNION inteiro cairia
+    # por causa dela.
+    ("bingo",        "picks_bingo",
+     "CONCAT('Bingo do Dia, ', JSONB_ARRAY_LENGTH(games::jsonb), ' selecoes') AS casa,"
+     " NULL AS fora, 'Bingo do Dia' AS market, NULL AS line, total_odd AS odd", True),
     ("alavancagem",  "picks_alavancagem",
      "home_team_1 AS casa, away_team_1 AS fora, market_1 AS market,"
      " line_1 AS line, odd_combined AS odd", False),
@@ -130,6 +136,7 @@ def _produtos(tipo: str | None = None) -> list:
     if tipo:
         alvo = tipo.strip().lower()
         alvo = {"multiplas": "multipla", "dica": "free",
+                "bingo do dia": "bingo", "cartela": "bingo",
                 "defesas": "goleiros", "jogador": "player_stats",
                 "ao vivo": "live"}.get(alvo, alvo)
         escolhido = [p for p in ativos if p[0] == alvo]

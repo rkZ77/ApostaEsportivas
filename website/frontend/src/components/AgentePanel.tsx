@@ -2,7 +2,7 @@ import { useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
-import { Bot, X as XIcon, Send, Lock } from 'lucide-react'
+import { X as XIcon, Send, Lock } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useAgentChat } from '../hooks/useAgentChat'
 import Avatar from './Avatar'
@@ -56,9 +56,12 @@ export default function AgentePanel({ onClose }: { onClose: () => void }) {
     >
       {/* Header */}
       <div className="shrink-0 px-4 py-3 border-b border-line flex items-center gap-2.5 bg-surface-1/60">
-        <div className="w-8 h-8 rounded-full bg-green-500/10 border border-green-500/30 flex items-center justify-center shrink-0">
-          <Bot className="w-4 h-4 text-green-400" />
-        </div>
+        {/* Mesmo mascote do botao que abre este painel · ver AgenteButton. */}
+        <img
+          src="/agente-128.webp" alt="" aria-hidden="true"
+          width={32} height={32}
+          className="w-8 h-8 rounded-full border border-green-500/30 bg-black shrink-0 object-cover"
+        />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-black text-ink-1 leading-none truncate">Agente PickIA</p>
           <p className="text-[11px] text-ink-3 mt-1">{loading ? 'Analisando...' : 'Online'}</p>

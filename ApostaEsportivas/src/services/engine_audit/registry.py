@@ -10,7 +10,7 @@ a mao. Sete pipelines viraram sete motores por acidente de arquivo.
 
 A arquitetura passa a ter QUATRO motores, cada um com METODOS:
 
-    PRE_LIVE      vip, dica, multipla, alavancagem, faltas
+    PRE_LIVE      vip, dica, multipla, bingo, alavancagem, faltas
     LIVE          live
     PICK_BOOST    over15_under25ht
     PLAYER_STATS  saves, shots, shots_on, fouls, tackles, passes
@@ -62,7 +62,7 @@ class Motor:
     metodos: tuple
 
 
-#: Pre Live -- CONGELADO. Nenhuma linha de calculo destes cinco metodos pode
+#: Pre Live -- CONGELADO. Nenhuma linha de calculo destes metodos pode
 #: mudar (instrucao explicita do usuario). Eles entram aqui so' pra serem
 #: auditados sob o mesmo run_id/versao dos motores novos.
 PRE_LIVE = Motor(
@@ -71,6 +71,7 @@ PRE_LIVE = Motor(
         Metodo("vip",         "VIP",         "1.0.0", "picks_vip",         "VIP_ENGINE"),
         Metodo("dica",        "Free",        "1.0.0", "picks_free",        "DICA_ENGINE"),
         Metodo("multipla",    "Múltipla",    "1.0.0", "picks_multiplas",   "MULTIPLA_ENGINE"),
+        Metodo("bingo",       "Bingo",       "1.0.0", "picks_bingo",       "BINGO_ENGINE"),
         Metodo("alavancagem", "Alavancagem", "1.0.0", "picks_alavancagem", "ALAVANCAGEM_ENGINE"),
         # Faltas: mercado do Pre Live desde 27/08. Pipeline proprio por razao
         # tecnica (fouls_model nao e' parametrico, ver a docstring dele), nao

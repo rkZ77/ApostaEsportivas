@@ -4,7 +4,21 @@ from services import settlement
 import json
 
 
-_ALLOWED_MULTIPLAS_TABLES = frozenset({"picks_multiplas"})
+# `picks_bingo` entra aqui em 2026-09-08, e reusar esta classe e' a decisao:
+# a cartela do Bingo tem a MESMA forma da multipla (pernas num JSONB `games`,
+# `total_odd`, `result`, `profit`), entao uma segunda implementacao so'
+# poderia divergir. E divergir na liquidacao ja' custou caro uma vez -- foi
+# ter duas leituras de PUSH que fez uma perna anulada virar RED de um lado e
+# PUSH do bilhete inteiro do outro (ver website/backend/settlement_bridge.py).
+_ALLOWED_MULTIPLAS_TABLES = frozenset({"picks_multiplas", "picks_bingo"})
+
+#: O prefixo do log sai da tabela: dois produtos passando pela mesma classe
+#: escreviam "[CHECKER MULTIPLAS]" os dois, e ler o log do bingo pensando que
+#: era a multipla e' o tipo de confusao que so' aparece depois.
+_ROTULO_POR_TABELA = {
+    "picks_multiplas": "CHECKER MULTIPLAS",
+    "picks_bingo":     "CHECKER BINGO",
+}
 
 
 class AIMultiplasCheckerService:
@@ -13,6 +27,7 @@ class AIMultiplasCheckerService:
         if table_name not in _ALLOWED_MULTIPLAS_TABLES:
             raise ValueError(f"Tabela não permitida: {table_name!r}. Use: {_ALLOWED_MULTIPLAS_TABLES}")
         self.table = table_name
+        self._rotulo = _ROTULO_POR_TABELA[table_name]
         self._engine = AIResultCheckerService()
 
     ##########################################################################
@@ -48,7 +63,7 @@ class AIMultiplasCheckerService:
     ##########################################################################
     def check_all_results(self):
 
-        print(f"[CHECKER MULTIPLAS] Processando tabela: {self.table}")
+        print(f"[{self._rotulo}] Processando tabela: {self.table}")
 
         conn = get_connection()
         cur  = conn.cursor()
@@ -62,7 +77,7 @@ class AIMultiplasCheckerService:
         rows = cur.fetchall()
 
         if not rows:
-            print("[CHECKER MULTIPLAS] Nada pendente.")
+            print(f"[{self._rotulo}] Nada pendente.")
             cur.close()
             conn.close()
             return 0
@@ -91,7 +106,7 @@ class AIMultiplasCheckerService:
                 r = self.evaluate_leg(leg, cur)
                 if r is None:
                     fid = leg.get("fixture_id", "?")
-                    print(f"[CHECKER MULTIPLAS] id={mid}: sem stats para fixture_id={fid} · aguardando.")
+                    print(f"[{self._rotulo}] id={mid}: sem stats para fixture_id={fid} · aguardando.")
                     leg_results.append(None)
                 else:
                     leg["result"] = r  # anota resultado parcial na perna
@@ -111,7 +126,7 @@ class AIMultiplasCheckerService:
                         """, (json.dumps(games), mid))
                         conn.commit()
                     except Exception as e:
-                        print(f"[CHECKER MULTIPLAS] Erro ao salvar parcial id={mid}: {e}")
+                        print(f"[{self._rotulo}] Erro ao salvar parcial id={mid}: {e}")
                         try: conn.rollback()
                         except Exception: pass
                 continue
@@ -119,11 +134,11 @@ class AIMultiplasCheckerService:
             final_result, profit, odd_efetiva = settlement.combine_legs(
                 leg_results, leg_odds, total_odd)
             if final_result is None:
-                print(f"[CHECKER MULTIPLAS] id={mid}: nao foi possivel combinar as "
+                print(f"[{self._rotulo}] id={mid}: nao foi possivel combinar as "
                       f"pernas ({leg_results}) - segue pendente.")
                 continue
 
-            print(f"[CHECKER MULTIPLAS] id={mid} | {final_result} | legs={leg_results} | "
+            print(f"[{self._rotulo}] id={mid} | {final_result} | legs={leg_results} | "
                   f"odd efetiva={odd_efetiva} | profit={profit}")
 
             try:
@@ -136,7 +151,7 @@ class AIMultiplasCheckerService:
                 """, (final_result, profit, json.dumps(games), mid))
                 conn.commit()
             except Exception as e:
-                print(f"[CHECKER MULTIPLAS] Erro ao salvar id={mid}: {e} · reconectando...")
+                print(f"[{self._rotulo}] Erro ao salvar id={mid}: {e} · reconectando...")
                 try: conn.rollback()
                 except Exception: pass
                 conn = get_connection()
@@ -155,5 +170,5 @@ class AIMultiplasCheckerService:
         cur.close()
         conn.close()
 
-        print(f"[CHECKER MULTIPLAS] Finalizado. Processados: {processed}")
+        print(f"[{self._rotulo}] Finalizado. Processados: {processed}")
         return processed

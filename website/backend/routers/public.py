@@ -173,24 +173,39 @@ def _sub_free(date_cond: str) -> str:
         WHERE pf.result IS NOT NULL {_qualificar(date_cond, "pf")}
     """
 
-def _sub_mult(date_cond: str) -> str:
-    return f"""
+def _sub_cartela(tabela: str, source: str, rotulo: str, peso: int):
+    """Fábrica de subconsulta das CARTELAS (múltipla e Bingo do Dia).
+
+    As duas guardam as pernas num JSONB `games` e a odd do bilhete em
+    `total_odd`, então a subconsulta é a mesma a menos de tabela, rótulo e
+    peso. Uma cópia por produto envelheceria separada, que é o defeito que o
+    comentário de `_SUB_BUILDERS` já descreve para faltas e goleiros.
+    """
+    def build(date_cond: str) -> str:
+        return f"""
         SELECT match_date,
                -- Bilhete de varias pernas nao tem UM horario. NULL e' a
                -- resposta certa, e a tela mostra so' a data.
                NULL::TIMESTAMP AS match_datetime,
-               CONCAT('Múltipla · ', JSONB_ARRAY_LENGTH(games::jsonb), ' sel.') AS home_team_name,
+               CONCAT('{rotulo}, ', JSONB_ARRAY_LENGTH(games::jsonb), ' sel.') AS home_team_name,
                NULL AS away_team_name,
                NULL::INTEGER AS home_team_id, NULL::INTEGER AS away_team_id,
-               'Múltipla' AS market, NULL AS line, total_odd AS odd,
-               result, profit * {_P_MULT} AS profit,
-               {_P_MULT}::numeric AS stake,
-               'multiplas' AS source,
+               '{rotulo}' AS market, NULL AS line, total_odd AS odd,
+               result, profit * {peso} AS profit,
+               {peso}::numeric AS stake,
+               '{source}' AS source,
                NULL::INTEGER AS league_id,
-               'Múltiplas' AS league_name
-        FROM picks_multiplas
+               '{rotulo}' AS league_name
+        FROM {tabela}
         WHERE result IS NOT NULL {date_cond}
     """
+    return build
+
+
+_sub_mult = _sub_cartela("picks_multiplas", "multiplas", "Múltipla", _P_MULT)
+#: Bingo do Dia (08/09). Mesmo peso da múltipla -- ver stake_plan.py.
+_sub_bingo = _sub_cartela("picks_bingo", "bingo", "Bingo do Dia",
+                          STAKE_PADRAO["bingo"])
 
 def _sub_alav(date_cond: str) -> str:
     # O ESCUDO DA ALAVANCAGEM ERA NULL A TOA. A tela mostra o confronto da
@@ -313,6 +328,7 @@ _SUB_BUILDERS = {
     "vip":        _sub_vip,
     "free":       _sub_free,
     "multiplas":  _sub_mult,
+    "bingo":      _sub_bingo,
     "alavancagem":_sub_alav,
     "faltas":     _sub_mercado("picks_faltas",   "faltas",   "Faltas"),
     "goleiros":   _sub_mercado("picks_goleiros", "goleiros", "Defesas"),
@@ -472,7 +488,7 @@ def _count_recent(cur, date_cond: str, date_params: tuple, source: Optional[str]
 def public_results(
     background: BackgroundTasks,
     month:  Optional[str] = Query(None, description="YYYY-MM · filtra por mês"),
-    source: Optional[str] = Query(None, description="all | vip | free | multiplas | alavancagem | faltas | goleiros"),
+    source: Optional[str] = Query(None, description="all | vip | free | multiplas | bingo | alavancagem | faltas | goleiros"),
     recent_limit:  int = Query(10, ge=1, le=50, description="Itens por página em 'recent'"),
     recent_offset: int = Query(0, ge=0, description="Offset de paginação em 'recent'"),
     slim: bool = Query(False, description="Pula os blocos que só a página de Resultados usa"),
@@ -769,6 +785,7 @@ def _resultados_publicos(month, source, recent_limit, recent_offset, slim, bloco
                 COUNT(*) FILTER (WHERE source = 'vip')        AS vip_total,
                 COUNT(*) FILTER (WHERE source = 'free')       AS free_total,
                 COUNT(*) FILTER (WHERE source = 'multipla')   AS multipla_total,
+                COUNT(*) FILTER (WHERE source = 'bingo')      AS bingo_total,
                 COUNT(*) FILTER (WHERE source = 'alavancagem') AS alavancagem_total,
                 COUNT(*) FILTER (WHERE source = 'faltas')     AS faltas_total,
                 COUNT(*) FILTER (WHERE source = 'goleiros')   AS goleiros_total,
@@ -781,6 +798,8 @@ def _resultados_publicos(month, source, recent_limit, recent_offset, slim, bloco
                 SELECT 'free'       AS source FROM picks_free       WHERE result IS NOT NULL
                 UNION ALL
                 SELECT 'multipla'   AS source FROM picks_multiplas  WHERE result IS NOT NULL
+                UNION ALL
+                SELECT 'bingo'      AS source FROM picks_bingo      WHERE result IS NOT NULL
                 UNION ALL
                 SELECT 'alavancagem' AS source FROM picks_alavancagem WHERE result IS NOT NULL
                 UNION ALL
@@ -830,7 +849,7 @@ def _mask_first(full_name: str) -> str:
 @router.get("/pick/{pick_type}/{pick_id}")
 def public_pick(pick_type: str, pick_id: int):
     """Teaser público de pick para compartilhamento. Nao expoe market/reasoning."""
-    valid = {"vip", "free", "multipla", "alavancagem", "faltas", "goleiros",
+    valid = {"vip", "free", "multipla", "bingo", "alavancagem", "faltas", "goleiros",
              "player_stats"}
     if pick_type not in valid:
         raise HTTPException(400, "Tipo inválido")
@@ -865,10 +884,13 @@ def public_pick(pick_type: str, pick_id: int):
                 LEFT JOIN leagues   l ON l.league_id   = fx.league_id
                 WHERE pf.id = %s
             """, (pick_id,))
-        elif pick_type == "multipla":
-            cur.execute("""
+        elif pick_type in ("multipla", "bingo"):
+            # As duas cartelas pelo mesmo ramo: mesmo esquema, mesmo corte de
+            # teaser (quais jogos, sem os mercados).
+            _tab = {"multipla": "picks_multiplas", "bingo": "picks_bingo"}[pick_type]
+            cur.execute(f"""
                 SELECT id, match_date, games, total_odd AS odd, result, profit
-                FROM picks_multiplas WHERE id = %s
+                FROM {_tab} WHERE id = %s
             """, (pick_id,))
         elif pick_type in ("faltas", "goleiros", "player_stats"):
             # Mesmo contrato dos outros: teaser sem market nem reasoning, que
@@ -905,8 +927,8 @@ def public_pick(pick_type: str, pick_id: int):
         if d.get("match_date") and hasattr(d["match_date"], "isoformat"):
             d["match_date"] = d["match_date"].isoformat()
 
-        # Para múltipla: extrai preview dos times sem expor markets
-        if pick_type == "multipla" and d.get("games"):
+        # Para as cartelas: extrai preview dos times sem expor markets
+        if pick_type in ("multipla", "bingo") and d.get("games"):
             import json as _json
             games = d["games"] if isinstance(d["games"], list) else _json.loads(d["games"])
             d["teams_preview"] = [
@@ -942,6 +964,7 @@ def public_today_summary():
                 COUNT(*) FILTER (WHERE t.source = 'vip')         AS vip,
                 COUNT(*) FILTER (WHERE t.source = 'free')        AS free,
                 COUNT(*) FILTER (WHERE t.source = 'multiplas')   AS multiplas,
+                COUNT(*) FILTER (WHERE t.source = 'bingo')       AS bingo,
                 COUNT(*) FILTER (WHERE t.source = 'alavancagem') AS alavancagem,
                 COUNT(*) FILTER (WHERE t.source = 'faltas')      AS faltas,
                 COUNT(*) FILTER (WHERE t.source = 'goleiros')    AS goleiros,
@@ -956,6 +979,8 @@ def public_today_summary():
                 UNION ALL
                 SELECT 'multiplas'   AS source FROM picks_multiplas   WHERE match_date = {HOJE_BR}
                 UNION ALL
+                SELECT 'bingo'       AS source FROM picks_bingo       WHERE match_date = {HOJE_BR}
+                UNION ALL
                 SELECT 'alavancagem' AS source FROM picks_alavancagem WHERE match_date = {HOJE_BR}
                 UNION ALL
                 SELECT 'faltas'      AS source FROM picks_faltas      WHERE match_date = {HOJE_BR}
@@ -969,6 +994,7 @@ def public_today_summary():
             ) t
         """)
         return dict(row) if row else {"vip": 0, "free": 0, "multiplas": 0,
+                                      "bingo": 0,
                                       "alavancagem": 0, "faltas": 0, "goleiros": 0,
                                       "player_stats": 0, "boost": 0, "live": 0,
                                       "total": 0}

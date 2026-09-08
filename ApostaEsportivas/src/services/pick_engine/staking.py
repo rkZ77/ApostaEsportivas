@@ -77,6 +77,17 @@ def calculate_stake(confidence: float, odd: float, ev: float = 0.0,
             #     pegar produz divergencia entre o ROI publicado e o real.
             # Revisar quando houver amostra medida em picks_ledger.
             "live":     (0.015, 0.25, 4),
+            # Bingo do Dia (2026-09-08). Cartela de 4 pernas, e o numero de
+            # pernas e' exatamente o motivo do teto ser menor que o da
+            # multipla: com 4 eventos independentes de ~70% cada, a cartela
+            # paga em ~24% das vezes. Kelly ja' enxerga isso sozinho (ele
+            # recebe `prob_combinada`, nao a media das pernas), mas o teto
+            # existe pra o caso em que a probabilidade vem otimista -- e num
+            # produto de 4 pernas o erro de cada perna entra no produto
+            # elevado a quarta potencia, nao ao quadrado como na multipla.
+            # Mesma fracao de Kelly da multipla; teto e unidades um degrau
+            # abaixo.
+            "bingo":    (0.02, 0.25, 3),
         }.get(pick_type, (0.03, 0.50, 5))
         stake_pct = round(max(0.005, min(cap, kelly * kelly_frac)), 4)
 

@@ -1,5 +1,6 @@
 """Sincroniza uma tabela unica (`picks_ledger`) com TODAS as pernas de
-picks das 4 tabelas (picks_vip/picks_free/picks_multiplas/picks_alavancagem),
+picks das tabelas de pick (picks_vip/picks_free/picks_multiplas/picks_bingo/
+picks_alavancagem e as demais),
 independente de serem geradas por IA (producao) ou pelo motor deterministico
 (engine_pipelines/, hoje so em DEV) -- uma linha por PERNA individual, com
 schema consistente.
@@ -27,6 +28,10 @@ _PICK_TYPE_BY_TABLE = {
     "picks_vip": "vip",
     "picks_free": "free",
     "picks_multiplas": "multipla",
+    # Bingo do Dia (2026-09-08). Sem esta linha o `fetch_all_legs` traria as
+    # quatro pernas da cartela e o ledger as descartaria caladas -- e' aqui que
+    # a tabela ganha nome de produto.
+    "picks_bingo": "bingo",
     "picks_alavancagem": "alavancagem",
     "picks_faltas": "faltas",
     "picks_goleiros": "goleiros",

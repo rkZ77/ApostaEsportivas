@@ -413,6 +413,43 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_free_date ON picks_free(match_date DESC);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_alav_date ON picks_alavancagem(match_date DESC);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_multi_date ON picks_multiplas(match_date DESC);")
+
+        # BINGO DO DIA (2026-09-08). A tabela e' criada AQUI e nao so' no
+        # motor, e a diferenca importa: o site le' `picks_bingo` na aba de
+        # picks, na banca, no ranking e no placar publico, e `pick_sources`
+        # a declara como fonte NAO-opcional. Se ela so' nascesse do
+        # `bingo_pipeline`, um ambiente que ainda nao rodou o motor derrubaria
+        # o LEFT JOIN de todas essas telas de uma vez -- que e' exatamente o
+        # modo de falhar que o comentario de `pick_sources.py` descreve.
+        #
+        # O motor mantem o proprio CREATE TABLE IF NOT EXISTS, e os dois
+        # concordam coluna a coluna de proposito: quem roda primeiro cria, o
+        # outro nao faz nada. Ver engine_pipelines/bingo_pipeline.py.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS picks_bingo (
+                id             SERIAL PRIMARY KEY,
+                bingo_name     TEXT,
+                games          JSONB,
+                total_odd      NUMERIC,
+                stake          NUMERIC,
+                stake_pct      NUMERIC,
+                score_combo    NUMERIC,
+                prob_combinada NUMERIC,
+                ev_combined    NUMERIC,
+                match_date     DATE,
+                result         TEXT,
+                profit         NUMERIC,
+                sent           BOOLEAN DEFAULT FALSE,
+                reasoning      TEXT,
+                engine_debug   JSONB,
+                created_at     TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        cur.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_picks_bingo_match_date_unique
+            ON picks_bingo (match_date) WHERE bingo_name = 'BINGO_ENGINE';
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_bingo_date ON picks_bingo(match_date DESC);")
         cur.execute("ALTER TABLE user_followed_picks ADD COLUMN IF NOT EXISTS result VARCHAR(20);")
         # Backfills de result em user_followed_picks removidos do startup.
         # Picks novos ja' gravam result via settlement_bridge. Para backfill
@@ -948,7 +985,8 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         # `void_reason` é o motivo, quando existe. Com os dois na tela, a
         # conferência deixa de depender de nós: o usuário compara com a súmula.
         for _t in ("picks_vip", "picks_free", "picks_faltas", "picks_goleiros",
-                   "picks_boost", "picks_multiplas", "picks_alavancagem",
+                   "picks_boost", "picks_multiplas", "picks_bingo",
+                   "picks_alavancagem",
                    "picks_live", "picks_player_stats"):
             try:
                 cur.execute(f"SELECT to_regclass('public.{_t}') IS NOT NULL AS existe")

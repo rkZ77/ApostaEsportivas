@@ -132,6 +132,69 @@ def _mercado_maps(cur, followed: list, colunas: str = "id, result, odd") -> dict
     return maps
 
 
+#: As tabelas de CARTELA: bilhete de N pernas guardadas num JSONB `games`, com
+#: a odd do bilhete em `total_odd`. Múltipla e Bingo do Dia têm o mesmo
+#: esquema, e é por isso que uma função só atende as duas.
+_TABELAS_CARTELA = {"multipla": "picks_multiplas",
+                    "bingo":    "picks_bingo"}
+
+#: Como a cartela se apresenta na lista de apostas. O rótulo é o que vai pra
+#: coluna `market`, já que nenhuma delas tem mercado próprio.
+_ROTULO_CARTELA = {"multipla": "Múltipla", "bingo": "Bingo do Dia"}
+
+
+def _cartela_maps(cur, followed: list, display: bool = False) -> dict:
+    """{pick_type: {id: pick}} das cartelas seguidas pelo usuário.
+
+    POR QUE ISTO EXISTE, E NÃO QUATRO BLOCOS IGUAIS
+    -----------------------------------------------
+    A construção do `multipla_map` estava escrita quatro vezes em quatro
+    consultas deste arquivo (saldo, estatísticas do mês, lista de apostas e
+    fechamento). Cada cópia teria que ganhar o Bingo à mão, e o modo de falhar
+    de esquecer uma é o mesmo que `pick_sources.py` descreve: a aposta some da
+    tela onde a cópia não foi atualizada, sem erro nenhum, indistinguível de
+    "esse usuário não apostou".
+
+    `display=True` traz o que a LISTA precisa (profit, times da primeira perna,
+    rótulo no lugar do mercado); o default traz só o que a SOMA precisa.
+    """
+    import json as _json
+    maps: dict = {}
+    for tipo, tabela in _TABELAS_CARTELA.items():
+        ids = [f["pick_id"] for f in followed if f["pick_type"] == tipo]
+        m: dict = {}
+        if ids:
+            try:
+                colunas = ("id, result, profit, total_odd AS odd, games AS legs_json"
+                           if display else "id, result, total_odd AS odd")
+                cur.execute(f"SELECT {colunas} FROM {tabela} WHERE id = ANY(%s)", (ids,))
+                for r in cur.fetchall():
+                    d = dict(r)
+                    if display:
+                        legs = []
+                        try:
+                            legs = (_json.loads(d["legs_json"])
+                                    if isinstance(d.get("legs_json"), str)
+                                    else (d.get("legs_json") or []))
+                        except Exception:
+                            pass
+                        first = legs[0] if legs else {}
+                        d["home_team_name"] = first.get("home") or first.get("home_team")
+                        d["away_team_name"] = first.get("away") or first.get("away_team")
+                        d["home_team_id"]   = first.get("home_team_id")
+                        d["away_team_id"]   = first.get("away_team_id")
+                        d["market"] = f"{_ROTULO_CARTELA[tipo]}, {len(legs)} seleções"
+                        del d["legs_json"]
+                    m[d["id"]] = d
+            except Exception:
+                # Instância sem a migração de `picks_bingo`: segue sem ela em
+                # vez de derrubar a banca inteira. Mesmo tratamento de
+                # _mercado_maps.
+                cur.connection.rollback()
+        maps[tipo] = m
+    return maps
+
+
 def _resolve_pick(cur, pick_id: int, pick_type: str) -> Optional[dict]:
     if pick_type == "vip":
         cur.execute("""
@@ -156,8 +219,13 @@ def _resolve_pick(cur, pick_id: int, pick_type: str) -> Optional[dict]:
             LEFT JOIN fixtures f ON f.fixture_id = pf.fixture_id
             WHERE pf.id = %s
         """, (pick_id,))
-    elif pick_type == "multipla":
-        cur.execute("""
+    elif pick_type in ("multipla", "bingo"):
+        # As duas CARTELAS pela mesma consulta: o esquema é o mesmo coluna a
+        # coluna (pernas num JSONB `games`, `total_odd`, `prob_combinada`).
+        # A tabela vem de um dicionário FECHADO porque `pick_type` chega do
+        # corpo da requisição e entra em SQL por f-string.
+        _tab = {"multipla": "picks_multiplas", "bingo": "picks_bingo"}[pick_type]
+        cur.execute(f"""
             SELECT result, profit, 1 AS stake,
                    NULL AS home_team_name, NULL AS away_team_name,
                    NULL AS home_team_id, NULL AS away_team_id,
@@ -166,7 +234,7 @@ def _resolve_pick(cur, pick_id: int, pick_type: str) -> Optional[dict]:
                    games AS legs_json,
                    COALESCE(prob_combinada, score_combo) AS confidence,
                    NULL AS match_datetime
-            FROM picks_multiplas WHERE id = %s
+            FROM {_tab} WHERE id = %s
         """, (pick_id,))
     elif pick_type == "alavancagem":
         cur.execute("""
@@ -266,8 +334,9 @@ def _resolve_pick(cur, pick_id: int, pick_type: str) -> Optional[dict]:
     if not row:
         return None
     d = dict(row)
-    # Para múltipla: extrai primeiro time dos legs + kickoff mais cedo entre as pernas
-    if pick_type == "multipla" and d.get("legs_json"):
+    # Para as cartelas (múltipla e bingo): extrai primeiro time dos legs +
+    # kickoff mais cedo entre as pernas
+    if pick_type in ("multipla", "bingo") and d.get("legs_json"):
         import json as _json
         try:
             legs = _json.loads(d["legs_json"]) if isinstance(d["legs_json"], str) else (d["legs_json"] or [])
@@ -469,6 +538,7 @@ PIPELINES_DA_QUEBRA: tuple = (
     ("vip",       "VIP",       ("vip",)),
     ("free",      "Free",      ("free",)),
     ("multipla",  "Múltipla",  ("multipla", "multiplas")),
+    ("bingo",     "Bingo do Dia", ("bingo",)),
     ("mercados",  "Mercados",  ("faltas", "goleiros", "player_stats")),
     ("boost",     "Pick Boost", ("boost",)),
     ("live",      "Ao Vivo",   ("live",)),
@@ -598,7 +668,6 @@ def _compute_bankroll_current(cur, user_id: int, bankroll_start: float, unit_val
 
     vip_ids      = [f["pick_id"] for f in followed if f["pick_type"] == "vip"]
     free_ids     = [f["pick_id"] for f in followed if f["pick_type"] == "free"]
-    multipla_ids = [f["pick_id"] for f in followed if f["pick_type"] == "multipla"]
 
     vip_map: dict = {}
     if vip_ids:
@@ -608,11 +677,8 @@ def _compute_bankroll_current(cur, user_id: int, bankroll_start: float, unit_val
     if free_ids:
         cur.execute("SELECT id, result, odd FROM picks_free WHERE id = ANY(%s)", (free_ids,))
         for r in cur.fetchall(): free_map[r["id"]] = dict(r)
-    multipla_map: dict = {}
-    if multipla_ids:
-        cur.execute("SELECT id, result, total_odd AS odd FROM picks_multiplas WHERE id = ANY(%s)", (multipla_ids,))
-        for r in cur.fetchall(): multipla_map[r["id"]] = dict(r)
-    type_map = {"vip": vip_map, "free": free_map, "multipla": multipla_map,
+    type_map = {"vip": vip_map, "free": free_map,
+                **_cartela_maps(cur, followed),
                 **_mercado_maps(cur, followed)}
 
     total = bankroll_start + alav_realized
@@ -659,7 +725,6 @@ def _compute_month_stats(cur, user_id: int, month_start: str, month_end: str, un
 
     vip_ids      = [f["pick_id"] for f in followed if f["pick_type"] == "vip"]
     free_ids     = [f["pick_id"] for f in followed if f["pick_type"] == "free"]
-    multipla_ids = [f["pick_id"] for f in followed if f["pick_type"] == "multipla"]
 
     vip_map: dict = {}
     if vip_ids:
@@ -671,12 +736,8 @@ def _compute_month_stats(cur, user_id: int, month_start: str, month_end: str, un
         cur.execute("SELECT id, result, odd FROM picks_free WHERE id = ANY(%s)", (free_ids,))
         for r in cur.fetchall(): free_map[r["id"]] = dict(r)
 
-    multipla_map: dict = {}
-    if multipla_ids:
-        cur.execute("SELECT id, result, total_odd AS odd FROM picks_multiplas WHERE id = ANY(%s)", (multipla_ids,))
-        for r in cur.fetchall(): multipla_map[r["id"]] = dict(r)
-
-    type_map = {"vip": vip_map, "free": free_map, "multipla": multipla_map,
+    type_map = {"vip": vip_map, "free": free_map,
+                **_cartela_maps(cur, followed),
                 **_mercado_maps(cur, followed)}
 
     for f in followed:
@@ -768,7 +829,6 @@ def get_banca(
             # Batch: separa ids por tipo para buscar tudo de uma vez
             vip_ids      = [f["pick_id"] for f in followed if f["pick_type"] == "vip"]
             free_ids     = [f["pick_id"] for f in followed if f["pick_type"] == "free"]
-            multipla_ids = [f["pick_id"] for f in followed if f["pick_type"] == "multipla"]
 
             vip_map: dict = {}
             if vip_ids:
@@ -795,32 +855,12 @@ def get_banca(
                 for r in cur.fetchall():
                     free_map[r["id"]] = dict(r)
 
-            multipla_map: dict = {}
-            if multipla_ids:
-                cur.execute("""
-                    SELECT id, result, profit, total_odd AS odd, games AS legs_json
-                    FROM picks_multiplas WHERE id = ANY(%s)
-                """, (multipla_ids,))
-                for r in cur.fetchall():
-                    d = dict(r)
-                    legs = []
-                    try:
-                        legs = _json.loads(d["legs_json"]) if isinstance(d.get("legs_json"), str) else (d.get("legs_json") or [])
-                    except Exception:
-                        pass
-                    first = legs[0] if legs else {}
-                    d["home_team_name"] = first.get("home") or first.get("home_team")
-                    d["away_team_name"] = first.get("away") or first.get("away_team")
-                    d["home_team_id"]   = first.get("home_team_id")
-                    d["away_team_id"]   = first.get("away_team_id")
-                    d["market"]         = f"Múltipla · {len(legs)} seleções"
-                    del d["legs_json"]
-                    multipla_map[d["id"]] = d
-
             # Aqui a lista e' exibida, nao so' somada: precisa das mesmas
             # colunas de display que vip_map/free_map trazem acima, senao o
-            # pick de mercado apareceria sem time e sem mercado na tela.
-            type_map = {"vip": vip_map, "free": free_map, "multipla": multipla_map,
+            # pick de mercado apareceria sem time e sem mercado na tela. E' o
+            # mesmo motivo do `display=True` nas cartelas.
+            type_map = {"vip": vip_map, "free": free_map,
+                        **_cartela_maps(cur, followed, display=True),
                         **_mercado_maps(cur, followed,
                                         "id, result, profit, "
                                         "{home} AS home_team_name, "
@@ -1290,6 +1330,10 @@ STAKE_LIMITS = {
     "vip":        (1, 20),
     "free":       (1, 6),
     "multipla":   (1, 5),
+    # Bingo do Dia: um degrau abaixo da múltipla, e o degrau é o número de
+    # pernas. São QUATRO eventos que precisam bater juntos, contra dois ou três
+    # da múltipla. É o mesmo raciocínio que já põe o Pick Boost abaixo do Free.
+    "bingo":      (1, 4),
     "alavancagem":(1, 9999),  # sem limite fixo · banca composta progressiva
     # Mercados de modelo proprio. Teto igual ao do Free e nao ao do VIP: sao
     # mercados com amostra historica menor (defesas aparece em menos de 1% dos
@@ -1314,7 +1358,7 @@ STAKE_LIMITS = {
 }
 
 STAKE_LABELS = {
-    "vip": "VIP", "free": "Free", "multipla": "Múltipla",
+    "vip": "VIP", "free": "Free", "multipla": "Múltipla", "bingo": "Bingo do Dia",
     "alavancagem": "Alavancagem", "faltas": "de Faltas", "goleiros": "de Defesas",
     "player_stats": "de Jogador", "boost": "Pick Boost",
     "live": "Ao Vivo",
@@ -1807,7 +1851,6 @@ def get_banca_summary(current_user: dict = Depends(get_current_user)):
         if followed:
             vip_ids      = [f["pick_id"] for f in followed if f["pick_type"] == "vip"]
             free_ids     = [f["pick_id"] for f in followed if f["pick_type"] == "free"]
-            multipla_ids = [f["pick_id"] for f in followed if f["pick_type"] == "multipla"]
 
             vip_map: dict = {}
             if vip_ids:
@@ -1819,12 +1862,8 @@ def get_banca_summary(current_user: dict = Depends(get_current_user)):
                 cur.execute("SELECT id, result, odd FROM picks_free WHERE id = ANY(%s)", (free_ids,))
                 for r in cur.fetchall(): free_map[r["id"]] = dict(r)
 
-            multipla_map: dict = {}
-            if multipla_ids:
-                cur.execute("SELECT id, result, total_odd AS odd FROM picks_multiplas WHERE id = ANY(%s)", (multipla_ids,))
-                for r in cur.fetchall(): multipla_map[r["id"]] = dict(r)
-
-            type_map = {"vip": vip_map, "free": free_map, "multipla": multipla_map,
+            type_map = {"vip": vip_map, "free": free_map,
+                **_cartela_maps(cur, followed),
                 **_mercado_maps(cur, followed)}
             for f in followed:
                 pick = type_map.get(f["pick_type"], {}).get(f["pick_id"])

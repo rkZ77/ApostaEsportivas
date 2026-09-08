@@ -21,6 +21,8 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
+from fechamento import MESES
+
 SAIDA = Path(__file__).parent / "carrossel" / "prints"
 
 # Celular real, nao janela estreita: o layout muda de verdade e a fonte fica no
@@ -28,21 +30,26 @@ SAIDA = Path(__file__).parent / "carrossel" / "prints"
 VIEWPORT = {"width": 390, "height": 844}
 DPR = 3
 
-# Mes do fechamento. Virou setembro, troca aqui e roda de novo.
+# Mes do fechamento. Virou o mes seguinte, troca aqui e roda de novo, ou
+# passa `--mes` na linha de comando.
 MES_FECHAMENTO = "2026-08"
-MES = ["Filtros", MES_FECHAMENTO, "Filtros"]
 
 
-# O grupo "Fonte" tem 10 opcoes, e acima de 8 o FilterPanel troca os botoes
-# por um <select> nativo. Por isso o produto entra por `fonte` e o mes por
-# `cliques`: sao dois controles diferentes na mesma gaveta.
+def rotulo_mes(mes: str) -> str:
+    """AAAA-MM no rotulo que a pagina mostra: "Agosto de 2026"."""
+    ano, num = mes.split("-")
+    return f"{MESES[num].capitalize()} de {ano}"
 
-# nome -> {rota, cliques, rolar, altura}
+
+# Mes e produto sao dois seletores lado a lado na propria pagina, cada um com
+# seu `aria-label`. Nao ha' mais gaveta de filtros pra abrir e fechar: a versao
+# antiga deste arquivo clicava num botao "Filtros" que deixou de existir, e o
+# print falhava por timeout sem dizer o motivo.
+
+# nome -> {rota, mes, fonte, rolar, altura}
 #
-# `cliques` e' uma lista de textos clicados na ordem, antes de rolar. E' assim
-# que o filtro de mes entra: a pagina de Resultados guarda o mes em estado, nao
-# na URL, entao nao da' pra pedir agosto por query string. Abre o painel de
-# filtros, clica no mes, fecha o painel.
+# `mes` liga o filtro de mes. A pagina guarda o mes em estado, nao na URL,
+# entao nao da' pra pedir agosto por query string.
 # altura = quanto do topo da pagina entra no print, em px de CSS. Um print alto
 # demais vira tijolinho ilegivel dentro do slide.
 PRINTS: dict[str, dict] = {
@@ -55,17 +62,22 @@ PRINTS: dict[str, dict] = {
 
     # O fechamento mensal precisa da pagina JA' filtrada: um slide que afirma
     # 253 picks ao lado de um print marcando 508 desmente o proprio post.
-    "mes-resumo": {"rota": "/resultados", "cliques": MES, "rolar": 0, "altura": 780},
-    "mes-ligas":  {"rota": "/resultados", "cliques": MES, "rolar": 1150, "altura": 780},
-    "mes-lista":  {"rota": "/resultados", "cliques": MES, "rolar": 1800, "altura": 780},
+    "mes-resumo": {"rota": "/resultados", "mes": True, "rolar": 0, "altura": 780},
+    "mes-ligas":  {"rota": "/resultados", "mes": True, "rolar": 1150, "altura": 780},
+    "mes-lista":  {"rota": "/resultados", "mes": True, "rolar": 1800, "altura": 780},
 
     # Um print por produto, com o proprio filtro ligado. Sem isso os cinco
     # slides do carrossel de produtos mostravam a mesma lista, e o carrossel
     # parecia travado num quadro so'.
-    "mes-vip":       {"rota": "/resultados", "cliques": MES, "fonte": "VIP",       "rolar": 1200, "altura": 780},
-    "mes-live":      {"rota": "/resultados", "cliques": MES, "fonte": "Ao Vivo",   "rolar": 1200, "altura": 780},
-    "mes-free":      {"rota": "/resultados", "cliques": MES, "fonte": "Free",      "rolar": 1200, "altura": 780},
-    "mes-multiplas": {"rota": "/resultados", "cliques": MES, "fonte": "Múltiplas", "rolar": 1200, "altura": 780},
+    "mes-vip":       {"rota": "/resultados", "mes": True, "fonte": "VIP",       "rolar": 1200, "altura": 780},
+    "mes-live":      {"rota": "/resultados", "mes": True, "fonte": "Ao Vivo",   "rolar": 1200, "altura": 780},
+    "mes-free":      {"rota": "/resultados", "mes": True, "fonte": "Free",      "rolar": 1200, "altura": 780},
+    "mes-multiplas": {"rota": "/resultados", "mes": True, "fonte": "Múltiplas", "rolar": 1200, "altura": 780},
+    # Jogadores e Boost entraram porque em setembro eles pesam: o de jogadores
+    # e' o pior produto do mes, e um carrossel de produto que nao mostra o pior
+    # nao e' transparencia, e' vitrine.
+    "mes-jogadores": {"rota": "/resultados", "mes": True, "fonte": "Jogadores", "rolar": 1200, "altura": 780},
+    "mes-boost":     {"rota": "/resultados", "mes": True, "fonte": "Pick Boost", "rolar": 1200, "altura": 780},
     "como-funciona":    {"rota": "/como-funciona", "rolar": 0,    "altura": 780},
     "como-funciona-passos": {"rota": "/como-funciona", "rolar": 1200, "altura": 780},
     "planos":           {"rota": "/planos",        "rolar": 300,  "altura": 780},
@@ -88,24 +100,42 @@ document.head.appendChild(css);
 """
 
 
-def capturar(pagina, nome: str, base: str) -> Path:
+def _escolher(pagina, seletor: str, opcao: str) -> None:
+    """Abre um dos seletores da pagina e marca uma opcao.
+
+    Sao listbox de verdade (`aria-haspopup`), nao `<select>` nativo, e o rotulo
+    visivel do botao e' o valor escolhido · por isso o alvo e' o `aria-label`,
+    que nao muda quando o filtro muda.
+    """
+    pagina.locator(f"button[aria-label='{seletor}']").first.click()
+    pagina.wait_for_timeout(700)
+    pagina.get_by_role("option", name=opcao, exact=True).first.click()
+    pagina.wait_for_timeout(1600)
+
+
+def capturar(pagina, nome: str, base: str, mes: str = MES_FECHAMENTO,
+             sufixo: str = "") -> Path:
     cfg = PRINTS[nome]
     pagina.goto(base.rstrip("/") + cfg["rota"], wait_until="networkidle")
     pagina.wait_for_timeout(1200)
+
+    # O banner de cookies e' um botao de verdade e cobre o rodape do print.
+    # Aceitar e' mais limpo que esconder no CSS: some e nao volta na proxima
+    # rota da mesma sessao.
+    aceitar = pagina.get_by_role("button", name="Entendi")
+    if aceitar.count():
+        aceitar.first.click()
+        pagina.wait_for_timeout(400)
     pagina.evaluate(_ESCONDER)
 
-    # Por papel, nao por texto: o botao de filtro carrega dois icones junto do
-    # rotulo, entao o no' de texto nunca bate exato. O produto entra no meio da
-    # sequencia, com a gaveta ja' aberta pelo primeiro clique.
-    cliques = list(cfg.get("cliques", []))
-    fonte = cfg.get("fonte")
-    for i, texto in enumerate(cliques):
-        pagina.get_by_role("button", name=texto).first.click()
-        pagina.wait_for_timeout(1400)
-        if fonte and i == 0:
-            pagina.locator("select").first.select_option(label=fonte)
-            pagina.wait_for_timeout(1600)
-    if cfg.get("cliques"):
+    # O mes entra por parametro pra que um print de setembro nao sobrescreva o
+    # de agosto: os dois posts convivem, e um slide que afirma o numero de um
+    # mes ao lado do print de outro desmente o proprio post.
+    if cfg.get("mes"):
+        _escolher(pagina, "Mês", rotulo_mes(mes))
+    if cfg.get("fonte"):
+        _escolher(pagina, "Produto", cfg["fonte"])
+    if cfg.get("mes") or cfg.get("fonte"):
         pagina.evaluate("window.scrollTo(0, 0)")
         pagina.wait_for_timeout(600)
 
@@ -114,7 +144,9 @@ def capturar(pagina, nome: str, base: str) -> Path:
         pagina.wait_for_timeout(900)
 
     SAIDA.mkdir(parents=True, exist_ok=True)
-    destino = SAIDA / f"{nome}.png"
+    # So' os prints com filtro de mes ganham sufixo. `home` e `planos` sao os
+    # mesmos em qualquer mes, e duplica-los so' encheria a pasta.
+    destino = SAIDA / f"{nome}{sufixo if cfg.get('mes') else ''}.png"
     pagina.screenshot(
         path=str(destino),
         clip={"x": 0, "y": 0, "width": VIEWPORT["width"], "height": cfg["altura"]},
@@ -128,7 +160,13 @@ def main() -> int:
     p.add_argument("--print", dest="prints", action="append", default=[])
     p.add_argument("--todos", action="store_true")
     p.add_argument("--listar", action="store_true")
+    p.add_argument("--mes", default=MES_FECHAMENTO,
+                   help="mes AAAA-MM dos prints 'mes-*' (padrao: %(default)s)")
     args = p.parse_args()
+
+    # Mes diferente do padrao ganha sufixo no arquivo. Sem sufixo o carrossel
+    # de agosto continua achando os prints dele onde sempre estiveram.
+    sufixo = "" if args.mes == MES_FECHAMENTO else f"-{args.mes}"
 
     if args.listar:
         for nome, cfg in PRINTS.items():
@@ -153,7 +191,7 @@ def main() -> int:
         pagina = ctx.new_page()
         for nome in escolhidos:
             try:
-                destino = capturar(pagina, nome, args.url)
+                destino = capturar(pagina, nome, args.url, args.mes, sufixo)
                 print(f"[{nome}] {destino}")
             except Exception as erro:
                 print(f"[{nome}] falhou: {erro}", file=sys.stderr)

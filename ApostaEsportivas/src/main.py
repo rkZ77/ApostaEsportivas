@@ -651,6 +651,12 @@ def cmd_multiplas():
     run_multipla_engine()
 
 
+def cmd_bingo():
+    """Bingo do Dia -- a cartela de 4 pernas, uma so por dia."""
+    from engine_pipelines.bingo_pipeline import run_bingo_engine
+    run_bingo_engine()
+
+
 def cmd_alavancagem():
     from engine_pipelines.alavancagem_pipeline import run_alavancagem_engine
     run_alavancagem_engine()
@@ -907,6 +913,16 @@ COMANDOS: tuple = (
     Comando("multiplas", "Gerar múltipla (motor)",
             "Gera múltipla do dia",
             lambda *a: cmd_multiplas(), etapa="MÚLTIPLA"),
+    # BINGO DEPOIS DA MULTIPLA, e antes da alavancagem.
+    #
+    # A ordem importa por causa de `_today_used_pairs`: o bingo nao repete o
+    # (jogo, mercado) que ja saiu em VIP ou Free, entao ele precisa rodar
+    # DEPOIS dos dois. Nao le a multipla de proposito (ver a docstring la),
+    # entao a posicao relativa a ela e indiferente -- fica ao lado dela porque
+    # e o produto irmao, e e onde se procura.
+    Comando("bingo", "Gerar Bingo do Dia (motor)",
+            "Gera a cartela de 4 pernas do dia",
+            lambda *a: cmd_bingo(), etapa="BINGO DO DIA"),
     Comando("alavancagem", "Gerar alavancagem (motor)",
             "Gera pick de alavancagem",
             lambda *a: cmd_alavancagem(), etapa="ALAVANCAGEM"),

@@ -303,7 +303,7 @@ def _compute_suggested_stake_units(
     if not bankroll or not unit_value or unit_value <= 0:
         return 1
 
-    KELLY_FR  = {'vip': 0.50, 'free': 0.50, 'multipla': 0.25}
+    KELLY_FR  = {'vip': 0.50, 'free': 0.50, 'multipla': 0.25, 'bingo': 0.25}
     kelly_frac = KELLY_FR.get(pick_type, 0.5)
 
     conf  = float(confidence or 0)
@@ -341,6 +341,13 @@ def _compute_suggested_stake_units(
         MAX_PCT = {'free': 0.02, 'multipla': 0.025,
                    'faltas': 0.02, 'goleiros': 0.02, 'player_stats': 0.02,
                    'live': 0.02,
+                   # Bingo do Dia: um degrau abaixo da multipla, e o motivo e'
+                   # o numero de pernas. A cartela sao QUATRO eventos, entao o
+                   # erro de estimativa de cada perna entra no produto elevado
+                   # a quarta potencia, nao ao quadrado. Mesmo teto que o motor
+                   # aplica em services/pick_engine/staking.py -- os dois
+                   # numeros tem que continuar iguais.
+                   'bingo': 0.02,
                    'boost': 0.015}
         max_pct = MAX_PCT.get(pick_type, 0.03)
 
@@ -715,6 +722,26 @@ def get_today_suggestions(
             """, _d)
             result["multiplas"] = _enrich_multipla_legs(cur, rows_m)
 
+            # BINGO DO DIA. Mesma forma da multipla (pernas num JSONB `games`,
+            # `total_odd`, `prob_combinada`), entao reusa o mesmo enriquecedor
+            # de pernas -- uma segunda implementacao so' poderia divergir.
+            #
+            # LIMIT 1 e nao 3: o produto e' UMA cartela por dia (indice unico
+            # em picks_bingo). A cauda de 3 dias do `_m_where` ainda pode
+            # trazer a cartela pendente de ontem, e e' pra isso que ela existe.
+            rows_b = _safe_query(cur, f"""
+                SELECT id, match_date,
+                       games AS legs,
+                       total_odd, COALESCE(prob_combinada, score_combo) AS confidence,
+                       prob_combinada AS probability,
+                       reasoning, result, profit, created_at
+                FROM picks_bingo
+                WHERE {_m_where}
+                ORDER BY match_date DESC, created_at DESC
+                LIMIT 3
+            """, _d)
+            result["bingo"] = _enrich_multipla_legs(cur, rows_b)
+
             # Alavancagem
             alav = _safe_query_one(cur, f"""
                 SELECT pa.id, pa.match_date, pa.tipo,
@@ -942,6 +969,14 @@ def get_today_suggestions(
                 LIMIT 1
             """, _d)
 
+            teaser_bingo = _safe_query(cur, f"""
+                SELECT id, match_date, total_odd AS odd, games
+                FROM picks_bingo
+                WHERE ({_m_where}) AND result IS NULL
+                ORDER BY match_date DESC, created_at DESC
+                LIMIT 1
+            """, _d)
+
             teaser_alav = _safe_query(cur, f"""
                 SELECT pa.id, pa.match_date, pa.odd_combined AS odd,
                        pa.home_team_1, pa.away_team_1,
@@ -987,6 +1022,10 @@ def get_today_suggestions(
             result["bloqueados"] = {
                 "vip": [dict(r) for r in teaser_vip],
                 "multipla": _teaser_de_multipla(teaser_mult[0]) if teaser_mult else None,
+                # O teaser do bingo tem o MESMO corte do da multipla: quantas
+                # selecoes e quais jogos, sem os mercados. O que cada perna e'
+                # continua sendo a analise, e a analise fica dentro do VIP.
+                "bingo": _teaser_de_multipla(teaser_bingo[0]) if teaser_bingo else None,
                 "alavancagem": _teaser_de_alavancagem(teaser_alav[0]) if teaser_alav else None,
                 "mercados": teaser_mercados,
             }
@@ -1015,6 +1054,7 @@ def get_today_suggestions(
 
         _alvo("vip",         result.get("vip") or [])
         _alvo("multipla",    result.get("multiplas") or [])
+        _alvo("bingo",       result.get("bingo") or [])
         _alvo("faltas",      result.get("faltas") or [])
         _alvo("goleiros",    result.get("goleiros") or [])
         _alvo("player_stats", result.get("player_stats") or [])
@@ -1048,6 +1088,7 @@ def get_today_suggestions(
 
         _marcar("vip",         result.get("vip") or [])
         _marcar("multipla",    result.get("multiplas") or [])
+        _marcar("bingo",       result.get("bingo") or [])
         _marcar("faltas",      result.get("faltas") or [])
         _marcar("goleiros",    result.get("goleiros") or [])
         _marcar("player_stats", result.get("player_stats") or [])
@@ -1080,6 +1121,13 @@ def get_today_suggestions(
                     if not m.get("is_followed"):
                         m["suggested_stake_units"] = _compute_suggested_stake_units(
                             'multipla', None, m.get("confidence"), m.get("total_odd"),
+                            None, bankroll, unit_value,
+                        )
+
+                for b in result.get("bingo") or []:
+                    if not b.get("is_followed"):
+                        b["suggested_stake_units"] = _compute_suggested_stake_units(
+                            'bingo', None, b.get("confidence"), b.get("total_odd"),
                             None, bankroll, unit_value,
                         )
 
@@ -1268,18 +1316,29 @@ def get_suggestion_detail(
 
         is_vip = is_vip_active(current_user)
 
-        # ── MÚLTIPLA ────────────────────────────────────────────────────────
-        if pick_type == "multipla":
-            cur.execute("""
+        # ── MÚLTIPLA e BINGO DO DIA ─────────────────────────────────────────
+        #
+        # O MESMO ramo para os dois, e nao uma copia: a cartela do Bingo tem a
+        # forma da multipla coluna a coluna (pernas num JSONB `games`,
+        # `total_odd`, `prob_combinada`, `score_combo`). Duplicar este bloco
+        # seria criar duas telas que respondem "o que e este bilhete" e que
+        # envelhecem separadas -- o defeito que `pick_sources.py` documenta.
+        #
+        # O que muda entre eles cabe em tres valores: a tabela, o rotulo do
+        # cabecalho e o `pick_type` que volta pro front.
+        if pick_type in ("multipla", "bingo"):
+            _tabela_cartela = {"multipla": "picks_multiplas", "bingo": "picks_bingo"}[pick_type]
+            _rotulo_cartela = {"multipla": "Múltipla", "bingo": "Bingo do Dia"}[pick_type]
+            cur.execute(f"""
                 SELECT id, match_date, games AS legs,
                        total_odd, COALESCE(prob_combinada, score_combo) AS confidence,
                        prob_combinada AS probability,
                        reasoning, result, profit, created_at
-                FROM picks_multiplas WHERE id = %s
+                FROM {_tabela_cartela} WHERE id = %s
             """, (suggestion_id,))
             row = cur.fetchone()
             if not row:
-                raise HTTPException(404, "Múltipla não encontrada")
+                raise HTTPException(404, f"{_rotulo_cartela} não encontrada")
             d = dict(row)
             if not is_vip:
                 raise HTTPException(403, "Acesso VIP necessário para ver a análise completa")
@@ -1321,7 +1380,7 @@ def get_suggestion_detail(
             suggestion = {
                 "id": d["id"],
                 "match_date": d["match_date"],
-                "home_team_name": f"Múltipla · {n} seleções",
+                "home_team_name": f"{_rotulo_cartela}, {n} seleções",
                 "away_team_name": "",
                 "market": f"{n} seleções",
                 "line": None,
@@ -1331,12 +1390,12 @@ def get_suggestion_detail(
                 "result": d["result"],
                 "profit": d["profit"],
                 "legs": enriched_legs,
-                "pick_type": "multipla",
+                "pick_type": pick_type,
             }
             ufp_m = _safe_query_one(cur, """
                 SELECT stake_units, actual_odd FROM user_followed_picks
-                WHERE user_id = %s AND pick_id = %s AND pick_type = 'multipla'
-            """, (current_user["id"], suggestion_id))
+                WHERE user_id = %s AND pick_id = %s AND pick_type = %s
+            """, (current_user["id"], suggestion_id, pick_type))
             suggestion["user_stake_units"] = float(ufp_m["stake_units"]) if ufp_m else None
             suggestion["user_actual_odd"]  = float(ufp_m["actual_odd"]) if ufp_m and ufp_m["actual_odd"] else None
             if not suggestion["user_stake_units"]:
@@ -1344,7 +1403,7 @@ def get_suggestion_detail(
                 if banca_d:
                     bl, uv = banca_d
                     suggestion["suggested_stake_units"] = _compute_suggested_stake_units(
-                        'multipla', None, d.get("confidence"), d.get("total_odd"), None, bl, uv,
+                        pick_type, None, d.get("confidence"), d.get("total_odd"), None, bl, uv,
                     )
             return {"suggestion": suggestion,
                     "home_recent": [], "away_recent": [], "odds": []}
@@ -1850,11 +1909,11 @@ def get_recent_results(
                 legs = []
             n = len(legs)
             first = legs[0] if legs else {}
-            d["home_team_name"] = first.get("home") or first.get("home_team") or f"Múltipla · {n} seleções"
+            d["home_team_name"] = first.get("home") or first.get("home_team") or f"Múltipla, {n} seleções"
             d["away_team_name"] = first.get("away") or first.get("away_team") or ""
             d["home_team_id"]   = first.get("home_team_id")
             d["away_team_id"]   = first.get("away_team_id")
-            d["market"]         = f"Múltipla · {n} seleções"
+            d["market"]         = f"Múltipla, {n} seleções"
             d["line"]           = None
             d["bet_house"]      = None
             d["legs_count"]     = n
@@ -1869,6 +1928,55 @@ def get_recent_results(
                 d["profit"] = 0.0
             del d["legs"]
             d["pick_type"] = "multipla"
+            results.append(d)
+
+        # ── BINGO DO DIA (resultados visíveis para todos) ────────────────────
+        #
+        # O mesmo tratamento da múltipla logo acima, com a mesma tabela de
+        # colunas -- inclusive o recálculo de `profit` por unidade, que ignora
+        # o valor armazenado de propósito (é o que mantém esta lista de acordo
+        # com a banca, que também recalcula).
+        rows = _safe_query(cur, """
+            SELECT pb.id, pb.match_date,
+                   pb.total_odd AS odd,
+                   COALESCE(pb.prob_combinada, pb.score_combo) AS confidence,
+                   pb.prob_combinada AS probability,
+                   pb.result, pb.profit,
+                   pb.games AS legs,
+                   COALESCE(ufp.stake_units, 1) AS stake
+            FROM picks_bingo pb
+            LEFT JOIN user_followed_picks ufp
+                ON ufp.pick_id = pb.id AND ufp.pick_type = 'bingo' AND ufp.user_id = %s
+            WHERE pb.result IS NOT NULL
+            ORDER BY pb.match_date DESC, pb.id DESC
+            LIMIT %s
+        """, (current_user["id"], limit,))
+        for r in rows:
+            d = dict(r)
+            try:
+                legs = _json.loads(d["legs"]) if isinstance(d["legs"], str) else (d["legs"] or [])
+            except Exception:
+                legs = []
+            n = len(legs)
+            first = legs[0] if legs else {}
+            d["home_team_name"] = first.get("home") or first.get("home_team") or f"Bingo do Dia, {n} seleções"
+            d["away_team_name"] = first.get("away") or first.get("away_team") or ""
+            d["home_team_id"]   = first.get("home_team_id")
+            d["away_team_id"]   = first.get("away_team_id")
+            d["market"]         = f"Bingo do Dia, {n} seleções"
+            d["line"]           = None
+            d["bet_house"]      = None
+            d["legs_count"]     = n
+            result_val = d.get("result")
+            odd_val = float(d.get("odd") or 1)
+            if result_val == "GREEN":
+                d["profit"] = round(odd_val - 1, 4)
+            elif result_val == "RED":
+                d["profit"] = -1.0
+            elif result_val == "PUSH":
+                d["profit"] = 0.0
+            del d["legs"]
+            d["pick_type"] = "bingo"
             results.append(d)
 
         # ── ALAVANCAGEM (resultados visíveis para todos) ─────────────────────
@@ -1964,16 +2072,16 @@ def get_picks_free_history(
         conn.close()
 
 
-@router.get("/multiplas")
-def get_multiplas(
-    current_user: dict = Depends(require_vip),
-    date_from:  Optional[str] = Query(None),
-    date_to:    Optional[str] = Query(None),
-    resultado:  Optional[str] = Query(None),
-    order_by:   str = Query("match_date"),
-    limit:      int = Query(100, ge=1, le=500),
-):
-    """Lista de múltiplas com filtros."""
+#: Tabela e pick_type das duas cartelas. Elas compartilham a listagem inteira
+#: (`_listar_cartelas`) porque compartilham o esquema -- ver o comentário do
+#: ramo de detalhe lá em cima.
+_CARTELAS = {"multipla": "picks_multiplas", "bingo": "picks_bingo"}
+
+
+def _listar_cartelas(tipo: str, current_user, date_from, date_to,
+                     resultado, order_by, limit):
+    """Listagem com filtros de uma tabela de cartela (múltipla ou bingo)."""
+    tabela = _CARTELAS[tipo]
     conn = get_connection()
     cur = conn.cursor()
     try:
@@ -2000,7 +2108,7 @@ def get_multiplas(
                    total_odd, COALESCE(prob_combinada, score_combo) AS confidence,
                        prob_combinada AS probability,
                    reasoning, result, profit, created_at
-            FROM picks_multiplas
+            FROM {tabela}
             {where}
             ORDER BY {order_col} DESC, created_at DESC
             LIMIT %s
@@ -2012,12 +2120,40 @@ def get_multiplas(
             for m in enriched:
                 if not m.get("result"):
                     m["suggested_stake_units"] = _compute_suggested_stake_units(
-                        'multipla', None, m.get("confidence"), m.get("total_odd"), None, bl, uv
+                        tipo, None, m.get("confidence"), m.get("total_odd"), None, bl, uv
                     )
         return enriched
     finally:
         cur.close()
         conn.close()
+
+
+@router.get("/multiplas")
+def get_multiplas(
+    current_user: dict = Depends(require_vip),
+    date_from:  Optional[str] = Query(None),
+    date_to:    Optional[str] = Query(None),
+    resultado:  Optional[str] = Query(None),
+    order_by:   str = Query("match_date"),
+    limit:      int = Query(100, ge=1, le=500),
+):
+    """Lista de múltiplas com filtros."""
+    return _listar_cartelas("multipla", current_user, date_from, date_to,
+                            resultado, order_by, limit)
+
+
+@router.get("/bingo")
+def get_bingo(
+    current_user: dict = Depends(require_vip),
+    date_from:  Optional[str] = Query(None),
+    date_to:    Optional[str] = Query(None),
+    resultado:  Optional[str] = Query(None),
+    order_by:   str = Query("match_date"),
+    limit:      int = Query(100, ge=1, le=500),
+):
+    """Lista de cartelas do Bingo do Dia com filtros."""
+    return _listar_cartelas("bingo", current_user, date_from, date_to,
+                            resultado, order_by, limit)
 
 
 #: (chave, tabela). A chave e' a mesma de STAKE_PADRAO e a mesma que
@@ -2027,6 +2163,7 @@ _FONTES_DO_PLACAR = [
     ("vip",          "picks_vip"),
     ("free",         "picks_free"),
     ("multiplas",    "picks_multiplas"),
+    ("bingo",        "picks_bingo"),
     ("alavancagem",  "picks_alavancagem"),
     ("faltas",       "picks_faltas"),
     ("goleiros",     "picks_goleiros"),
@@ -2278,12 +2415,18 @@ def _source_games_sql(source: str, date_cond: str, result_null_cond: str = "IS N
             LEFT JOIN fixtures f ON f.fixture_id = p.fixture_id
             WHERE p.result {result_null_cond} {date_cond}
         """
-    if source == "multipla":
+    # As duas CARTELAS pelo mesmo molde. Nenhuma delas tem partida própria (as
+    # pernas moram num JSONB), então as duas entram na lista como um bilhete
+    # com N seleções, e não como um jogo.
+    if source in ("multipla", "bingo"):
+        _tab = {"multipla": "picks_multiplas", "bingo": "picks_bingo"}[source]
+        _rot = {"multipla": "Múltipla", "bingo": "Bingo"}[source]
+        _liga = {"multipla": "Múltiplas", "bingo": "Bingo do Dia"}[source]
         return f"""
-            SELECT id, 'multipla' AS pick_type, match_date,
-                   CONCAT('Múltipla · ', JSONB_ARRAY_LENGTH(games::jsonb), ' sel.') AS home_team_name,
+            SELECT id, '{source}' AS pick_type, match_date,
+                   CONCAT('{_rot}, ', JSONB_ARRAY_LENGTH(games::jsonb), ' sel.') AS home_team_name,
                    NULL AS away_team_name, NULL AS home_team_id, NULL AS away_team_id,
-                   CONCAT('Múltipla · ', JSONB_ARRAY_LENGTH(games::jsonb), ' sel.') AS market,
+                   CONCAT('{_rot}, ', JSONB_ARRAY_LENGTH(games::jsonb), ' sel.') AS market,
                    NULL AS line, total_odd AS odd, NULL AS bet_house,
                    result,
                    CASE result
@@ -2293,8 +2436,8 @@ def _source_games_sql(source: str, date_cond: str, result_null_cond: str = "IS N
                        ELSE NULL
                    END AS profit,
                    1::numeric AS stake,
-                   NULL::INTEGER AS league_id, 'Múltiplas' AS league_name
-            FROM picks_multiplas
+                   NULL::INTEGER AS league_id, '{_liga}' AS league_name
+            FROM {_tab}
             WHERE result {result_null_cond} {date_cond}
         """
     if source == "alavancagem":
@@ -2347,7 +2490,7 @@ def _source_games_sql(source: str, date_cond: str, result_null_cond: str = "IS N
 # aprendido com faltas e goleiros (ver _SUB_BUILDERS).
 # Pick Boost fica de FORA: fase 1 e' so' Admin (ver stake_plan). Entrar aqui
 # o publicaria na aba "Por Jogo" sem nunca ter passado por decisao.
-FONTES_POR_JOGO = ("vip", "free", "multipla", "alavancagem", "faltas",
+FONTES_POR_JOGO = ("vip", "free", "multipla", "bingo", "alavancagem", "faltas",
                    "goleiros", "player_stats")
 
 
@@ -2431,12 +2574,12 @@ def get_results_games(
 
         items = [dict(r) for r in rows]
 
-        # Substitui stake de VIP/Free/Múltipla pelo stake pessoal do usuário.
+        # Substitui stake de VIP/Free/Múltipla/Bingo pelo stake pessoal do usuário.
         # Sem sessão não há stake pessoal: a lista sai com a stake do plano.
         if current_user is None:
             return {"total": total, "items": items}
 
-        personal_types = ("vip", "free", "multipla")
+        personal_types = ("vip", "free", "multipla", "bingo")
         ids_by_type: dict[str, list] = {t: [] for t in personal_types}
         for x in items:
             pt = x.get("pick_type")
@@ -3154,14 +3297,18 @@ def _pernas_de_boost(cur, suggestion_id: int) -> list:
     ]
 
 
-def _pernas_de_multipla(cur, suggestion_id: int) -> list:
-    """Pernas de uma multipla, do JSONB `games`.
+def _pernas_de_multipla(cur, suggestion_id: int, tipo: str = "multipla") -> list:
+    """Pernas de uma cartela (multipla ou Bingo do Dia), do JSONB `games`.
 
     Liga/temporada e ids de time saem da fixture, nao do JSON: o bilhete guarda
     o que era verdade no dia da geracao, e a serie precisa do mesmo recorte de
     competicao que o motor usou (ver a docstring de get_market_form).
+
+    `tipo` so' escolhe a tabela, e a lista de tabelas e' FECHADA (`_CARTELAS`)
+    porque o valor chega pela query string e entra em SQL por f-string.
     """
-    cur.execute("SELECT games FROM picks_multiplas WHERE id = %s", (suggestion_id,))
+    tabela = _CARTELAS[tipo]
+    cur.execute(f"SELECT games FROM {tabela} WHERE id = %s", (suggestion_id,))
     row = cur.fetchone()
     if not row or not row["games"]:
         return []
@@ -3788,8 +3935,8 @@ def get_market_form(
     conn = get_connection()
     cur = conn.cursor()
     try:
-        if pick_type == "multipla":
-            pernas = _pernas_de_multipla(cur, suggestion_id)
+        if pick_type in _CARTELAS:
+            pernas = _pernas_de_multipla(cur, suggestion_id, pick_type)
         elif pick_type == "alavancagem":
             pernas = _pernas_de_alavancagem(cur, suggestion_id)
         elif pick_type == "boost":

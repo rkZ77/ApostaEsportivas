@@ -18,6 +18,12 @@ DEFAULT_PROVIDERS = {
     "alavancagem": "anthropic",
     "vip": "openai",
     "multipla": "openai",
+    # BINGO DO DIA (2026-09-08) no mesmo provedor do VIP e da multipla, e
+    # pelo mesmo motivo dos dois: e' bilhete combinado montado com a regua do
+    # VIP, entao o parecer que ele precisa e' o de contexto de partida (time
+    # ja' classificado, jogo decidido, elenco reserva) sobre QUATRO jogos de
+    # uma vez -- a leitura mais cara que o gate faz em qualquer produto.
+    "bingo": "openai",
     # `goleiros` continua aqui e nao e' usado por ninguem desde 27/08: o motor
     # virou o metodo `saves` do Player Stats, que passa por "player_stats".
     # Fica como rastro de qual provedor aquele produto usava.

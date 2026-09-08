@@ -442,3 +442,38 @@ ALAVANCAGEM_CONFIG = PickEngineConfig(
     min_odd=1.01, max_odd=1.55,
     conservative_odd_low=1.01, conservative_odd_high=1.55,
 )
+
+
+# BINGO DO DIA (2026-09-08, pedido do usuario).
+#
+# O produto e' uma CARTELA de 4 pernas, uma so' por dia, cada perna cotada
+# entre 1.40 e 2.00. A faixa nao e' preferencia: e' o produto. Quem compra o
+# bingo esta' comprando "quatro oportunidades de preco parecido", entao uma
+# perna de 1.15 descaracteriza a cartela tanto quanto uma de 3.50 -- a
+# primeira nao paga o risco das outras tres, a segunda carrega a cartela
+# inteira sozinha.
+#
+# Por isso `enforce_odd_band=True` com a faixa colada em min_odd/max_odd: os
+# tres numeros dizem a MESMA coisa por caminhos diferentes (o gate de odd, o
+# filtro de faixa e o teto de sanidade), e deixar qualquer um deles mais largo
+# abriria em silencio uma perna que o produto nao aceita.
+#
+# TODO O RESTO E' O VIP, byte a byte. Foi o pedido explicito: "motor identico
+# ao do VIP com todas as premissas mapeadas". min_taxa, min_confidence,
+# min_ev, min_edge, min_amostra, min_bookmakers_count, odd_evaluation e os
+# pesos do line_score ficam no default -- que e' exatamente o que VIP_CONFIG
+# tambem faz. A UNICA divergencia de VIP_CONFIG e' a faixa (1.40-2.00 contra
+# 1.45-2.00) e o teto (2.00 contra 15.0), e as duas saem da definicao do
+# produto, nao de uma medicao propria.
+#
+# A ponta 1.40-1.45 -- o unico preco que o bingo aceita e o VIP nao -- entra
+# porque o usuario a nomeou. Ela fica de olho: e' a regiao vizinha da faixa
+# que a medicao de 14/08 apontou como a de ROI negativo (odd < 1.50), e o
+# VIP recuou pra 1.45 justamente por isso. Aqui ela e' segurada pelo mesmo que
+# segura a perna barata da alavancagem: `min_edge` de 0.05, que numa odd de
+# 1.40 ja' exige taxa real de ~76%.
+BINGO_CONFIG = PickEngineConfig(
+    enforce_odd_band=True,
+    min_odd=1.40, max_odd=2.00,
+    conservative_odd_low=1.40, conservative_odd_high=2.00,
+)

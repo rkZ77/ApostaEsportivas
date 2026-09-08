@@ -65,9 +65,17 @@ def fetch_vip_free_legs(cur, table: str) -> list:
     return legs
 
 
-def fetch_multiplas_legs(cur) -> list:
+#: Tabelas cujas pernas moram num JSONB `games`, uma por item. A multipla e o
+#: Bingo do Dia tem a MESMA forma, entao um extractor so' cobre as duas -- o
+#: nome da tabela e' o unico parametro.
+_TABELAS_DE_CARTELA = ("picks_multiplas", "picks_bingo")
+
+
+def fetch_multiplas_legs(cur, tabela: str = "picks_multiplas") -> list:
     """cur precisa ser RealDictCursor."""
-    cur.execute("SELECT id, games, match_date, created_at FROM picks_multiplas")
+    if tabela not in _TABELAS_DE_CARTELA:
+        raise ValueError(f"Tabela nao permitida: {tabela!r}")
+    cur.execute(f"SELECT id, games, match_date, created_at FROM {tabela}")
     legs = []
     for row in cur.fetchall():
         games_raw = row["games"]
@@ -76,7 +84,7 @@ def fetch_multiplas_legs(cur) -> list:
             if not g.get("fixture_id"):
                 continue
             legs.append({
-                "source_table": "picks_multiplas", "source_id": row["id"], "leg_number": i,
+                "source_table": tabela, "source_id": row["id"], "leg_number": i,
                 "fixture_id": g["fixture_id"], "match_date": row["match_date"],
                 "home_team_id": g.get("home_team_id"), "away_team_id": g.get("away_team_id"),
                 "home_team": g.get("home_team"), "away_team": g.get("away_team"),
@@ -86,10 +94,15 @@ def fetch_multiplas_legs(cur) -> list:
                 "market_id": g.get("market_id"),
                 "line": g.get("line", ""), "odd": g.get("odd"), "bet_house": g.get("bet_house"),
                 "confidence": g.get("confidence"), "probability": g.get("prob_real"),
-                "ev": None, "reasoning": None, "stake_pct": None, "stake_units": None,
+                # `ev` e `reasoning` por perna so' existem no Bingo -- ele
+                # grava os dois em cada item de `games`. Na multipla as chaves
+                # nao existem e o .get devolve None, que e' exatamente o que
+                # estava escrito aqui antes.
+                "ev": g.get("ev"), "reasoning": g.get("reasoning"),
+                "stake_pct": None, "stake_units": None,
                 "result": g.get("result"), "profit": None, "created_at": row["created_at"],
-                # A multipla e' revisada como bilhete unico, entao toda perna
-                # carrega o mesmo parecer -- ver multipla_pipeline._save_multipla.
+                # A cartela e' revisada como bilhete unico, entao toda perna
+                # carrega o mesmo parecer -- ver _save_multipla/_save_bingo.
                 "ai_review": g.get("ai_review"),
             })
     return legs
@@ -177,6 +190,13 @@ def fetch_all_legs(cur) -> list:
         except Exception:
             cur.connection.rollback()
     legs += fetch_multiplas_legs(cur)
+    # picks_bingo pela mesma porta protegida das tabelas acima: e' tabela que
+    # o MOTOR cria (bingo_pipeline), entao um ambiente que nunca rodou o Bingo
+    # nao a tem, e a excecao aqui derrubaria a sincronizacao do ledger inteiro.
+    try:
+        legs += fetch_multiplas_legs(cur, "picks_bingo")
+    except Exception:
+        cur.connection.rollback()
     legs += fetch_alavancagem_legs(cur)
     return legs
 

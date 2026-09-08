@@ -292,6 +292,7 @@ _PIPELINE_SCRIPTS = {
     "gerar_vip":            os.path.join("engine_pipelines", "vip_pipeline.py"),
     "gerar_free":           os.path.join("engine_pipelines", "dica_pipeline.py"),
     "gerar_multipla":       os.path.join("engine_pipelines", "multipla_pipeline.py"),
+    "gerar_bingo":          os.path.join("engine_pipelines", "bingo_pipeline.py"),
     "gerar_alavancagem":    os.path.join("engine_pipelines", "alavancagem_pipeline.py"),
     # Faltas e defesas de goleiro (2026-08-01). Nao passam pelo caminho
     # generico do motor: usam modelo proprio (fouls_model / goalkeeper_model),
@@ -323,6 +324,7 @@ _PIPELINE_SCRIPTS = {
     "dev_gerar_vip":           os.path.join("engine_pipelines", "vip_pipeline.py"),
     "dev_gerar_dica":          os.path.join("engine_pipelines", "dica_pipeline.py"),
     "dev_gerar_multipla":      os.path.join("engine_pipelines", "multipla_pipeline.py"),
+    "dev_gerar_bingo":         os.path.join("engine_pipelines", "bingo_pipeline.py"),
     "dev_gerar_alavancagem":   os.path.join("engine_pipelines", "alavancagem_pipeline.py"),
     "dev_homolog_vip":         os.path.join("ai", "vip_engine_shadow.py"),
     "dev_homolog_dica":        os.path.join("ai", "dica_homologation.py"),
@@ -361,7 +363,8 @@ _PIPELINE_ARGS["gerar_playerstats"] = _metodos_diarios_do_motor()
 
 _DEV_PIPELINE_STEPS = [
     "dev_atualizar_jogos", "dev_capturar_odds",
-    "dev_gerar_vip", "dev_gerar_dica", "dev_gerar_multipla", "dev_gerar_alavancagem",
+    "dev_gerar_vip", "dev_gerar_dica", "dev_gerar_multipla", "dev_gerar_bingo",
+    "dev_gerar_alavancagem",
     "dev_homolog_vip", "dev_homolog_dica", "dev_homolog_multipla", "dev_homolog_alavancagem",
 ]
 
@@ -409,6 +412,7 @@ _PASSO_DO_COMANDO = {
     "vip":                "gerar_vip",
     "dica":               "gerar_free",
     "multiplas":          "gerar_multipla",
+    "bingo":              "gerar_bingo",
     "alavancagem":        "gerar_alavancagem",
     "faltas":             "gerar_faltas",
     "playerstats-diario": "gerar_playerstats",
@@ -436,7 +440,7 @@ _TUDO_STEPS_FALLBACK = [
     # `player_stats` ANTES de `capturar_odds` desde 28/08, por pedido do
     # usuario · a razao esta' no registro do motor, que e' a fonte.
     "atualizar_jogos", "player_stats", "capturar_odds",
-    "gerar_vip", "gerar_free", "gerar_multipla", "gerar_alavancagem",
+    "gerar_vip", "gerar_free", "gerar_multipla", "gerar_bingo", "gerar_alavancagem",
     "gerar_faltas", "gerar_playerstats", "gerar_pickboost",
     "atualizar_resultados",
 ]
@@ -498,6 +502,7 @@ _STEP_LABELS = {
     "gerar_vip":            "Gerando picks VIP",
     "gerar_free":           "Gerando pick gratuito",
     "gerar_multipla":       "Gerando múltipla",
+    "gerar_bingo":          "Gerando o Bingo do Dia",
     "gerar_alavancagem":    "Gerando alavancagem",
     "gerar_faltas":         "Gerando picks de faltas",
     "player_stats":         "Coletando estatística de jogador",
@@ -892,6 +897,7 @@ _PASSO_LABEL_CURTO = {
     "gerar_vip":            "Gerar VIP",
     "gerar_free":           "Gerar Free",
     "gerar_multipla":       "Gerar Múltipla",
+    "gerar_bingo":          "Gerar Bingo do Dia",
     "gerar_alavancagem":    "Gerar Alavancagem",
     "gerar_faltas":         "Gerar Faltas",
     "gerar_playerstats":    "Gerar Jogadores",
@@ -1022,7 +1028,7 @@ def ai_review_status(current_user: dict = Depends(require_admin)):
 # diferentes pro mesmo fluxo ("dica" no motor, "free" no ledger) e a juncao
 # abaixo depende deste mapa.
 _PIPELINE_POR_PICK_TYPE = {
-    "vip": "vip", "free": "dica", "multipla": "multipla",
+    "vip": "vip", "free": "dica", "multipla": "multipla", "bingo": "bingo",
     "alavancagem": "alavancagem", "faltas": "faltas", "goleiros": "goleiros",
     "player_stats": "player_stats", "boost": "boost",
 }
@@ -1498,6 +1504,10 @@ _PICK_TABLES = {
     "vip":         ("picks_vip",        "home_team_name", "away_team_name"),
     "free":        ("picks_free",        "home_team",      "away_team"),
     "multipla":    ("picks_multiplas",   "home_team_name", "away_team_name"),
+    # Bingo do Dia (08/09). Mesma forma da multipla: sem coluna de time (as
+    # pernas moram no JSONB `games`), entao os nomes de coluna aqui sao os
+    # mesmos placeholders que a multipla usa e que a busca substitui.
+    "bingo":       ("picks_bingo",       "home_team_name", "away_team_name"),
     "alavancagem": ("picks_alavancagem", "home_team_1",    "away_team_1"),
     "faltas":      ("picks_faltas",      "home_team",      "away_team"),
     "goleiros":    ("picks_goleiros",    "home_team",      "away_team"),
@@ -1530,7 +1540,7 @@ _VALID_RESULTS = {"GREEN", "RED", "PUSH", "HALF-WIN", "HALF-LOSS", None}
 _ODD_COL = {
     "vip": "odd", "free": "odd", "faltas": "odd", "goleiros": "odd",
     "player_stats": "odd", "boost": "odd", "live": "odd",
-    "multipla": "total_odd", "alavancagem": "odd_combined",
+    "multipla": "total_odd", "bingo": "total_odd", "alavancagem": "odd_combined",
 }
 
 
@@ -1762,7 +1772,7 @@ def admin_picks_pendentes(
         # Múltipla e alavancagem têm várias fixtures por bilhete · não dá pra
         # apontar UMA folha faltando, então entram só na contagem.
         bilhetes = {}
-        for pt in ("multipla", "alavancagem"):
+        for pt in ("multipla", "bingo", "alavancagem"):
             table, _h, _a = _PICK_TABLES[pt]
             try:
                 cur.execute(f"""
@@ -1955,7 +1965,7 @@ def admin_search_picks(
                 #
                 # Procurar time numa multipla e' procurar dentro do JSON, que e'
                 # onde os times de fato estao.
-                if pt == "multipla":
+                if pt in ("multipla", "bingo"):
                     conds.append("games::text ILIKE %s")
                     params.append(f"%{q}%")
                 else:
@@ -1969,8 +1979,9 @@ def admin_search_picks(
             # Multipla e alavancagem nao tem coluna `market`/`line` unica (sao
             # varias pernas), entao vao com rotulo fixo -- sem isso a query
             # quebra e some do resultado inteiro.
-            if pt == "multipla":
-                mercado = "'Múltipla' AS market, NULL AS line, total_odd AS odd"
+            if pt in ("multipla", "bingo"):
+                _rot = "Múltipla" if pt == "multipla" else "Bingo do Dia"
+                mercado = f"'{_rot}' AS market, NULL AS line, total_odd AS odd"
             elif pt == "alavancagem":
                 mercado = "market_1 AS market, line_1 AS line, odd_combined AS odd"
             else:
@@ -1979,8 +1990,9 @@ def admin_search_picks(
             # As colunas de time, pelo mesmo motivo. A multipla mostra quantas
             # pernas tem: e' o que identifica o bilhete, ja' que nao ha' UM
             # confronto pra nomear.
-            if pt == "multipla":
-                times = ("multipla_name AS home_team, "
+            if pt in ("multipla", "bingo"):
+                _nome = "multipla_name" if pt == "multipla" else "bingo_name"
+                times = (f"{_nome} AS home_team, "
                          "(jsonb_array_length(games::jsonb) || ' jogos') AS away_team")
             else:
                 times = f"{home_col} AS home_team, {away_col} AS away_team"
@@ -2287,7 +2299,9 @@ def admin_stats(current_user: dict = Depends(require_admin)):
                 (SELECT COUNT(*) FROM picks_boost
                  WHERE match_date = {HOJE_BR})                               AS boost,
                 (SELECT COUNT(*) FROM picks_multiplas
-                 WHERE DATE(created_at AT TIME ZONE 'UTC') = CURRENT_DATE)  AS multiplas
+                 WHERE DATE(created_at AT TIME ZONE 'UTC') = CURRENT_DATE)  AS multiplas,
+                (SELECT COUNT(*) FROM picks_bingo
+                 WHERE match_date = {HOJE_BR})                               AS bingo
         """)
         picks_row = dict(cur.fetchone())
         # Fora do SELECT acima porque `picks_live` vem do motor: uma sub-query
@@ -2443,6 +2457,7 @@ def admin_overview(current_user: dict = Depends(require_admin)):
         picks = {}
         for rotulo, tabela in (("vip", "picks_vip"), ("free", "picks_free"),
                                ("multiplas", "picks_multiplas"),
+                               ("bingo", "picks_bingo"),
                                ("alavancagem", "picks_alavancagem"),
                                ("faltas", "picks_faltas"),
                                ("player_stats", "picks_player_stats"),
@@ -5986,6 +6001,7 @@ _TABELAS_COM_RESULTADO = {
     "picks_vip":          ("VIP",          "home_team_name", "away_team_name"),
     "picks_free":         ("Free",         "home_team",      "away_team"),
     "picks_multiplas":    ("Múltipla",     None,             None),
+    "picks_bingo":        ("Bingo do Dia", None,             None),
     "picks_alavancagem":  ("Alavancagem",  "home_team_1",    "away_team_1"),
     "picks_faltas":       ("Faltas",       "home_team",      "away_team"),
     "picks_goleiros":     ("Defesas",      "home_team",      "away_team"),

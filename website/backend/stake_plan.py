@@ -11,7 +11,7 @@ lugar:
     ao vivo ............................................ 4u
     VIP ................................................ 4u
     free, faltas, defesas, player stats, pick boost .... 3u
-    multipla ........................................... 1u
+    multipla, bingo do dia ............................. 1u
     alavancagem ........... 1u POR CAMINHO, nao por pick (ver abaixo)
 
 O VIP fica um degrau acima porque e' o produto de maior convicção do motor: e'
@@ -116,6 +116,13 @@ STAKE_PADRAO: dict[str, int] = {
     # abaixo do free.
     "boost":       3,
     "multiplas":   1,
+    # BINGO DO DIA (08/09): 1u, o mesmo peso da multipla, e pela mesma razao.
+    # E' um bilhete combinado -- a variancia de "as quatro tem que bater" nao
+    # e' a de uma entrada simples, e igualar a stake inflaria tanto o lucro dos
+    # meses bons quanto o buraco dos ruins. Com QUATRO pernas o argumento e'
+    # ainda mais forte que na multipla, que tem duas ou tres; 1u ja' e' o piso
+    # da tabela, entao ele fica no piso.
+    "bingo":       1,
     # Zero = NAO tem peso por pick. Isso nao significa mais "fora do placar":
     # desde 04/09 a alavancagem entra por caminho, em alavancagem_caminho.py.
     # Ver o bloco no topo deste arquivo.

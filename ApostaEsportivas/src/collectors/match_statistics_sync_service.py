@@ -682,17 +682,30 @@ class MatchStatisticsSyncService:
                 if fid is not None:
                     pending_ids.add(fid)
 
-        # Múltiplas: extrai fixture_ids do JSON das legs
-        self.cur.execute(f"SELECT games FROM picks_multiplas WHERE TRUE {filtro};")
-        for (games_raw,) in self.cur.fetchall():
+        # Múltiplas e Bingo: extraem fixture_ids do JSON das legs. As duas
+        # tabelas tem a MESMA forma (`games` JSONB com uma perna por item),
+        # entao o mesmo laco cobre as duas.
+        #
+        # picks_bingo pode nao existir no ambiente: e' tabela que o MOTOR cria
+        # (bingo_pipeline._create_table_if_needed), como picks_live. Um erro
+        # aqui sujaria a transacao e derrubaria a varredura inteira -- por isso
+        # o try/rollback, no mesmo padrao do laco de tabelas acima.
+        for tabela in ("picks_multiplas", "picks_bingo"):
             try:
-                games = _json.loads(games_raw) if isinstance(games_raw, str) else games_raw
-                for leg in (games if isinstance(games, list) else []):
-                    fid = leg.get("fixture_id")
-                    if fid is not None:
-                        pending_ids.add(fid)
-            except Exception:
-                pass
+                self.cur.execute(f"SELECT games FROM {tabela} WHERE TRUE {filtro};")
+            except Exception as e:
+                print(f"[MATCH_STATS] Aviso: {tabela} indisponivel ({e})")
+                self.conn.rollback()
+                continue
+            for (games_raw,) in self.cur.fetchall():
+                try:
+                    games = _json.loads(games_raw) if isinstance(games_raw, str) else games_raw
+                    for leg in (games if isinstance(games, list) else []):
+                        fid = leg.get("fixture_id")
+                        if fid is not None:
+                            pending_ids.add(fid)
+                except Exception:
+                    pass
 
         # Remove os que já têm a folha COMPLETA. Antes bastava existir a linha:
         # um jogo gravado com a folha vazia nunca era rebuscado.

@@ -31,6 +31,7 @@ _FONTES: tuple = (
     ("vip",          "picks_vip",          "pv",  "odd",          False),
     ("free",         "picks_free",         "pf",  "odd",          False),
     ("multipla",     "picks_multiplas",    "pm",  "total_odd",    False),
+    ("bingo",        "picks_bingo",        "pbi", "total_odd",    False),
     ("alavancagem",  "picks_alavancagem",  "pa",  "odd_combined", False),
     ("faltas",       "picks_faltas",       "pfa", "odd",          False),
     ("goleiros",     "picks_goleiros",     "pg",  "odd",          False),

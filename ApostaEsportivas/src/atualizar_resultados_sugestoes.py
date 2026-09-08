@@ -21,6 +21,10 @@ class AIUpdateResultsMain:
         # MULTIPLAS
         self.result_checker_multiplas = AIMultiplasCheckerService("picks_multiplas")
 
+        # BINGO DO DIA -- mesma classe da multipla, outra tabela: a cartela
+        # tem a mesma forma (pernas num JSONB, total_odd, result, profit).
+        self.result_checker_bingo = AIMultiplasCheckerService("picks_bingo")
+
         # ALAVANCAGEM
         self.result_checker_alavancagem = AIResultCheckerAlavancagem()
 
@@ -45,12 +49,16 @@ class AIUpdateResultsMain:
         # MULTIPLAS
         updated_multiplas = self.result_checker_multiplas.check_all_results()
 
+        # BINGO DO DIA
+        updated_bingo = self.result_checker_bingo.check_all_results()
+
         # ALAVANCAGEM
         updated_alav = self.result_checker_alavancagem.check_all_results()
 
         print(
             f"[AI_UPDATE_MAIN] VIP: {updated_vip} | Free: {updated_free} | "
-            f"Multiplas: {updated_multiplas} | Alavancagem: {updated_alav}"
+            f"Multiplas: {updated_multiplas} | Bingo: {updated_bingo} | "
+            f"Alavancagem: {updated_alav}"
         )
 
         # Sincroniza a tabela unificada (picks_ledger) -- nunca escreve nas
