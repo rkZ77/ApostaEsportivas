@@ -3315,15 +3315,15 @@ export default function Picks() {
                 <section>
                   <SectionHeader color="bg-cyan-400" label="Pick Boost"
                     contagem={boostFreeCards.length + (canSeeVip ? boostVipCards.length : 0)} />
+                  {/* Mesmo corte de 4 do VIP. O free vem primeiro pra que o
+                      card publico nunca caia fora da amostra. */}
                   <div className="lista-longa grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                    {boostFreeCards.map(c => (
-                      <SuggestionCard key={`bf-${c.id}`} s={c.s}
-                        banca={bancaSummary?.has_banca ? bancaSummary : null} />
-                    ))}
-                    {canSeeVip && boostVipCards.map(c => (
-                      <SuggestionCard key={`bv-${c.id}`} s={c.s}
-                        banca={bancaSummary?.has_banca ? bancaSummary : null} />
-                    ))}
+                    {[...boostFreeCards.map(c => ({ ...c, k: `bf-${c.id}` })),
+                      ...(canSeeVip ? boostVipCards.map(c => ({ ...c, k: `bv-${c.id}` })) : [])]
+                      .slice(0, 4).map(c => (
+                        <SuggestionCard key={c.k} s={c.s}
+                          banca={bancaSummary?.has_banca ? bancaSummary : null} />
+                      ))}
                   </div>
                   {!canSeeVip && boostVipCards.length > 0 && (
                     <div className="mt-3">
@@ -3331,10 +3331,15 @@ export default function Picks() {
                         rotulo="Pick Boost" />
                     </div>
                   )}
-                  <button onClick={() => setTab('boost')}
-                    className="mt-4 w-full text-center text-xs text-cyan-400 hover:text-cyan-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong">
-                    Abrir a aba Pick Boost
-                  </button>
+                  {(() => {
+                    const total = boostFreeCards.length + (canSeeVip ? boostVipCards.length : 0)
+                    return (
+                      <button onClick={() => setTab('boost')}
+                        className="mt-4 w-full text-center text-xs text-cyan-400 hover:text-cyan-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong">
+                        {total > 4 ? `Ver todos os ${total} picks do Boost` : 'Abrir a aba Pick Boost'}
+                      </button>
+                    )
+                  })()}
                 </section>
               )}
 
@@ -3352,28 +3357,25 @@ export default function Picks() {
                         primeiro) ele era montado sem nenhuma prop além do pick.
                         Com SuggestionCard o card é o mesmo do VIP em qualquer
                         lugar que apareça. */}
-                    {faltasCards.map(c => (
-                      <SuggestionCard
-                        key={`f-${c.id}`}
-                        s={c.s}
-                        banca={bancaSummary?.has_banca ? bancaSummary : null}
-                      />
-                    ))}
-                    {playerStatsCards.map(c => (
-                      <SuggestionCard
-                        key={`p-${c.id}`}
-                        s={c.s}
-                        banca={bancaSummary?.has_banca ? bancaSummary : null}
-                      />
-                    ))}
-                    {goleirosCards.map(c => (
-                      <SuggestionCard
-                        key={`g-${c.id}`}
-                        s={c.s}
-                        banca={bancaSummary?.has_banca ? bancaSummary : null}
-                      />
-                    ))}
+                    {[...faltasCards.map(c => ({ ...c, k: `f-${c.id}` })),
+                      ...playerStatsCards.map(c => ({ ...c, k: `p-${c.id}` })),
+                      ...goleirosCards.map(c => ({ ...c, k: `g-${c.id}` }))]
+                      .slice(0, 4).map(c => (
+                        <SuggestionCard
+                          key={c.k}
+                          s={c.s}
+                          banca={bancaSummary?.has_banca ? bancaSummary : null}
+                        />
+                      ))}
                   </div>
+                  {/* Mesmo corte de 4 do VIP: aqui somam tres mercados, entao um
+                      dia cheio empilhava a maior grade da aba. */}
+                  {faltasCards.length + playerStatsCards.length + goleirosCards.length > 4 && (
+                    <button onClick={() => setTab('vip')}
+                      className="mt-4 w-full text-center text-xs text-purple-400 hover:text-purple-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong">
+                      Ver todos os {faltasCards.length + playerStatsCards.length + goleirosCards.length} picks de mercados
+                    </button>
+                  )}
                   {/* Os dois atalhos ("Ver faltas no VIP" / "Ver picks de
                       jogador") saíram em 28/08: os cards que eles prometiam
                       já estão nesta mesma grade, então o clique levava a outra
@@ -3403,15 +3405,19 @@ export default function Picks() {
                       </button>
                     ) : undefined}
                   />
+                  {/* Corte de 4 igual ao VIP (07/09). A aba Hoje e' resumo: o
+                      ao vivo publica em rajada e a secao sozinha ficava mais
+                      longa que o resto da pagina inteira. O restante continua a
+                      um clique, na aba do produto. */}
                   <div className="lista-longa grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                    {liveCards.map(c => (
+                    {liveCards.slice(0, 4).map(c => (
                       <SuggestionCard key={`l-${c.id}`} s={c.s}
                         banca={bancaSummary?.has_banca ? bancaSummary : null} />
                     ))}
                   </div>
                   <button onClick={() => setTab('ao_vivo')}
                     className="mt-4 w-full text-center text-xs text-accent-ink hover:text-green-400 transition-colors py-3 border border-line rounded-md hover:border-line-strong">
-                    Abrir a aba Ao Vivo
+                    {liveCards.length > 4 ? `Ver todos os ${liveCards.length} picks ao vivo` : 'Abrir a aba Ao Vivo'}
                   </button>
                 </section>
               )}
@@ -3424,9 +3430,6 @@ export default function Picks() {
 
         {tab === 'pick_seguro' && (
           <motion.div key="pick_seguro" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6">
-            <BarraDoDia offset={selectedOffset} setOffset={setSelectedOffset}
-                        diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
-                        rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />
             {/* Fechado por padrão · ver ComoFunciona. */}
             <ComoFunciona titulo="O que é o Pick do Dia Free?" cor="text-green-400"
                           borda="border-green-500/20" fundo="bg-green-500/5">
@@ -3442,6 +3445,10 @@ export default function Picks() {
                 <PlacarDoProduto source="free" tom="text-green-400/70" />
               </>
             </ComoFunciona>
+
+            <BarraDoDia offset={selectedOffset} setOffset={setSelectedOffset}
+                        diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
+                        rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />
 
             {/* Pick de hoje */}
             {todayLoading ? <PickLoading /> : (
@@ -3461,9 +3468,6 @@ export default function Picks() {
 
         {tab === 'vip' && (
           <motion.div key="vip" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6">
-            <BarraDoDia offset={selectedOffset} setOffset={setSelectedOffset}
-                        diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
-                        rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />
             <ComoFunciona titulo="O que são os Picks VIP?" cor="text-yellow-400"
                           borda="border-yellow-400/20" fundo="bg-yellow-400/5">
               <>
@@ -3479,6 +3483,10 @@ export default function Picks() {
                 <PlacarDoProduto source="vip" tom="text-yellow-400/70" />
               </>
             </ComoFunciona>
+
+            <BarraDoDia offset={selectedOffset} setOffset={setSelectedOffset}
+                        diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
+                        rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />
 
             {/* Picks do dia */}
             <div>
@@ -3599,9 +3607,6 @@ export default function Picks() {
 
         {tab === 'multiplas' && (
           <motion.div key="multiplas" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6">
-            <BarraDoDia offset={selectedOffset} setOffset={setSelectedOffset}
-                        diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
-                        rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />
             <ComoFunciona titulo="O que são as Múltiplas VIP?" cor="text-blue-400"
                           borda="border-blue-400/20" fundo="bg-blue-400/5">
               <>
@@ -3616,6 +3621,10 @@ export default function Picks() {
                 <PlacarDoProduto source="multiplas" tom="text-blue-400/70" />
               </>
             </ComoFunciona>
+
+            <BarraDoDia offset={selectedOffset} setOffset={setSelectedOffset}
+                        diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
+                        rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />
 
             {/* Múltiplas de hoje */}
             <div>
@@ -3651,9 +3660,6 @@ export default function Picks() {
 
         {tab === 'alavancagem' && (
           <motion.div key="alavancagem" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6">
-            <BarraDoDia offset={selectedOffset} setOffset={setSelectedOffset}
-                        diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
-                        rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />
             {/* UMA explicação só, e a certa.
               *
               * Havia DUAS, e elas se contradiziam: esta caixa descrevia o
@@ -3701,6 +3707,10 @@ export default function Picks() {
                 <PlacarDoProduto source="alavancagem" tom="text-orange-400/70" />
               </>
             </ComoFunciona>
+
+            <BarraDoDia offset={selectedOffset} setOffset={setSelectedOffset}
+                        diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
+                        rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />
 
             {/* Stats da série + Pick de hoje (bloqueado para free) */}
             {!canSeeVip ? (
@@ -4133,9 +4143,6 @@ export default function Picks() {
             vários jogos na mesma rodada, dar um não esvazia o resto. */}
         {tab === 'boost' && (
           <motion.div key="boost" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6">
-            <BarraDoDia offset={selectedOffset} setOffset={setSelectedOffset}
-                        diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
-                        rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />
             <ComoFunciona titulo="O que é o Pick Boost?" cor="text-cyan-400"
                           borda="border-cyan-400/20" fundo="bg-cyan-400/5">
               <>
@@ -4149,6 +4156,10 @@ export default function Picks() {
                 <PlacarDoProduto source="boost" tom="text-cyan-400/70" />
               </>
             </ComoFunciona>
+
+            <BarraDoDia offset={selectedOffset} setOffset={setSelectedOffset}
+                        diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
+                        rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />
 
             <FiltrosDePicks
               picks={boost ?? []} liga={boostLiga} setLiga={setBoostLiga}
@@ -4214,12 +4225,16 @@ export default function Picks() {
             ATUAÇÕES dele, não de partidas entre dois times. */}
         {tab === 'jogadores' && (
           <motion.div key="jogadores" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6">
-            <BarraDoDia offset={selectedOffset} setOffset={setSelectedOffset}
-                        diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
-                        rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />
             {!canSeeVip ? (
               <div>
-                <SectionHeader color="bg-amber-400" label="Jogadores" />
+                {/* Sem o "Como funciona" no ramo free, a barra volta pro topo:
+                    o controle continua vindo depois do que explica a tela. */}
+                <BarraDoDia offset={selectedOffset} setOffset={setSelectedOffset}
+                            diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
+                            rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />
+                <div className="mt-6">
+                  <SectionHeader color="bg-amber-400" label="Jogadores" />
+                </div>
                 <VipLockOverlay color="amber" picks={today?.bloqueados?.mercados} rotulo="picks de jogador" />
               </div>
             ) : (
@@ -4248,6 +4263,10 @@ export default function Picks() {
                     <PlacarDoProduto source="player_stats" tom="text-amber-400/70" />
                   </>
                 </ComoFunciona>
+
+                <BarraDoDia offset={selectedOffset} setOffset={setSelectedOffset}
+                            diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
+                            rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />
 
                 <FiltrosDePicks
                   picks={playerStatsOrdenados ?? []} liga={jogLiga} setLiga={setJogLiga}
