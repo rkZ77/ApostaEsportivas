@@ -27,6 +27,10 @@ interface Summary {
   total: number; greens: number; reds: number; push: number
   half_wins?: number; half_losses?: number
   profit: number; stake_total: number; roi: number
+  /** Ligas distintas com pick resolvido no filtro, contadas no próprio SELECT
+   *  do resumo. Vem em toda resposta, inclusive nas abas que não pedem
+   *  `by_league`. */
+  leagues_count?: number
 }
 interface DayResult {
   match_date: string; total: number; greens: number; reds: number; profit: number
@@ -588,7 +592,11 @@ export default function ResultadosPublicos() {
   // que exibir o plano de stake junto (`stake_label`), senao o numero nao bate
   // com o que o usuario ve na banca dele.
   const lucroUnidades  = Number(s?.profit ?? 0)
-  const leaguesCovered = byLeague.length
+  // Do resumo, nunca de `by_league.length`: a aba Resumo não pede o bloco
+  // `by_league` (blocosDaAba acima), então o tamanho da lista é 0 ali e o tile
+  // "Ligas" mostrava zero em toda visita à aba padrão. Mesma regra que o
+  // StatsBand da Home já segue, e que test_unidades_e_odd_2026_08 cobre lá.
+  const leaguesCovered = s?.leagues_count ?? byLeague.length
 
   /* ── Indicadores por aba ────────────────────────────────────────────────
      Tudo derivado do que a aba já baixou. Nenhuma consulta nova. */
