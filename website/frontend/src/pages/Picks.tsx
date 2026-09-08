@@ -115,7 +115,7 @@ function LeagueLogo({ id, name, size = 18 }: { id?: number; name?: string; size?
  * decide nao e' o confronto, e' o individuo · o card fala de uma pessoa, a
  * busca e' por nome, e a amostra e' de atuacoes e nao de partidas. Empilhar
  * isso embaixo da grade VIP misturava duas perguntas. */
-type Tab = 'hoje' | 'pick_seguro' | 'vip' | 'multiplas' | 'alavancagem' | 'jogadores' | 'boost' | 'ao_vivo' | 'minhas_apostas'
+type Tab = 'hoje' | 'pick_seguro' | 'vip' | 'multiplas' | 'alavancagem' | 'jogadores' | 'faltas' | 'boost' | 'ao_vivo' | 'minhas_apostas'
 
 /** Chave antiga na URL -> aba atual.
  *
@@ -123,11 +123,11 @@ type Tab = 'hoje' | 'pick_seguro' | 'vip' | 'multiplas' | 'alavancagem' | 'jogad
  * em `hoje`: quem salvou /picks#mercados quer os picks de faltas e jogadores,
  * e eles estao na aba VIP agora. Sem o alias o hash caia no fallback e abria a
  * aba Hoje, que e' outra tela -- o mesmo sintoma que #chat produziu. */
-const ALIAS_ABA: Record<string, Tab> = { aovivo: 'minhas_apostas', mercados: 'vip' }
-/* `mercados` cai em `vip` e nao em `jogadores` porque o conteudo dela se
-   dividiu: faltas cobre 62% dos jogos e defesa de goleiro 0,86% (ver
-   fouls_model / goalkeeper_model), entao quem salvou o link quase sempre
-   queria faltas. */
+const ALIAS_ABA: Record<string, Tab> = { aovivo: 'minhas_apostas', mercados: 'faltas' }
+/* `mercados` cai em `faltas` desde 08/09, quando o produto voltou a ter aba:
+   faltas cobre 62% dos jogos e defesa de goleiro 0,86% (ver fouls_model /
+   goalkeeper_model), entao quem salvou aquele link quase sempre queria falta
+   -- e agora existe uma aba pra onde mandar. */
 
 const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
 
@@ -153,10 +153,13 @@ interface AlavSerie {
 const defaultAlavFilters: AlavFilters = { date_from: '', date_to: TODAY, resultado: 'all' }
 
 // Tab bar
-function TabBar({ tab, setTab, canSeeVip, verAoVivo, counts, liveCount, onPrefetch }: {
+function TabBar({ tab, setTab, canSeeVip, verAoVivo, temFaltasHoje, counts, liveCount, onPrefetch }: {
   tab: Tab; setTab: (t: Tab) => void; canSeeVip: boolean
   /** Ver `podeVerAoVivo` no Picks · admin enxerga antes do produto abrir. */
   verAoVivo: boolean
+  /** A aba Pick Falta some no dia sem pick: falta e' o metodo mais
+   *  seletivo do motor, e aba vazia todo dia le como produto morto. */
+  temFaltasHoje?: boolean
   counts?: Partial<Record<Tab, number>>
   liveCount?: number
   /** Aquece os dados da aba antes do clique · ver `prefetchAba` no Picks. */
@@ -230,10 +233,24 @@ function TabBar({ tab, setTab, canSeeVip, verAoVivo, counts, liveCount, onPrefet
     { key: 'multiplas',    label: 'Múltiplas',       premiumOnly: true },
     { key: 'alavancagem',  label: 'Alavancagem',      premiumOnly: true },
     {
+      /* PICK FALTA · aba propria de novo (08/09, decisao do usuario).
+         Ela virou secao do VIP em 05/09 porque "num dia sem pick de falta nao
+         ha' nada a anunciar" -- verdade que a aba resolve melhor do que a
+         secao: a aba SOME da barra no dia sem pick, enquanto dentro do VIP ela
+         diluia um produto de modelo proprio numa lista de outro.
+         O que decide aqui e' o arbitro e o quanto o jogo trava, nao o
+         confronto: e' outro modelo, com outra amostra. */
+      key: 'faltas' as Tab, label: 'Pick Falta', premiumOnly: true,
+      oculta: !temFaltasHoje,
+    },
+    {
       /* Prop de jogador · chutes, chutes no alvo, gols, defesas, faltas,
          desarmes e passes. Aba própria e não uma seção do VIP: o que decide
-         aqui é o indivíduo e não o confronto. */
-      key: 'jogadores' as Tab, label: 'Jogadores', premiumOnly: true,
+         aqui é o indivíduo e não o confronto.
+         "Pick Jogador" e nao "Jogadores" (08/09): a barra nomeia PRODUTOS
+         (Pick Boost, Pick Falta), e um plural solto lia como uma lista de
+         atletas, nao como um pick sobre um deles. */
+      key: 'jogadores' as Tab, label: 'Pick Jogador', premiumOnly: true,
     },
     {
       /* O que o usuário decidiu seguir. O contador pulsante continua aqui,
@@ -2454,7 +2471,7 @@ export default function Picks() {
     // nem tem bloco de conteúdo, então /picks#chat abria a página com NENHUMA
     // aba ativa e a área vazia -- exatamente o sintoma que o comentário acima
     // descreve pro #ao_vivo. O chat vive no botão do Agente e em /agente.
-    const valid: Tab[] = ['hoje','pick_seguro','vip','multiplas','alavancagem','jogadores','boost','minhas_apostas',
+    const valid: Tab[] = ['hoje','pick_seguro','vip','multiplas','alavancagem','jogadores','faltas','boost','minhas_apostas',
                           ...(podeVerAoVivo ? ['ao_vivo' as Tab] : [])]
     setTab(valid.includes(hash) ? hash : 'hoje')
   }, [location.hash, podeVerAoVivo])
@@ -2507,6 +2524,8 @@ export default function Picks() {
   const [boostLiga, setBoostLiga] = useState(''); const [boostResultado, setBoostResultado] = useState('')
   const [jogLiga, setJogLiga] = useState(''); const [jogResultado, setJogResultado] = useState('')
   const [multLiga, setMultLiga] = useState(''); const [multResultado, setMultResultado] = useState('')
+  const [falLiga, setFalLiga] = useState(''); const [falResultado, setFalResultado] = useState('')
+  const [falOrdem, setFalOrdem] = useState<OrdemDePick>('rank')
   const [boostOrdem, setBoostOrdem] = useState<OrdemDePick>('rank')
   const [jogOrdem, setJogOrdem] = useState<OrdemDePick>('rank')
 
@@ -2566,6 +2585,9 @@ export default function Picks() {
   const jogadoresDaAba = useMemo(
     () => ordenarPicks(filtrarPicks(playerStatsOrdenados ?? [], jogLiga, jogResultado), jogOrdem),
     [playerStatsOrdenados, jogLiga, jogResultado, jogOrdem])
+  const faltasDaAba = useMemo(
+    () => ordenarPicks(filtrarPicks(faltasOrdenadas ?? [], falLiga, falResultado), falOrdem),
+    [faltasOrdenadas, falLiga, falResultado, falOrdem])
   const multiplasDaAba = useMemo(
     () => filtrarPicks((today?.multiplas ?? []) as any[], multLiga, multResultado),
     [today?.multiplas, multLiga, multResultado])
@@ -2990,13 +3012,13 @@ export default function Picks() {
           onPrefetch={prefetchAba}
           canSeeVip={canSeeVip}
           liveCount={liveCount}
+          temFaltasHoje={(today?.faltas ?? []).length > 0}
           counts={{
             pick_seguro: today?.dica_do_dia && !today.dica_do_dia.result ? 1 : undefined,
-            /* Faltas entra na contagem do VIP: desde 27/08 ela é uma seção
-               DENTRO desta aba, e um contador que a ignorasse diria "3" numa
-               aba com 5 picks. Jogadores tem aba própria e contador próprio. */
-            vip:         ([...(today?.vip ?? []), ...(today?.faltas ?? [])]
-                            .filter((s: any) => !s.result).length) || undefined,
+            /* Cada produto conta o SEU: faltas saiu do VIP em 08/09 e voltou
+               a ter aba, entao somar as duas diria "5" numa aba com 3 picks. */
+            vip:         ((today?.vip ?? []).filter((s: any) => !s.result).length) || undefined,
+            faltas:      ((today?.faltas ?? []).filter((s: any) => !s.result).length) || undefined,
             jogadores:   ([...(today?.player_stats ?? []), ...(today?.goleiros ?? [])]
                             .filter((s: any) => !s.result).length) || undefined,
             boost:       ((today?.boost ?? []).filter((s: any) => !s.result).length) || undefined,
@@ -3271,43 +3293,66 @@ export default function Picks() {
                 </section>
               )}
 
-              {/* Mercados do dia. So' renderiza quando ha' pick -- ao
-                  contrario da aba Mercados, aqui um card de "nada hoje" por
-                  mercado so' empurraria o conteudo util pra baixo. */}
-              {canSeeVip && (today?.faltas?.length > 0 || today?.goleiros?.length > 0
-                             || today?.player_stats?.length > 0) && (
+              {/* UMA SECAO POR PRODUTO (08/09, pedido do usuario).
+                  Era uma so', chamada "Mercados de hoje", com falta, jogador e
+                  defesa na mesma grade. Sao tres produtos diferentes: falta le'
+                  o arbitro e o quanto o jogo trava, jogador le' as atuacoes de
+                  UMA pessoa, e defesa e' o legado que parou de crescer. Juntos
+                  eles pareciam variacoes de um mesmo bloco, e o corte de 4
+                  chegava a esconder um produto inteiro atras do outro.
+
+                  Cada uma so' aparece quando o dia tem pick dela, com o mesmo
+                  corte de 4 do VIP e um atalho pra aba do produto. */}
+              {canSeeVip && faltasCards.length > 0 && (
                 <section>
-                  <SectionHeader color="bg-purple-400" label="Mercados de hoje" badge="VIP" />
+                  <SectionHeader color="bg-purple-400" label="Pick Falta" badge="VIP"
+                    contagem={faltasCards.length} />
                   <div className="lista-longa grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                    {/* Era aqui que o card de mercado aparecia SEM ação nenhuma:
-                        o MercadoCard antigo só mostrava o botão Apostar quando
-                        recebia `onBet`, e nesta aba (a que o usuário abre
-                        primeiro) ele era montado sem nenhuma prop além do pick.
-                        Com SuggestionCard o card é o mesmo do VIP em qualquer
-                        lugar que apareça. */}
-                    {[...faltasCards.map(c => ({ ...c, k: `f-${c.id}` })),
-                      ...playerStatsCards.map(c => ({ ...c, k: `p-${c.id}` })),
-                      ...goleirosCards.map(c => ({ ...c, k: `g-${c.id}` }))]
-                      .slice(0, 4).map(c => (
-                        <SuggestionCard
-                          key={c.k}
-                          s={c.s}
-                          banca={bancaSummary?.has_banca ? bancaSummary : null}
-                        />
-                      ))}
+                    {faltasCards.slice(0, 4).map(c => (
+                      <SuggestionCard key={`f-${c.id}`} s={c.s}
+                        banca={bancaSummary?.has_banca ? bancaSummary : null} />
+                    ))}
                   </div>
-                  {/* Mesmo corte de 4 do VIP: aqui somam tres mercados, entao um
-                      dia cheio empilhava a maior grade da aba. */}
-                  {faltasCards.length + playerStatsCards.length + goleirosCards.length > 4 && (
-                    <button onClick={() => setTab('vip')}
-                      className="mt-4 w-full text-center text-xs text-purple-400 hover:text-purple-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong">
-                      Ver todos os {faltasCards.length + playerStatsCards.length + goleirosCards.length} picks de mercados
-                    </button>
-                  )}
-                  {/* Os dois atalhos ("Ver faltas no VIP" / "Ver picks de
-                      jogador") saíram em 28/08: os cards que eles prometiam
-                      já estão nesta mesma grade, então o clique levava a outra
-                      aba pra ver o que a pessoa acabou de ler. */}
+                  <button onClick={() => setTab('faltas')}
+                    className="mt-4 w-full text-center text-xs text-purple-400 hover:text-purple-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong">
+                    {faltasCards.length > 4
+                      ? `Ver todos os ${faltasCards.length} picks de falta`
+                      : 'Abrir a aba Pick Falta'}
+                  </button>
+                </section>
+              )}
+
+              {canSeeVip && playerStatsCards.length > 0 && (
+                <section>
+                  <SectionHeader color="bg-amber-400" label="Pick Jogador" badge="VIP"
+                    contagem={playerStatsCards.length} />
+                  <div className="lista-longa grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                    {playerStatsCards.slice(0, 4).map(c => (
+                      <SuggestionCard key={`p-${c.id}`} s={c.s}
+                        banca={bancaSummary?.has_banca ? bancaSummary : null} />
+                    ))}
+                  </div>
+                  <button onClick={() => setTab('jogadores')}
+                    className="mt-4 w-full text-center text-xs text-amber-400 hover:text-amber-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong">
+                    {playerStatsCards.length > 4
+                      ? `Ver todos os ${playerStatsCards.length} picks de jogador`
+                      : 'Abrir a aba Pick Jogador'}
+                  </button>
+                </section>
+              )}
+
+              {/* Defesas parou de crescer em 27/08 (virou o metodo `saves` do
+                  Player Stats). Fica sem atalho de aba: ela nao tem uma. */}
+              {canSeeVip && goleirosCards.length > 0 && (
+                <section>
+                  <SectionHeader color="bg-sky-400" label="Defesas" badge="VIP"
+                    contagem={goleirosCards.length} />
+                  <div className="lista-longa grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                    {goleirosCards.slice(0, 4).map(c => (
+                      <SuggestionCard key={`g-${c.id}`} s={c.s}
+                        banca={bancaSummary?.has_banca ? bancaSummary : null} />
+                    ))}
+                  </div>
                 </section>
               )}
 
@@ -3381,7 +3426,7 @@ export default function Picks() {
             {/* Pick de hoje */}
             {todayLoading ? <PickLoading /> : (
               <div>
-                <SectionHeader color="bg-green-500" label={`Pick do Dia, ${todayDateStr}`} />
+                <SectionHeader color="bg-green-500" label="Pick do Dia" />
                 {today?.dica_do_dia ? <PickSeguroCard dica={today.dica_do_dia} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(today.dica_do_dia.fixture_id)} /> : <PickSeguroEmpty />}
               </div>
             )}
@@ -3413,12 +3458,13 @@ export default function Picks() {
             </ComoFunciona>
 
 
-            {/* Picks do dia */}
+            {/* NO FORMATO DO PICK BOOST (08/09, pedido do usuario).
+                O titulo "Picks do Dia, 8 de setembro de 2026" saiu: com o dia
+                dentro do proprio botao do calendario ele era a terceira vez que
+                a mesma data aparecia na dobra, e empurrava a barra de controles
+                pra longe do "Como funciona". As abas com mais de um pick por
+                dia (VIP, Pick Falta, Pick Jogador, Boost) ficam todas assim. */}
             <div>
-              <SectionHeader
-                color="bg-yellow-400"
-                label={`Picks do Dia, ${todayDateStr}`}
-              />
               {!canSeeVip ? <VipLockOverlay color="yellow" picks={today?.bloqueados?.vip} /> : todayLoading ? <PickLoading /> : (() => {
                 const vips = today?.vip ?? []
                 const leagues = Array.from(new Set(vips.map((s: any) => s.league_name).filter(Boolean))) as string[]
@@ -3487,34 +3533,6 @@ export default function Picks() {
               })()}
             </div>
 
-            {/* Faltas · até 27/08 morava numa aba separada, e desde 05/09 ela
-                nem seção fixa é: o método publica DENTRO do VIP, então num dia
-                sem pick de falta não há nada a anunciar -- o aviso "sem pick de
-                faltas hoje" descrevia um produto com agenda própria, que é
-                justamente o que ela deixou de ser. A seção continua existindo
-                pro dia em que sai pick pela tabela dela.
-
-                É um mercado de PARTIDA como os outros picks VIP (um jogo, um
-                mercado, uma odd), sai do mesmo motor e usa o mesmo card · o que
-                a aba dava era distância, não organização.
-
-                Fica DEPOIS da grade e não misturada nela de propósito: a grade
-                de cima é a que o assinante abre esperando ("os picks do dia"),
-                e um pick de faltas no meio dela mudaria a leitura sem avisar.
-
-                Prop de JOGADOR não vem junto: ela tem aba própria, porque o que
-                decide lá é o indivíduo e não o confronto. */}
-            <MercadoSecao
-              tipo="faltas"
-              titulo="Faltas"
-              cor="bg-purple-400"
-              explicacao="Total de faltas do jogo. A previsão combina o histórico de faltas dos dois times com o do árbitro, e a probabilidade sai da taxa medida em jogos reais nessa faixa de previsão."
-              picks={faltasOrdenadas}
-              carregando={todayLoading}
-              banca={bancaSummary?.has_banca ? bancaSummary : null}
-              sumirSeVazio
-            />
-
             <button onClick={() => navigate('/resultados')}
               className="w-full text-center text-xs text-yellow-400 hover:text-yellow-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong font-semibold">
               Ver todos os resultados
@@ -3523,7 +3541,10 @@ export default function Picks() {
         )}
 
         {tab === 'multiplas' && (
-          <motion.div key="multiplas" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6">
+          /* A aba inteira na largura de leitura, e nao so' o card: com o
+             "Como funciona" ocupando 1400px em cima de um card de 672 a tela
+             ficava com duas larguras diferentes na mesma coluna. */
+          <motion.div key="multiplas" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6 max-w-2xl">
             <ComoFunciona titulo="O que são as Múltiplas VIP?" cor="text-blue-400"
                           borda="border-blue-400/20" fundo="bg-blue-400/5">
               <>
@@ -3539,9 +3560,14 @@ export default function Picks() {
               </>
             </ComoFunciona>
 
-            {/* Múltiplas de hoje */}
+            {/* LARGURA DE LEITURA, e nao a da tela (08/09, pedido do usuario).
+                O dia normal tem UMA multipla, e ela ocupava os 1400px inteiros:
+                o card mais denso do site (duas pernas, odd combinada, barra de
+                probabilidade) virava uma faixa com metros de vazio no meio. E'
+                o mesmo max-w que a secao dela usa na aba Hoje desde que o card
+                truncava nomes de time em 1/3 de tela.
+                O titulo com a data saiu junto, como no VIP e no Boost. */}
             <div>
-              <SectionHeader color="bg-blue-400" label={`Múltiplas do Dia, ${todayDateStr}`} />
               {/* Dia e filtros na mesma linha · ver o comentario na aba VIP. */}
               <div className="flex flex-wrap items-center gap-2 mb-4">
                 <BarraDoDia offset={selectedOffset} setOffset={setSelectedOffset}
@@ -3580,7 +3606,10 @@ export default function Picks() {
         )}
 
         {tab === 'alavancagem' && (
-          <motion.div key="alavancagem" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6">
+          /* Mesma largura de leitura da Multipla: e' UM caminho por dia, e a
+             tela inteira pra um card so' espalhava entrada, progresso e escada
+             em faixas de 1400px. */
+          <motion.div key="alavancagem" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6 max-w-2xl">
             {/* UMA explicação só, e a certa.
               *
               * Havia DUAS, e elas se contradiziam: esta caixa descrevia o
@@ -3636,7 +3665,7 @@ export default function Picks() {
             {/* Stats da série + Pick de hoje (bloqueado para free) */}
             {!canSeeVip ? (
               <div>
-                <SectionHeader color="bg-orange-400" label={`Pick do Dia, ${todayDateStr}`} />
+                <SectionHeader color="bg-orange-400" label="Pick do Dia" />
                 <VipLockOverlay color="orange" resumo={today?.bloqueados?.alavancagem} rotulo="caminhos" />
               </div>
             ) : (
@@ -3644,7 +3673,7 @@ export default function Picks() {
                 {/* Pick de hoje */}
                 {todayLoading ? <PickLoading /> : (
                   <div>
-                    <SectionHeader color="bg-orange-400" label={`Pick do Dia, ${todayDateStr}`} />
+                    <SectionHeader color="bg-orange-400" label="Pick do Dia" />
                     {today?.alavancagem ? (
                       <AlavancagemCard
                         pick={today.alavancagem}
@@ -4120,6 +4149,65 @@ export default function Picks() {
           </motion.div>
         )}
 
+        {/* PICK FALTA · aba propria (08/09, decisao do usuario).
+            O total de faltas do jogo tem modelo proprio: quem decide e' o
+            arbitro e o quanto o jogo trava, nao o confronto. Dentro do VIP ele
+            era uma secao no fim da grade de outro produto. */}
+        {tab === 'faltas' && (
+          <motion.div key="faltas" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6">
+            <ComoFunciona titulo="O que é o Pick Falta?" cor="text-purple-400"
+                          borda="border-purple-400/20" fundo="bg-purple-400/5">
+              <>
+                <p>
+                  O <span className="text-ink-1 font-bold">total de faltas do jogo</span>, somando
+                  os dois times. A previsão combina o histórico de faltas de cada um com o do{' '}
+                  <span className="text-ink-1 font-bold">árbitro</span>, que é quem define o quanto
+                  o jogo trava.
+                </p>
+                <p>
+                  A probabilidade não sai de Poisson: falta é contagem superdispersa (1 jogo em
+                  cada 3 foge da média), então o motor usa Binomial Negativa com a dispersão medida
+                  na própria base.
+                </p>
+                <PlacarDoProduto source="faltas" tom="text-purple-400/70" />
+              </>
+            </ComoFunciona>
+
+            {!canSeeVip ? (
+              <VipLockOverlay color="purple" picks={today?.bloqueados?.mercados} rotulo="picks de falta" />
+            ) : (
+              <>
+                {/* Dia e filtros na mesma linha · ver o comentario na aba VIP. */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <BarraDoDia offset={selectedOffset} setOffset={setSelectedOffset}
+                              diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
+                              rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />
+                  <FiltrosDePicks
+                    picks={faltasOrdenadas ?? []} liga={falLiga} setLiga={setFalLiga}
+                    resultado={falResultado} setResultado={setFalResultado}
+                    ordem={falOrdem} setOrdem={setFalOrdem}
+                    mostrados={faltasDaAba.length}
+                  />
+                </div>
+                <MercadoSecao
+                  tipo="faltas"
+                  titulo="Pick Falta"
+                  cor="bg-purple-400"
+                  explicacao="Total de faltas do jogo. A previsão combina o histórico dos dois times com o do árbitro, e a probabilidade sai da taxa medida em jogos reais nessa faixa."
+                  picks={faltasDaAba}
+                  carregando={todayLoading}
+                  banca={bancaSummary?.has_banca ? bancaSummary : null}
+                />
+              </>
+            )}
+
+            <button onClick={() => navigate('/resultados')}
+              className="w-full text-center text-xs text-purple-400 hover:text-purple-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong font-semibold">
+              Ver todos os resultados
+            </button>
+          </motion.div>
+        )}
+
         {/* Prop de JOGADOR · aba própria desde 27/08.
             O que decide aqui é o indivíduo e não o confronto, então a leitura é
             outra: o card fala de uma pessoa, e a média que sustenta o pick é de
@@ -4134,7 +4222,7 @@ export default function Picks() {
                             diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
                             rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />
                 <div className="mt-6">
-                  <SectionHeader color="bg-amber-400" label="Jogadores" />
+                  <SectionHeader color="bg-amber-400" label="Pick Jogador" />
                 </div>
                 <VipLockOverlay color="amber" picks={today?.bloqueados?.mercados} rotulo="picks de jogador" />
               </div>
@@ -4179,7 +4267,7 @@ export default function Picks() {
                 </div>
                 <MercadoSecao
                   tipo="player_stats"
-                  titulo="Jogadores"
+                  titulo="Pick Jogador"
                   cor="bg-amber-400"
                   explicacao="Cada pick é sobre uma pessoa, num jogo. A linha traz o nome junto porque o jogador faz parte da aposta."
                   picks={jogadoresDaAba}
