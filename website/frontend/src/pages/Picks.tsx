@@ -18,6 +18,8 @@ import { ComoFunciona,
 } from '../components/ui'
 import { aplicarFiltro, FILTRO_INICIAL } from '../lib/mercadoFiltro'
 import EngineStatus from '../components/EngineStatus'
+import { Escada, LinhaCaminho,
+         type AlavStep, type CaminhoEncerrado } from '../components/alavancagem/caminho'
 import AnalysisModal from '../components/AnalysisModal'
 import {
   CampoDoPick, PickCardFooter, PickExplainButton, PickProbability,
@@ -131,10 +133,6 @@ interface AlavFilters { date_from: string; date_to: string; resultado: string }
 
 /** Um caminho de alavancagem. `current_bankroll` é o bolo em jogo, não saldo:
  *  só vira dinheiro (e entra na banca) quando o caminho é encerrado. */
-interface AlavStep {
-  pick_id: number; result: 'GREEN' | 'RED'; odd: number
-  date: string | null; match: string; before: number; after: number
-}
 interface AlavSerie {
   configured: boolean
   series_id?: number
@@ -148,11 +146,7 @@ interface AlavSerie {
   realized_units?: number
   open_units?: number
   realized_total?: number
-  history?: {
-    id: number; initial: number; final: number; realized: number
-    units: number; greens: number
-    end_reason: 'manual' | 'red' | 'meta'; started_at: string | null; ended_at: string | null
-  }[]
+  history?: CaminhoEncerrado[]
 }
 const defaultAlavFilters: AlavFilters = { date_from: '', date_to: TODAY, resultado: 'all' }
 
@@ -3879,64 +3873,34 @@ export default function Picks() {
                     )
                   })()}
 
-                  {/* Passos do caminho atual · a escada que levou até o bolo de hoje */}
+                  {/* A ESCADA, e não a fileira de tags (07/09).
+                      O caminho até aqui era uma linha de "R$30 › R$37 › R$46"
+                      em fonte 10: os números estavam todos lá e o salto do
+                      composto, que é o produto inteiro, não aparecia. É o mesmo
+                      gráfico de /banca/alavancagem, mais baixo porque aqui ele
+                      é o contexto do pick do dia e não o assunto da tela. */}
                   {!!userAlavSerie?.steps?.length && (
-                    <div className="mb-3 flex flex-wrap items-center gap-1.5">
-                      <span className="text-[10px] text-ink-4 font-mono">R${userAlavSerie.initial_bankroll.toFixed(0)}</span>
-                      {userAlavSerie.steps.map(s => (
-                        <span key={s.pick_id} className="flex items-center gap-1">
-                          <span className="text-ink-4 text-[10px]">&rsaquo;</span>
-                          <span
-                            title={`${s.match} | odd ${s.odd.toFixed(2)}`}
-                            className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                              s.result === 'GREEN'
-                                ? 'bg-green-500/10 text-green-400'
-                                : 'bg-red-500/10 text-red-400 line-through'
-                            }`}
-                          >
-                            R${s.after.toFixed(0)}
-                          </span>
-                        </span>
-                      ))}
+                    <div className="mb-4">
+                      <p className="text-[11px] text-ink-3 mb-2">Caminho até aqui</p>
+                      <Escada entrada={userAlavSerie.initial_bankroll}
+                              steps={userAlavSerie.steps} altura="h-28" />
                     </div>
                   )}
 
+                  {/* Caminhos anteriores com a mesma linha da tela de leitura:
+                      motivo do fim, entrada, greens e o que virou saldo. O
+                      <details> antigo espremia isso numa frase por caminho, e
+                      o caminho é a unidade de conta do produto. */}
                   {!!userAlavSerie?.history?.length && (
                     <details className="mb-3">
                       <summary className="cursor-pointer text-[11px] text-ink-3 hover:text-ink-1 select-none font-semibold">
                         Caminhos anteriores ({userAlavSerie.history.length})
                       </summary>
-                      <ul className="mt-2 divide-y divide-line/50">
+                      <div className="mt-1">
                         {userAlavSerie.history.map(h => (
-                          <li key={h.id} className="py-2 flex items-center justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="text-[11px] text-ink-2">
-                                R${h.initial.toFixed(0)} <span className="text-ink-4">para</span> R${h.final.toFixed(0)}
-                                <span className={`ml-2 font-bold ${
-                                  h.end_reason === 'red' ? 'text-red-400'
-                                  : h.end_reason === 'meta' ? 'text-green-400' : 'text-orange-400'}`}>
-                                  {h.end_reason === 'red' ? 'estourou'
-                                   : h.end_reason === 'meta' ? 'bateu a meta' : 'encerrado por você'}
-                                </span>
-                              </p>
-                              <p className="text-[10px] text-ink-4">
-                                {/* "Peguei esse caminho?" · caminho sem green seguido existe
-                                    no banco mas nunca foi jogado. */}
-                                {h.greens > 0
-                                  ? `${h.greens} ${h.greens === 1 ? 'green seu' : 'greens seus'}`
-                                  : 'você não seguiu nenhum pick deste caminho'}
-                                {h.ended_at && `, ${h.ended_at.slice(8, 10)}/${h.ended_at.slice(5, 7)}`}
-                              </p>
-                            </div>
-                            <span className={`font-mono text-xs font-bold shrink-0 ${h.realized >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                              {h.realized >= 0 ? '+' : ''}R${h.realized.toFixed(2)}
-                              <span className="block text-[10px] text-ink-4 font-normal text-right">
-                                {h.units >= 0 ? '+' : ''}{h.units.toFixed(2)}u
-                              </span>
-                            </span>
-                          </li>
+                          <LinhaCaminho key={h.id} c={h} />
                         ))}
-                      </ul>
+                      </div>
                     </details>
                   )}
 
