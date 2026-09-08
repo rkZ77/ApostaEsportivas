@@ -56,6 +56,7 @@ import { pctProb } from '../utils/format'
 import { rotuloDoStatus, escudoDoTime } from '../lib/aoVivo'
 import { calcVipStake } from '../utils/stakeUtils'
 import { sinalizarNavegacao } from '../services/progressBus'
+import FiltrosDePicks, { filtrarPicks, ordenarPicks, type OrdemDePick } from './FiltrosDePicks'
 
 /* Teto de unidades do Live · espelha STAKE_LIMITS["live"] em
  * backend/routers/banca.py. É o mais baixo de qualquer produto, e a razão está
@@ -1470,6 +1471,19 @@ export default function LivePicksFeed({ isActive, banca }: {
   }, [picks])
   const greensDeHoje = useMemo(() => encerrados.filter(p => p.result === 'GREEN').length, [encerrados])
 
+  /* MESMA BARRA DE FILTRO DAS OUTRAS ABAS (07/09).
+     A lista de encerrados chega a dez cards num dia normal e nao tinha
+     controle nenhum: "quais deram green" so' se respondia rolando a pagina.
+     Liga sai de dentro do proprio componente compartilhado quando ha' mais de
+     uma, entao aqui nao ha' regra propria. */
+  const [liveLiga, setLiveLiga]           = useState('')
+  const [liveResultado, setLiveResultado] = useState('')
+  const [liveOrdem, setLiveOrdem]         = useState<OrdemDePick>('rank')
+  const encerradosDaAba = useMemo(
+    () => ordenarPicks(filtrarPicks(encerrados as any[], liveLiga, liveResultado), liveOrdem),
+    [encerrados, liveLiga, liveResultado, liveOrdem],
+  )
+
   /* SUAS APOSTAS PRIMEIRO, E SEPARADAS (2026-08-29, pedido do usuário).
    *
    * A aba misturava numa lista só o que a pessoa já pegou e o que o motor
@@ -1672,11 +1686,25 @@ export default function LivePicksFeed({ isActive, banca }: {
               : ''}
             Estes já foram liquidados e não aceitam mais entrada.
           </p>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {encerrados.map(p => (
-              <CardLive key={p.id} pick={p} onSeguir={setAlvo} banca={banca} />
-            ))}
+          <div className="mb-3">
+            <FiltrosDePicks
+              picks={encerrados as any[]} liga={liveLiga} setLiga={setLiveLiga}
+              resultado={liveResultado} setResultado={setLiveResultado}
+              ordem={liveOrdem} setOrdem={setLiveOrdem}
+              mostrados={encerradosDaAba.length}
+            />
           </div>
+          {encerradosDaAba.length === 0 ? (
+            <p className="text-xs text-ink-4 py-6 text-center">
+              Nenhum pick encerrado com esses filtros. Limpe o filtro para ver o dia inteiro.
+            </p>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {encerradosDaAba.map(p => (
+                <CardLive key={p.id} pick={p} onSeguir={setAlvo} banca={banca} />
+              ))}
+            </div>
+          )}
         </>
       )}
 

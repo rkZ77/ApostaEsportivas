@@ -18,6 +18,8 @@ import { ComoFunciona,
 } from '../components/ui'
 import { aplicarFiltro, FILTRO_INICIAL } from '../lib/mercadoFiltro'
 import EngineStatus from '../components/EngineStatus'
+import FiltrosDePicks, { filtrarPicks, ordenarPicks,
+         type OrdemDePick } from '../components/FiltrosDePicks'
 import { Escada, LinhaCaminho,
          type AlavStep, type CaminhoEncerrado } from '../components/alavancagem/caminho'
 import AnalysisModal from '../components/AnalysisModal'
@@ -798,6 +800,18 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
 
   // Multipla nao tem coluna de probabilidade: score_combo entra como aproximacao
   const pct = Math.round(Number(m.probability ?? m.confidence ?? 0) * 100)
+  /* A ODD DO BILHETE, e nunca "NaN" na tela (07/09).
+     `Number(m.total_odd).toFixed(2)` imprimia NaN em corpo 30 quando o campo
+     nao vinha -- e a multipla e' o unico card em que a odd nao esta' em cada
+     perna, entao nao havia como a pessoa conferir. Cai pro produto das pernas,
+     e so' entao desiste. */
+  const oddDoBilhete = (() => {
+    const bruta = Number(m.total_odd)
+    if (Number.isFinite(bruta) && bruta > 0) return bruta
+    const pernas = (m.legs ?? []).map((l: any) => Number(l.odd)).filter((o: number) => Number.isFinite(o) && o > 0)
+    if (pernas.length === 0) return null
+    return pernas.reduce((a: number, b: number) => a * b, 1)
+  })()
   const [followed, setFollowed] = useState<boolean>(!!m.is_followed)
   const [following, setFollowing] = useState(false)
   const [showModal, setShowModal] = useState(false)
@@ -957,10 +971,10 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
           <div className="text-3xl font-black text-green-400">
             {seguido && oddSeguida != null
               ? Number(oddSeguida).toFixed(2)
-              : Number(m.total_odd).toFixed(2)}
+              : oddDoBilhete != null ? oddDoBilhete.toFixed(2) : '-'}
           </div>
           {seguido && oddSeguida != null && Math.abs(oddSeguida - Number(m.total_odd)) > 0.001 && (
-            <div className="text-[9px] text-ink-4 mt-0.5">bilhete: {Number(m.total_odd).toFixed(2)}</div>
+            <div className="text-[9px] text-ink-4 mt-0.5">bilhete: {(oddDoBilhete ?? 0).toFixed(2)}</div>
           )}
         </div>
         {!m.result && seguido && stakeSeguida != null ? (
@@ -973,7 +987,7 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
             <div className="flex-1 px-4 py-3 text-center">
               <div className="text-[10px] text-ink-3 mb-0.5">Lucro pot.</div>
               {(() => {
-                const effOdd = oddSeguida ?? Number(m.total_odd)
+                const effOdd = oddSeguida ?? oddDoBilhete ?? 0
                 const profitU = (effOdd - 1) * stakeSeguida
                 return (
                   <>
@@ -2375,95 +2389,6 @@ function BarraDoDia({ offset, setOffset, diasComPick, isoDoOffset, rotuloLongo, 
  * `ordenar` reordena, nunca filtra · e o default e' a ordem do motor, a unica
  * que carrega julgamento dele.
  */
-type OrdemDePick = 'rank' | 'prob' | 'odd' | 'hora'
-
-function FiltrosDePicks({
-  picks, liga, setLiga, resultado, setResultado, ordem, setOrdem, mostrados,
-}: {
-  picks: any[]
-  liga: string; setLiga: (v: string) => void
-  resultado: string; setResultado: (v: string) => void
-  ordem?: OrdemDePick; setOrdem?: (v: OrdemDePick) => void
-  /** Quantos sobraram depois do filtro · só aparece com filtro ativo. */
-  mostrados?: number
-}) {
-  const ligas = Array.from(new Set(picks.map(p => p.league_name).filter(Boolean))) as string[]
-  if (picks.length < 2) return null
-
-  const porLiga = (lg: string) => picks.filter(p => p.league_name === lg).length
-  const ativo = Boolean(liga || resultado)
-
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      {ligas.length > 1 && (
-        <SelectMenu
-          ariaLabel="Liga"
-          options={[{ value: '', label: 'Todas as ligas' },
-                    ...ligas.map(lg => ({ value: lg, label: lg, meta: String(porLiga(lg)) }))]}
-          value={liga}
-          onChange={setLiga}
-        />
-      )}
-      <SelectMenu
-        ariaLabel="Resultado"
-        options={[
-          { value: '', label: 'Todos os resultados' },
-          { value: 'pending', label: 'Pendentes' },
-          { value: 'GREEN', label: 'Green' },
-          { value: 'RED', label: 'Red' },
-        ]}
-        value={resultado}
-        onChange={setResultado}
-      />
-      {setOrdem && (
-        <SelectMenu
-          ariaLabel="Ordenar"
-          options={[
-            { value: 'rank', label: 'Ordem do motor' },
-            { value: 'prob', label: 'Maior probabilidade' },
-            { value: 'odd', label: 'Maior odd' },
-            { value: 'hora', label: 'Horário do jogo' },
-          ]}
-          value={ordem ?? 'rank'}
-          onChange={v => setOrdem(v as OrdemDePick)}
-        />
-      )}
-      {ativo && (
-        <button
-          onClick={() => { setLiga(''); setResultado('') }}
-          className="text-[11px] font-bold text-accent-ink hover:text-accent-hover transition-colors"
-        >
-          Limpar
-        </button>
-      )}
-      {ativo && mostrados != null && (
-        <span className="text-[11px] text-ink-4">{mostrados} de {picks.length}</span>
-      )}
-    </div>
-  )
-}
-
-/** Aplica liga + resultado, na ordem em que a tela oferece. */
-function filtrarPicks(picks: any[], liga: string, resultado: string): any[] {
-  return picks.filter(p => {
-    if (liga && p.league_name !== liga) return false
-    if (!resultado) return true
-    return resultado === 'pending' ? !p.result : p.result === resultado
-  })
-}
-
-/** Reordena sem filtrar. `rank` devolve a lista como o motor entregou. */
-function ordenarPicks(picks: any[], ordem: OrdemDePick): any[] {
-  if (ordem === 'rank') return picks
-  return [...picks].sort((a, b) => {
-    if (ordem === 'prob') return Number(b.probability ?? b.confidence ?? 0) - Number(a.probability ?? a.confidence ?? 0)
-    if (ordem === 'odd') return Number(b.odd ?? 0) - Number(a.odd ?? 0)
-    // horário: sem match_datetime o pick vai pro fim, não pro topo.
-    const ha = a.match_datetime ? String(a.match_datetime).slice(11, 16) : '99:99'
-    const hb = b.match_datetime ? String(b.match_datetime).slice(11, 16) : '99:99'
-    return ha.localeCompare(hb)
-  })
-}
 
 export default function Picks() {
   const navigate = useNavigate()
@@ -2694,7 +2619,6 @@ export default function Picks() {
    * texto é o atalho que o painel de filtro não dá · e a ordem existe porque
    * "mostre primeiro o de maior probabilidade" é a pergunta que o assinante
    * faz depois de já ter visto a lista uma vez. Ver components/FilterPanel. */
-  const [vipBusca, setVipBusca] = useState<string>('')
   const [vipOrdem, setVipOrdem] = useState<string>('rank')
 
   function getBrasiliaDate(offset: number): Date {
@@ -3495,20 +3419,13 @@ export default function Picks() {
                 const byResult = vipResultFilter
                   ? byLeague.filter((s: any) => vipResultFilter === 'pending' ? !s.result : s.result === vipResultFilter)
                   : byLeague
-                /* Busca casa em time, liga e mercado · são os três jeitos de a
-                   pessoa lembrar de um pick ("o do Palmeiras", "o da Serie B",
-                   "o de escanteios"). Sem acento e sem caixa, porque ninguém
-                   digita "Brasileirão" com til numa caixa de busca. */
-                const alvo = vipBusca.trim().toLowerCase()
-                  .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-                const byBusca = alvo
-                  ? byResult.filter((s: any) => [
-                      s.home_team_name, s.away_team_name, s.league_name,
-                      translateMarket(s.market), translateLine(s.line),
-                    ].filter(Boolean).join(' ').toLowerCase()
-                      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-                      .includes(alvo))
-                  : byResult
+                /* A CAIXA DE BUSCA SAIU (07/09, pedido do usuario).
+                   Ela so' existia aqui, e era o que fazia esta aba ter uma
+                   barra de controles diferente de todas as outras -- alem de
+                   esticar (flex-1) ate' passar da largura da grade no desktop.
+                   Liga, resultado e ordem respondem as mesmas perguntas com o
+                   mesmo componente que Boost, Jogadores e Ao Vivo usam. */
+                const byBusca = byResult
                 /* `rank` é a ordem que o motor entregou · é o default porque é
                    a única que carrega julgamento do motor. As outras três
                    reordenam a MESMA lista, nunca filtram. */
@@ -3535,15 +3452,6 @@ export default function Picks() {
                           ordem={vipOrdem as OrdemDePick} setOrdem={v => setVipOrdem(v)}
                           mostrados={filteredVips.length}
                         />
-                        <input
-                          value={vipBusca}
-                          onChange={e => setVipBusca(e.target.value)}
-                          placeholder="Buscar time, liga ou mercado"
-                          aria-label="Buscar pick"
-                          className="flex-1 min-w-[180px] bg-surface-1 border border-line rounded-md
-                                     px-3 py-2 min-h-[36px] text-xs text-ink-1 placeholder:text-ink-4
-                                     focus:outline-none focus:border-line-strong transition-colors"
-                        />
                       </div>
                     )}
                     {filteredVips.length > 0 ? (
@@ -3554,7 +3462,7 @@ export default function Picks() {
                       </motion.div>
                     ) : (
                       <SecaoVazia texto={
-                        leagueFilter || vipResultFilter || vipBusca.trim()
+                        leagueFilter || vipResultFilter
                           ? 'Nenhum pick VIP com esses filtros. Limpe o filtro para ver o dia inteiro.'
                           : 'Sem pick VIP hoje. Não há horário fixo de publicação: eles saem quando o motor encontra jogo que passa nos cortes.'
                       } />

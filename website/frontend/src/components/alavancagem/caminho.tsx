@@ -76,25 +76,35 @@ export function Escada({ entrada, steps, altura = 'h-40' }: {
   ]
   const maior = Math.max(...degraus.map(d => d.valor), entrada)
 
+  /* Largura de leitura, e nao a largura da tela: com quatro degraus num
+     monitor de 1440 as barras viravam blocos de 300px cada, e o formato da
+     escada -- que e' o assunto do grafico -- se perdia em barras chapadas. */
   return (
-    <div className={`flex items-end gap-1.5 ${altura}`}>
+    <div className={`flex items-end gap-1.5 max-w-xl ${altura}`}>
       {degraus.map((d, i) => {
         const alturaPct = maior > 0 ? (d.valor / maior) * 100 : 0
         const cor = d.result === 'RED' ? 'bg-red-500/70'
                   : d.result === 'GREEN' ? 'bg-orange-400'
                   : 'bg-ink-4/50'
         return (
-          <div key={i} className="flex-1 flex flex-col items-center justify-end min-w-0 h-full">
+          /* O NUMERO E O ROTULO FICAM FORA DA ESCALA (07/09).
+             Eles eram irmaos da barra no mesmo flex-col, entao comiam ~26px da
+             altura e a barra de 100% acabava do mesmo tamanho da de 74%: a
+             escada crescia e o grafico nao mostrava. Agora so' a faixa do meio
+             (flex-1) e' a area do grafico, e a porcentagem vale sobre ela. */
+          <div key={i} className="flex-1 flex flex-col items-center min-w-0 h-full">
             <span className="font-mono text-[10px] text-ink-3 mb-1 tabular-nums whitespace-nowrap">
               {d.result === 'RED' ? '0' : Math.round(d.valor)}
             </span>
-            <motion.div
-              initial={{ height: 0 }}
-              animate={{ height: `${Math.max(3, alturaPct)}%` }}
-              transition={{ delay: i * 0.06, type: 'spring', stiffness: 220, damping: 26 }}
-              className={`w-full rounded-t ${cor}`}
-              title={d.match || d.rotulo}
-            />
+            <div className="flex-1 w-full flex items-end">
+              <motion.div
+                initial={{ height: 0 }}
+                animate={{ height: `${Math.max(3, alturaPct)}%` }}
+                transition={{ delay: i * 0.06, type: 'spring', stiffness: 220, damping: 26 }}
+                className={`w-full rounded-t ${cor}`}
+                title={d.match || d.rotulo}
+              />
+            </div>
             <span className="text-[9px] text-ink-4 mt-1 truncate w-full text-center">
               {d.rotulo}
             </span>
