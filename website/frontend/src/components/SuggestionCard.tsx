@@ -575,27 +575,25 @@ function SuggestionCard({
                     </>
                   )}
                 </div>
-                <div className="flex-1 px-4 py-3 text-center">
-                  {seguiu ? (
-                    <>
-                      <div className="text-[10px] text-ink-3 mb-0.5">Em reais</div>
-                      {profitR != null ? (
-                        <div className={`text-xl font-black ${color}`}>
-                          {p >= 0 ? '+' : '-'}R${profitR.toFixed(0)}
-                        </div>
-                      ) : (
-                        <div className="text-xl font-black text-ink-4">-</div>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      {/* Vocabulário do próprio card: o botão vira "Registrado"
-                          quando a aposta é seguida, então o oposto é este. */}
-                      <div className="text-[10px] text-ink-3 mb-0.5">Sua aposta</div>
-                      <div className="text-sm font-semibold text-ink-4 pt-1.5">Não registrada</div>
-                    </>
-                  )}
-                </div>
+                {/* A COLUNA "SUA APOSTA / NAO REGISTRADA" SAIU (07/09).
+                    Ela existia so' para dizer que nao havia nada: num pick
+                    encerrado que a pessoa nao seguiu, um terco da largura do
+                    card ficava com a palavra "Nao" numa linha e "registrada"
+                    na outra -- e num card de duas colunas isso apertava a odd
+                    e o lucro, que sao o assunto. Quem seguiu continua vendo o
+                    valor em reais, que e' informacao. */}
+                {seguiu && (
+                  <div className="flex-1 px-4 py-3 text-center">
+                    <div className="text-[10px] text-ink-3 mb-0.5">Em reais</div>
+                    {profitR != null ? (
+                      <div className={`text-xl font-black ${color}`}>
+                        {p >= 0 ? '+' : '-'}R${profitR.toFixed(0)}
+                      </div>
+                    ) : (
+                      <div className="text-xl font-black text-ink-4">-</div>
+                    )}
+                  </div>
+                )}
               </>
             )
           })()

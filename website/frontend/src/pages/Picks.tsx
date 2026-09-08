@@ -2575,6 +2575,12 @@ export default function Picks() {
   const [alavError,    setAlavError]    = useState(false)
   const [alavHasMore,    setAlavHasMore]    = useState(false)
   const [alavLoadingMore, setAlavLoadingMore] = useState(false)
+  /* QUANTAS ETAPAS DO CAMINHO A TELA MOSTRA (07/09, pedido do usuario).
+     A lista vinha inteira: quem segue alavancagem ha' meses chegava a
+     sessenta linhas empilhadas numa coluna so', e a etapa de hoje -- a unica
+     que ainda aceita aposta -- ficava a um scroll de distancia do rodape. Doze
+     cobre as duas ultimas semanas; o resto continua a um clique. */
+  const [alavEtapas, setAlavEtapas] = useState(12)
   const [userAlavSerie, setUserAlavSerie] = useState<AlavSerie | null>(null)
 
   /*
@@ -3402,9 +3408,6 @@ export default function Picks() {
               </>
             </ComoFunciona>
 
-            <BarraDoDia offset={selectedOffset} setOffset={setSelectedOffset}
-                        diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
-                        rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />
 
             {/* Picks do dia */}
             <div>
@@ -3444,16 +3447,24 @@ export default function Picks() {
                         Resultados, agora igual em todas as abas de pick. A
                         busca fica ao lado porque com 20 picks ela responde o
                         que o menu de liga nao responde ("o do Palmeiras"). */}
-                    {vips.length > 1 && (
-                      <div className="flex flex-wrap items-center gap-2">
+                    {/* UMA BARRA DE CONTROLES SO' (07/09, pedido do usuario).
+                        O "Hoje" ficava sozinho la' em cima, separado dos
+                        filtros por um titulo -- dois blocos de controle na
+                        mesma tela, com o recorte de dia longe do recorte de
+                        lista. Agora e' uma linha: dia, resultado e ordem. */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <BarraDoDia offset={selectedOffset} setOffset={setSelectedOffset}
+                                  diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
+                                  rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />
+                      {vips.length > 1 && (
                         <FiltrosDePicks
                           picks={vips} liga={leagueFilter} setLiga={setLeagueFilter}
                           resultado={vipResultFilter} setResultado={setVipResultFilter}
                           ordem={vipOrdem as OrdemDePick} setOrdem={v => setVipOrdem(v)}
                           mostrados={filteredVips.length}
                         />
-                      </div>
-                    )}
+                      )}
+                    </div>
                     {filteredVips.length > 0 ? (
                       <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                         {filteredVips.map((s: any) => (
@@ -3524,21 +3535,25 @@ export default function Picks() {
               </>
             </ComoFunciona>
 
-            <BarraDoDia offset={selectedOffset} setOffset={setSelectedOffset}
-                        diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
-                        rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />
-
             {/* Múltiplas de hoje */}
             <div>
               <SectionHeader color="bg-blue-400" label={`Múltiplas do Dia, ${todayDateStr}`} />
+              {/* Dia e filtros na mesma linha · ver o comentario na aba VIP. */}
+              <div className="flex flex-wrap items-center gap-2 mb-4">
+                <BarraDoDia offset={selectedOffset} setOffset={setSelectedOffset}
+                            diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
+                            rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />
+                {canSeeVip && today?.multiplas?.length > 1 && (
+                  <FiltrosDePicks
+                    picks={(today?.multiplas ?? []) as any[]} liga={multLiga} setLiga={setMultLiga}
+                    resultado={multResultado} setResultado={setMultResultado}
+                    mostrados={multiplasDaAba.length}
+                  />
+                )}
+              </div>
               {!canSeeVip ? <VipLockOverlay color="blue" resumo={today?.bloqueados?.multipla} rotulo="múltiplas" /> : todayLoading ? <PickLoading /> : (
                 today?.multiplas?.length > 0 ? (
                   <>
-                    <FiltrosDePicks
-                      picks={(today?.multiplas ?? []) as any[]} liga={multLiga} setLiga={setMultLiga}
-                      resultado={multResultado} setResultado={setMultResultado}
-                      mostrados={multiplasDaAba.length}
-                    />
                     <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-4 mt-4">
                       {multiplasDaAba.map((m: any) => <MultiplaCard key={m.id} m={m} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isMultiplaLive(m)} />)}
                     </motion.div>
@@ -3932,7 +3947,7 @@ export default function Picks() {
                       </button>
                     )}
                     <div className="space-y-0">
-                      {[...alavancagem].reverse().map((pick: any, idx: number, arr: any[]) => {
+                      {[...alavancagem].reverse().slice(0, alavEtapas).map((pick: any, idx: number, arr: any[]) => {
                         const res = pick.result
                         const date = pick.match_date
                           ? new Date(pick.match_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
@@ -3997,6 +4012,14 @@ export default function Picks() {
                         )
                       })}
                     </div>
+                    {alavancagem.length > alavEtapas && (
+                      <button
+                        onClick={() => setAlavEtapas(n => n + 20)}
+                        className="w-full text-center text-xs text-orange-400 hover:text-orange-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong font-semibold"
+                      >
+                        Mostrar mais etapas ({alavancagem.length - alavEtapas} restantes)
+                      </button>
+                    )}
                   </div>
                 )}
               </>
@@ -4029,16 +4052,18 @@ export default function Picks() {
               </>
             </ComoFunciona>
 
-            <BarraDoDia offset={selectedOffset} setOffset={setSelectedOffset}
-                        diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
-                        rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />
-
-            <FiltrosDePicks
-              picks={boost ?? []} liga={boostLiga} setLiga={setBoostLiga}
-              resultado={boostResultado} setResultado={setBoostResultado}
-              ordem={boostOrdem} setOrdem={setBoostOrdem}
-              mostrados={boostDaAba.length}
-            />
+            {/* Dia e filtros na mesma linha · ver o comentario na aba VIP. */}
+            <div className="flex flex-wrap items-center gap-2">
+              <BarraDoDia offset={selectedOffset} setOffset={setSelectedOffset}
+                          diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
+                          rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />
+              <FiltrosDePicks
+                picks={boost ?? []} liga={boostLiga} setLiga={setBoostLiga}
+                resultado={boostResultado} setResultado={setBoostResultado}
+                ordem={boostOrdem} setOrdem={setBoostOrdem}
+                mostrados={boostDaAba.length}
+              />
+            </div>
 
             {/* O gratuito do dia · fora do bloqueio, com selo próprio. */}
             <div>
@@ -4136,16 +4161,18 @@ export default function Picks() {
                   </>
                 </ComoFunciona>
 
-                <BarraDoDia offset={selectedOffset} setOffset={setSelectedOffset}
-                            diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
-                            rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />
-
-                <FiltrosDePicks
-                  picks={playerStatsOrdenados ?? []} liga={jogLiga} setLiga={setJogLiga}
-                  resultado={jogResultado} setResultado={setJogResultado}
-                  ordem={jogOrdem} setOrdem={setJogOrdem}
-                  mostrados={jogadoresDaAba.length}
-                />
+                {/* Dia e filtros na mesma linha · ver o comentario na aba VIP. */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <BarraDoDia offset={selectedOffset} setOffset={setSelectedOffset}
+                              diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
+                              rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />
+                  <FiltrosDePicks
+                    picks={playerStatsOrdenados ?? []} liga={jogLiga} setLiga={setJogLiga}
+                    resultado={jogResultado} setResultado={setJogResultado}
+                    ordem={jogOrdem} setOrdem={setJogOrdem}
+                    mostrados={jogadoresDaAba.length}
+                  />
+                </div>
                 <MercadoSecao
                   tipo="player_stats"
                   titulo="Jogadores"
