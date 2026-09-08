@@ -45,7 +45,7 @@ import PicksPendingCard from '../components/PicksPendingCard'
 import CalendarioDePicks from '../components/ui/CalendarioDePicks'
 import SelectMenu from '../components/ui/SelectMenu'
 import { LIVE_PICKS_ENABLED } from '../config'
-import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronDown, BrainCircuit, Share2, Check as CheckIcon, Loader2, TrendingUp, X as XIcon, Lock, Ticket } from 'lucide-react'
+import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronDown, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2, TrendingUp, X as XIcon, Lock, Ticket } from 'lucide-react'
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import { stakeDe } from '../utils/stakePlan'
 import { fmtUnits, pctProb, capitalizarFrase, plural } from '../utils/format'
@@ -188,6 +188,42 @@ function TabBar({ tab, setTab, canSeeVip, verAoVivo, temFaltasHoje, counts, live
     barra.scrollTo({ left: Math.max(0, botao.offsetLeft - (barra.clientWidth - botao.clientWidth) / 2), behavior: 'smooth' })
   }, [tab])
 
+  /* SETAS PRA ANDAR NA FITA (08/09, pedido do usuario).
+   *
+   * A barra passou de nove abas com o Pick Falta, e no desktop ela corta sem
+   * dar pista de como continuar: o dedo arrasta no celular, mas com mouse a
+   * pessoa tem que descobrir o scroll horizontal, e a roda do mouse nao rola
+   * fita. O degrade da ponta diz que TEM mais; a seta e' o que deixa ir.
+   *
+   * Cada uma aparece so' quando ha' pra onde ir daquele lado -- seta apagada
+   * que nao faz nada e' pior que seta nenhuma. O `-1` no comparativo absorve o
+   * arredondamento de subpixel que o zoom do navegador introduz e que, sem
+   * ele, deixa a seta da direita acesa pra sempre. */
+  const [podeEsq, setPodeEsq] = useState(false)
+  const [podeDir, setPodeDir] = useState(false)
+  useEffect(() => {
+    const barra = barraRef.current
+    if (!barra) return
+    const medir = () => {
+      setPodeEsq(barra.scrollLeft > 1)
+      setPodeDir(barra.scrollLeft + barra.clientWidth < barra.scrollWidth - 1)
+    }
+    medir()
+    barra.addEventListener('scroll', medir, { passive: true })
+    /* ResizeObserver e nao `resize` da janela: a fita muda de largura tambem
+       quando uma aba entra ou sai (Pick Falta some no dia sem pick). */
+    const ro = new ResizeObserver(medir)
+    ro.observe(barra)
+    return () => { barra.removeEventListener('scroll', medir); ro.disconnect() }
+  }, [])
+  const andar = (dir: 1 | -1) => {
+    const barra = barraRef.current
+    if (!barra) return
+    /* 70% da largura visivel: rola quase uma tela cheia e deixa uma aba de
+       ancora na borda, entao a pessoa nao perde o lugar. */
+    barra.scrollBy({ left: dir * barra.clientWidth * 0.7, behavior: 'smooth' })
+  }
+
   const tabs: { key: Tab; label: string; badge?: string; badgeCls?: string; premiumOnly?: boolean; oculta?: boolean }[] = [
     { key: 'hoje',         label: 'Hoje'            },
     { key: 'pick_seguro',  label: 'Picks Free',      badge: 'FREE', badgeCls: 'bg-green-500/10 text-green-400 border-green-500/20' },
@@ -267,7 +303,34 @@ function TabBar({ tab, setTab, canSeeVip, verAoVivo, temFaltasHoje, counts, live
           surface-0/0, e nao pra `transparent`: transparent e' rgba(0,0,0,0),
           entao o degrade passaria pelo preto no meio e deixaria uma mancha
           escura na ponta da barra em vez de sumir. */}
-      <div className="pointer-events-none absolute right-0 top-0 h-full w-10 bg-gradient-to-l from-surface-0 to-surface-0/0 z-10" />
+      {podeDir && (
+        <div className="pointer-events-none absolute right-0 top-0 h-full w-10 bg-gradient-to-l from-surface-0 to-surface-0/0 z-10" />
+      )}
+      {podeEsq && (
+        <div className="pointer-events-none absolute left-0 top-0 h-full w-10 bg-gradient-to-r from-surface-0 to-surface-0/0 z-10" />
+      )}
+      {/* As setas ficam FORA do container que rola: dentro dele elas andariam
+          junto com as abas e sairiam de cena na primeira arrastada.
+          `hidden sm:flex` porque no celular o dedo ja' arrasta a fita, e dois
+          alvos de toque em cima das abas custariam mais do que resolvem. */}
+      {podeEsq && (
+        <button
+          type="button" aria-label="Abas anteriores" onClick={() => andar(-1)}
+          className="hidden sm:flex absolute left-0 top-0 z-20 h-[calc(100%-1px)] w-8 items-center justify-center
+                     text-ink-3 hover:text-ink-1 transition-colors"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+      )}
+      {podeDir && (
+        <button
+          type="button" aria-label="Próximas abas" onClick={() => andar(1)}
+          className="hidden sm:flex absolute right-0 top-0 z-20 h-[calc(100%-1px)] w-8 items-center justify-center
+                     text-ink-3 hover:text-ink-1 transition-colors"
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      )}
       <div ref={barraRef} className="flex border-b border-line px-4 overflow-x-auto scrollbar-none">
         {tabs.filter(t => !t.oculta).map(t => {
           const count = counts?.[t.key]
