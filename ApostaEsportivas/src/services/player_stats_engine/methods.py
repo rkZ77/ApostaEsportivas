@@ -47,6 +47,43 @@ PISO DE 4 (2026-08-28, decisao do usuario). Os valores eram 3 a 6 e passaram a
 pick. O campo CONTINUA sendo por metodo -- e' ele que permite subir de novo o de
 um contador especifico quando houver medicao pedindo, sem mexer nos outros.
 
+A MEDICAO CHEGOU (2026-09-10), e ela pede exatamente isso em dois metodos.
+
+Reamostrei a serie real de PROD (278 jogadores com 15+ atuacoes de 60min+,
+30 reamostragens por tamanho) medindo o quanto a media de n atuacoes se afasta
+da media completa do jogador:
+
+    metodo         CV     n=4    n=6    n=8   n=10   n=12   n=15
+    saves         0.65    22%    17%    14%    12%    10%     8%
+    shots_total   1.37    36%    28%    22%    18%    14%    11%
+    shots_on      1.90    52%    40%    32%    25%    20%    16%
+
+O piso unico de 4 nao produz uma exigencia unica: produz 22% de erro no saves
+e 52% no shots_on. E' o proprio risco que o paragrafo do topo deste bloco
+descreve ("exigir o mesmo numero nos dois zeraria uns e afrouxaria outros"),
+so' que pelo lado de afrouxar.
+
+E o resultado em PROD segue a ordem do CV, invertida, com uma limpeza que
+raramente se ve em 16 picks:
+
+    saves         CV 0.65    2 GREEN  0 RED
+    shots_total   CV 1.37    2 GREEN  2 RED
+    shots_on      CV 1.90    5 GREEN  6 RED
+
+O motor previa 75.9% e entregou 56.2%. Com uma media que carrega 40-52% de
+erro, esse gap nao e' o modelo errando: e' o modelo respondendo com confianca
+uma pergunta que a amostra dele nao respondia.
+
+A REGUA ESCOLHIDA: igualar os outros ao unico metodo que esta funcionando, em
+vez de inventar um numero. `saves` acerta com 4 atuacoes porque 4 atuacoes ja'
+lhe dao ~22% de erro; entao o piso de cada metodo passa a ser o n que lhe da'
+os mesmos ~22%. Sai um piso igual em NUMERO e vira um piso igual em QUALIDADE
+DE ESTIMATIVA, que e' o que o piso sempre quis ser.
+
+Os tres metodos sem oferta hoje (fouls, tackles, passes) ficam em 4: nao foram
+medidos, e mexer neles seria transpor conclusao de outro contador -- o mesmo
+erro que este bloco esta corrigindo.
+
 Aqui o piso morde mais que no resto do motor: atuacao so' conta com 60+ minutos
 (player_history.MIN_MINUTOS), entao 4 atuacoes sao 4 jogos de titular efetivo, e
 nao 4 aparicoes.
@@ -153,7 +190,10 @@ SHOTS_ON = Metodo(
     #
     #   Consequencia aceita: hoje so' ha' oferta de chute no alvo pro lado de
     #   CASA. Nao e' filtro do motor, e' o que a casa publica.
-    min_atuacoes=4,
+    # 12, nao 4 · CV 1.90 e' o maior de todos os contadores medidos, e com 4
+    # atuacoes a media do jogador carrega 52% de erro. 12 e' onde ele chega
+    # nos ~22% do saves. Ver A MEDICAO CHEGOU, no topo.
+    min_atuacoes=12,
     rotulo_linha="{n} ou mais chutes no alvo",
     diario=True,
 )
@@ -177,7 +217,9 @@ SHOTS = Metodo(
     nomes_mercado=frozenset({"player shots", "total shots by player",
                              "player total shots", "shots",
                              "home player shots", "away player shots"}),
-    min_atuacoes=4,
+    # 8, nao 4 · CV 1.37, e 8 atuacoes e' onde o erro da media chega nos ~22%
+    # do saves (com 4 seriam 36%). Ver A MEDICAO CHEGOU, no topo.
+    min_atuacoes=8,
     rotulo_linha="{n} ou mais chutes",
     diario=True,
 )

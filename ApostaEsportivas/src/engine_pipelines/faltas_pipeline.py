@@ -135,6 +135,60 @@ AMOSTRA_SATURACAO = 159
 # a tabela se recalibra sozinha junto, sem nenhuma outra mudanca de codigo.
 USAR_MANDO = False
 
+# PISO DE AMOSTRA E MARGEM MINIMA (2026-09-10).
+#
+# O motor validava `probability` e `edge` e nunca olhava QUANTOS jogos tinham
+# produzido a media. `MIN_JOGOS_TIME` (=4) existe no projeto desde sempre, mas
+# so' e' aplicado em fouls_calibration.py, na hora de montar a tabela -- nunca
+# na hora de gerar o pick. A docstring de `_historico` chega a falar num
+# "minimo de 5 do modelo" que nao e' cobrado em lugar nenhum.
+#
+# O que isso custou, em PROD: quando a Championship abriu temporada, os 7 picks
+# de 08 e 09/09 sairam com CINCO jogos de historico por time (a liga so' tinha
+# 5 rodadas). Deram 3 GREEN e 4 RED, enquanto os 5 picks com 15 jogos ou mais
+# deram 4 GREEN e 1 RED.
+#
+# QUANTOS JOGOS SAO NECESSARIOS · medido, nao arbitrado. Reamostrei a media de
+# faltas de 49 times com historico longo (1.960 reamostragens por tamanho),
+# comparando a media de n jogos com a media completa do time:
+#
+#     n     erro na media do time      erro no TOTAL do jogo
+#     5      1.29 falta  (9.9%)              1.82
+#     8      1.03 falta  (7.9%)              1.45
+#    10      0.86 falta  (6.6%)              1.22
+#    12      0.72 falta  (5.5%)              1.02
+#    15      0.59 falta  (4.5%)              0.83
+#    18      0.49 falta  (3.7%)              0.69
+#
+# A ultima coluna e' a que importa: o pick e' sobre o TOTAL do jogo, entao os
+# erros dos dois times se somam (em quadratura, dai o sqrt(2)).
+#
+# Com n=5 o erro tipico da projecao e' 1.82 falta -- e as margens dos picks que
+# perderam eram 1.3, 2.9 e 3.1. O erro de amostragem era da ordem da margem
+# INTEIRA. Nao e' que o modelo errou: e' que com 5 jogos ele nao tinha o que
+# dizer, e disse assim mesmo.
+_ERRO_POR_AMOSTRA = ((5, 1.82), (8, 1.45), (10, 1.22), (12, 1.02),
+                     (15, 0.83), (18, 0.69))
+
+# Piso duro. Abaixo de 10 jogos o erro passa de 1.2 falta no total e come a
+# margem tipica de um pick de faltas inteira.
+MIN_JOGOS_PICK = 10
+
+
+def erro_de_amostragem(n_casa: int, n_fora: int) -> float:
+    """Erro esperado da projecao do TOTAL, em faltas, pra uma amostra de n
+    jogos por time. Interpola a tabela medida acima; manda o lado mais curto,
+    que e' quem limita."""
+    n = min(int(n_casa or 0), int(n_fora or 0))
+    if n <= _ERRO_POR_AMOSTRA[0][0]:
+        return _ERRO_POR_AMOSTRA[0][1]
+    if n >= _ERRO_POR_AMOSTRA[-1][0]:
+        return _ERRO_POR_AMOSTRA[-1][1]
+    for (n0, e0), (n1, e1) in zip(_ERRO_POR_AMOSTRA, _ERRO_POR_AMOSTRA[1:]):
+        if n0 <= n <= n1:
+            return round(e0 + (e1 - e0) * (n - n0) / (n1 - n0), 3)
+    return _ERRO_POR_AMOSTRA[-1][1]
+
 
 def _historico(match_stats: MatchStatsService, fixture: dict, team_id: int) -> list:
     """Historico do time, respeitando o perfil da competicao.
@@ -296,6 +350,12 @@ def _avaliar_fixture(fixture: dict, match_stats: MatchStatsService,
     media_fora, n_fora = _media_faltas(
         hist_fora, fixture["away_team_id"], "away" if USAR_MANDO else None)
 
+    # Piso de amostra · ver MIN_JOGOS_PICK. Sai ANTES de consultar contexto,
+    # arbitro e faixas: nenhuma dessas camadas conserta uma media de 5 jogos, e
+    # gastar consulta pra reprovar depois e' so' desperdicio.
+    if min(n_casa or 0, n_fora or 0) < MIN_JOGOS_PICK:
+        return None
+
     # Contexto de confronto (2026-08-20). Faltas era um dos dois pipelines
     # cegos ao agregado, e e' o mercado com o efeito MEDIDO mais forte de
     # todos: o lado que precisa reverter comete 2.48 faltas A MENOS por jogo
@@ -353,6 +413,25 @@ def _avaliar_fixture(fixture: dict, match_stats: MatchStatsService,
         if analise.get("probability", 0) < PROB_MIN:
             continue
         if analise.get("edge", 0) < EDGE_MIN:
+            continue
+        # A PROJECAO PRECISA CABER FORA DO PROPRIO ERRO DE AMOSTRAGEM.
+        #
+        # `probability` sai da tabela empirica de faixas e `expected_fouls` sai
+        # da media dos times: sao dois estimadores, e ate' aqui ninguem
+        # arbitrava quando eles discordavam. O resultado apareceu em PROD --
+        # "Over 20.5" publicado com 67% de probabilidade e expected_fouls de
+        # 17.6, ou seja, o proprio motor projetando 2.9 faltas ABAIXO da linha
+        # que ele estava recomendando. Deu RED, como o expected dizia. Um
+        # segundo caso no dia seguinte (Over 24.5 com expected 24.3) tambem.
+        #
+        # E' o mesmo gate que o motor ao vivo chama de `distancia_da_linha`:
+        # projecao colada na linha e' moeda ao ar mesmo com EV positivo. A
+        # diferenca e' que aqui a folga exigida nao e' uma constante -- ela
+        # cresce quando a amostra encolhe, que e' exatamente quando a projecao
+        # merece menos credito.
+        margem = (analise.get("expected_fouls") or 0) - linha
+        exigido = erro_de_amostragem(n_casa, n_fora)
+        if margem < exigido:
             continue
         analise["pick_score"] = pick_score(
             probability=analise["probability"], odd=oferta["odd"],
