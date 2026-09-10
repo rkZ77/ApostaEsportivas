@@ -364,7 +364,16 @@ export default function AnalysisModal({
           )}
         </div>
 
-        {/* A conta, em uma linha */}
+        {/* A CONTA, SEM REPETIR OS CARTOES (10/09/2026).
+          *
+          * A frase daqui reescrevia em prosa os mesmos dois numeros que estao
+          * logo acima em corpo 18 -- "o modelo estima 71,2% e a odd paga como
+          * se fosse 62,5%" com os dois ladrilhos "Probabilidade 71,2%" e
+          * "Prob. da casa 62,5%" a dois centimetros. Ler duas vezes o mesmo
+          * par nao explica melhor, so' empurra o resto pra baixo.
+          *
+          * O que os cartoes NAO dizem e' a subtracao entre eles, que e' a
+          * unica razao de o pick existir. Sobrou isso. */}
         {edge != null && (
           <div className="bg-surface-0 border border-line rounded-lg p-4">
             <div className="flex items-center gap-2 mb-2">
@@ -372,19 +381,14 @@ export default function AnalysisModal({
               <span className="panel-label">Por que virou pick</span>
             </div>
             <p className="text-xs text-ink-2 leading-relaxed">
-              O modelo estima <span className="font-mono text-ink-1">{mostraProb!.toFixed(1)}%</span> de
-              chance, e a odd {odd.toFixed(2)} está pagando como se fosse{' '}
-              <span className="font-mono text-ink-1">{implied.toFixed(1)}%</span>.
               {edge > 0 ? (
                 <>
-                  {' '}A diferença de{' '}
-                  <span className="font-mono text-accent-ink">{edge.toFixed(1)} pontos</span>{' '}
-                  a nosso favor é o valor que o pick busca capturar.
+                  Damos <span className="font-mono text-accent-ink">{edge.toFixed(1)} pontos</span>{' '}
+                  a mais de chance do que a odd está pagando. Essa diferença é o valor
+                  que o pick busca capturar.
                 </>
               ) : (
-                <>
-                  {' '}Sem diferença a nosso favor, o pick não seria publicado.
-                </>
+                <>Sem diferença a nosso favor, o pick não seria publicado.</>
               )}
             </p>
           </div>
@@ -471,7 +475,9 @@ export default function AnalysisModal({
           <div>
             <div className="flex items-center justify-between gap-2 mb-2">
               <span className="panel-label">Leitura do jogo</span>
-              <Badge tone="neutral">Gerado pela IA</Badge>
+              {/* "Gerado pela IA" ficou para tras: desde 18/07 quem escreve
+                  isto e' o motor deterministico, e a IA so' veta. */}
+              <Badge tone="neutral">Motor de análise</Badge>
             </div>
             <div className="bg-surface-0 border border-line rounded-lg p-4">
               <p className="text-xs text-ink-2 leading-relaxed whitespace-pre-line">
@@ -482,8 +488,8 @@ export default function AnalysisModal({
         )}
 
         <p className="text-[10px] text-ink-4 leading-relaxed">
-          Probabilidade estimada não é garantia de resultado. O histórico completo de acertos e
-          erros fica público na página de Resultados.
+          Probabilidade não é garantia de resultado. O histórico de acertos e erros fica
+          público na página de Resultados.
           {data.updatedAt && (
             <> Última atualização em {new Date(data.updatedAt).toLocaleString('pt-BR', {
               day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',

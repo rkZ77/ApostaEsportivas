@@ -180,6 +180,15 @@ export default function LiveAnalysisModal({
 
   const rotuloStat = (data.statLabel ?? 'no mercado').toLowerCase()
 
+  /* O LADRILHO NAO REPETE O SNAPSHOT (10/09/2026).
+   *
+   * "O que o motor leu em campo" mostrava escanteios e chutes no gol da
+   * criacao. Num pick DE escanteios, esse numero e' exatamente o "observado"
+   * da coluna "Quando nasceu", duas caixas acima -- o mesmo 6 escrito duas
+   * vezes, com dois rotulos diferentes, o que faz o leitor procurar a
+   * diferenca que nao existe. Contador que ja' esta' no snapshot some daqui. */
+  const jaNoSnapshot = (termo: string) => rotuloStat.includes(termo)
+
   /* Quanto o mercado andou desde que o pick nasceu. É o número que responde
      "ainda dá tempo?" sem obrigar a subtrair de cabeça duas leituras que
      estavam em pontas opostas do card. */
@@ -323,22 +332,21 @@ export default function LiveAnalysisModal({
               <Target className="w-3.5 h-3.5 text-ink-4" />
               <span className="panel-label">Por que virou pick neste minuto</span>
             </div>
+            {/* Sem repetir os dois numeros dos cartoes logo acima · mesma
+                limpeza do modal de pre-jogo. O que sobra e' o que so' esta
+                aqui: a subtracao, e o tempo que restava pra ela acontecer. */}
             <p className="text-xs text-ink-2 leading-relaxed">
-              Com o jogo no {data.minuteAtCreation != null ? `${data.minuteAtCreation}'` : 'minuto da leitura'},
-              o modelo estimou <span className="font-mono text-ink-1">{mostraProb!.toFixed(1)}%</span> de
-              chance, e a odd {odd.toFixed(2)} pagava como se fosse{' '}
-              <span className="font-mono text-ink-1">{implied.toFixed(1)}%</span>.
               {edge > 0 ? (
                 <>
-                  {' '}A diferença de{' '}
-                  <span className="font-mono text-accent-ink">{edge.toFixed(1)} pontos</span>{' '}
-                  é o valor que o pick busca capturar
+                  Com o jogo no {data.minuteAtCreation != null ? `${data.minuteAtCreation}'` : 'minuto da leitura'},
+                  demos <span className="font-mono text-accent-ink">{edge.toFixed(1)} pontos</span>{' '}
+                  a mais de chance do que a odd pagava
                   {data.remainingMinutes != null && (
-                    <> nos <span className="font-mono text-ink-1">{data.remainingMinutes} min</span> que restavam</>
+                    <>, com <span className="font-mono text-ink-1">{data.remainingMinutes} min</span> ainda por jogar</>
                   )}.
                 </>
               ) : (
-                <> Sem diferença a nosso favor, o pick não seria publicado.</>
+                <>Sem diferença a nosso favor, o pick não seria publicado.</>
               )}
             </p>
           </div>
@@ -368,14 +376,11 @@ export default function LiveAnalysisModal({
                     </div>
                   </div>
                 )}
-                {data.liveSignalScore != null && (
-                  <div>
-                    <div className="stat-label !mt-0">Sinais</div>
-                    <div className="font-mono text-sm font-bold text-ink-1 tabular-nums">
-                      {(Number(data.liveSignalScore) * 100).toFixed(0)}%
-                    </div>
-                  </div>
-                )}
+                {/* "Sinais 62%" SAIU (10/09/2026). Era o score interno do
+                    motor, numa escala que nao esta escrita em lugar nenhum da
+                    tela: sem saber que 50% e' o jogo medio, o numero nao muda
+                    a decisao de ninguem · e ocupava espaco ao lado de ritmo e
+                    pressao, que dizem a mesma coisa em palavra. */}
                 {data.possessionHomeAtCreation != null && (
                   <div>
                     <div className="stat-label !mt-0">Posse na criação</div>
@@ -384,7 +389,7 @@ export default function LiveAnalysisModal({
                     </div>
                   </div>
                 )}
-                {data.shotsOnTargetAtCreation != null && (
+                {data.shotsOnTargetAtCreation != null && !jaNoSnapshot('chute') && (
                   <div>
                     <div className="stat-label !mt-0">Chutes no gol</div>
                     <div className="font-mono text-sm font-bold text-ink-1 tabular-nums">
@@ -393,7 +398,7 @@ export default function LiveAnalysisModal({
                     </div>
                   </div>
                 )}
-                {data.cornersAtCreation != null && (
+                {data.cornersAtCreation != null && !jaNoSnapshot('escanteio') && (
                   <div>
                     <div className="stat-label !mt-0">Escanteios</div>
                     <div className="font-mono text-sm font-bold text-ink-1 tabular-nums">
@@ -458,9 +463,9 @@ export default function LiveAnalysisModal({
         <p className="flex items-start gap-1.5 text-[10px] text-ink-4 leading-relaxed">
           <Gauge className="w-3 h-3 mt-0.5 shrink-0" />
           <span>
-            Ao vivo a linha e a odd se movem a cada minuto. A odd mostrada é a do instante da
-            publicação. Confira o preço na casa antes de entrar. O histórico de acertos e erros
-            do motor ao vivo fica na página de Resultados.
+            Ao vivo a odd se move a cada minuto, e os números desta análise são os do
+            instante da publicação. Confira o preço na casa antes de entrar. O histórico de
+            acertos e erros fica público na página de Resultados.
           </span>
         </p>
       </div>

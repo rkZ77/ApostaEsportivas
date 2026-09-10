@@ -39,13 +39,13 @@
  */
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Radio, RefreshCw, Timer, CheckCircle2, Clock, PowerOff, Eye,
+import { Radio, RefreshCw, Timer, CheckCircle2, Clock, PowerOff,
          Goal, Flag, Target, Crosshair, Lock, Radar, Ban, Square, Share2, Loader2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { capitalizarFrase } from '../utils/format'
 import api from '../services/api'
 import ApostaModal from './ApostaModal'
-import { Badge, Button, ComoFunciona, EmptyState, ErrorState, LiveDot, Marquee, PickTypeBadge,
+import { Badge, Button, ComoFunciona, EmptyState, ErrorState, LiveDot, PickTypeBadge,
          ResultBadge, Skeleton, SkeletonPickGrid } from './ui'
 import { CampoDoPick, PickExplainButton, PickProbability } from './PickCardParts'
 import LiveAnalysisModal from './LiveAnalysisModal'
@@ -287,51 +287,18 @@ function TeamLogoOrDot({ id, name }: { id?: number | null; name?: string | null 
   )
 }
 
-function FitaDeBusca({ partidas }: { partidas: EmLeitura[] }) {
-  if (partidas.length === 0) return null
-  const itens = partidas.map(p => (
-    <span key={p.fixture_id}
-          className="inline-flex items-center gap-1.5 text-[11px] whitespace-nowrap
-                     bg-surface-1 border border-line rounded-md px-2.5 py-1">
-      <LeagueLogo id={p.league_id ?? undefined} name={p.liga ?? ''} />
-      <TeamLogoOrDot id={p.home_team_id} name={p.home_team} />
-      <span className="text-ink-2 font-medium">{p.home_team ?? 'Time'}</span>
-      <span className="text-ink-4 text-[10px]">x</span>
-      <TeamLogoOrDot id={p.away_team_id} name={p.away_team} />
-      <span className="text-ink-2 font-medium">{p.away_team ?? 'Time'}</span>
-      {p.minuto != null && (
-        <span className="font-mono text-indigo-300 font-bold text-[10px]
-                         bg-indigo-500/10 border border-indigo-500/20 rounded px-1">
-          {p.minuto}&apos;
-        </span>
-      )}
-    </span>
-  ))
-  return (
-    <div className="relative overflow-hidden rounded-lg border border-indigo-500/25 bg-indigo-500/[0.05] py-2.5 mb-6">
-      <div className="flex items-center gap-2.5 px-3 mb-2">
-        {/* O RADAR. Um ponto pulsando dizia "ligado" e nada mais · aqui o
-            ícone é o próprio verbo do produto (varrer os jogos), e as duas
-            ondas saindo dele dão o movimento que faz a pessoa entender que a
-            busca está ACONTECENDO, e não apenas habilitada. O `motion-safe`
-            respeita quem pediu menos animação no sistema. */}
-        <span className="relative flex items-center justify-center w-5 h-5 shrink-0">
-          <span aria-hidden="true"
-                className="absolute inset-0 rounded-full border border-indigo-400/40 motion-safe:animate-ping" />
-          <Radar className="relative w-4 h-4 text-indigo-300 motion-safe:animate-pulse" aria-hidden="true" />
-        </span>
-        <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-wide">
-          a IA está varrendo estes jogos agora
-        </span>
-        <span className="ml-auto font-mono text-[10px] text-ink-4 tabular-nums">
-          {partidas.length} {partidas.length === 1 ? 'jogo' : 'jogos'}
-        </span>
-      </div>
-      {/* gap-2 entre os cards: cada item já tem borda e fundo próprios */}
-      <Marquee items={itens} spacing="pr-2" speed={28} />
-    </div>
-  )
-}
+/* A FITA DE BUSCA SAIU (10/09/2026, pedido do usuário).
+ *
+ * A aba tinha DOIS radares: a fita rolando no topo e o bloco de cartões no
+ * rodapé, os dois lendo a mesma lista e dizendo a mesma frase com palavras
+ * diferentes. Duas vezes o mesmo sinal não convence o dobro, só divide a
+ * atenção · e a fita era a metade que mostrava menos (nome dos times e o
+ * minuto, sem contador nenhum).
+ *
+ * Ficou o bloco, agora chamado RADAR: mesmo ícone pulsando, o verbo do produto
+ * no título e os números que fazem alguém entender por que ainda não saiu
+ * pick.
+ */
 
 /* A busca de "o que a IA está lendo", em um lugar só.
  *
@@ -416,10 +383,16 @@ function EmLeituraAgora({ partidas, tick, disponivel, motor }: {
     <div className="mt-8">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
         <div className="flex items-center gap-2">
-          <span className="w-1 h-4 rounded-full bg-accent" />
+          {/* O RADAR. As ondas saindo do ícone são o que faz a pessoa entender
+              que a varredura está ACONTECENDO, e não apenas ligada · o
+              `motion-safe` respeita quem pediu menos animação no sistema. */}
+          <span className="relative flex items-center justify-center w-5 h-5 shrink-0">
+            <span aria-hidden="true"
+                  className="absolute inset-0 rounded-full border border-accent/40 motion-safe:animate-ping" />
+            <Radar className="relative w-4 h-4 text-accent-ink motion-safe:animate-pulse" aria-hidden="true" />
+          </span>
           <h3 className="text-sm font-bold text-ink-1 flex items-center gap-1.5">
-            <Eye className="w-3.5 h-3.5 text-accent-ink" />
-            A IA está lendo
+            Radar
             <span className="font-mono text-[11px] font-bold tabular-nums text-ink-3
                              bg-surface-2 border border-line rounded-full px-2 py-0.5 ml-0.5">
               {partidas.length}
@@ -434,15 +407,16 @@ function EmLeituraAgora({ partidas, tick, disponivel, motor }: {
             ? 'border-accent/40 bg-accent/10 text-accent-ink'
             : 'border-line-strong bg-surface-2 text-ink-3'}`}>
           {motor?.ligado
-            ? <><LiveDot /> buscando</>
-            : <><PowerOff className="w-3 h-3" /> pausada</>}
+            ? <><LiveDot /> varrendo</>
+            : <><PowerOff className="w-3 h-3" /> parado</>}
           {motor?.ultima_rodada && (
             <span className="font-mono text-ink-4">{horaCurta(motor.ultima_rodada)}</span>
           )}
         </span>
       </div>
       <p className="text-[11px] text-ink-4 mb-3 leading-relaxed">
-        Os jogos que a IA acompanha agora, com o total da partida somando os dois times.
+        Os jogos que a IA varre agora atrás de oportunidade no mercado, com o total da
+        partida somando os dois times.
         {comPick === 0 && ' Nenhum virou pick ainda, e isso é o normal.'}
       </p>
 
@@ -945,7 +919,26 @@ const CardLive = forwardRef<HTMLDivElement, {
    * decidir pela pessoa. */
   const podeSeguir = !pick.is_followed && !encerrado
   const temAposta = !encerrado && aposta.unidades > 0
-  const lucroPot = (Number(oddEfetiva) - 1) * aposta.unidades
+
+  /* A ODD DA TELA MUDA DE DONO QUANDO A PESSOA PEGA O BILHETE (10/09/2026,
+   * pedido do usuario).
+   *
+   * Antes o numero grande era sempre o da publicacao e a odd de agora entrava
+   * numa linha minuscula embaixo. Pra quem AINDA NAO entrou, isso era o dado
+   * errado em destaque: o preco que ele vai digitar na casa e' o de agora, e o
+   * da publicacao so' serve de referencia. Entao pra ele o numero grande passa
+   * a ser o preco corrente, com o da publicacao virando a nota de rodape.
+   *
+   * Depois de seguir, o inverso: a odd dele esta' travada no bilhete e ficar
+   * mexendo naquele numero seria mentir sobre a aposta que ele tem. Dali em
+   * diante quem continua se movendo na tela sao a leitura da partida e as
+   * probabilidades -- a odd, nao. */
+  const seguido = !!pick.is_followed
+  const oddCorrente = (!encerrado && !seguido && oddAgora?.cotado && oddAgora.odd != null)
+    ? Number(oddAgora.odd)
+    : null
+  const oddExibida = seguido ? Number(oddEfetiva) : (oddCorrente ?? Number(pick.odd))
+  const lucroPot = (oddExibida - 1) * aposta.unidades
 
   return (
   <>
@@ -1001,33 +994,32 @@ const CardLive = forwardRef<HTMLDivElement, {
           tipográficos diferentes conforme a aba. */}
       <div className="font-mono flex items-stretch divide-x divide-line/60 border-b border-line/60">
         <div className="flex-1 px-5 py-3 text-center">
-          <div className="text-[10px] text-ink-3 mb-0.5">Odd</div>
+          <div className="text-[10px] text-ink-3 mb-0.5">
+            {oddCorrente != null ? 'Odd agora' : 'Odd'}
+          </div>
           <div className="text-3xl font-black text-green-400 tabular-nums">
-            {Number(oddEfetiva).toFixed(2)}
+            {oddExibida.toFixed(2)}
           </div>
           {/* A odd que o usuário registrou pode divergir da do pick: ele segue
               depois, e a linha se move ao vivo mais que em pré-jogo. */}
-          {pick.is_followed && Math.abs(Number(oddEfetiva) - Number(pick.odd)) > 0.001 && (
+          {seguido && Math.abs(Number(oddEfetiva) - Number(pick.odd)) > 0.001 && (
             <div className="text-[9px] text-ink-4 mt-0.5">pick: {Number(pick.odd).toFixed(2)}</div>
           )}
-          {/* A ODD DE AGORA, quando a leitura alcançou este pick. O número
-              grande continua sendo o da publicação -- é o que a IA analisou e
-              contra o que o resultado é medido; este aqui é o que a casa paga
-              neste minuto, que é o que decide se ainda vale entrar. */}
-          {!encerrado && oddAgora && (
-            oddAgora.cotado && oddAgora.odd != null ? (
-              <div className="text-[9px] mt-0.5 tabular-nums">
-                <span className="text-ink-4">agora </span>
-                <span className={
-                  (oddAgora.variacao ?? 0) > 0 ? 'text-accent-ink font-bold'
-                  : (oddAgora.variacao ?? 0) < 0 ? 'text-red-400 font-bold'
-                  : 'text-ink-3 font-bold'}>
-                  {Number(oddAgora.odd).toFixed(2)}
-                </span>
-              </div>
-            ) : (
-              <div className="text-[9px] text-amber-400/80 mt-0.5">sem cotação agora</div>
-            )
+          {/* A odd da PUBLICAÇÃO vira a nota de rodapé, e só quando ela de fato
+              difere do preço de agora · repetir o mesmo número duas vezes em
+              dois tamanhos não informa nada. A seta diz para que lado a casa
+              moveu desde que o pick saiu. */}
+          {oddCorrente != null && Math.abs(oddCorrente - Number(pick.odd)) > 0.001 && (
+            <div className="text-[9px] mt-0.5 tabular-nums text-ink-4">
+              publicada {Number(pick.odd).toFixed(2)}
+              <span className={oddCorrente > Number(pick.odd) ? 'text-accent-ink font-bold ml-1'
+                                                              : 'text-red-400 font-bold ml-1'}>
+                {oddCorrente > Number(pick.odd) ? '↑' : '↓'}
+              </span>
+            </div>
+          )}
+          {!encerrado && !seguido && oddAgora && !oddAgora.cotado && (
+            <div className="text-[9px] text-amber-400/80 mt-0.5">sem cotação agora</div>
           )}
           {/* Odd vencida SEM leitura nenhuma (a rota falhou, ou o pick é de um
               jogo que a leitura não alcança): o preço da tela é histórico, e
@@ -1561,10 +1553,10 @@ export default function LivePicksFeed({ isActive, banca }: {
             return (
               <Badge tone={motor.ligado ? 'green' : 'amber'}>
                 {!motor.ligado
-                  ? <><PowerOff className="w-3 h-3" /> Busca pausada</>
+                  ? <><PowerOff className="w-3 h-3" /> Radar pausado</>
                   : dormindo
                   ? <><Clock className="w-3 h-3" /> Aguardando jogo</>
-                  : <><LiveDot /> IA buscando entradas</>}
+                  : <><Radar className="w-3 h-3" /> Radar varrendo o mercado</>}
                 {motor.ultima_rodada && (
                   <span className="font-mono font-normal opacity-70">
                     {horaCurta(motor.ultima_rodada)}
@@ -1575,8 +1567,6 @@ export default function LivePicksFeed({ isActive, banca }: {
           })()}
         </div>
       </div>
-
-      <FitaDeBusca partidas={motor?.ligado && !motor.hibernando ? emLeitura : []} />
 
       {/* O VAZIO PRECISA DIZER SE O MOTOR ESTÁ LIGADO.
         *
