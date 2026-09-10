@@ -3718,10 +3718,17 @@ export default function Picks() {
         )}
 
         {tab === 'multiplas' && (
-          /* A aba inteira na largura de leitura, e nao so' o card: com o
-             "Como funciona" ocupando 1400px em cima de um card de 672 a tela
-             ficava com duas larguras diferentes na mesma coluna. */
-          <motion.div key="multiplas" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6 max-w-2xl mx-auto">
+          /* LARGURA DO PADRAO DA BARRA: a aba ocupa a tela, como o VIP
+             (10/09, decisao do usuario · ele mandou o print do VIP como a
+             referencia). A regra de 08/09 era a oposta -- a aba inteira na
+             largura de leitura, 672px, pra que o card de bilhete nao virasse
+             uma faixa com metros de vazio no meio. So' que ela valia pra tres
+             abas de dez: trocar de aba mudava a largura da pagina, e o que
+             saltava aos olhos nao era o card confortavel, era o degrau.
+             O card se vira: o miolo dele ja e' grade, e a mesma tela que
+             mostra quatro picks VIP lado a lado mostra as pernas do bilhete
+             com mais ar. */
+          <motion.div key="multiplas" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6">
             <ComoFunciona titulo="O que são as Múltiplas VIP?" cor="text-blue-400"
                           borda="border-blue-400/20" fundo="bg-blue-400/5">
               <>
@@ -3783,18 +3790,17 @@ export default function Picks() {
         )}
 
         {tab === 'bingo' && verBingo && (
-          /* Mesma largura de leitura da aba de múltiplas, e pelo mesmo motivo:
-             o card de cartela é o mais denso do site e não ganha nada com os
-             1400px da tela.
-             CENTRALIZADA (10/09, pedido do usuário): a coluna de 672px ficava
-             encostada na esquerda embaixo de um cabeçalho e de uma barra de
-             abas que ocupam a tela inteira, e a página parecia ter duas
-             larguras. `mx-auto` não mexe na largura de leitura, só tira o
-             vazio todo de um lado só. No celular não muda nada: lá a coluna já
-             é a tela. As três abas de card único (Múltiplas, Bingo e
-             Alavancagem) mudaram juntas -- centralizar uma só faria a página
-             pular de lugar a cada troca de aba. */
-          <motion.div key="bingo" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6 max-w-2xl mx-auto">
+          /* LARGURA DO PADRAO DA BARRA: a aba ocupa a tela, como o VIP
+             (10/09, decisao do usuario · ele mandou o print do VIP como a
+             referencia). A regra de 08/09 era a oposta -- a aba inteira na
+             largura de leitura, 672px, pra que o card de bilhete nao virasse
+             uma faixa com metros de vazio no meio. So' que ela valia pra tres
+             abas de dez: trocar de aba mudava a largura da pagina, e o que
+             saltava aos olhos nao era o card confortavel, era o degrau.
+             O card se vira: o miolo dele ja e' grade, e a mesma tela que
+             mostra quatro picks VIP lado a lado mostra as pernas do bilhete
+             com mais ar. */
+          <motion.div key="bingo" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6">
             <ComoFunciona titulo="O que é o Bingo do Dia?" cor="text-rose-400"
                           borda="border-rose-400/20" fundo="bg-rose-400/5">
               <>
@@ -3854,10 +3860,17 @@ export default function Picks() {
         )}
 
         {tab === 'alavancagem' && (
-          /* Mesma largura de leitura da Multipla: e' UM caminho por dia, e a
-             tela inteira pra um card so' espalhava entrada, progresso e escada
-             em faixas de 1400px. */
-          <motion.div key="alavancagem" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6 max-w-2xl mx-auto">
+          /* LARGURA DO PADRAO DA BARRA: a aba ocupa a tela, como o VIP
+             (10/09, decisao do usuario · ele mandou o print do VIP como a
+             referencia). A regra de 08/09 era a oposta -- a aba inteira na
+             largura de leitura, 672px, pra que o card de bilhete nao virasse
+             uma faixa com metros de vazio no meio. So' que ela valia pra tres
+             abas de dez: trocar de aba mudava a largura da pagina, e o que
+             saltava aos olhos nao era o card confortavel, era o degrau.
+             O card se vira: o miolo dele ja e' grade, e a mesma tela que
+             mostra quatro picks VIP lado a lado mostra as pernas do bilhete
+             com mais ar. */
+          <motion.div key="alavancagem" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6">
             {/* UMA explicação só, e a certa.
               *
               * Havia DUAS, e elas se contradiziam: esta caixa descrevia o
