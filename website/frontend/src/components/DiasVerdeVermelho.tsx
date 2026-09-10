@@ -84,7 +84,15 @@ export default function DiasVerdeVermelho({ dias }: { dias: Dia[] }) {
       </div>
 
       <div ref={caixa} className="w-full">
-        <div className="flex items-stretch gap-1 h-[132px]" role="img"
+        {/* A LINHA DO ZERO ATRAVESSA O GRÁFICO INTEIRO, e não um pedaço por
+            coluna (10/09/2026). Desenhada dentro de cada coluna, o `gap` entre
+            elas cortava a linha em quatro pedaços soltos, e o olho lia isso
+            como quatro colunas de tamanhos diferentes em vez de um eixo. Aqui
+            ela é uma só, no fundo, e as barras passam por cima. */}
+        <div className="relative">
+          <div aria-hidden="true"
+               className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-line-strong" />
+          <div className="relative flex items-stretch gap-1 h-[168px]" role="img"
              aria-label={`Saldo dos últimos ${ultimos.length} dias: ${verdes} no verde e ${vermelhos} no vermelho`}>
           {ultimos.map(d => {
             const positivo = d.profit > 0
@@ -95,7 +103,7 @@ export default function DiasVerdeVermelho({ dias }: { dias: Dia[] }) {
                    title={`${diaBR(d.match_date)}: ${d.profit === 0 ? 'sem saldo' : fmtSigned(d.profit)}`}>
                 {/* Metade de cima: a barra cresce do zero para o alto, então
                     ela se ancora embaixo. */}
-                <div className="flex-1 flex flex-col justify-end items-center">
+                <div className="flex-1 flex flex-col justify-end items-center w-full">
                   {positivo && rotulado(d) && (
                     <span className="font-mono text-[9px] font-bold text-accent-ink tabular-nums mb-0.5
                                      whitespace-nowrap">
@@ -103,19 +111,21 @@ export default function DiasVerdeVermelho({ dias }: { dias: Dia[] }) {
                     </span>
                   )}
                   {positivo && (
-                    <div className="w-full rounded-t-[4px] bg-accent transition-opacity
+                    /* BARRA FINA, COM TETO DE LARGURA (10/09/2026).
+                       Era `w-full`: com quatro dias numa coluna de 400px, cada
+                       barra virava um bloco de 100px de largura e 30 de altura,
+                       que lê como painel de cor e não como gráfico. A régua é a
+                       mesma do "Picks por dia" da página de Resultados, onde a
+                       barra ocupa uns dois terços do passo e o resto é ar. */
+                    <div className="w-2/3 max-w-[34px] rounded-t-[4px] bg-accent transition-opacity
                                     opacity-90 group-hover:opacity-100"
                          style={{ height: `${Math.max(altura, 3)}%` }} />
                   )}
                 </div>
 
-                {/* A linha do zero atravessa o gráfico inteiro: sem ela as
-                    barras de baixo pareceriam soltas. */}
-                <div className="h-px bg-line-strong w-full shrink-0" />
-
-                <div className="flex-1 flex flex-col items-center">
+                <div className="flex-1 flex flex-col items-center w-full">
                   {negativo && (
-                    <div className="w-full rounded-b-[4px] bg-red-500 transition-opacity
+                    <div className="w-2/3 max-w-[34px] rounded-b-[4px] bg-red-500 transition-opacity
                                     opacity-90 group-hover:opacity-100"
                          style={{ height: `${Math.max(altura, 3)}%` }} />
                   )}
@@ -135,6 +145,7 @@ export default function DiasVerdeVermelho({ dias }: { dias: Dia[] }) {
               </div>
             )
           })}
+          </div>
         </div>
 
         {/* As datas, fora da área das barras para não brigarem com os valores. */}
