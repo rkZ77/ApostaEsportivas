@@ -110,6 +110,16 @@ interface EmLeitura {
   away_team: string | null
   liga: string | null
   tem_pick: boolean
+  /** JOGO EM CAMPO QUE O MOTOR AINDA NÃO LEU.
+   *
+   *  O motor só entra na partida depois dos primeiros minutos, e até lá não
+   *  existe leitura nenhuma dela: sem placar, sem contador, sem minuto. Estes
+   *  jogos entram no Radar mesmo assim, porque a alternativa era o Radar
+   *  aparecer vazio com jogo rolando na TV. Ver a rota em-leitura. */
+  aguardando?: boolean
+  /** Minutos desde o apito. NÃO é o minuto do jogo: o intervalo e o atraso do
+   *  início entram nessa conta, então a tela escreve "começou há X". */
+  iniciado_ha_min?: number | null
 }
 
 /* O PLACAR DO LIVE, dentro do "O que é" da aba · o mesmo bloco que os outros
@@ -556,6 +566,11 @@ function EmLeituraAgora({ partidas, tick, disponivel, motor }: {
           // A barra é o tempo de jogo, não uma métrica · é o que dá noção de
           // "ainda dá tempo de sair pick aqui" sem precisar de número nenhum.
           const andamento = minuto != null ? Math.min(100, (minuto / 90) * 100) : 0
+          /* Jogo ainda não lido não tem número nenhum para mostrar · os quatro
+             ladrilhos com "-" seriam quatro promessas vazias ocupando metade
+             do cartão. No lugar deles vai uma linha dizendo o que está
+             acontecendo de verdade: o motor entra daqui a pouco. */
+          const semLeitura = !!p.aguardando
           return (
             <div
               key={p.fixture_id}
@@ -581,11 +596,16 @@ function EmLeituraAgora({ partidas, tick, disponivel, motor }: {
                   </span>
                   <span className="flex items-center gap-1.5 shrink-0">
                     <LiveDot />
+                    {/* SEM LEITURA, SEM MINUTO. O tempo desde o apito não é o
+                        minuto da partida (o intervalo entra na conta), então o
+                        cartão diz o que sabe: que a bola já rolou. */}
                     <span className="font-mono text-[11px] font-bold text-accent-ink tabular-nums"
                           title={projetado ? 'Minuto projetado desde a última leitura' : undefined}>
-                      {minuto != null
-                        ? `${projetado ? '~' : ''}${minuto}'`
-                        : rotuloDoStatus(p.status)}
+                      {p.aguardando
+                        ? (p.iniciado_ha_min != null ? `há ${p.iniciado_ha_min}min` : 'em campo')
+                        : minuto != null
+                          ? `${projetado ? '~' : ''}${minuto}'`
+                          : rotuloDoStatus(p.status)}
                     </span>
                   </span>
                 </div>
@@ -607,6 +627,12 @@ function EmLeituraAgora({ partidas, tick, disponivel, motor }: {
                     ))}
                 </div>
 
+                {semLeitura ? (
+                  <p className="mt-2.5 text-[10px] text-ink-4 leading-relaxed">
+                    A IA entra nesta partida depois dos primeiros minutos, quando o jogo
+                    já tem estatística suficiente para ser lido.
+                  </p>
+                ) : (
                 <div className="grid grid-cols-4 gap-1 mt-2.5">
                   {([
                     [Goal,      'Gols',           p.goals_observado],
@@ -626,6 +652,8 @@ function EmLeituraAgora({ partidas, tick, disponivel, motor }: {
                   ))}
                 </div>
 
+                )}
+
                 <div className="flex items-center justify-between gap-2 mt-2 text-[10px]">
                   <span className="flex items-center gap-2 text-ink-4">
                     {/* COM DADO FRESCO A FRASE MUDA DE ASSUNTO.
@@ -636,7 +664,7 @@ function EmLeituraAgora({ partidas, tick, disponivel, motor }: {
                       * desmentir a própria tela. O relógio do motor só aparece
                       * quando é ele que está mandando no cartão. */}
                     <span className="font-mono tabular-nums">
-                      {p.fresco ? 'ao vivo' : `lido ${idadeCurta(idade)}`}
+                      {semLeitura ? 'em campo' : p.fresco ? 'ao vivo' : `lido ${idadeCurta(idade)}`}
                     </span>
                     {!!p.red_cards_observado && (
                       <span className="flex items-center gap-1" title="Cartões vermelhos">
@@ -649,7 +677,9 @@ function EmLeituraAgora({ partidas, tick, disponivel, motor }: {
                   </span>
                   {p.tem_pick
                     ? <span className="text-accent-ink font-bold">já virou pick</span>
-                    : <span className="text-ink-4">sem oportunidade ainda</span>}
+                    : <span className="text-ink-4">
+                        {semLeitura ? 'aguardando os primeiros minutos' : 'sem oportunidade ainda'}
+                      </span>}
                 </div>
               </div>
             </div>

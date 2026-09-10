@@ -90,6 +90,92 @@ function CardPipeline({ p, volumeTotal }: { p: Pipeline; volumeTotal: number }) 
   )
 }
 
+
+/*
+ * LUCRO POR PRODUTO, EM BARRAS (2026-09-10, pedido do usuário).
+ *
+ * A aba já dizia quanto cada produto rendeu, mas em nove cartões de números:
+ * para saber quem puxou o mês para cima era preciso ler nove valores e
+ * ordená-los de cabeça. A comparação entre categorias é trabalho de barra, não
+ * de leitura de tabela.
+ *
+ * EM UNIDADES, e não em reais. Unidade é a régua que compara produtos entre si
+ * e entre meses, porque não muda quando a banca muda de tamanho. O valor em
+ * reais continua no cartão de cada produto, que é onde ele responde "quanto
+ * entrou no bolso".
+ *
+ * ZERO NO MEIO, lucro para a direita e prejuízo para a esquerda: o lado da
+ * barra já diz o sinal antes de a cor dizer. Isso não é enfeite. Verde e
+ * vermelho ficam a uma distância de 6,5 (ΔE) para quem tem deuteranopia, que
+ * é a faixa em que a cor sozinha não distingue nada · o lado do zero e o
+ * número com sinal ao lado de cada barra são o que faz a leitura funcionar
+ * para essa pessoa. Nunca tirar os dois.
+ */
+function GraficoPorProduto({ pipelines }: { pipelines: Pipeline[] }) {
+  const ordenado = [...pipelines].sort((a, b) => b.units - a.units)
+  /* A escala sai do maior valor ABSOLUTO dos dois lados, então lucro e
+     prejuízo compartilham a mesma régua: uma barra de -2u tem exatamente o
+     tamanho de uma de +2u. Escalas separadas por lado fariam um prejuízo
+     pequeno parecer do tamanho do maior lucro. */
+  const maior = Math.max(...ordenado.map(p => Math.abs(p.units)), 0.1)
+
+  return (
+    <div className="card p-4">
+      <div className="flex items-baseline justify-between gap-3 mb-1">
+        <h3 className="text-sm font-black text-ink-1">Lucro por produto</h3>
+        <span className="text-[10px] text-ink-4">em unidades</span>
+      </div>
+      <p className="text-[11px] text-ink-4 mb-4 leading-relaxed">
+        Unidade compara produtos entre si sem depender do tamanho da sua banca.
+      </p>
+
+      <ul className="space-y-1.5">
+        {ordenado.map(p => {
+          const positivo = p.units >= 0
+          const largura = (Math.abs(p.units) / maior) * 50
+          return (
+            <li key={p.key} className="group flex items-center gap-2">
+              <span className="w-[66px] sm:w-[88px] shrink-0 text-[11px] text-ink-2 truncate"
+                    title={p.label}>
+                {p.label}
+              </span>
+
+              <div className="relative flex-1 h-5 min-w-0">
+                {/* A linha do zero, discreta: é referência, não dado. */}
+                <div className="absolute inset-y-0 left-1/2 w-px bg-line-strong" aria-hidden="true" />
+                <div
+                  className={`absolute top-1/2 -translate-y-1/2 h-2.5 ${
+                    positivo
+                      ? 'left-1/2 rounded-r-[4px] bg-accent'
+                      : 'right-1/2 rounded-l-[4px] bg-red-500'}`}
+                  style={{ width: `${Math.max(largura, p.units === 0 ? 0 : 1.5)}%` }}
+                  aria-hidden="true"
+                />
+                {/* Um cartão por barra ao passar o dedo/mouse: o detalhe que
+                    não cabe na linha, sem tirar ninguém da comparação. */}
+                <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-1 z-10
+                                opacity-0 group-hover:opacity-100 transition-opacity duration-1
+                                whitespace-nowrap rounded-md border border-line-strong bg-surface-2
+                                px-2 py-1 text-[10px] text-ink-2 shadow-lg">
+                  {p.total} {p.total === 1 ? 'aposta' : 'apostas'}, {p.greens}G/{p.reds}R,
+                  {' '}yield {p.yield >= 0 ? '+' : ''}{p.yield.toFixed(1)}%
+                </div>
+              </div>
+
+              {/* O NUMERO COM SINAL fica sempre visível, em todas as barras: é
+                  ele que carrega a polaridade quando a cor não carrega. */}
+              <span className={`w-[52px] shrink-0 text-right font-mono text-[11px] font-bold tabular-nums
+                                ${positivo ? 'text-accent-ink' : 'text-red-400'}`}>
+                {fmtUnits(p.units)}
+              </span>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
+
 export default function PipelinesBreakdown({ pipelines }: { pipelines: Pipeline[] }) {
   const navigate = useNavigate()
 
@@ -109,7 +195,19 @@ export default function PipelinesBreakdown({ pipelines }: { pipelines: Pipeline[
   const pnlTotal    = pipelines.reduce((a, p) => a + p.pnl, 0)
   const unidades    = pipelines.reduce((a, p) => a + p.units, 0)
   const noAzul      = pipelines.filter(p => p.pnl > 0).length
-  const melhor      = pipelines[0]   // o backend já devolve ordenado por pnl
+
+  /* MELHOR E PIOR, medidos em UNIDADE.
+   *
+   * O backend ordena por reais, e nesta tela isso responderia a pergunta
+   * errada: reais dependem de quanto foi apostado em cada produto, então o
+   * mais frequente tende a liderar por volume e não por acerto. Unidade é a
+   * mesma régua para todos.
+   *
+   * Os dois só aparecem se forem produtos DIFERENTES: com um produto só na
+   * lista, "melhor" e "pior" seriam o mesmo cartão escrito duas vezes. */
+  const porUnidade = [...pipelines].sort((a, b) => b.units - a.units)
+  const melhor = porUnidade[0]
+  const pior   = porUnidade.length > 1 ? porUnidade[porUnidade.length - 1] : null
 
   return (
     <div className="space-y-4">
@@ -137,10 +235,10 @@ export default function PipelinesBreakdown({ pipelines }: { pipelines: Pipeline[
             c: noAzul * 2 >= pipelines.length ? 'text-accent-ink' : 'text-ink-1',
           },
           {
-            l: 'Mais lucro',
+            l: 'Rende mais',
             v: melhor.label,
-            sub: fmtSigned(melhor.pnl),
-            c: 'text-ink-1',
+            sub: `${fmtUnits(melhor.units)} em ${melhor.total} ${melhor.total === 1 ? 'aposta' : 'apostas'}`,
+            c: melhor.units >= 0 ? 'text-accent-ink' : 'text-ink-1',
           },
         ].map(({ l, v, sub, c }) => (
           <div key={l} className="card p-4">
@@ -150,6 +248,24 @@ export default function PipelinesBreakdown({ pipelines }: { pipelines: Pipeline[
           </div>
         ))}
       </div>
+
+      {/* O QUE ESTA CUSTANDO fica ao lado do que está rendendo · saber onde o
+          lucro nasce só muda decisão junto com saber onde ele vaza, e era esse
+          o lado que a tela não dizia. Só entra quando o produto de fato perde:
+          num mês em que todos fecharam no azul, chamar o último de "custa
+          mais" seria inventar um problema. */}
+      {pior && pior.units < 0 && (
+        <div className="card p-4 border-red-500/30">
+          <div className="text-[10px] text-ink-3 mb-1">Custa mais</div>
+          <div className="text-xl font-black text-red-400">{pior.label}</div>
+          <div className="text-[10px] text-ink-4 mt-0.5">
+            {fmtUnits(pior.units)} em {pior.total} {pior.total === 1 ? 'aposta' : 'apostas'},
+            {' '}win rate {pior.win_rate}%
+          </div>
+        </div>
+      )}
+
+      <GraficoPorProduto pipelines={pipelines} />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
         {pipelines.map(p => (

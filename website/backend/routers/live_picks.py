@@ -1056,6 +1056,79 @@ def em_leitura(current_user: dict = Depends(require_live_reader), limit: int = Q
 
     _atualizar_leitura(linhas)
 
+    # O RADAR MOSTRA O JOGO DESDE O APITO (2026-09-10, pedido do usuario).
+    #
+    # Ate aqui a lista era so o que o motor JA LEU, e ele so entra na partida
+    # depois dos primeiros minutos (ver a janela em config.py). Entre o apito
+    # inicial e a primeira leitura -- que pode passar de quinze minutos -- a
+    # aba dizia "Radar varrendo o mercado" no topo e nao mostrava jogo nenhum
+    # embaixo. Quem esta com o jogo na TV le isso como radar quebrado, e nao
+    # como "ainda nao deu a hora dele".
+    #
+    # Entao a lista e completada com as partidas que DEVEM estar em campo
+    # agora, pelo mesmo criterio que faz o motor acordar (_ha_jogo_na_janela,
+    # so que trazendo as linhas). Elas vem marcadas com `aguardando`, sem
+    # placar e sem contador: nao ha leitura nenhuma delas ainda, e inventar
+    # numero seria pior que a ausencia.
+    #
+    # Custo zero de API, como o resto desta rota.
+    ja_listadas = {l["fixture_id"] for l in linhas}
+    if len(linhas) < limit:
+        conn2 = None
+        try:
+            conn2 = get_connection()
+            cur2 = conn2.cursor()
+            cur2.execute(
+                """
+                SELECT f.fixture_id, f.home_team, f.away_team,
+                       f.home_team_id, f.away_team_id, f.league_id,
+                       COALESCE(l.name, 'Liga ' || f.league_id::text) AS liga,
+                       f.status,
+                       -- Minutos desde o apito, contados no banco. NAO e o
+                       -- minuto do jogo: o intervalo e o atraso de inicio
+                       -- entram nessa conta, e por isso a tela escreve
+                       -- "comecou ha X" e nunca "X'".
+                       GREATEST(0, EXTRACT(EPOCH FROM (
+                           (NOW() AT TIME ZONE 'America/Sao_Paulo') - f.match_datetime
+                       )) / 60)::int AS iniciado_ha_min,
+                       EXISTS (SELECT 1 FROM picks_live p
+                                WHERE p.fixture_id = f.fixture_id
+                                  AND p.match_date >= (NOW() AT TIME ZONE
+                                      'America/Sao_Paulo')::date) AS tem_pick
+                  FROM fixtures f
+                  JOIN leagues l ON l.league_id = f.league_id
+                                AND COALESCE(l.ativa, TRUE)
+                 WHERE f.match_datetime BETWEEN
+                       (NOW() AT TIME ZONE 'America/Sao_Paulo') - (%s * INTERVAL '1 minute')
+                   AND (NOW() AT TIME ZONE 'America/Sao_Paulo')
+                   AND COALESCE(f.status, 'NS') NOT IN
+                       ('FT','AET','PEN','PST','CANC','ABD','AWD','WO')
+                   AND f.home_team IS NOT NULL
+              ORDER BY f.match_datetime DESC
+                 LIMIT %s
+                """,
+                (_JANELA_DE_JOGO_MIN, limit),
+            )
+            for r in (cur2.fetchall() or []):
+                d = dict(r)
+                if d["fixture_id"] in ja_listadas:
+                    continue
+                d.update({"aguardando": True, "minuto": None, "fresco": False,
+                          "idade_seg": None, "goals_observado": None,
+                          "corners_observado": None, "shots_observado": None,
+                          "shots_on_target_observado": None,
+                          "red_cards_observado": None, "lido_em": None})
+                linhas.append(d)
+        except Exception as e:
+            # A lista lida continua valendo - esta metade e complemento.
+            logger.info("[LIVE] em-leitura sem os jogos em campo: %s", str(e)[:200])
+        finally:
+            if conn2 is not None:
+                try:
+                    conn2.close()
+                except Exception:
+                    pass
+
     return {
         "disponivel": True,
         "janela_min": _JANELA_EM_LEITURA_MIN,

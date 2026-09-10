@@ -10,6 +10,7 @@ import PageShell from '../components/PageShell'
 import { translateMarket, translateLine } from '../utils/marketTranslate'
 import SuggestionDetail from '../components/SuggestionDetail'
 import ProfitChart from '../components/ProfitChart'
+import DiasVerdeVermelho from '../components/DiasVerdeVermelho'
 import { fmtBRL, fmtSigned, winRate as calcWinRate, capitalizarFrase } from '../utils/format'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { TeamLogo } from '../components/TeamLogo'
@@ -457,29 +458,41 @@ export default function MeusPicks() {
                     <ProfitChart data={chartFiltered} unit="R$" height={240} />
                   </div>
 
+                  {/* OS DIAS VIRARAM BARRA (10/09/2026, pedido do usuário).
+                    *
+                    * Aqui havia três números: dias no positivo, melhor dia,
+                    * pior dia. Eles dizem quantos e quanto, nunca QUANDO, e a
+                    * pergunta que sobra depois de um mês fechado é se os dias
+                    * ruins vieram juntos ou espalhados. O gráfico responde
+                    * isso de relance; o melhor e o pior continuam abaixo,
+                    * porque nomear o dia é o que a barra sozinha não faz. */}
                   <div className="card p-4 flex flex-col">
-                    <h3 className="text-xs font-semibold text-ink-3 mb-4">Como foi por dia</h3>
-                    <dl className="flex flex-col gap-4 flex-1 justify-center">
+                    <DiasVerdeVermelho
+                      dias={chartFiltered.map((c: any) => ({
+                        match_date: c.match_date, profit: Number(c.profit) || 0,
+                      }))}
+                    />
+                    <dl className="grid grid-cols-3 gap-2 mt-auto pt-4">
                       <div>
-                        <dd className="font-mono text-2xl font-black text-ink-1">
-                          {positivos}<span className="text-ink-4 text-base">/{dias.length}</span>
+                        <dd className="font-mono text-base font-black text-ink-1">
+                          {positivos}<span className="text-ink-4 text-xs">/{dias.length}</span>
                         </dd>
-                        <dt className="text-[11px] text-ink-3 mt-0.5">Dias no positivo</dt>
+                        <dt className="text-[10px] text-ink-3 mt-0.5 leading-tight">Dias no positivo</dt>
                       </div>
                       <div>
-                        <dd className="font-mono text-lg font-black text-accent-ink">
+                        <dd className="font-mono text-base font-black text-accent-ink truncate">
                           {fmtSigned(Number(melhor.profit) || 0)}
                         </dd>
-                        <dt className="text-[11px] text-ink-3 mt-0.5">
-                          Melhor dia, {diaBR(melhor.match_date)}
+                        <dt className="text-[10px] text-ink-3 mt-0.5 leading-tight">
+                          Melhor, {diaBR(melhor.match_date)}
                         </dt>
                       </div>
                       <div>
-                        <dd className="font-mono text-lg font-black text-red-400">
+                        <dd className="font-mono text-base font-black text-red-400 truncate">
                           {fmtSigned(Number(pior.profit) || 0)}
                         </dd>
-                        <dt className="text-[11px] text-ink-3 mt-0.5">
-                          Pior dia, {diaBR(pior.match_date)}
+                        <dt className="text-[10px] text-ink-3 mt-0.5 leading-tight">
+                          Pior, {diaBR(pior.match_date)}
                         </dt>
                       </div>
                     </dl>

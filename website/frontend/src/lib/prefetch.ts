@@ -117,9 +117,26 @@ export function prefetchOcioso(logado: boolean) {
   if (conexao?.saveData) return
   if (conexao?.effectiveType && /2g/.test(conexao.effectiveType)) return
 
+  /* O ADIANTAMENTO ESPERA A PRIMEIRA TELA TERMINAR (2026-09-10).
+   *
+   * `requestIdleCallback` chama de ocioso o intervalo em que a página está
+   * PARADA ESPERANDO REDE, que num 4G lento é a maior parte do carregamento
+   * inicial. O prefetch então disparava no meio dele e ia disputar banda com
+   * os arquivos da tela que a pessoa está tentando ver: medido na home, são
+   * uns 82 KB (Resultados, Planos e a fábrica de imagem do compartilhar)
+   * entrando na frente do que ainda falta pintar.
+   *
+   * Com o `load` na frente, o adiantamento continua acontecendo cedo para quem
+   * tem rede boa e sai completamente do caminho de quem não tem. É a mesma
+   * decisão que já valia para o gtag (ver index.html).
+   */
   const ocioso = (window as unknown as {
     requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number
   }).requestIdleCallback
-  if (ocioso) ocioso(rodar, { timeout: 3000 })
-  else window.setTimeout(rodar, 1500)
+  const agendar = () => {
+    if (ocioso) ocioso(rodar, { timeout: 3000 })
+    else window.setTimeout(rodar, 1500)
+  }
+  if (document.readyState === 'complete') agendar()
+  else window.addEventListener('load', agendar, { once: true })
 }
