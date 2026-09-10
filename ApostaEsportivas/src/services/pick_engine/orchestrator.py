@@ -607,6 +607,13 @@ def analyze_fixture_markets(
                 "melhor_odd":       best_odd,
                 "best_bookmaker":   m.get("best_bookmaker"),
                 "bookmakers_count": m.get("bookmakers_count", 1),
+                # TODAS as casas que cotaram esta linha, com o preco de cada
+                # uma. Uma pick simples nao precisa disso -- best_bookmaker
+                # basta. Um BILHETE precisa: bingo, multipla e alavancagem
+                # escolhem uma casa que cote o bilhete INTEIRO (ver
+                # pick_engine.bet_house), e sem a lista completa nao ha' como
+                # saber onde as pernas se encontram.
+                "bookmaker_odds":   m.get("bookmaker_odds") or [],
                 "taxa_real":        taxa_ajustada,
                 "taxa_bruta_pre_bayes": taxa_bruta_raw,
                 "amostra":          taxa["amostra"],

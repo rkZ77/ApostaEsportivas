@@ -41,6 +41,8 @@ from services.pick_engine import competition_profile as cp
 from services.pick_engine import context_gate
 from services.pick_engine import stats_model
 from services.pick_engine import ranking
+from services.pick_engine import bet_house
+from services.pick_engine import bilhetes_do_dia
 from services.pick_engine import competition_rules_store
 from engine_pipelines.decision_log import (
     MOTIVO_HISTORICO_REPROVADO, MOTIVO_SEM_HISTORICO, MOTIVO_SEM_ODDS,
@@ -197,11 +199,16 @@ def _today_used_pairs(cur) -> set:
     bruto, entao repetir um como se fosse outro e' o mesmo pick com outra
     roupa. O escopo e' por JOGO: a mesma familia continua liberada em outra
     partida, senao um bilhete de 2-3 pernas nao fecha.
+
+    Desde 2026-09-10 os BILHETES do dia entram na mesma conta (multipla,
+    bingo): a mesma perna em dois bilhetes derruba os dois de uma vez, com
+    todas as outras pernas junto -- ver bilhetes_do_dia.py.
     """
     pares = set()
     for tabela in ("picks_vip", "picks_free"):
         cur.execute(f"SELECT fixture_id, market_type FROM {tabela} WHERE match_date = {HOJE_BR}")
         pares |= {(r[0], ranking.correlation_group(r[1])) for r in cur.fetchall() if r[0] and r[1]}
+    pares |= bilhetes_do_dia.pares_em_bilhetes(cur, HOJE_BR, exceto=("picks_alavancagem",))
     return pares
 
 
@@ -411,10 +418,16 @@ def _find_combo(legs: list, odd_min: float, odd_max: float) -> tuple | None:
             if len(set(chaves)) != len(chaves):
                 continue
 
-            odd_combined = round(1.0, 4)
-            for p in combo:
-                odd_combined *= p["odd"]
-            odd_combined = round(odd_combined, 4)
+            # CASA UNICA: o caminho inteiro sai de uma casa so' (achado do
+            # usuario, 2026-09-10) -- inclusive o formato 'simples', que assim
+            # publica a odd real da casa indicada. Combo que nenhuma casa cota
+            # por completo nao e' apostavel e nem concorre. A faixa por perna
+            # e' a mesma do produto, entao a odd da casa nao fura o gate.
+            aplicado = bet_house.aplicar_casa(
+                combo, ODD_INDIVIDUAL_MIN, ODD_INDIVIDUAL_MAX)
+            if aplicado is None:
+                continue
+            combo, _casa, odd_combined = aplicado
 
             if not (odd_min <= odd_combined <= odd_max):
                 continue
@@ -430,7 +443,7 @@ def _find_combo(legs: list, odd_min: float, odd_max: float) -> tuple | None:
                 confidence_combo *= float(p["confidence"])
             confidence_combo = round(confidence_combo, 4)
             if best is None or confidence_combo > best[1]:
-                best = (combo, confidence_combo, odd_combined)
+                best = (tuple(combo), confidence_combo, odd_combined)
 
         if best:
             return best[0], best[1], best[2]
@@ -541,7 +554,7 @@ def run_alavancagem_engine():
 
     used_pairs = _today_used_pairs(cur)
     if used_pairs:
-        print(f"[ALAVANCAGEM_ENGINE] {len(used_pairs)} pick(s) de VIP/Free bloqueado(s) hoje "
+        print(f"[ALAVANCAGEM_ENGINE] {len(used_pairs)} perna(s) ja' publicada(s) hoje bloqueada(s) "
               f"(mesmo jogo + mesma familia de mercado).")
 
     legs = _gather_leg_candidates(fixtures, used_pairs)

@@ -33,6 +33,9 @@ from services.pick_engine import competition_profile as cp
 from services.pick_engine import context_gate
 from services.pick_engine import stats_model
 from services.pick_engine import ranking
+from services.pick_engine import bet_house
+from services.pick_engine import bilhetes_do_dia
+from services.pick_engine.config import DEFAULT_CONFIG
 from services.pick_engine import competition_rules_store
 from engine_pipelines.decision_log import (
     MOTIVO_HISTORICO_REPROVADO, MOTIVO_SEM_HISTORICO, MOTIVO_SEM_ODDS,
@@ -153,12 +156,19 @@ def _multiplas_de_hoje(cur) -> int:
 def _today_used_pairs(cur) -> set:
     """(fixture_id, market_type) ja usados em picks_vip/picks_free hoje --
     a multipla nunca repete o mesmo mercado do mesmo jogo que ja saiu em
-    VIP/Free, mesma regra do pipeline de IA."""
+    VIP/Free, mesma regra do pipeline de IA.
+
+    Desde 2026-09-10 tambem cruza contra os BILHETES do dia (bingo,
+    alavancagem): perna repetida entre dois bilhetes derruba os dois inteiros
+    de uma vez -- ver services/pick_engine/bilhetes_do_dia.py. Na ordem atual
+    a multipla roda primeiro e costuma nao achar nada aqui; a consulta existe
+    pra a regra nao depender da ordem."""
     pairs = set()
     cur.execute(f"SELECT fixture_id, market_type FROM picks_vip WHERE match_date = {HOJE_BR}")
     pairs |= {(r[0], r[1]) for r in cur.fetchall() if r[0] and r[1]}
     cur.execute(f"SELECT fixture_id, market_type FROM picks_free WHERE match_date = {HOJE_BR}")
     pairs |= {(r[0], r[1]) for r in cur.fetchall() if r[0] and r[1]}
+    pairs |= bilhetes_do_dia.pares_em_bilhetes(cur, HOJE_BR, exceto=("picks_multiplas",))
     return pairs
 
 
@@ -299,7 +309,10 @@ def _gather_leg_candidates(fixtures: list, used_pairs: set) -> list:
             # Quem protege contra familia repetida no mesmo jogo agora e'
             # _find_combo, no momento certo: na hora de montar o bilhete.
             for p in elegiveis:
-                if (fixture["fixture_id"], p["market_type"]) in used_pairs:
+                # Duas chaves: market_type cru (VIP/Free) e familia (bilhetes).
+                if ((fixture["fixture_id"], p["market_type"]) in used_pairs
+                        or (fixture["fixture_id"],
+                            ranking.correlation_group(p["market_type"])) in used_pairs):
                     continue
                 legs.append({**p, "_fixture": fixture, "data_quality_score": quality["score"]})
 
@@ -379,10 +392,17 @@ def _find_combo(legs: list) -> tuple | None:
             if len(set(chaves)) != len(chaves):
                 continue
 
-            odd_total = round(1.0, 4)
-            for p in combo:
-                odd_total *= p["odd"]
-            odd_total = round(odd_total, 4)
+            # CASA UNICA: bilhete de 2-3 pernas espalhado por casas
+            # diferentes nao existe no mundo real (achado do usuario,
+            # 2026-09-10). A casa e' escolhida depois das pernas e so' decide
+            # onde apostar; bilhete que nenhuma casa cota inteiro nem
+            # concorre. A faixa por perna e' a mesma do motor (DEFAULT_CONFIG),
+            # entao a odd da casa nao pode furar o gate que a perna passou.
+            aplicado = bet_house.aplicar_casa(
+                combo, DEFAULT_CONFIG.min_odd, DEFAULT_CONFIG.max_odd)
+            if aplicado is None:
+                continue
+            combo, _casa, odd_total = aplicado
 
             if not (ODD_TOTAL_MIN <= odd_total <= ODD_TOTAL_MAX):
                 continue
@@ -394,7 +414,7 @@ def _find_combo(legs: list) -> tuple | None:
 
             chave_ordem = (round(prob_combinada, 6), score_combo)
             if best is None or chave_ordem > best[0]:
-                best = (chave_ordem, combo, score_combo, odd_total)
+                best = (chave_ordem, tuple(combo), score_combo, odd_total)
 
     if best is None:
         return None

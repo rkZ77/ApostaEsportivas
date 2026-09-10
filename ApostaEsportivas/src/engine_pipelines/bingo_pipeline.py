@@ -76,6 +76,8 @@ from services.pick_engine import competition_profile as cp
 from services.pick_engine import context_gate
 from services.pick_engine import stats_model
 from services.pick_engine import ranking
+from services.pick_engine import bet_house
+from services.pick_engine import bilhetes_do_dia
 from services.pick_engine import competition_rules_store
 from engine_pipelines.decision_log import (
     MOTIVO_HISTORICO_REPROVADO, MOTIVO_SEM_HISTORICO, MOTIVO_SEM_ODDS,
@@ -153,17 +155,25 @@ def _today_used_pairs(cur) -> set:
     -- quem segue os dois produtos dobraria a exposicao achando que
     diversificou.
 
-    A multipla NAO entra nesta consulta, e isso e' escolha, nao esquecimento:
-    ela roda depois e ja' tem o proprio bloqueio de pernas exclusivas dentro
-    do dia dela. Cruzar os dois produtos aqui esvaziaria o pool do bingo em
-    dia curto sem nenhum ganho de diversificacao real -- o que importa e' que
-    a CARTELA nao repita jogo dentro de si, e disso cuida `_find_cartela`.
+    A MULTIPLA PASSOU A ENTRAR (2026-09-10, pedido do usuario). Ate' aqui ela
+    ficava de fora com o argumento de nao esvaziar o pool em dia curto -- o
+    que ignorava o risco real: bilhete e' tudo ou nada, entao a perna
+    repetida nos dois produtos nao dobra a exposicao, ela derruba os DOIS
+    bilhetes inteiros no mesmo lance, levando junto as outras seis pernas.
+    Ver services/pick_engine/bilhetes_do_dia.py.
+
+    A cartela tambem nao pode repetir jogo dentro de si, e disso continua
+    cuidando `_find_cartela`.
     """
     pairs = set()
     cur.execute(f"SELECT fixture_id, market_type FROM picks_vip WHERE match_date = {HOJE_BR}")
     pairs |= {(r[0], r[1]) for r in cur.fetchall() if r[0] and r[1]}
     cur.execute(f"SELECT fixture_id, market_type FROM picks_free WHERE match_date = {HOJE_BR}")
     pairs |= {(r[0], r[1]) for r in cur.fetchall() if r[0] and r[1]}
+    # Pernas ja' dentro de um bilhete de hoje (multipla; alavancagem roda
+    # depois). Vem por correlation_group, e a checagem no pool testa as duas
+    # chaves -- ver _gather_leg_candidates.
+    pairs |= bilhetes_do_dia.pares_em_bilhetes(cur, HOJE_BR, exceto=("picks_bingo",))
     return pairs
 
 
@@ -307,7 +317,11 @@ def _gather_leg_candidates(fixtures: list, used_pairs: set) -> list:
                 match_context=match_context)
 
             for p in elegiveis:
-                if (fixture["fixture_id"], p["market_type"]) in used_pairs:
+                # Duas chaves: o market_type cru (como VIP/Free gravam) e a
+                # familia (como os bilhetes do dia entram).
+                if ((fixture["fixture_id"], p["market_type"]) in used_pairs
+                        or (fixture["fixture_id"],
+                            ranking.correlation_group(p["market_type"])) in used_pairs):
                     continue
                 legs.append({**p, "_fixture": fixture,
                              "data_quality_score": quality["score"],
@@ -356,17 +370,25 @@ def _find_cartela(legs: list) -> tuple | None:
         if len(fixtures) != PERNAS:
             continue
 
-        odd_total = 1.0
+        # CASA UNICA: a cartela inteira tem que caber numa casa so'. Cartela
+        # que nenhuma casa cota por completo nao e' apostavel e por isso nem
+        # concorre -- o laco segue e tenta a proxima. A partir daqui as pernas
+        # ja' vem com a odd DAQUELA casa.
+        aplicado = bet_house.aplicar_casa(combo, ODD_PERNA_MIN, ODD_PERNA_MAX)
+        if aplicado is None:
+            continue
+        combo, _casa, odd_total = aplicado
+
         prob_combinada = 1.0
         for p in combo:
-            odd_total *= float(p["odd"])
             prob_combinada *= float(p["taxa_real"])
-        odd_total = round(odd_total, 4)
         score_combo = round(sum(p["final_score"] for p in combo) / PERNAS, 4)
 
+        # Ordena por probabilidade, nunca por preco: a casa unica so' decide
+        # ONDE a cartela e' apostada, nao qual cartela ganha.
         chave_ordem = (round(prob_combinada, 6), score_combo)
         if best is None or chave_ordem > best[0]:
-            best = (chave_ordem, combo, score_combo, odd_total)
+            best = (chave_ordem, tuple(combo), score_combo, odd_total)
 
     if best is None:
         return None
