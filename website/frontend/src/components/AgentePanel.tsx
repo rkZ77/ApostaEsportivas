@@ -58,7 +58,7 @@ export default function AgentePanel({ onClose }: { onClose: () => void }) {
       <div className="shrink-0 px-4 py-3 border-b border-line flex items-center gap-2.5 bg-surface-1/60">
         {/* Mesmo mascote do botao que abre este painel · ver AgenteButton. */}
         <img
-          src="/agente-128.webp" alt="" aria-hidden="true"
+          src="/agente-face-128.webp" alt="" aria-hidden="true"
           width={32} height={32}
           className="w-8 h-8 rounded-full border border-green-500/30 bg-black shrink-0 object-cover"
         />

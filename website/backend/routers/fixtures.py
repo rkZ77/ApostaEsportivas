@@ -43,16 +43,36 @@ def _fetch_by_utc_date(league_id: int, season: int, utc_date: str) -> list:
         if time.time() - ts < CACHE_TTL:
             return data
 
+    # SEASON NAO ENTRA NO FILTRO (2026-09-07).
+    #
+    # A tela mostrava DOIS jogos num dia cheio, e nao era filtro do front: a
+    # season vinha da coluna `leagues.season`, que so' muda quando alguem roda a
+    # coleta. Liga que virou de temporada e ficou com o ano velho na tabela
+    # responde ZERO aqui -- a API casa `season` com `date` e nao devolve nada,
+    # sem erro nenhum. Uma liga com a season certa sobrava, e a tela dizia que o
+    # dia tinha dois jogos.
+    #
+    # `league` + `date` ja' identificam a rodada sozinhos. A season fica so' como
+    # plano B, para o caso de a API passar a exigir o par.
+    base = {"league": league_id, "date": utc_date, "timezone": TZ_BRAZIL}
     try:
-        resp = requests.get(API_URL, headers=_api_headers(), params={
-            "league":   league_id,
-            "season":   season,
-            "date":     utc_date,
-            "timezone": TZ_BRAZIL,
-        }, timeout=10)
+        resp = requests.get(API_URL, headers=_api_headers(), params=base, timeout=10)
         api_quota.registrar(getattr(resp, "headers", None), "fixtures")
         resp.raise_for_status()
-        result = resp.json().get("response", [])
+        payload = resp.json()
+        result  = payload.get("response", [])
+
+        # `errors` vem como lista vazia no sucesso e como objeto quando a API
+        # reclama de parametro -- e ela responde 200 nos dois casos.
+        erros = payload.get("errors") or []
+        if not result and isinstance(erros, dict) and erros:
+            logger.warning("[FIXTURES API] liga %s sem season: %s", league_id, erros)
+            resp = requests.get(API_URL, headers=_api_headers(),
+                                params={**base, "season": season}, timeout=10)
+            api_quota.registrar(getattr(resp, "headers", None), "fixtures")
+            resp.raise_for_status()
+            result = resp.json().get("response", [])
+
         _cache[cache_key] = (time.time(), result)
         return result
     except Exception as e:

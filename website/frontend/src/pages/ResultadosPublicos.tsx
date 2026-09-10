@@ -93,6 +93,7 @@ const SRC_LBL: Record<string, string> = {
 }
 const SOURCE_LABELS: Record<string, string> = {
   all: 'Todos', vip: 'VIP', free: 'Free', multiplas: 'Múltiplas',
+  bingo: 'Bingo do Dia',
   alavancagem: 'Alavancagem', faltas: 'Faltas', goleiros: 'Defesas',
   player_stats: 'Jogadores', boost: 'Pick Boost', live: 'Ao Vivo',
 }
@@ -179,7 +180,7 @@ interface FechamentoMes {
    aparecia em menos de 1% dos jogos ate' la'. O historico dele continua no
    placar somado -- so' nao vale uma linha num menu que a pessoa le' hoje. */
 const PRODUTOS_DO_FILTRO = [
-  'all', 'vip', 'live', 'boost', 'multiplas', 'alavancagem',
+  'all', 'vip', 'live', 'boost', 'multiplas', 'bingo', 'alavancagem',
   'free', 'player_stats', 'faltas',
 ] as const
 

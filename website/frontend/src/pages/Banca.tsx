@@ -21,7 +21,7 @@ import SelectMenu from '../components/ui/SelectMenu'
 import MonthlyCloseSection from '../components/MonthlyCloseSection'
 
 const SOURCE_LBL: Record<string, string> = {
-  vip: 'VIP', free: 'Free', multipla: 'Múlt.', alavancagem: 'Alav.',
+  vip: 'VIP', free: 'Free', multipla: 'Múlt.', bingo: 'Bingo', alavancagem: 'Alav.',
 }
 
 // lock overlay para free
@@ -220,6 +220,7 @@ const PRODUTOS_DA_BANCA: Array<[string, string]> = [
   ['live', 'Ao Vivo'],
   ['boost', 'Pick Boost'],
   ['multipla', 'Múltiplas'],
+  ['bingo', 'Bingo do Dia'],
   ['free', 'Free'],
   ['player_stats', 'Jogadores'],
   ['faltas', 'Faltas'],
@@ -710,6 +711,7 @@ export default function Banca() {
                           {e.home_team_name
                             ? e.home_team_name
                             : e.pick_type === 'multipla' ? 'Múltipla'
+                            : e.pick_type === 'bingo' ? 'Bingo do Dia'
                             : e.pick_type === 'alavancagem' ? 'Alavancagem'
                             : e.market ?? `Pick #${e.pick_id}`}
                         </span>
@@ -764,7 +766,7 @@ export default function Banca() {
                     <div className="card p-12 text-center border-dashed">
                       <p className="text-ink-3 text-sm font-semibold mb-2">Nenhum pick apostado ainda</p>
                       <p className="text-ink-4 text-xs mb-4">
-                        Clique em "Apostar" nos picks da página Picks para registrar suas apostas aqui.
+                        Clique em "Pegar bilhete" nos picks da página Picks para registrar suas apostas aqui.
                       </p>
                       <button onClick={() => navigate('/picks')} className="btn-primary text-sm px-6 py-2.5">
                         Ver picks

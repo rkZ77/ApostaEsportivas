@@ -367,6 +367,65 @@ def _fetch_live_odds(fid: int) -> list:
 # cards over-under). Familias sem equivalente claro ao vivo (handicap,
 # shots, offsides) nao entram aqui -- _find_live_odd devolve None pra elas,
 # e o front cai pra odd ja salva (mesmo comportamento de antes desta feature).
+#: Leitura GLOBAL de /odds/live, com uma entrada de cache só.
+#:
+#: `_fetch_live_odds` acima pergunta por UMA fixture e custa uma requisição por
+#: partida. Isso serve o modal de aposta (uma partida por vez) e não serve pra
+#: acompanhar a odd de vários picks abertos ao mesmo tempo: com 5 picks e poll
+#: de 1 minuto seriam 300 requisições por hora.
+#:
+#: `/odds/live` SEM `fixture` devolve o mundo inteiro, e filtrar em memória é de
+#: graça -- é a mesma descoberta que o motor fez em 05/09 e que derrubou o custo
+#: da rodada dele. Aqui uma requisição por minuto cobre TODOS os picks abertos,
+#: de todos os usuários: em 4 horas de jogos são ~240 chamadas, contra as 7.500
+#: do plano.
+_odds_mundo_cache: tuple[float, dict] = (0.0, {})
+#: 3 MINUTOS, e nao 1 (2026-09-06, decisao do usuario). Odd ao vivo se move em
+#: minutos, nao em segundos, e o que a leitura precisa responder e' "o mercado
+#: ainda esta' de pe' e por quanto" -- nao acompanhar cada oscilacao. A conta
+#: cai de ~240 requisicoes num dia de 4 horas de jogo pra ~80, sobre as 7.500
+#: do plano.
+_TTL_ODDS_MUNDO = 180
+
+
+def _fetch_live_odds_mundo(max_paginas: int = 3) -> dict:
+    """{fixture_id: [mercados]} de todas as partidas com odd ao vivo agora.
+
+    Erro devolve o cache anterior, nunca dicionário vazio: vazio aqui seria
+    lido como "o mercado suspendeu tudo", e é a diferença entre marcar um pick
+    como sem cotação e admitir que a leitura falhou.
+    """
+    global _odds_mundo_cache
+    agora = time.time()
+    ts, cache = _odds_mundo_cache
+    if agora - ts < _TTL_ODDS_MUNDO and cache:
+        return cache
+
+    por_fixture: dict[int, list] = {}
+    try:
+        pagina = 1
+        while pagina <= max_paginas:
+            params = {"page": pagina} if pagina > 1 else {}
+            r = requests.get(f"{API_BASE}/odds/live", headers=_headers(),
+                             params=params, timeout=12)
+            api_quota.registrar(getattr(r, "headers", None), "live")
+            corpo = r.json() or {}
+            for item in corpo.get("response") or []:
+                fid = (item.get("fixture") or {}).get("id")
+                if fid is not None:
+                    por_fixture[int(fid)] = item.get("odds") or []
+            total = ((corpo.get("paging") or {}).get("total")) or 1
+            if pagina >= int(total):
+                break
+            pagina += 1
+    except Exception as e:
+        logger.error("[LIVE ODDS MUNDO] %s", e)
+        return cache
+
+    _odds_mundo_cache = (agora, por_fixture)
+    return por_fixture
+
+
 _LIVE_OVERUNDER_NAMES = {
     "goals":   {"match goals", "over/under line", "goals over/under"},
     "corners": {"total corners", "match corners"},
@@ -1668,9 +1727,16 @@ def _gravar_resultado_das_pernas(cur, tabela: str, pick_id: int,
     return json.dumps(pernas, default=str)
 
 
+#: As duas cartelas, e a tabela de cada uma. Múltipla e Bingo do Dia guardam
+#: as pernas do mesmo jeito (JSONB `games`), então toda a resolução automática
+#: por visita serve as duas com um parâmetro a mais.
+_TABELA_DA_CARTELA = {"multipla": "picks_multiplas", "bingo": "picks_bingo"}
+
+
 def _save_multipla_result(pick_id: int, legs_results: list[str | None],
                           total_odd: float, conn, legs_odds: list | None = None,
-                          forced_result: str | None = None) -> None:
+                          forced_result: str | None = None,
+                          pick_type: str = "multipla") -> None:
     """`forced_result` fecha o BILHETE sem exigir todas as pernas encerradas ·
     uma perna RED já mata a múltipla. As pernas continuam guardando o resultado
     DELAS, incluindo `None` pra quem ainda não jogou. Ver _leg_result_do_bilhete."""
@@ -1684,19 +1750,20 @@ def _save_multipla_result(pick_id: int, legs_results: list[str | None],
         profit = _profit_for_result(result, total_odd)
     else:
         profit = _combined_profit(legs_results, legs_odds, total_odd, result)
+    tabela = _TABELA_DA_CARTELA[pick_type]
     c = conn.cursor()
-    games_json = _gravar_resultado_das_pernas(c, "picks_multiplas", pick_id, legs_results)
+    games_json = _gravar_resultado_das_pernas(c, tabela, pick_id, legs_results)
     if games_json is not None:
-        c.execute("UPDATE picks_multiplas SET result=%s, profit=%s, games=%s "
+        c.execute(f"UPDATE {tabela} SET result=%s, profit=%s, games=%s "
                   "WHERE id=%s AND result IS NULL",
                   (result, profit, games_json, pick_id))
     else:
-        c.execute("UPDATE picks_multiplas SET result=%s, profit=%s WHERE id=%s AND result IS NULL",
+        c.execute(f"UPDATE {tabela} SET result=%s, profit=%s WHERE id=%s AND result IS NULL",
                   (result, profit, pick_id))
-    _sync_followed_result(pick_id, "multipla", result, c)
+    _sync_followed_result(pick_id, pick_type, result, c)
     conn.commit()
     c.close()
-    logger.info("[AUTO-RESULT] multipla #%s → %s (%+.4fu)", pick_id, result, profit)
+    logger.info("[AUTO-RESULT] %s #%s → %s (%+.4fu)", pick_type, pick_id, result, profit)
 
 
 def _save_alavancagem_result(pick_id: int, legs_results: list[str | None],
@@ -1943,14 +2010,16 @@ def get_current_pick_odd(fixture_id: int, market_type: str = "", line: str = "",
 
 
 def _pernas_do_bilhete(cur, pick_id: int, pick_type: str) -> list[dict]:
-    """Pernas de uma múltipla ou de uma alavancagem, no mesmo formato.
+    """Pernas de uma cartela ou de uma alavancagem, no mesmo formato.
 
-    Múltipla guarda as pernas num JSONB (`games`); alavancagem guarda em
-    colunas numeradas (`fixture_id_1`, `market_type_1`, ...). Os dois viram a
-    mesma lista aqui pra que a atualização de odd seja uma função só.
+    As cartelas (múltipla e Bingo do Dia) guardam as pernas num JSONB
+    (`games`); alavancagem guarda em colunas numeradas (`fixture_id_1`,
+    `market_type_1`, ...). Os dois viram a mesma lista aqui pra que a
+    atualização de odd seja uma função só.
     """
-    if pick_type == "multipla":
-        cur.execute("SELECT games FROM picks_multiplas WHERE id = %s", (pick_id,))
+    if pick_type in ("multipla", "bingo"):
+        _tab = {"multipla": "picks_multiplas", "bingo": "picks_bingo"}[pick_type]
+        cur.execute(f"SELECT games FROM {_tab} WHERE id = %s", (pick_id,))
         row = cur.fetchone()
         if not row:
             return []
@@ -1991,7 +2060,7 @@ def _pernas_do_bilhete(cur, pick_id: int, pick_type: str) -> list[dict]:
 @router.get("/ticket-odd")
 def get_current_ticket_odd(pick_id: int, pick_type: str,
                            current_user: dict = Depends(get_current_user)):
-    """Odd combinada atual de múltipla ou alavancagem.
+    """Odd combinada atual de uma cartela (múltipla, Bingo do Dia) ou alavancagem.
 
     Bilhete não tem odd própria numa casa: ele é o produto das pernas. Então
     cada perna é reconsultada (mesmo caminho do pick simples, ao vivo ou
@@ -2002,7 +2071,7 @@ def get_current_ticket_odd(pick_id: int, pick_type: str,
     Sem isso, múltipla e alavancagem eram os únicos tipos em que "Apostei"
     nunca conferia a odd: o modal abria direto com o número da geração.
     """
-    if pick_type not in ("multipla", "alavancagem"):
+    if pick_type not in ("multipla", "bingo", "alavancagem"):
         return {"odd": None, "original_odd": None, "partial": True, "legs": []}
 
     conn = get_connection()
@@ -2236,6 +2305,7 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
     vip_ids         = [r["pick_id"] for r in followed if r["pick_type"] == "vip"]
     free_ids        = [r["pick_id"] for r in followed if r["pick_type"] == "free"]
     multipla_ids    = [r["pick_id"] for r in followed if r["pick_type"] == "multipla"]
+    bingo_ids       = [r["pick_id"] for r in followed if r["pick_type"] == "bingo"]
     alavancagem_ids = [r["pick_id"] for r in followed if r["pick_type"] == "alavancagem"]
     # Picks Ao Vivo seguidos (2026-08-11). Antes deste bloco eles caiam fora de
     # todos os `if/elif` do laco la embaixo e sumiam de "Minhas Apostas" em
@@ -2290,6 +2360,28 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
         """, (multipla_ids,))
         multipla_map = {r["id"]: r for r in cur.fetchall()}
 
+    # Bingo do Dia: mesma consulta, outra tabela. Os dois mapas ficam
+    # SEPARADOS (e não fundidos) porque a chave é o `id`, e os ids das duas
+    # tabelas se repetem -- fundir faria a cartela #7 do bingo aparecer no
+    # lugar da múltipla #7.
+    bingo_map: dict = {}
+    if bingo_ids:
+        try:
+            cur.execute("""
+                SELECT id, games, total_odd, result, match_date
+                FROM picks_bingo WHERE id = ANY(%s)
+            """, (bingo_ids,))
+            bingo_map = {r["id"]: r for r in cur.fetchall()}
+        except Exception as e:
+            conn.rollback()
+            logger.error("[LIVE] picks_bingo indisponivel em my-picks: %s", e)
+            bingo_map = {}
+
+    #: As duas cartelas juntas, só pra os laços que varrem PERNAS (prefetch de
+    #: fixture e de estatística). Aí o id não é usado como chave, então a
+    #: colisão que separa os mapas acima não existe.
+    cartela_maps = (multipla_map, bingo_map)
+
     alavancagem_map: dict = {}
     if alavancagem_ids:
         cur.execute("""
@@ -2320,7 +2412,7 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
     # Batch fixture lookups for multipla legs (nomes ou IDs faltando)
     multipla_fixture_ids: set = set()
     multipla_stats_ids: set = set()
-    for p in multipla_map.values():
+    for p in [p for m in cartela_maps for p in m.values()]:
         legs_raw = p["games"]
         if isinstance(legs_raw, str):
             try: legs_raw = json.loads(legs_raw)
@@ -2369,7 +2461,7 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
     for p in live_map.values():
         if p["fixture_id"]:
             all_fixture_ids.add(p["fixture_id"])
-    for p in multipla_map.values():
+    for p in [p for m in cartela_maps for p in m.values()]:
         legs_raw = p["games"]
         if isinstance(legs_raw, str):
             try: legs_raw = json.loads(legs_raw)
@@ -2504,9 +2596,9 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                 )},
             })
 
-        # ── MÚLTIPLA ────────────────────────────────────────────────────────
-        elif pick_type == "multipla":
-            p = multipla_map.get(pick_id)
+        # ── AS CARTELAS: MÚLTIPLA E BINGO DO DIA ────────────────────────────
+        elif pick_type in ("multipla", "bingo"):
+            p = (multipla_map if pick_type == "multipla" else bingo_map).get(pick_id)
             if not p:
                 continue
             is_today = (p["match_date"] == today_br)
@@ -2560,13 +2652,14 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                         final_result = "RED" if morto else _multipla_combined_result(leg_results, leg_odds, total_odd)
                         if final_result:
                             _save_multipla_result(pick_id, leg_results, total_odd, conn, leg_odds,
-                                                  forced_result="RED" if morto else None)
+                                                  forced_result="RED" if morto else None,
+                                                  pick_type=pick_type)
                             if not is_today:
                                 continue
 
                 result.append({
                     "pick_id":        pick_id,
-                    "pick_type":      "multipla",
+                    "pick_type":      pick_type,
                     "match_date":     str(p["match_date"]),
                     "odd":            total_odd,
                     "actual_odd":     actual_odd,
@@ -2736,7 +2829,7 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
 
     conn = get_connection()
     cur  = conn.cursor()
-    resolved: dict = {"vip": 0, "free": 0, "multipla": 0, "alavancagem": 0,
+    resolved: dict = {"vip": 0, "free": 0, "multipla": 0, "bingo": 0, "alavancagem": 0,
                       "faltas": 0, "goleiros": 0,
                       # Motores de 27/08. A chave `goleiros` continua acima
                       # porque a tabela antiga ainda tem pendencia historica a
@@ -2865,77 +2958,90 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
         except Exception as e:
             logger.error("[AUTO-RESULT] live query erro: %s", e)
 
-        # ── MÚLTIPLA ─────────────────────────────────────────────────────────
-        try:
-            cur.execute(
-                "SELECT id, games, total_odd FROM picks_multiplas "
-                f"WHERE result IS NULL AND match_date <= %s {_janela}",
-                _args(),
-            )
-            multiplas = cur.fetchall()
-            _fetch_fixtures_bulk([
-                g.get("fixture_id")
-                for p in multiplas
-                for g in (json.loads(p["games"]) if isinstance(p["games"], str)
-                          else (p["games"] or []))
-                if isinstance(g, dict) and g.get("fixture_id")
-                and g.get("fixture_id") not in nao_iniciados
-            ] if multiplas else [])
-            for p in multiplas:
-                try:
-                    games = p["games"]
-                    if isinstance(games, str):
-                        try:    games = json.loads(games)
-                        except: continue
-                    if not isinstance(games, list) or not games:
-                        continue
-
-                    legs_out = []
-                    for leg_data in games:
-                        fid = leg_data.get("fixture_id")
-                        if not fid:
+        # ── AS CARTELAS: MÚLTIPLA E BINGO DO DIA ─────────────────────────────
+        #
+        # O MESMO laço para as duas. Elas guardam as pernas do mesmo jeito
+        # (JSONB `games`), então a resolução é a mesma leitura, a mesma
+        # graduação por perna e o mesmo UPDATE, só muda a tabela. Uma cópia
+        # deste bloco herdaria as correções de hoje e nenhuma das próximas: o
+        # resultado por perna e o "bilhete morto por perna RED" entraram aqui
+        # depois de o bloco existir, e a cópia teria ficado para trás sem dar
+        # erro nenhum.
+        for _pt, _tab in _TABELA_DA_CARTELA.items():
+            try:
+                cur.execute(
+                    f"SELECT id, games, total_odd FROM {_tab} "
+                    f"WHERE result IS NULL AND match_date <= %s {_janela}",
+                    _args(),
+                )
+                cartelas = cur.fetchall()
+                _fetch_fixtures_bulk([
+                    g.get("fixture_id")
+                    for p in cartelas
+                    for g in (json.loads(p["games"]) if isinstance(p["games"], str)
+                              else (p["games"] or []))
+                    if isinstance(g, dict) and g.get("fixture_id")
+                    and g.get("fixture_id") not in nao_iniciados
+                ] if cartelas else [])
+                for p in cartelas:
+                    try:
+                        games = p["games"]
+                        if isinstance(games, str):
+                            try:    games = json.loads(games)
+                            except: continue
+                        if not isinstance(games, list) or not games:
                             continue
-                        home = leg_data.get("home") or leg_data.get("home_team") or ""
-                        away = leg_data.get("away") or leg_data.get("away_team") or ""
-                        # Perna de jogo que não começou entra como stub: sem
-                        # chamada de API, mas SEM sumir da lista -- ver
-                        # _leg_nao_iniciada.
-                        if fid in nao_iniciados:
-                            legs_out.append(_leg_nao_iniciada(
-                                fid, leg_data.get("market", ""), leg_data.get("line", ""),
+
+                        legs_out = []
+                        for leg_data in games:
+                            fid = leg_data.get("fixture_id")
+                            if not fid:
+                                continue
+                            home = leg_data.get("home") or leg_data.get("home_team") or ""
+                            away = leg_data.get("away") or leg_data.get("away_team") or ""
+                            # Perna de jogo que não começou entra como stub: sem
+                            # chamada de API, mas SEM sumir da lista -- ver
+                            # _leg_nao_iniciada.
+                            if fid in nao_iniciados:
+                                legs_out.append(_leg_nao_iniciada(
+                                    fid, leg_data.get("market", ""), leg_data.get("line", ""),
+                                    float(leg_data.get("odd", 1)),
+                                    market_type=leg_data.get("market_type"),
+                                    home_team=home, away_team=away,
+                                ))
+                                continue
+                            legs_out.append(_enrich_leg(
+                                fid,
+                                leg_data.get("market", ""),
+                                leg_data.get("line", ""),
+                                home, away,
+                                leg_data.get("home_team_id"),
+                                leg_data.get("away_team_id"),
                                 float(leg_data.get("odd", 1)),
                                 market_type=leg_data.get("market_type"),
-                                home_team=home, away_team=away,
                             ))
+
+                        if not legs_out:
                             continue
-                        legs_out.append(_enrich_leg(
-                            fid,
-                            leg_data.get("market", ""),
-                            leg_data.get("line", ""),
-                            home, away,
-                            leg_data.get("home_team_id"),
-                            leg_data.get("away_team_id"),
-                            float(leg_data.get("odd", 1)),
-                            market_type=leg_data.get("market_type"),
-                        ))
 
-                    if not legs_out:
-                        continue
-
-                    total_odd   = float(p["total_odd"] or 1)
-                    leg_results = [_locked_leg_result(l) for l in legs_out]
-                    leg_odds    = [l.get("odd") for l in legs_out]
-                    if _bilhete_morto(leg_results):
-                        _save_multipla_result(p["id"], leg_results, total_odd, conn, leg_odds,
-                                              forced_result="RED")
-                        resolved["multipla"] += 1
-                    elif all(r is not None for r in leg_results):
-                        _save_multipla_result(p["id"], leg_results, total_odd, conn, leg_odds)
-                        resolved["multipla"] += 1
-                except Exception as e:
-                    logger.error("[AUTO-RESULT] multipla #%s erro: %s", p["id"], e)
-        except Exception as e:
-            logger.error("[AUTO-RESULT] multipla query erro: %s", e)
+                        total_odd   = float(p["total_odd"] or 1)
+                        leg_results = [_locked_leg_result(l) for l in legs_out]
+                        leg_odds    = [l.get("odd") for l in legs_out]
+                        if _bilhete_morto(leg_results):
+                            _save_multipla_result(p["id"], leg_results, total_odd, conn, leg_odds,
+                                                  forced_result="RED", pick_type=_pt)
+                            resolved[_pt] += 1
+                        elif all(r is not None for r in leg_results):
+                            _save_multipla_result(p["id"], leg_results, total_odd, conn, leg_odds,
+                                              pick_type=_pt)
+                            resolved[_pt] += 1
+                    except Exception as e:
+                        logger.error("[AUTO-RESULT] %s #%s erro: %s", _pt, p["id"], e)
+            except Exception as e:
+                # `picks_bingo` nasce do motor: onde ele nunca rodou a tabela
+                # nao existe, e o erro sujaria a transacao das proximas secoes.
+                conn.rollback()
+                logger.error("[AUTO-RESULT] %s query erro: %s", _pt, e)
 
         # ── ALAVANCAGEM ──────────────────────────────────────────────────────
         try:
@@ -3418,12 +3524,18 @@ def _ha_pendente_em_jogo() -> bool:
             # guarda as pernas em JSON), então aqui a pergunta é só pela data --
             # são poucos por dia e o custo de um falso positivo é uma varredura
             # que não acha nada.
-            for tabela in ("picks_multiplas", "picks_alavancagem"):
-                cur.execute(f"""
-                    SELECT 1 FROM {tabela}
-                    WHERE result IS NULL AND match_date BETWEEN %s AND %s
-                    LIMIT 1
-                """, (desde, datetime.now(_BR_TZ).date()))
+            for tabela in ("picks_multiplas", "picks_bingo", "picks_alavancagem"):
+                try:
+                    cur.execute(f"""
+                        SELECT 1 FROM {tabela}
+                        WHERE result IS NULL AND match_date BETWEEN %s AND %s
+                        LIMIT 1
+                    """, (desde, datetime.now(_BR_TZ).date()))
+                except Exception:
+                    # `picks_bingo` nasce do motor; ambiente sem ele não pode
+                    # travar o freio das outras tabelas.
+                    conn.rollback()
+                    continue
                 if cur.fetchone():
                     return True
             # OS DOIS PRODUTOS DE JOGADOR PERGUNTAM PELA HORA DO JOGO, NAO
@@ -3668,56 +3780,63 @@ def reverify_recent_stats_results(days: int | None = None,
                 conn.rollback()  # tabela ausente nao pode abortar as proximas
                 logger.error("[AUTO-RECHECK] %s query erro: %s", table, e)
 
-        # ── MÚLTIPLA (pernas em JSON, resultado combinado) ──────────────────────
-        try:
-            cur.execute("""
-                SELECT id, games, total_odd, result
-                FROM picks_multiplas
-                WHERE result IS NOT NULL AND match_date BETWEEN %s AND %s
-            """, (since, today_br))
-            for p in cur.fetchall():
-                checked += 1
-                try:
-                    games = p["games"]
-                    if isinstance(games, str):
-                        games = json.loads(games)
-                    if not isinstance(games, list) or not games:
-                        continue
-                    if not all_markets and not any(
-                            g.get("market_type") in _STATS_REVERIFY_MARKET_TYPES for g in games):
-                        continue  # nenhuma perna usa mercado sujeito a revisao -- nada a reconferir
-                    legs_out = []
-                    for g in games:
-                        fid = g.get("fixture_id")
-                        if not fid:
+        # ── AS CARTELAS (pernas em JSON, resultado combinado) ───────────────────
+        #
+        # Múltipla e Bingo do Dia no mesmo laço, pelo mesmo motivo do bloco de
+        # resolução acima: mesmo esquema, mesma conta.
+        for _pt, _tab in _TABELA_DA_CARTELA.items():
+            try:
+                cur.execute(f"""
+                    SELECT id, games, total_odd, result
+                    FROM {_tab}
+                    WHERE result IS NOT NULL AND match_date BETWEEN %s AND %s
+                """, (since, today_br))
+                for p in cur.fetchall():
+                    checked += 1
+                    try:
+                        games = p["games"]
+                        if isinstance(games, str):
+                            games = json.loads(games)
+                        if not isinstance(games, list) or not games:
                             continue
-                        home = g.get("home") or g.get("home_team") or ""
-                        away = g.get("away") or g.get("away_team") or ""
-                        legs_out.append(_enrich_leg(fid, g.get("market", ""), g.get("line", ""), home, away,
-                                                     g.get("home_team_id"), g.get("away_team_id"),
-                                                     float(g.get("odd", 1)), market_type=g.get("market_type")))
-                    if not legs_out or not all(l["is_ft"] for l in legs_out):
-                        continue  # so' reconfere quando TODAS as pernas ja encerraram
-                    leg_results = [_locked_leg_result(l) for l in legs_out]
-                    leg_odds    = [l.get("odd") for l in legs_out]
-                    total_odd   = float(p["total_odd"] or 1)
-                    computed = _multipla_combined_result(leg_results, leg_odds, total_odd)
-                    if computed and computed != p["result"]:
-                        profit = _combined_profit(leg_results, leg_odds, total_odd, computed)
-                        c = conn.cursor()
-                        c.execute("UPDATE picks_multiplas SET result=%s, profit=%s WHERE id=%s",
-                                  (computed, profit, p["id"]))
-                        _sync_followed_result(p["id"], "multipla", computed, c)
-                        conn.commit()
-                        c.close()
-                        corrected.append({"table": "picks_multiplas", "id": p["id"],
-                                           "old": p["result"], "new": computed})
-                        logger.warning("[AUTO-RECHECK] multipla #%s: %s -> %s (revisao tardia do provedor)",
-                                       p["id"], p["result"], computed)
-                except Exception as e:
-                    logger.error("[AUTO-RECHECK] multipla #%s erro: %s", p["id"], e)
-        except Exception as e:
-            logger.error("[AUTO-RECHECK] multipla query erro: %s", e)
+                        if not all_markets and not any(
+                                g.get("market_type") in _STATS_REVERIFY_MARKET_TYPES for g in games):
+                            continue  # nenhuma perna usa mercado sujeito a revisao -- nada a reconferir
+                        legs_out = []
+                        for g in games:
+                            fid = g.get("fixture_id")
+                            if not fid:
+                                continue
+                            home = g.get("home") or g.get("home_team") or ""
+                            away = g.get("away") or g.get("away_team") or ""
+                            legs_out.append(_enrich_leg(fid, g.get("market", ""), g.get("line", ""), home, away,
+                                                         g.get("home_team_id"), g.get("away_team_id"),
+                                                         float(g.get("odd", 1)), market_type=g.get("market_type")))
+                        if not legs_out or not all(l["is_ft"] for l in legs_out):
+                            continue  # so' reconfere quando TODAS as pernas ja encerraram
+                        leg_results = [_locked_leg_result(l) for l in legs_out]
+                        leg_odds    = [l.get("odd") for l in legs_out]
+                        total_odd   = float(p["total_odd"] or 1)
+                        computed = _multipla_combined_result(leg_results, leg_odds, total_odd)
+                        if computed and computed != p["result"]:
+                            profit = _combined_profit(leg_results, leg_odds, total_odd, computed)
+                            c = conn.cursor()
+                            c.execute(f"UPDATE {_tab} SET result=%s, profit=%s WHERE id=%s",
+                                      (computed, profit, p["id"]))
+                            _sync_followed_result(p["id"], _pt, computed, c)
+                            conn.commit()
+                            c.close()
+                            corrected.append({"table": _tab, "id": p["id"],
+                                               "old": p["result"], "new": computed})
+                            logger.warning("[AUTO-RECHECK] %s #%s: %s -> %s (revisao tardia do provedor)",
+                                           _pt, p["id"], p["result"], computed)
+                    except Exception as e:
+                        logger.error("[AUTO-RECHECK] %s #%s erro: %s", _pt, p["id"], e)
+            except Exception as e:
+                # `picks_bingo` nasce do motor: onde ele nunca rodou a tabela
+                # nao existe, e o erro sujaria a transacao das proximas secoes.
+                conn.rollback()
+                logger.error("[AUTO-RECHECK] %s query erro: %s", _pt, e)
 
         # ── ALAVANCAGEM (ate 3 pernas em colunas separadas, resultado combinado) ─
         try:

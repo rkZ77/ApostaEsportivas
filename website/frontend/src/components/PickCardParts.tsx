@@ -34,10 +34,20 @@ export function PickCardFooter({
   shareState?: 'idle' | 'loading' | 'done'
   className?: string
 }) {
+  /* "PEGAR BILHETE", e nao "Apostar" (2026-09-05, pedido do usuario).
+  
+     O botao nao aposta nada: ele registra na banca o pick que a pessoa levou
+     pra casa. "Apostar" prometia uma acao que acontece na casa de apostas, e
+     era o mesmo verbo do rotulo da stake sugerida logo acima ("Apostar 2u"),
+     entao o card dizia a mesma palavra pra duas coisas diferentes. */
   const betLabel =
     betState === 'loading' ? 'Registrando...'
-    : betState === 'done' ? 'Registrado'
-    : hasBanca ? 'Apostar'
+    /* "Bilhete registrado", nao so' "Registrado" (2026-09-06, pedido do
+       usuario): o botao ao lado convida a PEGAR BILHETE, e o estado depois
+       dele tem que fechar a mesma frase. "Registrado" sozinho nao dizia o que
+       foi registrado. */
+    : betState === 'done' ? 'Bilhete registrado'
+    : hasBanca ? 'Pegar bilhete'
     : 'Configurar banca'
 
   return (
@@ -151,6 +161,7 @@ export function PickProbability({
   probability,
   label = 'Probabilidade',
   className,
+  mercadoAgora,
 }: {
   /** Fração 0..1. Só é usada quando não há probabilidade. */
   confidence?: number | null
@@ -163,18 +174,43 @@ export function PickProbability({
    */
   label?: string
   className?: string
+  /**
+   * A chance que a CASA está precificando neste minuto (ao vivo).
+   *
+   * Não é um recálculo do nosso modelo: ele lê escanteio, chute e posse por
+   * partida, e refazer isso a cada leitura custaria uma requisição de
+   * estatística por jogo. É o mercado se movendo, que é a outra metade da
+   * pergunta "ainda vale entrar?" -- a nossa estimativa é do instante da
+   * publicação e não muda.
+   */
+  mercadoAgora?: { valor: number | null; semVig?: boolean } | null
 }) {
   const bruto = probability ?? confidence
   if (bruto == null) return null
-  const pct = Math.round(Number(bruto) * 100)
+  const nosso = Math.round(Number(bruto) * 100)
+  const pctMercado = mercadoAgora?.valor != null
+    ? Math.round(Number(mercadoAgora.valor) * 100) : null
+
+  /* UM NÚMERO SÓ, E ELE SE MOVE (2026-09-06, pedido do usuário).
+  
+     A barra mostrava a nossa estimativa e, embaixo, o que a casa pagava agora:
+     dois percentuais concorrendo pela mesma leitura, e o de cima congelado no
+     instante da publicação. Ao vivo, o número que responde "ainda vale entrar?"
+     é o do mercado -- ele é o que muda a cada leitura.
+  
+     A nossa estimativa não sumiu: ela vive no "Entenda esta análise", ao lado
+     da conta do valor, que é onde ela explica alguma coisa. Sem leitura ao
+     vivo (pré-jogo, pick encerrado) a barra continua sendo a nossa. */
+  const pct = pctMercado ?? nosso
   // Sem probabilidade real, o numero e' uma aproximacao: o rotulo avisa.
-  const aproximado = probability == null
+  const aproximado = pctMercado == null && probability == null
 
   return (
     <div className={cn('px-5 pb-3', className)}>
       <div className="flex justify-between items-baseline text-[10px] mb-1">
         <span className="text-ink-4">
-          {label}{aproximado && <span className="text-ink-4"> estimada</span>}
+          {pctMercado != null ? 'Chance na odd de agora' : label}
+          {aproximado && <span className="text-ink-4"> estimada</span>}
         </span>
         <span className={cn('font-mono', pct >= 75 ? 'text-accent-ink font-bold' : 'text-ink-3')}>
           {pct}%

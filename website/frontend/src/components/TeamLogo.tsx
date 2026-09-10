@@ -25,13 +25,32 @@ export function TeamLogo({ id, name, size = 22 }: { id?: number; name: string; s
   )
 }
 
+/*
+ * ESCUDO DE LIGA SOBRE FUNDO CLARO (2026-09-06, pedido do usuário).
+ *
+ * Boa parte dos emblemas de competição é monocromática em PRETO -- Ligue 1,
+ * Serie A, Eredivisie -- e o provedor entrega o PNG com fundo transparente.
+ * No tema escuro do site isso vira um quadrado invisível: a linha mostrava o
+ * nome da liga e um buraco onde devia estar o escudo, e só nas ligas de logo
+ * colorido (Bundesliga) ele aparecia. Parecia imagem quebrada.
+ *
+ * A moldura clara resolve nos dois temas e para os dois tipos de emblema: o
+ * preto passa a ter contraste, e o colorido continua legível sobre branco --
+ * é a mesma solução que os placares usam. `opacity` saiu junto: escurecer um
+ * logo que já sumia era o outro metade do problema.
+ */
 export function LeagueLogo({ id, name, size = 16 }: { id?: number; name?: string; size?: number }) {
   const src = LEAGUE_LOGO(id)
   if (!src) return null
   return (
-    <img src={src} alt={name ?? ''} width={size} height={size} loading="lazy"
-      className="object-contain shrink-0 opacity-70" style={{ width: size, height: size }}
-      onError={e => (e.currentTarget.style.display = 'none')} />
+    <span
+      className="inline-flex items-center justify-center shrink-0 rounded-[3px] bg-white/90 p-px"
+      style={{ width: size + 3, height: size + 3 }}
+    >
+      <img src={src} alt={name ?? ''} width={size} height={size} loading="lazy"
+        className="object-contain" style={{ width: size, height: size }}
+        onError={e => (e.currentTarget.style.display = 'none')} />
+    </span>
   )
 }
 

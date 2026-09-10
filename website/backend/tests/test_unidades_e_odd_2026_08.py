@@ -436,11 +436,15 @@ def test_por_jogo_cobre_todos_os_pipelines():
 
     `player_stats` entrou em 27/08 pelo mesmo motivo -- ele e' publicado e
     liquidado como os outros. `boost` NAO entra: fase 1 dele e' so' Admin.
+
+    `bingo` entrou em 08/09. Ele nao tem partida propria (as pernas moram num
+    JSONB), entao entra na lista como um bilhete de N selecoes -- exatamente
+    como a multipla ja' entrava, e pelo mesmo molde de SQL.
     """
     from routers.suggestions import FONTES_POR_JOGO
 
     assert set(FONTES_POR_JOGO) == {
-        "vip", "free", "multipla", "alavancagem", "faltas", "goleiros",
+        "vip", "free", "multipla", "bingo", "alavancagem", "faltas", "goleiros",
         "player_stats",
     }
     assert "boost" not in FONTES_POR_JOGO
@@ -868,6 +872,15 @@ def test_lucro_em_reais_so_pra_quem_apostou():
     Seguiu: a conta e' a dele. Nao seguiu: mostra o resultado do PICK em 1u, e
     nada de reais -- real depende de stake, e stake que nao houve nao vira
     dinheiro.
+
+    O ROTULO "Nao registrada" DEIXOU DE SER EXIGIDO EM 08/09. Ele era a coluna
+    que ocupava um terco da largura do card pra dizer que a pessoa ficou de
+    fora, e o SuggestionCard passou a nao desenhar essa coluna quando ela nao
+    seguiu · decisao de layout, documentada no proprio componente.
+
+    O que este teste protege e' o DINHEIRO, e isso nao mudou: `seguiu && banca`
+    continua sendo a unica porta pro valor em reais. Exigir o rotulo aqui era
+    travar a moldura junto com a regra.
     """
     for tela in ("components/SuggestionCard.tsx", "pages/Picks.tsx"):
         fonte = _front_codigo(tela)
@@ -875,7 +888,6 @@ def test_lucro_em_reais_so_pra_quem_apostou():
             f"{tela} ainda cai na stake sugerida pra calcular lucro"
         assert "const seguiu =" in fonte, tela
         assert "seguiu && banca" in fonte, f"{tela} calcula reais sem checar se apostou"
-        assert "Não registrada" in _front(tela), f"{tela} nao diz que o usuario ficou de fora"
 
 
 def test_suporte_tem_um_link_so():

@@ -86,11 +86,12 @@ export function useOddAtualizada() {
     }
   }
 
-  /** Bilhete combinado (múltipla, alavancagem): o backend refaz o produto das pernas. */
+  /** Bilhete combinado (múltipla, Bingo do Dia, alavancagem): o backend refaz
+   *  o produto das pernas. */
   async function oddBilhete(
     pickOdd: number,
     pickId: number,
-    pickType: 'multipla' | 'alavancagem',
+    pickType: 'multipla' | 'bingo' | 'alavancagem',
   ): Promise<OddAtualizada> {
     const base = Number(pickOdd)
     setBuscando(true)

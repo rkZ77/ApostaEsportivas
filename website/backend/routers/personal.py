@@ -145,6 +145,9 @@ PICK_TABLES = {
     "vip":         "picks_vip",
     "free":        "picks_free",
     "multipla":    "picks_multiplas",
+    # Bingo do Dia (08/09). Sem esta linha o GREEN de uma cartela nao conta pra
+    # conquista nenhuma: o laco abaixo so' visita o que esta' neste mapa.
+    "bingo":       "picks_bingo",
     "alavancagem": "picks_alavancagem",
     "faltas":      "picks_faltas",
     "goleiros":    "picks_goleiros",

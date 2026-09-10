@@ -38,14 +38,20 @@ def test_a_banca_soma_todo_tipo_que_ela_deixa_seguir():
     """`_resolve_pick` aceitar o tipo nao basta: o follow entra no banco e o
     somatorio ignora o pick.
 
-    Alavancagem e multipla sao as duas excecoes DECLARADAS: a alavancagem sai
-    por `pick_type != 'alavancagem'` (caminho em andamento nao e' dinheiro, ver
-    _quebra_por_pipeline) e a multipla tem mapa proprio no corpo da rota,
-    porque le `games` alem de result/odd.
+    Alavancagem e' a excecao DECLARADA: ela sai por
+    `pick_type != 'alavancagem'` (caminho em andamento nao e' dinheiro, ver
+    _quebra_por_pipeline).
+
+    As CARTELAS (multipla e bingo) tem mapa proprio -- `_cartela_maps` --
+    porque leem `games` alem de result/odd. Ate' 08/09 a multipla estava
+    escrita a mao aqui e o mapa dela vivia copiado em quatro consultas da
+    banca; agora as duas saem de `_TABELAS_CARTELA`, e um produto de cartela
+    novo entra neste teste sozinho.
     """
     import routers.banca as banca
 
-    cobertos = set(banca._TABELAS_MERCADO) | {"vip", "free", "multipla", "alavancagem"}
+    cobertos = (set(banca._TABELAS_MERCADO) | set(banca._TABELAS_CARTELA)
+                | {"vip", "free", "alavancagem"})
     faltando = _tipos_seguiveis() - cobertos
     assert not faltando, (
         f"{faltando} pode ser seguido e some do saldo: type_map.get devolve "

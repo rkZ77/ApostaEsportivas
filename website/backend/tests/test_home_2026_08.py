@@ -555,16 +555,27 @@ def test_forma_do_mercado_exige_sessao():
 
 
 def test_bilhete_de_varias_pernas_mostra_uma_serie_POR_PERNA():
-    """Nao existe UMA serie que descreva multipla/alavancagem -- sao mercados
-    diferentes. Existe a de cada perna, que e' a mesma decisao que a regra de
-    mercado no modal ja seguia. Ate 2026-08-10 os dois tipos nao passavam
-    pickId/pickType e a secao inteira sumia dos dois cards."""
+    """Nao existe UMA serie que descreva multipla/bingo/alavancagem -- sao
+    mercados diferentes. Existe a de cada perna, que e' a mesma decisao que a
+    regra de mercado no modal ja seguia. Ate 2026-08-10 os tipos de bilhete
+    nao passavam pickId/pickType e a secao inteira sumia dos cards.
+
+    O CARD DE CARTELA VIROU UM SO' EM 08/09: multipla e Bingo do Dia usam o
+    mesmo componente, e o `pickType` que ele manda pro modal e' a variavel
+    `tipo` -- por isso o literal 'multipla' nao aparece mais aqui. A garantia
+    e' a mesma (o tipo VIAJA), e ela agora e' checada nos dois lugares: o
+    componente encaminha `tipo`, e as duas tabelas de cartela estao na lista
+    fechada que o backend aceita."""
     src = _front_codigo("pages/Picks.tsx")
-    assert "pickType: 'multipla'" in src
+    assert "pickType: tipo" in src, "o card de cartela precisa encaminhar o tipo"
+    assert "tipo=\"bingo\"" in src, "o Bingo tem que reusar o card da cartela"
     assert "pickType: 'alavancagem'" in src
     corpo = _codigo("routers/suggestions.py", "get_market_form")
     assert "_pernas_de_multipla" in corpo
     assert "_pernas_de_alavancagem" in corpo
+    # A serie por perna vale pras DUAS cartelas, e a lista de tabelas e' fechada.
+    import routers.suggestions as sug
+    assert set(sug._CARTELAS) == {"multipla", "bingo"}
 
 
 # ────────────────────── Meta de banca removida ─────────────────────────
@@ -743,8 +754,10 @@ def test_periodo_fica_a_vista_nas_duas_telas():
     celular, nao oferecia mes especifico sem crescer um item por mes e nao
     tinha lugar pro recorte por produto.
     """
+    # As duas usam o MESMO menu desde 06/09: a fila de pills era um segundo
+    # controle pra mesma pergunta e nao cabia numa linha de celular.
     for pagina, controle in (("pages/Banca.tsx", "<SelectMenu"),
-                             ("pages/MeusPicks.tsx", "<PillGroup")):
+                             ("pages/MeusPicks.tsx", "<SelectMenu")):
         src = _front_codigo(pagina)
         assert controle in src, f"{pagina} devia mostrar o periodo a vista"
     assert "FilterPanel" not in _front_codigo("pages/Banca.tsx")
@@ -819,14 +832,26 @@ def test_a_aba_mercados_virou_duas_coisas():
 
     O hash antigo tem que continuar chegando em algum lugar util · `#mercados`
     caindo no fallback abriria a aba Hoje, que e' outra tela (mesmo sintoma que
-    `#chat` produziu). Ele cai em `vip` porque faltas cobre 62% dos jogos e
-    defesa de goleiro 0,86%: quem salvou o link quase sempre queria faltas.
+    `#chat` produziu).
+
+    O DESTINO MUDOU EM 08/09, e a garantia nao. Ele apontava pra `vip` porque
+    era pra la' que o conteudo tinha ido em 27/08 (faltas cobre 62% dos jogos e
+    defesa de goleiro 0,86%, entao quem salvou o link quase sempre queria
+    faltas). Em 08/09 o Pick Falta voltou a ter aba propria, e o alias
+    acompanhou: `#mercados` agora cai em `faltas`, que e' exatamente o que
+    aquele raciocinio pedia assim que o destino passou a existir.
+
+    O que este teste trava continua sendo "o hash nao pode cair no fallback",
+    nao um destino especifico · por isso ele aceita qualquer aba real.
     """
     src = _front_codigo("pages/Picks.tsx")
 
     assert "tab === 'mercados'" not in src, "o bloco da aba ainda esta' desenhado"
     assert "key: 'mercados'" not in src, "a aba ainda esta' na barra"
-    assert "mercados: 'vip'" in src, "#mercados precisa de alias pra aba VIP"
+    import re as _re
+    alias = _re.search(r"mercados: '(\w+)'", src)
+    assert alias, "#mercados precisa de alias pra alguma aba, senao cai no fallback"
+    assert alias.group(1) in ("vip", "faltas"),         f"#mercados aponta pra {alias.group(1)!r}, que nao recebeu o conteudo da aba antiga"
 
     # Faltas dentro do VIP, jogadores em aba propria · sem os dois, os picks
     # sumiram junto com a aba antiga.
@@ -937,7 +962,12 @@ def _uniao_de_picks(sql: str) -> set:
 # notificado e seguido na banca, e nao existia em nenhum numero publico -- o
 # site vendia um motor que o placar dele ignorava. Peso 3 em stake_plan.py, na
 # mesma mudanca.
-_FONTES_DO_PLACAR = {"picks_vip", "picks_free", "picks_multiplas",
+#
+# Bingo do Dia entrou em 08/09, e pela mesma regra: ele nasce PUBLICADO (aba
+# propria, banca, ranking, placar publico), entao a fonte e o peso 1u em
+# stake_plan.py mudaram juntos. Fonte publicada que nao estivesse aqui contaria
+# acerto e nao contaria unidade.
+_FONTES_DO_PLACAR = {"picks_vip", "picks_free", "picks_multiplas", "picks_bingo",
                      "picks_alavancagem", "picks_faltas", "picks_goleiros",
                      "picks_player_stats", "picks_boost", "picks_live"}
 #: Nome antigo, mantido pra nao reescrever as asserts uma a uma.

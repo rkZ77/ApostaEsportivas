@@ -30,6 +30,7 @@ export const PICK_TYPE_LABEL: Record<string, string> = {
   free: 'Free',
   multipla: 'Múltipla',
   multiplas: 'Múltipla',
+  bingo: 'Bingo',
   alavancagem: 'Alavancagem',
   faltas: 'Faltas',
   goleiros: 'Defesas',
@@ -46,6 +47,10 @@ export const PICK_TYPE_HEX: Record<string, string> = {
   free: '#4ade80',
   multipla: '#60a5fa',
   multiplas: '#60a5fa',
+  /* Rosa · o Bingo é a outra cartela e vive ao lado da múltipla numa lista
+     misturada, então precisa se distinguir DELA antes de qualquer outra coisa.
+     Repetir o azul faria os dois bilhetes parecerem o mesmo produto. */
+  bingo: '#fb7185',
   alavancagem: '#fb923c',
   faltas: '#c084fc',
   goleiros: '#38bdf8',
@@ -78,6 +83,7 @@ export const PICK_TYPE_BORDER: Record<string, string> = {
   free:        'border-green-500/20 hover:border-green-500/40',
   multipla:    'border-blue-400/20 hover:border-blue-400/40',
   multiplas:   'border-blue-400/20 hover:border-blue-400/40',
+  bingo:       'border-rose-400/20 hover:border-rose-400/40',
   alavancagem: 'border-orange-400/20 hover:border-orange-400/40',
   faltas:      'border-purple-400/20 hover:border-purple-400/40',
   goleiros:    'border-sky-400/20 hover:border-sky-400/40',
@@ -92,6 +98,7 @@ export const PICK_TYPE_CLS: Record<string, string> = {
   free:        'text-green-400 bg-green-500/10 border-green-500/20',
   multipla:    'text-blue-400 bg-blue-400/10 border-blue-400/20',
   multiplas:   'text-blue-400 bg-blue-400/10 border-blue-400/20',
+  bingo:       'text-rose-400 bg-rose-400/10 border-rose-400/20',
   alavancagem: 'text-orange-400 bg-orange-400/10 border-orange-400/20',
   // Mesmas cores da aba Mercados na pagina de picks (roxo/azul-claro), pra
   // um pick de faltas ser reconhecido pela cor em qualquer tela.

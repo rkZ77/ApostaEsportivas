@@ -42,7 +42,17 @@ export default function ComoFunciona({
   children: React.ReactNode
   className?: string
 }) {
-  const [aberto, setAberto] = useState(true)
+  /* ABERTO NO DESKTOP, FECHADO NO CELULAR (2026-09-07, pedido do usuário).
+   *
+   * O "nasce aberto" de 30/08 continua valendo onde ele custa nada: no
+   * desktop a explicação e o primeiro pick cabem na mesma tela. No celular
+   * ela empurrava o produto inteiro pra baixo da dobra, que era exatamente o
+   * problema da primeira versão. O estado é decidido UMA vez, na montagem: a
+   * pessoa que abre no celular e gira o aparelho não vê o bloco se mexer
+   * sozinho. */
+  const [aberto, setAberto] = useState(() =>
+    typeof window === 'undefined' ? true : window.matchMedia('(min-width: 768px)').matches,
+  )
   const id = useId()
 
   return (

@@ -17,7 +17,7 @@ VALID_REACTIONS = {"fire", "money", "like", "doubt"}
 # "multipla" e "multiplas" coexistem: a tabela é picks_multiplas mas o
 # pick_type gravado em user_followed_picks é "multipla" (sem 's').
 VALID_PICK_TYPES = {
-    "vip", "free", "multipla", "multiplas", "alavancagem",
+    "vip", "free", "multipla", "multiplas", "bingo", "alavancagem",
     "faltas", "goleiros", "player_stats", "boost", "live",
 }
 

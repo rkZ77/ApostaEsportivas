@@ -50,6 +50,7 @@ interface Stats {
     player_stats: number
     boost: number
     multiplas: number
+    bingo: number
     live: number
   }
 }
@@ -99,7 +100,7 @@ interface Liga {
 }
 
 const PICK_LABEL: Record<string, string> = {
-  vip: 'VIP', free: 'Dica do Dia', multiplas: 'Múltiplas',
+  vip: 'VIP', free: 'Dica do Dia', multiplas: 'Múltiplas', bingo: 'Bingo do Dia',
   alavancagem: 'Alavancagem', faltas: 'Faltas', goleiros: 'Defesas',
   player_stats: 'Jogadores', boost: 'Pick Boost', live: 'Ao Vivo',
 }
@@ -251,6 +252,7 @@ export default function Admin() {
     { command: 'gerar_vip',            label: 'Gerar VIP'            },
     { command: 'gerar_free',           label: 'Gerar Free'           },
     { command: 'gerar_multipla',       label: 'Gerar Múltipla'       },
+    { command: 'gerar_bingo',          label: 'Gerar Bingo do Dia'   },
     { command: 'gerar_alavancagem',    label: 'Gerar Alavancagem'    },
     { command: 'gerar_faltas',         label: 'Gerar Faltas'         },
     { command: 'gerar_playerstats',    label: 'Gerar Jogadores'      },
@@ -1352,6 +1354,7 @@ export default function Admin() {
                 <option value="vip">VIP</option>
                 <option value="free">Free</option>
                 <option value="multipla">Múltipla</option>
+                <option value="bingo">Bingo do Dia</option>
                 <option value="alavancagem">Alavancagem</option>
                 <option value="faltas">Faltas</option>
                 <option value="player_stats">Jogadores</option>
@@ -1388,7 +1391,8 @@ export default function Admin() {
                 // ser reconhecido pela cor em qualquer tela.
                 const typeCls: Record<string, string> = {
                   vip: 'text-yellow-400 bg-yellow-400/10', free: 'text-green-400 bg-green-400/10',
-                  multipla: 'text-blue-400 bg-blue-400/10', alavancagem: 'text-orange-400 bg-orange-400/10',
+                  multipla: 'text-blue-400 bg-blue-400/10', bingo: 'text-rose-400 bg-rose-400/10',
+                  alavancagem: 'text-orange-400 bg-orange-400/10',
                   faltas: 'text-purple-400 bg-purple-400/10', goleiros: 'text-sky-400 bg-sky-400/10',
                   player_stats: 'text-amber-400 bg-amber-400/10',
                   boost: 'text-pink-400 bg-pink-400/10', live: 'text-accent-ink bg-accent/10',

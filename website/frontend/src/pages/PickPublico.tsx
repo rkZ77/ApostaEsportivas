@@ -135,7 +135,7 @@ export default function PickPublico() {
 
           {/* Times */}
           <div className="px-5 py-4 border-b border-line/60">
-            {pick.pick_type === 'multipla' && pick.teams_preview ? (
+            {(pick.pick_type === 'multipla' || pick.pick_type === 'bingo') && pick.teams_preview ? (
               <div className="space-y-1.5">
                 {pick.teams_preview.map((t: string, i: number) => (
                   <p key={i} className="text-sm font-semibold text-ink-1">{t}</p>

@@ -38,6 +38,10 @@ export const STAKE_PADRAO: Record<string, number> = {
   // ('multiplas'). As duas chaves apontam pro mesmo peso pra que nenhum
   // chamador precise normalizar antes de perguntar.
   multipla:    1,
+  // Bingo do Dia · 1u, o mesmo peso da múltipla e pela mesma razão: é bilhete
+  // combinado, e a variância de "as quatro têm que bater" não é a de uma
+  // entrada simples. Ver o comentário no Python, que é a fonte.
+  bingo:       1,
   alavancagem: 0,
 }
 
