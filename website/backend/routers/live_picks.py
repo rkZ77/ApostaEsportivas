@@ -423,9 +423,16 @@ def reconferir_liquidados(cur, conn, dias: int = 7) -> dict:
 
             odd = float(linha["odd"] or 1)
             profit = _profit_for_result(correto, odd)
+            # `status` vai junto de proposito. picks_live tem DUAS colunas de
+            # estado (ver _save_live_pick_result em routers/live.py) e a
+            # reconferencia mexia so na de resultado -- um pick que estivesse
+            # ACTIVE ou EXPIRED na hora da correcao ficava com result gravado e
+            # status antigo. Achado em 2026-09-10 com dois picks reais de 06/09
+            # em PROD: #91 (PUSH) e #105 (GREEN), os dois ainda marcados ACTIVE.
             cur.execute("""
                 UPDATE picks_live
-                   SET result = %s, profit = %s, settled_at = NOW()
+                   SET result = %s, profit = %s, settled_at = NOW(),
+                       status = 'SETTLED', expiration_reason = NULL
                  WHERE id = %s
             """, (correto, profit, linha["id"]))
             # Quem seguiu tem que ver a correcao no saldo E no sino · e' o

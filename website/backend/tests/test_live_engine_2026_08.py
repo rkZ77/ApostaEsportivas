@@ -33,6 +33,7 @@ from services.pick_engine_live import (
     live_odds, live_state, orchestrator, pressure_model,
     residual_model as rm, rhythm_model as rit, signal_score,
 )
+from services.pick_engine_live import config as live_config
 from services.pick_engine_live.config import (
     AmbienteInvalido, LiveEngineConfig, exigir_ambiente_dev,
 )
@@ -1169,7 +1170,11 @@ def test_avaliacao_completa_produz_candidato_com_rastro_auditavel():
         assert 0.0 <= c["probability"] <= 1.0
         assert c["live_signal_score"] is not None
         assert c["debug"]["faltam_para_a_linha"] == pytest.approx(2.5)
-        assert c["engine_version"] == "live_v1.0.0"
+        # Contra a CONSTANTE, nao contra o literal: a versao muda toda vez que
+        # a matematica muda (e' pra isso que ela existe), e um literal aqui
+        # transforma cada correcao de motor numa quebra de teste que nao diz
+        # nada sobre o motor.
+        assert c["engine_version"] == live_config.ENGINE_VERSION
         for bloco in ("lambda", "janelas", "tendencia", "fator_ritmo",
                       "ajuste_estado", "convergencia", "confianca"):
             assert bloco in c["debug"], f"rastro sem {bloco}"
@@ -1208,7 +1213,7 @@ def test_engine_debug_responde_por_que_o_motor_criou_o_pick():
                   "recent_windows", "trend", "events", "projection", "market",
                   "convergence", "probability", "ev", "confidence", "decision"):
         assert chave in debug, f"engine_debug sem {chave}"
-    assert debug["engine_version"] == "live_v1.0.0"
+    assert debug["engine_version"] == live_config.ENGINE_VERSION
 
     texto = lp.montar_explicacao(analise, candidato)
     assert "Aos 60'" in texto

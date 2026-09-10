@@ -174,6 +174,20 @@ def triagem(analise: dict, config: LiveEngineConfig = DEFAULT_LIVE_CONFIG) -> di
         return {"vale": False, "familias": [],
                 "motivo": "qualidade do dado desconhecida"}
 
+    # Ritmo vetado corta AQUI, e nao la em `_gates`, porque a triagem e' a
+    # camada que decide se vale gastar requisicao de odd -- e o ritmo ja esta
+    # calculado neste ponto, de graca. Deixar o veto so no gate final custava
+    # uma chamada de /odds/live por partida que ia ser recusada de qualquer
+    # jeito, num motor cujo teto de requisicoes por rodada e' 15.
+    #
+    # O gate em `_gates` FICA, e nao e' redundancia: quem chama `avaliar()`
+    # direto (teste, homologacao, replay de uma partida gravada) nao passa pela
+    # triagem, e um veto que so existe no caminho feliz nao e' um veto.
+    nivel_ritmo = (analise.get("ritmo") or {}).get("nivel")
+    if nivel_ritmo in (config.ritmos_vetados or ()):
+        return {"vale": False, "familias": [],
+                "motivo": f"ritmo {nivel_ritmo}: pico ja gasto, nao vale a odd"}
+
     candidatas, detalhes = [], []
     for familia, info in (analise.get("familias") or {}).items():
         if not info.get("disponivel"):

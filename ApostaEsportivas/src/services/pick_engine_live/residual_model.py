@@ -326,6 +326,10 @@ def probabilidade_da_linha(lam: float, linha: float, direcao: str,
     Linha ja resolvida pelo placar devolve certeza pratica, nao 1.0 exato: EV
     infinito quebraria o gate seguinte. Quem corta esse caso e' o
     orquestrador, antes de chegar aqui.
+
+    LINHA QUARTER (.25/.75) e' meia aposta em cada linha vizinha · ver
+    _prob_quarter. A casa cota gols ao vivo em quarter o tempo todo, e sem
+    este ramo o motor lia "Over 3.75" como se fosse "Over 3.5".
     """
     if lam is None or lam < 0:
         return None
@@ -337,10 +341,75 @@ def probabilidade_da_linha(lam: float, linha: float, direcao: str,
     if direcao == "over":
         if faltam < 0:
             return 0.9999
+        if _e_quarter(faltam):
+            return _prob_quarter(faltam, lam, phi, "over")
         return pm.prob_over(faltam, lam, phi)
     if faltam < 0:
         return 0.0001
+    if _e_quarter(faltam):
+        return _prob_quarter(faltam, lam, phi, "under")
     return pm.prob_under(faltam, lam, phi)
+
+
+def _e_quarter(linha: float) -> bool:
+    """.25 ou .75 · a linha asiatica que vale metade em cada vizinha."""
+    return abs((linha * 4) % 2) > 1e-9
+
+
+def _prob_quarter(linha: float, lam: float, phi: float, direcao: str) -> float:
+    """Probabilidade de uma linha quarter, medida como o que ela e': METADE da
+    aposta em cada linha vizinha.
+
+    O BUG QUE ISTO CORRIGE (2026-09-10)
+    -----------------------------------
+    `pm.prob_under` diz na propria docstring que "linhas de aposta sao sempre
+    .5" -- e' verdade no pre-jogo, e e' falso aqui. A casa cota gols AO VIVO em
+    quarter o tempo todo: dos 168 picks ao vivo ja liquidados em PROD, 25
+    tinham linha quarter, e os 25 eram de GOLS. Nenhum de escanteios.
+
+    Como as duas funcoes usam `floor(linha)`, a linha quarter era silenciosamente
+    trocada por uma vizinha .5 -- e QUAL vizinha depende do lado, o que faz o
+    erro trocar de sinal sem nenhum aviso (lambda residual 1.8, sem observado):
+
+        over  3.75   lia Over 3.5     0.109 -> 0.074   superestimava 3.5pp
+        under 2.25   lia Under 2.5    0.731 -> 0.681   superestimava 4.9pp
+        under 1.75   lia Under 1.5    0.463 -> 0.547   SUBestimava  8.5pp
+
+    O caso do Over e' o mais caro porque e' o mais direto: "Over 3.75" contava
+    X=4 como acerto CHEIO quando na verdade ele paga metade (Over 3.5 ganha,
+    Over 4.0 devolve). O erro e' 0.5 * P(X=4), e perto da linha P(X=4) e' a
+    maior massa da distribuicao inteira.
+
+    Nao e' o mesmo achado da medicao de 09/09, e' uma segunda causa embaixo
+    dela: la o problema era o modelo extrapolar o pico de ritmo (por isso gols
+    so' entra em UNDER), aqui e' a conta da linha estar errada nos DOIS lados.
+    As duas somam, e as duas continuam valendo depois desta correcao.
+
+    Linha .5 nao muda em nada -- e' o que o teste protege.
+
+    A convencao aqui e' a que o motor ja adota pra linha redonda em
+    `pm.poisson_prob_for_line`: cada metade e' medida condicionada a NAO dar
+    push. Meia aposta em cada uma, media simples -- e' o que a aposta e'.
+    """
+    baixa, alta = linha - 0.25, linha + 0.25   # ex.: 3.75 -> 3.5 e 4.0
+    push = pm.nb_pmf(int(round(alta)), lam, phi)
+    if direcao == "over":
+        p_meia = pm.prob_over(baixa, lam, phi)
+        p_inteira = pm.prob_over(alta, lam, phi)
+    else:
+        p_meia = pm.prob_under(baixa, lam, phi)
+        # prob_under() usa floor(linha), que numa linha redonda INCLUI o empate
+        # exato -- tira ele do numerador antes de renormalizar. E' a mesma
+        # correcao, na mesma ordem, que pm.poisson_prob_for_line faz no
+        # pre-jogo; escrever diferente aqui faria os dois motores discordarem
+        # sobre a mesma linha.
+        p_inteira = pm.prob_under(alta, lam, phi) - push
+    # A vizinha inteira empata na linha em vez de perder: a massa do empate sai
+    # do denominador, porque nela a aposta e' devolvida, nao decidida.
+    if push < 1.0:
+        p_inteira = p_inteira / (1.0 - push)
+    p_inteira = max(0.0, min(1.0, p_inteira))
+    return round(0.5 * p_meia + 0.5 * p_inteira, 6)
 
 
 def encolher_contra_mercado(prob_modelo: float, prob_mercado: float | None,

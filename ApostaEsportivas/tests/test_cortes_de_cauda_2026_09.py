@@ -108,3 +108,75 @@ def test_live_um_pick_por_partida():
     """O segundo pick da mesma partida acertava 63.2% contra 73.1% do unico:
     ele le' o MESMO jogo, entao quando a leitura erra os dois erram juntos."""
     assert LiveEngineConfig().max_picks_por_partida == 1
+
+
+# ─────────────────── LINHA QUARTER · o bug de conta (10/09) ──────────────────
+#
+# A casa cota gols ao vivo em quarter (.25/.75) o tempo todo: dos 168 picks ao
+# vivo liquidados em PROD, 25 tinham linha quarter e os 25 eram de GOLS.
+# `prob_over`/`prob_under` usam floor(linha), entao a quarter virava uma vizinha
+# .5 -- e qual vizinha depende do lado, o que faz o erro trocar de sinal.
+
+from services.pick_engine_live import residual_model as rm
+from services.pick_engine import probability_model as pm
+
+
+def test_linha_meia_nao_muda():
+    """A correcao e' cirurgica: linha .5 continua exatamente como era. Este e'
+    o teste que separa "consertei a quarter" de "mexi na conta de todo mundo"."""
+    for linha, direcao in ((3.5, "over"), (2.5, "under"), (9.5, "over")):
+        f = pm.prob_over if direcao == "over" else pm.prob_under
+        assert rm.probabilidade_da_linha(1.8, linha, direcao, 0) == \
+            pytest.approx(f(linha, 1.8, 1.0), abs=1e-4)
+
+
+def test_over_quarter_deixa_de_ser_lido_como_a_linha_de_baixo():
+    """"Over 3.75" contava X=4 como acerto cheio, quando ele paga metade."""
+    novo = rm.probabilidade_da_linha(1.8, 3.75, "over", 0)
+    assert novo < pm.prob_over(3.5, 1.8, 1.0)
+    # e fica entre as duas vizinhas, que e' o que "meia aposta em cada" quer dizer
+    assert pm.prob_over(4.0, 1.8, 1.0) < novo < pm.prob_over(3.5, 1.8, 1.0)
+
+
+def test_under_quarter_erra_para_os_dois_lados():
+    """O sinal do erro depende de .25 ou .75, porque floor() escolhe vizinhas
+    diferentes -- e' por isso que ele passou tanto tempo sem aparecer."""
+    assert rm.probabilidade_da_linha(1.8, 2.25, "under", 0) < pm.prob_under(2.25, 1.8, 1.0)
+    assert rm.probabilidade_da_linha(1.8, 1.75, "under", 0) > pm.prob_under(1.75, 1.8, 1.0)
+
+
+def test_quarter_respeita_o_placar_ja_observado():
+    """A quarter se preserva na subtracao (observado e' inteiro), entao o ramo
+    tem que valer tambem no meio do jogo, nao so' com o placar zerado."""
+    assert rm.probabilidade_da_linha(1.5, 5.75, "over", 2) == \
+        pytest.approx(rm.probabilidade_da_linha(1.5, 3.75, "over", 0), abs=1e-6)
+
+
+def test_quarter_nunca_sai_da_faixa_de_probabilidade():
+    for linha in (0.75, 1.25, 2.25, 3.75, 6.25, 10.75):
+        for direcao in ("over", "under"):
+            p = rm.probabilidade_da_linha(2.0, linha, direcao, 0)
+            assert 0.0 <= p <= 1.0
+
+
+# ──────────────── Ritmo vetado corta antes de gastar requisicao ──────────────
+
+
+def test_ritmo_vetado_para_na_triagem_e_nao_no_gate():
+    """A triagem e' quem decide se vale gastar /odds/live · com teto de 15
+    requisicoes por rodada, vetar so no gate final paga a chamada pra recusar
+    depois. O ritmo ja esta calculado nesse ponto, e de graca."""
+    analise = {
+        "estado": {"minuto": 40, "status": "1H"},
+        "freshness": {"nivel": "FRESH"},
+        "ritmo": {"nivel": "MUITO_ALTO"},
+        "familias": {"corners": {"disponivel": True, "observado": 4, "baseline": 9.0,
+                                 "projecao_total": 13.0,
+                                 "lambda": {"lambda_residual": 5.0}}},
+    }
+    tri = orchestrator.triagem(analise, DEFAULT_LIVE_CONFIG)
+    assert tri["vale"] is False and "MUITO_ALTO" in tri["motivo"]
+    # e o mesmo veto continua no gate, pra quem chama avaliar() sem triagem
+    assert any("MUITO_ALTO" in m
+               for m in _gates(direcao="under", familia="corners",
+                               ritmo={"nivel": "MUITO_ALTO"}))
