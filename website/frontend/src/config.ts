@@ -22,27 +22,33 @@ export const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY ?? ''
 export const LIVE_PICKS_ENABLED = true
 
 /**
- * Bingo do Dia visível no site.
+ * Bingo do Dia · em teste com dado de PRODUÇÃO, visível só para admin.
  *
- * O produto está INTEIRO no código (motor, liquidação, banca, placar) e roda
- * em dev e noprod desde 08/09. Esta linha existe para que qualquer outro
- * commit possa ir para produção sem levar o Bingo junto, enquanto ele ainda
- * está sendo medido · decisão do usuário em 09/09.
+ * O produto está INTEIRO no código (motor, liquidação, banca, placar) e agora
+ * roda em `main`, contra o banco de produção · decisão do usuário em 10/09.
+ * Medir em dev não servia: dev enxerga 8 ligas e produção enxerga 14, então a
+ * cartela de lá não é a cartela que o assinante receberia.
  *
- * A REGRA É A DO ARQUIVO: `dev` e `noprod` sobem com `true`, e o que for para
- * `main` sobe com `false`. Quando o produto for aprovado, é uma linha só, e
- * ela aparece no diff · diferente de uma variável de ambiente, que já sumiu
- * sem rastro uma vez (ver LIVE_PICKS_ENABLED acima).
+ * O QUE MUDOU EM 10/09: até aqui o Bingo era escondido por um booleano do
+ * front que subia `false` para `main`. Com o motor publicando cartela em
+ * produção, esconder no front deixou de bastar -- a resposta de
+ * `/api/suggestions/today` traria a cartela inteira para qualquer assinante
+ * que abrisse o DevTools. Então o corte de verdade passou a ser o do SERVIDOR
+ * (`website/backend/feature_flags.py::BINGO_BETA_ADMIN_ONLY`), e esta
+ * constante virou o par dele: mesmo nome, mesmo valor, e o front só deixa de
+ * desenhar o que o servidor já não manda.
  *
- * ELA GOVERNA O FRONT, E SÓ. O backend continua ligado de propósito: em
- * produção a tabela `picks_bingo` está vazia (o motor é um comando manual e
- * nunca rodou lá), então toda consulta devolve nada e não há o que esconder.
- * Um segundo interruptor do lado do servidor seria um par para manter em
- * sincronia, e par fora de sincronia é como o produto some pela metade.
+ * PARA LIBERAR PARA TODO MUNDO são duas linhas, e as duas aparecem no diff:
+ * esta e a do `feature_flags.py`. Variável de ambiente já sumiu sem rastro uma
+ * vez neste projeto (ver LIVE_PICKS_ENABLED acima).
  *
- * Os quatro lugares onde o Bingo aparece e que esta constante fecha: a aba na
- * barra, a seção da aba Hoje, o filtro de produto em Resultados e o botão
- * "Gerar Bingo do Dia" no /admin · esse último é o que impede um clique
- * distraído de publicar uma cartela em produção.
+ * Os lugares que `bingoVisivel` fecha: a aba na barra, a seção da aba Hoje e o
+ * filtro de produto em Resultados. O /admin NÃO entra na lista: a página
+ * inteira já é de admin, e é lá que o produto é gerado e medido durante o
+ * teste.
  */
-export const BINGO_ENABLED = true
+export const BINGO_BETA_ADMIN_ONLY = true
+
+/** O Bingo aparece para ESTE usuário? `isAdmin` vem do useAuth(). */
+export const bingoVisivel = (isAdmin: boolean) => !BINGO_BETA_ADMIN_ONLY || isAdmin
+

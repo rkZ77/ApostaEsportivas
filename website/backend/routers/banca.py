@@ -10,6 +10,7 @@ import alavancagem_caminho
 from data_br import data_br
 from database import get_connection
 from auth_utils import get_current_user, is_vip_active
+from feature_flags import bingo_visivel
 from routers.payments import PLANS
 
 logger = logging.getLogger(__name__)
@@ -1406,6 +1407,13 @@ def _pode_seguir(cur, user: dict, pick_type: str, pick_id: int) -> bool:
     passassem a devolver market, line e odd do pick. O gate de leitura existia
     em todo lugar; o de escrita, em nenhum.
     """
+    # BINGO EM TESTE: seguir e' ler, e o Bingo so' e' legivel pra admin
+    # enquanto o produto esta' sendo medido em producao (feature_flags.py).
+    # Sem esta linha o assinante nao veria a cartela em lugar nenhum e ainda
+    # assim poderia segui-la pelo id -- e a Banca dele devolveria as quatro
+    # pernas com mercado, linha e odd, que e' o produto inteiro.
+    if pick_type == "bingo" and not bingo_visivel(user):
+        return False
     if pick_type not in _FOLLOW_SO_VIP:
         if pick_type == "boost" and not is_vip_active(user):
             return boost_liberado_do_dia(cur, pick_id)

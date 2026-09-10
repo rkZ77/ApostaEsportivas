@@ -44,7 +44,7 @@ const LivePicksFeed = lazy(() => import('../components/LivePicksFeed'))
 import PicksPendingCard from '../components/PicksPendingCard'
 import CalendarioDePicks from '../components/ui/CalendarioDePicks'
 import SelectMenu from '../components/ui/SelectMenu'
-import { LIVE_PICKS_ENABLED, BINGO_ENABLED } from '../config'
+import { LIVE_PICKS_ENABLED, bingoVisivel } from '../config'
 import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronDown, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2, TrendingUp, X as XIcon, Lock, Ticket } from 'lucide-react'
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import { stakeDe } from '../utils/stakePlan'
@@ -153,10 +153,12 @@ interface AlavSerie {
 const defaultAlavFilters: AlavFilters = { date_from: '', date_to: TODAY, resultado: 'all' }
 
 // Tab bar
-function TabBar({ tab, setTab, canSeeVip, verAoVivo, temFaltasHoje, counts, liveCount, onPrefetch }: {
+function TabBar({ tab, setTab, canSeeVip, verAoVivo, verBingo, temFaltasHoje, counts, liveCount, onPrefetch }: {
   tab: Tab; setTab: (t: Tab) => void; canSeeVip: boolean
   /** Ver `podeVerAoVivo` no Picks · admin enxerga antes do produto abrir. */
   verAoVivo: boolean
+  /** Bingo do Dia em teste: só admin · ver `bingoVisivel` em config.ts. */
+  verBingo: boolean
   /** A aba Pick Falta some no dia sem pick: falta e' o metodo mais
    *  seletivo do motor, e aba vazia todo dia le como produto morto. */
   temFaltasHoje?: boolean
@@ -280,10 +282,10 @@ function TabBar({ tab, setTab, canSeeVip, verAoVivo, temFaltasHoje, counts, live
        preços na mesma faixa. Misturar os dois numa aba obrigaria o card a
        explicar qual é qual, que é justamente o serviço da barra. */
     /* `oculta` e nao remocao da lista: a aba some da barra, mas o hash
-       `/picks#bingo` continua sendo um destino valido pra quem testa em dev.
-       Ver BINGO_ENABLED em config.ts. */
+       `/picks#bingo` continua sendo um destino valido pra quem PODE ver.
+       Ver `bingoVisivel` em config.ts · em teste, so' admin. */
     { key: 'bingo',        label: 'Bingo do Dia',    premiumOnly: true,
-      oculta: !BINGO_ENABLED },
+      oculta: !verBingo },
     { key: 'alavancagem',  label: 'Alavancagem',      premiumOnly: true },
     {
       /* PICK FALTA · aba propria de novo (08/09, decisao do usuario).
@@ -2562,6 +2564,15 @@ export default function Picks() {
    * quando está desligado). Isto aqui é só sobre a aba aparecer.
    */
   const podeVerAoVivo = LIVE_PICKS_ENABLED || isAdmin
+  /*
+   * Quem enxerga o Bingo do Dia · em teste com dado de produção (10/09).
+   *
+   * O corte que VALE é o do servidor (`feature_flags.py`): sem cartela na
+   * resposta, não há o que desenhar nem o que ler no DevTools. Isto aqui é o
+   * par dele no front, e serve pra tela não anunciar o que não vem -- uma aba
+   * "Bingo do Dia" que abre sempre vazia é pior do que aba nenhuma.
+   */
+  const verBingo = bingoVisivel(isAdmin)
   const canSeeVip = isVip || isAdmin
   const { hasNew, markSeen, liveCount, hasLive, clearLive } = useNotifications()
   // Só para não empilhar sobreposição: enquanto o tour de boas-vindas ainda
@@ -2600,15 +2611,15 @@ export default function Picks() {
     // nem tem bloco de conteúdo, então /picks#chat abria a página com NENHUMA
     // aba ativa e a área vazia -- exatamente o sintoma que o comentário acima
     // descreve pro #ao_vivo. O chat vive no botão do Agente e em /agente.
-    // `bingo` só é destino válido enquanto o produto existe na tela · com
-    // BINGO_ENABLED false o hash cairia numa aba selecionada que não desenha
-    // nada, que é o mesmo sintoma que `#chat` produziu em 20/08. Fora da
-    // lista, ele cai no fallback e abre a aba Hoje.
+    // `bingo` só é destino válido pra quem pode ver o produto · pra quem não
+    // pode, o hash cairia numa aba selecionada que não desenha nada, que é o
+    // mesmo sintoma que `#chat` produziu em 20/08. Fora da lista, ele cai no
+    // fallback e abre a aba Hoje.
     const valid: Tab[] = ['hoje','pick_seguro','vip','multiplas','alavancagem','jogadores','faltas','boost','minhas_apostas',
-                          ...(BINGO_ENABLED ? ['bingo' as Tab] : []),
+                          ...(verBingo ? ['bingo' as Tab] : []),
                           ...(podeVerAoVivo ? ['ao_vivo' as Tab] : [])]
     setTab(valid.includes(hash) ? hash : 'hoje')
-  }, [location.hash, podeVerAoVivo])
+  }, [location.hash, podeVerAoVivo, verBingo])
 
   /*
    * O painel lateral de detalhe saiu daqui em 2026-08-14, a pedido do usuário.
@@ -3140,6 +3151,7 @@ export default function Picks() {
 
         <TabBar
           verAoVivo={podeVerAoVivo}
+          verBingo={verBingo}
           tab={tab}
           setTab={(t) => {
             if (t === 'minhas_apostas') clearLive()
@@ -3362,7 +3374,7 @@ export default function Picks() {
 
               {/* Bingo do Dia · free vê lock; some se vazio pra quem já tem acesso */}
               {(() => {
-                if (!BINGO_ENABLED) return null
+                if (!verBingo) return null
                 const cartelas = today?.bingo ?? []
                 if (canSeeVip && cartelas.length === 0) return null
                 return (
@@ -3709,7 +3721,7 @@ export default function Picks() {
           /* A aba inteira na largura de leitura, e nao so' o card: com o
              "Como funciona" ocupando 1400px em cima de um card de 672 a tela
              ficava com duas larguras diferentes na mesma coluna. */
-          <motion.div key="multiplas" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6 max-w-2xl">
+          <motion.div key="multiplas" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6 max-w-2xl mx-auto">
             <ComoFunciona titulo="O que são as Múltiplas VIP?" cor="text-blue-400"
                           borda="border-blue-400/20" fundo="bg-blue-400/5">
               <>
@@ -3770,11 +3782,19 @@ export default function Picks() {
           </motion.div>
         )}
 
-        {tab === 'bingo' && BINGO_ENABLED && (
+        {tab === 'bingo' && verBingo && (
           /* Mesma largura de leitura da aba de múltiplas, e pelo mesmo motivo:
              o card de cartela é o mais denso do site e não ganha nada com os
-             1400px da tela. */
-          <motion.div key="bingo" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6 max-w-2xl">
+             1400px da tela.
+             CENTRALIZADA (10/09, pedido do usuário): a coluna de 672px ficava
+             encostada na esquerda embaixo de um cabeçalho e de uma barra de
+             abas que ocupam a tela inteira, e a página parecia ter duas
+             larguras. `mx-auto` não mexe na largura de leitura, só tira o
+             vazio todo de um lado só. No celular não muda nada: lá a coluna já
+             é a tela. As três abas de card único (Múltiplas, Bingo e
+             Alavancagem) mudaram juntas -- centralizar uma só faria a página
+             pular de lugar a cada troca de aba. */
+          <motion.div key="bingo" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6 max-w-2xl mx-auto">
             <ComoFunciona titulo="O que é o Bingo do Dia?" cor="text-rose-400"
                           borda="border-rose-400/20" fundo="bg-rose-400/5">
               <>
@@ -3837,7 +3857,7 @@ export default function Picks() {
           /* Mesma largura de leitura da Multipla: e' UM caminho por dia, e a
              tela inteira pra um card so' espalhava entrada, progresso e escada
              em faixas de 1400px. */
-          <motion.div key="alavancagem" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6 max-w-2xl">
+          <motion.div key="alavancagem" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6 max-w-2xl mx-auto">
             {/* UMA explicação só, e a certa.
               *
               * Havia DUAS, e elas se contradiziam: esta caixa descrevia o

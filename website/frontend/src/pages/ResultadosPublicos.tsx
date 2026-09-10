@@ -20,7 +20,7 @@ import DailyGreensChart from '../components/DailyGreensChart'
 import PipelineProfitChart from '../components/PipelineProfitChart'
 import LucroBarChart from '../components/LucroBarChart'
 import { sinalizarNavegacao } from '../services/progressBus'
-import { BINGO_ENABLED } from '../config'
+import { bingoVisivel } from '../config'
 
 const GAMES_PAGE_SIZE = 10
 
@@ -180,14 +180,18 @@ interface FechamentoMes {
    picks_goleiros parou de crescer quando o Player Stats nasceu, e o mercado
    aparecia em menos de 1% dos jogos ate' la'. O historico dele continua no
    placar somado -- so' nao vale uma linha num menu que a pessoa le' hoje. */
-/* O Bingo sai do filtro enquanto `BINGO_ENABLED` for false · sem isso a lista
-   ofereceria um produto que a tela nao mostra em lugar nenhum, e o recorte
-   dele viria vazio. `SOURCE_LABELS` continua com a chave: ela nomeia a fonte
-   na quebra por produto, e o historico de dev nao pode aparecer sem nome. */
-const PRODUTOS_DO_FILTRO = ([
+/* O Bingo so' entra no filtro pra quem pode ve-lo (em teste, admin · ver
+   `bingoVisivel` em config.ts). Sem isso a lista ofereceria um produto que a
+   tela nao mostra em lugar nenhum, e o recorte dele viria vazio -- o backend
+   ja' derruba a fonte do UNION publico. `SOURCE_LABELS` continua com a chave:
+   ela nomeia a fonte na quebra por produto, e o historico nao pode aparecer
+   sem nome. */
+const PRODUTOS_BASE = [
   'all', 'vip', 'live', 'boost', 'multiplas', 'bingo', 'alavancagem',
   'free', 'player_stats', 'faltas',
-] as const).filter(p => p !== 'bingo' || BINGO_ENABLED)
+] as const
+const produtosDoFiltro = (verBingo: boolean) =>
+  PRODUTOS_BASE.filter(p => p !== 'bingo' || verBingo)
 
 const PRODUTO_LABELS: Record<string, string> = {
   ...SOURCE_LABELS, multipla: 'Múltiplas',
@@ -493,6 +497,7 @@ export default function ResultadosPublicos() {
   const [recentLeagueFilter, setRecentLeagueFilter] = useState<string>('')
 
   const { user } = useAuth()
+  const verBingo = bingoVisivel(user?.plan === 'admin')
   const [tab, setTab] = useState<'resumo' | 'por_liga' | 'por_jogo' | 'por_mes' | 'alavancagem'>('resumo')
 
   // "Picks recentes" · paginação (server-side, ver recent_limit/recent_offset em /public/results)
@@ -761,7 +766,7 @@ export default function ResultadosPublicos() {
             )}
             <SelectMenu
               ariaLabel="Produto"
-              options={PRODUTOS_DO_FILTRO.map(v => ({
+              options={produtosDoFiltro(verBingo).map(v => ({
                 value: v, label: v === 'all' ? 'Todos os produtos' : SOURCE_LABELS[v],
               }))}
               value={source}

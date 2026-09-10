@@ -53,10 +53,28 @@ def test_free_nao_segue_produto_pago(pick_type):
     assert banca._pode_seguir(_Cur(), _FREE, pick_type, 1) is False
 
 
-@pytest.mark.parametrize("pick_type", sorted(banca._FOLLOW_SO_VIP))
+#: O Bingo sai desta varredura enquanto ele for de admin (feature_flags.py):
+#: e' o unico produto pago que o ASSINANTE tambem nao segue, porque ele nao
+#: aparece pra esse assinante em lugar nenhum. A regra dele ganha caso proprio
+#: logo abaixo, em vez de simplesmente sumir da lista.
+_SO_VIP_VISIVEIS = sorted(banca._FOLLOW_SO_VIP - {"bingo"})
+
+
+@pytest.mark.parametrize("pick_type", _SO_VIP_VISIVEIS)
 @pytest.mark.parametrize("user", [_VIP, _TRIAL])
 def test_assinante_segue(pick_type, user):
     assert banca._pode_seguir(_Cur(), user, pick_type, 1) is True
+
+
+def test_o_bingo_em_teste_nem_o_assinante_segue():
+    """Seguir e' ler: a Banca devolve mercado, linha e odd de todo pick
+    seguido. Enquanto o Bingo roda em producao so' pra admin, o assinante com
+    o id na mao leria as quatro pernas do produto inteiro."""
+    from feature_flags import BINGO_BETA_ADMIN_ONLY
+    if not BINGO_BETA_ADMIN_ONLY:
+        pytest.skip("produto liberado pra todo mundo")
+    assert banca._pode_seguir(_Cur(), _VIP, "bingo", 1) is False
+    assert banca._pode_seguir(_Cur(), {"id": 1, "plan": "admin"}, "bingo", 1) is True
 
 
 @pytest.mark.parametrize("pick_type", sorted(banca._FOLLOW_SO_VIP))
