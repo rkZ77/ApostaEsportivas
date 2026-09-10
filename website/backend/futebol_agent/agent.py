@@ -207,7 +207,7 @@ TOOLS: list[dict] = [
     },
     {
         "name": "get_team_historical_stats",
-        "description": "Stats reais dos últimos N jogos do time na liga: escanteios, chutes, posse, gols, cartões e faltas com breakdown 1ºT/2ºT.",
+        "description": ("Stats reais dos últimos N jogos do time na liga, com breakdown 1ºT/2ºT: ""escanteios, chutes (total, a gol, para fora, bloqueados, dentro e fora da área), ""posse, cartões amarelos e vermelhos, faltas, IMPEDIMENTOS, defesas do goleiro, ""passes, xG e gols marcados/sofridos por jogo. ""A lista de métricas é literal: se está aqui, a ferramenta devolve."),
         "input_schema": {
             "type": "object",
             "properties": {

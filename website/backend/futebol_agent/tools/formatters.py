@@ -243,6 +243,16 @@ def fmt_team_historical_stats(data: dict) -> str:
         f"{'Amarelos':<20} {r(t,'yellow_cards'):>5} {r(h1,'yellow_cards'):>5} {r(h2,'yellow_cards'):>5}",
         f"{'Vermelhos':<20} {r(t,'red_cards'):>5} {r(h1,'red_cards'):>5} {r(h2,'red_cards'):>5}",
         f"{'Faltas':<20} {r(t,'fouls'):>5} {r(h1,'fouls'):>5} {r(h2,'fouls'):>5}",
+        # IMPEDIMENTOS E DEFESAS ERAM COLETADOS E JOGADOS FORA (2026-09-10,
+        # reclamação do usuário).
+        #
+        # `_STAT_KEYS` lê as duas da API e `_new_totals` guarda as duas, mas a
+        # tabela não imprimia nenhuma. O agente recebia a resposta sem elas e
+        # concluía, com razão pelo que via, que "a ferramenta não retorna
+        # impedimentos" -- e repetia isso mesmo com o usuário afirmando que o
+        # dado existe. Existia; era esta linha que faltava.
+        f"{'Impedimentos':<20} {r(t,'offsides'):>5} {r(h1,'offsides'):>5} {r(h2,'offsides'):>5}",
+        f"{'Defesas do goleiro':<20} {r(t,'saves'):>5} {r(h1,'saves'):>5} {r(h2,'saves'):>5}",
         f"{'xG':<20} {r(t,'xg'):>5} {r(h1,'xg'):>5} {r(h2,'xg'):>5}",
         f"Gols marcados: {data['avg_goals_scored']}/jogo  Sofridos: {data['avg_goals_conceded']}/jogo",
     ]
@@ -268,6 +278,8 @@ def fmt_team_historical_stats_any(data: dict) -> str:
         f"{'Posse (%)':<20} {r(t,'possession'):>5} {r(h1,'possession'):>5} {r(h2,'possession'):>5}",
         f"{'Amarelos':<20} {r(t,'yellow_cards'):>5} {r(h1,'yellow_cards'):>5} {r(h2,'yellow_cards'):>5}",
         f"{'Faltas':<20} {r(t,'fouls'):>5} {r(h1,'fouls'):>5} {r(h2,'fouls'):>5}",
+        f"{'Impedimentos':<20} {r(t,'offsides'):>5} {r(h1,'offsides'):>5} {r(h2,'offsides'):>5}",
+        f"{'Defesas do goleiro':<20} {r(t,'saves'):>5} {r(h1,'saves'):>5} {r(h2,'saves'):>5}",
         f"Gols marcados: {data['avg_goals_scored']}/jogo  Sofridos: {data['avg_goals_conceded']}/jogo",
     ]
     return "\n".join(lines)

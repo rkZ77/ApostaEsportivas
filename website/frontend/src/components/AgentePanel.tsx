@@ -2,7 +2,7 @@ import { useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
-import { X as XIcon, Send, Lock } from 'lucide-react'
+import { X as XIcon, Send, Lock, Sparkles } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useAgentChat } from '../hooks/useAgentChat'
 import Avatar from './Avatar'
@@ -56,12 +56,15 @@ export default function AgentePanel({ onClose }: { onClose: () => void }) {
     >
       {/* Header */}
       <div className="shrink-0 px-4 py-3 border-b border-line flex items-center gap-2.5 bg-surface-1/60">
-        {/* Mesmo mascote do botao que abre este painel · ver AgenteButton. */}
-        <img
-          src="/agente-face-128.webp" alt="" aria-hidden="true"
-          width={32} height={32}
-          className="w-8 h-8 rounded-full border border-green-500/30 bg-black shrink-0 object-cover"
-        />
+        {/* O ICONE NO LUGAR DO MASCOTE (10/09/2026, pedido do usuário) · a
+            arte saiu de todas as telas do agente, e não só do botão. Ela tem
+            verde dentro e vive sobre fundo escuro, então precisava de um
+            círculo preto atrás para existir: um adesivo, com download próprio,
+            dizendo o que uma forma de 20px já diz. */}
+        <span className="w-8 h-8 rounded-full border border-accent/30 bg-accent/10 shrink-0
+                         flex items-center justify-center">
+          <Sparkles className="w-4 h-4 text-accent-ink" aria-hidden="true" />
+        </span>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-black text-ink-1 leading-none truncate">Agente PickIA</p>
           <p className="text-[11px] text-ink-3 mt-1">{loading ? 'Analisando...' : 'Online'}</p>

@@ -1,6 +1,6 @@
 import { useRef, useEffect } from 'react'
 import { Helmet } from 'react-helmet-async'
-import { Zap, Lock } from 'lucide-react'
+import { Zap, Lock, Sparkles } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import Navbar from '../components/Navbar'
 import PageShell from '../components/PageShell'
@@ -112,14 +112,15 @@ export default function Agente() {
       <div className="bg-surface-0 border-b border-line">
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-3">
           <BackButton />
-          {/* O mesmo mascote do botao flutuante e do painel · quem atende e' um
-              so', e ate' aqui cada tela desenhava o proprio (icone Bot, bolinha
-              "AI", e agora a arte da marca). */}
-          <img
-            src="/agente-face-128.webp" alt="" aria-hidden="true"
-            width={36} height={36}
-            className="w-9 h-9 rounded-full border border-accent/30 bg-black shrink-0 object-cover"
-          />
+          {/* O ICONE NO LUGAR DO MASCOTE (10/09/2026, pedido do usuário) · a
+              arte saiu de todas as telas do agente, e não só do botão. Ela tem
+              verde dentro e vive sobre fundo escuro, então precisava de um
+              círculo preto atrás para existir: um adesivo, com download próprio,
+              dizendo o que uma forma de 20px já diz. */}
+          <span className="w-9 h-9 rounded-full border border-accent/30 bg-accent/10 shrink-0
+                           flex items-center justify-center">
+            <Sparkles className="w-4 h-4 text-accent-ink" aria-hidden="true" />
+          </span>
           <div>
             <h1 className="font-display text-base font-semibold text-ink-1">Pick<span className="text-accent-ink">IA</span> Agent</h1>
             <p className="text-ink-3 text-xs mt-0.5">Picks. Banca. Alavancagem. Jogos ao vivo</p>
