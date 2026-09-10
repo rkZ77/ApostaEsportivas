@@ -269,7 +269,8 @@ def avaliar(analise: dict, cotacoes: list, config: LiveEngineConfig = DEFAULT_LI
             prob_modelo_puro=encolhido["prob_pre_encolhimento"])
 
         motivos = _gates(entrada, prob, valor, conf, conv, observado, linha, direcao,
-                         analise.get("freshness"), config)
+                         analise.get("freshness"), config,
+                         familia=familia, ritmo=analise.get("ritmo"))
         avaliados.append({
             **entrada,
             "observado_na_criacao": observado,
@@ -310,7 +311,8 @@ def avaliar(analise: dict, cotacoes: list, config: LiveEngineConfig = DEFAULT_LI
 
 def _gates(entrada: dict, prob: float, valor: dict, conf: dict, conv: dict,
            observado: int, linha: float, direcao: str, fresh: dict | None,
-           config: LiveEngineConfig = DEFAULT_LIVE_CONFIG) -> list[str]:
+           config: LiveEngineConfig = DEFAULT_LIVE_CONFIG,
+           familia: str | None = None, ritmo: dict | None = None) -> list[str]:
     """Todos os motivos de reprovacao, nao o primeiro.
 
     Sem short-circuit de proposito: saber que um candidato reprovou por EV E
@@ -336,10 +338,27 @@ def _gates(entrada: dict, prob: float, valor: dict, conf: dict, conv: dict,
     # Piso de probabilidade. Ver config.probabilidade_minima pros dois picks
     # reais que passaram sem ele -- os dois entraram por EV, e o EV veio da
     # odd, nao da leitura do jogo.
-    if prob < config.probabilidade_minima:
+    piso = config.probabilidade_minima
+    piso_familia = (config.probabilidade_minima_por_familia or {}).get(familia)
+    if piso_familia is not None:
+        piso = max(piso, piso_familia)
+    if prob < piso:
         motivos.append(
-            f"probabilidade {prob:.1%} abaixo do minimo ({config.probabilidade_minima:.0%}): "
+            f"probabilidade {prob:.1%} abaixo do minimo ({piso:.0%}): "
             f"o EV vem da odd, nao da leitura da partida")
+
+    # Familia que so' calibra de um lado. Ver familias_somente_under em
+    # config.py pros numeros -- gols Over 42.9% real, gols Under 64.0%.
+    if direcao == "over" and familia in (config.familias_somente_under or ()):
+        motivos.append(
+            f"{familia} so' entra em UNDER: o Over ao vivo compra a "
+            f"continuacao de um ritmo que ja aconteceu")
+
+    # Ritmo que veta a partida inteira. Ver ritmos_vetados em config.py.
+    nivel_ritmo = (ritmo or {}).get("nivel")
+    if nivel_ritmo in (config.ritmos_vetados or ()):
+        motivos.append(
+            f"ritmo {nivel_ritmo}: pico ja gasto, o residual extrapola o topo")
     if conf["confidence"] < config.confianca_minima:
         motivos.append(f"confianca {conf['confidence']:.0%} abaixo do minimo ({config.confianca_minima:.0%})")
     if entrada["odd"] < config.odd_minima:

@@ -157,13 +157,58 @@ class LiveEngineConfig:
     #: uma taxa historica de jogo inteiro. O que ela nao pode ser e' um
     #: cara-ou-coroa publicado como pick.
     probabilidade_minima: float = 0.55
+    #: Piso de probabilidade POR FAMILIA, quando ela precisa de um mais alto
+    #: que o geral. Medicao de 2026-09-09 sobre 146 picks liquidados em PROD:
+    #:
+    #:   escanteios   107 picks   75.3% previsto   72.9% real   +21.1u
+    #:   gols          39 picks   69.0% previsto   56.4% real    -3.5u
+    #:
+    #: Escanteio calibra porque a taxa observada do proprio jogo DIZ alguma
+    #: coisa sobre o resto dele -- escanteio sai de estilo de jogo, e estilo
+    #: nao muda no intervalo. Gol nao: gol e' o evento mais raro do feed, um
+    #: 3x1 aos 30 minutos nao e' "ritmo de 6 gols", e' variancia que ja'
+    #: aconteceu. O residual extrapola a taxa dos dois do mesmo jeito, e por
+    #: isso erra 12.6pp em gols e 2.4pp em escanteios.
+    #:
+    #: O piso mais alto nao conserta a extrapolacao -- so' exige que ela venha
+    #: de uma posicao onde sobrar folga. Quem conserta e' o veto de Over
+    #: abaixo.
+    probabilidade_minima_por_familia: dict = field(
+        default_factory=lambda: {"goals": 0.65})
+    #: Familias que so' podem virar pick pelo lado UNDER. Mesma medicao:
+    #:
+    #:   gols Over    14 picks   42.9% real   -4.06u
+    #:   gols Under   25 picks   64.0% real   +0.60u
+    #:
+    #: A assimetria e' o diagnostico inteiro. Comprar Over ao vivo e' comprar
+    #: a continuacao de um ritmo que o modelo leu DEPOIS que ele apareceu --
+    #: quando a taxa observada esta alta, boa parte do que faltava ja' foi
+    #: gasto. O Under nao tem esse vies porque ele aposta na reversao a media,
+    #: que e' pra onde o jogo tende quando o pico passa.
+    #:
+    #: Escanteios fica de fora do veto porque nele os dois lados calibram
+    #: (Over 72.4%, Under 73.1%) -- e' especifico de gol, nao do motor.
+    familias_somente_under: tuple = ("goals",)
+    #: Niveis de ritmo que vetam qualquer pick. MUITO_ALTO e' o mesmo erro do
+    #: paragrafo acima na sua forma mais pura: 11 picks, 36.4% real contra
+    #: 71.2% previsto, -5.26u -- a pior fatia do motor inteiro, e a unica com
+    #: os dois mercados negativos ao mesmo tempo (gols 20%, escanteios 50%).
+    #: Ritmo MUITO_ALTO nao e' um jogo que vai render muito; e' um jogo que ja'
+    #: rendeu, e o motor cobra o preco de comprar o topo.
+    ritmos_vetados: tuple = ("MUITO_ALTO",)
     #: Amostra minima do proprio jogo pra familia analisada. Escanteio: um
     #: jogo com 0 escanteios aos 20 minutos nao sustenta estimativa nenhuma.
     minutos_minimos_observados: int = 15
 
     # ── Anti-inundacao ───────────────────────────────────────────────────
     #: Quantos picks a mesma partida pode gerar na vida inteira dela.
-    max_picks_por_partida: int = 2
+    #:
+    #: 2 -> 1 em 2026-09-09. O segundo pick da mesma partida acertava 63.2%
+    #: (34 fixtures) contra 73.1% do pick unico (78 fixtures). Nao e' que o
+    #: segundo seja pior de nascenca: e' que ele le' o MESMO jogo, entao
+    #: quando a leitura esta errada os dois erram juntos, e a partida vira uma
+    #: aposta dupla disfarcada de duas apostas.
+    max_picks_por_partida: int = 1
     #: Intervalo minimo, em minutos de JOGO, entre dois picks da mesma
     #: partida. Sem isso uma partida movimentada vira o produto do dia.
     minutos_entre_picks: int = 20
@@ -283,7 +328,7 @@ class LiveEngineConfig:
             probabilidade_minima=_decimal("LIVE_MIN_PROBABILITY", 0.55),
             odd_minima=_decimal("LIVE_MIN_ODD", 1.49),
             odd_maxima=_decimal("LIVE_MAX_ODD", 4.00),
-            max_picks_por_partida=_inteiro("LIVE_MAX_PICKS_PER_FIXTURE", 2),
+            max_picks_por_partida=_inteiro("LIVE_MAX_PICKS_PER_FIXTURE", 1),
             minutos_entre_picks=_inteiro("LIVE_MINUTES_BETWEEN_PICKS", 20),
             validade_odd_segundos=_inteiro("LIVE_ODD_VALIDITY_SECONDS", 180),
             ligas_permitidas=ligas,
@@ -311,7 +356,7 @@ DEFAULT_LIVE_CONFIG = LiveEngineConfig()
 
 #: Versao do motor gravada em cada pick. Muda quando a matematica muda -- e'
 #: o que permite, depois, separar "pick ruim" de "pick de outra versao".
-ENGINE_VERSION = "live_v1.0.0"
+ENGINE_VERSION = "live_v1.1.0"
 
 
 def exigir_ambiente_dev() -> None:

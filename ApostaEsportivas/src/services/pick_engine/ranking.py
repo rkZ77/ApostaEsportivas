@@ -216,6 +216,10 @@ def evaluate_all_lines(
         if reason is None:
             if c["edge"] < effective_min_edge:
                 reason = "edge abaixo do minimo efetivo"
+            elif config.max_edge is not None and c["edge"] > config.max_edge:
+                # Ver max_edge em config.py: acima do teto o edge deixa de
+                # medir valor e passa a medir erro da propria amostra.
+                reason = f"edge acima do teto ({c['edge']*100:.1f}% > {config.max_edge*100:.0f}%)"
             elif c["ev"] <= 0:
                 reason = "EV nao positivo"
         evaluated.append({
@@ -357,6 +361,7 @@ def rank_all_candidates(candidates: list, config: PickEngineConfig = DEFAULT_CON
     for c in candidates:
         taxa_aprov, ev_aprov = _valores_de_aprovacao(c)
         if (taxa_aprov >= config.min_taxa
+                and (config.max_taxa is None or taxa_aprov <= config.max_taxa)
                 and c["amostra"] >= config.min_amostra
                 and c["confidence"] >= config.min_confidence
                 and ev_aprov > config.min_ev
@@ -383,6 +388,9 @@ def rank_all_candidates_debug(candidates: list, config: PickEngineConfig = DEFAU
         taxa_aprov, ev_aprov = _valores_de_aprovacao(c)
         if taxa_aprov < config.min_taxa:
             reasons.append(f"taxa abaixo do minimo ({taxa_aprov*100:.1f}% < {config.min_taxa*100:.0f}%)")
+        if config.max_taxa is not None and taxa_aprov > config.max_taxa:
+            # Ver max_taxa em config.py: a cauda alta da Free acertou 40%.
+            reasons.append(f"taxa acima do teto ({taxa_aprov*100:.1f}% > {config.max_taxa*100:.0f}%)")
         if c["amostra"] < config.min_amostra:
             reasons.append(f"amostra insuficiente ({c['amostra']} < {config.min_amostra})")
         if c["confidence"] < config.min_confidence:

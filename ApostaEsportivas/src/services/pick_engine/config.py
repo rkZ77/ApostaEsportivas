@@ -51,6 +51,26 @@ class PickEngineConfig:
     # (calculate_stake ja usa Kelly, que naturalmente pondera por odd).
     min_odd: float = 1.39
     min_edge: float = 0.05
+    # TETOS DE SANIDADE ESTATISTICA (2026-09-09). None = desligado, que e' o
+    # default e o que VIP/Alavancagem/Multipla continuam usando.
+    #
+    # Medicao sobre os 70 picks Free ja' liquidados em PROD: 64.3% real contra
+    # 72.0% previsto. O erro NAO esta espalhado -- ele mora inteiro na cauda
+    # alta, e nas duas pontas ao mesmo tempo:
+    #
+    #   taxa prevista > 85%    5 picks    40.0% real    -1.93u
+    #   edge > 24%             6 picks    33.3% real    -2.52u
+    #
+    # Enquanto o miolo (taxa 0.65-0.79, edge 0.09-0.21) fecha em ~68% real e
+    # positivo. E' a mesma leitura que a faixa de odd ja' registrou em 14/08:
+    # numero extremo nao e' oportunidade extrema, e' sintoma de que a amostra
+    # que produziu o numero nao representa o jogo. Uma taxa de 89% num pool de
+    # 14 jogos quer dizer "12 de 14", nao "9 em cada 10".
+    #
+    # Sao gates, nao ordenadores: eliminam, e nunca entram no line_score nem
+    # no final_score.
+    max_taxa: float | None = None
+    max_edge: float | None = None
     # Teto de sanidade: odds muito extremas (>15) geralmente refletem
     # mercado ilíquido/raramente cotado, não valor real -- visto na pratica
     # com um handicap a odd 51.0 gerando EV de +3839% (taxa historica
@@ -395,9 +415,15 @@ VIP_CONFIG = PickEngineConfig(
 # casar com o teto da faixa -- no VIP ele e' 15.0 porque la' o teto de sanidade
 # e o da faixa sao coisas separadas por historico, mas a faixa corta antes nos
 # dois, entao os dois pipelines rejeitam exatamente as mesmas odds.
+#
+# TETOS DE CAUDA (2026-09-09): ver max_taxa/max_edge no topo do arquivo. Ficam
+# so' na Free por enquanto porque foi so' nela que a cauda foi medida -- o VIP
+# tem volume e perfil de odd diferentes, e ligar um limiar em cima de amostra
+# de outro produto e' exatamente o erro que o min_confidence 0.72 cometeu.
 DICA_CONFIG = PickEngineConfig(
     min_odd=1.45, max_odd=2.00, enforce_odd_band=True,
-    conservative_odd_low=1.45, conservative_odd_high=2.00)
+    conservative_odd_low=1.45, conservative_odd_high=2.00,
+    max_taxa=0.85, max_edge=0.22)
 
 # Alavancagem precisa do EXATO oposto do resto do motor: perna barata.
 #
