@@ -65,15 +65,16 @@ def run(cmd: str, *extra_args):
         print(f"Comando desconhecido em prod: '{cmd}'")
         return
 
-    # main.py so' roda as migracoes dentro do proprio __main__, e este wrapper
-    # importa main como modulo -- ou seja, rodar por aqui nunca as aplicava.
-    # Ja' quebrou o motor em prod em silencio depois de um merge que adicionou
-    # coluna nova (engine_debug, 2026-07-23): a coluna nao existia e todo
-    # INSERT de pick falhava. Sao ALTER/CREATE ... IF NOT EXISTS, idempotentes
-    # e baratos, entao rodar sempre e' seguro.
-    if comando.migrar:
-        main_module.run_migrations()
-
+    # SEM run_migrations() aqui · ver o comentario no dataclass Comando.
+    # Esta linha era `if comando.migrar:` e sobrou da remocao de 28/08, quando
+    # a migracao automatica saiu de todo comando. Como o campo tinha ido junto,
+    # o menu morria com AttributeError antes de rodar qualquer coisa.
+    #
+    # O texto historico, que era a justificativa da linha: "ja quebrou o motor
+    # em prod em silencio depois de um merge que adicionou coluna nova
+    # (engine_debug, 2026-07-23)". O risco continua existindo e continua
+    # assumido -- e' a divida escrita em 28/08, e ela vale pra TODO caminho do
+    # projeto, nao so' pra este: `DB_ENV=prod python main.py setup` na mao.
     comando.executar(*extra_args)
 
 

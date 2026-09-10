@@ -22,6 +22,7 @@ except Exception:  # pragma: no cover
 import alavancagem_caminho
 from stake_plan import STAKE_PADRAO
 from pick_sources import tabela_existe
+from feature_flags import bingo_visivel
 
 logger = logging.getLogger(__name__)
 
@@ -589,6 +590,30 @@ def _teaser_de_alavancagem(row) -> dict:
     return d
 
 
+def _paywall_analise(pick_type: str, pick_id: int, user: dict) -> None:
+    """Trava de analise: `free` e' publico, o Boost liberado do dia tambem, o
+    resto exige plano ativo.
+
+    Nasceu de uma regra que estava escrita em tres lugares com a mesma frase
+    (`pick_type != "free"`) e ja' errava no mesmo ponto nos tres: o pick
+    gratuito do Boost nao abria a propria analise. Ver `boost_liberado_do_dia`
+    em routers/banca.py, que e' quem sabe qual e' o liberado.
+    """
+    if pick_type == "free" or is_vip_active(user):
+        return
+    if pick_type == "boost":
+        from routers.banca import boost_liberado_do_dia
+        conn = get_connection()
+        cur = conn.cursor()
+        try:
+            if boost_liberado_do_dia(cur, pick_id):
+                return
+        finally:
+            cur.close()
+            conn.close()
+    raise HTTPException(403, "Acesso VIP necessário para ver a análise completa")
+
+
 def _marcar_boost_free(picks: list) -> None:
     """Marca `plano` em cada pick do Boost · o primeiro e' free, o resto e' VIP.
 
@@ -610,6 +635,8 @@ def get_today_suggestions(
     date: Optional[str] = Query(None, description="YYYY-MM-DD · deixar vazio para hoje"),
 ):
     is_vip = is_vip_active(current_user)
+    # Bingo do Dia em teste com dado de produção · ver feature_flags.py.
+    ver_bingo = bingo_visivel(current_user)
     # Abrir a tela de picks é o que mantém os resultados em dia: a varredura
     # roda em segundo plano (no máximo uma a cada poucos minutos, e só quando
     # há pick pendente de jogo já iniciado), então esta chamada não espera por
@@ -729,6 +756,10 @@ def get_today_suggestions(
             # LIMIT 1 e nao 3: o produto e' UMA cartela por dia (indice unico
             # em picks_bingo). A cauda de 3 dias do `_m_where` ainda pode
             # trazer a cartela pendente de ontem, e e' pra isso que ela existe.
+            #
+            # EM TESTE: SÓ ADMIN (ver feature_flags.py). A consulta nem sai
+            # quando o gate está fechado -- devolver a cartela e esconder no
+            # front deixaria o produto inteiro a um DevTools de distância.
             rows_b = _safe_query(cur, f"""
                 SELECT id, match_date,
                        games AS legs,
@@ -739,7 +770,7 @@ def get_today_suggestions(
                 WHERE {_m_where}
                 ORDER BY match_date DESC, created_at DESC
                 LIMIT 3
-            """, _d)
+            """, _d) if ver_bingo else []
             result["bingo"] = _enrich_multipla_legs(cur, rows_b)
 
             # Alavancagem
@@ -969,13 +1000,16 @@ def get_today_suggestions(
                 LIMIT 1
             """, _d)
 
+            # O teaser é o que o FREE vê no lugar do card · enquanto o
+            # produto está em teste, nem o teaser existe: ele anunciaria uma
+            # cartela que ninguém pode comprar.
             teaser_bingo = _safe_query(cur, f"""
                 SELECT id, match_date, total_odd AS odd, games
                 FROM picks_bingo
                 WHERE ({_m_where}) AND result IS NULL
                 ORDER BY match_date DESC, created_at DESC
                 LIMIT 1
-            """, _d)
+            """, _d) if ver_bingo else []
 
             teaser_alav = _safe_query(cur, f"""
                 SELECT pa.id, pa.match_date, pa.odd_combined AS odd,
@@ -1329,6 +1363,11 @@ def get_suggestion_detail(
         if pick_type in ("multipla", "bingo"):
             _tabela_cartela = {"multipla": "picks_multiplas", "bingo": "picks_bingo"}[pick_type]
             _rotulo_cartela = {"multipla": "Múltipla", "bingo": "Bingo do Dia"}[pick_type]
+            # 404 e nao 403 enquanto o Bingo esta em teste: "existe mas voce
+            # nao pode" ja' e' informacao sobre um produto que ainda nao foi
+            # anunciado. Ver feature_flags.py.
+            if pick_type == "bingo" and not bingo_visivel(current_user):
+                raise HTTPException(404, f"{_rotulo_cartela} não encontrada")
             cur.execute(f"""
                 SELECT id, match_date, games AS legs,
                        total_odd, COALESCE(prob_combinada, score_combo) AS confidence,
@@ -1557,8 +1596,20 @@ def get_suggestion_detail(
             row = cur.fetchone()
             if not row:
                 raise HTTPException(404, "Pick nao encontrado")
+            # O BOOST LIBERADO ABRE A PROPRIA ANALISE (2026-09-10).
+            #
+            # O ramo trata quatro produtos como se todos fossem 100% VIP, e
+            # tres sao. O Boost nao: ele publica um pick gratuito por dia desde
+            # 28/08, e o free que recebia esse pick levava 403 ao clicar nele
+            # -- o produto de captacao entregava um card que nao abria.
+            #
+            # Quem decide qual e' o liberado e' `boost_liberado_do_dia`, a
+            # mesma funcao que o follow usa. Uma regra, um lugar.
             if not is_vip:
-                raise HTTPException(403, "Acesso VIP necessario para ver a analise completa")
+                from routers.banca import boost_liberado_do_dia
+                if not (pick_type == "boost"
+                        and boost_liberado_do_dia(cur, suggestion_id)):
+                    raise HTTPException(403, "Acesso VIP necessario para ver a analise completa")
 
             cur.execute(
                 "SELECT stake_units, actual_odd, bet_house FROM user_followed_picks "
@@ -1936,6 +1987,8 @@ def get_recent_results(
         # colunas -- inclusive o recálculo de `profit` por unidade, que ignora
         # o valor armazenado de propósito (é o que mantém esta lista de acordo
         # com a banca, que também recalcula).
+        # Em teste, só admin (ver feature_flags.py): o histórico do Bingo é a
+        # prova de que o produto existe, e sai da lista junto com ele.
         rows = _safe_query(cur, """
             SELECT pb.id, pb.match_date,
                    pb.total_odd AS odd,
@@ -1950,7 +2003,7 @@ def get_recent_results(
             WHERE pb.result IS NOT NULL
             ORDER BY pb.match_date DESC, pb.id DESC
             LIMIT %s
-        """, (current_user["id"], limit,))
+        """, (current_user["id"], limit,)) if bingo_visivel(current_user) else []
         for r in rows:
             d = dict(r)
             try:
@@ -2151,7 +2204,14 @@ def get_bingo(
     order_by:   str = Query("match_date"),
     limit:      int = Query(100, ge=1, le=500),
 ):
-    """Lista de cartelas do Bingo do Dia com filtros."""
+    """Lista de cartelas do Bingo do Dia com filtros.
+
+    Em teste, só admin · ver feature_flags.py. Devolve a lista VAZIA em vez de
+    403 pelo mesmo motivo do 404 no detalhe: a resposta não conta que o
+    produto existe.
+    """
+    if not bingo_visivel(current_user):
+        return []
     return _listar_cartelas("bingo", current_user, date_from, date_to,
                             resultado, order_by, limit)
 
@@ -2191,8 +2251,20 @@ _FONTES_OPCIONAIS = {"live"}
 _APELIDOS_DE_FONTE = {"multipla": "multiplas", "dica": "free", "pick_seguro": "free"}
 
 
-def _fontes(source: str | None, cur=None) -> list[tuple[str, str]]:
+def _ocultas(user) -> tuple:
+    """As fontes que ESTE usuario nao pode ver. Hoje so' o Bingo, em teste com
+    dado de producao · ver feature_flags.py."""
+    return () if bingo_visivel(user) else ("bingo",)
+
+
+def _fontes(source: str | None, cur=None,
+            ocultas: tuple = ()) -> list[tuple[str, str]]:
     """As tabelas que entram no placar. `None`/`all` = todas.
+
+    `ocultas` sai do `all` E do recorte: pedir `source=bingo` sem poder ver
+    devolve LISTA VAZIA, e nao o fallback pra todas -- o fallback existe pra
+    nome de fonte errado, e responder o placar geral no lugar do produto
+    escondido inventaria um numero que nao e' de ninguem.
 
     `cur` serve so' pra derrubar fonte opcional que nao existe aqui. O placar
     e' UM union: uma tabela ausente nao devolve "aquela fonte com zero", ela
@@ -2200,13 +2272,15 @@ def _fontes(source: str | None, cur=None) -> list[tuple[str, str]]:
     win rate, lucro e sequencia zerados na tela por causa de um produto que
     aquele ambiente nem publica.
     """
-    disponiveis = _FONTES_DO_PLACAR
+    disponiveis = [f for f in _FONTES_DO_PLACAR if f[0] not in ocultas]
     if cur is not None:
         disponiveis = [f for f in disponiveis
                        if f[0] not in _FONTES_OPCIONAIS or tabela_existe(cur, f[1])]
     if not source or source == "all":
         return disponiveis
     alvo = _APELIDOS_DE_FONTE.get(source, source)
+    if alvo in ocultas:
+        return []
     return [f for f in disponiveis if f[0] == alvo] or disponiveis
 
 
@@ -2271,7 +2345,14 @@ def get_quick_stats(
         # O peso entra aqui pelo MESMO dicionario que /public/results usa -- com
         # a tabela escrita duas vezes, a tela de Picks e a Home passariam a
         # discordar sobre o lucro da IA sem ninguem perceber.
-        fontes = _fontes(source, cur)
+        fontes = _fontes(source, cur, ocultas=_ocultas(current_user))
+        if not fontes:
+            # Produto em teste pedido por quem nao pode ve-lo · placar
+            # zerado, o mesmo que a tela ja' desenha em produto sem pick
+            # liquidado.
+            return {"total": 0, "greens": 0, "reds": 0, "profit": 0,
+                    "win_rate": 0.0, "streak": 0, "streak_type": None,
+                    "source": source or "all"}
         uniao = "\n                UNION ALL\n".join(
             _sql_do_lucro(chave, tabela) for chave, tabela in fontes
         )
@@ -2495,15 +2576,25 @@ FONTES_POR_JOGO = ("vip", "free", "multipla", "bingo", "alavancagem", "faltas",
 
 
 def _build_combined_sql(source: str, date_cond: str,
-                        result_null_cond: str = "IS NOT NULL") -> tuple[str, int]:
-    """(SQL, número de pernas). O segundo item manda no `date_params * n`."""
-    if source in FONTES_POR_JOGO:
+                        result_null_cond: str = "IS NOT NULL",
+                        ocultas: tuple = ()) -> tuple[str, int]:
+    """(SQL, número de pernas). O segundo item manda no `date_params * n`.
+
+    `ocultas` são as fontes que este usuário não pode ver (Bingo em teste ·
+    feature_flags.py). Some do `all` e some do recorte: `source=bingo` sem
+    permissão vira uma consulta que não devolve linha, e não a lista inteira.
+    """
+    fontes = tuple(f for f in FONTES_POR_JOGO if f not in ocultas)
+    if source in ocultas:
+        return "SELECT * FROM (" + _source_games_sql(
+            FONTES_POR_JOGO[0], date_cond, result_null_cond) + ") AS vazio WHERE FALSE", 1
+    if source in fontes:
         return _source_games_sql(source, date_cond, result_null_cond), 1
     return (
         " UNION ALL ".join(
-            _source_games_sql(s, date_cond, result_null_cond) for s in FONTES_POR_JOGO
+            _source_games_sql(s, date_cond, result_null_cond) for s in fontes
         ),
-        len(FONTES_POR_JOGO),
+        len(fontes),
     )
 
 
@@ -2557,7 +2648,8 @@ def get_results_games(
         if resultado and resultado not in ("all", "pending"):
             result_cond = " AND result = %s"; result_params.append(resultado)
 
-        inner_sql, n_legs = _build_combined_sql(source, date_cond, result_null_cond)
+        inner_sql, n_legs = _build_combined_sql(source, date_cond, result_null_cond,
+                                                ocultas=_ocultas(current_user))
         combined_date_params = date_params * n_legs
 
         count_sql = f"SELECT COUNT(*) AS n FROM ({inner_sql}) AS c WHERE TRUE {result_cond}"
@@ -2617,7 +2709,7 @@ def get_results_monthly(
     Só agrega picks JÁ RESOLVIDOS (o SQL nasce com `result IS NOT NULL`), então
     não há o que esconder aqui: é o placar fechado de cada mês.
     """
-    inner_sql, _ = _build_combined_sql(source, "")
+    inner_sql, _ = _build_combined_sql(source, "", ocultas=_ocultas(current_user))
 
     conn = get_connection()
     cur = conn.cursor()
@@ -3027,7 +3119,8 @@ def get_results(
 
         # Contagem de pernas derivada do builder · aqui a lista dizia 4 e o
         # UNION tinha o mesmo problema de get_results_games.
-        inner_sql, n_legs = _build_combined_sql(source, date_cond)
+        inner_sql, n_legs = _build_combined_sql(source, date_cond,
+                                                ocultas=_ocultas(current_user))
         combined_params = params_q * n_legs
 
         row = _safe_query_one(cur, f"""
@@ -3929,8 +4022,7 @@ def get_market_form(
     # conteudo que se paga. So' `free` e' publico; todo o resto exige plano
     # ativo, igual ao /detail. Sem esta trava, um free pegava o id do pick VIP
     # no teaser de /today (result["bloqueados"]) e lia mercado+linha aqui.
-    if pick_type != "free" and not is_vip_active(current_user):
-        raise HTTPException(403, "Acesso VIP necessário para ver a análise completa")
+    _paywall_analise(pick_type, suggestion_id, current_user)
 
     conn = get_connection()
     cur = conn.cursor()
@@ -4011,8 +4103,7 @@ def get_amostra(
     # Paywall: a amostra e' a analise interna que decidiu o pick pago. So'
     # `free` e' publico; o resto segue a mesma regra do /detail e do
     # /market-form. Ver o comentario la'.
-    if pick_type != "free" and not is_vip_active(current_user):
-        raise HTTPException(403, "Acesso VIP necessário para ver a análise completa")
+    _paywall_analise(pick_type, suggestion_id, current_user)
 
     conn = get_connection()
     cur = conn.cursor()

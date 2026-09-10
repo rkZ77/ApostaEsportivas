@@ -9,6 +9,7 @@ from data_br import HOJE_BR, TZ_BR, data_br
 import alavancagem_caminho
 from stake_plan import STAKE_PADRAO, stake_de, rotulo_curto
 from pick_sources import fontes, joins_sql, case_sql, tabela_existe
+from feature_flags import bingo_visivel
 
 # Peso de cada pipeline em unidades, lido uma vez · os SELECTs sao f-strings
 # e interpolar `STAKE_PADRAO['vip']` la dentro exigiria aspas aninhadas.
@@ -372,6 +373,12 @@ def _builders(cur) -> dict:
     for chave, tabela in _FONTES_OPCIONAIS.items():
         if not tabela_existe(cur, tabela):
             ativos.pop(chave, None)
+    # BINGO EM TESTE (ver feature_flags.py). Aqui nao ha' usuario: este e' o
+    # placar PUBLICO, aberto sem login, entao enquanto o produto for de admin
+    # ele simplesmente nao existe neste UNION -- nem nos totais, nem na lista
+    # de recentes, nem no filtro por fonte.
+    if not bingo_visivel(None):
+        ativos.pop("bingo", None)
     return ativos
 
 def _build_union(builders: dict, date_cond: str, source: Optional[str]) -> str:
@@ -618,6 +625,13 @@ def _resultados_publicos(month, source, recent_limit, recent_offset, slim, bloco
         # A contagem por tipo (mais abaixo) le' as tabelas cruas, entao a perna
         # do ao vivo so' entra quando a tabela existe -- mesma guarda de
         # `_builders`, escrita aqui porque aquela consulta nao passa por ele.
+        # Mesma guarda para o Bingo, pelo motivo do gate e nao pelo da tabela:
+        # `bingo_total` sairia > 0 numa resposta onde nenhuma cartela aparece.
+        sql_bingo_resolvido = (
+            "UNION ALL SELECT 'bingo' AS source FROM picks_bingo"
+            " WHERE result IS NOT NULL"
+            if "bingo" in builders else ""
+        )
         sql_live_resolvido = (
             "UNION ALL SELECT 'live' AS source FROM picks_live"
             " WHERE result IS NOT NULL"
@@ -798,8 +812,7 @@ def _resultados_publicos(month, source, recent_limit, recent_offset, slim, bloco
                 SELECT 'free'       AS source FROM picks_free       WHERE result IS NOT NULL
                 UNION ALL
                 SELECT 'multipla'   AS source FROM picks_multiplas  WHERE result IS NOT NULL
-                UNION ALL
-                SELECT 'bingo'      AS source FROM picks_bingo      WHERE result IS NOT NULL
+                {sql_bingo_resolvido}
                 UNION ALL
                 SELECT 'alavancagem' AS source FROM picks_alavancagem WHERE result IS NOT NULL
                 UNION ALL
@@ -851,6 +864,11 @@ def public_pick(pick_type: str, pick_id: int):
     """Teaser público de pick para compartilhamento. Nao expoe market/reasoning."""
     valid = {"vip", "free", "multipla", "bingo", "alavancagem", "faltas", "goleiros",
              "player_stats"}
+    # O link compartilhado de uma cartela do Bingo é público por definição ·
+    # enquanto o produto está em teste (feature_flags.py) ele não existe aqui,
+    # senão bastaria o id na URL para ver a cartela sem sessão nenhuma.
+    if not bingo_visivel(None):
+        valid.discard("bingo")
     if pick_type not in valid:
         raise HTTPException(400, "Tipo inválido")
 
@@ -959,6 +977,11 @@ def public_today_summary():
         live_hoje = (f"UNION ALL SELECT 'live' AS source FROM picks_live"
                      f" WHERE match_date = {HOJE_BR}"
                      if tabela_existe(cur, "picks_live") else "")
+        # Bingo em teste · ver feature_flags.py. Sem isto o "picks de hoje"
+        # contaria uma cartela que nenhuma tela mostra.
+        bingo_hoje = (f"UNION ALL SELECT 'bingo' AS source FROM picks_bingo"
+                      f" WHERE match_date = {HOJE_BR}"
+                      if bingo_visivel(None) else "")
         row = _q1(cur, f"""
             SELECT
                 COUNT(*) FILTER (WHERE t.source = 'vip')         AS vip,
@@ -978,8 +1001,7 @@ def public_today_summary():
                 SELECT 'free'        AS source FROM picks_free        WHERE match_date = {HOJE_BR}
                 UNION ALL
                 SELECT 'multiplas'   AS source FROM picks_multiplas   WHERE match_date = {HOJE_BR}
-                UNION ALL
-                SELECT 'bingo'       AS source FROM picks_bingo       WHERE match_date = {HOJE_BR}
+                {bingo_hoje}
                 UNION ALL
                 SELECT 'alavancagem' AS source FROM picks_alavancagem WHERE match_date = {HOJE_BR}
                 UNION ALL

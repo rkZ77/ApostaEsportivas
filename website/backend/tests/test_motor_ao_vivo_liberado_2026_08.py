@@ -155,7 +155,7 @@ class TestNotificacaoDePickNovo:
         import routers.notifications as notif
 
         chamadas = []
-        monkeypatch.setattr(notif, "notify_all_users",
+        monkeypatch.setattr(notif, "notify_vip_users",
                             lambda *a, **kw: chamadas.append(kw) or 1)
 
         notif.notificar_pick_live_novo([
@@ -173,7 +173,7 @@ class TestNotificacaoDePickNovo:
         import routers.notifications as notif
 
         chamadas = []
-        monkeypatch.setattr(notif, "notify_all_users",
+        monkeypatch.setattr(notif, "notify_vip_users",
                             lambda *a, **kw: chamadas.append(kw) or 1)
 
         notif.notificar_pick_live_novo([
@@ -190,7 +190,7 @@ class TestNotificacaoDePickNovo:
     def test_pick_sem_id_nao_estoura(self, monkeypatch):
         import routers.notifications as notif
 
-        monkeypatch.setattr(notif, "notify_all_users", lambda *a, **kw: 1)
+        monkeypatch.setattr(notif, "notify_vip_users", lambda *a, **kw: 1)
         assert notif.notificar_pick_live_novo([{"home_team_name": "A"}]) == 0
         assert notif.notificar_pick_live_novo([]) == 0
 
@@ -274,3 +274,39 @@ class TestOCardSegueOPadrao:
         calcular o lucro de quem ja' apostou daria um numero que ele nao ve."""
         src = _ler(_FRONT, "components", "LivePicksFeed.tsx")
         assert "user_actual_odd ?? pick.odd" in src
+
+
+# ── o alcance do aviso ────────────────────────────────────────────────────
+class TestOSinoNaoFuraOPaywall:
+    """O sino era a porta dos fundos do Ao Vivo (achado em 10/09/2026).
+
+    `notificar_pick_live_novo` chamava `notify_all_users`, que e' um
+    `SELECT u.id FROM users u` sem filtro nenhum, e o corpo do aviso e'
+    `f"{market} {line} @ {odd}"`. O free nao via o pick na aba e lia a analise
+    dele na bandeja do sistema.
+    """
+
+    def test_o_aviso_de_pick_ao_vivo_e_so_pra_quem_assina(self):
+        src = _ler(_BACKEND, "routers", "notifications.py")
+        trecho = src[src.index("def notificar_pick_live_novo"):]
+        trecho = trecho[:trecho.index("LIVE_NOVO_JANELA_MIN")]
+        assert "notify_vip_users(" in trecho
+        assert "notify_all_users(" not in trecho
+
+    def test_o_alcance_vip_e_a_mesma_regra_do_resto_do_site(self):
+        """A clausula tem que aceitar trial e admin, e derrubar plano vencido ·
+        e' `auth_utils.is_vip_active` escrita em SQL."""
+        import routers.notifications as notif
+
+        sql = notif.SQL_VIP_ATIVO
+        for plano in ("'vip'", "'trial'", "'admin'"):
+            assert plano in sql
+        assert "expires_at" in sql and "NOW()" in sql
+
+    def test_notify_all_users_continua_existindo_pro_que_e_de_todos(self):
+        """Aviso de manutencao, fechamento mensal e afins seguem sendo pra base
+        inteira · o corte novo e' de CONTEUDO, nao um desligamento geral."""
+        import routers.notifications as notif
+
+        assert callable(notif.notify_all_users)
+        assert callable(notif.notify_vip_users)

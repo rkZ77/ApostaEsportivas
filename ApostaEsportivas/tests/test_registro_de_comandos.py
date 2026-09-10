@@ -67,13 +67,22 @@ def test_tudo_roda_as_etapas_do_pipeline_diario():
 
     PICK BOOST entrou em 2026-08-28, junto com a publicacao dele pro assinante.
     A regra que governa esta lista continua sendo a mesma: produto publicado e'
-    gerado todo dia, e motor que ainda nao foi publicado (Player Stats completo,
-    Live) fica fora pra nao virar custo fixo da rodada.
+    gerado todo dia, e motor que ainda nao foi publicado (Player Stats completo)
+    fica fora pra nao virar custo fixo da rodada.
+
+    O LIVE E' A EXCECAO QUE CONFIRMA A REGRA, e por isso nao esta' aqui mesmo
+    sendo publicado: ele nao e' etapa de rodada diaria: so' faz sentido rodando
+    DURANTE os jogos, e de manha so' gastaria cota lendo partida que nem
+    comecou. Tem botao proprio no /admin desde 2026-09-10.
+
+    BINGO DO DIA entrou entre a MULTIPLA e a ALAVANCAGEM · a posicao nao e'
+    estetica: `_today_used_pairs` impede o bingo de repetir o (jogo, mercado)
+    que ja saiu em VIP ou Free, entao ele precisa rodar depois dos dois.
     """
     assert [c.etapa for c in main.COMANDOS if c.etapa] == [
         "DADOS", "ESTATISTICA DE JOGADOR", "ODDS", "PICKS VIP", "DICA DO DIA",
-        "MÚLTIPLA", "ALAVANCAGEM", "FALTAS", "PICKS DE JOGADOR", "PICK BOOST",
-        "RESULTADOS",
+        "MÚLTIPLA", "BINGO DO DIA", "ALAVANCAGEM", "FALTAS",
+        "PICKS DE JOGADOR", "PICK BOOST", "RESULTADOS",
         # ESTATISTICA DE JOGADOR entrou em 28/08 e, no mesmo dia, foi movida
         # pra ANTES das odds por pedido do usuario. Ela e' a UNICA etapa com
         # teto fixo (50 fixtures); a coleta de odds pede o que o dia tiver.
@@ -162,12 +171,23 @@ def test_a_coleta_de_jogador_entrou_no_tudo():
     assert etapas.index("player_stats") < etapas.index("playerstats-diario")
 
 
-# ── Live: dev-only e sem migracao ─────────────────────────────────────────
-def test_live_e_shadow_sao_so_de_dev():
-    """cmd_live recusa rodar sem DB_ENV=dev (pick_engine_live/config) e o
-    shadow compara contra base de homologacao. Oferecer no menu de prod seria
-    um botao que so' sabe recusar."""
-    assert main.COMANDOS_POR_NOME["live"].ambientes == ("dev",)
+# ── Ambientes ─────────────────────────────────────────────────────────────
+def test_o_live_roda_nos_dois_ambientes():
+    """DEIXOU DE SER DEV-ONLY em 2026-08-28, e o registro so' soube em 10/09.
+
+    A trava era `pick_engine_live.config.exigir_ambiente_dev()`, que hoje e' um
+    `return` vazio -- o motor grava no banco pra onde o processo aponta, igual
+    aos outros seis. `ambientes=("dev",)` ficou pra tras, e nao era so' um menu
+    a menos: o /admin DERIVA os botoes deste registro, entao o motor de um
+    produto publicado pro assinante nao tinha porta nenhuma fora de um terminal
+    com DB_ENV=dev, que e' o ambiente errado. Nada roda agendado neste projeto.
+    """
+    assert main.COMANDOS_POR_NOME["live"].ambientes == ("dev", "prod")
+
+
+def test_o_shadow_continua_so_de_dev():
+    """Compara o motor com os picks que a IA salvou hoje, contra uma base de
+    homologacao. Oferecer no menu de prod seria um botao que so' sabe recusar."""
     assert main.COMANDOS_POR_NOME["shadow"].ambientes == ("dev",)
 
 
@@ -181,6 +201,13 @@ def test_so_o_setup_dispara_as_migracoes():
 
     O preco esta assumido: coluna nova exige `python main.py setup` na mao,
     PROD inclusive.
+
+    O CAMPO VOLTOU POR UM DIA (718b70c9, 2026-09-10) e este teste e' quem
+    pegou. Os wrappers ainda tinham `if comando.migrar:` sobrando da remocao, e
+    o menu morria com AttributeError -- a correcao daquele dia redeclarou o
+    campo em vez de apagar a linha, e com isso o menu virou o UNICO caminho do
+    projeto que migra. As duas pontas foram alinhadas aqui: a linha saiu dos
+    dois wrappers e o campo saiu de novo do registro.
     """
     assert not hasattr(main.Comando, "migrar")
 
@@ -190,6 +217,13 @@ def test_so_o_setup_dispara_as_migracoes():
     assert 'if cmd == "setup":' in fonte
     assert "alvo.migrar" not in fonte
 
+    # Os wrappers sao o caminho que de fato regrediu · sem isto, redeclarar o
+    # campo faz o teste acima passar e a migracao automatica volta em silencio.
+    for wrapper in (run_dev, run_prod):
+        assert "run_migrations()" not in io.open(
+            wrapper.__file__, encoding="utf-8").read(), (
+            f"{wrapper.__name__} voltou a migrar antes de cada comando")
+
 
 def test_live_chega_no_menu_do_run_dev():
     """A regressao original: `live` existia no main.py e em lugar nenhum do
@@ -197,8 +231,11 @@ def test_live_chega_no_menu_do_run_dev():
     assert "live" in {c.nome for c in run_dev.COMANDOS}
 
 
-def test_live_nao_chega_no_menu_do_run_prod():
-    assert "live" not in {c.nome for c in run_prod.COMANDOS}
+def test_live_chega_no_menu_do_run_prod():
+    """O espelho do de cima, e a razao esta' em test_o_live_roda_nos_dois_
+    ambientes: enquanto a trava existia, um `live` no menu de prod era um botao
+    que so' sabia recusar. A trava saiu."""
+    assert "live" in {c.nome for c in run_prod.COMANDOS}
 
 
 # ── HELP ──────────────────────────────────────────────────────────────────

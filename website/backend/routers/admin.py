@@ -316,6 +316,38 @@ _PIPELINE_SCRIPTS = {
     # diaria da coleta de odds. Botao separado, sob demanda.
     "player_stats":         os.path.join("collectors", "player_stats_collector_service.py"),
     "dev_player_stats":     os.path.join("collectors", "player_stats_collector_service.py"),
+    # ─────────────────────────────────────────────────────────────────────
+    # OS COMANDOS QUE SO' EXISTIAM NO TERMINAL (2026-09-10)
+    #
+    # O "Rodar Tudo" e' derivado do registro do motor desde 28/08 -- mas so' a
+    # metade dele. `_passos_do_motor()` le os Comandos que declaram `etapa`, e
+    # os que NAO declaram (os sob demanda) nao eram lidos por ninguem: nao
+    # tinham script aqui, nao tinham rotulo, e `_PASSOS_AVULSOS` estava vazia
+    # com o comentario "o proximo passo avulso entra aqui sozinho". Sozinho nao
+    # entrava: faltava a derivacao.
+    #
+    # Quem ficou de fora, e o que isso significava na pratica:
+    #
+    #   live         motor de um produto PUBLICADO pro assinante, sem botao
+    #                nenhum. Nada roda agendado neste projeto, entao pick ao
+    #                vivo so' existia se alguem abrisse um terminal.
+    #   historico    Stage 6 avulso · e' o que se roda em dia de mata-mata pra
+    #                liberar mais cota e nao analisar meio jogo.
+    #   playerstats  os SEIS metodos. O botao que existe roda so' os tres
+    #                diarios (ver _PIPELINE_ARGS), entao os outros tres nao
+    #                tinham porta nenhuma no painel.
+    #   ligas        perfil de liga por IA · consome credito da Anthropic.
+    #
+    # `shadow` continua de fora DE PROPOSITO, e nao por esquecimento: ele
+    # compara o motor com "os picks que a IA salvou hoje", e a IA foi cortada
+    # da geracao em 2026-07-17. Nao ha com o que comparar.
+    "gerar_live":           os.path.join("engine_pipelines", "live_pipeline.py"),
+    # Sem argumento: o pipeline decide o dry run pelo ambiente
+    # (LIVE_ENGINE_DRY_RUN), que e' a mesma regra do CLI. Passar `--gravar`
+    # aqui faria o botao ignorar a variavel do Railway.
+    "historico_times":      "atualizar_jogos.py",
+    "gerar_playerstats_todos": os.path.join("engine_pipelines", "player_stats_pipeline.py"),
+    "perfis_de_liga":       "atualizar_ligas.py",
     # Fase de homologacao/validacao (compara motor vs IA em uma base DEV
     # separada, ANTES de promover mudanca pro motor de producao acima) --
     # prefixo "dev_" sinaliza que _run_and_track() precisa injetar DB_ENV=dev
@@ -360,6 +392,18 @@ _PIPELINE_ARGS = {
 # teste que faz literal_eval no fonte, e uma chamada de funcao dentro do dict
 # torna o literal impossivel de avaliar sem importar o router inteiro.
 _PIPELINE_ARGS["gerar_playerstats"] = _metodos_diarios_do_motor()
+
+#: Stage 6 do `atualizar_jogos.py`, sozinho. O script aceita o estagio como
+#: argv (ver o __main__ dele), entao o botao pede a etapa em vez de rodar as
+#: sete. Sem numero extra: os padroes de TeamHistoryBackfillService (10 jogos,
+#: teto de 60 requisicoes) sao os mesmos que o CLI usa sem argumento.
+_PIPELINE_ARGS["historico_times"] = ["6"]
+
+#: SEM argumento de metodo, e e' o que distingue este passo de
+#: `gerar_playerstats`: aquele roda os tres diarios, este roda os seis.
+#: `player_stats_pipeline.py` sem argv chama `run_player_stats_engine()`, que
+#: percorre o catalogo inteiro.
+_PIPELINE_ARGS["gerar_playerstats_todos"] = []
 
 _DEV_PIPELINE_STEPS = [
     "dev_atualizar_jogos", "dev_capturar_odds",
@@ -418,6 +462,14 @@ _PASSO_DO_COMANDO = {
     "playerstats-diario": "gerar_playerstats",
     "pickboost":          "gerar_pickboost",
     "resultados":         "atualizar_resultados",
+    # --- Sob demanda: Comando SEM `etapa`, botao fora do "Rodar Tudo" -------
+    # Ver o bloco grande em _PIPELINE_SCRIPTS pro que cada um destes fazia
+    # falta. `tudo` nao entra (ele E' a sequencia) e `shadow` nao entra (compara
+    # com uma IA que nao gera pick desde 2026-07-17).
+    "live":               "gerar_live",
+    "historico":          "historico_times",
+    "playerstats":        "gerar_playerstats_todos",
+    "ligas":              "perfis_de_liga",
 }
 
 #: A sequencia do "Rodar Tudo", quando o motor esta' no path.
@@ -452,6 +504,32 @@ _TUDO_STEPS_FALLBACK = [
 _TUDO_STEPS_DERIVADA = False
 
 
+def _registro_do_motor():
+    """`main.COMANDOS` do motor, ou None quando ele nao esta' alcancavel.
+
+    Carregado UMA vez e guardado: as duas derivacoes (a sequencia do "Rodar
+    Tudo" e os passos avulsos) leem a mesma lista, e executar o main.py do
+    motor duas vezes no import do router e' trabalho repetido sem nenhum ganho.
+    """
+    global _MOTOR_COMANDOS
+    if _MOTOR_COMANDOS is not None:
+        return _MOTOR_COMANDOS
+    with _motor_no_path():
+        # Nome proprio: `import main` resolveria pro main.py do SITE em
+        # qualquer processo que ja' o tenha importado -- e pro do motor em
+        # qualquer outro. Carregar por caminho tira a ambiguidade.
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "_motor_main", os.path.join(_PIPELINE_DIR, "main.py"))
+        _motor = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(_motor)
+    _MOTOR_COMANDOS = list(_motor.COMANDOS)
+    return _MOTOR_COMANDOS
+
+
+_MOTOR_COMANDOS = None
+
+
 def _passos_do_motor() -> list:
     """Etapas do `main.py tudo`, na ordem, com o nome que este router usa.
 
@@ -461,21 +539,13 @@ def _passos_do_motor() -> list:
     que as duas descrevam a mesma coisa.
     """
     try:
-        with _motor_no_path():
-            # Nome proprio: `import main` resolveria pro main.py do SITE em
-            # qualquer processo que ja' o tenha importado -- e pro do motor em
-            # qualquer outro. Carregar por caminho tira a ambiguidade.
-            import importlib.util
-            spec = importlib.util.spec_from_file_location(
-                "_motor_main", os.path.join(_PIPELINE_DIR, "main.py"))
-            _motor = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(_motor)
+        _comandos = _registro_do_motor()
 
-        passos = [_PASSO_DO_COMANDO[c.nome] for c in _motor.COMANDOS
+        passos = [_PASSO_DO_COMANDO[c.nome] for c in _comandos
                   if c.etapa and c.nome in _PASSO_DO_COMANDO]
         # Etapa do motor sem traducao aqui e' passo que o botao NAO sabe rodar ·
         # avisar e' melhor que rodar uma sequencia incompleta em silencio.
-        sem_traducao = [c.nome for c in _motor.COMANDOS
+        sem_traducao = [c.nome for c in _comandos
                         if c.etapa and c.nome not in _PASSO_DO_COMANDO]
         if sem_traducao:
             logging.getLogger(__name__).warning(
@@ -509,6 +579,11 @@ _STEP_LABELS = {
     "gerar_playerstats":    "Gerando picks de jogador",
     "gerar_pickboost":      "Escolhendo jogos do Pick Boost",
     "atualizar_resultados": "Atualizando resultados",
+    # Sob demanda · fora da sequencia do "Rodar Tudo".
+    "gerar_live":              "Rodando o motor Ao Vivo",
+    "historico_times":         "Buscando histórico dos times",
+    "gerar_playerstats_todos": "Gerando picks de jogador (todos os métodos)",
+    "perfis_de_liga":          "Atualizando perfis de liga",
 }
 
 
@@ -903,6 +978,13 @@ _PASSO_LABEL_CURTO = {
     "gerar_playerstats":    "Gerar Jogadores",
     "gerar_pickboost":      "Gerar Pick Boost",
     "atualizar_resultados": "Atualizar Resultados",
+    # Sob demanda. O rotulo diz o CUSTO quando ele nao e' obvio: "Perfis de
+    # Liga" gasta credito da Anthropic e "Ao Vivo" so' faz sentido com jogo
+    # rolando -- quem clica precisa saber disso antes, nao depois.
+    "gerar_live":              "Rodar Ao Vivo",
+    "historico_times":         "Histórico dos Times",
+    "gerar_playerstats_todos": "Jogadores (6 métodos)",
+    "perfis_de_liga":          "Perfis de Liga (IA)",
 }
 
 #: Passos que o painel mostra FORA da sequencia do "Rodar Tudo".
@@ -911,11 +993,45 @@ _PASSO_LABEL_CURTO = {
 #: medido nao vira custo fixo da rodada diaria), mas que precisam de botao
 #: porque a unica alternativa e' a linha de comando.
 #:
-#: VAZIA desde 28/08, quando "Gerar Defesas" foi apagado: aquele botao rodava
-#: UM metodo do Player Stats, e o metodo ja' roda todo dia dentro de "Gerar
-#: Jogadores". A lista fica (e nao o campo some da resposta) porque o painel
-#: ja' sabe desenhar o bloco, e o proximo passo avulso entra aqui sozinho.
-_PASSOS_AVULSOS: list[str] = []
+#: DERIVADA DESDE 2026-09-10, pelo mesmo motivo que a sequencia do "Rodar Tudo"
+#: passou a ser em 28/08. Ela era uma lista literal, ficou VAZIA quando "Gerar
+#: Defesas" foi apagado, e o comentario que sobrou dizia "o proximo passo
+#: avulso entra aqui sozinho". Nao entrava: nao havia derivacao nenhuma, so' a
+#: das etapas. Quatro comandos do motor passaram meses sem botao por causa
+#: disso -- entre eles o motor AO VIVO, de um produto publicado pro assinante,
+#: num projeto onde nada roda agendado.
+#:
+#: Agora o criterio e' o mesmo dos dois lados: Comando sem `etapa` que tenha
+#: traducao em `_PASSO_DO_COMANDO` vira botao avulso. Quem nao deve ter botao
+#: simplesmente nao entra no mapa (`tudo`, que E' a sequencia, e `shadow`), e
+#: isso fica escrito la'.
+#: Mesma ordem em que os Comandos sem `etapa` aparecem no registro do motor.
+_AVULSOS_FALLBACK = [
+    "gerar_playerstats_todos", "historico_times", "gerar_live", "perfis_de_liga",
+]
+
+
+def _avulsos_do_motor() -> list:
+    """Comandos sob demanda do motor, com o nome que este router usa.
+
+    Mesmo fallback e mesma tolerancia de `_passos_do_motor`: painel sem botao
+    e' pior que painel com a lista congelada, e um passo sem script aqui seria
+    um botao que so' sabe dar 400 -- por isso o filtro por `_PIPELINE_SCRIPTS`.
+    """
+    try:
+        avulsos = [_PASSO_DO_COMANDO[c.nome] for c in _registro_do_motor()
+                   if not c.etapa
+                   and c.nome in _PASSO_DO_COMANDO
+                   and _PASSO_DO_COMANDO[c.nome] in _PIPELINE_SCRIPTS]
+        return avulsos or list(_AVULSOS_FALLBACK)
+    except Exception as e:
+        logging.getLogger(__name__).warning(
+            "[ADMIN] avulsos do motor indisponiveis, usando a lista congelada: %s",
+            str(e)[:200])
+        return list(_AVULSOS_FALLBACK)
+
+
+_PASSOS_AVULSOS: list[str] = [p for p in _avulsos_do_motor() if p not in _TUDO_STEPS]
 
 
 @router.get("/pipeline-etapas")

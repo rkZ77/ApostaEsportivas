@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 import alavancagem_caminho
 from data_br import data_br
 from database import get_connection
-from auth_utils import get_current_user
+from auth_utils import get_current_user, is_vip_active
 from routers.payments import PLANS
 
 logger = logging.getLogger(__name__)
@@ -1364,6 +1364,55 @@ STAKE_LABELS = {
     "live": "Ao Vivo",
 }
 
+#: Produtos que o free NAO pode seguir. E' a lista dos que ele tambem nao pode
+#: LER -- e a coincidencia e' o ponto: seguir e' ler.
+#:
+#: `free` fica de fora porque o produto e' aberto. `boost` fica de fora porque
+#: tem um pick liberado por dia, e quem decide se ESTE pick e' o liberado e'
+#: `boost_liberado_do_dia`, logo abaixo.
+_FOLLOW_SO_VIP = {"vip", "multipla", "bingo", "alavancagem",
+                  "faltas", "goleiros", "player_stats", "live"}
+
+
+def boost_liberado_do_dia(cur, pick_id: int) -> bool:
+    """Este pick do Boost e' o gratuito de hoje?
+
+    A REGRA MORA AQUI PORQUE ELA E' UMA SO'. `/suggestions/today` escolhe o
+    liberado com `ORDER BY score DESC LIMIT 1` dentro da janela do dia, e
+    `_marcar_boost_free` so' carimba o primeiro da lista. Reescrever esse
+    criterio no gate criaria a segunda implementacao da mesma escolha, e as
+    duas divergiriam no primeiro dia em que alguem mexesse numa delas.
+    """
+    cur.execute("""
+        SELECT id FROM picks_boost
+        WHERE match_date = (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
+           OR (result IS NULL
+               AND match_date >= (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
+                                 - INTERVAL '3 days')
+        ORDER BY score DESC NULLS LAST
+        LIMIT 1
+    """)
+    linha = cur.fetchone()
+    return bool(linha and linha["id"] == pick_id)
+
+
+def _pode_seguir(cur, user: dict, pick_type: str, pick_id: int) -> bool:
+    """SEGUIR E' LER (2026-09-10).
+
+    O follow validava so' o `pick_type` e o tamanho da stake · nunca perguntava
+    QUEM estava seguindo. Como o teaser do paywall entrega o `id` do pick
+    trancado (e precisa entregar, e' o que faz o card existir), bastava chamar
+    esta rota com aquele id pra que `GET /live/my-picks` e a propria Banca
+    passassem a devolver market, line e odd do pick. O gate de leitura existia
+    em todo lugar; o de escrita, em nenhum.
+    """
+    if pick_type not in _FOLLOW_SO_VIP:
+        if pick_type == "boost" and not is_vip_active(user):
+            return boost_liberado_do_dia(cur, pick_id)
+        return True
+    return is_vip_active(user)
+
+
 @router.post("/follow")
 def follow_pick(body: FollowPick, current_user: dict = Depends(get_current_user)):
     _check_banca_rate(current_user["id"])
@@ -1380,6 +1429,8 @@ def follow_pick(body: FollowPick, current_user: dict = Depends(get_current_user)
     conn = get_connection()
     cur = conn.cursor()
     try:
+        if not _pode_seguir(cur, current_user, body.pick_type, body.pick_id):
+            raise HTTPException(403, "Acesso VIP necessário para seguir este pick.")
         pick = _resolve_pick(cur, body.pick_id, body.pick_type)
         if not pick:
             raise HTTPException(404, "Pick não encontrado.")

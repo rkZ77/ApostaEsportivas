@@ -853,19 +853,20 @@ class Comando:
     ambientes: tuple = ("dev", "prod")
     uso: str = ""                # forma no HELP quando difere do nome ("dados [full]")
     detalhe: str = ""            # linhas extras do HELP, uma por linha
-    #: Rodar `run_migrations()` antes do comando.
-    #:
-    #: O CAMPO EXISTIA NOS WRAPPERS E NAO AQUI (achado em 2026-09-10). Tanto
-    #: `run_dev.py` quanto `run_prod.py` fazem `if comando.migrar:` antes de
-    #: executar, e o dataclass nunca declarou o campo -- entao QUALQUER opcao
-    #: do menu morria com AttributeError antes de rodar uma linha. O comentario
-    #: de la' ate' explica a intencao ("`live` declara migrar=False e provisiona
-    #: o proprio esquema"), so' que o `migrar=False` nunca chegou a ser escrito,
-    #: e o default tambem nao.
-    #:
-    #: `main.py` direto nunca passou por aqui: ele migra dentro do proprio
-    #: __main__. Por isso o defeito so' aparecia pra quem usava o menu.
-    migrar: bool = True
+
+    # NAO EXISTE CAMPO `migrar` AQUI, e a ausencia e' a decisao (28/08).
+    #
+    # Nenhum comando roda a lista de ALTER TABLE antes de trabalhar: o esquema
+    # esta' criado ha' meses e reaplicar dezenas de DDL a cada `vip` / `dados`
+    # / `pickboost` so' custa. Quem migra e' `python main.py setup`, na mao.
+    #
+    # O campo voltou por um dia (718b70c9, 2026-09-10) porque os wrappers ainda
+    # tinham `if comando.migrar:` sobrando daquela remocao, e o menu morria com
+    # AttributeError. O AttributeError era real; a conclusao e' que sobrava a
+    # LINHA DO WRAPPER, nao que faltava o campo -- e a diferenca importa,
+    # porque com o campo de volta o menu virou o UNICO caminho do projeto que
+    # migra: `main.py` direto nao migra (so' o `setup`), e o /admin roda script
+    # por caminho, sem passar por registro nenhum.
 
 
 def _tem(args: tuple, palavra: str) -> bool:
@@ -1018,15 +1019,22 @@ COMANDOS: tuple = (
             uso="historico [min_jogos] [teto]",
             detalhe="historico               padrão: abaixo de 10 jogos, teto de 60 requisições\n"
                     "historico 15 200        exige 15 jogos e libera 200 requisições"),
-    # Só dev: cmd_live recusa rodar sem DB_ENV=dev (pick_engine_live/config).
-    # Estar no menu do run_prod seria oferecer um botão que só sabe recusar.
-    Comando("live", "Motor Ao Vivo · uma rodada (dry run)",
-            "Motor Ao Vivo · UMA rodada (DEV apenas, dry run por padrão)",
-            lambda *a: cmd_live(*a), ambientes=("dev",),
-            # O motor ao vivo provisiona o proprio esquema (ver o CREATE
-            # TABLE em live_pipeline.py): rodar as migracoes gerais antes
-            # dele nao acrescenta nada.
-            migrar=False,
+    # O "SO' DEV" CADUCOU EM 2026-08-28 E A LINHA FICOU (achado em 2026-09-10).
+    #
+    # O comentario aqui dizia "cmd_live recusa rodar sem DB_ENV=dev, estar no
+    # menu do run_prod seria oferecer um botao que so' sabe recusar". A recusa
+    # foi removida naquela data: `pick_engine_live.config.exigir_ambiente_dev()`
+    # e' um `return` vazio hoje, e a docstring de `cmd_live` ja' diz que a
+    # rodada grava no banco pra onde o ambiente do processo aponta.
+    #
+    # O custo de ninguem ter apagado a linha e' maior que um menu a menos.
+    # `ambientes=("dev",)` tira o Live do run_prod E do /admin -- o painel
+    # deriva os passos DESTE registro --, entao o unico jeito de rodar o motor
+    # de um produto PUBLICADO pro assinante era abrir terminal com DB_ENV=dev,
+    # que e' o ambiente errado. E nada roda agendado neste projeto.
+    Comando("live", "Motor Ao Vivo · uma rodada",
+            "Motor Ao Vivo · UMA rodada (grava no ambiente do processo)",
+            lambda *a: cmd_live(*a),
             detalhe="live                    respeita o .env\n"
                     "live gravar             grava de verdade nesta rodada\n"
                     "live fixture 123456     analisa só essa partida"),

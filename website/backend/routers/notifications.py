@@ -302,6 +302,53 @@ def create_notification(cur, user_id: int, ntype: str, title: str, dedupe_key: s
           json.dumps(payload) if payload is not None else None, dedupe_key))
 
 
+#: QUEM TEM ACESSO VIP, em SQL.
+#:
+#: E' a traducao de `auth_utils.is_vip_active` pra dentro do INSERT em lote --
+#: mesma lista de planos, mesma leitura de vencimento, e `admin` nunca expira.
+#: Existe porque o aviso em massa nao passa por usuario nenhum: ele nasce de um
+#: SELECT sobre `users`, e sem esta clausula o sino entrega pra base inteira o
+#: que a tela cobra pra mostrar.
+SQL_VIP_ATIVO = """
+    u.plan IN ('vip', 'trial', 'admin')
+    AND (u.plan = 'admin' OR u.expires_at IS NULL OR u.expires_at > NOW())
+"""
+
+
+def notify_vip_users(ntype: str, title: str, dedupe_key: str,
+                     body: Optional[str] = None, url: Optional[str] = None,
+                     payload: Optional[dict] = None) -> int:
+    """Igual a `notify_all_users`, mas so' pra quem assina.
+
+    A DIFERENCA E' DE CONTEUDO, NAO DE VOLUME (2026-09-10).
+
+    Um aviso de produto VIP carrega o produto dentro: mercado, linha e odd
+    cabem no corpo da notificacao, e o corpo chega inteiro pra quem recebe. Com
+    `notify_all_users` o sino virava a porta dos fundos do paywall -- o free
+    nao via o pick na aba e lia a analise no sino, que e' pior do que nunca ter
+    trancado.
+
+    Quem nao assina nao fica sem nada: o teaser da propria aba continua
+    mostrando jogo, liga e odd. O que nao sai daqui e' o que se paga.
+    """
+    conn = get_connection()
+    cur  = conn.cursor()
+    try:
+        cur.execute(f"""
+            INSERT INTO notifications (user_id, type, title, body, url, payload, dedupe_key)
+            SELECT u.id, %s, %s, %s, %s, %s::jsonb, %s FROM users u
+            WHERE {SQL_VIP_ATIVO}
+            ON CONFLICT (user_id, dedupe_key) DO NOTHING
+        """, (ntype, title[:160], body, url,
+              json.dumps(payload) if payload is not None else None, dedupe_key))
+        count = cur.rowcount
+        conn.commit()
+        return count
+    finally:
+        cur.close()
+        conn.close()
+
+
 def notify_all_users(ntype: str, title: str, dedupe_key: str,
                      body: Optional[str] = None, url: Optional[str] = None,
                      payload: Optional[dict] = None) -> int:
@@ -476,7 +523,10 @@ def notificar_pick_live_novo(picks: list) -> int:
         home, away = p.get("home_team_name"), p.get("away_team_name")
         jogo = f"{home} x {away}" if home and away else "Jogo ao vivo"
         minuto = p.get("minute_at_creation")
-        criadas += notify_all_users(
+        # SO' QUEM ASSINA (2026-09-10). O Ao Vivo virou VIP puro, e este corpo
+        # carrega mercado, linha e odd -- era o unico lugar do site que ainda
+        # entregava a analise do produto pra base inteira.
+        criadas += notify_vip_users(
             TYPE_LIVE_NOVO,
             title=f"Pick ao vivo · {jogo}",
             dedupe_key=f"live_novo:{pick_id}",

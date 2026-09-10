@@ -55,12 +55,11 @@ def run(cmd: str, *extra_args):
         print(f"Comando desconhecido em dev: '{cmd}'")
         return
 
-    # Mesma correcao de run_prod.py: main.py so' migra dentro do __main__ dele,
-    # e aqui ele entra como modulo importado. Idempotente (IF NOT EXISTS).
-    # `live` declara migrar=False e provisiona o proprio esquema.
-    if comando.migrar:
-        main_module.run_migrations()
-
+    # SEM run_migrations() aqui · ver o comentario no dataclass Comando.
+    # Esta linha era `if comando.migrar:` e sobrou da remocao de 28/08, quando
+    # a migracao automatica saiu de todo comando. Como o campo tinha ido junto,
+    # o menu morria com AttributeError antes de rodar qualquer coisa.
+    # Coluna nova exige `python main.py setup` na mao, aqui como em prod.
     comando.executar(*extra_args)
 
 
