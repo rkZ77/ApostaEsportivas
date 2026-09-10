@@ -17,6 +17,7 @@ import {
 } from './PickCardParts'
 import { useShareStoryImage, useShareBilheteImage } from '../hooks/useShareStoryImage'
 import { useOddAtualizada } from '../hooks/useOddAtualizada'
+import { useOddAgora } from '../hooks/useOddsAgora'
 import { TeamLogo, LeagueLogo, PlayerPhoto } from './TeamLogo'
 import { Ban, Clock } from 'lucide-react'
 
@@ -205,6 +206,18 @@ function SuggestionCard({
   const seguido      = registrado != null || (s.is_followed ?? false)
   const stakeSeguida = registrado?.stakeUnits ?? s.user_stake_units ?? null
   const oddSeguida   = registrado?.actualOdd ?? s.user_actual_odd ?? null
+  /* A ODD DE AGORA NO CARD (10/09/2026, pedido do usuário) · ver o comentário
+     gêmeo no card free em Picks.tsx e hooks/useOddsAgora.
+     BILHETE FICA DE FORA: num pick de pernas o número é o produto de duas odds,
+     e a leitura de vitrine é por mercado simples. Ele continua conferindo perna
+     a perna no clique, por /live/ticket-odd. */
+  const temPernas    = (s.legs?.length ?? 0) > 0
+  const oddDeAgora   = useOddAgora(
+    s.pick_type ?? 'vip', s.id, seguido || !!s.result || temPernas)
+  const oddCorrente  = oddDeAgora?.odd ?? null
+  const oddExibida   = seguido && oddSeguida != null
+    ? Number(oddSeguida)
+    : (oddCorrente ?? Number(s.odd))
   const casaSeguida  = registrado?.betHouse ?? s.user_bet_house ?? null
   const { share: shareStory, sharing, shared } = useShareStoryImage()
   /* Pick com pernas compartilha como BILHETE · ver handleShare. */
@@ -333,7 +346,8 @@ function SuggestionCard({
   const handleFollow = (e: React.MouseEvent) => {
     e.stopPropagation()
     if (followed) return
-    setModalOdd(Number(s.odd))
+    // Abre com a odd que está no card · ver o comentário gêmeo em Picks.tsx.
+    setModalOdd(oddExibida)
     setShowModal(true)
     // Múltipla não passa por aqui: bilhete se atualiza perna a perna, no card
     // dele, via /live/ticket-odd.
@@ -473,15 +487,22 @@ function SuggestionCard({
               duas odds, nao a odd de um mercado. Ver as pernas logo abaixo,
               cada uma com a sua. */}
           <div className="text-[10px] text-ink-3 mb-0.5">
-            {s.legs && s.legs.length > 0 ? 'Odd combinada' : 'Odd'}
+            {temPernas ? 'Odd combinada' : oddCorrente != null ? 'Odd agora' : 'Odd'}
           </div>
           <div className="text-3xl font-black text-green-400">
-            {seguido && oddSeguida != null
-              ? Number(oddSeguida).toFixed(2)
-              : Number(s.odd).toFixed(2)}
+            {oddExibida.toFixed(2)}
           </div>
           {seguido && oddSeguida != null && Math.abs(oddSeguida - Number(s.odd)) > 0.001 && (
             <div className="text-[9px] text-ink-4 mt-0.5">pick: {Number(s.odd).toFixed(2)}</div>
+          )}
+          {oddCorrente != null && Math.abs(oddCorrente - Number(s.odd)) > 0.001 && (
+            <div className="text-[9px] text-ink-4 mt-0.5 tabular-nums">
+              publicada {Number(s.odd).toFixed(2)}
+              <span className={oddCorrente > Number(s.odd)
+                ? 'text-accent-ink font-bold ml-1' : 'text-red-400 font-bold ml-1'}>
+                {oddCorrente > Number(s.odd) ? '↑' : '↓'}
+              </span>
+            </div>
           )}
           {/* A CASA SUGERIDA DESCEU PRO CORPO, como campo rotulado "Casa"
               (04/09) · era a única informação do card que aparecia sem nome,
@@ -522,8 +543,10 @@ function SuggestionCard({
             </div>
             <div className="flex-1 px-4 py-3 text-center">
               <div className="text-[10px] text-ink-3 mb-0.5">Lucro pot.</div>
-              <div className="text-xl font-black text-ink-1">+{((Number(s.odd) - 1) * stakeSuggestion.units).toFixed(2)}u</div>
-              <div className="text-[11px] text-green-600 font-semibold">+R${((Number(s.odd) - 1) * stakeSuggestion.amountR).toFixed(0)}</div>
+              {/* Mesma odd do topo · duas contas que não fecham entre si na
+                  mesma faixa fazem duvidar da conta inteira. */}
+              <div className="text-xl font-black text-ink-1">+{((oddExibida - 1) * stakeSuggestion.units).toFixed(2)}u</div>
+              <div className="text-[11px] text-green-600 font-semibold">+R${((oddExibida - 1) * stakeSuggestion.amountR).toFixed(0)}</div>
             </div>
           </>
         ) : s.result ? (

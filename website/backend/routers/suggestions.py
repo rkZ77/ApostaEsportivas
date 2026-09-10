@@ -4184,6 +4184,146 @@ def get_amostra(
 #
 # Falha de um lado não derruba o outro: quem tem forma de mercado mas não tem
 # amostra gravada (pick anterior a 27/08) continua vendo a metade que existe.
+# ─────────────────────────────────────────────────────────────────────────────
+# A ODD DE AGORA NOS CARDS DE PRE-JOGO
+#
+# POR QUE ISTO EXISTE (2026-09-10, pedido do usuario)
+# ---------------------------------------------------
+# O card mostrava a odd da PUBLICACAO, e a odd corrente so' aparecia depois do
+# clique em "Pegar bilhete", dentro do modal. Quem estava decidindo via um
+# numero que podia ter mudado horas antes, e so' descobria a mudanca quando ja'
+# tinha decidido -- ou seja, no pior momento possivel.
+#
+# O CUSTO FOI O QUE DECIDIU O DESENHO. `/odds` da API-Football responde por UMA
+# fixture, entao pedir por card seria uma requisicao por pick, por visita: numa
+# tela com dez picks e cem visitas no dia, dez mil chamadas. Foi consumo assim
+# que estourou a cota em 01/08 e custou o agendador do projeto.
+#
+# Tres travas, nesta ordem:
+#
+#   1. UMA leitura serve TODO MUNDO. O resultado fica em cache de processo, com
+#      TTL longo (odd pre-jogo se move em horas, nao em segundos), entao a
+#      centesima visita do dia nao custa nada.
+#   2. AGRUPADO POR FIXTURE. Dois picks do mesmo jogo (VIP e faltas, por
+#      exemplo) sao uma leitura so'.
+#   3. TETO DURO de fixtures por rodada. Mesmo num dia atipico, o gasto tem
+#      limite conhecido.
+#
+# NAO GRAVA PRECO NOVO NO PICK, pelo mesmo motivo do Ao Vivo: o `odd` salvo e' o
+# que a IA analisou e e' contra ele que o resultado e' medido. Isto aqui e'
+# leitura de vitrine.
+# ─────────────────────────────────────────────────────────────────────────────
+
+#: Quanto tempo a leitura vale. Odd pre-jogo nao se mexe como a ao vivo, e o
+#: que se quer evitar e' o numero de ONTEM, nao o de dez minutos atras.
+_TTL_ODDS_PRE_AGORA = 900  # 15 minutos
+
+#: Teto de fixtures consultadas por rodada de cache. Com 15 minutos de TTL, o
+#: pior caso e' 25 requisicoes a cada 15 min -- 100 por hora de site em uso.
+_MAX_FIXTURES_ODDS_AGORA = 25
+
+_odds_agora_cache: dict = {"ts": 0.0, "dados": {}}
+
+
+@router.get("/odds-agora")
+def odds_agora_prejogo(current_user: dict = Depends(get_current_user)):
+    """A odd que a casa esta' pagando AGORA nos picks de hoje, em lote.
+
+    Chave do mapa: "<pick_type>:<id>". Valor: odd corrente, a da publicacao e a
+    variacao. Pick sem correspondencia clara no mercado simplesmente nao entra
+    no mapa, e o card segue mostrando a odd salva -- best-effort em todos os
+    caminhos, igual ao resto do modulo de odds.
+
+    BILHETE NAO ENTRA (multipla, bingo, alavancagem, boost): eles sao produto de
+    varias pernas e ja' tem `/live/ticket-odd`, que refaz a conta perna a perna
+    no momento do clique.
+    """
+    import time as _t
+    from routers.live import (_fetch_prematch_odds, _find_prematch_odd,
+                              _casas_ativas, LIVE_STATUSES, FT_STATUSES)
+
+    agora = _t.time()
+    if agora - _odds_agora_cache["ts"] < _TTL_ODDS_PRE_AGORA:
+        return {"disponivel": True, "picks": _odds_agora_cache["dados"],
+                "idade_seg": int(agora - _odds_agora_cache["ts"])}
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        # UNION dos produtos de UM JOGO SO'. Cada tabela contribui com a mesma
+        # tripla que identifica um mercado: fixture, familia e linha.
+        partes = []
+        for tipo, tabela in (("vip", "picks_vip"), ("free", "picks_free"),
+                             ("faltas", "picks_faltas"), ("goleiros", "picks_goleiros"),
+                             ("player_stats", "picks_player_stats")):
+            partes.append(
+                "SELECT '{t}' AS pick_type, p.id, p.fixture_id, p.market_type, "
+                "       p.line, p.odd "
+                "  FROM {tab} p "
+                "  JOIN fixtures f ON f.fixture_id = p.fixture_id "
+                " WHERE p.result IS NULL "
+                "   AND p.match_date = (NOW() AT TIME ZONE 'America/Sao_Paulo')::date "
+                "   AND p.fixture_id IS NOT NULL "
+                # SO' JOGO QUE AINDA NAO COMECOU. Com a bola rolando quem
+                # responde e' o mercado ao vivo, que e' outra aposta com outro
+                # preco -- misturar os dois poria no card um numero que nao
+                # descreve o pick.
+                "   AND COALESCE(f.status, 'NS') = 'NS' ".format(t=tipo, tab=tabela)
+            )
+        linhas = []
+        for sql in partes:
+            try:
+                cur.execute(sql)
+                linhas.extend(dict(r) for r in (cur.fetchall() or []))
+            except Exception:
+                # Tabela que nao existe neste ambiente nao derruba as outras.
+                conn.rollback()
+    finally:
+        cur.close()
+        conn.close()
+
+    if not linhas:
+        _odds_agora_cache.update({"ts": agora, "dados": {}})
+        return {"disponivel": True, "picks": {}, "idade_seg": 0}
+
+    # Uma leitura por FIXTURE, e nao por pick.
+    fixtures = []
+    for l in linhas:
+        if l["fixture_id"] not in fixtures:
+            fixtures.append(l["fixture_id"])
+    fixtures = fixtures[:_MAX_FIXTURES_ODDS_AGORA]
+
+    casas = _casas_ativas()
+    por_fixture: dict = {}
+    for fid in fixtures:
+        try:
+            por_fixture[fid] = _fetch_prematch_odds(fid)
+        except Exception:
+            por_fixture[fid] = []
+
+    dados: dict = {}
+    for l in linhas:
+        livro = por_fixture.get(l["fixture_id"])
+        if not livro:
+            continue
+        try:
+            nova, casa = _find_prematch_odd(l["market_type"], l["line"], livro, casas)
+        except Exception:
+            nova, casa = None, None
+        if not nova:
+            continue
+        salva = float(l["odd"]) if l["odd"] is not None else None
+        dados[f"{l['pick_type']}:{l['id']}"] = {
+            "odd": round(float(nova), 2),
+            "odd_pick": salva,
+            "variacao": round(float(nova) - salva, 2) if salva else 0,
+            "casa": casa,
+        }
+
+    _odds_agora_cache.update({"ts": agora, "dados": dados})
+    return {"disponivel": True, "picks": dados, "idade_seg": 0}
+
+
 @router.get("/{suggestion_id}/analise")
 def get_analise_completa(
     suggestion_id: int,

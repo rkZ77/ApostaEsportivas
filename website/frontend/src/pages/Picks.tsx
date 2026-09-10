@@ -52,6 +52,7 @@ import { fmtUnits, pctProb, capitalizarFrase, plural } from '../utils/format'
 import { getResultStyle, PICK_TYPE_CLS, PICK_TYPE_BORDER } from '../utils/resultStyle'
 import { useShareStoryImage, useShareAlavancagemImage, useShareBilheteImage } from '../hooks/useShareStoryImage'
 import { useOddAtualizada } from '../hooks/useOddAtualizada'
+import { useOddAgora } from '../hooks/useOddsAgora'
 import { translateMarket, translateLine, translateTeamName } from '../utils/marketTranslate'
 // Copa do Mundo 2026 · fase pelo match_date
 function wcPhase(dateStr?: string): string | null {
@@ -529,6 +530,13 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
   const seguido      = registrado != null || (dica.is_followed ?? false)
   const stakeSeguida = registrado?.stakeUnits ?? dica.user_stake_units ?? null
   const oddSeguida   = registrado?.actualOdd ?? dica.user_actual_odd ?? null
+  /* Congela em quem já pegou o bilhete e em pick já liquidado · nos dois a odd
+     que vale é a do passado, não a da vitrine. */
+  const oddDeAgora   = useOddAgora('free', dica.id, seguido || !!dica.result)
+  const oddCorrente  = oddDeAgora?.odd ?? null
+  const oddExibida   = seguido && oddSeguida != null
+    ? Number(oddSeguida)
+    : (oddCorrente ?? Number(dica.odd))
   const casaSeguida  = registrado?.betHouse ?? dica.user_bet_house ?? null
   const { share: shareStory, sharing, shared } = useShareStoryImage()
   const { odd: buscarOdd, buscando: buscandoOdd } = useOddAtualizada()
@@ -581,7 +589,9 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
   const handleFollow = (e: React.MouseEvent) => {
     e.stopPropagation()
     if (followed) return
-    setModalOdd(Number(dica.odd))
+    // Abre com a odd que a pessoa está VENDO no card, e não com a da
+    // publicação: o modal que começa com outro número parece corrigir o card.
+    setModalOdd(oddExibida)
     setShowModal(true)
     buscarOdd(Number(dica.odd), {
       fixture_id: dica.fixture_id,
@@ -663,14 +673,30 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
       {/* Hero: Odd | Stake | Retorno */}
       <div className="font-mono flex items-stretch divide-x divide-line/60 border-b border-line/60">
         <div className="flex-1 px-5 py-3 text-center">
-          <div className="text-[10px] text-ink-3 mb-0.5">Odd</div>
+          {/* A ODD DE AGORA OCUPA O LUGAR DA ODD (10/09/2026, pedido do
+              usuário). Antes o preço corrente só aparecia dentro do modal de
+              pegar bilhete, ou seja: depois da decisão. Quem ainda não pegou vê
+              o que a casa paga neste momento, e a odd da publicação desce para
+              a nota de rodapé com a seta do movimento.
+              Depois de pegar, a odd congela na registrada: mexer naquele número
+              seria mentir sobre a aposta que a pessoa tem. Ver hooks/useOddsAgora. */}
+          <div className="text-[10px] text-ink-3 mb-0.5">
+            {oddCorrente != null ? 'Odd agora' : 'Odd'}
+          </div>
           <div className="text-3xl font-black text-green-400">
-            {seguido && oddSeguida != null
-              ? Number(oddSeguida).toFixed(2)
-              : Number(dica.odd).toFixed(2)}
+            {oddExibida.toFixed(2)}
           </div>
           {seguido && oddSeguida != null && Math.abs(oddSeguida - Number(dica.odd)) > 0.001 && (
             <div className="text-[9px] text-ink-4 mt-0.5">pick: {Number(dica.odd).toFixed(2)}</div>
+          )}
+          {oddCorrente != null && Math.abs(oddCorrente - Number(dica.odd)) > 0.001 && (
+            <div className="text-[9px] text-ink-4 mt-0.5 tabular-nums">
+              publicada {Number(dica.odd).toFixed(2)}
+              <span className={oddCorrente > Number(dica.odd)
+                ? 'text-accent-ink font-bold ml-1' : 'text-red-400 font-bold ml-1'}>
+                {oddCorrente > Number(dica.odd) ? '↑' : '↓'}
+              </span>
+            </div>
           )}
           {/* Só a casa de quem JÁ registrou fica colada na odd · a sugerida
               desceu pro corpo como campo rotulado "Casa" (04/09). */}
@@ -708,8 +734,11 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
             </div>
             <div className="flex-1 px-4 py-3 text-center">
               <div className="text-[10px] text-ink-3 mb-0.5">Lucro pot.</div>
-              <div className="text-xl font-black text-ink-1">+{((Number(dica.odd) - 1) * stakeSuggestion.units).toFixed(2)}u</div>
-              <div className="text-[11px] text-green-600 font-semibold">+R${((Number(dica.odd) - 1) * stakeSuggestion.amountR).toFixed(0)}</div>
+              {/* Com a odd de agora no topo, o lucro tem que sair da MESMA
+                  odd · dois números que não fecham entre si na mesma faixa é
+                  o tipo de coisa que faz a pessoa desconfiar da conta inteira. */}
+              <div className="text-xl font-black text-ink-1">+{((oddExibida - 1) * stakeSuggestion.units).toFixed(2)}u</div>
+              <div className="text-[11px] text-green-600 font-semibold">+R${((oddExibida - 1) * stakeSuggestion.amountR).toFixed(0)}</div>
             </div>
           </>
         ) : dica.result ? (
