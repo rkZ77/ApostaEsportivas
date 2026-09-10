@@ -4203,16 +4203,28 @@ def get_analise_completa(
                            suggestion_id, exc_info=True)
             return {"available": False}
 
-    return {
-        "market_form": _tentar(
-            # `limit` explícito: chamada direta em Python não passa pelo
-            # FastAPI, então o default do parâmetro seria o objeto `Query(10)`
-            # em vez do número 10 · ele iria inteiro pro `LIMIT %s`.
-            lambda: get_market_form(suggestion_id, pick_type=pick_type, limit=10,
-                                    current_user=current_user),
-            "forma do mercado"),
-        "amostra": _tentar(
-            lambda: get_amostra(suggestion_id, pick_type=pick_type,
-                                current_user=current_user),
-            "amostra"),
-    }
+    # AS DUAS METADES VAO JUNTAS (2026-09-10).
+    #
+    # Elas rodavam em sequência, e cada uma abre a própria conexão e faz as
+    # próprias consultas · o modal esperava a soma das duas. Medido numa
+    # bancada da tela de picks, com esta rota atrasada em 400ms, o "Entenda
+    # esta análise" inteiro passava de ~150ms para ~520ms: o modal aparece
+    # rápido (44ms), mas fica de esqueleto até a resposta, e é esse esqueleto
+    # que a pessoa lê como travada.
+    #
+    # São duas threads que só esperam banco, e o pool já tem folga pra isso
+    # (ver database.py). O `_tentar` continua de fora: cada metade falha
+    # sozinha, como antes.
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        # `limit` explícito: chamada direta em Python não passa pelo FastAPI,
+        # então o default do parâmetro seria o objeto `Query(10)` em vez do
+        # número 10 · ele iria inteiro pro `LIMIT %s`.
+        f_forma = pool.submit(_tentar, lambda: get_market_form(
+            suggestion_id, pick_type=pick_type, limit=10, current_user=current_user),
+            "forma do mercado")
+        f_amostra = pool.submit(_tentar, lambda: get_amostra(
+            suggestion_id, pick_type=pick_type, current_user=current_user), "amostra")
+
+    return {"market_form": f_forma.result(), "amostra": f_amostra.result()}

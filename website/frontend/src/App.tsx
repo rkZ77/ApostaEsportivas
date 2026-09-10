@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import { NotificationProvider } from './context/NotificationContext'
 import { OnboardingProvider, useOnboarding } from './context/OnboardingContext'
 import TopProgressBar from './components/TopProgressBar'
+import PilhaDeAvisos from './components/ui/PilhaDeAvisos'
 import { useWebMCP } from './hooks/useWebMCP'
 import { prefetchOcioso, ouvirLinksParaPrefetch } from './lib/prefetch'
 
@@ -240,15 +241,21 @@ export default function App() {
             <AgenteButton />
             <CookieBanner />
             <UpdateBanner />
-            <ErrorToast />
-            <PushPromptBanner />
-            <VerifyEmailBanner />
-            <PlanUpsellToast />
-            {/* Pick ao vivo publicado agora · precisa estar fora do <Routes>
-                pelo mesmo motivo dos outros avisos: o evento chega pelo poll do
-                sino, que roda em qualquer página, e a pessoa quase nunca está
-                na aba Ao Vivo quando ele acontece. */}
-            <LivePickToast />
+            {/* A PILHA · a ordem aqui e' a ordem na tela, de cima pra baixo.
+                O mais urgente fica por ULTIMO, que e' o mais perto do dedo:
+                convite de notificacao e de plano em cima, oportunidade com
+                prazo e erro embaixo. Ver components/ui/PilhaDeAvisos. */}
+            <PilhaDeAvisos>
+              <PushPromptBanner />
+              <VerifyEmailBanner />
+              <PlanUpsellToast />
+              {/* Pick ao vivo publicado agora · precisa estar fora do <Routes>
+                  pelo mesmo motivo dos outros avisos: o evento chega pelo poll
+                  do sino, que roda em qualquer página, e a pessoa quase nunca
+                  está na aba Ao Vivo quando ele acontece. */}
+              <LivePickToast />
+              <ErrorToast />
+            </PilhaDeAvisos>
             <GlobalModals />
             {/* Precisa ficar fora do <Routes>: o tour troca de rota entre os
                 passos (banca, picks, banca de novo) e ali dentro ele seria

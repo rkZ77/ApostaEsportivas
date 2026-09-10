@@ -22,6 +22,17 @@ export default function CookieBanner() {
           animate={{ y: 0 }}
           exit={{ y: '100%' }}
           transition={{ type: 'spring', stiffness: 300, damping: 32 }}
+          /* A PILHA DE AVISOS PRECISA SABER QUE ESTA BARRA EXISTE.
+            *
+            * Ela e' uma barra de rodape inteira, e antes os avisos flutuantes
+            * simplesmente caiam por cima dela (o toast de erro vivia em
+            * `bottom-6`). So' este componente sabe se esta' na tela, entao e'
+            * ele que publica a folga · ver PilhaDeAvisos. */
+          ref={el => {
+            const raiz = document.documentElement
+            if (el) raiz.style.setProperty('--aviso-offset', `${el.offsetHeight}px`)
+            else raiz.style.removeProperty('--aviso-offset')
+          }}
           className="fixed bottom-0 inset-x-0 z-40 bg-surface-1 border-t border-line px-4 py-4 sm:py-3"
           style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
         >

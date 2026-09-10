@@ -74,15 +74,15 @@ export default function PlanUpsellToast() {
           initial="hidden"
           animate="visible"
           exit="exit"
-          /* Mesma faixa vertical do VerifyEmailBanner, e nunca os dois ao mesmo
-             tempo: `convitePlano` devolve null para quem ainda pode ganhar o
-             trial confirmando o e-mail, que é exatamente quem vê o outro. */
-          className="fixed bottom-24 left-0 right-0 z-[9990] flex justify-center px-4 pointer-events-none"
+          /* Nunca aparece junto do VerifyEmailBanner: `convitePlano` devolve
+             null para quem ainda pode ganhar o trial confirmando o e-mail, que
+             é exatamente quem vê o outro. Posição, ver PilhaDeAvisos. */
+          className="w-full max-w-md pointer-events-auto"
         >
           {/* `max-w-md` e não `sm` como os vizinhos: este aviso tem título E corpo
                 com conteúdo variável (o prazo do trial entra no título), e em 384px
                 os dois quebravam em quatro linhas dentro de um card de 72px. */}
-          <div className="pointer-events-auto w-full max-w-md bg-surface-1 border border-line-strong rounded-lg shadow-2xl px-4 py-4 flex items-center gap-3">
+          <div className="w-full bg-surface-1 border border-line-strong rounded-lg shadow-2xl px-4 py-4 flex items-center gap-3">
             <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${cor.bolha}`}>
               <Crown className={`w-4 h-4 ${cor.icone}`} aria-hidden="true" />
             </div>

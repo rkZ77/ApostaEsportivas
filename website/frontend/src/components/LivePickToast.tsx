@@ -72,15 +72,14 @@ export default function LivePickToast() {
           initial="hidden"
           animate="visible"
           exit="exit"
-          /* Mesma faixa dos outros avisos (`bottom-24`), e não uma quarta: em
-             `bottom-6` ele cairia por cima do banner de cookies. Quem cede o
-             lugar é o convite de plano · ele se esconde enquanto este estiver
-             na tela (ver PlanUpsellToast), porque oportunidade com prazo ganha
-             de convite permanente. O `z` mais alto cobre o empate de um ciclo
-             de render entre os dois. */
-          className="fixed bottom-24 left-0 right-0 z-[9995] flex justify-center px-4 pointer-events-none"
+          /* Posição e empilhamento são da PilhaDeAvisos · ver o cabeçalho
+             dela. Aqui sobra só o cartão. Quem ainda cede o lugar é o convite
+             de plano, que se esconde enquanto este estiver na tela (ver
+             PlanUpsellToast): oportunidade com prazo ganha de convite
+             permanente, e são dois cartões grandes para uma tela de celular. */
+          className="w-full max-w-md pointer-events-auto"
         >
-          <div className="pointer-events-auto w-full max-w-md bg-surface-1 border border-red-500/40 rounded-lg shadow-2xl px-4 py-4 flex items-center gap-3">
+          <div className="w-full bg-surface-1 border border-red-500/40 rounded-lg shadow-2xl px-4 py-4 flex items-center gap-3">
             <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-red-500/10">
               <Radio className="w-4 h-4 text-red-400" aria-hidden="true" />
             </div>
