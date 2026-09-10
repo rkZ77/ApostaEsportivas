@@ -317,11 +317,26 @@ class TestAFlagDeVisibilidade:
         src = self._front("pages/ResultadosPublicos.tsx")
         assert "BINGO_ENABLED" in src
 
-    def test_o_botao_do_admin_pergunta_pela_flag(self):
-        """O que impede um clique distraído de publicar cartela em produção."""
+    def test_o_botao_do_admin_filtra_a_lista_QUE_A_TELA_DESENHA(self):
+        """O que impede um clique distraído de publicar cartela em produção.
+
+        E ele precisa filtrar a lista VINDA DO BACKEND, não a escrita a mão.
+        A primeira versão gateava o `PIPELINE_FALLBACK`, e o gate era
+        decorativo: aquela lista é só o primeiro quadro, e a resposta de
+        `/admin/pipeline-etapas` a substitui inteira · ela vem do registro do
+        motor, que não conhece flag de produto. O botão reapareceria sozinho um
+        instante depois, e em produção.
+        """
         src = self._front("pages/Admin.tsx")
-        assert "BINGO_ENABLED" in src
-        assert "'gerar_bingo'" in src
+        assert "semProdutoOculto(r.data.etapas)" in src,             "a lista do backend entra sem passar pelo funil da flag"
+        assert "e.command !== 'gerar_bingo' || BINGO_ENABLED" in src
+
+    def test_o_passo_continua_existindo_no_backend(self):
+        """A flag decide o que APARECE, nunca o que existe · o /admin do
+        ambiente de dev precisa do passo pra rodar o motor."""
+        import routers.admin as adm
+        assert "gerar_bingo" in adm._TUDO_STEPS
+        assert adm._TUDO_STEPS_DERIVADA,             "os passos deixaram de sair do registro do motor e viraram copia"
 
     def test_o_backend_continua_ligado_de_proposito(self):
         """Um segundo interruptor do lado do servidor seria um par pra manter

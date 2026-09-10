@@ -253,12 +253,7 @@ export default function Admin() {
     { command: 'gerar_vip',            label: 'Gerar VIP'            },
     { command: 'gerar_free',           label: 'Gerar Free'           },
     { command: 'gerar_multipla',       label: 'Gerar Múltipla'       },
-    /* O botao do Bingo so' existe onde o produto existe · em producao um
-       clique distraido aqui publicaria uma cartela de um produto que ainda
-       esta' sendo medido. Ver BINGO_ENABLED em config.ts. */
-    ...(BINGO_ENABLED
-      ? [{ command: 'gerar_bingo', label: 'Gerar Bingo do Dia' }]
-      : []),
+    { command: 'gerar_bingo',          label: 'Gerar Bingo do Dia'   },
     { command: 'gerar_alavancagem',    label: 'Gerar Alavancagem'    },
     { command: 'gerar_faltas',         label: 'Gerar Faltas'         },
     { command: 'gerar_playerstats',    label: 'Gerar Jogadores'      },
@@ -267,17 +262,31 @@ export default function Admin() {
   ]
 
   type EtapaDoPipeline = { command: string; label: string }
-  const [pipelineEtapas, setPipelineEtapas] = useState<EtapaDoPipeline[]>(PIPELINE_FALLBACK)
+  const [pipelineEtapas, setPipelineEtapas] = useState<EtapaDoPipeline[]>(
+    () => PIPELINE_FALLBACK.filter(e => e.command !== 'gerar_bingo' || BINGO_ENABLED))
   /* Passos com botão próprio e FORA do "Rodar Tudo" · o motor os deixa sem
    * `etapa` de propósito (motor sem histórico medido não vira custo fixo da
    * rodada diária), e sem essa separação o grid dizia que eles rodavam junto. */
   const [pipelineAvulsos, setPipelineAvulsos] = useState<EtapaDoPipeline[]>([])
 
+  /* A FLAG FILTRA O QUE A TELA DESENHA, e nao a lista escrita a mao (10/09).
+   *
+   * Primeira versao disto gateava o `PIPELINE_FALLBACK`, e o gate era
+   * decorativo: aquela lista e' so' o primeiro quadro, e a resposta de
+   * /admin/pipeline-etapas a substitui inteira · ela vem do registro do motor,
+   * que nao conhece flag de produto. O botao reapareceria sozinho um instante
+   * depois, e em producao.
+   *
+   * Filtrando aqui, as duas origens passam pelo mesmo funil e a lista continua
+   * DERIVADA · a flag decide o que aparece, nunca o que existe. */
+  const semProdutoOculto = (etapas: EtapaDoPipeline[]) =>
+    etapas.filter(e => e.command !== 'gerar_bingo' || BINGO_ENABLED)
+
   useEffect(() => {
     api.get('/admin/pipeline-etapas')
       .then(r => {
-        if (r.data?.etapas?.length) setPipelineEtapas(r.data.etapas)
-        setPipelineAvulsos(r.data?.avulsos ?? [])
+        if (r.data?.etapas?.length) setPipelineEtapas(semProdutoOculto(r.data.etapas))
+        setPipelineAvulsos(semProdutoOculto(r.data?.avulsos ?? []))
       })
       .catch(() => { /* fica o desenho inicial · o grid nunca some */ })
   }, [])
