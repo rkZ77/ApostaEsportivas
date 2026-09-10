@@ -640,9 +640,16 @@ function EmLeituraAgora({ partidas, tick, disponivel, motor }: {
                 </div>
 
                 {semLeitura ? (
+                  /* DUAS FRASES, e não uma (10/09, achado do usuário). A frase
+                     dos primeiros minutos vale para o jogo que ACABOU de
+                     começar. Num jogo que já passou da metade ela vira
+                     mentira: o motor não entrou nele, e a próxima rodada não
+                     vai mudar isso · o que a pessoa precisa saber é que este
+                     jogo não teve leitura, não que "a IA já já entra". */
                   <p className="mt-2.5 text-[10px] text-ink-4 leading-relaxed">
-                    A IA entra nesta partida depois dos primeiros minutos, quando o jogo
-                    já tem estatística suficiente para ser lido.
+                    {(p.iniciado_ha_min ?? 0) <= 25
+                      ? 'A IA entra nesta partida depois dos primeiros minutos, quando o jogo já tem estatística suficiente para ser lido.'
+                      : 'A IA ainda não conseguiu ler esta partida. Ela aparece aqui porque a bola está rolando, mas nenhuma leitura chegou até agora.'}
                   </p>
                 ) : (
                 <div className="grid grid-cols-4 gap-1 mt-2.5">

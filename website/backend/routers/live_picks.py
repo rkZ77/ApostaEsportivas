@@ -813,6 +813,26 @@ def feed(
 #: rodada que falhou e curto o bastante pra não inventar jogo em andamento.
 _JANELA_EM_LEITURA_MIN = 60
 
+#: Ate quando uma partida SEM LEITURA NENHUMA ainda pode aparecer no radar,
+#: em minutos desde o apito inicial (2026-09-10, achado do usuario).
+#:
+#: O complemento "aguardando" nasceu reusando `_JANELA_DE_JOGO_MIN` (150), que
+#: e a janela de ACORDAR o motor -- e la errar pra mais e' de graca: acordar
+#: cedo custa uma varredura, dormir com jogo em campo custa pick. No RADAR o
+#: erro tem o sinal contrario: partida que ja acabou fica na tela dizendo "em
+#: campo" e "a IA entra depois dos primeiros minutos". Foi o que o usuario viu
+#: em 10/09, com jogos parados em "ha 137min".
+#:
+#: O teto certo e o fim da janela do motor, nao a duracao do jogo: ele le de
+#: LIVE_MINUTE_START a LIVE_MINUTE_END (15'-80' por padrao), entao passado o
+#: minuto final + intervalo + acrescimo a partida nunca mais sera lida --
+#: manter ela como "aguardando" e' anunciar uma leitura que nao vem mais.
+#:
+#: Vale so para a metade SEM observacao. Quem ja foi lido continua saindo pelas
+#: travas de status/leitura velha da consulta principal.
+_MINUTO_FINAL_DO_MOTOR = int(os.getenv("LIVE_MINUTE_END", "80") or 80)
+_JANELA_DO_RADAR_MIN = _MINUTO_FINAL_DO_MOTOR + 25   # intervalo + acrescimo
+
 
 #: Cache proprio das estatisticas do bloco "em leitura", com TTL LONGO.
 #:
@@ -1036,7 +1056,17 @@ def em_leitura(current_user: dict = Depends(require_live_reader), limit: int = Q
                    --      tempo normal, e um jogo que segue em campo recebe
                    --      leitura nova a cada rodada -- entao leitura parada ha'
                    --      mais de 20 minutos num jogo de 90' e' jogo que acabou.
+                   --   3. LEITURA VELHA, em qualquer minuto (2026-09-10). O
+                   --      motor passa de 8 em 8 minutos e le TODA partida que
+                   --      esta na janela dele -- entao observacao parada ha
+                   --      mais de 25 minutos so' tem duas explicacoes, e as
+                   --      duas tiram o jogo do radar: ou ele acabou, ou ele
+                   --      passou do minuto final da janela e nao sera lido de
+                   --      novo. Sem esta trava, um jogo encerrado aos 88' com
+                   --      o status da fixture ainda desatualizado ficava ate'
+                   --      uma hora na tela como "acompanhando agora".
                    AND COALESCE(f.status, '') <> ALL(%s)
+                   AND EXTRACT(EPOCH FROM (NOW() - u.observed_at)) <= 1500
                    AND NOT (COALESCE(u.minuto, 0) >= 90
                             AND EXTRACT(EPOCH FROM (NOW() - u.observed_at)) > 1200)
               ORDER BY u.observed_at DESC, u.minuto DESC NULLS LAST
@@ -1107,7 +1137,7 @@ def em_leitura(current_user: dict = Depends(require_live_reader), limit: int = Q
               ORDER BY f.match_datetime DESC
                  LIMIT %s
                 """,
-                (_JANELA_DE_JOGO_MIN, limit),
+                (_JANELA_DO_RADAR_MIN, limit),
             )
             for r in (cur2.fetchall() or []):
                 d = dict(r)
