@@ -322,20 +322,27 @@ function SuggestionCard({
     })
   }
 
-  const handleFollow = async (e: React.MouseEvent) => {
+  /* O MODAL ABRE NO CLIQUE, NAO DEPOIS DA CONSULTA (10/09/2026).
+   *
+   * A conferencia da odd na casa leva ~310ms em producao (p95 acima de 550ms),
+   * e ela acontecia ANTES de abrir o modal: a tela ficava parada nesse tempo,
+   * que e' exatamente a "travada" ao pegar bilhete. Agora o modal abre com a
+   * odd publicada e a consulta corre por baixo, com o campo e o botao travados
+   * ate' ela responder -- a espera nao sumiu, mudou de lugar pra um lugar onde
+   * ela e' visivel. */
+  const handleFollow = (e: React.MouseEvent) => {
     e.stopPropagation()
     if (followed) return
+    setModalOdd(Number(s.odd))
+    setShowModal(true)
     // Múltipla não passa por aqui: bilhete se atualiza perna a perna, no card
     // dele, via /live/ticket-odd.
-    const { odd } = s.pick_type === 'multipla'
-      ? { odd: Number(s.odd) }
-      : await buscarOdd(Number(s.odd), {
-          fixture_id: s.fixture_id,
-          market_type: s.market_type,
-          line: s.line,
-        })
-    setModalOdd(odd)
-    setShowModal(true)
+    if (s.pick_type === 'multipla') return
+    buscarOdd(Number(s.odd), {
+      fixture_id: s.fixture_id,
+      market_type: s.market_type,
+      line: s.line,
+    }).then(({ odd }) => setModalOdd(odd))
   }
 
   const handleConfirm = async (actualOdd: number, betHouse: string, stakeUnits: number) => {
@@ -964,6 +971,7 @@ function SuggestionCard({
         onCancel={() => setShowModal(false)}
         loading={following}
         error={apiError}
+        conferindoOdd={buscandoOdd}
       />
     )}
     </AnimatePresence>

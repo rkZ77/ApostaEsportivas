@@ -2085,16 +2085,41 @@ def get_current_ticket_odd(pick_id: int, pick_type: str,
     if not pernas:
         return {"odd": None, "original_odd": None, "partial": True, "legs": []}
 
+    # AS PERNAS SAO CONSULTADAS EM PARALELO (2026-09-10).
+    #
+    # Cada `odd_atual` custa DUAS chamadas a API-Football (a fixture, pra saber
+    # o status, e a folha de odds), e o laco fazia isso uma perna depois da
+    # outra. Medido em producao, esta rota passou de 1,2s num bilhete -- com o
+    # site parado esperando, porque o modal de "Pegar bilhete" so' abria depois
+    # dela. O front ja' deixou de esperar (o modal abre no clique), e aqui a
+    # espera encolhe pro tempo da perna mais lenta em vez da soma de todas.
+    #
+    # Sao poucas threads e elas so' esperam rede · o cache por fixture de
+    # `_fetch_fixture`/`_fetch_prematch_odds` continua valendo, e duas pernas
+    # do mesmo jogo no maximo repetem uma busca que ja' era barata.
+    from concurrent.futures import ThreadPoolExecutor
+
+    def _odd_da_perna(perna: dict):
+        if not perna["fixture_id"]:
+            return (None, None, None)
+        try:
+            return odd_atual(perna["fixture_id"], perna["market_type"], perna["line"])
+        except Exception:
+            # Best-effort igual ao resto do caminho: a perna entra com a odd
+            # salva e o bilhete volta marcado como parcial.
+            logger.warning("[TICKET-ODD] perna %s falhou", perna["fixture_id"], exc_info=True)
+            return (None, None, None)
+
+    with ThreadPoolExecutor(max_workers=min(5, len(pernas))) as pool:
+        atuais = list(pool.map(_odd_da_perna, pernas))
+
     combinada = 1.0
     original  = 1.0
     parcial   = False
     detalhe   = []
-    for perna in pernas:
+    for perna, (atual, origem, _status) in zip(pernas, atuais):
         salva = perna["odd"] or 0
         original *= salva or 1
-        atual, origem, _status = (None, None, None)
-        if perna["fixture_id"]:
-            atual, origem, _status = odd_atual(perna["fixture_id"], perna["market_type"], perna["line"])
         usada = atual if atual else salva
         if not atual:
             parcial = True

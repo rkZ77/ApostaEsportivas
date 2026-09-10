@@ -576,16 +576,18 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
     })
   }
 
-  const handleFollow = async (e: React.MouseEvent) => {
+  /* O MODAL ABRE NO CLIQUE · ver o comentário em SuggestionCard.handleFollow.
+     A conferência da odd corre por baixo, com o modal já na tela. */
+  const handleFollow = (e: React.MouseEvent) => {
     e.stopPropagation()
     if (followed) return
-    const { odd } = await buscarOdd(Number(dica.odd), {
+    setModalOdd(Number(dica.odd))
+    setShowModal(true)
+    buscarOdd(Number(dica.odd), {
       fixture_id: dica.fixture_id,
       market_type: dica.market_type,
       line: dica.line,
-    })
-    setModalOdd(odd)
-    setShowModal(true)
+    }).then(({ odd }) => setModalOdd(odd))
   }
 
   const handleConfirm = async (actualOdd: number, betHouse: string, stakeUnits: number) => {
@@ -861,6 +863,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
     {showModal && (
       <ApostaModal
         pickOdd={modalOdd}
+        conferindoOdd={buscandoOdd}
         originalOdd={Number(dica.odd)}
         suggestedUnits={stakeSuggestion?.units ?? 1}
         suggestedHouse={dica.bet_house}
@@ -1026,14 +1029,16 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
     })
   }
 
-  const handleFollow = async (e: React.MouseEvent) => {
+  /* O MODAL ABRE NO CLIQUE · ver o comentário em SuggestionCard.handleFollow.
+     A conferência da odd corre por baixo, com o modal já na tela. */
+  const handleFollow = (e: React.MouseEvent) => {
     e.stopPropagation()
     if (following || followed) return
+    setModalOdd(Number(m.total_odd))
+    setShowModal(true)
     // Bilhete não tem odd numa casa: o backend reconsulta cada perna e refaz o
     // produto. Perna que não puder ser atualizada entra com a odd salva.
-    const { odd } = await oddBilhete(Number(m.total_odd), m.id, tipo)
-    setModalOdd(odd)
-    setShowModal(true)
+    oddBilhete(Number(m.total_odd), m.id, tipo).then(({ odd }) => setModalOdd(odd))
   }
 
   const handleConfirm = async (actualOdd: number, betHouse: string, stakeUnits: number) => {
@@ -1350,6 +1355,7 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
     {showModal && (
       <ApostaModal
         pickOdd={modalOdd ?? Number(m.total_odd)}
+        conferindoOdd={buscandoBilhete}
         originalOdd={Number(m.total_odd)}
         suggestedUnits={stakeSuggestion?.units ?? 1}
         maxUnits={Math.max(10, stakeSuggestion?.units ?? 10)}
@@ -1404,13 +1410,16 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
   const { share: shareAlav, sharing, shared } = useShareAlavancagemImage()
   const { oddBilhete, buscando: buscandoBilhete } = useOddAtualizada()
 
-  const handleFollow = async (e: React.MouseEvent) => {
+  /* O MODAL ABRE NO CLIQUE · ver o comentário em SuggestionCard.handleFollow.
+     A conferência da odd corre por baixo, com o modal já na tela. */
+  const handleFollow = (e: React.MouseEvent) => {
     e.stopPropagation()
     if (following || followed) return
-    // Mesma reconsulta perna a perna da múltipla · alavancagem também é bilhete.
-    const { odd } = await oddBilhete(Number(pick.odd_combined), pick.id, 'alavancagem')
-    setModalOdd(odd)
+    setModalOdd(Number(pick.odd_combined))
     setShowModal(true)
+    // Mesma reconsulta perna a perna da múltipla · alavancagem também é bilhete.
+    oddBilhete(Number(pick.odd_combined), pick.id, 'alavancagem')
+      .then(({ odd }) => setModalOdd(odd))
   }
 
   const handleConfirm = async (actualOdd: number, betHouse: string, stakeUnits: number) => {
@@ -1682,6 +1691,7 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
     {showModal && (
       <ApostaModal
         pickOdd={modalOdd ?? Number(pick.odd_combined)}
+        conferindoOdd={buscandoBilhete}
         originalOdd={Number(pick.odd_combined)}
         suggestedHouse={pick.bet_house_1}
         hideUnits

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { backdropFade, sheetUp, tabFade } from '../lib/motion'
 
@@ -21,13 +21,36 @@ interface Props {
   onCancel: () => void
   loading?: boolean
   error?: string | null
+  /**
+   * A CONFERENCIA DA ODD ACONTECE COM O MODAL JA' ABERTO (10/09/2026).
+   *
+   * Antes o clique em "Pegar bilhete" fazia `await` na consulta a' casa e so'
+   * depois abria isto. Medido em producao, essa consulta leva ~310ms num pick
+   * simples e passou de 1,2s num bilhete de varias pernas -- e nesse tempo a
+   * tela nao respondia nada, o que le' como travamento.
+   *
+   * Agora o modal abre no clique com a odd publicada e a conferencia corre por
+   * baixo. Enquanto ela nao volta, o campo e o botao ficam travados: a espera
+   * continua existindo, mas dentro de uma tela que ja' abriu e que diz o que
+   * esta' esperando, em vez de um botao que parece nao ter funcionado.
+   */
+  conferindoOdd?: boolean
 }
 
 export default function ApostaModal({
   pickOdd, originalOdd, suggestedUnits = 1, suggestedHouse, maxUnits = 10, hideUnits = false,
-  onConfirm, onCancel, loading, error
+  onConfirm, onCancel, loading, error, conferindoOdd = false
 }: Props) {
   const [oddStr, setOddStr] = useState(String(pickOdd))
+
+  /* A odd que chega da conferencia entra no campo · mas so' enquanto a pessoa
+     nao digitou a dela. Quem ja' corrigiu o numero pra o que pegou de fato na
+     casa nao pode ver isso ser sobrescrito por uma resposta que estava a
+     caminho. */
+  const editouAMao = useRef(false)
+  useEffect(() => {
+    if (!editouAMao.current) setOddStr(String(pickOdd))
+  }, [pickOdd])
   const [house,  setHouse]  = useState(suggestedHouse ?? '')
   const [units,  setUnits]  = useState(suggestedUnits)
   const [overrideStep, setOverrideStep] = useState(false)
@@ -40,7 +63,8 @@ export default function ApostaModal({
   const variacao = Math.abs(pickOdd - oddPick) > 0.001 ? pickOdd - oddPick : 0
   const exceedsMax = !hideUnits && units > maxUnits
   const exceedsSuggested = !hideUnits && units > suggestedUnits
-  const valid = validOdd && house.length > 0 && (hideUnits || (units >= 1 && !exceedsMax))
+  const valid = validOdd && house.length > 0 && !conferindoOdd
+    && (hideUnits || (units >= 1 && !exceedsMax))
 
   function handlePrimary() {
     if (!valid) return
@@ -128,17 +152,25 @@ export default function ApostaModal({
               </label>
               <input
                 type="number" step="0.01" min="1.01" value={oddStr}
-                onChange={e => setOddStr(e.target.value)}
-                className="input font-mono w-full text-center text-xl font-black"
+                onChange={e => { editouAMao.current = true; setOddStr(e.target.value) }}
+                disabled={conferindoOdd}
+                className="input font-mono w-full text-center text-xl font-black disabled:opacity-60"
               />
+              {conferindoOdd && (
+                <p className="text-ink-4 text-[11px] mt-1.5 flex items-center gap-1.5">
+                  <span aria-hidden="true"
+                        className="w-3 h-3 rounded-full border-2 border-line-strong border-t-ink-3 animate-spin" />
+                  Conferindo a odd na casa...
+                </p>
+              )}
               {/* Movimento da casa desde a publicação do pick. Aparece nos dois
                   sentidos: odd que subiu é boa notícia e some se não for dita. */}
-              {variacao !== 0 && (
+              {!conferindoOdd && variacao !== 0 && (
                 <p className={`text-[11px] mt-1.5 ${variacao > 0 ? 'text-green-400' : 'text-yellow-400'}`}>
                   Odd atualizada agora, {variacao > 0 ? 'subiu' : 'caiu'} de {oddPick.toFixed(2)} para {pickOdd.toFixed(2)}
                 </p>
               )}
-              {oddChanged && (
+              {!conferindoOdd && oddChanged && (
                 <p className="text-yellow-400 text-[11px] mt-1.5">
                   Odd diferente do pick, será registrada como apostada
                 </p>
@@ -202,7 +234,7 @@ export default function ApostaModal({
                     : 'bg-green-600 hover:bg-green-500 text-white'
                 }`}
               >
-                {loading ? '...' : exceedsSuggested ? `Pegar bilhete de ${units}u` : 'Pegar bilhete'}
+                {loading || conferindoOdd ? '...' : exceedsSuggested ? `Pegar bilhete de ${units}u` : 'Pegar bilhete'}
               </button>
             </div>
           </motion.div>
