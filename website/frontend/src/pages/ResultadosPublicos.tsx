@@ -20,6 +20,7 @@ import DailyGreensChart from '../components/DailyGreensChart'
 import PipelineProfitChart from '../components/PipelineProfitChart'
 import LucroBarChart from '../components/LucroBarChart'
 import { sinalizarNavegacao } from '../services/progressBus'
+import { BINGO_ENABLED } from '../config'
 
 const GAMES_PAGE_SIZE = 10
 
@@ -179,10 +180,14 @@ interface FechamentoMes {
    picks_goleiros parou de crescer quando o Player Stats nasceu, e o mercado
    aparecia em menos de 1% dos jogos ate' la'. O historico dele continua no
    placar somado -- so' nao vale uma linha num menu que a pessoa le' hoje. */
-const PRODUTOS_DO_FILTRO = [
+/* O Bingo sai do filtro enquanto `BINGO_ENABLED` for false · sem isso a lista
+   ofereceria um produto que a tela nao mostra em lugar nenhum, e o recorte
+   dele viria vazio. `SOURCE_LABELS` continua com a chave: ela nomeia a fonte
+   na quebra por produto, e o historico de dev nao pode aparecer sem nome. */
+const PRODUTOS_DO_FILTRO = ([
   'all', 'vip', 'live', 'boost', 'multiplas', 'bingo', 'alavancagem',
   'free', 'player_stats', 'faltas',
-] as const
+] as const).filter(p => p !== 'bingo' || BINGO_ENABLED)
 
 const PRODUTO_LABELS: Record<string, string> = {
   ...SOURCE_LABELS, multipla: 'Múltiplas',

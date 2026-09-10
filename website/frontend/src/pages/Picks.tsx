@@ -44,7 +44,7 @@ const LivePicksFeed = lazy(() => import('../components/LivePicksFeed'))
 import PicksPendingCard from '../components/PicksPendingCard'
 import CalendarioDePicks from '../components/ui/CalendarioDePicks'
 import SelectMenu from '../components/ui/SelectMenu'
-import { LIVE_PICKS_ENABLED } from '../config'
+import { LIVE_PICKS_ENABLED, BINGO_ENABLED } from '../config'
 import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronDown, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2, TrendingUp, X as XIcon, Lock, Ticket } from 'lucide-react'
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import { stakeDe } from '../utils/stakePlan'
@@ -283,7 +283,11 @@ function TabBar({ tab, setTab, canSeeVip, verAoVivo, temFaltasHoje, counts, live
        o que existe), e o bingo é sempre a mesma cartela, quatro jogos, quatro
        preços na mesma faixa. Misturar os dois numa aba obrigaria o card a
        explicar qual é qual, que é justamente o serviço da barra. */
-    { key: 'bingo',        label: 'Bingo do Dia',    premiumOnly: true },
+    /* `oculta` e nao remocao da lista: a aba some da barra, mas o hash
+       `/picks#bingo` continua sendo um destino valido pra quem testa em dev.
+       Ver BINGO_ENABLED em config.ts. */
+    { key: 'bingo',        label: 'Bingo do Dia',    premiumOnly: true,
+      oculta: !BINGO_ENABLED },
     { key: 'alavancagem',  label: 'Alavancagem',      premiumOnly: true },
     {
       /* PICK FALTA · aba propria de novo (08/09, decisao do usuario).
@@ -2600,7 +2604,12 @@ export default function Picks() {
     // nem tem bloco de conteúdo, então /picks#chat abria a página com NENHUMA
     // aba ativa e a área vazia -- exatamente o sintoma que o comentário acima
     // descreve pro #ao_vivo. O chat vive no botão do Agente e em /agente.
-    const valid: Tab[] = ['hoje','pick_seguro','vip','multiplas','bingo','alavancagem','jogadores','faltas','boost','minhas_apostas',
+    // `bingo` só é destino válido enquanto o produto existe na tela · com
+    // BINGO_ENABLED false o hash cairia numa aba selecionada que não desenha
+    // nada, que é o mesmo sintoma que `#chat` produziu em 20/08. Fora da
+    // lista, ele cai no fallback e abre a aba Hoje.
+    const valid: Tab[] = ['hoje','pick_seguro','vip','multiplas','alavancagem','jogadores','faltas','boost','minhas_apostas',
+                          ...(BINGO_ENABLED ? ['bingo' as Tab] : []),
                           ...(podeVerAoVivo ? ['ao_vivo' as Tab] : [])]
     setTab(valid.includes(hash) ? hash : 'hoje')
   }, [location.hash, podeVerAoVivo])
@@ -3357,6 +3366,7 @@ export default function Picks() {
 
               {/* Bingo do Dia · free vê lock; some se vazio pra quem já tem acesso */}
               {(() => {
+                if (!BINGO_ENABLED) return null
                 const cartelas = today?.bingo ?? []
                 if (canSeeVip && cartelas.length === 0) return null
                 return (
@@ -3764,7 +3774,7 @@ export default function Picks() {
           </motion.div>
         )}
 
-        {tab === 'bingo' && (
+        {tab === 'bingo' && BINGO_ENABLED && (
           /* Mesma largura de leitura da aba de múltiplas, e pelo mesmo motivo:
              o card de cartela é o mais denso do site e não ganha nada com os
              1400px da tela. */

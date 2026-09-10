@@ -16,6 +16,7 @@ import AdminPendencias from '../components/AdminPendencias'
 import AdminPlanosVencidos from '../components/AdminPlanosVencidos'
 import { fmtBRL } from '../utils/format'
 import { sinalizarNavegacao } from '../services/progressBus'
+import { BINGO_ENABLED } from '../config'
 
 interface User {
   id: number
@@ -252,7 +253,12 @@ export default function Admin() {
     { command: 'gerar_vip',            label: 'Gerar VIP'            },
     { command: 'gerar_free',           label: 'Gerar Free'           },
     { command: 'gerar_multipla',       label: 'Gerar Múltipla'       },
-    { command: 'gerar_bingo',          label: 'Gerar Bingo do Dia'   },
+    /* O botao do Bingo so' existe onde o produto existe · em producao um
+       clique distraido aqui publicaria uma cartela de um produto que ainda
+       esta' sendo medido. Ver BINGO_ENABLED em config.ts. */
+    ...(BINGO_ENABLED
+      ? [{ command: 'gerar_bingo', label: 'Gerar Bingo do Dia' }]
+      : []),
     { command: 'gerar_alavancagem',    label: 'Gerar Alavancagem'    },
     { command: 'gerar_faltas',         label: 'Gerar Faltas'         },
     { command: 'gerar_playerstats',    label: 'Gerar Jogadores'      },

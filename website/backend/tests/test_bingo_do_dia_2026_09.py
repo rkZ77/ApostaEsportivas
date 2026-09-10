@@ -273,3 +273,60 @@ class TestUmaPorDia:
         from collectors import match_statistics_sync_service as sync
         fonte = open(sync.__file__, encoding="utf-8").read()
         assert '("picks_multiplas", "picks_bingo")' in fonte
+
+
+# ─────────────── A FLAG QUE SEGURA O PRODUTO FORA DE PRODUÇÃO ───────────────
+
+class TestAFlagDeVisibilidade:
+    """`BINGO_ENABLED` existe pra que qualquer outro commit vá pra produção sem
+    levar o Bingo junto enquanto ele é medido (decisão do usuário, 09/09).
+
+    Estes testes NÃO afirmam o valor dela: `dev` e `noprod` sobem com `true` e
+    `main` sobe com `false`, então travar o valor quebraria a branch de
+    produção de propósito. O que se trava é a LIGAÇÃO: os quatro lugares onde o
+    produto aparece têm que perguntar pela flag. Um deles esquecido é o vazamento
+    inteiro, e ele não daria erro nenhum.
+    """
+
+    def _front(self, caminho: str) -> str:
+        alvo = os.path.join(os.path.dirname(_BACKEND), "frontend", "src", caminho)
+        with open(alvo, encoding="utf-8") as fh:
+            return fh.read()
+
+    def test_a_flag_e_uma_constante_no_config_e_nao_uma_env(self):
+        """Variável de ambiente que ninguém configura é só um caminho a mais
+        pro produto sumir por engano · foi o que aconteceu com o Live em 28/08.
+        Constante aparece no diff."""
+        cfg = self._front("config.ts")
+        assert "export const BINGO_ENABLED" in cfg
+        assert "VITE_BINGO" not in cfg, "a flag virou env var e some sem rastro"
+
+    def test_a_aba_pergunta_pela_flag(self):
+        src = self._front("pages/Picks.tsx")
+        assert "oculta: !BINGO_ENABLED" in src
+
+    def test_a_secao_da_aba_hoje_pergunta_pela_flag(self):
+        src = self._front("pages/Picks.tsx")
+        assert "if (!BINGO_ENABLED) return null" in src
+
+    def test_o_bloco_da_aba_pergunta_pela_flag(self):
+        src = self._front("pages/Picks.tsx")
+        assert "tab === 'bingo' && BINGO_ENABLED" in src
+
+    def test_o_filtro_de_resultados_pergunta_pela_flag(self):
+        src = self._front("pages/ResultadosPublicos.tsx")
+        assert "BINGO_ENABLED" in src
+
+    def test_o_botao_do_admin_pergunta_pela_flag(self):
+        """O que impede um clique distraído de publicar cartela em produção."""
+        src = self._front("pages/Admin.tsx")
+        assert "BINGO_ENABLED" in src
+        assert "'gerar_bingo'" in src
+
+    def test_o_backend_continua_ligado_de_proposito(self):
+        """Um segundo interruptor do lado do servidor seria um par pra manter
+        em sincronia, e par fora de sincronia é como o produto some pela
+        metade. Em produção a tabela está vazia, então não há o que esconder."""
+        import pick_sources
+        assert any(f[0] == "bingo" for f in pick_sources._FONTES)
+
