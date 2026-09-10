@@ -31,6 +31,11 @@ interface Alvo {
   minuto: number | null
   tem_pick: boolean
   aguardando?: boolean
+  /** Minuto que ANDA entre duas varreduras, projetado da última leitura, e se
+   *  ele é projeção. Vem calculado de fora porque quem tem o relógio da tela é
+   *  o feed (ver `minutoVivo` em LivePicksFeed). */
+  minutoVivo?: number | null
+  minutoProjetado?: boolean
 }
 
 /** Janela em que o motor trabalha · fora dela a partida nem entra no radar. */
@@ -64,7 +69,7 @@ export default function VarreduraDoRadar({ partidas }: { partidas: Alvo[] }) {
   if (alvos.length === 0) return null
 
   return (
-    <div className="relative w-full max-w-[280px] mx-auto aspect-square mb-4 select-none">
+    <div className="relative w-full max-w-[210px] mx-auto aspect-square mb-4 select-none">
       {/* Os anéis. Três, e não uma grade: eles dão a noção de distância sem
           prometer uma escala que o desenho não tem. */}
       {[100, 68, 36].map(pct => (
@@ -108,9 +113,11 @@ export default function VarreduraDoRadar({ partidas }: { partidas: Alvo[] }) {
         /* Raio: quem tem mais jogo pela frente fica mais longe do centro. Jogo
            que o motor ainda não leu entra na borda, que é onde ele de fato
            está: acabou de começar. */
-        const minuto = p.aguardando ? MIN_JANELA : (p.minuto ?? MIN_JANELA)
+        const minuto = p.minutoVivo ?? p.minuto
+        const projetado = !!p.minutoProjetado
+        const paraORaio = p.aguardando ? MIN_JANELA : (minuto ?? MIN_JANELA)
         const andado = Math.min(1, Math.max(0,
-          (minuto - MIN_JANELA) / (MAX_JANELA - MIN_JANELA)))
+          (paraORaio - MIN_JANELA) / (MAX_JANELA - MIN_JANELA)))
         const raio = 44 - andado * 26   // 44% da caixa na borda, 18% no miolo
         const x = 50 + Math.cos(ang) * raio
         const y = 50 + Math.sin(ang) * raio
@@ -118,20 +125,31 @@ export default function VarreduraDoRadar({ partidas }: { partidas: Alvo[] }) {
           <div
             key={p.fixture_id}
             title={`${p.home_team ?? 'Time'} x ${p.away_team ?? 'Time'}`
-                   + (p.minuto != null ? `, ${p.minuto}'` : '')
+                   + (minuto != null ? `, ${minuto}'` : '')
                    + (p.tem_pick ? ' · já virou pick' : '')}
             className={`absolute -translate-x-1/2 -translate-y-1/2 flex items-center gap-0.5
+                        transition-[left,top] duration-1000 ease-linear
                         rounded-full border px-1.5 py-1 backdrop-blur-[1px] ${
               p.tem_pick
                 ? 'border-accent/60 bg-accent/15 shadow-[0_0_10px_rgba(0,204,0,0.25)]'
                 : 'border-line-strong bg-surface-1/90'}`}
             style={{ left: `${x}%`, top: `${y}%` }}
           >
+            {/* O ALVO QUE JÁ VIROU PICK PISCA · num radar, o que foi
+                encontrado é o que chama. O `motion-safe` respeita quem pediu
+                menos animação. */}
+            {p.tem_pick && (
+              <span aria-hidden="true"
+                    className="absolute inset-0 rounded-full border border-accent/50
+                               motion-safe:animate-ping" />
+            )}
             <Escudo id={p.home_team_id} nome={p.home_team} />
             <Escudo id={p.away_team_id} nome={p.away_team} />
-            {p.minuto != null && (
+            {minuto != null && (
+              /* O MINUTO ANDA SOZINHO entre duas varreduras · o `~` avisa
+                 quando ele é projeção da última leitura, e não leitura nova. */
               <span className="font-mono text-[9px] font-bold text-ink-3 tabular-nums ml-0.5">
-                {p.minuto}&apos;
+                {projetado ? '~' : ''}{minuto}&apos;
               </span>
             )}
           </div>

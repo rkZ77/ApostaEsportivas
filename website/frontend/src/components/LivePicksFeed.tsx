@@ -558,7 +558,12 @@ function EmLeituraAgora({ partidas, tick, disponivel, motor }: {
           pulsando dizia "ligado" e mais nada. Aqui os jogos aparecem como
           alvos, e a distância até o centro é quanto de partida ainda falta.
           Ver components/VarreduraDoRadar. */}
-      <VarreduraDoRadar partidas={partidas} />
+      <VarreduraDoRadar
+        partidas={partidas.map(p => {
+          const { minuto, projetado } = minutoVivo(p, tick)
+          return { ...p, minutoVivo: minuto, minutoProjetado: projetado }
+        })}
+      />
 
       <p className="text-[11px] text-ink-4 mb-3 leading-relaxed">
         Os jogos que a IA varre agora atrás de oportunidade no mercado, com o total da
@@ -1845,6 +1850,14 @@ export default function LivePicksFeed({ isActive, banca }: {
         </>
       )}
 
+      {/* O RADAR SOBE PARA ANTES DOS ENCERRADOS (10/09/2026, pedido do
+          usuário). Ele continua depois do que dá pra apostar -- a aba é tela
+          de decisão --, mas passa à frente da lista do que já acabou: o que o
+          motor está varrendo AGORA é a próxima coisa que pode virar pick, e
+          estava embaixo do histórico do dia, que não vai virar nada. */}
+      <EmLeituraAgora partidas={emLeitura} tick={tickLeitura} disponivel={leituraOk}
+                      motor={motor} />
+
       {encerrados.length > 0 && (
         <>
           <TituloDeSecao
@@ -1926,13 +1939,6 @@ export default function LivePicksFeed({ isActive, banca }: {
           </div>
         </div>
       )}
-
-      {/* O QUE O MOTOR ESTÁ LENDO fica DEPOIS dos picks (29/08, pedido do
-          usuário). A aba é tela de decisão: primeiro o que dá pra apostar,
-          depois o contexto de onde ele pode sair. Ver o cabeçalho do
-          componente. */}
-      <EmLeituraAgora partidas={emLeitura} tick={tickLeitura} disponivel={leituraOk}
-                      motor={motor} />
 
       {/* Os encerrados do dia saíram daqui · ver o comentário em `emAndamento`.
           O link existe porque tirar a seção não pode virar "sumiu": o pick

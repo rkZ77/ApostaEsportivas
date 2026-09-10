@@ -32,7 +32,13 @@ export default function FiltrosDePicks({
   const ativo = Boolean(liga || resultado)
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    /* O RESPIRO E' DAQUI, e nao de cada aba (10/09/2026).
+     *
+     * A barra aparece em sete telas e em nenhuma delas tinha margem embaixo:
+     * os cards comecavam colados nos seletores, e o filtro parecia parte do
+     * primeiro card em vez de um controle da lista. Corrigir em sete lugares
+     * seria sete chances de esquecer o oitavo. */
+    <div className="flex flex-wrap items-center gap-2 mb-4">
       {ligas.length > 1 && (
         <SelectMenu
           ariaLabel="Liga"
