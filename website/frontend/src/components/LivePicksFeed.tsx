@@ -49,6 +49,7 @@ import { Badge, Button, ComoFunciona, EmptyState, ErrorState, LiveDot, PickTypeB
          ResultBadge, Skeleton, SkeletonPickGrid } from './ui'
 import { CampoDoPick, PickExplainButton, PickProbability } from './PickCardParts'
 import LiveAnalysisModal from './LiveAnalysisModal'
+import VarreduraDoRadar from './VarreduraDoRadar'
 import { translateLine, translateMarket, metadesDaLinha, nomeDoMercadoComGrade } from '../utils/marketTranslate'
 import { LeagueLogo, TeamLogo } from './TeamLogo'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
@@ -553,6 +554,12 @@ function EmLeituraAgora({ partidas, tick, disponivel, motor }: {
           )}
         </span>
       </div>
+      {/* A VARREDURA, DESENHADA (10/09/2026, pedido do usuário) · o ícone
+          pulsando dizia "ligado" e mais nada. Aqui os jogos aparecem como
+          alvos, e a distância até o centro é quanto de partida ainda falta.
+          Ver components/VarreduraDoRadar. */}
+      <VarreduraDoRadar partidas={partidas} />
+
       <p className="text-[11px] text-ink-4 mb-3 leading-relaxed">
         Os jogos que a IA varre agora atrás de oportunidade no mercado, com o total da
         partida somando os dois times.

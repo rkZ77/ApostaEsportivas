@@ -172,11 +172,17 @@ export default {
       animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'marquee': 'marquee 28s linear infinite',
+        // O feixe do radar da aba Ao Vivo · ver components/VarreduraDoRadar.
+        'varredura': 'varredura 4s linear infinite',
       },
       keyframes: {
         marquee: {
           '0%': { transform: 'translateX(0%)' },
           '100%': { transform: 'translateX(-50%)' },
+        },
+        varredura: {
+          '0%':   { transform: 'rotate(0deg)' },
+          '100%': { transform: 'rotate(360deg)' },
         },
       },
     },
