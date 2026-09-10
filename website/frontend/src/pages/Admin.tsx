@@ -16,7 +16,6 @@ import AdminPendencias from '../components/AdminPendencias'
 import AdminPlanosVencidos from '../components/AdminPlanosVencidos'
 import { fmtBRL } from '../utils/format'
 import { sinalizarNavegacao } from '../services/progressBus'
-import { BINGO_ENABLED } from '../config'
 
 interface User {
   id: number
@@ -262,31 +261,32 @@ export default function Admin() {
   ]
 
   type EtapaDoPipeline = { command: string; label: string }
-  const [pipelineEtapas, setPipelineEtapas] = useState<EtapaDoPipeline[]>(
-    () => PIPELINE_FALLBACK.filter(e => e.command !== 'gerar_bingo' || BINGO_ENABLED))
+  const [pipelineEtapas, setPipelineEtapas] = useState<EtapaDoPipeline[]>(PIPELINE_FALLBACK)
   /* Passos com botão próprio e FORA do "Rodar Tudo" · o motor os deixa sem
    * `etapa` de propósito (motor sem histórico medido não vira custo fixo da
    * rodada diária), e sem essa separação o grid dizia que eles rodavam junto. */
   const [pipelineAvulsos, setPipelineAvulsos] = useState<EtapaDoPipeline[]>([])
 
-  /* A FLAG FILTRA O QUE A TELA DESENHA, e nao a lista escrita a mao (10/09).
+  /* SEM FILTRO DE PRODUTO AQUI, e isso e' o que o gate do Bingo decidiu.
    *
-   * Primeira versao disto gateava o `PIPELINE_FALLBACK`, e o gate era
-   * decorativo: aquela lista e' so' o primeiro quadro, e a resposta de
-   * /admin/pipeline-etapas a substitui inteira · ela vem do registro do motor,
-   * que nao conhece flag de produto. O botao reapareceria sozinho um instante
-   * depois, e em producao.
+   * Esta pagina chegou a filtrar `gerar_bingo` por uma constante do front, que
+   * o gate de 10/09 SUBSTITUIU por `BINGO_BETA_ADMIN_ONLY` + `bingoVisivel()`
+   * -- o corte de verdade passou pro servidor. O import ficou apontando pro
+   * nome antigo, e como ele nao existe mais em `config.ts` o modulo nem
+   * carregava: o /admin INTEIRO abria em "Algo deu errado", nao so' o cartao
+   * do Bingo. Quem achou foi o print de Playwright, que e' o passo final de
+   * toda mudanca de site.
    *
-   * Filtrando aqui, as duas origens passam pelo mesmo funil e a lista continua
-   * DERIVADA · a flag decide o que aparece, nunca o que existe. */
-  const semProdutoOculto = (etapas: EtapaDoPipeline[]) =>
-    etapas.filter(e => e.command !== 'gerar_bingo' || BINGO_ENABLED)
-
+   * E o filtro nao devia estar aqui de todo jeito · esta' escrito no proprio
+   * config.ts: "O /admin NAO entra na lista: a pagina inteira ja' e' de admin,
+   * e e' la' que o produto e' gerado e medido durante o teste". Esconder o
+   * botao que gera a cartela justamente de quem esta' medindo o teste era o
+   * contrario do que o gate queria. */
   useEffect(() => {
     api.get('/admin/pipeline-etapas')
       .then(r => {
-        if (r.data?.etapas?.length) setPipelineEtapas(semProdutoOculto(r.data.etapas))
-        setPipelineAvulsos(semProdutoOculto(r.data?.avulsos ?? []))
+        if (r.data?.etapas?.length) setPipelineEtapas(r.data.etapas)
+        setPipelineAvulsos(r.data?.avulsos ?? [])
       })
       .catch(() => { /* fica o desenho inicial · o grid nunca some */ })
   }, [])

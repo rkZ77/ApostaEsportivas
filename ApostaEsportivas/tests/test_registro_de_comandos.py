@@ -219,9 +219,13 @@ def test_so_o_setup_dispara_as_migracoes():
 
     # Os wrappers sao o caminho que de fato regrediu · sem isto, redeclarar o
     # campo faz o teste acima passar e a migracao automatica volta em silencio.
+    #
+    # Ignora COMENTARIO: o que explica por que a chamada saiu precisa poder
+    # citar o nome dela. So' codigo conta.
     for wrapper in (run_dev, run_prod):
-        assert "run_migrations()" not in io.open(
-            wrapper.__file__, encoding="utf-8").read(), (
+        codigo = [linha for linha in io.open(wrapper.__file__, encoding="utf-8")
+                  if not linha.lstrip().startswith("#")]
+        assert not any("run_migrations" in linha for linha in codigo), (
             f"{wrapper.__name__} voltou a migrar antes de cada comando")
 
 

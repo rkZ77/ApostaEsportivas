@@ -277,15 +277,28 @@ class TestUmaPorDia:
 
 # ─────────────── A FLAG QUE SEGURA O PRODUTO FORA DE PRODUÇÃO ───────────────
 
-class TestAFlagDeVisibilidade:
-    """`BINGO_ENABLED` existe pra que qualquer outro commit vá pra produção sem
-    levar o Bingo junto enquanto ele é medido (decisão do usuário, 09/09).
+class TestOGateDeAdmin:
+    """O corte que segura o Bingo enquanto ele e' medido com dado de PRODUCAO.
 
-    Estes testes NÃO afirmam o valor dela: `dev` e `noprod` sobem com `true` e
-    `main` sobe com `false`, então travar o valor quebraria a branch de
-    produção de propósito. O que se trava é a LIGAÇÃO: os quatro lugares onde o
-    produto aparece têm que perguntar pela flag. Um deles esquecido é o vazamento
-    inteiro, e ele não daria erro nenhum.
+    ELE MUDOU DE LUGAR EM 2026-09-10. Era `BINGO_ENABLED`, um booleano do FRONT
+    que subia `false` pra `main`, e o comentario dele dizia por que aquilo
+    bastava: em producao a tabela `picks_bingo` estava VAZIA, entao nao havia o
+    que esconder. Com o motor publicando cartela em producao a premissa acabou
+    -- um `/api/suggestions/today` no DevTools entregaria a cartela inteira,
+    com pernas, mercados e odds, pra qualquer assinante.
+
+    Hoje o corte e' do SERVIDOR (`feature_flags.bingo_visivel`), e o front so'
+    deixa de desenhar o que o servidor ja' nao manda. Sao duas metades com o
+    MESMO nome de constante, de proposito: par com nomes diferentes e' par que
+    sai de sincronia.
+
+        website/backend/feature_flags.py :: BINGO_BETA_ADMIN_ONLY
+        website/frontend/src/config.ts   :: BINGO_BETA_ADMIN_ONLY
+
+    Estes testes NAO afirmam o VALOR da flag: travar isso quebraria a liberacao
+    do produto de proposito. O que se trava e' a LIGACAO -- cada lugar por onde
+    a cartela sai tem que perguntar. Um esquecido e' o vazamento inteiro, e ele
+    nao daria erro nenhum.
     """
 
     def _front(self, caminho: str) -> str:
@@ -293,55 +306,89 @@ class TestAFlagDeVisibilidade:
         with open(alvo, encoding="utf-8") as fh:
             return fh.read()
 
-    def test_a_flag_e_uma_constante_no_config_e_nao_uma_env(self):
-        """Variável de ambiente que ninguém configura é só um caminho a mais
+    def _backend(self, caminho: str) -> str:
+        with open(os.path.join(_BACKEND, caminho), encoding="utf-8") as fh:
+            return fh.read()
+
+    # ── O gate em si ──────────────────────────────────────────────────────
+
+    def test_admin_ve_e_assinante_nao(self):
+        import feature_flags as ff
+        assert ff.bingo_visivel({"plan": "admin"}) is True
+        assert ff.bingo_visivel({"plan": "vip"}) is False
+        assert ff.bingo_visivel({"plan": "free"}) is False
+
+    def test_o_publico_sem_sessao_tambem_nao_ve(self):
+        """`user=None` e' o endpoint publico. Um total que conta cartela
+        invisivel e' pior que nao contar: o usuario soma os produtos da tela e
+        nao chega no numero que o site mostra."""
+        import feature_flags as ff
+        assert ff.bingo_visivel(None) is False
+
+    def test_a_flag_e_uma_constante_e_nao_uma_env(self):
+        """Variavel de ambiente que ninguem configura e' so' um caminho a mais
         pro produto sumir por engano · foi o que aconteceu com o Live em 28/08.
-        Constante aparece no diff."""
-        cfg = self._front("config.ts")
-        assert "export const BINGO_ENABLED" in cfg
-        assert "VITE_BINGO" not in cfg, "a flag virou env var e some sem rastro"
+        Constante aparece no diff.
+        """
+        import feature_flags as ff
+        assert isinstance(ff.BINGO_BETA_ADMIN_ONLY, bool)
+        assert "os.getenv" not in self._backend("feature_flags.py")
 
-    def test_a_aba_pergunta_pela_flag(self):
+    def test_as_duas_metades_tem_o_MESMO_nome(self):
+        """Par com nomes diferentes e' par que sai de sincronia · e foi
+        exatamente assim que o /admin quebrou, com um lado renomeado e o outro
+        importando o nome morto."""
+        assert "export const BINGO_BETA_ADMIN_ONLY" in self._front("config.ts")
+        assert "export const bingoVisivel" in self._front("config.ts")
+        assert "VITE_BINGO" not in self._front("config.ts")
+
+    # ── Todo caminho que serve bingo pergunta ─────────────────────────────
+
+    @pytest.mark.parametrize("modulo", ["suggestions", "public", "banca"])
+    def test_os_routers_que_servem_bingo_perguntam_pelo_gate(self, modulo):
+        """Router que serve o produto e nao importa o gate e' um vazamento que
+        nao levanta erro nenhum."""
+        fonte = self._backend(os.path.join("routers", f"{modulo}.py"))
+        assert "from feature_flags import bingo_visivel" in fonte
+        assert "bingo_visivel(" in fonte
+
+    def test_seguir_e_ler_entao_o_follow_tambem_fecha(self):
+        """Seguir uma cartela e' ler a cartela: o pick entra na banca com perna,
+        mercado e odd. Fechar so' a listagem deixaria a porta dos fundos."""
+        fonte = self._backend(os.path.join("routers", "banca.py"))
+        assert 'pick_type == "bingo" and not bingo_visivel(' in fonte
+
+    # ── O front so' nao desenha o que o servidor nao manda ────────────────
+
+    def test_a_aba_pergunta_pelo_gate(self):
         src = self._front("pages/Picks.tsx")
-        assert "oculta: !BINGO_ENABLED" in src
+        assert "bingoVisivel(isAdmin)" in src
+        assert "oculta: !verBingo" in src
 
-    def test_a_secao_da_aba_hoje_pergunta_pela_flag(self):
-        src = self._front("pages/Picks.tsx")
-        assert "if (!BINGO_ENABLED) return null" in src
-
-    def test_o_bloco_da_aba_pergunta_pela_flag(self):
-        src = self._front("pages/Picks.tsx")
-        assert "tab === 'bingo' && BINGO_ENABLED" in src
-
-    def test_o_filtro_de_resultados_pergunta_pela_flag(self):
+    def test_o_filtro_de_resultados_pergunta_pelo_gate(self):
         src = self._front("pages/ResultadosPublicos.tsx")
-        assert "BINGO_ENABLED" in src
+        assert "bingoVisivel(" in src
 
-    def test_o_botao_do_admin_filtra_a_lista_QUE_A_TELA_DESENHA(self):
-        """O que impede um clique distraído de publicar cartela em produção.
+    def test_o_admin_NAO_esconde_o_botao_de_gerar(self):
+        """A pagina inteira e' de admin, e e' la' que a cartela e' gerada e
+        medida durante o teste · esconder o botao de quem esta' medindo era o
+        contrario do que o gate quer.
 
-        E ele precisa filtrar a lista VINDA DO BACKEND, não a escrita a mão.
-        A primeira versão gateava o `PIPELINE_FALLBACK`, e o gate era
-        decorativo: aquela lista é só o primeiro quadro, e a resposta de
-        `/admin/pipeline-etapas` a substitui inteira · ela vem do registro do
-        motor, que não conhece flag de produto. O botão reapareceria sozinho um
-        instante depois, e em produção.
+        O IMPORT, e nao a mencao: o comentario que explica por que o nome saiu
+        precisa poder cita-lo. E o import e' o que de fato quebrava --
+        `BINGO_ENABLED` deixou de existir em `config.ts` no rename, e o import
+        que ficou pra tras nao derrubava so' o cartao do Bingo: derrubava o
+        /admin INTEIRO em "Algo deu errado".
         """
         src = self._front("pages/Admin.tsx")
-        assert "semProdutoOculto(r.data.etapas)" in src,             "a lista do backend entra sem passar pelo funil da flag"
-        assert "e.command !== 'gerar_bingo' || BINGO_ENABLED" in src
+        assert "import { BINGO_ENABLED }" not in src, (
+            "nome antigo · a constante nao existe mais e o import quebra a pagina")
+        assert "gerar_bingo" in src
 
     def test_o_passo_continua_existindo_no_backend(self):
-        """A flag decide o que APARECE, nunca o que existe · o /admin do
-        ambiente de dev precisa do passo pra rodar o motor."""
+        """A flag decide o que APARECE, nunca o que existe · o /admin precisa do
+        passo pra gerar a cartela que esta' sendo medida."""
         import routers.admin as adm
         assert "gerar_bingo" in adm._TUDO_STEPS
-        assert adm._TUDO_STEPS_DERIVADA,             "os passos deixaram de sair do registro do motor e viraram copia"
-
-    def test_o_backend_continua_ligado_de_proposito(self):
-        """Um segundo interruptor do lado do servidor seria um par pra manter
-        em sincronia, e par fora de sincronia é como o produto some pela
-        metade. Em produção a tabela está vazia, então não há o que esconder."""
-        import pick_sources
-        assert any(f[0] == "bingo" for f in pick_sources._FONTES)
-
+        assert adm._TUDO_STEPS_DERIVADA, (
+            "os passos deixaram de sair do registro do motor e viraram copia")

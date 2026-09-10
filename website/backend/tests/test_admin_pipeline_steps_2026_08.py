@@ -34,6 +34,29 @@ def _avaliar(no):
     return ast.literal_eval(no)
 
 
+def _motor_main():
+    """O `main.py` DO MOTOR, carregado por caminho.
+
+    `import main` resolveria pro main.py do SITE, que ja' esta' em sys.modules
+    quando a suite roda -- foi exatamente essa colisao que derrubou 30 testes de
+    outros arquivos. Por isso nome proprio e carregamento por caminho.
+    """
+    import importlib.util
+    import os as _os
+
+    import routers.admin as admin
+
+    if not admin._PIPELINE_DIR:
+        pytest.skip("motor fora do path neste ambiente")
+
+    with admin._motor_no_path():
+        spec = importlib.util.spec_from_file_location(
+            "_motor_main_teste", _os.path.join(admin._PIPELINE_DIR, "main.py"))
+        motor = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(motor)
+    return motor
+
+
 def _literal(nome: str):
     """Valor de uma constante de modulo do admin.py.
 
@@ -222,22 +245,9 @@ def test_a_sequencia_do_site_e_a_MESMA_do_motor():
 
     Agora ela e' DERIVADA. Este teste compara com a fonte.
     """
-    import importlib.util
-    import os as _os
-
     import routers.admin as admin
 
-    if not admin._PIPELINE_DIR:
-        pytest.skip("motor fora do path neste ambiente")
-
-    # Carregado por CAMINHO, com nome proprio · `import main` resolveria pro
-    # main.py do SITE, que ja' esta' em sys.modules quando a suite roda. Foi
-    # exatamente essa colisao que derrubou 30 testes de outros arquivos.
-    with admin._motor_no_path():
-        spec = importlib.util.spec_from_file_location(
-            "_motor_main_teste", _os.path.join(admin._PIPELINE_DIR, "main.py"))
-        motor = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(motor)
+    motor = _motor_main()
 
     do_motor = [admin._PASSO_DO_COMANDO[c.nome] for c in motor.COMANDOS
                 if c.etapa and c.nome in admin._PASSO_DO_COMANDO]
@@ -270,3 +280,72 @@ def test_geradores_apontam_pro_motor_e_nao_pra_ia(passos):
         if passo.startswith("gerar_"):
             assert "engine_pipelines" in scripts[passo], passo
             assert not scripts[passo].startswith("ai"), passo
+
+
+# ── Passos avulsos: os comandos sob demanda do motor (2026-09-10) ──────────
+def test_todo_comando_sob_demanda_do_motor_tem_botao():
+    """O ESPELHO do teste da sequencia, e ele faltava.
+
+    O /admin derivava do registro do motor so' as etapas do `tudo`. Os Comandos
+    SEM `etapa` -- os sob demanda -- nao eram lidos por ninguem, e
+    `_PASSOS_AVULSOS` estava vazia com o comentario "o proximo passo avulso
+    entra aqui sozinho". Sozinho nao entrava: faltava a derivacao.
+
+    Quatro comandos passaram meses so' no terminal por causa disso, entre eles
+    o motor AO VIVO -- de um produto publicado pro assinante, num projeto onde
+    nada roda agendado.
+
+    `tudo` e `shadow` ficam fora DE PROPOSITO e por isso a lista de excecoes e'
+    explicita aqui: `tudo` E' a sequencia (tem botao proprio) e `shadow` compara
+    o motor com picks de uma IA que nao gera nada desde 2026-07-17.
+    """
+    import routers.admin as admin
+
+    motor = _motor_main()
+    sem_botao = [c.nome for c in motor.COMANDOS
+                 if not c.etapa
+                 and c.nome not in ("tudo", "shadow")
+                 and c.nome not in admin._PASSO_DO_COMANDO]
+    assert not sem_botao, (
+        f"comandos sob demanda do motor sem botao no /admin: {sem_botao}")
+
+
+def test_avulso_nao_repete_passo_da_sequencia(passos):
+    """Duas portas pro mesmo trabalho e' como o botao "Gerar Defesas" acabou
+    apontando pro pipeline errado por um mes."""
+    import routers.admin as admin
+
+    repetidos = [p for p in admin._PASSOS_AVULSOS if p in passos]
+    assert not repetidos, f"passo avulso que ja roda no 'Rodar Tudo': {repetidos}"
+
+
+def test_todo_avulso_tem_script_e_rotulo():
+    """Avulso sem script e' botao que so' sabe dar 400; sem rotulo, cartao sem
+    nome no painel."""
+    import routers.admin as admin
+
+    scripts = _literal("_PIPELINE_SCRIPTS")
+    for passo in admin._PASSOS_AVULSOS:
+        assert passo in scripts, f"avulso sem script: {passo}"
+        assert passo in admin._PASSO_LABEL_CURTO, f"avulso sem rotulo: {passo}"
+
+
+def test_o_motor_ao_vivo_tem_botao():
+    """O achado que originou tudo isto · produto publicado, motor sem porta.
+
+    Ele NAO entra no "Rodar Tudo" e isso continua certo: o Live so' faz sentido
+    rodando durante os jogos, e de manha so' gastaria cota lendo partida que nem
+    comecou. O que faltava era o botao.
+    """
+    import routers.admin as admin
+
+    assert "gerar_live" in admin._PASSOS_AVULSOS
+    assert "gerar_live" not in admin._TUDO_STEPS
+
+
+def test_a_lista_congelada_de_avulsos_descreve_o_mesmo_que_o_motor():
+    """Mesma regra do fallback da sequencia: existe pra ambiente sem
+    PIPELINE_SRC_PATH, nao pra ser mantido em paralelo."""
+    import routers.admin as admin
+
+    assert admin._AVULSOS_FALLBACK == admin._PASSOS_AVULSOS
