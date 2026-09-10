@@ -39,7 +39,7 @@
  */
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Radio, RefreshCw, Timer, CheckCircle2, Clock, PowerOff,
+import { Radio, RefreshCw, Timer, CheckCircle2, Clock, PowerOff, CalendarClock,
          Goal, Flag, Target, Crosshair, Lock, Radar, Ban, Square, Share2, Loader2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { capitalizarFrase } from '../utils/format'
@@ -299,6 +299,135 @@ function TeamLogoOrDot({ id, name }: { id?: number | null; name?: string | null 
  * no título e os números que fazem alguém entender por que ainda não saiu
  * pick.
  */
+
+interface ProximoJogo {
+  fixture_id: number
+  home_team: string | null
+  away_team: string | null
+  home_team_id: number | null
+  away_team_id: number | null
+  league_id: number | null
+  liga: string | null
+  /** Brasília SEM fuso · lido por fatia de string, nunca por `new Date`. */
+  match_datetime: string
+  falta_seg: number
+}
+
+/* O DIA DO JOGO, sem deixar o navegador interpretar o horário.
+ *
+ * `match_datetime` é hora de Brasília gravada sem fuso. Jogar isso num `Date`
+ * faz o navegador assumir o fuso DELE e deslocar a partida em horas para quem
+ * não está em Brasília -- que é o erro que o resto do site já evita lendo por
+ * fatia. A comparação de DIA é feita entre strings "AAAA-MM-DD", que é
+ * exatamente o que uma data sem fuso permite comparar sem risco.
+ */
+const DIAS_CURTOS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb']
+
+function diaDoJogo(iso: string, hojeISO: string, amanhaISO: string): string {
+  const dia = iso.slice(0, 10)
+  if (dia === hojeISO) return 'hoje'
+  if (dia === amanhaISO) return 'amanhã'
+  // O nome do dia da semana precisa de calendário, e aqui é seguro: a conta é
+  // feita à meia-noite UTC de uma data pura, sem hora nenhuma para deslocar.
+  const d = new Date(`${dia}T00:00:00Z`)
+  return `${DIAS_CURTOS[d.getUTCDay()]}, ${dia.slice(8, 10)}/${dia.slice(5, 7)}`
+}
+
+/** "em 40min", "em 3h20". Vem do servidor em segundos e não depende de fuso. */
+function faltaCurto(seg: number): string {
+  const min = Math.round(seg / 60)
+  if (min < 60) return `em ${Math.max(1, min)}min`
+  const h = Math.floor(min / 60)
+  const m = min % 60
+  return m === 0 ? `em ${h}h` : `em ${h}h${String(m).padStart(2, '0')}`
+}
+
+/*
+ * A AGENDA DO MOTOR.
+ *
+ * "Nenhum jogo em campo agora" é verdade e encerra a conversa: quem abriu a
+ * aba às 15h não sabe se volta em uma hora ou se a tarde inteira vai ser
+ * assim, e a tela não dá motivo nenhum pra ele voltar. Aqui ele vê o dia e a
+ * hora dos próximos jogos que o motor vai acompanhar.
+ *
+ * São os jogos que fazem o motor ACORDAR (mesmo critério de
+ * `_ha_jogo_na_janela` no backend), não uma agenda de futebol qualquer ·
+ * prometer análise de partida que o motor nunca vai abrir seria pior que não
+ * mostrar nada.
+ */
+function AgendaDoMotor({ isActive }: { isActive: boolean }) {
+  const [jogos, setJogos] = useState<ProximoJogo[] | null>(null)
+
+  useEffect(() => {
+    if (!isActive) return
+    let vivo = true
+    api.get('/live-picks/proximos-jogos')
+      .then(r => { if (vivo) setJogos(r.data?.partidas ?? []) })
+      /* Falhou: a agenda simplesmente não aparece. Ela é o complemento do
+         estado vazio, e um erro vermelho no lugar dela chamaria mais atenção
+         que o próprio assunto da tela. */
+      .catch(() => { if (vivo) setJogos([]) })
+    return () => { vivo = false }
+  }, [isActive])
+
+  if (!jogos || jogos.length === 0) return null
+
+  /* "Hoje" e "amanhã" pelo relógio de Brasília, que é o fuso em que os jogos
+     estão gravados · usar o relógio do aparelho marcaria "amanhã" num jogo
+     de hoje pra quem está em outro fuso. */
+  const hojeISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+  const amanha = new Date(`${hojeISO}T12:00:00Z`)
+  amanha.setUTCDate(amanha.getUTCDate() + 1)
+  const amanhaISO = amanha.toISOString().slice(0, 10)
+
+  return (
+    <div className="mt-6">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="w-1 h-4 rounded-full bg-line-strong" />
+        <h3 className="text-sm font-bold text-ink-1 flex items-center gap-1.5">
+          <CalendarClock className="w-3.5 h-3.5 text-ink-3" />
+          Próximos jogos no radar
+        </h3>
+      </div>
+      <p className="text-[11px] text-ink-4 mb-3 leading-relaxed">
+        O motor volta a varrer assim que um destes entrar em campo. A análise começa
+        com a partida em andamento, não antes do apito.
+      </p>
+      <ul className="divide-y divide-line border border-line rounded-xl overflow-hidden bg-surface-1">
+        {jogos.map(j => (
+          <li key={j.fixture_id} className="flex items-center gap-2.5 px-3 py-2.5">
+            <div className="flex flex-col items-center justify-center w-[52px] shrink-0">
+              <span className="font-mono text-sm font-bold text-ink-1 tabular-nums leading-none">
+                {j.match_datetime.slice(11, 16)}
+              </span>
+              <span className="text-[10px] text-ink-4 mt-0.5">
+                {diaDoJogo(j.match_datetime, hojeISO, amanhaISO)}
+              </span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <TeamLogoOrDot id={j.home_team_id} name={j.home_team} />
+                <span className="text-sm text-ink-1 truncate">{j.home_team ?? 'Time ?'}</span>
+              </div>
+              <div className="flex items-center gap-1.5 min-w-0 mt-1">
+                <TeamLogoOrDot id={j.away_team_id} name={j.away_team} />
+                <span className="text-sm text-ink-1 truncate">{j.away_team ?? 'Time ?'}</span>
+              </div>
+              <div className="flex items-center gap-1.5 mt-1 min-w-0">
+                <LeagueLogo id={j.league_id ?? undefined} name={j.liga ?? ''} />
+                <span className="text-[10px] text-ink-4 truncate">{j.liga ?? 'liga ?'}</span>
+              </div>
+            </div>
+            <span className="text-[10px] text-ink-3 shrink-0 tabular-nums">
+              {faltaCurto(j.falta_seg)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 
 /* A busca de "o que a IA está lendo", em um lugar só.
  *
@@ -1582,14 +1711,20 @@ export default function LivePicksFeed({ isActive, banca }: {
         * teaser veio resolver. */}
       {emAndamento.length === 0 && encerrados.length === 0 && bloqueados.length === 0 && (
         motor?.ligado && motor.hibernando ? (
-          <EmptyState
-            Icon={Clock}
-            title="Nenhum jogo em campo agora"
-            description={
-              'A IA acompanha partida em andamento, então ela espera o próximo jogo começar '
-              + 'para voltar a buscar. Nada é publicado até lá, e nada está errado.'
-            }
-          />
+          <>
+            <EmptyState
+              Icon={Clock}
+              title="Nenhum jogo em campo agora"
+              description={
+                'A IA acompanha partida em andamento, então ela espera o próximo jogo começar '
+                + 'para voltar a buscar. Nada é publicado até lá, e nada está errado.'
+              }
+            />
+            {/* O ESTADO VAZIO GANHA UM DEPOIS (10/09/2026, pedido do usuário).
+                "Nenhum jogo em campo" fecha a conversa; a agenda diz quando
+                ela recomeça, e é a única coisa que dá motivo pra voltar. */}
+            <AgendaDoMotor isActive={isActive} />
+          </>
         ) : motor?.ligado ? (
           <EmptyState
             Icon={Radio}
@@ -1601,14 +1736,19 @@ export default function LivePicksFeed({ isActive, banca }: {
             }
           />
         ) : (
-          <EmptyState
-            Icon={PowerOff}
-            title="A busca está pausada"
-            description={
-              'Nada será publicado até ela voltar. Não é falta de oportunidade.'
-              + (motor?.ultima_rodada ? ` A última busca foi às ${horaCurta(motor.ultima_rodada)}.` : '')
-            }
-          />
+          <>
+            <EmptyState
+              Icon={PowerOff}
+              title="O radar está pausado"
+              description={
+                'Nada será publicado até ele voltar. Não é falta de oportunidade.'
+                + (motor?.ultima_rodada ? ` A última varredura foi às ${horaCurta(motor.ultima_rodada)}.` : '')
+              }
+            />
+            {/* Pausado, a agenda continua verdadeira: são os jogos por causa
+                dos quais ele vai voltar a varrer. */}
+            <AgendaDoMotor isActive={isActive} />
+          </>
         )
       )}
 

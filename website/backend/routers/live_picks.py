@@ -1073,6 +1073,87 @@ def em_leitura(current_user: dict = Depends(require_live_reader), limit: int = Q
     }
 
 
+#: Quantos jogos a agenda mostra. Oito cabe na tela do celular sem virar
+#: rolagem, e passar disso deixa de ser "o proximo" e vira tabela de campeonato
+#: -- que nao e' o que a aba Ao Vivo responde.
+_AGENDA_LIMITE = 8
+
+#: Ate' onde a agenda enxerga. Dois dias porque a tabela `fixtures` so' e'
+#: povoada com a janela curta do motor (ver a memoria do projeto: a janela e'
+#: HOJE), entao pedir uma semana devolveria vazio na maior parte dos dias e
+#: pareceria bug.
+_AGENDA_HORAS = 48
+
+
+@router.get("/proximos-jogos")
+def proximos_jogos(current_user: dict = Depends(require_live_reader)):
+    """A agenda do motor: as proximas partidas que ele vai acompanhar.
+
+    POR QUE ISTO EXISTE (2026-09-10, pedido do usuario)
+    ---------------------------------------------------
+    Sem jogo em campo a aba dizia "nenhum jogo em campo agora" e parava ali. A
+    frase e' verdadeira e termina a conversa: quem abriu o site as 15h nao tem
+    como saber se volta em uma hora ou se a noite inteira vai ser assim, e a
+    tela nao da' motivo nenhum pra ele voltar.
+
+    A resposta e' a agenda. O mesmo criterio que faz o motor ACORDAR
+    (`_ha_jogo_na_janela`: partida de liga cadastrada e ativa, com status que
+    ainda vai acontecer) lido pra frente no tempo em vez de pra tras · ou seja,
+    a lista e' literalmente "os jogos por causa dos quais ele vai sair da
+    hibernacao", e nao uma agenda de futebol qualquer que prometeria analise de
+    partida que o motor nunca vai abrir.
+
+    CUSTA ZERO REQUISICAO DE API, pelo mesmo motivo do `_ha_jogo_na_janela`: a
+    tabela `fixtures` ja' tem o horario de cada partida.
+
+    `match_datetime` viaja como TEXTO cru, sem fuso: ele e' horario de Brasilia
+    gravado sem timezone, e deixar o navegador interpretar isso desloca a hora
+    de quem nao esta no fuso de Brasilia (ver o mesmo cuidado em todo o site).
+    """
+    conn = None
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT f.fixture_id,
+                   f.home_team, f.away_team,
+                   f.home_team_id, f.away_team_id,
+                   f.league_id,
+                   COALESCE(l.name, 'Liga ' || f.league_id::text) AS liga,
+                   f.match_datetime::text AS match_datetime,
+                   -- Quanto falta pro apito, calculado NO BANCO · e' ele que
+                   -- tem o relogio de Brasilia sem precisar adivinhar fuso
+                   -- nenhum, mesma decisao do `idade_seg` da rota de leitura.
+                   GREATEST(0, EXTRACT(EPOCH FROM (
+                       f.match_datetime - (NOW() AT TIME ZONE 'America/Sao_Paulo')
+                   )))::int AS falta_seg
+              FROM fixtures f
+              JOIN leagues l ON l.league_id = f.league_id
+                            AND COALESCE(l.ativa, TRUE)
+             WHERE f.match_datetime > (NOW() AT TIME ZONE 'America/Sao_Paulo')
+               AND f.match_datetime <= (NOW() AT TIME ZONE 'America/Sao_Paulo')
+                                       + (%s * INTERVAL '1 hour')
+               AND COALESCE(f.status, 'NS') NOT IN
+                   ('FT','AET','PEN','PST','CANC','ABD','AWD','WO')
+          ORDER BY f.match_datetime ASC
+             LIMIT %s
+        """, (_AGENDA_HORAS, _AGENDA_LIMITE))
+        linhas = [dict(r) for r in (cur.fetchall() or [])]
+        return {"disponivel": True, "total": len(linhas), "partidas": linhas}
+    except Exception as e:
+        # Falha aberta e SILENCIOSA na tela: a agenda e' um extra do estado
+        # vazio. Devolver 500 aqui apagaria o resto da aba por causa de um
+        # bloco decorativo.
+        logger.warning("[LIVE-PICKS] agenda do motor falhou (%s)", e)
+        return {"disponivel": False, "total": 0, "partidas": []}
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
 @router.get("/stats")
 def estatisticas(
     date: str | None = Query(None, description="YYYY-MM-DD · só este dia"),
