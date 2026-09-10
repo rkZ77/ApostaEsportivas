@@ -8,19 +8,35 @@ import { useNotifications, type AppNotification } from '../context/NotificationC
 import { backdropFade, popIn, sheetUp } from '../lib/motion'
 
 /** "agora", "12 min", "3 h", "ontem", "12/07" · compacto o bastante pro item da lista. */
-function timeAgo(iso: string | null): string {
-  if (!iso) return ''
-  const then = new Date(iso).getTime()
-  if (isNaN(then)) return ''
-  const diffMin = Math.floor((Date.now() - then) / 60000)
+/*
+ * "HÁ QUANTO TEMPO", PELO RELÓGIO DE QUEM GRAVOU (2026-09-10).
+ *
+ * Isto fazia `Date.now() - new Date(created_at)`, e `created_at` é TIMESTAMP
+ * SEM FUSO: o navegador lia aquele horário como se fosse local. Para quem está
+ * em Brasília com o servidor em UTC, a diferença de três horas caía inteira
+ * dentro da conta, e a subtração dava negativo · todo aviso aparecia como
+ * "agora", inclusive os de ontem.
+ *
+ * `idade_seg` vem calculado no banco, sem fuso nenhum no meio. A data ISO só
+ * é usada no fim, para escrever o dia de um item antigo, onde três horas não
+ * mudam o rótulo.
+ */
+function timeAgo(idadeSeg: number | null | undefined, iso: string | null): string {
+  if (idadeSeg == null) return ''
+  const diffMin = Math.floor(idadeSeg / 60)
   if (diffMin < 1)    return 'agora'
   if (diffMin < 60)   return `${diffMin} min`
   const diffH = Math.floor(diffMin / 60)
   if (diffH < 24)     return `${diffH} h`
   if (diffH < 48)     return 'ontem'
-  const d = new Date(then)
-  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
+  if (!iso) return `${Math.floor(diffH / 24)} d`
+  return `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
 }
+
+/** Aviso de pick ao vivo cuja janela já passou · mesma régua do backend. */
+const LIVE_NOVO_JANELA_SEG = 25 * 60
+const oportunidadeEncerrada = (n: AppNotification) =>
+  n.type === 'live_novo' && n.idade_seg != null && n.idade_seg > LIVE_NOVO_JANELA_SEG
 
 function NotificationIcon({ n }: { n: AppNotification }) {
   const base = 'w-4 h-4 shrink-0'
@@ -114,10 +130,21 @@ function NotificationList({ onNavigate }: ListProps) {
                   <span className={`text-sm leading-snug ${n.read ? 'text-ink-2' : 'text-ink-1 font-bold'}`}>
                     {n.title}
                   </span>
-                  <span className="text-[10px] text-ink-4 ml-auto shrink-0">{timeAgo(n.created_at)}</span>
+                  <span className="text-[10px] text-ink-4 ml-auto shrink-0">
+                    {timeAgo(n.idade_seg, n.created_at)}
+                  </span>
                 </span>
                 {n.body && (
                   <span className="block text-xs text-ink-3 leading-snug mt-0.5 break-words">{n.body}</span>
+                )}
+                {/* O QUE ACONTECE AO CLICAR, DITO ANTES DO CLIQUE.
+                    Pick ao vivo vive minutos, e o aviso fica no sino até ser
+                    lido: sem esta linha, o item de ontem convida para uma aba
+                    que não tem mais aquele pick. */}
+                {oportunidadeEncerrada(n) && (
+                  <span className="block text-[10px] text-ink-4 mt-1">
+                    Esta oportunidade já passou. O resultado fica em Minhas Apostas.
+                  </span>
                 )}
               </span>
               {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-green-500 mt-2 shrink-0" />}

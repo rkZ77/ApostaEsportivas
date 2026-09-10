@@ -37,7 +37,20 @@ export interface AppNotification {
   payload: Record<string, any>
   read: boolean
   created_at: string | null
+  /** Segundos desde que o aviso nasceu, calculado NO BANCO.
+   *
+   *  `created_at` é TIMESTAMP sem fuso, então medir a idade no navegador
+   *  erraria por horas para quem não está no fuso do servidor. Ver a rota
+   *  /notifications. */
+  idade_seg?: number | null
 }
+
+/* Quanto tempo um aviso de pick ao vivo ainda vale como AVISO.
+ *
+ * Mesma janela do backend (LIVE_NOVO_JANELA_MIN, em routers/notifications.py):
+ * passados 25 minutos, a odd daquele instante já não existe e mandar alguém
+ * correr atrás dela é pior que não avisar. */
+const LIVE_NOVO_JANELA_SEG = 25 * 60
 
 interface NotificationCtx {
   // Sino
@@ -167,6 +180,23 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
        * `seenLiveIds` já existia pro outro evento e serve igual aqui. */
       for (const n of novos) {
         if (n.type !== 'live_novo' || n.read) continue
+        /* AVISO VELHO NÃO TOCA (2026-09-10, pedido do usuário).
+         *
+         * O item ficava no sino até alguém ler, e o único filtro aqui era
+         * "não lido". Então quem passou a noite fora abria o site no dia
+         * seguinte, levava o toque de "Pick ao vivo agora", clicava, e caía
+         * numa aba vazia: o pick tinha sido liquidado horas antes. O aviso
+         * era verdadeiro quando nasceu e mentiroso quando tocou.
+         *
+         * A idade vem do servidor, calculada no banco, porque `created_at`
+         * não tem fuso e a conta no navegador erraria por horas. Sem ela, o
+         * seguro é NÃO tocar: um item de idade desconhecida é indistinguível
+         * de um item velho.
+         *
+         * O aviso continua no sino, com o histórico. O que para de acontecer
+         * é o alarme fora de hora. */
+        const idade = n.idade_seg
+        if (idade == null || idade > LIVE_NOVO_JANELA_SEG) continue
         const chave = `novo-${n.id}`
         if (seenLiveIds.current.has(chave)) continue
         seenLiveIds.current.add(chave)

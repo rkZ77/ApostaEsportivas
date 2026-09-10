@@ -654,7 +654,17 @@ def list_notifications(
             logger.warning("[NOTIF] Falha no sync de pick ao vivo: %s", e)
 
         cur.execute("""
-            SELECT id, type, title, body, url, payload, read_at, created_at
+            SELECT id, type, title, body, url, payload, read_at, created_at,
+                   -- IDADE CALCULADA NO BANCO (2026-09-10).
+                   --
+                   -- `created_at` e' TIMESTAMP sem fuso, gravado pelo relogio
+                   -- do servidor. Mandar so' ele obriga a tela a chutar de que
+                   -- fuso veio, e o chute erra por horas -- que e' exatamente
+                   -- a ordem de grandeza que decide se um aviso de pick ao
+                   -- vivo ainda vale. A subtracao acontece aqui, do lado de
+                   -- quem gravou, e o que viaja e' um numero sem fuso nenhum.
+                   GREATEST(0, EXTRACT(EPOCH FROM (NOW() - created_at)))::int
+                       AS idade_seg
             FROM notifications
             WHERE user_id = %s
             ORDER BY created_at DESC, id DESC
@@ -676,6 +686,7 @@ def list_notifications(
                 "payload":    payload or {},
                 "read":       d["read_at"] is not None,
                 "created_at": d["created_at"].isoformat() if d["created_at"] else None,
+                "idade_seg":  d.get("idade_seg"),
             })
 
         cur.execute(
