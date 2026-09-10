@@ -740,37 +740,20 @@ def feed(
         # quem ja' esta' olhando, que e' o mais importante.
         logger.warning("[LIVE] Falha ao notificar pick novo: %s", e)
 
-    # UM PICK AO VIVO POR DIA E' FREE (01/09/2026, decisao do usuario).
+    # O AO VIVO E' VIP PURO (10/09/2026, decisao do usuario).
     #
-    # Mesma regra do Pick Boost, e pelo mesmo motivo: o Ao Vivo publica varios
-    # picks ao longo da noite, entao liberar um nao esvazia o produto -- e e' o
-    # unico jeito de quem nao assina entender o que ele e'. Ate' hoje a aba
-    # respondia 403 pro free, e a tela mostrava "nao foi possivel carregar":
-    # um produto inteiro parecendo defeito.
+    # De 01/09 ate' hoje o free levava um pick liberado por dia, na mesma regra
+    # do Pick Boost. Foi revertido: o Ao Vivo passa a ter o mesmo corte dos
+    # picks VIP -- nenhum pick completo pra quem nao assina.
     #
-    # O liberado e' o de MAIOR `live_signal_score` entre os que estao de pe',
-    # que e' o mesmo criterio de qualidade do motor. Nao e' o mais recente de
-    # proposito: "o primeiro que apareceu" daria ao free um pick pior so' por
-    # sorte de horario.
-    #
-    # O `plano` e' explicito e nao inferido pela posicao -- a tela reordena, e
-    # a marca tem que sobreviver a isso. Mesma decisao de `_marcar_boost_free`.
+    # O que fica de pe' e' o TEASER, e e' de proposito: sem ele a aba volta a
+    # parecer defeito pro free (foi o motivo de o 403 ter saido em 28/08). O
+    # corte do teaser e' o mesmo contrato do link publico de pick: times, liga,
+    # horario e odd, nunca a analise.
     e_vip = is_vip_active(current_user)
     bloqueados = []
     if not e_vip:
-        de_pe = [p for p in saida
-                 if p.get("result") is None and p.get("status") == STATUS_ATIVO]
-        liberado = max(
-            de_pe,
-            key=lambda p: (p.get("live_signal_score") or 0),
-            default=None,
-        )
-        novo = []
         for p in saida:
-            if liberado is not None and p["id"] == liberado["id"]:
-                p["plano"] = "free"
-                novo.append(p)
-                continue
             # O QUE O TEASER MOSTRA e' o mesmo contrato do link publico de pick
             # e do teaser dos outros produtos: times, liga, horario e odd.
             # NUNCA market, line, reasoning, probability, ev, edge, confidence
@@ -787,7 +770,7 @@ def feed(
                     "odd": p.get("odd"),
                     "minute_at_creation": p.get("minute_at_creation"),
                 })
-        saida = novo
+        saida = []
     else:
         for p in saida:
             p["plano"] = "vip"

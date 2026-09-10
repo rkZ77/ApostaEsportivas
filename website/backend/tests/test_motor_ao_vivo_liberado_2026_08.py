@@ -99,17 +99,18 @@ class TestLiberacao:
         assert "export const LIVE_PICKS_ENABLED = true" in src
         assert "import.meta.env.VITE_LIVE_PICKS_ENABLED" not in src
 
-    def test_a_aba_deixou_de_ser_100_premium(self):
-        """01/09/2026: um pick ao vivo por dia virou free, mesma regra do Pick
-        Boost. Aba marcada VIP que abre com um pick liberado dentro contradiz o
-        proprio selo -- entao o selo saiu, e quem tranca o resto e' o teaser."""
+    def test_a_aba_voltou_a_ser_vip_pura(self):
+        """10/09/2026: o free do dia acabou. Sem pick liberado, o cadeado de
+        `premiumOnly` volta a ser a verdade sobre a aba -- e ela continua
+        ABRINDO pra todos, com teaser no lugar dos cards."""
         src = _ler(_FRONT, "pages", "Picks.tsx")
-        trecho = src[src.index("key: 'ao_vivo'"):][:600]
-        assert "premiumOnly: true" not in trecho
+        trecho = src[src.index("key: 'ao_vivo'"):][:900]
+        assert "premiumOnly: true" in trecho
 
     def test_o_feed_atende_quem_nao_assina(self):
         """Ate 01/09 o endpoint exigia VIP e a aba respondia erro pro free: um
-        produto inteiro parecendo defeito. Quem corta agora e o proprio feed."""
+        produto inteiro parecendo defeito. Quem corta agora e o proprio feed --
+        e desde 10/09 esse corte leva TODOS os picks, nao todos menos um."""
         src = _ler(_BACK, "routers", "live_picks.py") if "_BACK" in globals() else None
         if src is None:
             import os
@@ -123,6 +124,11 @@ class TestLiberacao:
         bloco = feed[feed.index("bloqueados.append("):feed.index("bloqueados.append(") + 900]
         for proibido in ("market", "reasoning", "probability", "stake", "\"ev\"", "confidence"):
             assert proibido not in bloco, proibido
+        # VIP PURO: nada sobrevive em `picks` pra quem nao assina. Um `saida`
+        # que ainda carregasse um pick liberado seria a regra antiga de volta.
+        corte = feed[feed.index("bloqueados = []"):]
+        assert "saida = []" in corte[:2000]
+        assert 'p["plano"] = "free"' not in corte
 
     def test_admin_ve_mesmo_com_o_produto_desligado(self):
         """Quem opera precisa ver a MESMA tela que o assinante ve, e nao so' o

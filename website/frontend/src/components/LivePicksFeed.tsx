@@ -1585,7 +1585,12 @@ export default function LivePicksFeed({ isActive, banca }: {
         * achou nada -- que é o caso NORMAL, e uma boa notícia sobre o filtro --
         * ou o motor simplesmente não está rodando. Na primeira vale esperar; na
         * segunda, esperar é perder a noite. */}
-      {emAndamento.length === 0 && encerrados.length === 0 && (
+      {/* O TEASER JÁ EXPLICA O VAZIO (10/09). Com o Ao Vivo VIP puro, quem não
+        * assina nunca tem card na tela, então o estado vazio dispararia sempre
+        * · "Nenhuma entrada agora" logo acima de quatro jogos trancados é a
+        * contradição que faz a aba parecer quebrada, que é justamente o que o
+        * teaser veio resolver. */}
+      {emAndamento.length === 0 && encerrados.length === 0 && bloqueados.length === 0 && (
         motor?.ligado && motor.hibernando ? (
           <EmptyState
             Icon={Clock}
@@ -1708,12 +1713,12 @@ export default function LivePicksFeed({ isActive, banca }: {
         </>
       )}
 
-      {/* O RESTO DO DIA, TRANCADO.
-          Quem não assina vê um pick por dia e o teaser do que ficou de fora ·
-          jogo, liga e odd, sem mercado, análise nem stake. É o mesmo contrato
-          dos outros produtos VIP, e existe porque a alternativa que estava no
-          ar era pior que um cadeado: a aba respondia erro e o produto inteiro
-          parecia quebrado. */}
+      {/* O DIA INTEIRO, TRANCADO (10/09).
+          O Ao Vivo virou VIP puro: quem não assina não vê pick nenhum completo,
+          só o teaser · jogo, liga e odd, sem mercado, análise nem stake. É o
+          mesmo contrato dos outros produtos VIP, e o teaser fica porque a
+          alternativa que estava no ar antes dele era pior que um cadeado: a aba
+          respondia erro e o produto inteiro parecia quebrado. */}
       {!eVip && bloqueados.length > 0 && (
         <div className="mt-6 space-y-3">
           <div className="grid gap-3 sm:grid-cols-2">
@@ -1744,7 +1749,7 @@ export default function LivePicksFeed({ isActive, banca }: {
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-display text-ink-1 font-bold text-sm mb-0.5">
-                Mais {bloqueados.length} {bloqueados.length === 1 ? 'entrada' : 'entradas'} ao vivo hoje
+                {bloqueados.length} {bloqueados.length === 1 ? 'entrada' : 'entradas'} ao vivo hoje
               </p>
               <p className="text-ink-3 text-xs leading-relaxed">
                 O jogo e a odd você já vê. O mercado, a leitura da partida e a sugestão de stake abrem no VIP.
