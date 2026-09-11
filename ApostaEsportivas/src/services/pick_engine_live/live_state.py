@@ -114,6 +114,14 @@ def _cartoes_por_evento(eventos: list, home_id, away_id) -> dict:
     for e in eventos:
         if e.get("tipo") != "Card":
             continue
+        # SEM JOGADOR IDENTIFICADO NAO E' CARTAO DE CAMPO. E' assim que a API
+        # publica o amarelo de tecnico e auxiliar, e este caminho existe
+        # justamente pra quando NAO ha' escalacao pra cruzar (ver
+        # services/cartoes_validos) -- entao este e' o unico filtro disponivel
+        # aqui. Nao pega o reserva que levou cartao no banco, que tem id; pega
+        # a area tecnica, que e' o caso comum.
+        if "player_id" in e and e["player_id"] is None:
+            continue
         tid = e.get("team_id")
         if tid == home_id:
             lado = "home"
@@ -121,7 +129,12 @@ def _cartoes_por_evento(eventos: list, home_id, away_id) -> dict:
             lado = "away"
         else:
             continue
-        contagem[f"{'red' if e.get('vermelho') else 'yellow'}_{lado}"] += 1
+        if e.get("segundo_amarelo"):
+            # A folha conta os dois, e o motor conta igual (ver _cores).
+            contagem[f"yellow_{lado}"] += 1
+            contagem[f"red_{lado}"] += 1
+        else:
+            contagem[f"{'red' if e.get('vermelho') else 'yellow'}_{lado}"] += 1
     return contagem
 
 
@@ -294,7 +307,12 @@ def ler_eventos(brutos: list, minuto_atual: int | None = None,
         minuto = ((e.get("time") or {}).get("elapsed"))
         if minuto is None:
             continue
-        vermelho = tipo == "Card" and "Red" in detalhe
+        # SEGUNDO AMARELO E' EXPULSAO. O teste era `"Red" in detalhe`, e
+        # "Second Yellow card" nao contem "Red" -- entao um expulso por dois
+        # amarelos nao existia pro motor: `vermelho_minuto` ficava None e o
+        # modelo de estado seguia analisando um jogo 11x11 que ja' era 11x10.
+        segundo_amarelo = tipo == "Card" and "second yellow" in detalhe.lower()
+        vermelho = tipo == "Card" and ("Red" in detalhe or segundo_amarelo)
         penalti = "Penalty" in detalhe
         registro = {
             "minuto": int(minuto),
@@ -304,7 +322,11 @@ def ler_eventos(brutos: list, minuto_atual: int | None = None,
             "time": ((e.get("team") or {}).get("name")),
             "team_id": ((e.get("team") or {}).get("id")),
             "jogador": ((e.get("player") or {}).get("name")),
+            # Sem o id nao da' pra separar cartao de jogador de cartao de
+            # comissao tecnica quando falta escalacao.
+            "player_id": ((e.get("player") or {}).get("id")),
             "vermelho": vermelho,
+            "segundo_amarelo": segundo_amarelo,
             "penalti": penalti,
             "gol": tipo == "Goal",
             "recente": (minuto_atual is not None

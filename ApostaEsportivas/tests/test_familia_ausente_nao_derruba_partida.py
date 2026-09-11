@@ -81,15 +81,18 @@ class TestCartaoSaiDoEventoQuandoAFolhaNaoVem:
     numero de familia que sobra ao vivo, e estava sendo descartado.
     """
 
+    #: `player.id` vai junto porque a API sempre o manda pra JOGADOR -- e
+    #: manda `null` pra comissao tecnica. E' essa diferenca que o motor usa
+    #: pra nao contar amarelo de tecnico quando nao ha escalacao pra cruzar.
     EVENTOS = [
         {"type": "Card", "detail": "Yellow Card", "time": {"elapsed": 20},
-         "team": {"id": 10}, "player": {"name": "A"}},
+         "team": {"id": 10}, "player": {"id": 1, "name": "A"}},
         {"type": "Card", "detail": "Yellow Card", "time": {"elapsed": 33},
-         "team": {"id": 20}, "player": {"name": "B"}},
+         "team": {"id": 20}, "player": {"id": 2, "name": "B"}},
         {"type": "Card", "detail": "Red Card", "time": {"elapsed": 47},
-         "team": {"id": 20}, "player": {"name": "C"}},
+         "team": {"id": 20}, "player": {"id": 3, "name": "C"}},
         {"type": "Goal", "detail": "Normal Goal", "time": {"elapsed": 12},
-         "team": {"id": 10}, "player": {"name": "D"}},
+         "team": {"id": 10}, "player": {"id": 4, "name": "D"}},
     ]
 
     def _estado(self, home_stats=None, away_stats=None, com_eventos=True):
@@ -107,6 +110,34 @@ class TestCartaoSaiDoEventoQuandoAFolhaNaoVem:
         e = self._estado()
         assert (e["yellow_home"], e["yellow_away"]) == (1, 1)
         assert (e["red_home"], e["red_away"], e["red_cards_total"]) == (0, 1, 1)
+
+    def test_amarelo_de_comissao_tecnica_nao_entra_sem_escalacao(self):
+        """Cartao com `player.id` nulo e' o que a API manda pra area tecnica.
+
+        Este caminho existe pra quando NAO ha escalacao pra cruzar, entao o id
+        nulo e' a unica evidencia disponivel -- e e' o caso comum.
+        """
+        com_tecnico = self.EVENTOS + [
+            {"type": "Card", "detail": "Yellow Card", "time": {"elapsed": 50},
+             "team": {"id": 10}, "player": {"id": None, "name": "Tecnico"}},
+        ]
+        eventos = live_state.ler_eventos(com_tecnico, 52)
+        contagem = live_state._cartoes_por_evento(eventos, 10, 20)
+        assert contagem["yellow_home"] == 1
+
+    def test_segundo_amarelo_e_expulsao(self):
+        """"Second Yellow card" nao contem "Red", e por isso um expulso por
+        dois amarelos nao existia pro motor: o jogo seguia sendo analisado como
+        11x11 quando ja' era 11x10.
+        """
+        eventos = live_state.ler_eventos([
+            {"type": "Card", "detail": "Second Yellow card",
+             "time": {"elapsed": 60}, "team": {"id": 20},
+             "player": {"id": 9, "name": "E"}},
+        ], 62)
+        assert eventos[0]["vermelho"] is True
+        contagem = live_state._cartoes_por_evento(eventos, 10, 20)
+        assert (contagem["yellow_away"], contagem["red_away"]) == (1, 1)
 
     def test_sem_evento_nenhum_continua_ausente_e_nao_vira_zero(self):
         """Lista vazia responde igual pra "sem cobertura" e "nada aconteceu".

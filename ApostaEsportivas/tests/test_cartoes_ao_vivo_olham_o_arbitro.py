@@ -43,7 +43,7 @@ class _Cursor:
 def _cartao(minuto, team_id, vermelho=False):
     return {"type": "Card", "detail": "Red Card" if vermelho else "Yellow Card",
             "time": {"elapsed": minuto}, "team": {"id": team_id},
-            "player": {"name": "x"}}
+            "player": {"id": 631, "name": "x"}}
 
 
 def _estado(eventos_brutos=None, arbitro="Paulo Cesar Zanovelli da Silva, Brazil",
