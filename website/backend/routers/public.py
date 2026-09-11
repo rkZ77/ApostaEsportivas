@@ -1,3 +1,4 @@
+import re
 import logging
 import traceback
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
@@ -491,10 +492,35 @@ def _count_recent(cur, date_cond: str, date_params: tuple, source: Optional[str]
     return total
 
 
+#: "YYYY-MM-DD" e nada mais. A data entra na consulta como PARAMETRO, entao o
+#: formato nao e' questao de injecao -- e' de erro: string fora do formato faz o
+#: Postgres levantar DataError no meio de uma pagina publica, e a tela inteira
+#: cai por causa de um filtro. Formato errado aqui simplesmente nao filtra.
+_RE_DATA_ISO = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _janela_de_datas(de, ate):
+    """(de, ate) quando as DUAS vem bem formadas e em ordem. None no resto.
+
+    Inverter as pontas seria devolver vazio e parecer "nenhum resultado no
+    periodo", que e' uma resposta errada pra uma pergunta mal feita -- entao
+    data invertida tambem cai fora e a pagina responde sem recorte.
+    """
+    if not de or not ate:
+        return None
+    if not _RE_DATA_ISO.match(str(de)) or not _RE_DATA_ISO.match(str(ate)):
+        return None
+    if str(de) > str(ate):
+        return None
+    return (str(de), str(ate))
+
+
 @router.get("/results")
 def public_results(
     background: BackgroundTasks,
     month:  Optional[str] = Query(None, description="YYYY-MM · filtra por mês"),
+    from_date: Optional[str] = Query(None, description="YYYY-MM-DD · início da janela (usa-se com to_date)"),
+    to_date:   Optional[str] = Query(None, description="YYYY-MM-DD · fim da janela, inclusive"),
     source: Optional[str] = Query(None, description="all | vip | free | multiplas | bingo | alavancagem | faltas | goleiros"),
     recent_limit:  int = Query(10, ge=1, le=50, description="Itens por página em 'recent'"),
     recent_offset: int = Query(0, ge=0, description="Offset de paginação em 'recent'"),
@@ -563,7 +589,8 @@ def public_results(
 
     background.add_task(_gatilhos_em_background)
 
-    return _resultados_publicos(month, source, recent_limit, recent_offset, slim, blocos)
+    return _resultados_publicos(month, source, recent_limit, recent_offset, slim, blocos,
+                                from_date, to_date)
 
 
 # O cache fica AQUI, e nao no endpoint, por causa dos gatilhos acima: eles
@@ -576,7 +603,8 @@ def public_results(
 # mostrar isso. O /admin invalida na hora quando publica ou corrige um pick
 # (ver cache_publico.invalidar).
 @cache_publico.rota(60)
-def _resultados_publicos(month, source, recent_limit, recent_offset, slim, blocos=None):
+def _resultados_publicos(month, source, recent_limit, recent_offset, slim, blocos=None,
+                         from_date=None, to_date=None):
     # `blocos` ausente = tudo, que e' o contrato antigo. Bloco nao citado e'
     # pulado exatamente como o `slim` ja' pulava: devolve vazio, e a tela que
     # nao pediu tambem nao le.
@@ -609,7 +637,25 @@ def _resultados_publicos(month, source, recent_limit, recent_offset, slim, bloco
         available_months = [r["month"] for r in months_rows]
 
         # ── Filtro de data ────────────────────────────────────────────────────
-        if month:
+        #
+        # DUAS FORMAS DE PEDIR A MESMA COISA, e a janela ganha.
+        #
+        # `month` e' o contrato antigo (a Home e qualquer link salvo ainda
+        # mandam ele). `from_date`/`to_date` chegaram com o recorte por DIA da
+        # pagina de Resultados -- "Hoje", "Ontem", "7 dias" -- que o mes nao
+        # consegue expressar. O mes especifico tambem viaja por aqui agora, como
+        # janela do dia 1 ao ultimo: uma forma so' pra pagina inteira, em vez de
+        # dois filtros concorrentes (ver frontend/src/lib/periodo.ts).
+        #
+        # A janela so' vale COMPLETA. Meia janela nao e' um recorte pela metade,
+        # e' um recorte que o leitor nao pediu: `from_date` sozinho mostraria
+        # tudo desde uma data ate' o fim dos tempos, e quem pediu "Ontem"
+        # receberia ontem, hoje e o futuro. Sem os dois, cai no mes.
+        janela = _janela_de_datas(from_date, to_date)
+        if janela:
+            date_cond   = "AND match_date BETWEEN %s AND %s"
+            date_params = janela
+        elif month:
             date_cond   = "AND TO_CHAR(match_date, 'YYYY-MM') = %s"
             date_params = (month,)
         else:

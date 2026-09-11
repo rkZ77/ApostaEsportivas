@@ -10,7 +10,7 @@ import { taxaAcerto, fmtUnits, STAKE_LABEL_PADRAO } from '../utils/format'
 import { TeamLogo, LeagueLogo } from '../components/TeamLogo'
 import { useAuth } from '../context/AuthContext'
 import PageShell from '../components/PageShell'
-import { nomeDoMes } from '../lib/periodo'
+import { PERIODOS, PERIODO_PADRAO, janelaDoPeriodo, nomeDoMes, type PeriodoKey } from '../lib/periodo'
 import CaminhosDaIA from '../components/CaminhosDaIA'
 import { PAGE_WIDTH } from '../lib/pageWidth'
 import { Button, SelectMenu, Spinner } from '../components/ui'
@@ -493,7 +493,22 @@ export default function ResultadosPublicos() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [source, setSource] = useState('all')
-  const [month, setMonth] = useState('')
+  /* RECORTE UNICO DA PAGINA (2026-09-11, pedido do usuario).
+
+     Era so' o mes, e mes nao responde a pergunta mais comum: "como foi
+     ontem". Quase todo jogo termina de madrugada, entao de manha "este mes"
+     mistura a rodada que acabou de fechar com as tres semanas anteriores.
+
+     Agora e' o MESMO vocabulario da Banca e do Meus Picks (lib/periodo):
+     Tudo, Hoje, Ontem, 7 dias, 30 dias, Este mes, Mes passado -- e os meses
+     especificos continuam na mesma lista, como `mes:YYYY-MM`. Uma escolha
+     so' governa a pagina inteira (indicadores, grafico, abas e listas),
+     porque o recorte ja' viajava pro backend e vale pra todos os blocos.
+
+     Um filtro so' tambem e' o motivo de os meses NAO virarem uma segunda
+     fila: dois controles de data na mesma tela foi exatamente o que a
+     reorganizacao de 04/09 desfez. */
+  const [periodo, setPeriodo] = useState<PeriodoKey>(PERIODO_PADRAO)
   const [recentLeagueFilter, setRecentLeagueFilter] = useState<string>('')
 
   const { user } = useAuth()
@@ -503,7 +518,9 @@ export default function ResultadosPublicos() {
   // "Picks recentes" · paginação (server-side, ver recent_limit/recent_offset em /public/results)
   const RECENT_PAGE_SIZE = 30
   const [recentPage, setRecentPage] = useState(0)
-  const handleMonthChange = (v: string) => { setMonth(v); setRecentPage(0); setRecentLeagueFilter('') }
+  const handlePeriodoChange = (v: string) => {
+    setPeriodo(v as PeriodoKey); setRecentPage(0); setRecentLeagueFilter('')
+  }
   const handleSourceChange = (v: string) => { setSource(v); setRecentPage(0); setRecentLeagueFilter('') }
 
   // "Por Jogo" · exige login (mesmos dados detalhados que antes só existiam em /results)
@@ -514,19 +531,16 @@ export default function ResultadosPublicos() {
   const [gamesLoading, setGamesLoading] = useState(false)
   const [detailPick, setDetailPick] = useState<{ id: number; pick_type: string } | null>(null)
 
-  const monthDateRange = (m: string): { date_from?: string; date_to?: string } => {
-    if (!m) return {}
-    const [y, mo] = m.split('-').map(Number)
-    const lastDay = new Date(y, mo, 0).getDate()
-    return { date_from: `${m}-01`, date_to: `${m}-${String(lastDay).padStart(2, '0')}` }
-  }
-
-  const fetchGames = useCallback((page: number, resultado: string, src: string, m: string) => {
+  /* A conta de datas saiu daqui (2026-09-11). Ela sabia converter MES em
+     janela e nada mais, entao "Ontem" nao tinha como chegar nesta aba -- a
+     lista de jogos ficava no mes inteiro enquanto o resto da pagina ja'
+     respondia pelo dia. `janelaDoPeriodo` e' a mesma conta que a Banca e o
+     Meus Picks usam, inclusive pro mes especifico. */
+  const fetchGames = useCallback((page: number, resultado: string, src: string, p: PeriodoKey) => {
     setGamesLoading(true)
-    const { date_from, date_to } = monthDateRange(m)
+    const janela = janelaDoPeriodo(p)
     const params: any = { limit: GAMES_PAGE_SIZE, offset: page * GAMES_PAGE_SIZE, source: src, days: 3650 }
-    if (date_from) params.date_from = date_from
-    if (date_to) params.date_to = date_to
+    if (janela) { params.date_from = janela.de; params.date_to = janela.ate }
     if (resultado !== 'all') params.resultado = resultado
     api.get('/suggestions/results/games', { params })
       .then(r => { setGames(r.data.items); setGamesTotal(r.data.total) })
@@ -539,10 +553,10 @@ export default function ResultadosPublicos() {
      backend ignora `resultado=pending` sem sessao (ver get_results_games),
      senao a URL entregaria os picks de hoje com mercado, linha e odd. */
   useEffect(() => {
-    if (tab === 'por_jogo') fetchGames(0, gamesFilter, source, month)
+    if (tab === 'por_jogo') fetchGames(0, gamesFilter, source, periodo)
     setGamesPage(0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, user, source, month])
+  }, [tab, user, source, periodo])
 
   /* CADA ABA BAIXA O QUE ELA USA (2026-09-04).
      
@@ -575,13 +589,17 @@ export default function ResultadosPublicos() {
       blocos: blocosDaAba(tab),
     }
     if (source !== 'all') params.source = source
-    if (month) params.month = month
+    // Janela de datas no lugar de `month`: e' ela que sabe dizer "ontem", e o
+    // mes especifico tambem chega assim (dia 1 ao ultimo). O backend mantem
+    // `month` pro contrato antigo, que a Home ainda usa.
+    const janela = janelaDoPeriodo(periodo)
+    if (janela) { params.from_date = janela.de; params.to_date = janela.ate }
     api.get('/public/results', { params })
       .then(r => setData(r.data))
       .catch(() => { setData(null); setError(true) })
       .finally(() => setLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source, month, recentPage, tab])
+  }, [source, periodo, recentPage, tab])
 
   const s = data?.summary
   // Taxa de acerto de TODOS os status: meio-green conta, anulada sai da conta.
@@ -755,15 +773,18 @@ export default function ResultadosPublicos() {
               usuario): sao os dois recortes da pagina, e recorte que existe tem
               que estar visivel, nao atras de um acordeao. */}
           <div className="flex flex-wrap items-center gap-2 mb-5">
-            {months.length > 0 && (
-              <SelectMenu
-                ariaLabel="Mês"
-                options={[{ value: '', label: 'Todos os meses' },
-                          ...months.map((m: string) => ({ value: m, label: nomeDoMes(m) }))]}
-                value={month}
-                onChange={handleMonthChange}
-              />
-            )}
+            <SelectMenu
+              ariaLabel="Período"
+              options={[
+                ...PERIODOS.map(p => ({ value: p.key as string, label: p.label })),
+                // Os meses entram na MESMA lista, embaixo das janelas
+                // relativas. Fila separada seria o segundo controle de data
+                // que a tela ja' teve e perdeu de proposito.
+                ...months.map((m: string) => ({ value: `mes:${m}`, label: nomeDoMes(m) })),
+              ]}
+              value={periodo}
+              onChange={handlePeriodoChange}
+            />
             <SelectMenu
               ariaLabel="Produto"
               options={produtosDoFiltro(verBingo).map(v => ({
@@ -1201,7 +1222,7 @@ export default function ResultadosPublicos() {
                   </div>
                   {gamesTotal > GAMES_PAGE_SIZE && (() => {
                     const totalPages = Math.ceil(gamesTotal / GAMES_PAGE_SIZE)
-                    const goTo = (p: number) => { setGamesPage(p); fetchGames(p, gamesFilter, source, month) }
+                    const goTo = (p: number) => { setGamesPage(p); fetchGames(p, gamesFilter, source, periodo) }
                     return (
                       <div className="flex items-center justify-center gap-1 mt-4 flex-wrap">
                         <button disabled={gamesPage === 0} onClick={() => goTo(gamesPage - 1)}

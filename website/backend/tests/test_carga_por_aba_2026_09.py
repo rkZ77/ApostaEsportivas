@@ -67,7 +67,7 @@ def test_a_pagina_pede_por_aba():
     assert "blocos: blocosDaAba(tab)" in tela
     # `tab` tem que estar nas dependências, senão a troca de aba não refaz a
     # consulta e a aba nova abre vazia.
-    assert re.search(r"\[source, month, recentPage, tab\]", tela)
+    assert re.search(r"\[source, periodo, recentPage, tab\]", tela)
 
 
 def test_o_filtro_de_mes_nunca_fica_sem_dado():
