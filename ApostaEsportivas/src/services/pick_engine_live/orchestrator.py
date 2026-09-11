@@ -36,17 +36,52 @@ from services.pick_engine_live.config import (
 DESVIO_MINIMO_TRIAGEM = 0.12
 
 
+#: Familia -> a chave do estado que conta o que ela ja' produziu.
+#:
+#: E' um MAPA e nao uma cadeia de ifs desde 2026-09-10, por causa do que a
+#: cadeia deixou passar: faltas foi ligada em 04/09 no config (`familias`), no
+#: catalogo de odds (`NOMES_POR_FAMILIA`), no baseline (`BASELINE_PADRAO`) e no
+#: estado (`fouls_total`) -- e ninguem acrescentou o `if familia == "fouls"`
+#: aqui. Resultado: a familia existia em todo lugar, nunca era analisada, e o
+#: log dizia "estatistica nao publicada pelo provedor" sobre um numero que o
+#: provedor tinha publicado. Seis dias culpando a API por fiacao faltando.
+#:
+#: Com o mapa, familia nova sem chave aparece no teste de cobertura em vez de
+#: sumir em silencio.
+CHAVE_DO_ESTADO = {
+    "corners": "corners_total",
+    "goals": "goals_total",
+    # PONTOS de cartao (amarelo=1, vermelho=2), que e' a unidade do mercado.
+    "cards": "cards_points_total",
+    "fouls": "fouls_total",
+    "shots": "shots_total",
+    "shots_on_target": "shots_on_target_total",
+}
+
+
 def observado_da_familia(estado: dict, familia: str) -> int | None:
     """Quanto a partida ja produziu daquela familia. None = provedor ainda
     nao publicou, e nesse caso a familia inteira sai da analise -- ausencia
-    nunca vira zero (invariante 1 de services/settlement.py)."""
-    if familia == "corners":
-        return estado.get("corners_total")
-    if familia == "goals":
-        return estado.get("goals_total")
-    if familia == "cards":
-        return estado.get("cards_points_total")
-    return None
+    nunca vira zero (invariante 1 de services/settlement.py).
+
+    Familia sem chave mapeada tambem devolve None, mas isso e' outra coisa:
+    e' fiacao faltando, nao dado faltando. Quem separa os dois e'
+    `motivo_da_indisponibilidade`, pra o log parar de culpar o provedor.
+    """
+    chave = CHAVE_DO_ESTADO.get(familia)
+    if chave is None:
+        return None
+    return estado.get(chave)
+
+
+def motivo_da_indisponibilidade(estado: dict, familia: str) -> str:
+    """Por que a familia ficou de fora. Sao dois diagnosticos diferentes e
+    levam a acoes diferentes: um se resolve esperando a folha do provedor, o
+    outro se resolve escrevendo codigo."""
+    if familia not in CHAVE_DO_ESTADO:
+        return (f"familia {familia} configurada mas sem chave de estado "
+                f"mapeada (CHAVE_DO_ESTADO) -- fiacao faltando, nao dado")
+    return "estatistica nao publicada pelo provedor"
 
 
 def _dados_completos(estado: dict, familia: str) -> bool:
@@ -97,7 +132,8 @@ def analisar(estado: dict, observacoes: list, config: LiveEngineConfig = DEFAULT
         if observado is None or minuto is None:
             familias[familia] = {
                 "disponivel": False,
-                "motivo": "estatistica nao publicada pelo provedor",
+                "motivo": ("minuto nao publicado" if minuto is None
+                           else motivo_da_indisponibilidade(estado, familia)),
             }
             continue
 

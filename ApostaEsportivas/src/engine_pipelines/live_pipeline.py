@@ -646,8 +646,20 @@ def contexto_pre_jogo(cur, estado: dict) -> dict | None:
             "match_datetime":  quando,
         }
         match_stats = MatchStatsService()
-        # baseline_cartoes=None: Live nao tem mercado de cartao na V1, entao
-        # a rivalidade ficara marcada como nao confiavel -- correto.
+        # convergencia_cartoes=None deixa a rivalidade marcada como nao
+        # confiavel, e o gate de rivalidade fica inerte no ao vivo.
+        #
+        # A JUSTIFICATIVA MUDOU DE DONO (corrigido em 2026-09-10). O comentario
+        # antigo dizia "Live nao tem mercado de cartao na V1" -- isso e' falso
+        # desde que cartoes entrou em `FAMILIAS_V1`. O que sustenta o None hoje
+        # e' CUSTO: passar a convergencia faz `build_for_fixture` comprar a
+        # folha de estatistica dos H2H, 6 requisicoes por partida, e era a
+        # maior fonte de consumo invisivel do motor (medido em 2026-09-05, a
+        # rodada que declarava 9/15 gastava 30).
+        #
+        # Trocar isso e' decisao de orcamento, nao de codigo: ligar rivalidade
+        # ao vivo custa ~6 requisicoes por partida analisada e so' vale se o
+        # teto de `max_requisicoes` subir junto.
         return context_gate.build_for_fixture(
             match_stats, fixture_live,
             convergencia_cartoes=None,
