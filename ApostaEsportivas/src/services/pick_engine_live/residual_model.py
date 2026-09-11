@@ -26,14 +26,55 @@ escanteios tem taxa observada de 0.20/min, que projetada da' 18 escanteios --
 absurdo estatistico de amostra curta, e exatamente o tipo de numero que
 geraria pick de Over com falsa margem. A taxa e' encolhida em direcao ao
 BASELINE (media da liga, ou a expectativa pre-jogo do confronto quando ela
-existe) com peso que cresce com o minuto:
+existe):
 
-    w = minuto / (minuto + MEIA_CONFIANCA)
+    w = fracao_jogada / (fracao_jogada + FORCA_DO_PRIOR)
     taxa = w x taxa_observada + (1 - w) x taxa_baseline
 
-Aos 15' o jogo pesa 33%; aos 75', 71%. Mesma logica do encolhimento bayesiano
-que o pre-jogo aplica (bayesian_model.shrink_taxa) -- amostra curta nao vira
-convicção.
+O PESO NAO VEM DO RELOGIO, VEM DA DISPERSAO DA FAMILIA (2026-09-10)
+-------------------------------------------------------------------
+Ate' hoje o peso era `minuto / (minuto + 45)`: so' o relogio, igual pra toda
+familia. Isso e' a mesma conta que `w = f / (f + 0.5)`, ou seja, o historico
+inteiro dos dois times entrava valendo MEIO JOGO contra o que a partida tinha
+mostrado ate' ali.
+
+A conta certa e' a posterior Gama-Poisson, e ela ja' estava medida no projeto.
+Se a contagem por partida tem dispersao phi (probability_model._DISPERSAO),
+entao o lambda da partida varia em torno da media com forca de prior
+
+    beta = 1 / (phi - 1)   jogos
+
+e o peso do proprio jogo e' `f / (f + beta)`, com f = minuto/90. Nada aqui e'
+escolhido: phi saiu da base de PROD em 2026-08-20 e beta e' consequencia dele.
+
+O que os numeros dizem, comparado com o que o motor fazia:
+
+    familia    phi   beta (jogos)    peso aos 45'      peso aos 45' (antes)
+    gols      1.07      14.3             0.03                 0.50
+    escanteio 1.82       1.22            0.29                 0.50
+    cartao    2.28       0.78            0.39                 0.50
+    faltas    3.12       0.47            0.51                 0.50
+
+A linha de faltas e' a leitura do defeito: o motor tratava TODA familia como se
+ela fosse tao superdispersa quanto falta. Gol e' quase Poisson (phi 1.07), o
+que quer dizer que a variacao de gols entre partidas e' quase toda sorte, nao
+diferenca real de jogo -- entao 36 minutos sem gol nao descrevem uma partida
+truncada, descrevem a partida mais comum que existe. O motor lia esse vazio
+como 44% da evidencia e cortava 44% do baseline.
+
+A CALIBRACAO MEDIDA CONFIRMA A DERIVACAO. O comentario de
+config.probabilidade_minima_por_familia registra 12.6pp de erro em gols contra
+2.4pp em escanteios. E' exatamente a ordem da distancia entre o peso antigo e
+este: gols estava 0.50 contra 0.03 (erro grande), escanteio 0.50 contra 0.29
+(erro pequeno), e falta, que ja' estava no lugar certo, nunca apareceu na
+lista.
+
+O QUE ISTO NAO DESLIGA: o que a partida mostrou continua entrando por dois
+outros caminhos, que sao os canais certos pra mudanca de estado -- `ajuste_estado`
+(placar, expulsao, pressao, necessidade) e `fator_ritmo`. E a projecao final
+continua sendo `observado + lambda_residual`, entao um 3x0 continua projetando
+em cima de 3. O que mudou e' so' a pergunta "este jogo tem lambda diferente do
+que o historico dizia", e quem responde ela e' a dispersao.
 
 `fator_ritmo` vem de rhythm_model (janela recente + tendencia) e `ajuste_estado`
 sai daqui, combinando placar, expulsao com minuto e pressao ofensiva. O
@@ -55,17 +96,17 @@ from services.pick_engine import probability_model as pm
 #: contar acrescimo como tempo garantido inflaria todo Over.
 MINUTOS_REGULAMENTARES = 90
 
-#: Ponto em que o proprio jogo passa a valer metade da estimativa.
-#:
-#: 45 (e nao 30) porque contagem de evento por partida REGRIDE forte: um jogo
-#: com 7 escanteios aos 38' quase nunca termina no ritmo que vinha -- ele
-#: termina perto de 15, nao de 20. Com 30 o proprio jogo pesava 56% aos 38' e
-#: a projecao saia sistematicamente acima do que a partida entrega; com 45 ele
-#: pesa 46% no mesmo minuto e ~62% aos 75', quando ja ha jogo suficiente pra
-#: sustentar a discordancia.
-#:
-#: Numero de partida declarado, pra calibrar contra resultado medido.
-MEIA_CONFIANCA = 45.0
+#: Teto da forca do prior, em jogos. Existe so' por seguranca numerica: phi
+#: chega a 1.00 em familia nao medida (`dispersao` devolve 1.0 por padrao) e
+#: `1/(phi-1)` estouraria. Com 20 jogos o proprio jogo ainda pesa 2% aos 45',
+#: que e' o comportamento certo pra uma familia sobre a qual nao ha medicao:
+#: acredite no historico ate' provarem o contrario.
+FORCA_MAXIMA_DO_PRIOR = 20.0
+
+#: Piso da forca do prior, em jogos. Familia absurdamente dispersa nao pode
+#: fazer o baseline sumir de vez -- meio jogo era o valor implicito da formula
+#: antiga pra TODAS elas, e aqui ele vira o chao de uma so'.
+FORCA_MINIMA_DO_PRIOR = 0.4
 
 # O ponto neutro de cartao mora no pre-jogo (referee_model): e' o mesmo
 # conceito nos dois motores, e duas constantes divergiriam no primeiro ajuste.
@@ -122,13 +163,31 @@ def minutos_restantes(minuto: int | None, status: str = "") -> int | None:
     return max(0, MINUTOS_REGULAMENTARES - int(minuto))
 
 
+def forca_do_prior(familia: str | None) -> float:
+    """Quantos JOGOS de historico o baseline vale, pra esta familia.
+
+    beta = 1 / (phi - 1), da Gama-Poisson: a contagem por partida tem media mu
+    e variancia mu + mu**2/alfa, entao phi = 1 + mu/alfa e beta = alfa/mu.
+    Familia pouco dispersa e' familia cujo lambda quase nao muda de jogo pra
+    jogo -- e prior que quase nao muda e' prior forte.
+    """
+    phi = pm.dispersao(familia, "total")
+    beta = 1.0 / max(phi - 1.0, 1.0 / FORCA_MAXIMA_DO_PRIOR)
+    return max(FORCA_MINIMA_DO_PRIOR, min(FORCA_MAXIMA_DO_PRIOR, beta))
+
+
 def taxa_por_minuto(observado: int | None, minuto: int | None,
-                    baseline_por_partida: float) -> dict | None:
+                    baseline_por_partida: float,
+                    familia: str | None = None) -> dict | None:
     """Taxa estimada de eventos por minuto, encolhida contra o baseline.
 
-    Devolve o rastro completo (observada, baseline, peso, final) porque cada
-    numero destes precisa aparecer no engine_debug -- sem isso nao ha como
-    auditar depois por que o motor projetou o que projetou.
+    `familia` decide o quanto o proprio jogo pesa contra o historico, pela
+    dispersao medida dela (ver o cabecalho e `forca_do_prior`). Sem familia o
+    prior fica no teto, que e' o lado conservador: na duvida, o historico manda.
+
+    Devolve o rastro completo (observada, baseline, peso, phi, forca do prior,
+    final) porque cada numero destes precisa aparecer no engine_debug -- sem
+    isso nao ha como auditar depois por que o motor projetou o que projetou.
     """
     if observado is None or minuto is None or minuto <= 0:
         return None
@@ -137,12 +196,16 @@ def taxa_por_minuto(observado: int | None, minuto: int | None,
 
     taxa_observada = observado / minuto
     taxa_baseline = baseline_por_partida / MINUTOS_REGULAMENTARES
-    peso = minuto / (minuto + MEIA_CONFIANCA)
+    fracao_jogada = min(1.0, minuto / MINUTOS_REGULAMENTARES)
+    beta = forca_do_prior(familia)
+    peso = fracao_jogada / (fracao_jogada + beta)
     final = peso * taxa_observada + (1 - peso) * taxa_baseline
     return {
         "taxa_observada_min": round(taxa_observada, 5),
         "taxa_baseline_min": round(taxa_baseline, 5),
         "peso_observado": round(peso, 4),
+        "dispersao_phi": round(pm.dispersao(familia, "total"), 3),
+        "forca_do_prior_jogos": round(beta, 3),
         "taxa_estimada_min": round(final, 5),
     }
 
@@ -241,7 +304,7 @@ def lambda_residual(familia: str, observado: int | None, minuto: int | None,
     restantes = minutos_restantes(minuto, status)
     if restantes is None or restantes <= 0:
         return None
-    taxa = taxa_por_minuto(observado, minuto, baseline_por_partida)
+    taxa = taxa_por_minuto(observado, minuto, baseline_por_partida, familia)
     if taxa is None:
         return None
 

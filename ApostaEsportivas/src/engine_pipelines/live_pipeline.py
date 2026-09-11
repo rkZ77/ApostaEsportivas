@@ -294,12 +294,16 @@ def ligas_cadastradas(cur) -> set:
 
 #: Jogos MINIMOS no mando pra a media daquele lado valer como baseline.
 #:
-#: 5 e' pouco pra descrever um time e e' de proposito: o numero nao decide pick
-#: sozinho, ele so' desloca o ponto de partida do lambda residual, que aos 60
-#: minutos ja' pesa menos que o proprio jogo (MEIA_CONFIANCA em
-#: residual_model). Exigir 10 deixaria metade das ligas sem mando ate' o meio
-#: da temporada, e a alternativa nao e' um baseline melhor · e' o mesmo numero
-#: sem recorte de mando.
+#: 5 e' pouco pra descrever um time e e' de proposito: exigir 10 deixaria
+#: metade das ligas sem mando ate' o meio da temporada, e a alternativa nao e'
+#: um baseline melhor, e' o mesmo numero sem recorte de mando.
+#:
+#: ATENCAO, ISTO PESA MAIS DESDE 2026-09-10. A justificativa antiga dizia que o
+#: numero "so' desloca o ponto de partida" porque aos 60 minutos o baseline ja'
+#: pesava menos que o proprio jogo. Isso deixou de ser verdade: o peso do jogo
+#: agora sai da dispersao da familia (residual_model.forca_do_prior), e em gols
+#: o baseline vale 14 jogos de prior, ou seja, ele manda na projecao do comeco
+#: ao fim. Baseline de mando ruim agora vira pick ruim direto.
 MIN_JOGOS_MANDO = 5
 
 

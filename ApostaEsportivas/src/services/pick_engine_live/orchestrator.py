@@ -102,7 +102,7 @@ def analisar(estado: dict, observacoes: list, config: LiveEngineConfig = DEFAULT
             continue
 
         baseline = baselines.get(familia) or rm.BASELINE_PADRAO.get(familia)
-        taxa = rm.taxa_por_minuto(observado, int(minuto), baseline)
+        taxa = rm.taxa_por_minuto(observado, int(minuto), baseline, familia)
         janelas = rit.janelas_recentes(observacoes, familia, int(minuto), observado, config)
         tendencia = rit.tendencia(observacoes, familia, int(minuto), observado, config)
         fator_ritmo = rit.fator_de_ritmo(
