@@ -77,6 +77,15 @@ def pool(monkeypatch):
     p = _PoolFake()
     monkeypatch.setattr(database, "_obter_pool", lambda: p)
     monkeypatch.setattr(database, "_pool", p)
+    # ESTADO GLOBAL ZERADO A CADA TESTE (2026-09-11). `_ociosas` e
+    # `_pool_stats` vivem no modulo e sobrevivem entre testes: rodando o
+    # arquivo sozinho tudo passava, e na suite inteira o lixo de quem rodou
+    # antes fazia `_get_connection` cair no caminho de fallback e abrir conexao
+    # PROPRIA -- que, sem a trava do conftest, era uma conexao real de
+    # producao. Sintoma classico de ordem, que faz procurar o defeito no
+    # arquivo errado.
+    monkeypatch.setattr(database, "_ociosas", {})
+    monkeypatch.setattr(database, "_pool_stats", dict(database._pool_stats))
     return p
 
 
