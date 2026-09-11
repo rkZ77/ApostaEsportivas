@@ -69,6 +69,13 @@ este: gols estava 0.50 contra 0.03 (erro grande), escanteio 0.50 contra 0.29
 (erro pequeno), e falta, que ja' estava no lugar certo, nunca apareceu na
 lista.
 
+E ISTO E' CONSISTENCIA, NAO OPINIAO NOVA. `dispersao_residual`, mais abaixo,
+ja' descrevia a partida com este MESMO Gama-Poisson pra achar o phi do trecho
+que falta -- ela usa `r = lambda_total / (phi_total - 1)`, que e' o mesmo beta
+daqui multiplicado pelo lambda (r = lambda x beta). O modulo acreditava no
+prior na hora de calcular a VARIANCIA do residual e ignorava esse mesmo prior
+na hora de calcular a MEDIA dele. As duas pontas agora contam a mesma historia.
+
 O QUE ISTO NAO DESLIGA: o que a partida mostrou continua entrando por dois
 outros caminhos, que sao os canais certos pra mudanca de estado -- `ajuste_estado`
 (placar, expulsao, pressao, necessidade) e `fator_ritmo`. E a projecao final

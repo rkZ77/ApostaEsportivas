@@ -60,6 +60,18 @@ def test_gol_tem_prior_muito_mais_forte_que_falta():
     assert faltas < 0.6       # falta: pouco mais de meio jogo
 
 
+def test_o_peso_e_a_mesma_gama_poisson_que_a_dispersao_residual_ja_usava():
+    """`dispersao_residual` descreve a partida com r = lambda/(phi-1), em
+    unidade de EVENTO. `forca_do_prior` e' o mesmo numero em unidade de JOGO
+    (r = lambda x beta). Antes desta mudanca o modulo usava esse prior pra
+    variancia do residual e um peso sem relacao nenhuma pra media dele."""
+    for familia, baseline in (("corners", 10.2), ("cards", 4.0), ("fouls", 24.82)):
+        phi_total = pm.dispersao(familia, "total")
+        r = baseline / (phi_total - 1.0)          # o que dispersao_residual usa
+        beta = rm.forca_do_prior(familia)
+        assert r == pytest.approx(baseline * beta, rel=0.01), familia
+
+
 def test_familia_sem_dispersao_medida_cai_no_prior_maximo():
     """`dispersao` devolve 1.0 (Poisson) pra familia nao medida, e 1/(phi-1)
     estouraria. Na duvida o historico manda, que e' o lado conservador."""
@@ -117,7 +129,8 @@ def test_o_pick_da_tela_nao_nasce_mais():
     abaixo do piso da familia (0.65) e o pick nao chega a existir."""
     lam = rm.lambda_residual("goals", observado=0, minuto=36, status="1H",
                              baseline_por_partida=2.65)
-    phi = pm.dispersao("goals", "total")
+    phi = rm.dispersao_residual("goals", 2.65, lam["lambda_residual"],
+                                lam["minutos_restantes"])
     prob_modelo = pm.prob_under(1.5, lam["lambda_residual"], phi)
     publicada = rm.encolher_contra_mercado(prob_modelo, 0.60, 36)["prob"]
     assert publicada < 0.65
