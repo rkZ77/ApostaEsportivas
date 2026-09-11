@@ -161,15 +161,30 @@ class AIReviewSettings:
         )
 
 
-def build_review_payload(picks: list[dict], pipeline: str, fixture: dict | None = None) -> dict:
+def build_review_payload(picks: list[dict], pipeline: str, fixture: dict | None = None,
+                         league_profile: str | None = None) -> dict:
+    """`league_profile` e' o parecer da liga (services/pick_engine/
+    league_profile_store), e ele entra AQUI e em nenhum outro lugar.
+
+    E' prosa sobre a tendencia da competicao -- gols, BTTS, cartoes,
+    escanteios, volatilidade --, e os numeros que ela descreve o motor ja' le'
+    direto do banco. Virar termo de projecao trocaria numero auditavel por
+    opiniao; virar contexto de um gate que so' VETA nao tira poder de decisao de
+    ninguem. `None` quando ninguem rodou `atualizar_ligas` ainda, que e' o
+    estado normal -- e a chave some do payload em vez de ir vazia, pra nao
+    mudar o cache_key de quem nao tem perfil.
+    """
     fixture = fixture or {}
+    bloco_fixture = {
+        "id": fixture.get("fixture_id"), "home": fixture.get("home_team"),
+        "away": fixture.get("away_team"), "league_id": fixture.get("league_id"),
+        "round": fixture.get("round"), "kickoff": str(fixture.get("match_datetime") or ""),
+    }
+    if league_profile:
+        bloco_fixture["league_profile"] = league_profile
     return {
         "pipeline": pipeline,
-        "fixture": {
-            "id": fixture.get("fixture_id"), "home": fixture.get("home_team"),
-            "away": fixture.get("away_team"), "league_id": fixture.get("league_id"),
-            "round": fixture.get("round"), "kickoff": str(fixture.get("match_datetime") or ""),
-        },
+        "fixture": bloco_fixture,
         "picks": [{
             "market": pick.get("market_name"), "market_type": pick.get("market_type"),
             "selection": pick.get("value_label"), "odd": pick.get("odd"),
@@ -253,7 +268,20 @@ class AIReviewGate:
         # viu.
         if self.settings.mode == "off":
             return {"status": "disabled", "decision": "approve", "mode": "off", "cached": False}
-        payload = build_review_payload(picks, pipeline, fixture)
+        # O PARECER DA LIGA entra aqui, e em nenhum outro lugar do motor.
+        # Ver services/pick_engine/league_profile_store: e prosa sobre a
+        # tendencia da competicao, e os numeros que ela descreve o motor ja le
+        # direto do banco. Como contexto de um gate que so VETA ela nao tira
+        # decisao de ninguem; como termo de projecao trocaria numero auditavel
+        # por opiniao. Ausente (o normal, ate alguem rodar o pipeline de perfis
+        # de liga) devolve None e a chave nem entra no payload.
+        perfil = None
+        try:
+            from services.pick_engine import league_profile_store
+            perfil = league_profile_store.perfil_da_liga((fixture or {}).get("league_id"))
+        except Exception:
+            perfil = None
+        payload = build_review_payload(picks, pipeline, fixture, perfil)
         key = cache_key_for_payload(payload, self.settings)
         cached = self._load_cache(key)
         if cached:

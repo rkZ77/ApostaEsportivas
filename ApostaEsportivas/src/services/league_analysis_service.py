@@ -12,6 +12,31 @@ load_dotenv(find_dotenv())
 MAX_TOKENS = 1500
 
 
+#: A tabela NUNCA foi criada por lugar nenhum (achado em 2026-09-11).
+#:
+#: `atualizar_ligas.py` abre com `TRUNCATE TABLE league_analysis`, entao o
+#: pipeline inteiro morria com UndefinedTable em qualquer banco que nao a
+#: tivesse -- era o caso de PROD. Em DEV ela existia porque alguem a criou na
+#: mao, e mesmo la' estava vazia.
+#:
+#: Auto-provisionada, mesmo padrao de competition_rules_store.criar_tabela e do
+#: _ensure_columns dos coletores: migracao em PROD nao roda sozinha depois do
+#: merge, e o `setup` manual e' justamente o passo que costuma faltar.
+def criar_tabela(cur) -> None:
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS league_analysis (
+            id            SERIAL PRIMARY KEY,
+            league_id     INTEGER NOT NULL,
+            league_name   TEXT,
+            season        INTEGER NOT NULL,
+            analysis_text TEXT,
+            created_at    TIMESTAMP DEFAULT NOW(),
+            updated_at    TIMESTAMP DEFAULT NOW(),
+            UNIQUE (league_id, season)
+        );
+    """)
+
+
 class LeagueAnalysisService:
 
     def __init__(self):

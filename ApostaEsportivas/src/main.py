@@ -106,6 +106,28 @@ def run_migrations():
         "ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS ev_combined NUMERIC;",
         "ALTER TABLE picks_vip   ADD COLUMN IF NOT EXISTS engine_debug JSONB;",
         "ALTER TABLE picks_free  ADD COLUMN IF NOT EXISTS engine_debug JSONB;",
+        # PERFIL DE LIGA POR IA (achado em 2026-09-11: a tabela nunca nasceu).
+        #
+        # `atualizar_ligas.py` abria com TRUNCATE nela, entao o pipeline inteiro
+        # morria com UndefinedTable em qualquer banco que nao a tivesse -- PROD
+        # era um deles, e em DEV ela so' existia porque alguem a criou na mao.
+        # O `reset` do atualizar_jogos tambem a truncava, e como TRUNCATE de
+        # tabela inexistente derruba a instrucao inteira, o reset nao limpava
+        # nem as outras treze tabelas da lista.
+        #
+        # Quem LE isto e' o gate de IA (ver pick_engine/league_profile_store):
+        # o texto vai no payload da revisao como contexto da competicao, e
+        # nunca vira termo de projecao.
+        """CREATE TABLE IF NOT EXISTS league_analysis (
+            id            SERIAL PRIMARY KEY,
+            league_id     INTEGER NOT NULL,
+            league_name   TEXT,
+            season        INTEGER NOT NULL,
+            analysis_text TEXT,
+            created_at    TIMESTAMP DEFAULT NOW(),
+            updated_at    TIMESTAMP DEFAULT NOW(),
+            UNIQUE (league_id, season)
+        );""",
         # Trava contra duplicata de multipla (achado real 2026-07-25: pipeline
         # rodou 2x quase simultaneo, o check "ja existe multipla hoje" em
         # Python e' select-then-insert e nao pega corrida entre 2 execucoes

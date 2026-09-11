@@ -99,7 +99,6 @@ class DataCollectorMain:
                 teams,
                 fixtures,
                 league_standings,
-                league_analysis,
                 referee_stats,
                 referees,
                 historical_stats,
@@ -109,6 +108,13 @@ class DataCollectorMain:
                 bet_recommendations
             RESTART IDENTITY CASCADE;
         """)
+        # `league_analysis` SAIU DA LISTA ACIMA (2026-09-11): ela nao nascia em
+        # lugar nenhum, e um TRUNCATE de tabela inexistente derruba a instrucao
+        # INTEIRA -- ou seja, o reset nao limpava nem as treze outras. Agora ela
+        # e' garantida e limpa em separado, e o resto nao depende dela.
+        from services.league_analysis_service import criar_tabela as _criar_perfis
+        _criar_perfis(cur)
+        cur.execute("TRUNCATE TABLE league_analysis RESTART IDENTITY CASCADE;")
         conn.commit()
         cur.close()
         conn.close()

@@ -1,5 +1,5 @@
 from services.leagues_service import LeaguesService
-from services.league_analysis_service import LeagueAnalysisService
+from services.league_analysis_service import LeagueAnalysisService, criar_tabela
 from utils.db_utils import get_connection
 
 
@@ -18,6 +18,10 @@ class AILeagueUpdateMain:
         conn = get_connection()
         cur = conn.cursor()
 
+        # CRIA ANTES DE LIMPAR. O TRUNCATE era a primeira instrucao do script e
+        # a tabela nao nascia em lugar nenhum, entao o pipeline morria com
+        # UndefinedTable em todo banco que nao a tivesse -- PROD, entre eles.
+        criar_tabela(cur)
         cur.execute("TRUNCATE TABLE league_analysis;")
 
         conn.commit()
