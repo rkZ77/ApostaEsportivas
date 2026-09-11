@@ -312,7 +312,15 @@ export default function Admin() {
         api.get('/admin/pipeline-status').then(r => { setPipelineStatus(r.data); return r.data }),
         api.get('/admin/ai-review-status').then(r => { setAiReviewStatus(r.data); return r.data }),
       ]).then(([ps]) => {
-        const rodando = ps?.status === 'running'
+        /* `ps` e' o DICIONARIO inteiro ({comando: {status,...}}), nao um passo.
+           `ps?.status` era sempre undefined, entao `rodando` era sempre false e
+           o backoff nunca acelerava: ficava nos 10s do ramo ocioso mesmo com
+           script rodando. O sintoma era o cartao parecer inerte depois do
+           clique -- `runningCmd` volta a null assim que o POST responde (o
+           backend dispara em background), e ate' 10 segundos depois nada na
+           tela dizia que havia algo rodando. */
+        const rodando = Object.values(ps ?? {}).some(
+          (v: any) => v?.status === 'running')
         clearInterval(id)
         id = setInterval(poll, rodando ? 3000 : 10_000)
       }).catch(() => {})
@@ -362,6 +370,78 @@ export default function Admin() {
   useEffect(() => {
     if (logAutoScroll && logAberto) logFimRef.current?.scrollIntoView({ block: 'nearest' })
   }, [logLinhas, logAutoScroll, logAberto])
+
+  /* O CARTAO DE UM PASSO, e' o mesmo nos dois blocos.
+
+     As etapas numeradas e os avulsos desenhavam cartoes DIFERENTES: o numerado
+     tinha bolinha de status, "ver log" no erro e "ver ao vivo" enquanto roda; o
+     avulso tinha so' o botao. Entao clicar num avulso nao mostrava que havia
+     algo rodando -- e sao justamente os passos mais demorados (a folha de
+     estatistica custa uma requisicao por partida).
+
+     E' uma FUNCAO que devolve JSX, e nao um componente declarado aqui dentro:
+     componente definido no corpo de outro e' remontado a cada render, e o
+     cartao perderia o log aberto a cada volta do poll. */
+  const cartaoDoPasso = (command: string, label: string, numero?: number) => {
+    const s = pipelineStatus[command]
+    const isRunning = runningCmd === command || s?.status === 'running'
+    const borderCls = !s ? (numero ? 'border-line' : 'border-line border-dashed')
+      : s.status === 'running' ? 'border-yellow-500/50'
+      : s.status === 'ok'      ? 'border-green-500/40'
+      : 'border-red-500/50'
+    const bgCls = !s ? ''
+      : s.status === 'running' ? 'bg-yellow-500/5'
+      : s.status === 'ok'      ? 'bg-green-500/5'
+      : 'bg-red-500/5'
+    return (
+      <div key={command} className={`rounded-md border ${borderCls} ${bgCls} p-3 flex flex-col gap-2 transition-colors`}>
+        <div className="flex items-center justify-between">
+          {/* O avulso nao tem numero (ele nao roda em sequencia), mas a
+              bolinha continua alinhada a direita. */}
+          <span className="text-[10px] text-ink-4 font-mono font-bold">
+            {numero ? String(numero).padStart(2, '0') : ''}
+          </span>
+          {!s                      && <span className="w-2 h-2 rounded-full bg-surface-3" />}
+          {s?.status === 'running' && <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />}
+          {s?.status === 'ok'      && <span className="w-2 h-2 rounded-full bg-green-500" />}
+          {s?.status === 'error'   && <span className="w-2 h-2 rounded-full bg-red-500" />}
+        </div>
+        <p className="text-xs font-semibold text-ink-2 leading-tight">{label}</p>
+        {s && !isRunning && (
+          <p
+            className={`text-[10px] cursor-pointer truncate ${s.status === 'error' ? 'text-red-400 underline' : 'text-ink-4'}`}
+            onClick={() => setExpandedLog(expandedLog === command ? null : command)}
+          >
+            {s.status === 'error'
+              ? <span className="inline-flex items-center gap-1"><AlertTriangle className="w-2.5 h-2.5" /> ver log</span>
+              : s.finished_at ?? ''}
+          </p>
+        )}
+        <button
+          onClick={() => runPipeline(command)}
+          disabled={runningCmd !== null || isRunning}
+          className="mt-auto text-[10px] px-2 py-1 rounded-md border border-line-strong text-ink-2 hover:border-ink-4 hover:text-ink-1 transition-colors duration-1 ease-smooth disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+        >
+          {isRunning
+            ? <><Spinner size="sm" className="w-2.5 h-2.5" tone="ink" /> rodando</>
+            : <><Play className="w-2.5 h-2.5" /> rodar</>}
+        </button>
+        {expandedLog === command && (s?.error || s?.log) && (
+          <pre className={`text-[10px] bg-surface-0 rounded p-2 whitespace-pre-wrap break-all overflow-y-auto max-h-40 ${s.status === 'error' ? 'text-red-400' : 'text-ink-2'}`}>
+            {s.error || s.log}
+          </pre>
+        )}
+        {isRunning && (
+          <button
+            onClick={() => abrirLog(command)}
+            className="text-[10px] text-ink-4 underline hover:text-ink-2"
+          >
+            {logAberto && logCmd === command ? 'esconder log' : 'ver ao vivo'}
+          </button>
+        )}
+      </div>
+    )
+  }
 
   const runPipeline = async (command: string) => {
     setRunningCmd(command)
@@ -716,62 +796,8 @@ export default function Admin() {
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
-            {pipelineEtapas.map(({ command, label }, idx) => {
-              const s = pipelineStatus[command]
-              const isRunning = runningCmd === command || s?.status === 'running'
-              const borderCls = !s ? 'border-line'
-                : s.status === 'running' ? 'border-yellow-500/50'
-                : s.status === 'ok'      ? 'border-green-500/40'
-                : 'border-red-500/50'
-              const bgCls = !s ? ''
-                : s.status === 'running' ? 'bg-yellow-500/5'
-                : s.status === 'ok'      ? 'bg-green-500/5'
-                : 'bg-red-500/5'
-              return (
-                <div key={command} className={`rounded-md border ${borderCls} ${bgCls} p-3 flex flex-col gap-2 transition-colors`}>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-ink-4 font-mono font-bold">{String(idx + 1).padStart(2, '0')}</span>
-                    {!s                    && <span className="w-2 h-2 rounded-full bg-surface-3" />}
-                    {s?.status === 'running' && <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />}
-                    {s?.status === 'ok'      && <span className="w-2 h-2 rounded-full bg-green-500" />}
-                    {s?.status === 'error'   && <span className="w-2 h-2 rounded-full bg-red-500" />}
-                  </div>
-                  <p className="text-xs font-semibold text-ink-2 leading-tight">{label}</p>
-                  {s && !isRunning && (
-                    <p
-                      className={`text-[10px] cursor-pointer truncate ${s.status === 'error' ? 'text-red-400 underline' : 'text-ink-4'}`}
-                      onClick={() => setExpandedLog(expandedLog === command ? null : command)}
-                    >
-                      {s.status === 'error'
-                        ? <span className="inline-flex items-center gap-1"><AlertTriangle className="w-2.5 h-2.5" /> ver log</span>
-                        : s.finished_at ?? ''}
-                    </p>
-                  )}
-                  <button
-                    onClick={() => runPipeline(command)}
-                    disabled={runningCmd !== null || isRunning}
-                    className="mt-auto text-[10px] px-2 py-1 rounded-md border border-line-strong text-ink-2 hover:border-ink-4 hover:text-ink-1 transition-colors duration-1 ease-smooth disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-1"
-                  >
-                    {isRunning
-                      ? <><Spinner size="sm" className="w-2.5 h-2.5" tone="ink" /> rodando</>
-                      : <><Play className="w-2.5 h-2.5" /> rodar</>}
-                  </button>
-                  {expandedLog === command && (s?.error || s?.log) && (
-                    <pre className={`text-[10px] bg-surface-0 rounded p-2 whitespace-pre-wrap break-all overflow-y-auto max-h-40 ${s.status === 'error' ? 'text-red-400' : 'text-ink-2'}`}>
-                      {s.error || s.log}
-                    </pre>
-                  )}
-                  {isRunning && (
-                    <button
-                      onClick={() => abrirLog(command)}
-                      className="text-[10px] text-ink-4 underline hover:text-ink-2"
-                    >
-                      {logAberto && logCmd === command ? 'esconder log' : 'ver ao vivo'}
-                    </button>
-                  )}
-                </div>
-              )
-            })}
+            {pipelineEtapas.map(({ command, label }, idx) =>
+              cartaoDoPasso(command, label, idx + 1))}
           </div>
 
           {/* FORA DA SEQUÊNCIA · botão próprio, e o "Rodar tudo" não os chama.
@@ -785,27 +811,8 @@ export default function Admin() {
                 Fora do "Rodar tudo", rodam só no clique
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
-                {pipelineAvulsos.map(({ command, label }) => {
-                  const s = pipelineStatus[command]
-                  const isRunning = runningCmd === command || s?.status === 'running'
-                  return (
-                    <div key={command} className="rounded-md border border-line border-dashed p-3 flex flex-col gap-2">
-                      <p className="text-xs font-semibold text-ink-2 leading-tight">{label}</p>
-                      {s && !isRunning && s.finished_at && (
-                        <p className="text-[10px] text-ink-4 truncate">{s.finished_at}</p>
-                      )}
-                      <button
-                        onClick={() => runPipeline(command)}
-                        disabled={runningCmd !== null || isRunning}
-                        className="mt-auto text-[10px] px-2 py-1 rounded-md border border-line-strong text-ink-2 hover:border-ink-4 hover:text-ink-1 transition-colors duration-1 ease-smooth disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-1"
-                      >
-                        {isRunning
-                          ? <><Spinner size="sm" className="w-2.5 h-2.5" tone="ink" /> rodando</>
-                          : <><Play className="w-2.5 h-2.5" /> rodar</>}
-                      </button>
-                    </div>
-                  )
-                })}
+                {pipelineAvulsos.map(({ command, label }) =>
+                  cartaoDoPasso(command, label))}
               </div>
             </div>
           )}
