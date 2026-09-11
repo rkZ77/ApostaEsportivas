@@ -678,19 +678,32 @@ def test_minutos_restantes():
 
 def test_amostra_curta_nao_vira_conviccao():
     """Aos 15' com 3 escanteios, a taxa crua projeta 18 no jogo. O
-    encolhimento contra o baseline tem que puxar isso pra perto do esperado."""
-    taxa = rm.taxa_por_minuto(observado=3, minuto=15, baseline_por_partida=10.0)
+    encolhimento contra o baseline tem que puxar isso pra perto do esperado.
+
+    O PESO MUDOU DE UNIDADE (2026-09-10). Era `minuto / (minuto +
+    MEIA_CONFIANCA)`, com a meia-confianca em MINUTOS e igual pra toda
+    familia. Agora a forca do prior sai da dispersao medida da familia e e'
+    contada em JOGOS (Gama-Poisson, `forca_do_prior`), entao o peso e'
+    `fracao_jogada / (fracao_jogada + beta)`. Por isso a familia passou a ser
+    obrigatoria aqui: sem ela o beta vai pro teto e o jogo nao pesa quase
+    nada, que e' o lado conservador de proposito.
+    """
+    taxa = rm.taxa_por_minuto(observado=3, minuto=15, baseline_por_partida=10.0,
+                              familia="corners")
     assert taxa["taxa_observada_min"] * 90 == pytest.approx(18.0)
     assert taxa["taxa_estimada_min"] * 90 < 12.5
-    assert taxa["peso_observado"] == pytest.approx(15 / (15 + rm.MEIA_CONFIANCA), abs=1e-4)
+    fracao = 15 / 90
+    beta = rm.forca_do_prior("corners")
+    assert taxa["peso_observado"] == pytest.approx(fracao / (fracao + beta), abs=1e-4)
 
 
 def test_contagem_de_evento_regride_e_o_modelo_respeita_isso():
     """7 escanteios aos 38' nao projetam o ritmo que vinha.
 
-    Este teste trava a decisao de calibracao de MEIA_CONFIANCA: com o valor
-    antigo (30) a projecao dessa partida saia acima de 16 antes de qualquer
-    multiplicador, o que e' percentil alto tratado como cenario central.
+    Este teste trava a calibracao da forca do prior: com a meia-confianca
+    antiga (30 minutos) a projecao dessa partida saia acima de 16 antes de
+    qualquer multiplicador, o que e' percentil alto tratado como cenario
+    central. O numero que segura isso hoje e' `forca_do_prior`.
     """
     taxa = rm.taxa_por_minuto(observado=7, minuto=38, baseline_por_partida=10.4)
     projecao_sem_multiplicadores = 7 + taxa["taxa_estimada_min"] * 52
@@ -699,9 +712,28 @@ def test_contagem_de_evento_regride_e_o_modelo_respeita_isso():
 
 
 def test_o_jogo_pesa_mais_conforme_o_tempo_passa():
-    cedo = rm.taxa_por_minuto(2, 15, 10.0)
-    tarde = rm.taxa_por_minuto(10, 75, 10.0)
-    assert cedo["peso_observado"] < 0.4 < 0.6 < tarde["peso_observado"]
+    """O que este teste protege e' a MONOTONIA, nao os limiares.
+
+    Os numeros absolutos mudaram quando a forca do prior passou a sair da
+    dispersao da familia (2026-09-10) e vao mudar de novo a cada
+    recalibracao dela. O que nao pode mudar e' a direcao: quanto mais jogo
+    corrido, mais o proprio jogo manda contra o historico.
+    """
+    cedo = rm.taxa_por_minuto(2, 15, 10.0, familia="corners")
+    tarde = rm.taxa_por_minuto(10, 75, 10.0, familia="corners")
+    assert cedo["peso_observado"] < tarde["peso_observado"]
+    assert tarde["peso_observado"] > 2 * cedo["peso_observado"]
+
+
+def test_familia_dispersa_deixa_o_jogo_pesar_mais_que_familia_estavel():
+    """E' a consequencia central da Gama-Poisson: familia cujo lambda quase
+    nao muda de jogo pra jogo tem prior forte, e por isso o jogo de hoje
+    desloca menos a estimativa. Gols e' a mais estavel, faltas a mais
+    dispersa.
+    """
+    gols = rm.taxa_por_minuto(2, 60, 2.6, familia="goals")
+    faltas = rm.taxa_por_minuto(18, 60, 26.0, familia="fouls")
+    assert gols["peso_observado"] < faltas["peso_observado"]
 
 
 def test_taxa_recusa_dado_ausente():
