@@ -33,7 +33,7 @@ class AIResultCheckerFree:
         for (pk_id, fixture_id, market, line, odd, home_team, away_team) in rows:
             odd = Decimal(str(odd))
 
-            stats = self._engine.get_fixture_result(fixture_id, cur)
+            stats = self._engine.get_fixture_result(fixture_id, cur, market)
             if not stats:
                 print(f"[CHECKER-FREE] id={pk_id}: sem stats para fixture_id={fixture_id} · aguardando.")
                 continue

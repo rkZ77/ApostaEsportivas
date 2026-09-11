@@ -252,6 +252,16 @@ class LiveEngineConfig:
     #: sabe se foi aos 12' ou aos 80', que sao jogos completamente diferentes.
     buscar_eventos: bool = True
 
+    #: Classificar cada cartao antes de contar (em campo / banco / comissao),
+    #: em vez de aceitar o contador da folha. Custa 1 requisicao de
+    #: /fixtures/lineups por partida, e SO' e' gasta quando a partida ja' tem
+    #: pelo menos um cartao -- sem cartao nao ha' o que validar.
+    #:
+    #: Desligar volta a contar o numero bruto, que soma amarelo de tecnico e de
+    #: reserva no mesmo total. Nao e' uma preferencia: e' aceitar liquidar
+    #: Over/Under de cartao com um numero que a casa nao usa.
+    validar_cartoes_com_escalacao: bool = True
+
     # ── Freshness ────────────────────────────────────────────────────────
     #: Acima deste atraso (em minutos de jogo desde a ultima leitura util) o
     #: dado e' classificado DELAYED; acima do dobro, STALE. Pick nunca sai com

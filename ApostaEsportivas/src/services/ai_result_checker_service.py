@@ -1,7 +1,7 @@
 from utils.db_utils import get_connection
 from decimal import Decimal
 
-from services import settlement
+from services import cards_validation_store, cartoes_validos, settlement
 
 
 _ALLOWED_CHECKER_TABLES = frozenset({"picks_vip", "picks_free", "picks_alavancagem"})
@@ -17,7 +17,7 @@ class AIResultCheckerService:
     ##########################################################################
     # BUSCA ESTATÍSTICAS
     ##########################################################################
-    def get_fixture_result(self, fixture_id, cur):
+    def get_fixture_result(self, fixture_id, cur, market=None):
 
         # SELECT * + mapa por NOME em vez de lista fixa lida por indice: a
         # lista posicional obrigava a recontar 25 posicoes a cada coluna nova
@@ -39,14 +39,48 @@ class AIResultCheckerService:
             i = col.get(nome)
             return row[i] if i is not None else None
 
+        # ── CARTAO E' VALIDADO ANTES DE VIRAR RESULTADO ──────────────────
+        #
+        # `home_yellow_cards` e' o contador da folha, e a folha soma o amarelo
+        # do tecnico e o do reserva que nao entrou junto com os de quem estava
+        # em campo. Num "Over 7.5" essa diferenca E' o resultado.
+        #
+        # A validacao custa duas requisicoes e por isso so' acontece pra quem
+        # precisa dela: quando `market` diz que este pick e' de cartao e a
+        # partida ainda nao foi validada. Os outros mercados nem tocam nisso, e
+        # a mesma partida so' e' perguntada uma vez -- o veredito fica gravado
+        # (ver services/cards_validation_store).
+        if market is not None and self.detect_market_type(market) == "cards":
+            cards_validation_store.garantir_colunas(cur)
+            if g("cards_validation") is None:
+                cards_validation_store.validar_e_gravar(
+                    fixture_id, cur,
+                    home_id=g("home_team_id"), away_id=g("away_team_id"),
+                    total_bruto=g("total_yellow_cards"))
+                cur.execute("SELECT * FROM match_statistics WHERE fixture_id = %s LIMIT 1;",
+                            (fixture_id,))
+                row = cur.fetchone()
+                if not row:
+                    return None
+                col = {d[0]: i for i, d in enumerate(cur.description)}
+
         # NULL aqui significa "o provedor ainda nao publicou esse numero" e
         # segue como None ate' o fim: `or 0` transformava ausencia em zero e
         # era isso que gradeava um Over como RED com o jogo inteiro por
         # contar (ver services/settlement.py, invariante 1). Gols sao a
         # excecao legitima: vem do proprio /fixtures (placar), nao da folha
         # de estatistica, e a linha so' existe pra jogo ja encerrado.
-        hy, hr = g("home_yellow_cards"), g("home_red_cards")
-        ay, ar = g("away_yellow_cards"), g("away_red_cards")
+        # SO' A CONTAGEM VALIDADA LIQUIDA CARTAO. Fora de VALIDADO os quatro
+        # contadores viram None, o que faz todo mercado de cartao cair em
+        # "nao liquidado" -- e' a invariante 1 aplicada a elegibilidade: nao
+        # saber quem levou o cartao e' um tipo de ausencia, e ausencia nunca
+        # vira numero. Quem resolve o pick preso e' a regra de anulacao por
+        # falta de estatistica, nao um palpite daqui.
+        if g("cards_validation") == cartoes_validos.VALIDADO:
+            hy, hr = g("valid_yellow_home"), g("valid_red_home")
+            ay, ar = g("valid_yellow_away"), g("valid_red_away")
+        else:
+            hy = hr = ay = ar = None
         hg_ht  = g("home_goals_ht")
         ag_ht  = g("away_goals_ht")
         h_off, a_off = g("home_offsides"), g("away_offsides")
@@ -616,7 +650,7 @@ class AIResultCheckerService:
 
             odd = Decimal(str(odd))
 
-            stats = self.get_fixture_result(fixture_id, cur)
+            stats = self.get_fixture_result(fixture_id, cur, market)
             if not stats:
                 print(f"[CHECKER] Sem stats para fixture_id={fixture_id} (id={sid}) · aguardando sync.")
                 continue

@@ -22,7 +22,7 @@ class AIResultCheckerAlavancagem:
         Nao achata mais PUSH/HALF em RED: uma perna anulada nao pode derrubar
         um bilhete que ainda paga. A combinacao e' feita em
         settlement.combine_legs(), que recalcula a odd do bilhete."""
-        stats = self._checker.get_fixture_result(fixture_id, cur)
+        stats = self._checker.get_fixture_result(fixture_id, cur, market)
         if not stats:
             return None
 

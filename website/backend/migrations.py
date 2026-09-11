@@ -1000,6 +1000,24 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
                 logger.warning("[MIGRATION] %s sem colunas de auditoria", _t, exc_info=True)
                 conn.rollback()
 
+        # CONTAGEM ELEGÍVEL DE CARTÕES (2026-09-10).
+        #
+        # "Yellow Cards" da folha soma o amarelo do técnico e o do reserva que
+        # não entrou junto com os de quem estava em campo, e a casa não paga
+        # por esse número. Quem classifica cartão a cartão é o motor
+        # (ApostaEsportivas/src/services/cartoes_validos.py) e grava aqui.
+        #
+        # As colunas nascem nesta migration, e não só no auto-provisionamento
+        # do motor, porque o caminho AO VIVO do site lê `match_statistics`
+        # direto no SQL: sem elas a consulta quebraria na instância que ainda
+        # não rodou o motor.
+        for _col in ("valid_yellow_home", "valid_yellow_away",
+                     "valid_red_home", "valid_red_away", "cards_excluded"):
+            cur.execute(
+                f"ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS {_col} INTEGER")
+        cur.execute(
+            "ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS cards_validation TEXT")
+
         # Índice composto que o pipeline ao vivo (live_pipeline.py) usa em
         # todas as queries de baseline: baselines_por_liga, baseline_do_arbitro,
         # baseline_do_mando, baseline_do_confronto consultam match_statistics

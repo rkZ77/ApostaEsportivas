@@ -48,7 +48,7 @@ class AIMultiplasCheckerService:
         home_team  = leg.get("home_team") or leg.get("home")
         away_team  = leg.get("away_team") or leg.get("away")
 
-        stats = self._engine.get_fixture_result(fixture_id, cur)
+        stats = self._engine.get_fixture_result(fixture_id, cur, market)
         if not stats:
             return None  # jogo ainda sem resultado · não validar
 

@@ -30,6 +30,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from services import cartoes_validos
 from services.pick_engine_live.config import DEFAULT_LIVE_CONFIG, LiveEngineConfig
 
 FRESH = "FRESH"
@@ -125,7 +126,8 @@ def _cartoes_por_evento(eventos: list, home_id, away_id) -> dict:
 
 
 def montar_estado(fixture_bruto: dict, home_stats: dict, away_stats: dict,
-                  eventos: list | None = None) -> dict:
+                  eventos: list | None = None,
+                  cartoes_validados: dict | None = None) -> dict:
     """Retrato normalizado e COMPLETO da partida neste instante.
 
     E' este dicionario que vira o snapshot gravado no pick, entao ele responde
@@ -168,6 +170,24 @@ def montar_estado(fixture_bruto: dict, home_stats: dict, away_stats: dict,
         y_fora = y_fora if y_fora is not None else do_evento["yellow_away"]
         r_casa = r_casa if r_casa is not None else do_evento["red_home"]
         r_fora = r_fora if r_fora is not None else do_evento["red_away"]
+        r_total = None if (r_casa is None or r_fora is None) else r_casa + r_fora
+
+    # A FOLHA PERDE PRO CARTAO VALIDADO -- e e' a unica fonte que perde.
+    #
+    # "Yellow Cards" de /fixtures/statistics soma o que o arbitro tirou do
+    # bolso, inclusive pro banco e pra comissao tecnica, e o mercado de cartoes
+    # nao e' sobre eles. Quando ha' evento E escalacao, a contagem elegivel e'
+    # estritamente melhor que a folha: nao e' outra fonte discordando, e' a
+    # MESMA fonte lida com o filtro que faltava (ver services/cartoes_validos).
+    #
+    # So' substitui com status VALIDADO. INCERTO significa que algum cartao nao
+    # pode ser classificado -- e nesse caso trocar um numero completo por um
+    # numero possivelmente incompleto pioraria o dado.
+    if (cartoes_validados and cartoes_validados.get("disponivel")
+            and cartoes_validados.get("status_validacao") == cartoes_validos.VALIDADO):
+        por_time = cartoes_validados.get("por_time") or {}
+        y_casa, y_fora = por_time.get("yellow_home"), por_time.get("yellow_away")
+        r_casa, r_fora = por_time.get("red_home"), por_time.get("red_away")
         r_total = None if (r_casa is None or r_fora is None) else r_casa + r_fora
 
     return {
@@ -228,6 +248,9 @@ def montar_estado(fixture_bruto: dict, home_stats: dict, away_stats: dict,
         "xg_away": away_stats.get("expected_goals"),
 
         "eventos_recentes": eventos or [],
+        # Fica no snapshot de proposito: e' ele que responde "o motor decidiu
+        # sobre 7 cartoes ou sobre os 8 da folha?" quando o pick for auditado.
+        "cartoes_validados": cartoes_validados,
         # Retrato bruto dos dois lados: e' o que permite recalcular qualquer
         # sinal depois sem recoletar. Barato de guardar, caro de recuperar.
         "_folha_home": dict(home_stats),

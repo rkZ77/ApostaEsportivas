@@ -158,7 +158,7 @@ def _resolve_leg_result(checker: AIResultCheckerService, cur, leg: dict):
     tem stats (pendente) ou o mercado nao e suportado pelo checker."""
     if not leg.get("fixture_id") or not leg.get("market"):
         return None, None
-    stats = checker.get_fixture_result(leg["fixture_id"], cur)
+    stats = checker.get_fixture_result(leg["fixture_id"], cur, leg.get("market"))
     if not stats:
         return None, None
     # `market_type` E' OBRIGATORIO AQUI (2026-08-29). A perna ja' carrega a

@@ -343,7 +343,13 @@ _COLUNA_DA_FOLHA = {
     #
     # Hoje nao ha' pick ao vivo de cartao (so' escanteio e gol) e a cobertura de
     # vermelho esta' em 100% nos FT -- isto e' pra quando o mercado ligar.
-    "cards":   "(ms.total_yellow_cards + 2 * ms.total_red_cards)",
+    # E A SOMA CRUA SAIU DE VEZ (2026-09-10): ela contava o amarelo do tecnico
+    # e o do reserva que nao entrou. Agora so' a contagem ELEGIVEL liquida, e
+    # fora de VALIDADO o CASE devolve NULL -- que e' o mesmo "nao liquida" que
+    # o paragrafo acima ja' descreve, agora tambem pra quem levou o cartao.
+    "cards":   ("(CASE WHEN ms.cards_validation = 'VALIDADO' THEN "
+                "ms.valid_yellow_home + ms.valid_yellow_away + "
+                "2 * (ms.valid_red_home + ms.valid_red_away) END)"),
 }
 
 

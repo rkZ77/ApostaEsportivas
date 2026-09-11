@@ -50,7 +50,7 @@ if _SRC not in sys.path:
 from utils.db_utils import get_connection  # noqa: E402
 from services.match_stats_service import MatchStatsService
 from services.standings_service import StandingsService
-from services import h2h_api_fetcher
+from services import cartoes_validos, h2h_api_fetcher
 from services.pick_engine import context_gate, referee_model, stats_model
 from services.pick_engine.ai_review import review_gate
 from services.pick_engine.staking import calculate_stake
@@ -1475,7 +1475,20 @@ def _processar_partida(indice: int, bruto: dict, cur, conn, feed: LiveFeed,
     eventos_lidos = live_state.ler_eventos(eventos_brutos, minuto_bruto)
     eventos = live_state.resumo_de_eventos(eventos_lidos, minuto_bruto)
 
-    estado = live_state.montar_estado(bruto, home_stats, away_stats, eventos_lidos)
+    # CARTAO SO' CONTA SE FOI DE ALGUEM EM CAMPO. A escalacao so' e' buscada
+    # quando existe cartao pra classificar: sem cartao a resposta nao mudaria
+    # nada e a requisicao seria cota jogada fora (ver o teto em live_feed).
+    cartoes_validados = None
+    tem_cartao = any((e.get("type") or "").strip().lower() == "card"
+                     for e in eventos_brutos or [])
+    if config.validar_cartoes_com_escalacao and tem_cartao and feed.tem_orcamento(2):
+        cartoes_validados = cartoes_validos.validar_cartoes(
+            eventos_brutos, feed.escalacoes(fid),
+            (times.get("home") or {}).get("id"),
+            (times.get("away") or {}).get("id"))
+
+    estado = live_state.montar_estado(bruto, home_stats, away_stats, eventos_lidos,
+                                      cartoes_validados)
     print(f"Minuto: {estado.get('minuto')}   Placar: "
           f"{estado.get('home_goals')}x{estado.get('away_goals')}")
 

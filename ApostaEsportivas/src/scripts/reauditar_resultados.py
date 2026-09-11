@@ -61,7 +61,7 @@ def _auditar_simples(cur, checker, tabela, home_col, away_col):
     achados = []
     for (pid, fixture_id, market, market_type, line, odd, result, profit,
          home, away, match_date) in cur.fetchall():
-        stats = checker.get_fixture_result(fixture_id, cur) if fixture_id else None
+        stats = checker.get_fixture_result(fixture_id, cur, market) if fixture_id else None
         if not stats:
             achados.append({
                 "tabela": tabela, "id": pid, "fixture_id": fixture_id,

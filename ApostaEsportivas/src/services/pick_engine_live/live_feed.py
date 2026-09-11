@@ -193,6 +193,23 @@ class LiveFeed:
         """
         return self._get("fixtures/events", {"fixture": fixture_id})
 
+    def escalacoes(self, fixture_id: int) -> list:
+        """Titulares, reservas e tecnico -- quem PODE estar em campo.
+
+        So' serve pra uma coisa, e por isso so' e' chamada quando essa coisa
+        existe: dizer se o cartao que a partida acabou de levar foi de alguem
+        em campo, de alguem no banco ou do tecnico. A folha de estatistica
+        soma os tres no mesmo contador, e um amarelo de area tecnica vira
+        GREEN falso num Over (ver services/cartoes_validos).
+
+        Custa 1 requisicao por partida e nao muda depois do apito inicial, entao
+        a memoria de `_get` resolve as rodadas seguintes de graca. Quem chama
+        so' gasta isso quando ja' ha' pelo menos UM cartao pra classificar --
+        sem cartao nao ha' o que validar, e a chamada seria puro desperdicio de
+        cota.
+        """
+        return self._get("fixtures/lineups", {"fixture": fixture_id})
+
     def odds_ao_vivo_do_mundo(self, max_paginas: int = 3) -> dict:
         """Todas as partidas com odd ao vivo AGORA, indexadas por fixture.
 
