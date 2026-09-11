@@ -108,8 +108,8 @@ export default function PickSocial({ pickId, pickType }: { pickId: number; pickT
         if (!prev) return prev
         const reactions = { ...prev.reactions, [reaction]: r.data.count }
         const user_reactions = r.data.active
-          ? [...prev.user_reactions, reaction]
-          : prev.user_reactions.filter((x: string) => x !== reaction)
+          ? [...(prev.user_reactions ?? []), reaction]
+          : (prev.user_reactions ?? []).filter((x: string) => x !== reaction)
         return { ...prev, reactions, user_reactions }
       })
     } catch {}
@@ -161,7 +161,12 @@ export default function PickSocial({ pickId, pickType }: { pickId: number; pickT
         <p className="text-xs text-ink-3 mb-3">Reações</p>
         <div className="flex flex-wrap gap-2">
           {REACTIONS.map(({ key, icon, label }) => {
-            const active = data?.user_reactions.includes(key) ?? false
+            /* O `?.` protegia `data` e NÃO o campo (10/09/2026). Uma
+               resposta sem `user_reactions` -- versão antiga da rota, corpo
+               truncado, qualquer coisa -- derrubava a PÁGINA INTEIRA com
+               "Algo deu errado", por causa da lista de reações de um pick.
+               Componente de comentário não pode ter esse poder. */
+            const active = data?.user_reactions?.includes(key) ?? false
             const count  = data?.reactions[key] ?? 0
             return (
               <button

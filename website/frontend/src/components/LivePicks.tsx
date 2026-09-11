@@ -11,6 +11,7 @@ import { rotuloDoMercado } from '../utils/marketTranslate'
 import { backdropFade, sheetUp } from '../lib/motion'
 import { AO_VIVO as LIVE_SET, ENCERRADO as FINISHED_SET, STATUS_LABEL } from '../lib/aoVivo'
 import { TeamLogo } from './TeamLogo'
+import { ehCartela } from '../utils/cartela'
 
 // Régua de status e escudo saíram daqui pra `lib/aoVivo.ts` em 02/09: as
 // mesmas listas viviam copiadas em Fixtures, FixtureStatsModal e no feed de
@@ -487,7 +488,10 @@ function PickCard({ pick, unitValue, onRefresh, syncedAt }: {
   const relogio     = useRelogio(pick.elapsed, pick.status, syncedAt)
   const isLive      = pick.is_live
   const isFinished  = FINISHED_SET.has(pick.status)
-  const isMulti     = pick.pick_type === 'multipla' || pick.pick_type === 'alavancagem'
+  /* Bilhete é bilhete: múltipla, Bingo e alavancagem. O Bingo estava fora
+     desta régua e era tratado como pick de um jogo só, inclusive no
+     travamento antecipado. Ver utils/cartela. */
+  const isMulti     = ehCartela(pick.pick_type) || pick.pick_type === 'alavancagem'
   const hasCashout  = pick.cashout_amount != null
 
   const earlyLocked     = !pick.is_locked && isLive && !isMulti && isEarlyLocked(pick)

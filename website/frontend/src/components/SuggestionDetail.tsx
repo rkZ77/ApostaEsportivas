@@ -13,6 +13,7 @@ import { translateMarket, translateLine, linhaDoJogador } from '../utils/marketT
 import { PlayerPhoto } from './TeamLogo'
 import { backdropFade, dialogScale } from '../lib/motion'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
+import { ehCartela } from '../utils/cartela'
 import AnalysisModal from './AnalysisModal'
 import { AnimatePresence } from 'framer-motion'
 
@@ -144,7 +145,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
     }
 
     // 3. Fallback com mesmas funções dos cards (por tipo de pick)
-    const isMultipla = pickType === 'multipla'
+    const isMultipla = ehCartela(pickType)
     const isFree     = pickType === 'free'
     const odd  = Number(s.total_odd ?? s.odd ?? 0)
     const prob = Number(s.probability ?? s.confidence ?? s.prob_real ?? 0)
@@ -217,15 +218,19 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                   <span className="font-black text-ink-1 text-sm leading-tight truncate">{s.home_team_name}</span>
                 </div>
 
-                {/* VS */}
+                {/* VS · SÓ QUANDO HÁ DOIS LADOS (10/09/2026).
+                    Num bilhete o cabeçalho é "Bingo do Dia, 3 seleções" e o
+                    campo do adversário vem vazio de propósito: o "VS" sozinho
+                    ao lado do nada lia como dado faltando. O selo de resultado
+                    continua aparecendo sempre, porque ele fala do bilhete. */}
                 <div className="text-center shrink-0">
                   {resultStyle ? (
                     <span className={`text-xs font-black px-2 py-1 rounded-lg border ${resultStyle.bg} ${resultStyle.text} ${resultStyle.border}`}>
                       {resultStyle.label}
                     </span>
-                  ) : (
+                  ) : s.away_team_name ? (
                     <span className="text-ink-4 text-xs font-bold">VS</span>
-                  )}
+                  ) : null}
                   {s.match_datetime && (
                     <div className="text-[10px] text-ink-4 mt-1">
                       {new Date(s.match_datetime).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
@@ -250,7 +255,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
           </div>
 
           {/* Bet summary bar */}
-          {s && pickType !== 'multipla' && pickType !== 'alavancagem' && (
+          {s && !ehCartela(pickType) && pickType !== 'alavancagem' && (
             <div className="flex items-center gap-0 border-t border-line/60 text-center divide-x divide-line/60">
               {/* JOGADOR, quando o pick é sobre uma pessoa (02/09).
                 * Esta barra é o mesmo dado do card, e o card passou a mostrar
@@ -344,11 +349,29 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                         </>
                       )}
                     </div>
+                    {/* NUM BILHETE, A ODD COMBINADA OCUPA ESTE LUGAR
+                        (10/09/2026).
+                        Múltipla e Bingo não têm EV gravado, então o cartão
+                        aparecia com o rótulo "EV" e NENHUM número embaixo -- um
+                        buraco no meio da faixa. E a odd combinada, que é o
+                        número mais importante de um bilhete, não estava em
+                        lugar nenhum do painel. */}
                     <div className="bg-surface-1 border border-line rounded-lg p-3 text-center">
-                      <div className="text-[10px] text-ink-3 mb-1">EV</div>
-                      <div className={`text-2xl font-black ${ev && Number(ev) > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {ev ? `${Number(ev) > 0 ? '+' : ''}${ev}%` : ''}
-                      </div>
+                      {ehCartela(pickType) ? (
+                        <>
+                          <div className="text-[10px] text-ink-3 mb-1">Odd combinada</div>
+                          <div className="text-2xl font-black text-green-400">
+                            {s.odd ? Number(s.odd).toFixed(2) : 's/d'}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="text-[10px] text-ink-3 mb-1">EV</div>
+                          <div className={`text-2xl font-black ${ev && Number(ev) > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {ev ? `${Number(ev) > 0 ? '+' : ''}${ev}%` : 's/d'}
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -435,7 +458,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                   </div>
 
                   {/* Múltipla / Alavancagem · legs */}
-                  {(pickType === 'multipla' || pickType === 'alavancagem') && s.legs?.length > 0 && (
+                  {(ehCartela(pickType) || pickType === 'alavancagem') && s.legs?.length > 0 && (
                     <div>
                       <p className="text-[10px] text-ink-3 mb-2">Jogos</p>
                       <div className="space-y-2">

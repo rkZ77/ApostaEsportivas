@@ -18,6 +18,7 @@ import {
 import { useShareStoryImage, useShareBilheteImage } from '../hooks/useShareStoryImage'
 import { useOddAtualizada } from '../hooks/useOddAtualizada'
 import { useOddAgora } from '../hooks/useOddsAgora'
+import { ehCartela } from '../utils/cartela'
 import { TeamLogo, LeagueLogo, PlayerPhoto } from './TeamLogo'
 import { Ban, Clock } from 'lucide-react'
 
@@ -239,7 +240,9 @@ function SuggestionCard({
     const odd  = Number(s.odd)
     const ev   = Number(s.ev ?? 0)
     const pickType = s.pick_type ?? 'vip'
-    if (pickType === 'multipla') {
+    /* Bingo entra aqui junto com a múltipla: é bilhete, e a conta de pick
+       simples num combinado de cinco pernas devolve unidade a mais. */
+    if (ehCartela(pickType)) {
       return calcMultiplaStake(prob, odd, banca.bankroll_current, banca.unit_value)
     }
     if (pickType === 'free') {
@@ -349,9 +352,10 @@ function SuggestionCard({
     // Abre com a odd que está no card · ver o comentário gêmeo em Picks.tsx.
     setModalOdd(oddExibida)
     setShowModal(true)
-    // Múltipla não passa por aqui: bilhete se atualiza perna a perna, no card
-    // dele, via /live/ticket-odd.
-    if (s.pick_type === 'multipla') return
+    // Bilhete não passa por aqui: ele se atualiza perna a perna, no card dele,
+    // via /live/ticket-odd. Perguntar a odd de UMA fixture num combinado é
+    // pedir o preço de um jogo que o bilhete inteiro não tem.
+    if (ehCartela(s.pick_type)) return
     buscarOdd(Number(s.odd), {
       fixture_id: s.fixture_id,
       market_type: s.market_type,
