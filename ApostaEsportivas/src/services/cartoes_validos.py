@@ -32,6 +32,8 @@ depende de convencao nenhuma da API.
 """
 from __future__ import annotations
 
+import unicodedata
+
 # ── Classificacao de um cartao ───────────────────────────────────────────
 EM_CAMPO = "EM_CAMPO"
 NO_BANCO = "NO_BANCO"
@@ -62,6 +64,38 @@ def _nome(bloco) -> str | None:
     return ((bloco or {}).get("name") or None)
 
 
+def _sem_acento(texto: str) -> str:
+    return "".join(c for c in unicodedata.normalize("NFKD", texto)
+                   if not unicodedata.combining(c))
+
+
+def _identidade(bloco):
+    """Quem e' esta pessoa, pra efeito de rastreio.
+
+    O ID QUANDO EXISTE, O NOME QUANDO NAO EXISTE. A API-Football tem jogador
+    sem id no proprio cadastro -- e quando isso acontece, o id vem nulo dos
+    DOIS lados: no `startXI` e no evento. Medido em 2026-09-10: America Mineiro
+    x Vila Nova (fixture 1520860) tinha "Otavio Goncalves" titular com id nulo,
+    e era esse jogador que derrubava o rastreio do time inteiro -- 5 das 30
+    partidas da amostra voltavam INCERTO por isso, nenhuma por falta de
+    escalacao.
+
+    Casar por nome aqui NAO e' heuristica frouxa: os dois lados sao a mesma
+    resposta do mesmo provedor, com a mesma grafia. O acento sai e o caixa
+    baixa so' por seguranca.
+
+    Devolve `None` pra quem nao tem nem id nem nome -- e e' esse `None` que
+    continua marcando comissao tecnica.
+    """
+    pid = _id(bloco)
+    if pid is not None:
+        return pid
+    nome = _nome(bloco)
+    if not nome:
+        return None
+    return ("nome", _sem_acento(nome).strip().lower())
+
+
 def _ordem(evento: dict, i: int) -> tuple:
     tempo = evento.get("time") or {}
     minuto = tempo.get("elapsed")
@@ -83,13 +117,13 @@ def ler_escalacoes(escalacoes: list | None) -> dict:
             continue
         titulares, reservas = set(), set()
         for item in bloco.get("startXI") or []:
-            pid = _id(item.get("player"))
-            if pid is not None:
-                titulares.add(pid)
+            quem = _identidade(item.get("player"))
+            if quem is not None:
+                titulares.add(quem)
         for item in bloco.get("substitutes") or []:
-            pid = _id(item.get("player"))
-            if pid is not None:
-                reservas.add(pid)
+            quem = _identidade(item.get("player"))
+            if quem is not None:
+                reservas.add(quem)
         if not titulares:
             # startXI vazio nao serve de base pro rastreio de quem esta' em
             # campo: sem os 11 iniciais toda substituicao fica ambigua.
@@ -98,7 +132,7 @@ def ler_escalacoes(escalacoes: list | None) -> dict:
             "titulares": titulares,
             "reservas": reservas,
             "elenco": titulares | reservas,
-            "tecnico": _id(bloco.get("coach")),
+            "tecnico": _identidade(bloco.get("coach")),
         }
     return por_time
 
@@ -187,8 +221,9 @@ def validar_cartoes(eventos: list | None, escalacoes: list | None = None,
             if tid in em_campo:
                 # DIRECAO RESOLVIDA POR PERTENCIMENTO, nao pelo campo da API:
                 # das duas pessoas do par, quem esta' em campo e' quem saiu.
-                par = [p for p in (_id(evento.get("player")),
-                                   _id(evento.get("assist"))) if p is not None]
+                par = [p for p in (_identidade(evento.get("player")),
+                                   _identidade(evento.get("assist")))
+                       if p is not None]
                 dentro = [p for p in par if p in em_campo[tid]]
                 fora = [p for p in par if p not in em_campo[tid]]
                 if len(dentro) == 1 and len(fora) == 1:
@@ -205,12 +240,12 @@ def validar_cartoes(eventos: list | None, escalacoes: list | None = None,
         if not _e_cartao(evento):
             continue
 
-        pid = _id(evento.get("player"))
+        pid = _identidade(evento.get("player"))
         amarelos_do_evento, vermelhos_do_evento = _cores(evento)
         lado = _lado(tid)
         registro = {
             "jogador": _nome(evento.get("player")),
-            "player_id": pid,
+            "player_id": _id(evento.get("player")),
             "time_id": tid,
             "lado": lado,
             "minuto": (evento.get("time") or {}).get("elapsed"),
@@ -221,11 +256,13 @@ def validar_cartoes(eventos: list | None, escalacoes: list | None = None,
         if elenco is None:
             classe = INDETERMINADO
         elif pid is None:
-            # Cartao sem jogador identificado: a API faz isso justamente com a
-            # area tecnica.
+            # Sem id E sem nome. Nao da' pra ser ninguem do elenco -- jogador
+            # sem id ainda tem nome, e e' por ele que `_identidade` o acha.
             classe = COMISSAO
         elif pid not in elenco["elenco"]:
-            # Fora do elenco relacionado: tecnico, auxiliar, preparador.
+            # Fora do elenco relacionado: tecnico, auxiliar, preparador. O
+            # tecnico cai aqui pelo nome quando o id dele e' 0 ou nulo, que e'
+            # como a API costuma manda-lo.
             classe = COMISSAO
         elif tid not in em_campo:
             classe = INDETERMINADO

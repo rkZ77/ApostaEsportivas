@@ -32,6 +32,17 @@ def _subst(minuto, team, a, b):
     }
 
 
+def _subst_nomeado(minuto, team, player, assist):
+    """Substituicao em que um dos dois pode vir sem id."""
+    return {
+        "time": {"elapsed": minuto, "extra": None},
+        "team": {"id": team, "name": "T"},
+        "player": player,
+        "assist": assist,
+        "type": "subst",
+        "detail": "Substitution 1",
+    }
+
 def _escalacoes(titulares_home, reservas_home, titulares_away, reservas_away,
                 tecnico_home=900, tecnico_away=901):
     def bloco(tid, titulares, reservas, tecnico):
@@ -223,3 +234,55 @@ class TestOrdem:
         card_45["time"]["extra"] = 2
         r = cv.validar_cartoes([card_45, subst_45], ESCALACAO, HOME, AWAY)
         assert r["total_cartoes_validos"] == 0
+
+
+class TestJogadorSemId:
+    """A API tem jogador sem id no proprio cadastro.
+
+    Medido em 2026-09-10 na fixture 1520860 (America Mineiro): "Otavio
+    Goncalves" era TITULAR com id nulo, e o id vem nulo dos dois lados -- no
+    `startXI` e no evento. Antes disso o time inteiro perdia o rastreio na
+    primeira substituicao dele, e um cartao dele era excluido como comissao
+    tecnica.
+    """
+
+    ESCALACAO = [
+        {"team": {"id": HOME, "name": "T"}, "coach": {"id": 0, "name": "Tecnico"},
+         "startXI": ([{"player": {"id": p, "name": f"P{p}"}} for p in range(1, 11)]
+                     + [{"player": {"id": None, "name": "Otavio Goncalves"}}]),
+         "substitutes": [{"player": {"id": 12, "name": "P12"}}]},
+        {"team": {"id": AWAY, "name": "T"}, "coach": {"id": 901, "name": "Tecnico"},
+         "startXI": [{"player": {"id": p, "name": f"P{p}"}} for p in range(21, 32)],
+         "substitutes": []},
+    ]
+
+    def test_cartao_de_titular_sem_id_conta(self):
+        eventos = [_card(30, HOME, None, nome="Otavio Goncalves")]
+        r = cv.validar_cartoes(eventos, self.ESCALACAO, HOME, AWAY)
+        assert r["total_cartoes_validos"] == 1
+        assert r["status_validacao"] == "VALIDADO"
+
+    def test_substituicao_com_id_nulo_nao_derruba_o_rastreio(self):
+        eventos = [_subst_nomeado(60, HOME, {"id": None, "name": "Otavio Goncalves"},
+                                  {"id": 12, "name": "P12"}),
+                   _card(75, HOME, None, nome="Otavio Goncalves")]
+        r = cv.validar_cartoes(eventos, self.ESCALACAO, HOME, AWAY)
+        assert r["status_validacao"] == "VALIDADO"
+        assert r["total_cartoes_validos"] == 0   # ja tinha saido
+
+    def test_o_tecnico_com_id_zero_continua_fora(self):
+        eventos = [_card(30, HOME, 0, nome="Tecnico")]
+        r = cv.validar_cartoes(eventos, self.ESCALACAO, HOME, AWAY)
+        assert r["total_cartoes_validos"] == 0
+        assert r["eventos_excluidos"][0]["motivo"] == "Cartao para comissao tecnica"
+
+    def test_acento_nao_separa_a_mesma_pessoa(self):
+        escalacao = [
+            {"team": {"id": HOME, "name": "T"}, "coach": {"id": 900, "name": "T"},
+             "startXI": ([{"player": {"id": p, "name": f"P{p}"}} for p in range(1, 11)]
+                         + [{"player": {"id": None, "name": "Joao Gon\u00e7alves"}}]),
+             "substitutes": []},
+        ]
+        eventos = [_card(30, HOME, None, nome="Joao Goncalves")]
+        r = cv.validar_cartoes(eventos, escalacao, HOME, AWAY)
+        assert r["total_cartoes_validos"] == 1
