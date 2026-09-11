@@ -5963,6 +5963,22 @@ def _sem_auditoria(e: Exception) -> bool:
     return ("engine_runs" in texto or "engine_errors" in texto) and "exist" in texto
 
 
+@router.get("/motor/fluxo")
+def motor_fluxo(current_user: dict = Depends(require_admin)):
+    """O desenho de cada motor: o que entra, por onde passa, o que reprova.
+
+    As outras telas desta aba respondem o que ACONTECEU (quais execuções
+    rodaram, o que o motor olhou num dia). Esta responde uma pergunta que não
+    tinha tela nenhuma: COMO o motor chega num pick, e com que dado.
+
+    Os limiares saem do config real do motor em tempo de execução, e os métodos
+    do registro de motores -- ver a docstring de motor_fluxo.py pro porquê de
+    nada disso ser texto no frontend.
+    """
+    from motor_fluxo import fluxo_dos_motores
+    return fluxo_dos_motores()
+
+
 @router.get("/motor/execucoes")
 def motor_execucoes(
     motor: str | None = None,

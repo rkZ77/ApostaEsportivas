@@ -12,6 +12,7 @@ import AdminMotorLive from '../components/AdminMotorLive'
 import AdminDados from '../components/AdminDados'
 import AdminMotorDecisoes from '../components/AdminMotorDecisoes'
 import AdminAuditoriaMotores from '../components/AdminAuditoriaMotores'
+import AdminFluxoDosMotores from '../components/AdminFluxoDosMotores'
 import AdminPendencias from '../components/AdminPendencias'
 import AdminPlanosVencidos from '../components/AdminPlanosVencidos'
 import { fmtBRL } from '../utils/format'
@@ -881,6 +882,11 @@ export default function Admin() {
 
         {aba === 'motor' && (
           <div className="space-y-8">
+            {/* O DESENHO VEM PRIMEIRO. As duas telas abaixo respondem o que
+                aconteceu (quais execuções rodaram, o que o motor olhou num
+                dia); esta responde como o motor chega num pick, que é a
+                pergunta anterior às duas. */}
+            <AdminFluxoDosMotores />
             <AdminAuditoriaMotores />
             <AdminMotorDecisoes />
           </div>
