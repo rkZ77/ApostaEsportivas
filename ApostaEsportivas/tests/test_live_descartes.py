@@ -7,7 +7,8 @@ na maioria das execucoes, e ela precisa dizer o que fazer a respeito.
 O `pode_voltar` tambem alimenta o live_watch, que usa `fixtures_no_radar` pra
 escolher entre a espera curta e a longa.
 """
-from engine_pipelines.live_pipeline import imprimir_descartes, resumir_descartes
+from engine_pipelines.live_pipeline import (imprimir_descartes, ligas_cadastradas,
+                                            resumir_descartes)
 
 
 def _d(jogo, categoria, pode_voltar, liga=71, minuto=30, motivo="x"):
@@ -77,3 +78,53 @@ def test_avisa_quando_nada_pode_render(capsys):
     imprimir_descartes(resumir_descartes([_d("alheio", "liga", False, liga=999)]))
 
     assert "nenhuma partida das nossas ligas" in capsys.readouterr().out
+
+# ── Quais ligas o motor ao vivo enxerga ──────────────────────────
+class _CursorDeLigas:
+    """Cursor que devolve so' o que o SQL realmente pediu."""
+
+    #: (league_id, ativa). A inativa e' o caso real: `leagues` recebe linha
+    #: por efeito colateral do backfill de historico, sempre com ativa=FALSE.
+    LINHAS = [(71, True), (39, True), (1, False), (242, False)]
+
+    def __init__(self):
+        self.sql = None
+
+    def execute(self, sql, params=None):
+        self.sql = sql
+
+    def fetchall(self):
+        if "ativa" in (self.sql or "").lower():
+            return [(lid,) for lid, ativa in self.LINHAS if ativa]
+        return [(lid,) for lid, _ in self.LINHAS]
+
+
+def test_liga_desativada_nao_entra_no_motor_ao_vivo():
+    """O motor ao vivo era o UNICO lugar do projeto que lia `leagues` inteira.
+
+    Isso deixava passar exatamente a liga que nao deveria: a que entrou na
+    tabela por efeito colateral do backfill de historico (ativa=FALSE) e que
+    por definicao e' a que tem MENOS historico no banco -- ou seja, o pior
+    baseline possivel. Medido em 2026-09-11: DEV tinha "Liga Pro (Ecuador)"
+    cadastrada sozinha assim, e PROD tinha a Copa do Mundo desativada; as
+    duas elegiveis pro motor ao vivo.
+    """
+    cur = _CursorDeLigas()
+
+    permitidas = ligas_cadastradas(cur)
+
+    assert permitidas == {71, 39}
+    assert 1 not in permitidas, "Copa do Mundo esta' desativada"
+    assert 242 not in permitidas, "liga que o backfill descobriu nao e' liga do projeto"
+
+
+def test_o_corte_de_liga_usa_a_mesma_clausula_do_resto_da_coleta():
+    """`COALESCE(ativa, TRUE)` e' a clausula que fixture_collector,
+    match_statistics_sync e o recorte da media ja' usavam. Divergir dela aqui
+    foi o que criou o furo.
+    """
+    cur = _CursorDeLigas()
+
+    ligas_cadastradas(cur)
+
+    assert "COALESCE(ativa, TRUE)" in cur.sql

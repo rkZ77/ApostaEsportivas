@@ -254,29 +254,27 @@ class TeamHistoryBackfillService:
         return {r[0] for r in self.cur.fetchall()}
 
     # ---------------------------------------------------------
-    # Liga descoberta -> historico
+    # Liga descoberta -> NAO vira cadastro
     # ---------------------------------------------------------
-    def _garantir_liga(self, liga: dict):
-        """Cadastra a liga do jogo como historico (ativa=FALSE) se ela ainda
-        nao existir. ON CONFLICT DO NOTHING protege a liga que JA' e' coletada:
-        nenhuma delas pode ser desativada por um efeito colateral daqui."""
-        league_id = liga.get("id")
-        if league_id is None:
-            return
-        nome = liga.get("name") or f"Liga {league_id}"
-        pais = liga.get("country")
-        # Sem o pais no nome, "Primera Division" do Paraguai, do Chile e do
-        # Uruguai viram tres linhas indistinguiveis nas telas.
-        if pais and pais.lower() not in ("world", nome.lower()):
-            nome = f"{nome} ({pais})"
-        self.cur.execute("""
-            INSERT INTO leagues (league_id, name, season, ativa)
-            VALUES (%s, %s, %s, FALSE)
-            ON CONFLICT (league_id) DO NOTHING
-        """, (league_id, nome[:100], liga.get("season")))
-        if self.cur.rowcount > 0:
-            print(f"[BACKFILL] Liga {league_id} ({nome}) cadastrada como historico (ativa=FALSE).")
-        self.conn.commit()
+    # ESTE COLETOR NAO ESCREVE EM `leagues` (2026-09-11).
+    #
+    # Ate' aqui ele cadastrava a liga de todo jogo que trouxesse, com
+    # `ativa=FALSE`. A intencao era boa -- dar nome a' liga nas telas em vez de
+    # "Liga 242" -- e o FALSE existia justamente pra ela nao virar liga do
+    # projeto. So' que `leagues` nao e' um dicionario de nomes: e' a lista do
+    # que o projeto ACOMPANHA. Escrever nela por efeito colateral de um
+    # backfill de historico confunde as duas coisas, e bastou UM lugar ler a
+    # tabela sem o `ativa` pra isso virar pick: o motor ao vivo passava a
+    # aceitar partida de qualquer liga que este coletor tivesse descoberto
+    # (ver live_pipeline.ligas_cadastradas).
+    #
+    # O jogo continua sendo gravado em `match_statistics` normalmente, que e' o
+    # unico proposito deste coletor -- complementar o historico do time. A liga
+    # dele aparece sem nome nas telas de estatistica, que ja' sabem lidar com
+    # isso ("(sem cadastro)", ver scripts/limpar_medias_orfas.py), e nao muda
+    # numero nenhum: todo consumidor que importa ja' exigia
+    # `COALESCE(ativa, TRUE)`, entao liga inativa e liga nao cadastrada sempre
+    # produziram exatamente o mesmo resultado neles.
 
     # ---------------------------------------------------------
     # Gravacao de um jogo
@@ -302,8 +300,6 @@ class TeamHistoryBackfillService:
             home_stats, away_stats = folha[0]["statistics"], folha[1]["statistics"]
         else:
             home_stats, away_stats = folha[1]["statistics"], folha[0]["statistics"]
-
-        self._garantir_liga(liga)
 
         fx = {
             "fixture_id": fixture["id"],

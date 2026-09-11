@@ -288,7 +288,28 @@ def criar_tabelas(cur) -> None:
 # LEITURA DE APOIO (banco, custo zero de API)
 # ─────────────────────────────────────────────────────────────────────────
 def ligas_cadastradas(cur) -> set:
-    cur.execute("SELECT league_id FROM leagues")
+    """As ligas que o projeto ACOMPANHA -- nao todas as que existem na tabela.
+
+    O `COALESCE(ativa, TRUE)` nao e' detalhe: e' a mesma clausula que
+    fixture_collector, match_statistics_sync, team_statistics_sync e o recorte
+    da media ja' usavam, e o motor ao vivo era o UNICO lugar do projeto que
+    lia `leagues` inteira.
+
+    O QUE ISSO DEIXAVA PASSAR. `leagues` recebe linha por efeito colateral:
+    team_history_backfill cadastra a liga de qualquer jogo que ele traga pra
+    complementar historico de copa, com `ativa=FALSE` justamente pra ela nao
+    virar liga do projeto. Todo o resto respeitava esse FALSE; aqui ele era
+    ignorado, entao a liga entrava no motor ao vivo no instante em que o
+    backfill a descobrisse -- e liga assim e' a que tem MENOS historico, ou
+    seja, o pior baseline possivel. Desde 2026-09-10 isso pesa mais ainda: o
+    baseline manda na projecao do comeco ao fim (ver MIN_JOGOS_MANDO logo
+    abaixo), entao baseline ruim vira pick ruim direto.
+
+    Estado medido em 2026-09-11: DEV tinha "Liga Pro (Ecuador)" cadastrada
+    sozinha pelo backfill, e PROD tinha a Copa do Mundo desativada -- as duas
+    elegiveis pro motor ao vivo, nenhuma das duas acompanhada pelo projeto.
+    """
+    cur.execute("SELECT league_id FROM leagues WHERE COALESCE(ativa, TRUE)")
     return {r[0] for r in cur.fetchall()}
 
 

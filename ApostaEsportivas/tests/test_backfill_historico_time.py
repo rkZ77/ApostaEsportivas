@@ -235,43 +235,37 @@ def test_liga_e_temporada_vem_do_jogo_e_nao_da_fixture_de_hoje(monkeypatch):
     assert fx["season"] == 2026
 
 
-# ── Liga descoberta ───────────────────────────────────────────────────────
-def test_liga_nova_entra_como_historico_e_nunca_desativa_liga_ativa(monkeypatch):
-    svc = _servico(monkeypatch)
-    svc._garantir_liga({"id": 250, "name": "Primera Division",
-                        "country": "Paraguay", "season": 2026})
+# ── Liga descoberta ─────────────────────────────────────────────
+def test_o_coletor_nao_escreve_em_leagues(monkeypatch):
+    """`leagues` e' a lista do que o projeto ACOMPANHA, nao um dicionario de
+    nomes de liga.
 
-    sql, params = svc.cur.execucoes[-1]
-    assert "INSERT INTO leagues" in sql
-    assert "FALSE" in sql, "liga descoberta nao pode entrar como coletavel"
-    assert "ON CONFLICT (league_id) DO NOTHING" in sql, \
-        "sem isso, uma liga JA ativa seria rebaixada a historico por efeito colateral"
-    assert params[0] == 250
+    Ate' 2026-09-11 este coletor cadastrava a liga de todo jogo que trazia,
+    com `ativa=FALSE` pra ela nao virar liga do projeto. Todo consumidor
+    respeitava esse FALSE menos UM -- o motor ao vivo lia `leagues` inteira --
+    e bastou isso pra liga descoberta por backfill virar partida analisada e
+    pick. O jogo continua sendo gravado; a liga dele nao vira cadastro.
+    """
+    svc = _servico(monkeypatch,
+                   jogos=[_jogo(1, league_id=250)], folha=_folha())
 
+    svc._backfill_time(_TIME)
 
-def test_nome_da_liga_carrega_o_pais(monkeypatch):
-    """'Primera Division' existe no Paraguai, no Chile e no Uruguai. Sem o
-    pais viram tres linhas indistinguiveis nas telas."""
-    svc = _servico(monkeypatch)
-    svc._garantir_liga({"id": 250, "name": "Primera Division",
-                        "country": "Paraguay", "season": 2026})
-
-    assert svc.cur.execucoes[-1][1][1] == "Primera Division (Paraguay)"
+    escritas = [sql for sql, _ in svc.cur.execucoes if "leagues" in sql.lower()]
+    assert escritas == [], f"o backfill tocou em leagues: {escritas}"
 
 
-def test_competicao_internacional_nao_ganha_sufixo_world(monkeypatch):
-    svc = _servico(monkeypatch)
-    svc._garantir_liga({"id": 13, "name": "CONMEBOL Libertadores",
-                        "country": "World", "season": 2026})
+def test_o_jogo_continua_gravado_mesmo_sem_a_liga_cadastrada(monkeypatch):
+    """O proposito do coletor e' o historico do TIME, e ele nao depende de a
+    liga existir em `leagues` -- nao ha chave estrangeira entre as duas.
+    """
+    svc = _servico(monkeypatch,
+                   jogos=[_jogo(1, league_id=250)], folha=_folha())
 
-    assert svc.cur.execucoes[-1][1][1] == "CONMEBOL Libertadores"
+    svc._backfill_time(_TIME)
 
-
-def test_liga_sem_id_nao_gera_escrita(monkeypatch):
-    svc = _servico(monkeypatch)
-    svc._garantir_liga({"name": "Sem id"})
-
-    assert svc.cur.execucoes == []
+    assert svc.gravados, "o jogo tem que ser gravado assim mesmo"
+    assert svc.gravados[0][0]["league_id"] == 250
 
 
 # ── Gatilho ───────────────────────────────────────────────────────────────
