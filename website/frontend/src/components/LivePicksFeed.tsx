@@ -571,7 +571,12 @@ function EmLeituraAgora({ partidas, tick, disponivel, motor }: {
         {comPick === 0 && ' Nenhum virou pick ainda, e isso é o normal.'}
       </p>
 
-      <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+      {/* O RADAR CABE MAIS JOGOS POR LINHA (10/09/2026, pedido do usuário).
+          Estes cartões são CONTEXTO, não decisão: quem decide são os cards de
+          pick, lá em cima. Em três colunas, quatro jogos já ocupavam duas telas
+          de rolagem antes dos encerrados. Agora vão até quatro por linha, com
+          menos respiro entre eles e o conteúdo compactado. */}
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {partidas.map(p => {
           const { minuto, projetado } = minutoVivo(p, tick)
           const idade = (p.idade_seg ?? 0) + tick
@@ -600,7 +605,7 @@ function EmLeituraAgora({ partidas, tick, disponivel, motor }: {
                 />
               </div>
 
-              <div className="p-3 pt-3.5">
+              <div className="p-2.5 pt-3">
                 <div className="flex items-center justify-between gap-2">
                   <span className="flex items-center gap-1.5 min-w-0">
                     <LeagueLogo id={p.league_id ?? undefined} name={p.liga ?? ''} />
@@ -629,12 +634,12 @@ function EmLeituraAgora({ partidas, tick, disponivel, motor }: {
                   * ladrilho abaixo, e não entre os nomes: um número entre os
                   * dois times é lido como placar e mentiria em todo jogo que
                   * não está empatado. */}
-                <div className="mt-2 space-y-1">
+                <div className="mt-1.5 space-y-0.5">
                   {([[p.home_team_id, p.home_team], [p.away_team_id, p.away_team]] as const).map(
                     ([id, nome], i) => (
                       <div key={i} className="flex items-center gap-1.5 min-w-0">
                         <TeamLogoOrDot id={id} name={nome} />
-                        <span className="text-sm text-ink-1 truncate">{nome ?? 'Time ?'}</span>
+                        <span className="text-[13px] text-ink-1 truncate">{nome ?? 'Time ?'}</span>
                       </div>
                     ))}
                 </div>
@@ -646,13 +651,19 @@ function EmLeituraAgora({ partidas, tick, disponivel, motor }: {
                      mentira: o motor não entrou nele, e a próxima rodada não
                      vai mudar isso · o que a pessoa precisa saber é que este
                      jogo não teve leitura, não que "a IA já já entra". */
-                  <p className="mt-2.5 text-[10px] text-ink-4 leading-relaxed">
+                  /* FRASE CURTA (10/09/2026, pedido do usuário). O texto
+                     inteiro ocupava quatro linhas e se repetia em cada cartão
+                     sem leitura -- numa noite com cinco jogos assim, metade da
+                     seção era a mesma frase copiada. A explicação longa não se
+                     perdeu: ela está no parágrafo que abre o Radar, dito uma
+                     vez só. */
+                  <p className="mt-2 text-[10px] text-ink-4 leading-relaxed">
                     {(p.iniciado_ha_min ?? 0) <= 25
-                      ? 'A IA entra nesta partida depois dos primeiros minutos, quando o jogo já tem estatística suficiente para ser lido.'
-                      : 'A IA ainda não conseguiu ler esta partida. Ela aparece aqui porque a bola está rolando, mas nenhuma leitura chegou até agora.'}
+                      ? 'A IA entra depois dos primeiros minutos.'
+                      : 'Bola rolando, mas nenhuma leitura chegou ainda.'}
                   </p>
                 ) : (
-                <div className="grid grid-cols-4 gap-1 mt-2.5">
+                <div className="grid grid-cols-4 gap-1 mt-2">
                   {([
                     [Goal,      'Gols',           p.goals_observado],
                     [Flag,      'Escanteios',     p.corners_observado],
@@ -660,10 +671,10 @@ function EmLeituraAgora({ partidas, tick, disponivel, motor }: {
                     [Crosshair, 'Chutes',         p.shots_observado],
                   ] as const).map(([Icone, rotulo, valor]) => (
                     <div key={rotulo}
-                         className="rounded-md bg-surface-2/70 border border-line/60 py-1.5 text-center"
+                         className="rounded-md bg-surface-2/70 border border-line/60 py-1 text-center"
                          title={rotulo}>
-                      <Icone className="w-3 h-3 text-ink-4 mx-auto" aria-hidden="true" />
-                      <div className="font-mono text-sm font-bold tabular-nums text-ink-1 leading-tight mt-0.5"
+                      <Icone className="w-2.5 h-2.5 text-ink-4 mx-auto" aria-hidden="true" />
+                      <div className="font-mono text-[13px] font-bold tabular-nums text-ink-1 leading-tight mt-0.5"
                            aria-label={rotulo}>
                         {valor ?? '-'}
                       </div>

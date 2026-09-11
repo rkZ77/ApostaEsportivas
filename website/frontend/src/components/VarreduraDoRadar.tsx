@@ -68,6 +68,19 @@ export default function VarreduraDoRadar({ partidas }: { partidas: Alvo[] }) {
   const alvos = partidas.slice(0, MAX_ALVOS)
   if (alvos.length === 0) return null
 
+  /* COM MUITOS JOGOS, O ALVO PERDE O MINUTO (10/09/2026, pedido do usuário).
+   *
+   * Cada alvo é uma pílula de dois escudos mais o minuto: uns 60px. O perímetro
+   * de um círculo de 210px comporta seis deles; do sétimo em diante eles se
+   * montam uns sobre os outros e o radar vira uma pilha de escudos no canto --
+   * "quando tem muitos jogos ele fica errado".
+   *
+   * O que sai é o minuto, e não um jogo: a lista logo abaixo tem o minuto de
+   * todos, e o radar existe para dizer QUAIS jogos estão sendo varridos e o
+   * quanto cada um já andou (que é o raio, e esse continua). O minuto de cada
+   * um segue no toque. */
+  const cheio = alvos.length > 5
+
   return (
     <div className="relative w-full max-w-[210px] mx-auto aspect-square mb-4 select-none">
       {/* Os anéis. Três, e não uma grade: eles dão a noção de distância sem
@@ -129,7 +142,7 @@ export default function VarreduraDoRadar({ partidas }: { partidas: Alvo[] }) {
                    + (p.tem_pick ? ' · já virou pick' : '')}
             className={`absolute -translate-x-1/2 -translate-y-1/2 flex items-center gap-0.5
                         transition-[left,top] duration-1000 ease-linear
-                        rounded-full border px-1.5 py-1 backdrop-blur-[1px] ${
+                        rounded-full border backdrop-blur-[1px] ${cheio ? 'px-1 py-0.5' : 'px-1.5 py-1'} ${
               p.tem_pick
                 ? 'border-accent/60 bg-accent/15 shadow-[0_0_10px_rgba(0,204,0,0.25)]'
                 : 'border-line-strong bg-surface-1/90'}`}
@@ -145,7 +158,7 @@ export default function VarreduraDoRadar({ partidas }: { partidas: Alvo[] }) {
             )}
             <Escudo id={p.home_team_id} nome={p.home_team} />
             <Escudo id={p.away_team_id} nome={p.away_team} />
-            {minuto != null && (
+            {minuto != null && !cheio && (
               /* O MINUTO ANDA SOZINHO entre duas varreduras · o `~` avisa
                  quando ele é projeção da última leitura, e não leitura nova. */
               <span className="font-mono text-[9px] font-bold text-ink-3 tabular-nums ml-0.5">
