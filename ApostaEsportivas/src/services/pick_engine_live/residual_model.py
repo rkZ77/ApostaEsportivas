@@ -413,17 +413,71 @@ def probabilidade_da_linha(lam: float, linha: float, direcao: str,
             return 0.9999
         if _e_quarter(faltam):
             return _prob_quarter(faltam, lam, phi, "over")
+        if _e_inteira(faltam):
+            return _prob_inteira(faltam, lam, phi, "over")
         return pm.prob_over(faltam, lam, phi)
     if faltam < 0:
         return 0.0001
     if _e_quarter(faltam):
         return _prob_quarter(faltam, lam, phi, "under")
+    if _e_inteira(faltam):
+        return _prob_inteira(faltam, lam, phi, "under")
     return pm.prob_under(faltam, lam, phi)
 
 
 def _e_quarter(linha: float) -> bool:
     """.25 ou .75 · a linha asiatica que vale metade em cada vizinha."""
     return abs((linha * 4) % 2) > 1e-9
+
+
+def _e_inteira(linha: float) -> bool:
+    """x.0 · a linha em que empatar exato DEVOLVE a aposta."""
+    return abs(linha - round(linha)) < 1e-9
+
+
+def _prob_inteira(faltam: float, lam: float, phi: float, direcao: str) -> float:
+    """Probabilidade de uma linha REDONDA, condicionada a nao dar push.
+
+    O QUE ESTAVA ERRADO (2026-09-10)
+    --------------------------------
+    "Escanteios Mais de 6.0" com 6 escanteios no fim NAO e' RED: a casa devolve
+    a aposta, e `settlement._straight` ja' liquida isso certo (valor igual a'
+    linha devolve fator 0 = PUSH). Quem nao sabia disso era o MODELO do ao
+    vivo: ele lia a linha redonda com `pm.prob_over`, que conta o empate exato
+    como derrota, e publicava P(X > 6) como se fosse a chance da aposta.
+
+    A chance que interessa e' a condicional a a aposta ser DECIDIDA, porque o
+    empate nao e' um desfecho ruim, e' um desfecho que nao acontece:
+
+        P(green | nao push) = P(green) / (1 - P(empate exato))
+
+    Esta e' a MESMA convencao que o pre-jogo aplica desde sempre em
+    `pm.poisson_prob_for_line`, e a mesma que `_prob_quarter` aqui do lado ja'
+    aplicava na vizinha inteira dela. O ao vivo era o unico caminho do projeto
+    que lia uma linha redonda como se fosse meia.
+
+    O ERRO SUBESTIMAVA, e por isso passou despercebido: probabilidade menor
+    vira EV menor, e EV menor reprova no gate em vez de gerar pick ruim. O
+    custo era pick que deveria existir e nao existia, e um numero na tela que
+    nao era o mesmo numero que os outros motores publicam.
+
+    Exemplo real (Sao Bernardo x Londrina, escanteios Mais de 6.0 aos 45' com
+    3 no placar, lambda residual 3.2): 72.6% lido como 68.3%.
+
+    O caso "so' pode empatar ou perder" sai certo sozinho: Under 6.0 com 6 no
+    placar deixa `faltam` em 0, o numerador vira zero e a familia reprova no
+    piso de probabilidade. Nao precisa de gate proprio.
+    """
+    push = pm.nb_pmf(int(round(faltam)), lam, phi)
+    if direcao == "over":
+        # prob_over ja' exclui o empate exato do numerador (usa floor).
+        p = pm.prob_over(faltam, lam, phi)
+    else:
+        # prob_under INCLUI o empate exato -- tira ele antes de renormalizar.
+        p = pm.prob_under(faltam, lam, phi) - push
+    if push < 1.0:
+        p = p / (1.0 - push)
+    return round(max(0.0, min(1.0, p)), 6)
 
 
 def _prob_quarter(linha: float, lam: float, phi: float, direcao: str) -> float:
@@ -462,23 +516,15 @@ def _prob_quarter(linha: float, lam: float, phi: float, direcao: str) -> float:
     push. Meia aposta em cada uma, media simples -- e' o que a aposta e'.
     """
     baixa, alta = linha - 0.25, linha + 0.25   # ex.: 3.75 -> 3.5 e 4.0
-    push = pm.nb_pmf(int(round(alta)), lam, phi)
     if direcao == "over":
         p_meia = pm.prob_over(baixa, lam, phi)
-        p_inteira = pm.prob_over(alta, lam, phi)
     else:
         p_meia = pm.prob_under(baixa, lam, phi)
-        # prob_under() usa floor(linha), que numa linha redonda INCLUI o empate
-        # exato -- tira ele do numerador antes de renormalizar. E' a mesma
-        # correcao, na mesma ordem, que pm.poisson_prob_for_line faz no
-        # pre-jogo; escrever diferente aqui faria os dois motores discordarem
-        # sobre a mesma linha.
-        p_inteira = pm.prob_under(alta, lam, phi) - push
-    # A vizinha inteira empata na linha em vez de perder: a massa do empate sai
-    # do denominador, porque nela a aposta e' devolvida, nao decidida.
-    if push < 1.0:
-        p_inteira = p_inteira / (1.0 - push)
-    p_inteira = max(0.0, min(1.0, p_inteira))
+    # A vizinha inteira empata na linha em vez de perder, e quem sabe disso e'
+    # `_prob_inteira` -- a mesma funcao que a linha redonda sozinha usa. Em
+    # 2026-09-10 esta conta estava escrita duas vezes, aqui e la'; duas copias
+    # da mesma convencao divergem no primeiro ajuste.
+    p_inteira = _prob_inteira(alta, lam, phi, direcao)
     return round(0.5 * p_meia + 0.5 * p_inteira, 6)
 
 
