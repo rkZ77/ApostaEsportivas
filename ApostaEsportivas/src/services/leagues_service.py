@@ -34,15 +34,29 @@ class LeaguesService:
         }
 
     # ----------------------------------------------------------------------
-    # NOVO: BUSCAR TODAS AS LIGAS DO SISTEMA
+    # AS LIGAS QUE O PROJETO ACOMPANHA
     # ----------------------------------------------------------------------
     def get_all_leagues(self):
+        """So' as ATIVAS -- e o nome do metodo mentia ate' 2026-09-11.
+
+        Ele varria `leagues` inteira, e quem o chama e' o gerador de perfil de
+        liga: uma chamada da Anthropic POR LIGA. Com a tabela inteira, a Copa do
+        Mundo (desativada desde a limpeza dos pipelines) e qualquer liga que o
+        backfill de historico tivesse descoberto entravam na conta -- credito
+        gasto pra descrever competicao que o projeto nao acompanha.
+
+        `COALESCE(ativa, TRUE)` e' a mesma clausula de fixture_collector,
+        match_statistics_sync, team_statistics_sync e do gate do motor ao vivo.
+        Liga sem a coluna preenchida continua contando como ativa, que e' o
+        comportamento de sempre.
+        """
         conn = get_connection()
         cur = conn.cursor()
 
         cur.execute("""
             SELECT league_id, name, season
             FROM leagues
+            WHERE COALESCE(ativa, TRUE)
             ORDER BY league_id ASC;
         """)
 

@@ -30,6 +30,14 @@ def _sem_banco_no_teste(monkeypatch):
 
     import database
     monkeypatch.setattr(database, "get_connection", _recusa)
+    # `get_direct_connection` TAMBEM (2026-09-11). A trava cobria so' a porta da
+    # frente, e o pool tem uma de servico: quando `_get_connection` pega uma
+    # conexao morta e o prazo estoura, ele abre conexao PROPRIA por dentro --
+    # sem passar por `get_connection`. Isso foi visto de verdade, com um teste
+    # do proprio pool recebendo uma conexao aberta no host de PRODUCAO no lugar
+    # do duble dele. Fechada aqui, esse caminho vira erro explicito em vez de
+    # virar trafego pra producao.
+    monkeypatch.setattr(database, "get_direct_connection", _recusa)
     for modulo in ("routers.payments", "routers.admin", "auth_utils"):
         alvo = sys.modules.get(modulo)
         if alvo is not None and hasattr(alvo, "get_connection"):

@@ -113,3 +113,28 @@ class TestQuemLe:
 
     def test_sem_liga_nao_consulta(self):
         assert league_profile_store.perfil_da_liga(None) is None
+
+
+class TestSoAsLigasAtivas:
+    """Perfil de liga custa uma chamada da Anthropic POR LIGA.
+
+    `get_all_leagues` varria a tabela inteira, entao a Copa do Mundo
+    (desativada na limpeza dos pipelines) e qualquer liga que o backfill de
+    historico tivesse descoberto entravam na conta. Credito gasto pra descrever
+    competicao que o projeto nao acompanha.
+    """
+
+    def test_a_consulta_filtra_por_ativa(self):
+        from pathlib import Path
+        fonte = (Path(__file__).resolve().parents[1] / "src" / "services"
+                 / "leagues_service.py").read_text(encoding="utf-8")
+        corpo = fonte[fonte.index("def get_all_leagues"):]
+        assert "COALESCE(ativa, TRUE)" in corpo, (
+            "a mesma clausula do resto da coleta e do gate do motor ao vivo")
+
+    def test_e_a_mesma_clausula_do_gate_do_ao_vivo(self):
+        """Divergir entre os dois foi o que deixou liga inativa virar pick."""
+        from pathlib import Path
+        vivo = (Path(__file__).resolve().parents[1] / "src" / "engine_pipelines"
+                / "live_pipeline.py").read_text(encoding="utf-8")
+        assert "WHERE COALESCE(ativa, TRUE)" in vivo
