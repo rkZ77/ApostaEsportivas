@@ -346,6 +346,22 @@ _PIPELINE_SCRIPTS = {
     # (LIVE_ENGINE_DRY_RUN), que e' a mesma regra do CLI. Passar `--gravar`
     # aqui faria o botao ignorar a variavel do Railway.
     "historico_times":      "atualizar_jogos.py",
+    # OS OUTROS SEIS ESTAGIOS DO `atualizar_jogos.py` (2026-09-11).
+    #
+    # O Stage 6 tinha botao desde 13/08 e os outros nao, entao refazer UMA
+    # coleta (os times de uma liga nova, a classificacao da rodada, a media que
+    # o motor le) exigia clicar em "Atualizar jogos" e pagar os sete -- inclusive
+    # a folha, que custa uma requisicao por partida. Fora do painel, o unico
+    # caminho era `python atualizar_jogos.py <n>` no terminal.
+    #
+    # Todos apontam pro MESMO script, e o que os distingue e' o argumento em
+    # `_PIPELINE_ARGS` -- mesmo padrao de `historico_times`.
+    "coleta_status":        "atualizar_jogos.py",
+    "coleta_times":         "atualizar_jogos.py",
+    "coleta_fixtures":      "atualizar_jogos.py",
+    "coleta_classificacao": "atualizar_jogos.py",
+    "coleta_folha":         "atualizar_jogos.py",
+    "coleta_medias":        "atualizar_jogos.py",
     "gerar_playerstats_todos": os.path.join("engine_pipelines", "player_stats_pipeline.py"),
     "perfis_de_liga":       "atualizar_ligas.py",
     # Fase de homologacao/validacao (compara motor vs IA em uma base DEV
@@ -398,6 +414,16 @@ _PIPELINE_ARGS["gerar_playerstats"] = _metodos_diarios_do_motor()
 #: sete. Sem numero extra: os padroes de TeamHistoryBackfillService (10 jogos,
 #: teto de 60 requisicoes) sao os mesmos que o CLI usa sem argumento.
 _PIPELINE_ARGS["historico_times"] = ["6"]
+
+#: Os demais estagios, pelo mesmo caminho. Sem argumento extra: os padroes de
+#: cada `run_stage_*` sao os mesmos que o CLI usa sem argumento, e um numero
+#: cravado aqui divergiria do terminal na primeira mudanca.
+_PIPELINE_ARGS["coleta_status"] = ["0"]
+_PIPELINE_ARGS["coleta_times"] = ["1"]
+_PIPELINE_ARGS["coleta_fixtures"] = ["2"]
+_PIPELINE_ARGS["coleta_classificacao"] = ["3"]
+_PIPELINE_ARGS["coleta_folha"] = ["4"]
+_PIPELINE_ARGS["coleta_medias"] = ["5"]
 
 #: SEM argumento de metodo, e e' o que distingue este passo de
 #: `gerar_playerstats`: aquele roda os tres diarios, este roda os seis.
@@ -470,6 +496,12 @@ _PASSO_DO_COMANDO = {
     "historico":          "historico_times",
     "playerstats":        "gerar_playerstats_todos",
     "ligas":              "perfis_de_liga",
+    "status":             "coleta_status",
+    "times":              "coleta_times",
+    "fixtures":           "coleta_fixtures",
+    "classificacao":      "coleta_classificacao",
+    "folha":              "coleta_folha",
+    "medias":             "coleta_medias",
 }
 
 #: A sequencia do "Rodar Tudo", quando o motor esta' no path.
@@ -584,6 +616,12 @@ _STEP_LABELS = {
     "historico_times":         "Buscando histórico dos times",
     "gerar_playerstats_todos": "Gerando picks de jogador (todos os métodos)",
     "perfis_de_liga":          "Atualizando perfis de liga",
+    "coleta_status":           "Atualizando status dos jogos",
+    "coleta_times":            "Sincronizando times por liga",
+    "coleta_fixtures":         "Coletando os jogos de hoje",
+    "coleta_classificacao":    "Atualizando a classificação",
+    "coleta_folha":            "Coletando folha de estatística",
+    "coleta_medias":           "Recalculando médias dos times",
 }
 
 
@@ -985,6 +1023,15 @@ _PASSO_LABEL_CURTO = {
     "historico_times":         "Histórico dos Times",
     "gerar_playerstats_todos": "Jogadores (6 métodos)",
     "perfis_de_liga":          "Perfis de Liga (IA)",
+    # Os estagios do "Atualizar Jogos", um a um. O rotulo diz QUAL coleta e', e
+    # nao o numero do estagio: "Stage 4" so' significa alguma coisa pra quem ja'
+    # leu atualizar_jogos.py.
+    "coleta_status":           "Status dos Jogos",
+    "coleta_times":            "Times por Liga",
+    "coleta_fixtures":         "Jogos de Hoje",
+    "coleta_classificacao":    "Classificação",
+    "coleta_folha":            "Folha de Estatística",
+    "coleta_medias":           "Médias dos Times",
 }
 
 #: Passos que o painel mostra FORA da sequencia do "Rodar Tudo".
@@ -1006,8 +1053,14 @@ _PASSO_LABEL_CURTO = {
 #: simplesmente nao entra no mapa (`tudo`, que E' a sequencia, e `shadow`), e
 #: isso fica escrito la'.
 #: Mesma ordem em que os Comandos sem `etapa` aparecem no registro do motor.
+#: NA ORDEM DO REGISTRO DO MOTOR, e ha teste cobrando isso: a lista existe pra
+#: ambiente sem PIPELINE_SRC_PATH, e um painel que muda de ordem conforme o
+#: motor esta alcancavel ou nao e pior que um painel sempre igual.
 _AVULSOS_FALLBACK = [
-    "gerar_playerstats_todos", "historico_times", "gerar_live", "perfis_de_liga",
+    "gerar_playerstats_todos", "historico_times", "gerar_live",
+    "coleta_status", "coleta_times", "coleta_fixtures", "coleta_classificacao",
+    "coleta_folha", "coleta_medias",
+    "perfis_de_liga",
 ]
 
 

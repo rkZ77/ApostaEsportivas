@@ -631,6 +631,75 @@ def cmd_historico(*args):
     TeamHistoryBackfillService(min_jogos=min_jogos, teto_requisicoes=teto).run()
 
 
+#: Os estagios do `dados`, um a um.
+#:
+#: `dados` roda os sete em sequencia (ver DataCollectorMain.run_all) e era a
+#: UNICA porta pra qualquer um deles. Isso obrigava a pagar a coleta inteira
+#: -- inclusive a folha de estatistica, que e' uma requisicao por partida --
+#: pra refazer uma coisa so'. E o unico jeito de rodar um estagio isolado era
+#: `python atualizar_jogos.py <n>` no terminal, que o /admin nao alcanca: o
+#: painel deriva os botoes DESTE registro, entao estagio sem Comando aqui e'
+#: estagio sem botao la'.
+#:
+#: O Stage 6 ja' tinha o seu (`historico`) desde 2026-08-13, pelo mesmo
+#: motivo. Estes sao os outros seis.
+#:
+#: Nenhum deles declara `etapa`: quem roda a sequencia continua sendo
+#: `dados`, e duplica-los dentro do `tudo` faria a rodada diaria coletar
+#: duas vezes.
+def _estagio(n: int, *args):
+    from atualizar_jogos import DataCollectorMain
+    return getattr(DataCollectorMain(), f"run_stage_{n}")(*args)
+
+
+def cmd_status():
+    """Stage 0: status de quem ja' estava no banco (encerrado, adiado, ao vivo)."""
+    _estagio(0)
+
+
+def cmd_times():
+    """Stage 1: o elenco de times de cada liga cadastrada.
+
+    Roda sozinho quando entra liga nova ou quando um time aparece sem nome
+    nas telas -- nao ha motivo pra pagar a folha de estatistica por isso.
+    """
+    _estagio(1)
+
+
+def cmd_fixtures():
+    """Stage 2: os jogos de HOJE (a janela do motor, ver a memoria do projeto)."""
+    _estagio(2)
+
+
+def cmd_classificacao():
+    """Stage 3: a tabela de cada liga. Muda uma vez por rodada, nao por hora."""
+    _estagio(3)
+
+
+def cmd_folha(*args):
+    """Stage 4: a folha de estatistica das partidas encerradas.
+
+    E' o estagio CARO -- uma requisicao por partida --, e por isso o que mais
+    se quer rodar sozinho: e' ele que preenche buraco de estatistica sem
+    refazer a coleta inteira.
+    """
+    mode = args[0] if args and args[0] else "fast"
+    dias = int(args[1]) if len(args) > 1 and args[1] else 3
+    _estagio(4, mode, dias)
+
+
+def cmd_medias(*args):
+    """Stage 5: refaz `team_statistics`, que e' a media que o motor de fato le.
+
+    `full` APAGA a tabela e reprocessa todo time -- e' a saida pra quando a
+    derivada esta' errada e a origem nao. Sem argumento, so' os times cuja
+    media ficou velha em relacao a alguma partida nova.
+    """
+    mode = args[0] if args and args[0] else "recent"
+    dias = int(args[1]) if len(args) > 1 and args[1] else 3
+    _estagio(5, mode, dias)
+
+
 def cmd_vip():
     # Motor deterministico (pick_engine) -- decisao explicita do usuario
     # (2026-07-17) de cortar a geracao de picks pra IA em produção tambem,
@@ -1038,6 +1107,34 @@ COMANDOS: tuple = (
             detalhe="live                    respeita o .env\n"
                     "live gravar             grava de verdade nesta rodada\n"
                     "live fixture 123456     analisa só essa partida"),
+    # OS ESTAGIOS DO `dados`, AVULSOS (2026-09-11, pedido do usuario: nao
+    # conseguia rodar a coleta de time separada). Ver `_estagio` acima pro
+    # porque. Sem `etapa`: quem roda a sequencia e' `dados`.
+    Comando("status", "Coleta · status dos jogos",
+            "Stage 0 · atualiza status de quem ja esta no banco",
+            lambda *a: cmd_status()),
+    Comando("times", "Coleta · times por liga",
+            "Stage 1 · sincroniza o elenco de times de cada liga",
+            lambda *a: cmd_times()),
+    Comando("fixtures", "Coleta · jogos de hoje",
+            "Stage 2 · coleta os jogos de hoje",
+            lambda *a: cmd_fixtures()),
+    Comando("classificacao", "Coleta · classificacao",
+            "Stage 3 · atualiza a tabela de cada liga",
+            lambda *a: cmd_classificacao()),
+    Comando("folha", "Coleta · folha de estatistica",
+            "Stage 4 · folha das partidas encerradas (1 requisicao por jogo)",
+            lambda *a: cmd_folha(*a),
+            uso="folha [fast|full|custom] [dias]",
+            detalhe="folha                   ultimos 3 dias\n"
+                    "folha custom 7          ultimos 7 dias\n"
+                    "folha full              temporada inteira"),
+    Comando("medias", "Coleta · medias do time",
+            "Stage 5 · refaz team_statistics, a media que o motor le",
+            lambda *a: cmd_medias(*a),
+            uso="medias [recent|full] [dias]",
+            detalhe="medias                  so os times com media velha\n"
+                    "medias full             APAGA a tabela e reprocessa todo time"),
     Comando("ligas", "Atualizar perfis de ligas (IA)",
             "Atualiza perfis de ligas (IA · consome crédito da Anthropic)",
             lambda *a: cmd_ligas()),
