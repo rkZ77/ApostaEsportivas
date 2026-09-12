@@ -376,7 +376,9 @@ class ComboConfig:
     # outros.
     #
     # peso_ev=0 E' DELIBERADO e e' a unica divergencia da tabela do §19, que
-    # pedia 15%. A regra permanente do motor -- ja' aplicada no pre-jogo
+    # pedia 15%. Levantei a divergencia e o usuario delegou a decisao em
+    # 2026-09-12 ("o peso tambem pode dar voce"), entao ela fica em zero pelo
+    # motivo abaixo. A regra permanente do motor -- ja' aplicada no pre-jogo
     # generico, no ao vivo e no Pick Jogador -- e' que PRECO ELIMINA NOS GATES
     # E NUNCA ORDENA: EV e odd decidem se um candidato vive, jamais qual
     # candidato vence. O §20 deste mesmo pedido diz a mesma coisa ("nao

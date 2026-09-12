@@ -167,19 +167,19 @@ def test_busca_na_api_usa_as_casas_ativas(monkeypatch):
 
     pedidos = []
 
-    class _Resp:
-        def raise_for_status(self):
-            pass
+    # O ALVO DO PATCH MUDOU EM 2026-09-11, junto com o coletor: ele deixou de
+    # chamar `requests.get` direto e passou a usar `utils.api_client.buscar`,
+    # que separa "a casa nao cotou" de "a chamada falhou" (cota estourada
+    # virava "a Betano nao cotou este jogo" no resumo de cobertura).
+    #
+    # Como o coletor importa o nome pra dentro do modulo (`from utils.api_client
+    # import buscar`), o patch tem que ser em `coletor.buscar` e nao em
+    # `api_client.buscar` -- patchear a origem nao alcanca o nome ja' ligado.
+    def _buscar_fake(recurso, params=None, origem=None, **kwargs):
+        pedidos.append((params or {})["bookmaker"])
+        return []
 
-        def json(self):
-            return {"response": []}
-
-    class _RequestsFake:
-        def get(self, url, headers=None, params=None, timeout=None):
-            pedidos.append(params["bookmaker"])
-            return _Resp()
-
-    monkeypatch.setattr(coletor, "requests", _RequestsFake())
+    monkeypatch.setattr(coletor, "buscar", _buscar_fake)
 
     OddsCollectorService().fetch_odds_by_fixture(123)
 

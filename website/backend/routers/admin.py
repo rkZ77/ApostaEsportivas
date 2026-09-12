@@ -6175,7 +6175,36 @@ _TABELAS_EXPLICAVEIS = {
     "picks_player_stats": "Player Stats",
     "picks_boost":        "Pick Boost",
     "picks_live":         "Ao vivo",
+    # A ALAVANCAGEM ENTROU EM 2026-09-11, quando ela passou a gravar
+    # `engine_debug`. Até aqui ela aparecia na lista de RED (`_TABELAS_COM_
+    # RESULTADO`, abaixo) e o botão "por quê" devolvia 400: a tela mostrava o
+    # prejuízo e se recusava a explicar, que é o inverso do propósito da aba.
+    "picks_alavancagem":  "Alavancagem",
 }
+
+
+#: Como as colunas do detalhe se chamam em cada tabela. Só existe porque a
+#: alavancagem é um BILHETE e não uma pick: ela guarda `market_1`/`odd_1` por
+#: perna e a odd do produto em `odd_combined`, enquanto todas as outras têm
+#: `market`/`odd` no singular. O que a tela abre é sempre a PRIMEIRA perna mais
+#: o bilhete inteiro em `engine_debug` -- é lá que moram as outras pernas, a
+#: correlação entre elas e o veredito de cada gate.
+_COLUNAS_DO_DETALHE = {
+    "picks_alavancagem": """
+        id, fixture_id_1 AS fixture_id, match_date::text AS dia,
+        home_team_1 AS home_team, away_team_1 AS away_team,
+        market_1 AS market, line_1 AS line, odd_combined AS odd,
+        reasoning_1 AS reasoning, engine_debug, result,
+        tipo, odd_combined, confidence_media, ev_combined,
+        created_at::text AS criada_em
+    """,
+}
+_COLUNAS_PADRAO = """
+    id, fixture_id, match_date::text AS dia,
+    home_team, away_team, market, line, odd,
+    reasoning, engine_debug, result,
+    created_at::text AS criada_em
+"""
 
 
 #: De onde os RED saem, e como o resultado de CADA produto se chama na tabela
@@ -6354,13 +6383,8 @@ def motor_pick_porque(
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute(f"""
-            SELECT id, fixture_id, match_date::text AS dia,
-                   home_team, away_team, market, line, odd,
-                   reasoning, engine_debug, result,
-                   created_at::text AS criada_em
-              FROM {tabela} WHERE id = %s
-        """, (pick_id,))
+        colunas = _COLUNAS_DO_DETALHE.get(tabela, _COLUNAS_PADRAO)
+        cur.execute(f"SELECT {colunas} FROM {tabela} WHERE id = %s", (pick_id,))
         pick = cur.fetchone()
         if not pick:
             raise HTTPException(404, "Pick não encontrado")
@@ -6436,6 +6460,13 @@ def motor_pick_porque(
         # picks gravados antes de a amostra existir no engine_debug.
         "amostra": debug.get("amostra") or contexto.get("amostra"),
         "engine_debug": debug,
+        # O BILHETE, quando o pick é um. `engine_debug` da alavancagem é o
+        # documento de decisão do combo (pernas com probabilidade bruta,
+        # calibrada e do modelo; correlação par a par; os descontos aplicados
+        # um a um; o veredito de cada gate). Vai num campo próprio pra a tela
+        # não ter que adivinhar pelo formato do dicionário, e só quando existe
+        # -- picks de perna única seguem sem a chave.
+        **({"bilhete": debug} if debug.get("gates") and debug.get("legs") else {}),
         "decisao": {k: v for k, v in (decisao or {}).items()
                     if k not in ("context",)} if decisao else None,
         "execucao": execucao,
