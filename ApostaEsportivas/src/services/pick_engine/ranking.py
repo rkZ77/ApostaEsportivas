@@ -206,8 +206,32 @@ def evaluate_all_lines(
         effective_min_edge = config.min_edge * (1 + deficit * config.dqs_min_edge_scale)
     effective_min_edge = round(effective_min_edge, 4)
 
+    # PISO DURO DE DQS, antes de qualquer conta de linha. Ver config.dqs_minimo
+    # pro porque: o ajuste de min_edge acima tem teto e nunca chegava a
+    # reprovar uma fixture, por pior que fosse o dado dela.
+    #
+    # Reprova TODAS as linhas com o mesmo motivo em vez de devolver lista
+    # vazia: a distribuicao de `reject_reason` por dia e' como o motor e' lido,
+    # e uma fixture que some sem motivo nao aparece nessa leitura.
+    dqs_reprovado = (
+        data_quality_score is not None
+        and config.dqs_minimo is not None
+        and data_quality_score < config.dqs_minimo
+    )
+
     evaluated = []
     for c in line_candidates:
+        if dqs_reprovado:
+            evaluated.append({
+                **c,
+                "line_score": _line_score(c, config),
+                "effective_min_edge": effective_min_edge,
+                "reject_reason": (
+                    f"qualidade de dado insuficiente "
+                    f"(DQS {data_quality_score:.0f} < {config.dqs_minimo:.0f})"
+                ),
+            })
+            continue
         # Os motivos de ODD saem de motivo_de_odd_fora() -- a mesma funcao que
         # o orchestrator consulta pra nem calcular a linha (2026-08-27). Os
         # dois restantes dependem de edge/EV, que so' existem depois da conta,

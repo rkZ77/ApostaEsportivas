@@ -143,6 +143,24 @@ class PickEngineConfig:
     dqs_baseline: float = 80.0
     dqs_min_edge_scale: float = 0.5
 
+    # PISO DURO de qualidade de dado. Abaixo disto nao sai pick, ponto.
+    #
+    # Ate 2026-09-12 o DQS nao bloqueava NADA: o unico efeito era encarecer o
+    # min_edge pela regra acima, e a conta tem teto. Com dqs_baseline=80 e
+    # dqs_min_edge_scale=0.5, o PIOR caso possivel -- DQS=0, ou seja, fixture
+    # sem cobertura, com integridade quebrada e outlier em tudo -- exigia
+    # min_edge apenas 40% maior. Uma fixture assim ainda produzia pick.
+    #
+    # E produzia pelo pior motivo: edge alto sobre dado ruim quase sempre E' o
+    # dado ruim, nao valor. E' a mesma razao pela qual max_edge existe (edge
+    # acima do teto mede erro da amostra, nao oportunidade); o piso de DQS e' a
+    # mesma ideia olhando pra a fonte em vez de pro resultado.
+    #
+    # 70 e' o limite de "LIMITED" na faixa que data_validation ja documenta
+    # (90+ excelente, 80+ bom, 70+ limitado, abaixo insuficiente). Dado
+    # insuficiente nao vira pick.
+    dqs_minimo: float = 70.0
+
     # Pesos da formula de confidence: C*weight_c + Q*weight_q + K*weight_k
     weight_c: float = 0.45
     weight_q: float = 0.25

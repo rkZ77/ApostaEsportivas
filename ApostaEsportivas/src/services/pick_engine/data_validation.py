@@ -308,19 +308,56 @@ def aggregate_fixture_quality_checks(last10_home: list, last10_away: list,
 # ============================================================
 # 5. DATA QUALITY SCORE (0-100)
 # ============================================================
-_W_HISTORY = 0.40
-_W_COVERAGE = 0.35
+_W_HISTORY = 0.35
+_W_COVERAGE = 0.30
 _W_INTEGRITY = 0.15
 _W_OUTLIER = 0.10
+_W_RECENCIA = 0.10
+
+#: Dias desde o ultimo jogo lido a partir dos quais a recencia zera. Duas
+#: semanas e' pausa normal de calendario; dois meses descreve um time que pode
+#: ter mudado de tecnico, de elenco e de forma, e a media nao sabe disso.
+_RECENCIA_OK_DIAS = 14
+_RECENCIA_ZERO_DIAS = 60
+
+
+def recencia_component(dias_desde_ultimo: int | None) -> float:
+    """0-100 pela idade do dado mais recente da amostra.
+
+    Ate 14 dias vale 100; decai linear ate 0 aos 60. `None` (o caller nao
+    sabe a data) devolve 100 e nao penaliza -- ausencia de medida nao pode
+    virar acusacao, senao todo caller que ainda nao passa a data derruba o
+    score de fixtures que estao boas.
+    """
+    if dias_desde_ultimo is None:
+        return 100.0
+    if dias_desde_ultimo <= _RECENCIA_OK_DIAS:
+        return 100.0
+    if dias_desde_ultimo >= _RECENCIA_ZERO_DIAS:
+        return 0.0
+    vao = _RECENCIA_ZERO_DIAS - _RECENCIA_OK_DIAS
+    return round(100.0 * (1 - (dias_desde_ultimo - _RECENCIA_OK_DIAS) / vao), 1)
 
 
 def data_quality_score(history_validation: dict, coverage_validation: dict,
                         integrity_validation: dict | None = None,
-                        outlier_info: dict | None = None) -> dict:
-    """Combina os 4 validadores num score 0-100 -- cada componente exposto
+                        outlier_info: dict | None = None,
+                        dias_desde_ultimo: int | None = None) -> dict:
+    """Combina os validadores num score 0-100 -- cada componente exposto
     separadamente (nunca um numero opaco). Integridade/outlier sao
     opcionais (nem todo caller roda os 4 -- ex.: outlier so faz sentido
-    por familia de mercado, nao por fixture inteiro de uma vez)."""
+    por familia de mercado, nao por fixture inteiro de uma vez).
+
+    RECENCIA entrou em 2026-09-12. Ate entao o score media completude,
+    cobertura, integridade e outlier, e nenhum dos quatro olha para QUANDO o
+    dado foi produzido: dez jogos de tres meses atras pontuavam exatamente
+    como dez jogos das ultimas tres semanas. O motor de Jogadores ja tinha a
+    medida certa (`_dias_desde_a_ultima`), so' que ela morria na qualidade
+    daquele motor e nao chegava ao DQS que os outros leem.
+
+    `dias_desde_ultimo=None` mantem o comportamento anterior pro caller que
+    ainda nao passa a data.
+    """
     history_component = history_validation["Q"] * 100
     coverage_component = coverage_validation["score"]
 
@@ -336,9 +373,12 @@ def data_quality_score(history_validation: dict, coverage_validation: dict,
     else:
         outlier_component = 100.0
 
+    recencia_comp = recencia_component(dias_desde_ultimo)
+
     total = (
         history_component * _W_HISTORY + coverage_component * _W_COVERAGE
         + integrity_component * _W_INTEGRITY + outlier_component * _W_OUTLIER
+        + recencia_comp * _W_RECENCIA
     )
 
     return {
@@ -348,5 +388,6 @@ def data_quality_score(history_validation: dict, coverage_validation: dict,
             "coverage": round(coverage_component, 1),
             "integrity": round(integrity_component, 1),
             "outlier": round(outlier_component, 1),
+            "recencia": round(recencia_comp, 1),
         },
     }
