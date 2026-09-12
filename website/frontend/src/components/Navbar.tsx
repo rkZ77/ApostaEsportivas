@@ -96,8 +96,25 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
             </span>
           </Link>
 
-          {/* Nav links · desktop only */}
-          <div className="hidden lg:flex items-center gap-1">
+          {/* Nav links · desktop only
+              O PONTO DE VIRADA E' `xl:`, E NAO `lg:` (12/09/2026).
+
+              Em `lg:` (1024px) o menu ligava antes de caber. O que define a
+              largura necessaria nao e' a tela, e' o CONJUNTO -- logo + links +
+              tema + sino + avatar com nome e selo -- e ele cresce com o plano:
+              free cabe em 1024, VIP so' a partir de ~1100 e admin de ~1150.
+
+              Medido em 8 larguras x 3 planos: entre 1024 e 1149 a barra
+              quebrava em duas linhas. Nao estourava pro lado (o que seria
+              visivel na hora) -- os rotulos quebravam DENTRO do proprio link,
+              e "Meus Picks" virava duas linhas empilhadas.
+
+              Abaixo de 1280 quem assume e' a gaveta, que e' o caminho que ja
+              funciona em qualquer largura. O `whitespace-nowrap` de cada link
+              e o par disto: rotulo de navegacao nao quebra, e sem ele um
+              rotulo mais longo no futuro traria o mesmo defeito de volta em
+              outra largura. */}
+          <div className="hidden xl:flex items-center gap-1">
             {navLinks.map(({ to, label, Icon, badge, onClick, highlight }) => (
               <Link
                 key={to}
@@ -108,7 +125,7 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
                    este menu vive dentro da gaveta fechada, e o tour não abre
                    gaveta. Ver components/onboarding/stepsVip.tsx. */
                 data-tour={to === '/fixtures' ? 'nav-jogos' : undefined}
-                className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm whitespace-nowrap transition-colors ${
                   highlight === 'yellow'
                     ? pathname === to ? 'text-yellow-400 font-semibold' : 'text-yellow-400 hover:text-yellow-300'
                     : isActive(to)
@@ -243,7 +260,7 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
                 botão que se chega ao Perfil. */}
             <button
               onClick={() => setSidebarOpen(v => !v)}
-              className="lg:hidden relative text-ink-2 hover:text-ink-1 transition-colors p-2"
+              className="xl:hidden relative text-ink-2 hover:text-ink-1 transition-colors p-2"
               aria-label={emailPendente ? 'Menu, e-mail não confirmado' : 'Menu'}
             >
               {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -273,14 +290,14 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
       {/* Overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/60 z-40 lg:hidden"
+          className="fixed inset-0 bg-black/60 z-40 xl:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Sidebar · mobile */}
       <aside
-        className={`fixed top-0 right-0 h-full w-72 bg-surface-0 border-l border-line z-50 flex flex-col transition-transform duration-300 ease-in-out lg:hidden ${
+        className={`fixed top-0 right-0 h-full w-72 bg-surface-0 border-l border-line z-50 flex flex-col transition-transform duration-300 ease-in-out xl:hidden ${
           sidebarOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
