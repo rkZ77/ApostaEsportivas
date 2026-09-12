@@ -40,8 +40,26 @@ jobs:
         working-directory: website/backend
         # requirements-dev.txt ja' puxa o requirements.txt com `-r`.
         run: pip install -r requirements-dev.txt
+      # `main.py` so' REGISTRA as rotas do SPA se `backend/dist` existir, e a
+      # checagem e' no import (linha `if _dist.exists()`). Numa maquina de
+      # desenvolvimento a pasta esta la porque alguem ja buildou; num checkout
+      # limpo ela nao existe, e os testes do catch-all respondiam 404 em vez do
+      # arquivo. Nao adianta buildar o frontend aqui: esses testes montam o
+      # proprio dist de mentira com `monkeypatch` e so' precisam que a rota
+      # tenha nascido. Entao o que falta e exatamente isto, um index.html vazio.
+      - name: Marcar presenca do dist (as rotas do SPA nascem no import)
+        working-directory: website/backend
+        run: |
+          mkdir -p dist
+          echo '<!doctype html>' > dist/index.html
       - name: Testes
         working-directory: website/backend
+        # Valor de mentira de proposito: dois testes importam o coletor de
+        # estatisticas, que estoura no import sem a variavel. Nenhuma chamada
+        # de rede sai daqui -- a suite proibe banco e mocka o provedor -- entao
+        # a chave nunca e usada, so' precisa existir.
+        env:
+          API_FOOTBALL_KEY: chave-de-mentira-para-o-ci
         run: python -m pytest tests -q
 
   motor:

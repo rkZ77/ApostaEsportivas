@@ -85,7 +85,14 @@ def pool(monkeypatch):
     # producao. Sintoma classico de ordem, que faz procurar o defeito no
     # arquivo errado.
     monkeypatch.setattr(database, "_ociosas", {})
-    monkeypatch.setattr(database, "_pool_stats", dict(database._pool_stats))
+    # `dict(...)` COPIAVA OS VALORES SUJOS (2026-09-12). A copia era pra isolar
+    # o teste do estado global, mas copiava o contador como ele estava: se quem
+    # rodou antes deixou `fallback_em_uso` em 2, este teste comecava em 2 e o
+    # `== 1` virava `== 3`. Passava rodando o arquivo sozinho e falhava na
+    # suite inteira -- de novo o sintoma de ordem que o comentario acima
+    # descreve, so' que uma linha abaixo dele. Zerar e' o que a fixture sempre
+    # quis dizer.
+    monkeypatch.setattr(database, "_pool_stats", {k: 0 for k in database._pool_stats})
     return p
 
 
