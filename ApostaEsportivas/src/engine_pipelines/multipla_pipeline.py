@@ -1,18 +1,40 @@
-"""Multipla via motor deterministico (pick_engine) -- unico gerador de
-picks_multiplas desde 2026-07-17 (decisao do usuario de cortar IA em
-producao tambem, nao so em dev). Reimplementa localmente selecao de
-fixtures/checagem de "ja rodou hoje"/bloqueio de pares ja usados (nao
-importa de ai/multipla_pipeline.py -- esse modulo instancia Anthropic()
-no nivel de modulo). O algoritmo de escolha de pernas (2-3 jogos ate
-bater a odd total exigida) nao existe hoje em lugar nenhum -- aqui e um
-guloso deterministico: ordena candidatos elegiveis por Score Final, testa
-combinacoes de fixtures diferentes ate achar uma cujo produto real das
-odds (nunca um valor "esperado") caia na faixa exigida."""
+"""Multipla V2 -- PORTFOLIO DIARIO de bilhetes, nao "a multipla do dia".
+
+Unico gerador de picks_multiplas desde 2026-07-17 (decisao do usuario de
+cortar a IA da GERACAO em producao tambem, nao so' em dev; ela continua no
+gate de veto, no fim). Reimplementa localmente selecao de fixtures, checagem
+de "ja rodou hoje" e bloqueio de pares ja' usados -- nao importa de
+ai/multipla_pipeline.py porque esse modulo instancia Anthropic() no nivel de
+modulo.
+
+O QUE MUDOU NA V2 (2026-09-11)
+------------------------------
+A V1 perguntava "qual e' a melhor combinacao do dia?" e repetia a pergunta na
+sobra ate' o teto. A V2 pergunta "quantas multiplas de qualidade existem
+hoje?", e aceita ZERO como resposta.
+
+Em ordem, o que passou a existir:
+
+  * TETO POR OFERTA. Quantos bilhetes o dia pode publicar sai de quantas
+    PARTIDAS entregaram perna aprovada -- 1 ate' 5 jogos, ate' 5 acima de 31.
+    Maximo nao e' meta.
+  * GATE DA PERNA. Probabilidade calibrada pelo que a amostra sustenta,
+    qualidade de dado, risco, margem de projecao e score proprio. Antes a
+    perna entrava crua, com o mesmo peso vindo de 4 jogos ou de 40.
+  * ESCOLHA POR SCORE COMPOSTO, cujo maior peso e' o ELO MAIS FRACO. Nunca
+    por EV: dentro de uma faixa de odd fixa, maximizar EV e' maximizar odd.
+  * CORRELACAO MEDIDA, nao presumida: mesmo jogo e mesma equipe viram HIGH e
+    nao combinam; desconhecido paga penalidade em vez de passar por
+    independente.
+  * O DIA COMO CONJUNTO: sobreposicao, exposicao por jogo e concentracao por
+    familia limitam o portfolio inteiro, e nao cada bilhete isolado.
+
+A logica de decisao inteira mora em services/pick_engine_multipla/. Aqui fica
+o que e' de pipeline: ler o dia, chamar o motor por fixture, gravar e logar.
+"""
 import json
 import textwrap
 import traceback
-import itertools
-from datetime import datetime
 
 from utils.db_utils import get_connection
 from utils.data_br import HOJE_BR, data_br
@@ -33,10 +55,10 @@ from services.pick_engine import competition_profile as cp
 from services.pick_engine import context_gate
 from services.pick_engine import stats_model
 from services.pick_engine import ranking
-from services.pick_engine import bet_house
 from services.pick_engine import bilhetes_do_dia
-from services.pick_engine.config import DEFAULT_CONFIG
 from services.pick_engine import competition_rules_store
+from services.pick_engine_multipla import component, portfolio
+from services.pick_engine_multipla import config as mcfg
 from engine_pipelines.decision_log import (
     MOTIVO_HISTORICO_REPROVADO, MOTIVO_SEM_HISTORICO, MOTIVO_SEM_ODDS,
     log_decision, log_run, log_skip, registrar_selecao,
@@ -44,50 +66,46 @@ from engine_pipelines.decision_log import (
 from services.engine_audit import auditar
 
 
-ODD_TOTAL_MIN = 2.00
-ODD_TOTAL_MAX = 4.00  # era 3.00 -- achado real (2026-07-21): com poucos jogos
-                      # no dia, o menor produto possivel entre 2 pernas de
-                      # jogos diferentes ja passa de 3.00 (ex: 1.82x1.85=3.37),
-                      # bloqueando a multipla o dia inteiro sem motivo real de
-                      # qualidade. Decisao do usuario: alargar o teto pra 4.00.
-# Sem teto de fixtures desde 2026-08-05 (pedido do usuario): todas as pernas
-# do dia entram no pool. O teto de 4 era heranca da era em que a IA MONTAVA a
-# multipla e cada fixture ia dentro do prompt ("controla tokens", ver
-# ai/alavancagem_pipeline.py) -- hoje a IA so' revisa a combo JA montada, uma
-# chamada unica no fim. Quem segura o custo de combinacao continua sendo
-# MAX_CANDIDATES_FOR_COMBO abaixo (itertools.combinations sobre o pool
-# ordenado), nao o numero de jogos lidos.
-#
-# 12 -> 30 em 2026-08-28. Duas coisas mudaram junto e as duas engordam o pool:
-# cada fixture passou a contribuir com o pool ELEGIVEL inteiro (ate 10 linhas,
-# em vez das 3 que sobreviviam ao corte "1 por familia"), e perna do mesmo
-# jogo deixou de ser proibida. Com o teto antigo o dia inteiro podia caber em
-# duas ou tres partidas e o motor voltaria a escolher dentro de um recorte
-# estreito -- exatamente o que a mudanca queria desfazer.
-# combinations(30, 3) = 4.060 combos, custo irrelevante.
-MAX_CANDIDATES_FOR_COMBO = 30  # limita o espaco de busca das combinacoes
+#: TUDO QUE DECIDE MUDOU DE LUGAR (V2, 2026-09-11).
+#:
+#: Faixa de odd, teto de bilhetes, pesos e limiares vivem em
+#: services/pick_engine_multipla/config.py. Os nomes abaixo ficam como ALIAS
+#: porque codigo antigo (testes, scripts de homologacao) importa daqui -- mas
+#: o valor tem uma casa so'. Duas casas para o mesmo numero e' como uma regra
+#: de produto vira duas regras diferentes sem ninguem editar nada.
+#:
+#: A FAIXA APERTOU: 2.00-4.00 virou 2.00-3.00. O teto largo entrou em
+#: 2026-07-21 por uma razao real -- num dia magro, o menor produto possivel
+#: entre duas pernas de jogos diferentes ja' passava de 3.00 (1.82 x 1.85 =
+#: 3.37) e a multipla nao saia. O que mudou desde entao: o pool deixou de ser
+#: "uma linha por jogo" e passou a levar o elegivel inteiro de cada fixture,
+#: entao existem pernas de 1.40-1.55 que aquela versao nem via. Se a medicao
+#: mostrar que a faixa nova zera dias demais, o teto volta EM UMA LINHA, no
+#: config -- ver ODD_TOTAL_MAX_AGRESSIVO.
+ODD_TOTAL_MIN = mcfg.ODD_TOTAL_MIN
+ODD_TOTAL_MAX = mcfg.ODD_TOTAL_MAX
 
-#: REDE DE SEGURANCA, NAO REGRA DE PRODUTO (2026-09-05).
+#: Limita o espaco de busca das combinacoes, NAO o numero de jogos lidos:
+#: todas as pernas do dia continuam entrando no pool (pedido de 2026-08-05).
+#: O corte e' pelas MELHORES pernas (component_score), entao alargar o teto so'
+#: adiciona candidatas piores que as que ja' estao dentro.
+#: combinations(30, 3) = 4.060 bilhetes, custo irrelevante.
+MAX_CANDIDATES_FOR_COMBO = 30
+
+#: O TETO DO DIA NAO E' MAIS UM NUMERO FIXO (V2).
 #:
-#: Quem limita quantos bilhetes o dia publica NAO e' este numero -- e' PERNA
-#: DISPONIVEL. Cada bilhete usa pernas EXCLUSIVAS, e a faixa de odd total
-#: ([ODD_TOTAL_MIN, ODD_TOTAL_MAX]) ainda precisa fechar com o que sobrou.
-#: Num dia normal a busca para sozinha, muito antes de encostar aqui.
+#: Ele vem da OFERTA: quantas PARTIDAS entregaram pelo menos uma perna
+#: aprovada no gate individual (config.teto_de_multiplas). 1 bilhete num dia
+#: de ate' 5 jogos elegiveis, 2 ate' 10, 3 ate' 20, 4 ate' 30, 5 acima disso.
 #:
-#: A exclusividade nao e' capricho: dois bilhetes que dividem uma perna nao
-#: sao duas apostas, sao uma aposta com o dobro da exposicao -- o RED daquela
-#: perna derruba os dois juntos. Seria concentracao de risco vestida de
-#: variedade, e o usuario apostaria duas vezes achando que diversificou.
+#: MAXIMO NAO E' META. O teto diz quantos bilhetes o dia PODE publicar; quem
+#: diz quantos ele DEVE e' a qualidade -- e a resposta pode ser zero num dia
+#: de 40 jogos. Nao existe cota de publicacao a cumprir.
 #:
-#: Entao pra que existir? Pelo mesmo motivo que `MAX_PICKS_POR_RODADA` existe
-#: no Player Stats: uma falha de calibragem nao pode publicar cinquenta
-#: bilhetes de uma vez. E' o teto do acidente, nao do dia bom.
-#:
-#: NAO ENTROU UM PISO DE `prob_combinada` PRA OS EXTRAS, e isso e' proposital:
-#: essa ideia ja' foi medida em 2.677 bilhetes e REPROVADA. As pernas destes
-#: bilhetes passaram exatamente pelos mesmos cortes das do primeiro -- o que
-#: muda entre o primeiro e o ultimo e' a ordem, nao o criterio.
-MAX_MULTIPLAS_POR_DIA = 8
+#: O numero aqui e' so' a rede de seguranca absoluta, o teto do ACIDENTE:
+#: uma falha de calibragem nao pode publicar o dia inteiro de uma vez. Mesmo
+#: papel de MAX_PICKS_POR_RODADA no Player Stats.
+MAX_MULTIPLAS_POR_DIA = mcfg.TETO_ABSOLUTO_POR_DIA
 
 
 def _create_table_if_needed(cur):
@@ -110,20 +128,33 @@ def _create_table_if_needed(cur):
             created_at    TIMESTAMP DEFAULT NOW()
         );
     """)
-    # Indice unico: no maximo 1 multipla por dia, mesma regra de negocio de
-    # _has_today_multipla() -- backstop contra 2 execucoes concorrentes do
-    # pipeline (achado real 2026-07-25: duplicata identica gerada com 2.5s
-    # de diferenca porque o check em Python e' select-then-insert, corrida
-    # entre processos passa por cima dele).
-    # PARCIAL de proposito (so' multipla_name='MULTIPLA_ENGINE'): historico
-    # anterior a 2026-07-17 tem MULTIPLA_1/MULTIPLA_2 legitimos no mesmo
-    # match_date (2 slots do sistema antigo de IA, nao duplicata) -- indice
-    # global quebraria contra esse historico real (achado ao rodar a
-    # migracao em prod: 12 datas de junho "falharam" o indice global antes
-    # dessa correcao, todas dado legitimo, nao duplicata).
+    # O INDICE QUE IMPEDIA O PRODUTO (achado 2026-09-11).
+    #
+    # O indice antigo era UNIQUE (match_date) WHERE multipla_name =
+    # 'MULTIPLA_ENGINE' -- uma multipla por dia, que era a regra correta em
+    # 2026-07-25, quando ele entrou como backstop contra duas execucoes
+    # concorrentes (o check em Python e' select-then-insert e nao pega corrida
+    # entre processos).
+    #
+    # Em 2026-09-05 o produto passou a publicar MAIS DE UM bilhete por dia, e
+    # o indice nao acompanhou. O laco do pipeline montava o segundo bilhete,
+    # chamava a IA, chamava o INSERT -- e o ON CONFLICT ... DO NOTHING
+    # engolia a gravacao em silencio. O motor dizia que ia publicar varios e o
+    # banco publicava um, sem erro nenhum no log. Nenhum teste pegou porque
+    # todos testavam a montagem em memoria, nunca a gravacao.
+    #
+    # A trava continua existindo, so' que na chave certa: (match_date,
+    # multipla_name), com o nome carregando o numero do bilhete no dia
+    # (MULTIPLA_ENGINE_1, _2, ...). Duas execucoes concorrentes ainda colidem
+    # no mesmo slot, que e' o que o backstop precisa garantir.
+    #
+    # O DROP e' obrigatorio e nao pode ser IF NOT EXISTS de um indice novo: o
+    # indice velho, se ficar, continua valendo sozinho.
+    cur.execute("DROP INDEX IF EXISTS idx_picks_multiplas_match_date_unique;")
     cur.execute("""
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_picks_multiplas_match_date_unique
-        ON picks_multiplas (match_date) WHERE multipla_name = 'MULTIPLA_ENGINE';
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_picks_multiplas_slot_unique
+        ON picks_multiplas (match_date, multipla_name)
+        WHERE multipla_name LIKE 'MULTIPLA_ENGINE%';
     """)
     # Colunas novas (2026-08-05) em tabela que ja' existe em producao --
     # CREATE TABLE IF NOT EXISTS acima nao adiciona coluna em tabela criada
@@ -132,18 +163,22 @@ def _create_table_if_needed(cur):
     # jogo, e o pipeline inteiro cairia no except.
     cur.execute("ALTER TABLE picks_multiplas ADD COLUMN IF NOT EXISTS prob_combinada NUMERIC;")
     cur.execute("ALTER TABLE picks_multiplas ADD COLUMN IF NOT EXISTS ev_combined NUMERIC;")
-
-
-def _has_today_multipla(cur) -> bool:
-    """NOTA: a versao original (ai/multipla_pipeline.py::has_today_multipla)
-    compara DATE(created_at AT TIME ZONE ...) com CURRENT_DATE AT TIME ZONE
-    ... -- essa segunda conversao aplica fuso a um DATE (vira timestamptz),
-    comparado contra um DATE puro do outro lado, e nunca bate (bug
-    encontrado durante o teste desta pipeline: rodava 2x no mesmo dia sem
-    detectar duplicata). Aqui usa match_date = CURRENT_DATE, mesmo padrao
-    ja usado (e correto) em has_today_dica()/has_today_pick()."""
-    cur.execute(f"SELECT COUNT(*) FROM picks_multiplas WHERE match_date = {HOJE_BR}")
-    return cur.fetchone()[0] >= MAX_MULTIPLAS_POR_DIA
+    # V2 (2026-09-11), mesmo gap de migracao das duas de cima.
+    #
+    # engine_debug: o documento inteiro da decisao do bilhete -- cada perna com
+    # probabilidade bruta e calibrada, amostra, qualidade de dado, risco e
+    # score aberto em parcelas; o bloco combinado com a correlacao par a par,
+    # diversificacao, sobreposicao contra os bilhetes ja' publicados e o score
+    # com todos os termos. E' o que permite responder depois POR QUE um RED
+    # saiu, e medir ROI por ESTRUTURA (gols+escanteio, mesma liga, faixa de
+    # odd) sem reconstruir a decisao a partir do resultado. Mesma coluna e
+    # mesmo papel de picks_vip.engine_debug e picks_alavancagem.engine_debug.
+    cur.execute("ALTER TABLE picks_multiplas ADD COLUMN IF NOT EXISTS engine_debug JSONB;")
+    # ai_review: o parecer do gate de IA sobre o bilhete. Ate' agora ele era
+    # calculado e jogado fora aqui -- no painel de desempenho por modelo a
+    # multipla aparecia como "sem revisao", como se o gate nem rodasse nela
+    # (mesmo defeito ja' corrigido na alavancagem).
+    cur.execute("ALTER TABLE picks_multiplas ADD COLUMN IF NOT EXISTS ai_review JSONB;")
 
 
 def _multiplas_de_hoje(cur) -> int:
@@ -326,107 +361,31 @@ def _gather_leg_candidates(fixtures: list, used_pairs: set) -> list:
     return legs
 
 
-def _chave_de_correlacao(perna: dict) -> tuple:
-    """(fixture_id, familia) -- a chave que decide se duas pernas se excluem."""
-    return (perna["_fixture"]["fixture_id"],
-            ranking.correlation_group(perna["market_type"]))
+def _pool_da_v2(legs: list, config) -> tuple:
+    """(aprovadas, reprovadas, jogos_elegiveis) -- o GATE INDIVIDUAL da V2.
 
+    Ate' aqui a perna passou pelos gates do motor (taxa, edge, EV, confidence,
+    amostra, faixa de odd). O que este passo cobra a mais e' o que so' um
+    BILHETE precisa: probabilidade calibrada pelo que a amostra sustenta,
+    qualidade de dado, risco e margem de projecao. Uma pick simples que erra
+    custa uma unidade; uma perna que erra derruba o bilhete inteiro, junto com
+    duas outras pernas que acertaram.
 
-def _find_combo(legs: list) -> tuple | None:
-    """A MELHOR combinacao do dia dentro da faixa de odd total.
-
-    Retorna (pernas, score_combo, odd_total) ou None.
-
-    O QUE MUDOU EM 2026-08-28, e por que
-    ------------------------------------
-    A versao anterior exigia FIXTURES DIFERENTES e devolvia a melhor dupla
-    assim que existisse uma valida -- so' olhava triplas se nenhuma dupla
-    fechasse a faixa. Somado ao pool cortado em 3 linhas por jogo, o efeito
-    pratico era o que o usuario descreveu: o motor nao escolhia os melhores
-    mercados DO DIA, escolhia um mercado por jogo e depois casava jogo com
-    jogo.
-
-    Tres regras cairam:
-
-    1. FIXTURE DIFERENTE nao e' mais exigida. Duas pernas do mesmo jogo sao
-       um bilhete legitimo -- e' o mesmo formato que a alavancagem entrega
-       desde 2026-08-08. O que substitui a regra e' o veto por
-       (fixture_id, correlation_group), identico ao de la': duas pernas so'
-       se excluem quando falam do MESMO jogo E da MESMA familia. E' esse veto
-       que impede o bilhete contraditorio ("Over 3.5 gols" com "Under 2.5
-       gols" na mesma partida, os dois em `goals`) e tambem o redundante
-       ("Over 1.5" com "Over 2.5", que multiplicava duas odds como se fossem
-       eventos independentes quando uma implica a outra). Familias
-       DIFERENTES no mesmo jogo passam -- gols num mercado e impedimento
-       noutro nao se contradizem.
-
-       Vale lembrar de onde vem a forca desse veto: `correlation_group` ja'
-       colapsa btts/clean_sheet/win_to_nil em `goals` e handicap_/odd_even_
-       na familia raiz (ver _CORRELATION_GROUP_OVERRIDES), entao "Under 2.5 +
-       Ambas Marcam" -- que so' paga em 1-1 -- continua barrado aqui.
-
-    2. NAO ha mais preferencia por tamanho. 2 e 3 pernas concorrem no mesmo
-       ranking; ganha a melhor, nao a menor. Antes uma dupla mediana vencia
-       uma tripla otima por chegar primeiro no laco.
-
-    3. O CRITERIO deixou de ser a media dos final_score das pernas. A media
-       premiava bilhete desequilibrado: uma perna excelente com uma fraca
-       ganhava de duas boas, sendo que o bilhete so' paga se TODAS baterem.
-       Agora ordena por `prob_combinada` -- o produto das probabilidades
-       reais das pernas, a chance de o bilhete pagar -- com a media dos
-       final_score de desempate. Mesmo raciocinio que _find_combo da
-       alavancagem ja' segue, e o mesmo numero que _save_multipla ja' grava.
-
-       NAO ordena por EV: dentro de uma faixa de odd fixa, maximizar EV e'
-       maximizar odd, e odd alta e' alerta, nao qualidade.
-
-    `score_combo` continua sendo gravado como a media dos final_score, pra o
-    historico de picks_multiplas seguir comparavel com o que ja' esta la'.
+    `jogos_elegiveis` e' quantas PARTIDAS diferentes sobreviveram -- e' esse
+    numero, e nao o total de jogos do dia, que define o teto de bilhetes.
     """
-    pool = sorted(legs, key=lambda p: p["final_score"], reverse=True)[:MAX_CANDIDATES_FOR_COMBO]
-
-    best = None
-    for combo_size in (2, 3):
-        for combo in itertools.combinations(pool, combo_size):
-            chaves = [_chave_de_correlacao(p) for p in combo]
-            if len(set(chaves)) != len(chaves):
-                continue
-
-            # CASA UNICA: bilhete de 2-3 pernas espalhado por casas
-            # diferentes nao existe no mundo real (achado do usuario,
-            # 2026-09-10). A casa e' escolhida depois das pernas e so' decide
-            # onde apostar; bilhete que nenhuma casa cota inteiro nem
-            # concorre. A faixa por perna e' a mesma do motor (DEFAULT_CONFIG),
-            # entao a odd da casa nao pode furar o gate que a perna passou.
-            aplicado = bet_house.aplicar_casa(
-                combo, DEFAULT_CONFIG.min_odd, DEFAULT_CONFIG.max_odd)
-            if aplicado is None:
-                continue
-            combo, _casa, odd_total = aplicado
-
-            if not (ODD_TOTAL_MIN <= odd_total <= ODD_TOTAL_MAX):
-                continue
-
-            prob_combinada = 1.0
-            for p in combo:
-                prob_combinada *= float(p["taxa_real"])
-            score_combo = round(sum(p["final_score"] for p in combo) / len(combo), 4)
-
-            chave_ordem = (round(prob_combinada, 6), score_combo)
-            if best is None or chave_ordem > best[0]:
-                best = (chave_ordem, tuple(combo), score_combo, odd_total)
-
-    if best is None:
-        return None
-    return best[1], best[2], best[3]
+    aprovadas, reprovadas = component.avaliar_pool(legs, config)
+    jogos = {component.jogo(p) for p in aprovadas}
+    return aprovadas, reprovadas, len(jogos)
 
 
-def _save_multipla(cur, legs: tuple, score_combo: float, odd_total: float) -> int | None:
+def _save_multipla(cur, bilhete: dict, slot: int, contexto: dict) -> int | None:
     """Grava o bilhete e devolve o id · None quando o ON CONFLICT nao gravou.
 
     O id e' o que liga TODAS as pernas ao bilhete na aba de Auditoria: e' o
     caminho de volta de um RED ate' o que o motor viu em cada jogo.
     """
+    legs = bilhete["pernas"]
     games_info = []
     for p in legs:
         fx = p["_fixture"]
@@ -449,70 +408,45 @@ def _save_multipla(cur, legs: tuple, score_combo: float, odd_total: float) -> in
             "bet_house": p["best_bookmaker"],
             "confidence": p["confidence"],
             "prob_real": p["taxa_real"],
+            # V2: a probabilidade que a AMOSTRA sustenta, ao lado da crua. As
+            # duas, e nao so' uma: a distancia entre elas e' a medida direta de
+            # quanto aquela perna depende de pouca evidencia, e some se a
+            # gravacao guardar so' o numero final.
+            "prob_calibrada": p.get("probabilidade_calibrada"),
+            "component_score": p.get("component_score"),
+            "risco": p.get("risco"),
             "ai_review": p.get("ai_review"),
         })
 
     match_date = min(p["_fixture"]["match_datetime"] for p in legs).date()
     reasoning = " | ".join(explain(p) for p in legs)
 
-    # Probabilidade e EV do BILHETE, nao das pernas. A multipla so' paga se
-    # TODAS as pernas baterem, entao a chance do bilhete e' o PRODUTO das
-    # probabilidades -- exatamente o que alavancagem_pipeline.py ja' fazia
-    # desde que o mesmo erro foi encontrado la'; nunca tinha sido propagado
-    # pra ca (2026-08-05).
+    # A PROBABILIDADE GRAVADA E' A AJUSTADA, nao o produto cru.
     #
-    # Quanto isso pesava: 3 pernas de 72%/70%/68% dao 34,3% de chance real, e
-    # o score_combo (media dos final_score das pernas) mostrava 86,0% -- 51,7
-    # pontos percentuais de diferenca. E score_combo nem e' probabilidade: e'
-    # a media de um score de ranqueamento que ja' mistura confidence, Q,
-    # contexto e perfil.
+    # O produto (`prob_produto`) assume independencia. Isso foi MEDIDO em
+    # 2026-08-20 sobre 2.677 bilhetes de 2 pernas, fora da amostra, e se
+    # sustenta para pernas de JOGOS DIFERENTES: o produto erra -1.0pp com
+    # familia repetida e -0.7pp com familias diferentes, ou seja, e' quase
+    # nao-enviesado e erra pro lado conservador. Por isso a V2 nao reintroduz
+    # piso de prob_combinada nem proibe familia repetida entre jogos: essa
+    # ideia ja' foi medida e reprovada.
     #
-    # Assume independencia entre as pernas.
+    # O que a medicao NAO cobre e' o que o ajuste trata: correlacao dentro do
+    # MESMO jogo (hoje bloqueada) e o desconhecido. Mais o encolhimento por
+    # amostra, que entra antes, dentro de cada perna.
     #
-    # ATE 2026-08-28 isso era garantido por construcao: _find_combo exigia
-    # fixtures DIFERENTES. Nao exige mais -- duas pernas do mesmo jogo entram,
-    # desde que de familias diferentes. O que sobra de dependencia e' quase
-    # todo pro lado CONSERVADOR: dentro de uma partida, mercados de volume
-    # (gols, escanteio, chute, falta) sao POSITIVAMENTE correlacionados na
-    # direcao "jogo aberto", entao duas pernas de Over ganham juntas com mais
-    # frequencia do que o produto anuncia. Fora do mesmo jogo continua valendo
-    # a correlacao fraca de rodada, tambem conservadora.
-    #
-    # O caso anti-conservador -- duas pernas do mesmo jogo apontando pra lados
-    # OPOSTOS, tipo Over de gol com Under de escanteio -- existe e nao e'
-    # pego pelo veto de familia. Ele ficou de fora de proposito: exigiria
-    # medir a correlacao por PAR de mercado, e o dado pra isso e' o mesmo
-    # que sustentou a medicao de 2026-08-20 (abaixo), que so' cobre pernas de
-    # jogos diferentes. Ate ter medicao propria, e' um risco conhecido e
-    # nomeado, nao um esquecimento.
-    #
-    # A INDEPENDENCIA FOI MEDIDA EM 2026-08-20, e ela se sustenta.
-    #
-    # A multipla vinha 2 GREEN em 14 nos ultimos 30 dias, com bilhetes
-    # anunciando EV de +53% e +71%. A suspeita obvia era que o produto
-    # estivesse errado -- ou por correlacao entre as pernas, ou por
-    # concentracao de mercado (havia bilhete de escanteio+escanteio e de
-    # chutes+chutes). Simulei 2.677 bilhetes de 2 pernas sobre o dado real,
-    # fora da amostra:
-    #
-    #     recorte                bilhetes   produto diz   real     erro
-    #     mesma familia               717        71.5%   72.5%   -1.0pp
-    #     familias diferentes       1.960        70.1%   70.8%   -0.7pp
-    #
-    # O produto e' praticamente nao-enviesado, e perna repetida NAO e' pior --
-    # e' marginalmente melhor, dentro do ruido. Nao ha caso pra proibir
-    # familia repetida nem pra somar um piso de prob_combinada.
-    #
-    # O erro estava inteiro nas PERNAS: cada uma era estimada por Poisson numa
-    # familia superdispersa e saia 3,5 a 5,6 pontos inflada
-    # (probability_model._DISPERSAO). O produto entao elevava o erro ao
-    # quadrado sem ter erro proprio nenhum. Corrigida a perna, a multipla se
-    # corrige junto -- e qualquer regra extra aqui estaria tratando sintoma.
-    prob_combinada = 1.0
-    for p in legs:
-        prob_combinada *= float(p["taxa_real"])
-    prob_combinada = round(prob_combinada, 4)
-    ev_combined = round(prob_combinada * float(odd_total) - 1.0, 4)
+    # Quanto isso pesa: 3 pernas de 72%/70%/68% dao 34,3% de chance real, e o
+    # score_combo (media dos final_score das pernas) mostrava 86,0% -- 51,7
+    # pontos de diferenca. score_combo nem e' probabilidade: e' a media de um
+    # score de ranqueamento que mistura confidence, Q, contexto e perfil.
+    prob_combinada = bilhete["probabilidade"]
+    ev_combined = bilhete["ev"]
+    odd_total = bilhete["odd_total"]
+    # score_combo continua sendo a media dos final_score das pernas, e nao o
+    # score novo: e' a coluna que o historico ja' tem, e trocar o significado
+    # dela no meio faria a serie inteira comparar duas coisas diferentes. O
+    # score da V2 vai pro engine_debug, onde nasce comparavel consigo mesmo.
+    score_combo = round(sum(p["final_score"] for p in legs) / len(legs), 4)
 
     # Kelly precisa da probabilidade do evento, nao de um score de
     # ranqueamento. Com score_combo o calculo saturava o teto de 2,5% em
@@ -522,15 +456,71 @@ def _save_multipla(cur, legs: tuple, score_combo: float, odd_total: float) -> in
         confidence=prob_combinada, odd=odd_total, ev=ev_combined, pick_type="multipla",
     )
 
+    engine_debug = {
+        "versao": "multipla_v2",
+        "bilhete": {
+            "slot": slot,
+            "odd_total": odd_total,
+            "prob_produto": bilhete["prob_produto"],
+            "prob_calibrada": bilhete["prob_calibrada"],
+            "prob_ajustada": prob_combinada,
+            "fair_odd": bilhete["fair_odd"],
+            "edge": bilhete["edge"],
+            "ev": ev_combined,
+            "score": bilhete["score"],
+            "score_liquido": bilhete.get("score_liquido"),
+            "score_parcelas": bilhete["score_parcelas"],
+            "faixa": bilhete["faixa"],
+            "elo_mais_fraco": bilhete["elo_mais_fraco"],
+            "risco": bilhete["risco"],
+            "casa": bilhete.get("casa"),
+            "correlacao": bilhete["correlacao"],
+            "diversificacao": bilhete["diversificacao"],
+            "overlap": bilhete.get("overlap"),
+        },
+        "pernas": [
+            {
+                "fixture_id": p["_fixture"]["fixture_id"],
+                "market_type": p["market_type"],
+                "line": p["value_label"],
+                "odd": p["odd"],
+                "taxa_real": p["taxa_real"],
+                "probabilidade_calibrada": p.get("probabilidade_calibrada"),
+                "amostra": p.get("amostra"),
+                "sample_quality": p.get("sample_quality"),
+                "data_quality_score": p.get("data_quality_score"),
+                "risco": p.get("risco"),
+                "risk_score": p.get("risk_score"),
+                "projection_margin": p.get("projection_margin"),
+                "ev": p.get("ev"),
+                "edge": p.get("edge"),
+                "component_score": p.get("component_score"),
+                "component_parcelas": p.get("component_parcelas"),
+            }
+            for p in legs
+        ],
+        # A foto do DIA junto do bilhete: quantos jogos havia, quantos
+        # candidatos sobreviveram e qual era o teto. Sem isso, comparar dois
+        # bilhetes de dias diferentes compara decisoes tomadas com ofertas
+        # diferentes sem saber disso.
+        "dia": contexto,
+    }
+
+    # A revisao e' UMA por bilhete (review_gate.apply recebe a combinacao
+    # inteira), entao todas as pernas carregam o mesmo dict -- guardar o da
+    # primeira e' guardar o parecer do bilhete.
+    ai_review = legs[0].get("ai_review") if legs else None
+
     cur.execute("""
         INSERT INTO picks_multiplas
         (multipla_name, games, total_odd, stake_pct, stake, score_combo,
-         prob_combinada, ev_combined, match_date, reasoning)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        ON CONFLICT (match_date) WHERE multipla_name = 'MULTIPLA_ENGINE' DO NOTHING
+         prob_combinada, ev_combined, match_date, reasoning, engine_debug, ai_review)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (match_date, multipla_name)
+            WHERE multipla_name LIKE 'MULTIPLA_ENGINE%%' DO NOTHING
         RETURNING id
     """, (
-        "MULTIPLA_ENGINE",
+        f"MULTIPLA_ENGINE_{slot}",
         json.dumps(games_info, default=str),
         odd_total,
         stake_pct,
@@ -540,6 +530,8 @@ def _save_multipla(cur, legs: tuple, score_combo: float, odd_total: float) -> in
         ev_combined,
         match_date,
         reasoning,
+        json.dumps(engine_debug, ensure_ascii=False, default=str),
+        json.dumps(ai_review, ensure_ascii=False, default=str) if ai_review else None,
     ))
     linha = cur.fetchone()
     return linha[0] if linha else None
@@ -561,10 +553,12 @@ def run_multipla_engine():
     _create_table_if_needed(cur)
     conn.commit()
 
+    config = mcfg.padrao()
+
     ja_publicadas = _multiplas_de_hoje(cur)
     if ja_publicadas >= MAX_MULTIPLAS_POR_DIA:
         print(f"[MULTIPLA_ENGINE] Dia já tem {ja_publicadas} múltipla(s), "
-              f"que é o teto ({MAX_MULTIPLAS_POR_DIA}).")
+              f"que é o teto absoluto ({MAX_MULTIPLAS_POR_DIA}).")
         cur.close()
         conn.close()
         return
@@ -579,58 +573,77 @@ def run_multipla_engine():
 
     used_pairs = _today_used_pairs(cur)
     legs = _gather_leg_candidates(fixtures, used_pairs)
-    if len(legs) < 2:
-        print(f"[MULTIPLA_ENGINE] Só {len(legs)} candidato(s) elegível(is) · insuficiente pra combinar.")
+
+    aprovadas, reprovadas, jogos_elegiveis = _pool_da_v2(legs, config)
+    print(f"[MULTIPLA_ENGINE] {len(fixtures)} jogo(s) no dia · {len(legs)} perna(s) do motor · "
+          f"{len(aprovadas)} aprovada(s) no gate da múltipla em {jogos_elegiveis} jogo(s) · "
+          f"teto do dia: {mcfg.teto_de_multiplas(jogos_elegiveis, config)}")
+    if reprovadas:
+        contagem = {}
+        for p in reprovadas:
+            for motivo in p["motivos"]:
+                contagem[motivo] = contagem.get(motivo, 0) + 1
+        # Distribuicao de motivo, e nao a lista de pernas: e' o que responde
+        # "por que hoje nao saiu" sem ter que abrir perna por perna.
+        detalhe = " · ".join(f"{k}={v}" for k, v in sorted(contagem.items(),
+                                                           key=lambda kv: -kv[1]))
+        print(f"[MULTIPLA_ENGINE] Pernas reprovadas: {detalhe}")
+
+    # O PORTFOLIO DO DIA, de uma vez -- e nao um bilhete de cada vez como na
+    # V1. A diferenca nao e' de forma: so' vendo o conjunto da' pra recusar um
+    # bilhete que era bom SOZINHO e concentra exposicao DEPOIS do que ja' foi
+    # publicado (mesmo jogo, mesma familia dominante, perna repetida).
+    vagas = MAX_MULTIPLAS_POR_DIA - ja_publicadas
+    resultado = portfolio.montar(aprovadas, jogos_elegiveis, config, vagas=vagas)
+
+    if not resultado["multiples"]:
+        # NO_MULTIPLA e' resposta valida, e e' a resposta certa em dia ruim.
+        # Nao existe cota de publicacao a cumprir.
+        print(f"[MULTIPLA_ENGINE] NO_MULTIPLA · {resultado.get('reason')}")
         cur.close()
         conn.close()
         return
 
-    # UM BILHETE POR VOLTA, e a volta seguinte procura na sobra. As pernas
-    # gastas saem do pool: bilhete que divide perna com outro nao e' aposta
-    # nova, e' a mesma exposicao contada duas vezes (ver MAX_MULTIPLAS_POR_DIA).
-    restantes = list(legs)
+    contexto = portfolio.resumo(resultado, data_br())
     salvas = 0
-    vagas = MAX_MULTIPLAS_POR_DIA - ja_publicadas
-    while salvas < vagas and len(restantes) >= 2:
-        result = _find_combo(restantes)
-        if not result:
-            if salvas == 0:
-                print(f"[MULTIPLA_ENGINE] Nenhuma combinação bateu a faixa de odd total "
-                      f"[{ODD_TOTAL_MIN:.2f}, {ODD_TOTAL_MAX:.2f}].")
-            else:
-                print(f"[MULTIPLA_ENGINE] A sobra do pool não fecha outro bilhete na faixa.")
-            break
-
-        combo, score_combo, odd_total = result
-        # As pernas saem do pool ANTES da IA: vetada ou nao, esta combinacao
-        # ja' foi considerada, e reofere-la na volta seguinte daria um laco
-        # infinito com a mesma resposta.
-        usadas = {id(p) for p in combo}
-        restantes = [p for p in restantes if id(p) not in usadas]
-
-        reviewed = review_gate("multipla").apply(list(combo), "multipla")
+    for i, bilhete in enumerate(resultado["multiples"], start=1):
+        # A IA SO' VETA, nunca monta nem reordena (regra do gate de IA). Ela
+        # roda por ultimo, sobre o bilhete ja' escolhido: falha aberto, entao
+        # "indisponivel" nunca vira "aprovado".
+        reviewed = review_gate("multipla").apply(list(bilhete["pernas"]), "multipla")
         if not reviewed:
-            print("[MULTIPLA_ENGINE] Combinacao vetada pela revisao de IA.")
+            print(f"[MULTIPLA_ENGINE] Bilhete {i} vetado pela revisão de IA.")
             continue
-        combo = tuple(reviewed)
-        pick_id = _save_multipla(cur, combo, score_combo, odd_total)
+        bilhete = {**bilhete, "pernas": list(reviewed)}
+
+        # O SLOT conta o dia, nao a execucao: rodar o motor duas vezes nao
+        # pode reescrever o bilhete que ja' esta' publicado nem dobrar a
+        # exposicao. E' a mesma chave do indice unico.
+        slot = ja_publicadas + salvas + 1
+        pick_id = _save_multipla(cur, bilhete, slot, contexto)
         conn.commit()
         if not pick_id:
+            # O slot ja' existia: outra execucao publicou entre o SELECT e o
+            # INSERT. E' exatamente o que o indice unico existe pra impedir.
+            print(f"[MULTIPLA_ENGINE] Slot {slot} já ocupado por outra execução, pulando.")
             continue
         salvas += 1
 
         pernas = " + ".join(
-            f"{p['_fixture']['home_team']} x {p['_fixture']['away_team']} ({p['market_name']} {p['value_label']} @ {p['odd']})"
-            for p in combo
+            f"{p['_fixture']['home_team']} x {p['_fixture']['away_team']} "
+            f"({p['market_name']} {p['value_label']} @ {p['odd']})"
+            for p in bilhete["pernas"]
         )
         # As contagens da aba de Auditoria: `contabilizar` ja' somou este jogo
         # como analisado/descartado quando o decision_log gravou a linha dele;
         # aqui a pick salva move a contagem pro lado certo.
         registrar_selecao("MULTIPLA_ENGINE",
-                          [p["_fixture"]["fixture_id"] for p in combo],
+                          [p["_fixture"]["fixture_id"] for p in bilhete["pernas"]],
                           pick_id=pick_id)
-        print(f"[MULTIPLA_ENGINE] Salva ({salvas}/{vagas}): {pernas} | "
-              f"odd_total={odd_total} | score_combo={score_combo}")
+        print(f"[MULTIPLA_ENGINE] Salva ({salvas}/{resultado['max_multiples']}): {pernas} | "
+              f"odd_total={bilhete['odd_total']} | score={bilhete['score']} "
+              f"({bilhete['faixa']}) | prob={bilhete['probabilidade']} | "
+              f"casa={bilhete.get('casa')}")
 
     cur.close()
     conn.close()

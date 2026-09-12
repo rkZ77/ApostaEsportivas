@@ -36,6 +36,27 @@ class FixturesService:
     # 1. Fixtures de HOJE
     ##########################################################################
     def get_fixtures_today(self):
+        """Jogos PRE-JOGO de hoje (BRT), pros geradores de bilhete.
+
+        'LIVE' SAIU DO FILTRO EM 2026-09-11, e o motivo e' o mesmo que tirou
+        'LIVE' da Dica em 11/08 (ver o docstring de
+        dica_pipeline._fixtures_with_odds_in_range): um jogo que ja comecou,
+        eventualmente ja perdendo de 1 a 0, continuava elegivel, e a odd usada
+        era a pre-jogo -- que naquele momento ja nao existia em casa nenhuma.
+
+        Aquela correcao afirmava ter varrido os seis geradores. Varreu os seis
+        que tinham query PROPRIA. Multipla e Bingo sao os unicos que leem
+        fixture por este metodo compartilhado, e por isso ficaram de fora da
+        conta e mantiveram o furo por um mes: uma perna de bilhete podia ser um
+        jogo em andamento, cotado a um preco que o usuario nao consegue mais
+        pegar. Com a regra de casa unica e perna exclusiva (10/09), uma perna
+        assim contamina o bilhete inteiro.
+
+        Os quatro chamadores sao todos pre-jogo (multipla, bingo e os dois
+        pipelines de IA legados), entao nenhum deles perde nada com o corte.
+        Quem precisar de jogo ao vivo usa o motor Ao Vivo, que tem feed proprio
+        (`pick_engine_live/live_feed.py`) -- nao volte 'LIVE' aqui.
+        """
         today = datetime.datetime.now(_TZ_BRT).date()
         tomorrow = today + datetime.timedelta(days=1)
 
@@ -59,7 +80,7 @@ class FixturesService:
                 DATE(f.match_datetime) = %s
                 OR (DATE(f.match_datetime) = %s AND EXTRACT(HOUR FROM f.match_datetime) < 3)
             )
-              AND f.status IN ('NS','TBD','LIVE')
+              AND f.status IN ('NS','TBD')
             ORDER BY f.match_datetime ASC;
         """, (today, tomorrow))
 

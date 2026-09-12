@@ -160,6 +160,17 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
             # da tela em silencio em vez de dar erro.
             cur.execute(f"ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS prob_real_{_n} NUMERIC;")
 
+        # engine_debug (2026-09-11, Alavancagem V2): o documento de decisao do
+        # bilhete -- pernas com probabilidade bruta/modelo/calibrada, amostra,
+        # qualidade de dado e contradicoes; o combinado com correlacao par a
+        # par, os descontos aplicados e o score; e o veredito de cada gate.
+        #
+        # O motor tambem faz este ALTER, mas os dois lados precisam faze'-lo:
+        # a ordem de deploy entre site e motor nao e' garantida, e quem
+        # escreve a coluna e' o motor enquanto quem le' e' o site. Mesmo
+        # padrao das colunas acima.
+        cur.execute("ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS engine_debug JSONB;")
+
         # Backfills de team_id em picks_alavancagem foram REMOVIDOS daqui em
         # 2026-08-xx (otimizacao de startup). Ja' rodaram uma vez contra a base
         # real e migraram todos os picks existentes. Novos picks ja' gravam o

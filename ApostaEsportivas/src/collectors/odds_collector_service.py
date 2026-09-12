@@ -425,22 +425,37 @@ class OddsCollectorService:
             self._cobertura = {}
 
         for bm_id in sorted(self.casas):
+            # FALHA E "NAO COTOU" SAO COISAS DIFERENTES, e ate 2026-09-11 este
+            # laco tratava as duas como a mesma: o `except ... continue` e o
+            # `.get("response", [])` caiam ambos no contador `sem`, que e' o
+            # que alimenta `resumo_das_casas()`. Cota estourada virava "a
+            # Betano nao cotou este jogo" -- exatamente a conclusao errada que
+            # o `/odds/live` produzia em 09/09, agora no coletor pre-jogo.
+            #
+            # Pior que o numero errado no painel: a casa sumia do consenso
+            # daquele jogo sem nenhum registro, e o pick saia com uma casa a
+            # menos na mediana como se fosse cobertura real.
             try:
-                response = requests.get(
-                    self.api_url,
-                    headers=HEADERS,
-                    params={"fixture": fixture_id, "bookmaker": bm_id},
-                    timeout=20,
+                data = buscar(
+                    "odds",
+                    {"fixture": fixture_id, "bookmaker": bm_id},
+                    origem="coletor_odds",
                 )
-                api_quota.registrar(getattr(response, "headers", None), "coletor_odds")
-                response.raise_for_status()
-            except requests.RequestException as e:
+            except ApiQuotaEsgotada:
+                # Nao adianta tentar a proxima casa nem o proximo jogo: a cota
+                # e' do dia. Sobe e deixa a rodada parar com motivo nomeado.
+                raise
+            except ApiFootballError as e:
                 print(f"[ODDS API ERROR] fixture {fixture_id} bookmaker {bm_id}: {e}")
+                registro = self._cobertura.setdefault(
+                    bm_id, {"com": 0, "sem": 0, "falhou": 0})
+                registro["falhou"] = registro.get("falhou", 0) + 1
+                self._falhas_na_rodada += 1
                 continue
 
-            data = response.json().get("response", [])
             casas_na_resposta = data[0].get("bookmakers", []) if data else []
-            registro = self._cobertura.setdefault(bm_id, {"com": 0, "sem": 0})
+            registro = self._cobertura.setdefault(
+                bm_id, {"com": 0, "sem": 0, "falhou": 0})
             if casas_na_resposta:
                 registro["com"] += 1
             else:

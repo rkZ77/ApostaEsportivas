@@ -220,6 +220,23 @@ def build_review_payload(picks: list[dict], pipeline: str, fixture: dict | None 
             # precaucao que `league_profile` toma logo acima.
             **({"player": pick["player_stats"]} if pick.get("player_stats") else {}),
         } for pick in picks],
+        # BILHETE (2026-09-11). Os campos acima descrevem PERNAS soltas, e era
+        # so' isso que a revisao da alavancagem recebia: nenhuma informacao de
+        # que as pernas iam juntas, qual a odd combinada, qual a probabilidade
+        # do produto, nem se ha' correlacao entre elas. A IA nao tinha como
+        # vetar "combinacao incoerente" ou "correlacao perigosa" (§48) porque
+        # nunca via a combinacao -- via duas picks que passavam nos criterios
+        # individuais, e aprovava.
+        #
+        # E' o documento que combo_engine.avaliar produz: probabilidade bruta e
+        # ajustada, os descontos um a um, correlacao par a par, risco do
+        # bilhete, diversificacao, score e o veredito de cada gate.
+        #
+        # SO' QUANDO EXISTE -- chave ausente nao muda o cache_key dos pipelines
+        # que nao montam bilhete, mesma precaucao de `player` e
+        # `league_profile`.
+        **({"bilhete": picks[0]["bilhete"]}
+           if picks and picks[0].get("bilhete") else {}),
     }
 
 

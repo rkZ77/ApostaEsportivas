@@ -1,11 +1,10 @@
 ﻿import os
-import requests
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv, find_dotenv
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from utils.db_utils import get_connection
-from services import api_quota
+from utils.api_client import buscar, ApiFootballError
 
 load_dotenv(find_dotenv())
 
@@ -15,9 +14,6 @@ load_dotenv(find_dotenv())
 API_KEY = os.getenv("API_FOOTBALL_KEY")
 if not API_KEY:
     raise RuntimeError("API_FOOTBALL_KEY não definida no .env")
-
-API_URL = "https://v3.football.api-sports.io/fixtures"
-HEADERS = {"x-apisports-key": API_KEY}
 
 # ============================================================
 # TIMEZONE BR
@@ -102,20 +98,20 @@ class FixtureCollectorService:
             print("[WARN] Execute o Stage 1 (sync de times) primeiro.")
             return []
 
-        try:
-            response = requests.get(
-                API_URL,
-                headers=HEADERS,
-                params={"date": date_str},
-                timeout=20,
-            )
-            api_quota.registrar(getattr(response, "headers", None), "coletor_fixtures")
-            response.raise_for_status()
-        except requests.RequestException as e:
-            print(f"[ERRO] Falha na API: {e}")
-            return []
-
-        data     = response.json().get("response", [])
+        # SEM `except` AQUI, E A AUSENCIA E' A CORRECAO.
+        #
+        # Ate 2026-09-11 este bloco terminava em `return []`, e ai' falha de
+        # rede, HTTP 429 e cota estourada eram indistinguiveis de "nao ha jogos
+        # nesta data". `collect_fixtures_today_br` chama este metodo QUATRO
+        # vezes e concatena: uma falhar significava o dia inteiro perder uma
+        # fatia dos jogos, com o log imprimindo o total menor como se fosse o
+        # total real. O pick do dia saia de um conjunto menor que o disponivel
+        # e nada em lugar nenhum registrava isso.
+        #
+        # `buscar()` levanta `ApiFootballError` nos tres casos, e quem chama
+        # aborta a rodada (ver collect_fixtures_today_br). Coleta parcial de
+        # fixtures nao pode virar base de decisao.
+        data     = buscar("fixtures", {"date": date_str}, origem="coletor_fixtures")
         fixtures = []
 
         for item in data:
@@ -198,9 +194,20 @@ class FixtureCollectorService:
         print(f"📅 Dias alvo : {dias_br[0]} a {dias_br[-1]} (Brasília)")
         print(f"🌐 Datas UTC consultadas: {', '.join(str(d) for d in datas_utc)}")
 
+        # TUDO OU NADA. Cada data UTC e' uma fatia do mesmo dia brasileiro, e
+        # uma fatia faltando nao e' "menos jogos", e' um conjunto incompleto
+        # disfarcado de completo. Deixar passar aqui era o que fazia o motor
+        # escolher o melhor pick de uma amostra que nao era a do dia.
         all_raw = []
         for utc_date in datas_utc:
-            all_raw.extend(self.get_fixtures_by_date(utc_date))
+            try:
+                all_raw.extend(self.get_fixtures_by_date(utc_date))
+            except ApiFootballError as e:
+                raise ApiFootballError(
+                    f"Coleta de fixtures ABORTADA: a data UTC {utc_date} falhou ({e}). "
+                    f"As {len(datas_utc)} datas formam um unico dia brasileiro -- "
+                    f"salvar o que veio produziria um dia incompleto sem aviso."
+                ) from e
 
         # Remove duplicatas por fixture_id (pode aparecer em mais de uma consulta)
         seen     = set()

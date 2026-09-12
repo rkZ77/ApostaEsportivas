@@ -43,6 +43,7 @@ from services.pick_engine import stats_model
 from services.pick_engine import ranking
 from services.pick_engine import bet_house
 from services.pick_engine import bilhetes_do_dia
+from services.pick_engine import combo_engine
 from services.pick_engine import competition_rules_store
 from engine_pipelines.decision_log import (
     MOTIVO_HISTORICO_REPROVADO, MOTIVO_SEM_HISTORICO, MOTIVO_SEM_ODDS,
@@ -137,6 +138,10 @@ def _create_table_if_needed(cur):
     # nao adiciona coluna em tabela criada antes; mesmo gap de migracao ja'
     # documentado em multipla_pipeline.py).
     cur.execute("ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS ai_review JSONB;")
+    # engine_debug (2026-09-11, V2): o documento de decisao do bilhete. Mesmo
+    # gap de migracao das colunas abaixo -- a tabela ja' existe em PROD, o
+    # CREATE acima nao a adiciona, e sem o ALTER o INSERT quebra no deploy.
+    cur.execute("ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS engine_debug JSONB;")
     # Mesmo gap: a tabela ja' existe em PROD, e o CREATE acima nao adiciona
     # coluna nova nela. Sem estes ALTERs o INSERT de _save_pick quebra na
     # primeira rodada depois do deploy. Ver a migracao equivalente do site em
@@ -363,54 +368,49 @@ def _legs_sem_jogo_do_vip(cur, legs: list) -> list:
 
 
 def _find_combo(legs: list, odd_min: float, odd_max: float) -> tuple | None:
-    """Tenta dupla -> tripla -> simples (pernas podem ser do mesmo fixture
-    ou de fixtures diferentes) ate o produto real das odds cair em
-    [odd_min, odd_max]. Faixa continua por parametro pra facilitar teste, mas
-    hoje so' existe uma: [ODD_COMBINED_MIN, ODD_COMBINED_MAX].
+    """CAMADA 3 -- CONSTRUCAO DA ALAVANCAGEM (V2, 2026-09-11).
 
-    CORRELACAO E' POR JOGO (corrigido 2026-08-08)
-    ---------------------------------------------
-    A regra anterior rejeitava todo combo cujas pernas tivessem o MESMO
-    market_type, sem olhar de que partida cada uma vinha. Duas pernas de
-    `goals` em jogos diferentes nao sao correlacionadas -- sao times
-    diferentes, em estadios diferentes, no mesmo dia -- mas caiam no mesmo
-    veto que "Over 1.5 gols + Ambas Marcam no mesmo jogo", que e' correlacao
-    de verdade.
+    Recebe as pernas que ja' passaram pela camada 1 (geracao, em
+    `_gather_leg_candidates`) e pela camada 2 (validacao individual, dentro do
+    `pick_engine`), monta TODOS os formatos possiveis na faixa, avalia cada um
+    como BILHETE em `combo_engine.avaliar`, e devolve o que a regra de escolha
+    selecionar. Retorna (pernas, confidence_do_bilhete, odd_combinada,
+    avaliacao) ou None.
 
-    O custo era o produto inteiro. Em 08/08 o motor gerou 12 pernas candidatas
-    e TODAS eram `goals` (consequencia direta do teto de 1.55: mercado barato
-    com probabilidade alta e' quase sempre Over 0.5 / Under 4.5 / Under 5.5 de
-    gols). Toda dupla e toda tripla morreram nesse veto, sobrou o formato
-    simples, e a maior odd do dia era 1.39 contra um piso de 1.40 -- dia sem
-    alavancagem por um centavo, depois de um veto que nao descrevia risco
-    nenhum.
+    O QUE MUDOU EM RELACAO AO MOTOR ANTIGO
+    --------------------------------------
+    O antigo tentava dupla -> tripla -> simples e PARAVA no primeiro formato
+    que fechasse na faixa, desempatando pelo produto das confidences. Duas
+    consequencias, as duas medidas no historico:
 
-    A chave do veto agora e' (fixture_id, correlation_group), a MESMA de
-    _today_used_pairs: duas pernas so' se excluem quando falam do mesmo jogo E
-    da mesma familia. Fica de pe o que o veto queria proteger, e some o que ele
-    protegia por acidente.
+      1. Nenhuma pergunta era feita sobre a COMBINACAO. Correlacao era um veto
+         binario por (fixture_id, familia); probabilidade combinada era o
+         produto cru; risco do bilhete nao existia. Uma dupla de duas pernas
+         boas era um bilhete bom por construcao.
+      2. A ORDEM DOS FORMATOS DECIDIA A APOSTA. Com dupla primeiro, uma dupla
+         que apenas coubesse na faixa vencia uma simples melhor que tambem
+         cabia -- e as duas pagam o mesmo, porque a faixa e' do TOTAL.
 
-    O QUE ESTA REGRA NAO COBRE, de proposito: erro sistematico do modelo. Tres
-    pernas de `goals` em tres jogos sao independentes no resultado, mas nao no
-    MODELO -- se a estimativa de gols estiver enviesada hoje, as tres erram
-    juntas. Diversificar por familia protegeria disso; o preco medido foi ficar
-    sem produto na maioria dos dias, entao a escolha aqui e' explicita, nao
-    esquecimento.
+    Agora os tres formatos concorrem no MESMO pool avaliado, e quem escolhe e'
+    `combo_engine.escolher`: simples por padrao, combo so' quando entrega mais
+    probabilidade pelo mesmo preco (ver a docstring de la').
 
-    A ORDEM importa e ja' foi um bug: com (1, 2, 3), uma perna unica de odd
-    1.40 sempre cabia na faixa e vencia antes de qualquer combo ser testado
-    -- as 30 alavancagens geradas em producao ate 2026-08-02 sairam TODAS
-    como 'simples'. Os tres formatos sao validos (o usuario confirmou em
-    2026-08-07 que "somente um pick" tambem serve), mas combo e' o formato
-    preferido do produto, entao simples fica por ultimo: e' o que se entrega
-    quando nenhuma dupla ou tripla fecha na faixa."""
+    O VETO DE (fixture_id, familia) CONTINUA AQUI, como pre-filtro barato: ele
+    corta o par na geracao em vez de deixa'-lo caminhar ate' a avaliacao so'
+    pra ser reprovado no gate de correlacao. O gate la' e' quem manda; este
+    aqui so' evita o trabalho.
+    """
     pool = sorted(legs, key=lambda p: p["final_score"], reverse=True)[:MAX_CANDIDATES_FOR_COMBO]
 
-    for combo_size in (2, 3, 1):
-        best = None
+    avaliacoes = []
+    # Simples primeiro, e sem `break` em nenhum formato: o motor precisa ver
+    # TODOS os bilhetes possiveis pra poder comparar formatos entre si. O custo
+    # e' limitado por MAX_CANDIDATES_FOR_COMBO (12 pernas -> 12 + 66 + 220
+    # combinacoes no pior caso, todas aritmetica pura, sem I/O).
+    for combo_size in (1, 2, 3):
+        if combo_size > combo_engine.DEFAULT_COMBO_CONFIG.max_combination_legs:
+            break
         for combo in itertools.combinations(pool, combo_size):
-            # Mesmo jogo E mesma familia = a mesma aposta duas vezes. Familia
-            # repetida em jogos diferentes passa (ver docstring).
             chaves = [
                 (p["_fixture"]["fixture_id"], ranking.correlation_group(p["market_type"]))
                 for p in combo
@@ -420,9 +420,7 @@ def _find_combo(legs: list, odd_min: float, odd_max: float) -> tuple | None:
 
             # CASA UNICA: o caminho inteiro sai de uma casa so' (achado do
             # usuario, 2026-09-10) -- inclusive o formato 'simples', que assim
-            # publica a odd real da casa indicada. Combo que nenhuma casa cota
-            # por completo nao e' apostavel e nem concorre. A faixa por perna
-            # e' a mesma do produto, entao a odd da casa nao fura o gate.
+            # publica a odd real da casa indicada.
             aplicado = bet_house.aplicar_casa(
                 combo, ODD_INDIVIDUAL_MIN, ODD_INDIVIDUAL_MAX)
             if aplicado is None:
@@ -432,26 +430,37 @@ def _find_combo(legs: list, odd_min: float, odd_max: float) -> tuple | None:
             if not (odd_min <= odd_combined <= odd_max):
                 continue
 
-            # Confianca do BILHETE (produto), nao a media das pernas: a aposta
-            # so' paga se todas baterem. A media premiava combo desequilibrado
-            # (uma perna otima + uma fraca ganhava de duas boas), que e'
-            # justamente o pior bilhete dos dois. Com 1 perna o produto e' o
-            # proprio confidence dela -- identico ao que ja' era gravado, entao
-            # nada muda pro historico de 'simples' que existe hoje.
-            confidence_combo = 1.0
-            for p in combo:
-                confidence_combo *= float(p["confidence"])
-            confidence_combo = round(confidence_combo, 4)
-            if best is None or confidence_combo > best[1]:
-                best = (tuple(combo), confidence_combo, odd_combined)
+            avaliacao = combo_engine.avaliar(list(combo), odd_combined)
+            avaliacao["_legs"] = tuple(combo)
+            avaliacoes.append(avaliacao)
 
-        if best:
-            return best[0], best[1], best[2]
+    if not avaliacoes:
+        return None
 
-    return None
+    escolhida = combo_engine.escolher(avaliacoes)
+    if escolhida is None:
+        # §51 -- o motivo E' o produto. Sem isto, "nenhuma combinacao passou"
+        # e' um silencio, e silencio nao se audita. Publica o bilhete que
+        # chegou mais perto e o que exatamente o reprovou.
+        perto = max(avaliacoes, key=lambda a: sum(a["gates"].values()))
+        print(f"[ALAVANCAGEM_ENGINE] NO_PICK · {len(avaliacoes)} bilhete(s) na faixa, "
+              f"nenhum aprovado. O mais proximo ({perto['type']}) parou em: "
+              f"{'; '.join(perto['reasons'][:3]) or 'sem motivo registrado'}")
+        return None
+
+    combo = escolhida.pop("_legs")
+    # Confianca do BILHETE (produto), nao a media das pernas: a aposta so' paga
+    # se todas baterem. A media premiava combo desequilibrado (uma perna otima
+    # + uma fraca ganhava de duas boas), que e' justamente o pior bilhete dos
+    # dois. Com 1 perna o produto e' o proprio confidence dela.
+    confidence_combo = 1.0
+    for p in combo:
+        confidence_combo *= float(p["confidence"])
+    return combo, round(confidence_combo, 4), escolhida["combined"]["odd"], escolhida
 
 
-def _save_pick(cur, legs: tuple, confidence_media: float, odd_combined: float):
+def _save_pick(cur, legs: tuple, confidence_media: float, odd_combined: float,
+               avaliacao: dict | None = None):
     tipo = _TIPO_POR_TAMANHO[len(legs)]
     cols, vals = ["match_date", "tipo"], [HOJE_BR, "%s"]
     params = [tipo]
@@ -486,18 +495,23 @@ def _save_pick(cur, legs: tuple, confidence_media: float, odd_combined: float):
     # tem significado: a alavancagem so' paga se TODAS as pernas baterem, entao
     # a probabilidade da aposta e' o produto das probabilidades, nao a media.
     # Com 2 pernas de 75% e EV +12% cada, a media dizia "+12%" enquanto o EV
-    # real do bilhete e' negativo (0.75*0.75=56% de chance). Errava sempre pro
-    # lado otimista, e piorava quanto mais pernas. Para 'simples' o resultado
-    # e' identico ao de antes (produto de um termo so').
+    # real do bilhete e' negativo (0.75*0.75=56% de chance).
     #
-    # Assume independencia entre as pernas. Nao e' exato quando duas pernas
-    # saem do MESMO jogo (permitido aqui por regra do produto), mas o erro cai
-    # pro lado conservador na pratica e _find_combo ja' recusa combo com todas
-    # as pernas do mesmo market_type, que e' o caso de correlacao forte.
-    prob_combinada = 1.0
-    for p in legs:
-        prob_combinada *= float(p["taxa_real"])
-    ev_combined = round(prob_combinada * float(odd_combined) - 1.0, 4)
+    # DESDE A V2 O NUMERO GRAVADO E' O AJUSTADO (§24). O produto cru assume
+    # independencia, e a V2 mede o quanto essa suposicao custa: correlacao,
+    # amostra, qualidade de dado e divergencia viram um desconto aplicado
+    # PERNA A PERNA antes da multiplicacao (ver combo_engine.probabilidade_
+    # combinada). Gravar o EV cru aqui e o ajustado no engine_debug faria a
+    # tabela e a auditoria contarem duas historias diferentes sobre o mesmo
+    # bilhete. Pro formato 'simples' os dois numeros sao identicos: perna
+    # unica nao leva desconto nenhum.
+    if avaliacao:
+        ev_combined = avaliacao["combined"]["EV"]
+    else:
+        prob_combinada = 1.0
+        for p in legs:
+            prob_combinada *= float(p["taxa_real"])
+        ev_combined = round(prob_combinada * float(odd_combined) - 1.0, 4)
 
     cols += ["odd_combined", "confidence_media", "ev_combined"]
     vals += ["%s", "%s", "%s"]
@@ -510,6 +524,19 @@ def _save_pick(cur, legs: tuple, confidence_media: float, odd_combined: float):
     cols += ["ai_review"]
     vals += ["%s"]
     params += [json.dumps(ai_review, ensure_ascii=False, default=str) if ai_review else None]
+
+    # ENGINE DEBUG (§41/§50). O documento inteiro da decisao: cada perna com
+    # probabilidade bruta/modelo/calibrada, amostra, qualidade de dado, risco e
+    # contradicoes; o bloco combinado com correlacao par a par, os descontos
+    # aplicados um a um, o score com todos os termos; e cada gate com o
+    # veredito dele. E' o que permite responder depois POR QUE um RED saiu --
+    # e, mais importante pro §42, permite separar o desempenho por ESTRUTURA
+    # (mesmo jogo x jogos diferentes, mesma familia x familias diferentes,
+    # faixa de correlacao) sem ter que reconstruir a decisao a partir do
+    # resultado. Mesma coluna e mesmo papel que picks_vip.engine_debug.
+    cols += ["engine_debug"]
+    vals += ["%s"]
+    params += [json.dumps(avaliacao, ensure_ascii=False, default=str) if avaliacao else None]
 
     # RETURNING id: e' o que permite a aba de Auditoria ligar as pernas ao
     # BILHETE. Sem ele o vinculo teria que ser adivinhado por partida, e um
@@ -622,17 +649,34 @@ def run_alavancagem_engine():
                 log_run("ALAVANCAGEM_ENGINE", motivo)
             break
 
-        combo, confidence_media, odd_combined = result
+        combo, confidence_media, odd_combined, avaliacao = result
         # Saem do pool ANTES da IA: vetado ou nao, este combo ja' foi
         # considerado, e reoferece-lo daria um laco com a mesma resposta.
         gastas.update(id(p) for p in combo)
 
+        # §47 -- A IA RECEBE O BILHETE, NAO SO' AS PERNAS.
+        #
+        # Ate' aqui a revisao da alavancagem recebia uma LISTA DE PICKS e mais
+        # nada: cada perna com a probabilidade dela, e nenhuma informacao de
+        # que elas iam juntas num bilhete. A IA nao via a odd combinada, nao
+        # via a probabilidade do produto, nao via correlacao entre as pernas --
+        # ou seja, nao tinha como vetar "combinacao incoerente" ou "correlacao
+        # perigosa", que sao justamente os dois vetos que o §48 pede dela.
+        # Cada perna passava nos criterios individuais, entao o parecer era
+        # aprovar.
+        #
+        # Vai no bloco `bilhete`, so' quando existe: chave ausente nao muda o
+        # cache_key dos outros pipelines (mesma precaucao de `player` e
+        # `league_profile` em ai_review.build_review_payload).
+        for _p in combo:
+            _p["bilhete"] = avaliacao
         reviewed = review_gate("alavancagem").apply(list(combo), "alavancagem")
         if not reviewed:
             print("[ALAVANCAGEM_ENGINE] Combinacao vetada pela revisao de IA.")
             continue
         combo = tuple(reviewed)
-        tipo, pick_id = _save_pick(cur, combo, confidence_media, odd_combined)
+        tipo, pick_id = _save_pick(cur, combo, confidence_media, odd_combined,
+                                   avaliacao=avaliacao)
         conn.commit()
         if not pick_id:
             continue
@@ -648,8 +692,15 @@ def run_alavancagem_engine():
             f"({p['market_name']} {p['value_label']} @ {p['odd']})"
             for p in combo
         )
+        comb = avaliacao["combined"]
         print(f"[ALAVANCAGEM_ENGINE] Salva ({tipo}) {salvos}/{vagas}: {pernas} | "
               f"odd_combined={odd_combined} | confidence_media={confidence_media}")
+        print(f"[ALAVANCAGEM_ENGINE]   {avaliacao.get('escolha', '')} | "
+              f"prob {comb['probability_raw']:.1%} -> {comb['probability_adjusted']:.1%} "
+              f"(desconto {comb['discount_per_leg']:.0%}/perna) | "
+              f"edge {0 if comb['edge'] is None else comb['edge']:+.1%} | "
+              f"EV {comb['EV']:+.1%} | risco {comb['risk']} | "
+              f"correlacao {comb['correlation']} | score {comb['score']:.3f}")
 
     cur.close()
     conn.close()
