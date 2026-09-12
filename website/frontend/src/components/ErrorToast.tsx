@@ -6,10 +6,12 @@ import { toastUp } from '../lib/motion'
 
 export default function ErrorToast() {
   const [msg, setMsg] = useState<string | null>(null)
+  const [codigo, setCodigo] = useState<string | undefined>()
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  useEffect(() => subscribeError(m => {
+  useEffect(() => subscribeError((m, c) => {
     setMsg(m)
+    setCodigo(c)
     if (timerRef.current) clearTimeout(timerRef.current)
     timerRef.current = setTimeout(() => setMsg(null), 4000)
   }), [])
@@ -36,7 +38,16 @@ export default function ErrorToast() {
             <div className="w-9 h-9 rounded-full bg-red-500/10 flex items-center justify-center shrink-0">
               <AlertTriangle className="w-4 h-4 text-red-400" aria-hidden="true" />
             </div>
-            <p className="flex-1 text-sm font-semibold text-ink-1 leading-snug">{msg}</p>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-ink-1 leading-snug">{msg}</p>
+              {/* O codigo so' aparece quando o servidor mandou um. E' o que
+                  liga o que a pessoa viu a' linha de log: pedir "manda o
+                  codigo do aviso" resolve em segundos o que antes era
+                  procurar por horario. */}
+              {codigo && (
+                <p className="text-[11px] text-ink-4 font-mono mt-1">Código {codigo}</p>
+              )}
+            </div>
           </div>
         </motion.div>
       )}

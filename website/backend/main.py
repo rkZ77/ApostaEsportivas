@@ -8,6 +8,7 @@ import os
 import pathlib
 import re
 import time
+import uuid
 from collections import defaultdict
 
 import httpx
@@ -31,7 +32,7 @@ import agent_web
 import cache_publico
 from migrations import run_startup_migrations
 from routers import admin, auth, banca, chat, explorer, fixtures, leaderboard, live, live_picks, notifications, palpites, payments, personal, public, social, suggestions
-from runtime_env import side_effects_note
+from runtime_env import is_production, side_effects_note
 
 _log_level = logging.DEBUG if os.getenv("APP_ENV") != "production" else logging.INFO
 logging.basicConfig(
@@ -220,6 +221,22 @@ async def security_headers(request: Request, call_next):
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    # HSTS. Sem ele, a primeira visita digitada sem "https://" ainda podia ser
+    # interceptada antes do redirecionamento -- era a unica peca faltando numa
+    # postura que ja' tinha CSP com hash, sem 'unsafe-inline', e
+    # frame-ancestors 'none'.
+    #
+    # So' em producao, e a razao e' concreta: o navegador GRAVA a diretiva por
+    # `max-age` inteiro e passa a recusar http naquele host. Em dev isso
+    # trancaria `localhost` pra qualquer outro projeto que servisse http na
+    # mesma maquina, e nao ha' como destrancar sem mexer no chrome://net-internals.
+    #
+    # Um ano, com subdominio, e sem `preload`: entrar na lista de preload dos
+    # navegadores e' irreversivel na pratica, e nao e' decisao de middleware.
+    if is_production():
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=31536000; includeSubDomains"
+        )
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
         # accounts.google.com aparece nas TRES diretivas porque o Sign in with
@@ -253,6 +270,71 @@ async def security_headers(request: Request, call_next):
         "frame-ancestors 'none'"
     )
     return response
+
+
+@app.middleware("http")
+async def identidade_da_requisicao(request: Request, call_next):
+    """Um id curto que liga o erro na tela ao log do servidor.
+
+    O QUE FALTAVA. Quando alguem dizia "deu erro as 21h", a unica saida era
+    vasculhar log por horario -- nao existia nada em comum entre as duas
+    pontas. A Railway ja' devolve `x-railway-request-id` em toda resposta, mas
+    ninguem o lia e ele nao aparecia em log nenhum nosso.
+
+    A Railway continua sendo a fonte quando ela existe: reaproveitar o id dela
+    e' o que permite cruzar com o log do proprio edge dela em vez de criar um
+    terceiro identificador pra mesma requisicao.
+
+    So' registra o que passou de meio segundo ou falhou. Um log por requisicao
+    num servico que responde 200 em 40ms e' ruido que esconde justamente o que
+    este middleware existe pra achar.
+    """
+    rid = request.headers.get("x-railway-request-id") or uuid.uuid4().hex[:12]
+    request.state.request_id = rid
+    inicio = time.perf_counter()
+    try:
+        resposta = await call_next(request)
+    except Exception:
+        ms = (time.perf_counter() - inicio) * 1000
+        logger.exception("[REQ %s] %s %s EXPLODIU em %.0fms",
+                         rid, request.method, request.url.path, ms)
+        raise
+    ms = (time.perf_counter() - inicio) * 1000
+    resposta.headers["X-Request-Id"] = rid
+    if ms > 500 or resposta.status_code >= 500:
+        logger.warning("[REQ %s] %s %s -> %s em %.0fms",
+                       rid, request.method, request.url.path,
+                       resposta.status_code, ms)
+    return resposta
+
+
+@app.exception_handler(Exception)
+async def erro_nao_tratado(request: Request, exc: Exception):
+    """Exceção sem dono vira uma frase em português, com o id junto.
+
+    Antes disto, ela virava o 500 cru do FastAPI ("Internal Server Error", em
+    ingles, sem corpo JSON). O frontend nao tinha o que ler: o interceptor de
+    `services/api.ts` cai no toast generico de 5xx, e nao sobrava nenhum fio
+    entre o que a pessoa viu e a linha de log que explica.
+
+    O texto da mensagem e' proposital: diz o que fazer, nao pede desculpa, e
+    nao vaza a excecao. A excecao inteira ja' foi pro log pelo middleware
+    acima, com o mesmo `request_id` que sai aqui no corpo.
+
+    HTTPException NAO passa por aqui -- o Starlette a trata antes, e ela e'
+    resposta legitima de regra de negocio (403 de paywall, 404 de pick).
+    """
+    rid = getattr(request.state, "request_id", None)
+    return JSONResponse(
+        status_code=500,
+        content={"error": {
+            "code": "INTERNAL_ERROR",
+            "message": "Não conseguimos completar essa ação agora. "
+                       "Tente de novo em instantes.",
+            "request_id": rid,
+        }},
+        headers={"X-Request-Id": rid} if rid else None,
+    )
 
 
 _rate_store: dict[str, list[float]] = defaultdict(list)

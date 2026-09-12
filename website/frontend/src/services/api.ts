@@ -131,7 +131,13 @@ api.interceptors.response.use(
           : 'Não foi possível falar com o servidor. Tente de novo em instantes.'
       )
     } else if (err.response.status >= 500) {
-      notifyError('Erro no servidor. Tente novamente em instantes.')
+      /* O `request_id` vem do cabeçalho, e não do corpo: o corpo de um 502 do
+         Cloudflare ou de um kill do container não passa pelo nosso
+         `exception_handler` e não tem envelope nenhum -- o cabeçalho, sim. */
+      const rid = err.response.headers?.['x-request-id']
+        ?? err.response.data?.error?.request_id
+      notifyError('Erro no servidor. Tente novamente em instantes.',
+                  typeof rid === 'string' ? rid : undefined)
     }
     return Promise.reject(err)
   }
