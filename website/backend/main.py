@@ -632,6 +632,66 @@ def health():
     return {"status": "ok"}
 
 
+# CHECAGEM DE SAUDE COM PROFUNDIDADE (12/09/2026).
+#
+# `/api/health` responde "o processo subiu", e e' so' isso que o healthcheck do
+# Railway precisa saber -- ele nao pode depender do banco, ou uma indisponibi-
+# lidade momentanea do Supabase derruba o container inteiro em loop de restart.
+#
+# As duas rotas abaixo existem pra quem esta investigando, e por isso sao mais
+# fundas. Nenhuma delas devolve host, usuario, senha, URL de banco ou pedaco de
+# chave: so' o veredito e o tempo. Um health check e' um endpoint publico por
+# natureza, e endpoint publico nao conta detalhe de infraestrutura.
+@app.get("/api/health/database")
+def health_database():
+    """Confirma que o pool devolve conexao viva e mede quanto isso custou.
+
+    Mede em milissegundos porque o problema tipico aqui nao e' o banco estar
+    fora -- e a conexao demorar. A consulta em si roda em fracao de milis:
+    quando este numero passa de centenas, o custo esta no handshake, nao no SQL.
+    """
+    from database import get_connection
+    inicio = time.perf_counter()
+    try:
+        conn = get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT 1 AS ok")
+            cur.fetchone()
+            cur.close()
+        finally:
+            conn.close()
+    except Exception:
+        logger.exception("[HEALTH] banco inacessivel")
+        return JSONResponse(
+            status_code=503,
+            content={"status": "error", "componente": "database"},
+        )
+    return {
+        "status": "ok",
+        "componente": "database",
+        "ms": round((time.perf_counter() - inicio) * 1000, 1),
+    }
+
+
+@app.get("/api/health/providers")
+def health_providers():
+    """Diz quais integracoes opcionais estao CONFIGURADAS -- nao se respondem.
+
+    Nao chama ninguem de proposito: um health check que bate na API do
+    MercadoPago, da Anthropic e do Resend a cada visita vira custo e vira
+    fonte de rate limit. O que este endpoint responde e a pergunta que
+    realmente aparece depois de um deploy: "faltou variavel no Railway?".
+    """
+    provedores = {desc: bool(os.getenv(var)) for var, desc in _OPTIONAL_VARS.items()}
+    faltando = [d for d, ok in provedores.items() if not ok]
+    return {
+        "status": "ok" if not faltando else "warning",
+        "provedores": provedores,
+        "faltando": faltando,
+    }
+
+
 @app.get("/api/version", include_in_schema=False)
 def get_version():
     return {"v": _SERVER_VERSION}

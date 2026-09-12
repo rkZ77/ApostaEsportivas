@@ -2149,3 +2149,124 @@ def get_referral(current_user: dict = Depends(get_current_user)):
         }
     finally:
         cur.close(); conn.close()
+
+
+# ---------------------------------------------------------------------------
+# EXCLUSAO DE CONTA (LGPD art. 18, inciso VI)
+# ---------------------------------------------------------------------------
+#
+# Tabelas pessoais que somem junto com a conta. `payments` e `payment_events`
+# ficam de fora de proposito: sao trilha fiscal e de conciliacao com o
+# MercadoPago, e continuam apontando pra linha ja anonimizada.
+_TABELAS_PESSOAIS = (
+    "notifications",
+    "user_push_subscriptions",
+    "user_alerts",
+    "user_achievements",
+    "user_favorites",
+    "user_followed_picks",
+    "pick_reactions",
+    "pick_comments",
+    "chat_messages",
+    "user_avatars",
+    "user_banca",
+    "alavancagem_series",
+    "banca_deposits",
+    "banca_withdrawals",
+    "banca_monthly_closes",
+    "phone_verification_codes",
+)
+
+
+class DeleteAccountBody(BaseModel):
+    current_password: Optional[str] = None
+    confirmacao: Optional[str] = None
+
+
+@router.post("/delete-account")
+def delete_account(body: DeleteAccountBody, response: Response,
+                   current_user: dict = Depends(get_current_user)):
+    """Exclui a conta do proprio usuario.
+
+    A linha de `users` sobrevive anonimizada porque `payments` referencia ela
+    com ON DELETE CASCADE -- apagar o usuario apagaria a trilha fiscal junto.
+    O que sai daqui e' o que identifica a pessoa (nome, e-mail, telefone, CPF,
+    vinculo com o Google, avatar) e tudo que ela produziu no site.
+
+    A conta sai com active = FALSE, e isso basta pra derrubar as sessoes: e o
+    mesmo campo que `get_current_user` e o login ja checam. O cache de sessao
+    e' invalidado na hora, senao a sessao atual continuaria valida ate o TTL.
+    """
+    user_id = current_user["sub"]
+    _check_profile_rate(user_id)
+
+    if (body.confirmacao or "").strip().upper() != "EXCLUIR":
+        raise HTTPException(400, "Digite EXCLUIR para confirmar")
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT password_hash, plan FROM users WHERE id = %s AND active = true", (user_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, "Conta não encontrada")
+
+        # Admin nao se exclui pela tela de perfil: seria um jeito silencioso de
+        # derrubar o unico acesso administrativo do site.
+        if row["plan"] == "admin":
+            raise HTTPException(403, "Conta de administrador não pode ser excluída por aqui")
+
+        # Conta com senha exige a senha. Conta so-Google (password_hash nulo)
+        # nao tem o que conferir alem do proprio login valido + a confirmacao
+        # digitada, entao nao inventa uma senha pra pedir.
+        if row["password_hash"]:
+            if not body.current_password or not verify_password(body.current_password, row["password_hash"]):
+                raise HTTPException(400, "Senha atual incorreta")
+
+        for tabela in _TABELAS_PESSOAIS:
+            cur.execute("SELECT to_regclass(%s) AS t", (f"public.{tabela}",))
+            if not cur.fetchone()["t"]:
+                continue
+            cur.execute(f"DELETE FROM {tabela} WHERE user_id = %s", (user_id,))
+
+        # O e-mail vira um endereco no dominio reservado .invalid (RFC 2606):
+        # mantem o UNIQUE da coluna sem colidir com conta real, e libera o
+        # e-mail original pra um cadastro novo depois.
+        cur.execute(
+            """
+            UPDATE users SET
+                name                     = 'Conta excluida',
+                email                    = %s,
+                username                 = NULL,
+                phone                    = NULL,
+                phone_verified           = FALSE,
+                cpf                      = NULL,
+                google_sub               = NULL,
+                avatar_url               = NULL,
+                ga_client_id             = NULL,
+                password_hash            = NULL,
+                pending_password_hash    = NULL,
+                reset_token              = NULL,
+                reset_token_expires_at   = NULL,
+                email_verified           = FALSE,
+                email_verification_token = NULL,
+                whatsapp_opt_in          = FALSE,
+                referral_code            = NULL,
+                session_token            = %s,
+                active                   = FALSE,
+                deleted_at               = NOW(),
+                updated_at               = NOW()
+            WHERE id = %s
+            """,
+            (f"excluido+{user_id}@pickia.invalid",
+             hashlib.sha256(secrets.token_hex(32).encode()).hexdigest(),
+             user_id),
+        )
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+
+    invalidar_cache_usuario(user_id)
+    clear_auth_cookies(response)
+    logger.info("[LGPD] conta %s excluida pelo proprio usuario", user_id)
+    return {"ok": True}

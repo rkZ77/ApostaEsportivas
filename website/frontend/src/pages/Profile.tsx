@@ -26,7 +26,7 @@ function displayPhone(raw: string): string {
 }
 
 export default function Profile() {
-  const { user, updateUser } = useAuth()
+  const { user, updateUser, logout } = useAuth()
   const navigate = useNavigate()
 
   const [name, setName]             = useState(user?.name ?? '')
@@ -44,6 +44,14 @@ export default function Profile() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const push = usePushNotification()
+
+  // Exclusao de conta (LGPD). Fica fechada atras de um botao porque e' acao
+  // sem volta: a conta some da primeira tela, nao do primeiro clique.
+  const [delAberto, setDelAberto]     = useState(false)
+  const [delSenha, setDelSenha]       = useState('')
+  const [delConfirma, setDelConfirma] = useState('')
+  const [delEnviando, setDelEnviando] = useState(false)
+  const [delErro, setDelErro]         = useState('')
 
   const [referral, setReferral]       = useState<ReferralData | null>(null)
   const [referralLoaded, setReferralLoaded] = useState(false)
@@ -210,6 +218,22 @@ export default function Profile() {
       setTimeout(() => setLoggedOutOthers(false), 3000)
     } catch { /* silent */ }
     finally { setLoggingOutOthers(false) }
+  }
+
+  const handleExcluirConta = async () => {
+    setDelErro('')
+    setDelEnviando(true)
+    try {
+      await api.post('/auth/delete-account', {
+        current_password: delSenha || undefined,
+        confirmacao: delConfirma,
+      })
+      await logout()
+      navigate('/', { replace: true })
+    } catch (err: any) {
+      setDelErro(err?.response?.data?.detail || 'Não foi possível excluir a conta. Tente novamente.')
+      setDelEnviando(false)
+    }
   }
 
   const copyReferralLink = () => {
@@ -870,6 +894,84 @@ export default function Profile() {
           {/* Alertas e conquistas. Vêm de /api/personal, tela própria dentro do
               perfil pra não criar mais uma rota pra dois blocos curtos. */}
           <AlertsAndAchievements push={push} />
+
+          {/* Exclusao de conta (LGPD art. 18). Ultimo bloco da pagina de
+              proposito: e' o unico destrutivo, e nao deve dividir espaco com
+              o que a pessoa veio fazer aqui. */}
+          <div className="card p-6 space-y-4 border-red-500/30">
+            <div>
+              <h2 className="text-sm font-bold text-ink-1">Excluir minha conta</h2>
+              <p className="text-ink-3 text-xs mt-0.5">
+                Apaga seus dados pessoais, sua banca, seus alertas e seu histórico de picks seguidas. Não tem volta.
+              </p>
+            </div>
+
+            {!delAberto ? (
+              <button
+                type="button"
+                onClick={() => setDelAberto(true)}
+                className="w-full py-2.5 rounded-md border border-red-500/40 hover:border-red-500 text-red-400 text-xs font-semibold transition-colors"
+              >
+                Quero excluir minha conta
+              </button>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-ink-3 text-xs">
+                  Seus registros de pagamento são mantidos por obrigação fiscal, já sem vínculo com seus dados pessoais.
+                  Se você tem plano VIP ativo, ele será perdido sem reembolso.
+                </p>
+
+                {meData?.tem_senha && (
+                  <div>
+                    <label htmlFor="del-senha" className="block text-xs text-ink-3 mb-1.5">Sua senha atual</label>
+                    <input
+                      id="del-senha"
+                      type="password"
+                      autoComplete="current-password"
+                      value={delSenha}
+                      onChange={e => setDelSenha(e.target.value)}
+                      className="input w-full"
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label htmlFor="del-confirma" className="block text-xs text-ink-3 mb-1.5">
+                    Digite <span className="font-bold text-ink-1">EXCLUIR</span> para confirmar
+                  </label>
+                  <input
+                    id="del-confirma"
+                    type="text"
+                    autoComplete="off"
+                    value={delConfirma}
+                    onChange={e => setDelConfirma(e.target.value)}
+                    className="input w-full"
+                  />
+                </div>
+
+                {delErro && <p className="text-red-400 text-xs" role="alert">{delErro}</p>}
+
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    type="button"
+                    onClick={handleExcluirConta}
+                    disabled={delEnviando || delConfirma.trim().toUpperCase() !== 'EXCLUIR' || (meData?.tem_senha && !delSenha)}
+                    className="flex-1 py-2.5 rounded-md bg-red-500/15 border border-red-500/40 hover:bg-red-500/25 text-red-400 text-xs font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {delEnviando ? 'Excluindo…' : 'Excluir conta definitivamente'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setDelAberto(false); setDelSenha(''); setDelConfirma(''); setDelErro('') }}
+                    disabled={delEnviando}
+                    className="flex-1 py-2.5 rounded-md border border-line-strong hover:border-ink-4 text-ink-2 text-xs font-semibold transition-colors disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
     </PageShell>
   )

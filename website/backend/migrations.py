@@ -1039,6 +1039,19 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
             ON match_statistics (league_id, match_date DESC)
         """)
 
+        # EXCLUSAO DE CONTA (LGPD art. 18, 2026-09-12).
+        #
+        # A conta excluida nao sai da tabela: `payments` referencia users com
+        # ON DELETE CASCADE, e um DELETE levaria junto a trilha fiscal que
+        # precisa ser guardada. Entao o caminho e anonimizar a linha (PII
+        # trocada por marcador), apagar as tabelas pessoais e desligar o
+        # `active` -- que ja e o que get_current_user e o login checam.
+        #
+        # `deleted_at` existe pra distinguir conta excluida pelo dono de conta
+        # desativada pelo admin: as duas tem active = FALSE, e so a primeira
+        # deve responder "conta excluida" em vez de "conta desativada".
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;")
+
         conn.commit()
         return True
     except Exception as e:

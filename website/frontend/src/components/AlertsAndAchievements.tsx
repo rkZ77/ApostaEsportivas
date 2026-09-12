@@ -100,12 +100,16 @@ export default function AlertsAndAchievements({ push }: { push?: PushInfo }) {
   const [unlockedCount, setUnlockedCount] = useState(0)
 
   useEffect(() => {
+    // `?? []` nao protege de resposta com forma errada: se o corpo vier como
+    // objeto (erro serializado, proxy no meio), `alerts.filter` estoura e
+    // derruba o /profile INTEIRO no error boundary -- a pagina de perfil some
+    // por causa de um bloco secundario. Checar o tipo custa uma linha.
     api.get('/personal/alerts')
-      .then(r => setAlerts(r.data ?? []))
+      .then(r => setAlerts(Array.isArray(r.data) ? r.data : []))
       .catch(() => setAlerts([]))
     api.get('/personal/achievements')
       .then(r => {
-        setAchievements(r.data?.achievements ?? [])
+        setAchievements(Array.isArray(r.data?.achievements) ? r.data.achievements : [])
         setUnlockedCount(r.data?.unlocked ?? 0)
       })
       .catch(() => setAchievements([]))
