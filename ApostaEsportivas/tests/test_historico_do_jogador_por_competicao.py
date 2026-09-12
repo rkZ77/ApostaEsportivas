@@ -58,14 +58,14 @@ def _carregar(**kw):
 def test_fixture_de_liga_le_so_aquela_liga():
     cur = _carregar(league_id=LIGA, season=2026)
 
-    assert "AND league_id = %s" in cur.sql
+    assert "AND p.league_id = %s" in cur.sql
     assert LIGA in cur.params
 
 
 def test_fixture_de_liga_tambem_recorta_a_temporada():
     cur = _carregar(league_id=LIGA, season=2026)
 
-    assert "AND season = %s" in cur.sql
+    assert "AND p.season = %s" in cur.sql
     assert 2026 in cur.params
 
 
@@ -75,7 +75,7 @@ def test_copa_le_todas_as_competicoes():
     inteira em silencio. Mesma decisao do lado dos times."""
     cur = _carregar(league_id=COPA, season=2026)
 
-    assert "AND league_id = %s" not in cur.sql
+    assert "AND p.league_id = %s" not in cur.sql
     assert COPA not in cur.params
 
 
@@ -85,7 +85,7 @@ def test_copa_nao_afrouxa_a_temporada():
     de outro clube."""
     cur = _carregar(league_id=COPA, season=2026)
 
-    assert "AND season = %s" in cur.sql
+    assert "AND p.season = %s" in cur.sql
     assert 2026 in cur.params
 
 
@@ -95,14 +95,14 @@ def test_sem_liga_le_tudo_como_antes():
     so' existe quando o chamador diz de qual partida esta' falando."""
     cur = _carregar()
 
-    assert "AND league_id = %s" not in cur.sql
-    assert "AND season = %s" not in cur.sql
+    assert "AND p.league_id = %s" not in cur.sql
+    assert "AND p.season = %s" not in cur.sql
 
 
 def test_o_corte_de_minutos_continua_valendo_em_todos_os_casos():
     for kw in ({}, {"league_id": LIGA, "season": 2026}, {"league_id": COPA, "season": 2026}):
         cur = _carregar(**kw)
-        assert "COALESCE(minutes, 0) >= %s" in cur.sql
+        assert "COALESCE(p.minutes, 0) >= %s" in cur.sql
         assert player_history.MIN_MINUTOS in cur.params
 
 

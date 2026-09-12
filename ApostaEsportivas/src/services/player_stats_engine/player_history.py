@@ -88,15 +88,26 @@ def carregar(cur, player_id: int, coluna: str, *, limite: int = LIMITE_ATUACOES,
             filtros.append("AND league_id = %s")
             params.append(league_id)
 
+    # O MANDO DE CADA ATUACAO (2026-09-11). `player_match_stats` nao guarda de
+    # que lado o time jogou -- guarda `team_id`. O lado sai do confronto com a
+    # propria fixture, e e' LEFT JOIN de proposito: fixture que sumiu da tabela
+    # nao pode fazer a atuacao desaparecer da media, ela so' perde o recorte de
+    # mando (vira `None` e o combinador la' de cima a trata como "sem lado").
+    filtros = [f.replace("AND ", "AND p.") for f in filtros]
     cur.execute(f"""
-        SELECT fixture_id, match_date, team_id, team_name, league_id, season,
-               minutes, position, {coluna} AS valor
-          FROM player_match_stats
-         WHERE player_id = %s
-           AND {coluna} IS NOT NULL
-           AND COALESCE(minutes, 0) >= %s
+        SELECT p.fixture_id, p.match_date, p.team_id, p.team_name, p.league_id,
+               p.season, p.minutes, p.position, p.is_substitute,
+               p.{coluna} AS valor,
+               CASE WHEN f.home_team_id = p.team_id THEN 'home'
+                    WHEN f.away_team_id = p.team_id THEN 'away'
+               END AS mando
+          FROM player_match_stats p
+          LEFT JOIN fixtures f ON f.fixture_id = p.fixture_id
+         WHERE p.player_id = %s
+           AND p.{coluna} IS NOT NULL
+           AND COALESCE(p.minutes, 0) >= %s
            {" ".join(filtros)}
-      ORDER BY match_date DESC
+      ORDER BY p.match_date DESC
          LIMIT %s
     """, tuple(params) + (limite,))
     return linhas_dict(cur)

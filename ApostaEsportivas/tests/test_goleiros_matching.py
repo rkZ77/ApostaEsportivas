@@ -117,12 +117,17 @@ def test_um_pick_por_jogador_continua_ligado():
 
 
 def test_a_reducao_fica_com_a_de_maior_score():
-    """Trava o criterio no codigo que roda hoje. A ordenacao e' por
-    `pick_score` DESC e o primeiro de cada `player_id` e' o que sai."""
+    """Trava o criterio no codigo que roda hoje: valor AJUSTADO AO RISCO DESC, e
+    o primeiro de cada `player_id` e' o que sai.
+
+    Era `pick_score` ate' 2026-09-11. O Score continua sendo calculado e
+    gravado, mas ele pontua odd (0.28) e edge (0.10) -- 38% da escolha era
+    preco, numa regra que o projeto ja' tinha zerado no pre-jogo generico e no
+    ao vivo. Odd e EV eliminam nos cortes duros, nunca ordenam."""
     import inspect
     from engine_pipelines import player_stats_pipeline
 
     fonte = inspect.getsource(player_stats_pipeline.run_player_stats_engine)
-    assert 'aprovados.sort(key=lambda par: par[0]["pick_score"], reverse=True)' in fonte
+    assert 'aprovados.sort(key=lambda par: par[0]["selecao"]["score"], reverse=True)' in fonte
     assert 'chave = c["jogador"]["player_id"]' in fonte
     assert "cfg.UM_PICK_POR_JOGADOR and chave in vistos" in fonte

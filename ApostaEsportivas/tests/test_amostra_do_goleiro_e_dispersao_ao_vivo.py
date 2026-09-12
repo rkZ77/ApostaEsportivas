@@ -78,13 +78,13 @@ def test_o_pipeline_passa_a_amostra_do_goleiro():
     o estado anterior, so' que sem o parametro.
 
     Lia o goleiros_pipeline ate' 28/08, quando ele foi apagado. Quem chama
-    `expected_saves` hoje e' `_avaliar_saves` do Player Stats, e a amostra vem
+    `expected_saves` hoje e' `_analise_de_saves` do Player Stats, e a amostra vem
     do tamanho da serie do proprio goleiro em vez de um campo do dicionario ·
     mesma grandeza, outro caminho."""
     import inspect
     from engine_pipelines import player_stats_pipeline
-    fonte = inspect.getsource(player_stats_pipeline._avaliar_saves)
-    assert "keeper_sample=len(valores)" in fonte
+    fonte = inspect.getsource(player_stats_pipeline._analise_de_saves)
+    assert 'keeper_sample=len(ctx["serie"])' in fonte
 
 
 def test_as_duas_amostras_sao_de_coisas_diferentes():

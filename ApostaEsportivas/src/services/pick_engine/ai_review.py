@@ -208,6 +208,17 @@ def build_review_payload(picks: list[dict], pipeline: str, fixture: dict | None 
             # nos jogos decisivos.
             "match_context": pick.get("match_context"),
             "context_gate": pick.get("context_gate"),
+            # PROP DE JOGADOR (2026-09-11). Os campos acima descrevem um
+            # mercado de TIME, e e' o que a revisao recebia tambem quando o
+            # pick era "Fulano, 2 ou mais chutes": sem saber se o jogador
+            # comeca, quanto ele joga, em que funcao, nem a que distancia da
+            # linha a projecao ficou. A IA opinava sobre um pick em branco e o
+            # gate parecia estar funcionando.
+            #
+            # Vai num bloco proprio e SO' QUANDO EXISTE: chave ausente nao
+            # muda o cache_key dos outros seis pipelines, que e' a mesma
+            # precaucao que `league_profile` toma logo acima.
+            **({"player": pick["player_stats"]} if pick.get("player_stats") else {}),
         } for pick in picks],
     }
 

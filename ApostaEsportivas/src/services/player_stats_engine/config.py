@@ -75,3 +75,37 @@ UM_PICK_POR_JOGADOR = True
 #: qualidade: e' pra uma falha de calibragem nao publicar cinquenta props de
 #: uma vez.
 MAX_PICKS_POR_RODADA = 10
+
+# ---------------------------------------------------------------------------
+# V2 (2026-09-11) · os cortes que nasceram com as camadas novas.
+#
+# Todos sao PISOS DE QUALIDADE DA ESTIMATIVA, e nenhum deles olha preco. A
+# separacao do topo do arquivo continua valendo, e agora com um lado a mais: o
+# Score ordena, os cortes duros aprovam, e o preco NAO faz nem uma coisa nem
+# outra -- ele so' elimina (faixa de odd, EDGE_MINIMO). Ver selection.py.
+# ---------------------------------------------------------------------------
+
+#: §22 · folga minima da projecao sobre a linha, RELATIVA a' linha.
+#:
+#: Relativa e nao absoluta porque os contadores nao estao na mesma escala: 0.4
+#: de folga sobre "0.5 ou mais chutes no alvo" e' 80% de margem, e sobre "24.5
+#: passes" e' 1.6%. Um piso absoluto aprovaria o segundo caso e reprovaria o
+#: primeiro, que e' o contrario do que se quer.
+#:
+#: 10% e' onde a projecao para de empatar com a linha. Abaixo disso a
+#: probabilidade sai perto de 50% de qualquer jeito e o pick vive do erro de
+#: estimativa, nao da vantagem.
+MARGEM_RELATIVA_MINIMA = 0.10
+
+#: §32 · qualidade do dado abaixo disto nao vira pick.
+#:
+#: 70 e' a fronteira "limitada" da propria escala (ver quality._classe_de_
+#: qualidade), e nao um numero solto: e' o ponto em que o pick ainda tem
+#: amostra e titularidade, mas ja' perdeu duas das camadas menores. Abaixo, o
+#: que falta e' estrutural.
+DATA_QUALITY_MINIMO = 70
+
+#: §40 · piso do stake depois do fator de risco. Um pick que sobreviveu a todos
+#: os cortes e sai com meia unidade continua sendo um pick; o que nao pode e'
+#: virar um numero que o apostador nao consegue colocar na casa.
+STAKE_FATOR_MINIMO = 0.4

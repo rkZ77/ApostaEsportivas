@@ -43,10 +43,12 @@ from services.pick_engine.market_pick_score import pick_score
 from services.pick_engine.saves_calibration import recalibrar as recalibrar_saves
 from services.pick_engine.staking import calculate_stake
 from services.player_stats_engine import config as cfg
-from services.player_stats_engine import count_model, explanation, name_match
+from services.player_stats_engine import (contradiction, count_model, decision,
+                                          explanation, minutes_model, name_match,
+                                          opponent_model, quality, selection)
 from services.player_stats_engine import methods as cat
 from services.player_stats_engine import player_history
-from utils.data_br import HOJE_BR
+from utils.data_br import HOJE_BR, data_br_de
 from utils.db_utils import get_connection
 
 MOTOR = "PLAYER_STATS"
@@ -135,34 +137,151 @@ def _frequencia(valores: list, n: int) -> tuple:
     return (acertos, round(acertos / len(validos), 4))
 
 
-def _avaliar_saves(oferta: dict, jogador: dict, fixture: dict, cur,
-                   constantes: dict) -> dict | None:
+def _dias_desde_a_ultima(atuacoes: list, fixture: dict) -> int | None:
+    """Quantos dias separam a ultima atuacao lida do jogo de hoje (§32).
+
+    Uma media de dois meses atras descreve um jogador que pode ter trocado de
+    funcao, de forma ou de clube -- e o motor nao tem como saber qual dos tres.
+    O numero nao reprova nada sozinho; ele entra na qualidade do dado.
+    """
+    if not atuacoes:
+        return None
+    ultima = atuacoes[0].get("match_date")
+    hoje = data_br_de(fixture.get("match_datetime"))
+    if not ultima or not hoje:
+        return None
+    try:
+        return (hoje - ultima).days
+    except TypeError:
+        return None
+
+
+def _mando_do_jogador(jogador: dict, fixture: dict) -> str | None:
+    if jogador.get("team_id") == fixture["home_team_id"]:
+        return "home"
+    if jogador.get("team_id") == fixture["away_team_id"]:
+        return "away"
+    return None
+
+
+def _contexto_do_jogador(cur, jogador: dict, metodo: cat.Metodo,
+                         fixture: dict) -> dict | None:
+    """Tudo que vale pro jogador NESTE jogo, independente da linha ofertada.
+
+    UMA VEZ POR JOGADOR, E NAO POR LINHA. A casa publica de tres a seis linhas
+    do mesmo jogador ("1 ou mais", "2 ou mais"...), e ate' 10/09 cada uma delas
+    refazia a consulta de historico inteira -- seis leituras identicas pra
+    escolher uma. Agora a parte que nao muda com a linha e' montada aqui e
+    reaproveitada, que e' a mesma razao pela qual a rodada percorre os jogos uma
+    vez so' e agrupa por metodo depois (ver run_player_stats_engine).
+
+    Devolve None quando nem vale a pena avaliar linha nenhuma: sem historico no
+    recorte de hoje, o metodo nao tem o que projetar.
+    """
+    atuacoes = player_history.carregar(
+        cur, jogador["player_id"], metodo.coluna,
+        league_id=fixture["league_id"], season=fixture["season"])
+    if len(atuacoes) < metodo.min_atuacoes:
+        return None
+
+    serie = [a["valor"] for a in atuacoes]
+    mando_hoje = _mando_do_jogador(jogador, fixture)
+    # §7 · as atuacoes NO MANDO de hoje, pra a media ser puxada na direcao
+    # delas. Sem mando resolvido (fixture antiga sem os dois ids) a lista sai
+    # vazia e o combinador devolve a media geral, que e' o comportamento de
+    # antes desta camada.
+    serie_no_mando = ([a["valor"] for a in atuacoes if a.get("mando") == mando_hoje]
+                      if (metodo.mando_relevante and mando_hoje) else [])
+
+    perfil_min = minutes_model.perfil(
+        cur, jogador["player_id"],
+        league_id=fixture["league_id"], season=fixture["season"])
+    esperados = minutes_model.minutos_esperados(perfil_min)
+    # O fator compara os minutos de HOJE com os minutos que geraram a media --
+    # e nao com 90. Ver a docstring do minutes_model.
+    minutos_lidos = [int(a.get("minutes") or 0) for a in atuacoes if a.get("minutes")]
+    minutos_da_amostra = (round(sum(minutos_lidos) / len(minutos_lidos), 1)
+                          if minutos_lidos else None)
+    fator = (minutes_model.fator_de_minutos(esperados, minutos_da_amostra)
+             if metodo.depende_de_minutos else 1.0)
+    risco_funcao, posicao = minutes_model.risco_de_funcao(perfil_min, atuacoes, metodo)
+
+    minutos = {
+        "status": minutes_model.status_de_titularidade(jogador, perfil_min),
+        "esperados": esperados,
+        "da_amostra": minutos_da_amostra,
+        "fator": fator,
+        "risco": minutes_model.risco_de_minutos(perfil_min, jogador),
+        "risco_funcao": risco_funcao,
+        "posicao": posicao,
+        "perfil": perfil_min,
+    }
+
+    # §8 · o adversario. Em `saves` ele ja' e' o sinal forte e vem pelo caminho
+    # medido do goalkeeper_model -- ligar os dois contaria o mesmo efeito duas
+    # vezes, e por isso o catalogo deixa `coluna_concedida` vazia la'.
+    ajuste_adv = {"disponivel": False, "motivo": "método sem ajuste de adversário",
+                  "ajuste": None}
+    if metodo.coluna_concedida and mando_hoje:
+        ajuste_adv = opponent_model.avaliar(
+            cur, metodo,
+            adversario_id=(fixture["away_team_id"] if mando_hoje == "home"
+                           else fixture["home_team_id"]),
+            # O adversario joga no mando OPOSTO ao do jogador. Errar isto
+            # inverte o ajuste, e um ajuste invertido e' pior que nenhum.
+            mando_do_adversario=("away" if mando_hoje == "home" else "home"),
+            league_id=fixture["league_id"], season=fixture["season"])
+
+    disp = quality.dispersao(serie)
+    dias = _dias_desde_a_ultima(atuacoes, fixture)
+    return {
+        "atuacoes": atuacoes,
+        "serie": serie,
+        "serie_no_mando": serie_no_mando,
+        "composicao": player_history.composicao(atuacoes),
+        "minutos": minutos,
+        "dispersao": disp,
+        "outliers": quality.outliers(serie, disp),
+        "classe_amostra": quality.classificar_amostra(len(serie)),
+        "penalidade_variancia": quality.penalidade_de_variancia(
+            disp.get("cv"), metodo.cv_referencia),
+        "adversario_ajuste": ajuste_adv,
+        "matchup": opponent_model.matchup(metodo, ajuste_adv),
+        "dias_desde_ultima": dias,
+        "data_quality": quality.data_quality_score(
+            amostra=len(serie), min_atuacoes=metodo.min_atuacoes,
+            perfil_minutos=perfil_min, status_titular=minutos["status"],
+            risco_minutos=minutos["risco"], dias_desde_ultima=dias,
+            adversario=ajuste_adv),
+        "mando": mando_hoje,
+    }
+
+
+def _analise_de_saves(oferta: dict, fixture: dict, cur, ctx: dict,
+                      constantes: dict) -> dict | None:
     """Metodo `saves` -- delega pro goalkeeper_model, que foi MEDIDO.
 
     O sinal forte e' o volume ofensivo do ADVERSARIO, nao o historico do
     goleiro. De qual lado ele esta' define de qual time pegar esse volume, e em
     que mando esse time joga hoje: o goleiro da casa enfrenta o visitante
     jogando como visitante, e vice-versa. Chutar o lado inverte a previsao.
+
+    O que a V2 acrescentou aqui e' so' a MOLDURA (minutos, qualidade de dado,
+    contradicao, auditoria final): a conta continua sendo a de 01/08, sem uma
+    linha alterada, porque ela foi medida contra jogo real e nao ficaria melhor
+    por ser reescrita de forma generica.
     """
-    if jogador["team_id"] == fixture["home_team_id"]:
-        adversario_id, mando_adversario = fixture["away_team_id"], "away"
-    elif jogador["team_id"] == fixture["away_team_id"]:
-        adversario_id, mando_adversario = fixture["home_team_id"], "home"
-    else:
+    mando = ctx.get("mando")
+    if not mando:
         return None
+    adversario_id = (fixture["away_team_id"] if mando == "home"
+                     else fixture["home_team_id"])
+    mando_adversario = "away" if mando == "home" else "home"
 
     media_adv, n_adv = player_history.volume_do_adversario(
         cur, adversario_id, "shots_on", mando_adversario,
         fixture["league_id"], fixture["season"])
-
-    # Mesma competicao e temporada que `volume_do_adversario` acabou de usar,
-    # duas linhas acima. Ate' 27/08 os dois lados do MESMO pick liam recortes
-    # diferentes: o time era filtrado por liga e o goleiro nao.
-    proprias = player_history.carregar(
-        cur, jogador["player_id"], cat.SAVES.coluna,
-        league_id=fixture["league_id"], season=fixture["season"])
-    valores = [j["valor"] for j in proprias]
-    media_propria = count_model.media_ponderada(valores)
+    media_propria = count_model.media_ponderada(ctx["serie"])
 
     # "N ou mais" e' P(X >= N), que no modelo (definido como P(X > line)) vira
     # prob_over(N - 0.5). Passar N direto contaria uma defesa a menos.
@@ -170,55 +289,39 @@ def _avaliar_saves(oferta: dict, jogador: dict, fixture: dict, cur,
     analise = analyze_saves_market(
         opponent_shots_on_avg=media_adv, keeper_saves_avg=media_propria,
         sample_size=n_adv, odd=oferta["odd"], line=linha,
-        constantes=constantes, keeper_sample=len(valores))
+        constantes=constantes, keeper_sample=len(ctx["serie"]))
     if not analise:
         return None
 
+    fator = ctx["minutos"].get("fator") or 1.0
+    esperado = analise.get("expected_saves")
     # Formato comum dos metodos, pra o resto do pipeline nao ter um ramo por
-    # metodo. `esperado` e' o nome generico do que o modelo de defesas chama
-    # de expected_saves.
+    # metodo. `esperado` e' o nome generico do que o modelo de defesas chama de
+    # expected_saves, e a probabilidade que sai daqui e' a DO MODELO -- o
+    # abatimento e' aplicado depois, no mesmo ponto dos outros cinco.
     return {
-        "analise": {
-            "linha": linha, "esperado": analise.get("expected_saves"),
-            "esperado_bruto": media_propria, "ajuste_adversario": None,
-            "phi": constantes.get("dispersion_r"), "amostra": len(valores),
-            "probability": analise.get("probability"),
-            "fair_odd": analise.get("fair_odd"),
-            "odd": analise.get("odd"), "edge": analise.get("edge"),
-            "ev": analise.get("ev"),
-        },
-        "serie": valores,
-        "composicao": player_history.composicao(proprias),
+        "linha": linha,
+        "esperado": round(esperado * fator, 3) if esperado is not None else None,
+        "esperado_bruto": media_propria,
+        "esperado_no_mando": None, "peso_do_mando": 0.0, "amostra_no_mando": 0,
+        "ajuste_adversario": None, "ajuste_minutos": fator,
+        "phi": constantes.get("dispersion_r"), "amostra": len(ctx["serie"]),
+        "probability_modelo": analise.get("probability"),
+        "odd": analise.get("odd"),
         "adversario": {"media": media_adv, "amostra": n_adv,
                        "mando": mando_adversario, "contador": "chutes no alvo"},
     }
 
 
-def _avaliar_generico(oferta: dict, jogador: dict, metodo: cat.Metodo,
-                      cur, phi: float, fixture: dict) -> dict | None:
-    """Metodos sem modelo especifico -- Binomial Negativa sobre o historico.
-
-    `fixture` entrou em 2026-08-27 e serve a uma coisa so': dizer de qual
-    COMPETICAO e temporada o historico pode vir (ver player_history.carregar).
-    O efeito colateral esperado e' menos pick, porque um jogador que tinha 12
-    atuacoes somando Brasileirao e Libertadores pode ter 7 no Brasileirao e
-    cair abaixo de `min_atuacoes`. E' o mesmo custo que o lado dos times ja'
-    paga, e pela mesma razao: amostra de outra competicao nao e' amostra maior,
-    e' amostra de outra coisa.
-    """
-    proprias = player_history.carregar(
-        cur, jogador["player_id"], metodo.coluna,
-        league_id=fixture["league_id"], season=fixture["season"])
-    if len(proprias) < metodo.min_atuacoes:
-        return None
-    valores = [j["valor"] for j in proprias]
-
-    analise = count_model.analisar(
-        valores=valores, linha=oferta["n"] - 0.5, phi=phi, odd=oferta["odd"])
-    if not analise:
-        return None
-    return {"analise": analise, "serie": valores, "adversario": None,
-            "composicao": player_history.composicao(proprias)}
+def _analise_generica(oferta: dict, metodo: cat.Metodo, ctx: dict,
+                      phi: float) -> dict | None:
+    """Metodos sem modelo especifico -- Binomial Negativa sobre o historico."""
+    return count_model.analisar(
+        valores=ctx["serie"], valores_no_mando=ctx["serie_no_mando"],
+        linha=oferta["n"] - 0.5, phi=phi, odd=oferta["odd"],
+        ajuste_adversario=(ctx["adversario_ajuste"] or {}).get("ajuste"),
+        ajuste_minutos=(ctx["minutos"].get("fator") if metodo.depende_de_minutos
+                        else None))
 
 
 def _avaliar_fixture(fixture: dict, cur, odds_service: OddsService,
@@ -316,6 +419,10 @@ def _avaliar_fixture(fixture: dict, cur, odds_service: OddsService,
         phi = (calibragem.get(metodo.slug) or {}).get("phi") or metodo.phi_congelado
 
         do_metodo = []
+        # O contexto do jogador NAO depende da linha ofertada, e a casa publica
+        # varias linhas do mesmo jogador. Uma leitura por jogador, reusada em
+        # todas as linhas dele -- ver `_contexto_do_jogador`.
+        contextos: dict = {}
         for oferta in ofertas:
             # Mercado publicado por mando so' lista jogador daquele lado -- ver
             # o comentario em `_ofertas_do_metodo`. Sem lado declarado, procura
@@ -335,14 +442,23 @@ def _avaliar_fixture(fixture: dict, cur, odds_service: OddsService,
                 # times, ou nome ambiguo entre eles. Descarta em vez de chutar.
                 continue
 
-            if metodo.slug == "saves":
-                avaliado = _avaliar_saves(oferta, jogador, fixture, cur, constantes_saves)
-            else:
-                avaliado = _avaliar_generico(oferta, jogador, metodo, cur, phi, fixture)
-            if not avaliado:
+            chave_ctx = jogador["player_id"]
+            if chave_ctx not in contextos:
+                contextos[chave_ctx] = _contexto_do_jogador(
+                    cur, jogador, metodo, fixture)
+            ctx = contextos[chave_ctx]
+            if not ctx:
                 continue
 
-            acertos, frequencia = _frequencia(avaliado["serie"], oferta["n"])
+            if metodo.slug == "saves":
+                analise = _analise_de_saves(oferta, fixture, cur, ctx,
+                                            constantes_saves)
+            else:
+                analise = _analise_generica(oferta, metodo, ctx, phi)
+            if not analise:
+                continue
+
+            acertos, frequencia = _frequencia(ctx["serie"], oferta["n"])
 
             # ANTES dos cortes de `_aprovado`, e nao depois: o contexto tem que
             # poder REPROVAR uma linha, e nao so' enfeitar a explicacao de uma
@@ -352,19 +468,81 @@ def _avaliar_fixture(fixture: dict, cur, odds_service: OddsService,
             # `saves` (defesa e' consequencia do ataque do outro), e essa
             # inversao mora la' de proposito -- ver `_lado_do_escopo`.
             analise = tie_effect.aplicar_em_analise(
-                avaliado["analise"], contexto,
+                analise, contexto,
                 familia=cat.familia_do_contexto(metodo),
                 escopo=("home" if jogador.get("team_id") == fixture["home_team_id"]
                         else "away"),
                 direcao="over", linha=oferta["n"] - 0.5,
-                lambda_esperado=avaliado["analise"].get("esperado"))
+                lambda_esperado=analise.get("esperado"))
+            # O tie_effect desloca `probability` e recalcula edge e odd justa a
+            # partir dela -- mas nao conhece a separacao entre probabilidade do
+            # MODELO e CALIBRADA (§18), que nasceu aqui. Entao o que ele
+            # devolve e' a nova probabilidade do modelo, e o abatimento e a
+            # aritmetica de mercado sao refeitos uma vez so', logo abaixo. Sem
+            # esta linha o EV ficaria congelado no valor de antes do contexto, e
+            # a conferencia aritmetica do §26 reprovaria o proprio motor.
+            analise["probability_modelo"] = analise.get("probability")
+
+            margem = quality.margem_de_projecao(
+                analise.get("esperado"), analise.get("linha"))
+
+            # AS CONTRADICOES SAO DETECTADAS SOBRE A PROBABILIDADE SEM DESCONTO
+            # e cobradas depois. A ordem inversa (descontar e depois detectar)
+            # faria o desconto mudar a propria classificacao que o gerou -- um
+            # pick com 81% cairia pra 77% e deixaria de disparar
+            # CONFIANCA_ACIMA_DA_AMOSTRA, que e' a contradicao que estava
+            # cobrando o desconto.
+            achados = contradiction.detectar(
+                analise=analise, disp=ctx["dispersao"], margem=margem,
+                frequencia=frequencia, amostra=analise.get("amostra"),
+                classe_amostra=ctx["classe_amostra"], minutos=ctx["minutos"],
+                risco_minutos=ctx["minutos"]["risco"],
+                risco_funcao=ctx["minutos"]["risco_funcao"],
+                status_titular=ctx["minutos"]["status"],
+                adversario=ctx["adversario_ajuste"],
+                outliers_serie=ctx["outliers"])
+
+            analise = count_model.aplicar_abatimento(
+                analise, penalidade_variancia=ctx["penalidade_variancia"],
+                desconto_contradicao=contradiction.desconto(achados))
+
+            escolha = selection.score_de_selecao(
+                probabilidade=analise.get("probability") or 0,
+                amostra=analise.get("amostra"),
+                amostra_saturacao=cfg.AMOSTRA_SATURACAO,
+                data_quality=(ctx["data_quality"] or {}).get("score"),
+                margem_relativa=margem.get("relativa"),
+                penalidade_variancia=ctx["penalidade_variancia"],
+                risco_minutos=ctx["minutos"]["risco"],
+                risco_funcao=ctx["minutos"]["risco_funcao"])
+
             do_metodo.append({
                 "fixture": fixture, "metodo": metodo, "jogador": jogador,
                 "oferta": oferta, "analise": analise,
-                "serie": avaliado["serie"], "adversario": avaliado.get("adversario"),
+                "serie": ctx["serie"], "serie_no_mando": ctx["serie_no_mando"],
+                "adversario": analise.get("adversario"),
+                "adversario_ajuste": ctx["adversario_ajuste"],
+                "matchup": ctx["matchup"], "minutos": ctx["minutos"],
+                "dispersao": ctx["dispersao"], "outliers": ctx["outliers"],
+                "classe_amostra": ctx["classe_amostra"],
+                "data_quality": ctx["data_quality"],
+                "dias_desde_ultima": ctx["dias_desde_ultima"],
+                "composicao": ctx["composicao"],
+                "contradicoes": achados,
+                "margem": margem,
                 "acertos": acertos, "frequencia": frequencia,
                 "rotulo_linha": metodo.rotulo_linha.format(n=oferta["n"]),
                 "calibragem": calibragem.get(metodo.slug),
+                "selecao": escolha,
+                "stake_fator": selection.fator_de_stake(
+                    data_quality=(ctx["data_quality"] or {}).get("score"),
+                    classe_amostra=ctx["classe_amostra"],
+                    risco_minutos=ctx["minutos"]["risco"],
+                    penalidade_variancia=ctx["penalidade_variancia"]),
+                # O Score antigo continua gravado -- ele e' comparavel com o dos
+                # outros pipelines de mercado proprio e e' a serie historica do
+                # motor. O que ele nao faz mais e' escolher: quem ordena e'
+                # `selecao`, que nao pontua preco (ver selection.py).
                 "pick_score": pick_score(
                     probability=analise.get("probability") or 0,
                     odd=analise.get("odd") or 0,
@@ -385,7 +563,19 @@ def _avaliar_fixture(fixture: dict, cur, odds_service: OddsService,
 
 
 def _aprovado(c: dict) -> tuple:
-    """(passou, motivo). Cortes duros, antes de qualquer ordenacao."""
+    """(passou, motivo). Cortes duros, antes de qualquer ordenacao.
+
+    DOIS BLOCOS, E A ORDEM IMPORTA PRA QUEM LE' A AUDITORIA. Primeiro os cortes
+    de sempre (probabilidade, margem sobre a odd, amostra), que respondem "este
+    numero paga?"; depois a auditoria final do §42, que responde "este numero
+    quer dizer alguma coisa?". Inverter faria o painel encher de "titularidade
+    não sustentada" em candidatos que morreriam de probabilidade de qualquer
+    jeito, e a leitura do dia ficaria sobre a camada errada.
+
+    O resultado da auditoria fica no candidato (`checklist`, `decisao`) mesmo
+    quando ela passa: e' ela que o `engine_debug` grava, e um pick aprovado
+    precisa poder mostrar as vinte respostas tanto quanto um reprovado.
+    """
     analise = c["analise"]
     prob = analise.get("probability") or 0
     edge = analise.get("edge")
@@ -398,7 +588,12 @@ def _aprovado(c: dict) -> tuple:
     if (analise.get("amostra") or 0) < c["metodo"].min_atuacoes:
         return (False, f"amostra de {analise.get('amostra')} atuações abaixo do "
                        f"mínimo do método ({c['metodo'].min_atuacoes})")
-    return (True, None)
+
+    decisao, motivo, itens = decision.avaliar(c)
+    c["checklist"] = itens
+    c["decisao"] = decisao
+    c["motivo"] = motivo
+    return (decisao == "PICK", motivo)
 
 
 def _pick_para_ia(c: dict) -> dict:
@@ -413,6 +608,7 @@ def _pick_para_ia(c: dict) -> dict:
     jogador, de que time, e sobre quantas atuacoes a media foi tirada.
     """
     analise, jogador, metodo = c["analise"], c["jogador"], c["metodo"]
+    minutos = c.get("minutos") or {}
     return {
         "market_name": metodo.label,
         "market_type": metodo.slug,
@@ -425,16 +621,71 @@ def _pick_para_ia(c: dict) -> dict:
         "ev": analise.get("ev"),
         "market_sample": analise.get("amostra"),
         "match_context": c.get("composicao"),
+        # §35 · O CONTRATO DE DADOS DA REVISAO.
+        #
+        # "A IA nao deve rejeitar uma aposta simplesmente porque um campo
+        # importante nao foi enviado. O contrato de dados precisa ser
+        # corrigido." Ate' aqui a revisao recebia dez campos de mercado de time
+        # e opinava sobre prop de jogador sem saber se o jogador comeca, quanto
+        # ele joga, em que funcao, contra quem, nem a que distancia da linha a
+        # projecao ficou -- ou seja, sem nada do que distingue este produto.
+        #
+        # Os quatro que o payload generico JA' TINHA slot, e que este pipeline
+        # nunca preenchia -- por isso a revisao via' `data_quality: null` em
+        # todo pick de jogador desde 04/09. Os nomes sao os de la'
+        # (`build_review_payload`), nao os do §35: renomear do lado de ca'
+        # deixaria os campos caindo no vazio de novo, que e' o defeito que este
+        # bloco esta' corrigindo.
+        "data_quality_score": (c.get("data_quality") or {}).get("score"),
+        "variance_penalty": analise.get("penalidade_variancia"),
+        "poisson_probability": analise.get("probability_modelo"),
+        "model_fit_diff": analise.get("abatimento"),
+        "matchup_raw": (c.get("matchup") or {}).get("motivo"),
+        # E o que so' existe em prop de jogador. Bloco proprio porque o payload
+        # generico descreve mercado de TIME e nao tem onde pendurar minutos,
+        # titularidade e funcao -- os campos em ingles sao os nomes do §35, que
+        # e' a lingua do prompt.
+        "player_stats": {
+            "player": jogador["player_name"],
+            "team": jogador.get("team_name"),
+            "market": metodo.slug,
+            "line": (c.get("oferta") or {}).get("n"),
+            "starter_status": minutos.get("status"),
+            "minutes_expected": minutos.get("esperados"),
+            "minutes_risk": minutos.get("risco"),
+            "role": minutos.get("posicao"),
+            "role_risk": minutos.get("risco_funcao"),
+            "projection": analise.get("esperado"),
+            "projection_margin": (c.get("margem") or {}).get("absoluta"),
+            "probability_model": analise.get("probability_modelo"),
+            "probability_calibrated": analise.get("probability_calibrada"),
+            "sample": analise.get("amostra"),
+            "sample_classification": c.get("classe_amostra"),
+            "sample_home_away": analise.get("amostra_no_mando"),
+            "dispersion_cv": (c.get("dispersao") or {}).get("cv"),
+            "opponent_adjustment": (c.get("adversario_ajuste") or {}).get("ajuste"),
+            "contradictions": [x["texto"] for x in (c.get("contradicoes") or [])],
+        },
     }
 
 
 def _engine_debug(c: dict) -> str:
-    return json.dumps({
+    """O rastro do pick -- §41, com os nomes que o projeto ja' usa.
+
+    A montagem mora em `decision.engine_debug` e nao aqui porque ela e' a outra
+    metade da auditoria final: as vinte perguntas e o rastro respondem a mesma
+    coisa e mudam juntos. O que sobra neste arquivo sao os campos que sao do
+    PIPELINE e nao da decisao -- qual modelo rodou, que calibragem estava
+    valendo naquela rodada e o que a IA disse.
+    """
+    decisao = c.get("decisao") or "PICK"
+    itens = c.get("checklist") or decision.checklist(c)
+    rastro = decision.engine_debug(c, decisao, c.get("motivo"), itens)
+    rastro.update({
         "modelo": ("goalkeeper_model/binomial_negativa" if c["metodo"].slug == "saves"
                    else "player_stats_engine/binomial_negativa"),
         "metodo": c["metodo"].slug,
         "analise": c["analise"],
-        "adversario": c.get("adversario"),
         "acertos": c.get("acertos"), "frequencia": c.get("frequencia"),
         "pick_score": c.get("pick_score"),
         # A AMOSTRA do jogador: as atuacoes que entraram na conta, ate' 10 pra
@@ -444,6 +695,7 @@ def _engine_debug(c: dict) -> str:
             "max_exibidos": 10,
             "atuacoes_lidas": len(c.get("serie") or []),
             "valores": (c.get("serie") or [])[:10],
+            "classificacao": c.get("classe_amostra"),
             # De QUAL competicao vieram essas atuacoes. Mesmo papel que
             # `multi_competicao` tem na amostra do time: sem isso, media tirada
             # de duas competicoes e media tirada de uma sao o mesmo numero na
@@ -455,7 +707,8 @@ def _engine_debug(c: dict) -> str:
         # diferentes ficariam inexplicaveis.
         "calibragem": c.get("calibragem"),
         "ai_review": c.get("ai_review"),
-    }, default=str, ensure_ascii=False)
+    })
+    return json.dumps(rastro, default=str, ensure_ascii=False)
 
 
 def _salvar(cur, c: dict) -> int | None:
@@ -464,6 +717,18 @@ def _salvar(cur, c: dict) -> int | None:
         confidence=analise.get("probability"), odd=analise.get("odd"),
         ev=analise.get("ev") or 0, pick_type="free",
     )
+    # §40 · O STAKE NAO SOBE POR EV, E DESCE POR QUALIDADE DE ESTIMATIVA.
+    #
+    # `calculate_stake` dimensiona por confianca e odd, que e' o eixo certo e
+    # nao e' o unico: dois picks com a mesma confianca e a mesma odd nao
+    # merecem a mesma unidade se um tem oito atuacoes atras e o outro tem
+    # vinte. O fator so' REDUZ (ver selection.fator_de_stake) e tem piso, pra
+    # nao produzir uma unidade que ninguem consegue colocar na casa.
+    fator = max((c.get("stake_fator") or {}).get("fator", 1.0),
+                cfg.STAKE_FATOR_MINIMO)
+    if fator < 1.0:
+        stake_pct = round(float(stake_pct) * fator, 4)
+        stake_units = round(float(stake_units) * fator, 2)
     cur.execute(f"""
         INSERT INTO picks_player_stats
             (fixture_id, match_date, home_team, away_team,
@@ -514,7 +779,17 @@ def _dados_da_auditoria(c: dict, motivo: str | None) -> dict:
         "conclusao": motivo or explanation.frase(c),
         "amostra": {"atuacoes_lidas": len(c.get("serie") or []),
                     "valores": (c.get("serie") or [])[:10],
+                    "classificacao": c.get("classe_amostra"),
                     **(c.get("composicao") or {})},
+        # A auditoria final e as contradicoes viajam junto com o motivo: o
+        # painel precisa poder mostrar TODAS as perguntas que falharam, e nao
+        # so' a primeira, que e' a unica que cabe na frase do motivo.
+        "auditoria_final": c.get("checklist"),
+        "contradicoes": c.get("contradicoes"),
+        "qualidade_do_dado": c.get("data_quality"),
+        "minutos": {k: v for k, v in (c.get("minutos") or {}).items()
+                    if k != "perfil"},
+        "selecao": c.get("selecao"),
     }
 
 
@@ -610,13 +885,17 @@ def run_player_stats_engine(metodos: tuple | None = None):
                 (aprovados if passou else reprovados).append((c, motivo))
 
             # Um pick por jogador: duas linhas do mesmo jogador sao a mesma
-            # aposta em graus diferentes. Fica a de maior Score.
-            aprovados.sort(key=lambda par: par[0]["pick_score"], reverse=True)
+            # aposta em graus diferentes. Fica a de maior valor AJUSTADO AO
+            # RISCO -- que nao e' a de maior Score, e a diferenca e' o ponto:
+            # o Score pontua odd e edge (38% dele e' preco) e o `selecao` nao
+            # pontua preco nenhum. Odd e EV eliminam nos cortes, nunca ordenam.
+            aprovados.sort(key=lambda par: par[0]["selecao"]["score"], reverse=True)
             vistos, publicaveis, repetidos = set(), [], []
             for c, _ in aprovados:
                 chave = c["jogador"]["player_id"]
                 if cfg.UM_PICK_POR_JOGADOR and chave in vistos:
-                    repetidos.append((c, "linha de menor Score do mesmo jogador"))
+                    repetidos.append((c, "linha de menor valor ajustado ao risco "
+                                         "do mesmo jogador"))
                     continue
                 vistos.add(chave)
                 publicaveis.append(c)

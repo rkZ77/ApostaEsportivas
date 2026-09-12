@@ -136,6 +136,30 @@ class Metodo:
     #: pick de verdade e ser medido. Ate' la' roda na mao, com `playerstats
     #: <slug>`.
     diario: bool = False
+    #: Coluna de `match_statistics` (sem o prefixo de lado) que mede o quanto o
+    #: adversario CONCEDE deste contador. Vazio = o metodo nao tem ajuste de
+    #: adversario, e o motor projeta so' pelo jogador.
+    #:
+    #: NAO E' A MESMA COISA QUE `coluna_do_adversario`, e a diferenca e' o
+    #: motivo de existirem as duas: aquela e' o volume que o adversario PRODUZ
+    #: (chute no alvo contra o goleiro), que e' o sinal FORTE do metodo `saves`;
+    #: esta e' o que ele CONCEDE, que e' ajuste sobre um sinal que ja' e' do
+    #: proprio jogador. Ver opponent_model.
+    coluna_concedida: str = ""
+    #: CV tipico deste contador, medido em PROD (2026-09-10, 278 jogadores com
+    #: 15+ atuacoes de 60min+). E' a referencia contra a qual a dispersao do
+    #: JOGADOR e' comparada -- ver quality.penalidade_de_variancia.
+    #:
+    #: Zero = sem medicao; o metodo nao sofre penalidade de variancia, porque
+    #: penalizar contra uma referencia chutada e' pior que nao penalizar.
+    cv_referencia: float = 0.0
+    #: O mando desloca este contador o suficiente pra valer o recorte? Quando
+    #: True, a media do jogador e' combinada com a dele no mando de hoje (§7).
+    mando_relevante: bool = True
+    #: A contagem acompanha o tempo em campo? True em tudo que e' volume. O
+    #: unico caso claro de False seria um evento de acontecimento unico, que
+    #: este catalogo ainda nao tem -- o campo existe pra quando tiver.
+    depende_de_minutos: bool = True
     #: Dispersao congelada, usada so' quando a recalibragem nao tem amostra.
     #: Comeca em 1.0 (= Poisson) de proposito nos metodos que ainda nao foram
     #: medidos: e' o valor neutro, e a calibragem mede na propria base a cada
@@ -159,6 +183,10 @@ SAVES = Metodo(
     min_atuacoes=4, min_amostra_adversario=4,
     depende_do_adversario=True, coluna_do_adversario="shots_on",
     posicoes=frozenset({"G"}),
+    # `saves` NAO recebe ajuste generico de adversario: o adversario dele ja' e'
+    # o sinal forte, pelo caminho medido do goalkeeper_model. Ligar os dois
+    # contaria o mesmo efeito duas vezes.
+    cv_referencia=0.65, mando_relevante=False,
     rotulo_linha="{n} ou mais defesas", phi_congelado=3.19,
     diario=True,
 )
@@ -194,6 +222,7 @@ SHOTS_ON = Metodo(
     # atuacoes a media do jogador carrega 52% de erro. 12 e' onde ele chega
     # nos ~22% do saves. Ver A MEDICAO CHEGOU, no topo.
     min_atuacoes=12,
+    coluna_concedida="shots_on", cv_referencia=1.90,
     rotulo_linha="{n} ou mais chutes no alvo",
     diario=True,
 )
@@ -220,6 +249,7 @@ SHOTS = Metodo(
     # 8, nao 4 · CV 1.37, e 8 atuacoes e' onde o erro da media chega nos ~22%
     # do saves (com 4 seriam 36%). Ver A MEDICAO CHEGOU, no topo.
     min_atuacoes=8,
+    coluna_concedida="total_shots", cv_referencia=1.37,
     rotulo_linha="{n} ou mais chutes",
     diario=True,
 )
@@ -229,6 +259,10 @@ FOULS = Metodo(
     nomes_mercado=frozenset({"player fouls committed", "fouls committed",
                              "player fouls"}),
     min_atuacoes=4,
+    # Falta cometida pelo jogador tem contrapartida no time de frente: o que o
+    # adversario CONCEDE aqui e' a falta que ele sofre, que e' a coluna `fouls`
+    # do outro lado -- a mesma leitura de lado oposto de todos os outros.
+    coluna_concedida="fouls",
     rotulo_linha="{n} ou mais faltas",
 )
 
