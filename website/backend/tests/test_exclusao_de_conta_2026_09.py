@@ -27,7 +27,17 @@ from routers import auth as auth_mod
 from routers.auth import _TABELAS_PESSOAIS, DeleteAccountBody, delete_account
 from auth_utils import hash_password
 
-SENHA = "SenhaCerta123"
+# As duas constantes abaixo sao dado de teste, nao credencial: nenhuma conta
+# real usa nenhuma delas, e o que o teste exercita e' o `verify_password`
+# comparando uma com o hash da outra.
+#
+# O FORMATO e' proposital. A primeira versao usava um literal com cara de
+# senha de verdade (maiuscula, minuscula e digito juntos) e o GitGuardian
+# abriu incidente no push -- falso positivo, mas incidente. Literal de teste
+# tem que PARECER literal de teste: alerta de segredo que cria ruido treina
+# todo mundo a ignorar alerta de segredo.
+SENHA = "placeholder-de-teste"
+SENHA_ERRADA = "placeholder-que-nao-bate"
 
 
 class _CursorFalso:
@@ -108,7 +118,7 @@ def test_confirmacao_aceita_minuscula_e_espaco(banco):
 def test_senha_errada_nao_exclui(banco):
     conn, cur = banco()
     with pytest.raises(HTTPException) as e:
-        _chamar(DeleteAccountBody(current_password="outra", confirmacao="EXCLUIR"))
+        _chamar(DeleteAccountBody(current_password=SENHA_ERRADA, confirmacao="EXCLUIR"))
     assert e.value.status_code == 400
     assert not conn.commitou
     assert not any("DELETE FROM" in s for s, _ in cur.sql)
