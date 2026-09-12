@@ -43,6 +43,7 @@ def resumo_estruturado(confronto: dict, perfil_home: dict, perfil_away: dict,
     ad = confronto.get("ataque_defesa") or {}
     tend = confronto.get("tendencia") or {}
     cons = confronto.get("consistencia") or {}
+    dist = confronto.get("distribuicao_ht") or {}
 
     itens = [
         {"rotulo": "Over 1.5 FT · frequência",
@@ -90,8 +91,40 @@ def resumo_estruturado(confronto: dict, perfil_home: dict, perfil_away: dict,
          "valor": _pct(confronto.get("prob_under25_ht")),
          "detalhe": f"modelo {_pct(confronto.get('prob_modelo_ht'))} + histórico "
                     f"{_pct(confronto.get('freq_under25_ht'))}"},
+        # -- V2 -------------------------------------------------------------
+        # O par deixou de ser o produto das duas pernas, e a linha abaixo é o
+        # lugar onde isso fica visível pra quem lê a análise: as duas fontes do
+        # par aparecem lado a lado, e o número do par não é mais reconstruível
+        # de cabeça a partir das duas probabilidades acima.
+        {"rotulo": "Probabilidade da combinação",
+         "valor": _pct(confronto.get("prob_combinada")),
+         "detalhe": f"modelo {_pct(confronto.get('prob_modelo_par'))} + histórico do par "
+                    f"{_pct(confronto.get('freq_par'))}"},
+        {"rotulo": "Primeiros tempos com 2 gols ou mais",
+         "valor": _pct(dist.get("freq_2mais")),
+         "detalhe": (f"{dist.get('jogos_2mais')} de {dist.get('jogos')} · "
+                     f"{dist.get('jogos_3mais')} com 3 ou mais · pior caso "
+                     f"{dist.get('max_ht')} gol")},
+        {"rotulo": "Folga da projeção contra a linha",
+         "valor": f"{_n(confronto.get('margem_ft'))} gol acima de 1,5",
+         "detalhe": f"e {_n(confronto.get('margem_ht'))} gol abaixo de 2,5 no intervalo"},
+        {"rotulo": "Ajuste por tamanho de amostra",
+         "valor": _delta_pp(confronto.get("deslocamento_freq_ft"),
+                            confronto.get("deslocamento_freq_ht")),
+         "detalhe": (f"frequências brutas {_pct(confronto.get('freq_over15_cru'))} e "
+                     f"{_pct(confronto.get('freq_under25_ht_cru'))}, ajustadas para a base "
+                     f"da competição")},
     ]
     return itens
+
+
+def _delta_pp(over, under) -> str:
+    partes = []
+    for rotulo, valor in (("Over 1.5", over), ("Under 2.5 HT", under)):
+        if valor is None:
+            continue
+        partes.append(f"{rotulo} {float(valor) * 100:+.0f} p.p.")
+    return " · ".join(partes) if partes else "sem ajuste"
 
 
 def _delta_texto(over, under) -> str:
@@ -133,7 +166,10 @@ def frase(score: float, confronto: dict, perfil_home: dict, perfil_away: dict,
     home = fixture.get("home_team") or "Mandante"
     away = fixture.get("away_team") or "Visitante"
     partes = [
-        f"Score Estatístico {score:.0f}/100 para a combinação Over "
+        # "Score" sem sobrenome desde a V2: o numero que chega aqui e' o Score
+        # FINAL (estatistica, modelo, risco, dado e convergencia), e chama-lo de
+        # Estatistico seria nomear errado o que decidiu.
+        f"Score {score:.0f}/100 para a combinação Over "
         f"{cfg.LINHA_OVER_FT} FT + Under {cfg.LINHA_UNDER_HT} HT.",
         f"Over 1.5 saiu em {perfil_home.get('over15_acertos')} dos "
         f"{perfil_home.get('over15_total')} últimos jogos do {home} e em "

@@ -40,6 +40,8 @@ from services.pick_engine.staking import calculate_stake
 from services.pick_engine_boost import config as cfg
 from services.pick_engine_boost import explanation, goals_history, score as scoring
 from services.pick_engine_boost import stats_model
+from services.pick_engine_boost import (baseline, calibration, contradiction,
+                                        decision, ht_risk, quality, shrinkage)
 from utils.data_br import HOJE_BR
 from utils.db_utils import get_connection
 
@@ -185,7 +187,10 @@ def _avaliar_fixture(fixture: dict, cur, match_stats: MatchStatsService,
     # -- indicadores ---------------------------------------------------------
     perfil_home = stats_model.perfil_do_time(hist_home, fixture["home_team_id"], "home")
     perfil_away = stats_model.perfil_do_time(hist_away, fixture["away_team_id"], "away")
-    confronto = stats_model.analisar_confronto(perfil_home, perfil_away)
+    # O baseline da liga (V2) e' pra onde as frequencias encolhem. Uma consulta
+    # por liga, cacheada no processo -- ver baseline.py.
+    base = baseline.da_liga(cur, fixture.get("league_id"))
+    confronto = stats_model.analisar_confronto(perfil_home, perfil_away, base)
 
     # Contexto do confronto (mata-mata, perna, agregado, rivalidade).
     #
@@ -222,6 +227,8 @@ def _avaliar_fixture(fixture: dict, cur, match_stats: MatchStatsService,
     # regra do faltas_pipeline: o contexto reprova, nao so' enfeita.
     lam_ft = confronto.get("lambda_ft")
     lam_ht = confronto.get("lambda_ht")
+    prob_ft_antes = confronto.get("prob_over15_ft")
+    prob_ht_antes = confronto.get("prob_under25_ht")
     if match_context:
         # Over 1.5 FT -- mandante atacando abre o jogo inteiro
         analise_ft = {"probability": confronto.get("prob_over15_ft"), "odd": perna_ft["odd"],
@@ -240,52 +247,214 @@ def _avaliar_fixture(fixture: dict, cur, match_stats: MatchStatsService,
             direcao="under", linha=cfg.LINHA_UNDER_HT, lambda_esperado=lam_ht)
         confronto = {**confronto, "prob_under25_ht": analise_ht.get("probability",
                                                                      confronto.get("prob_under25_ht"))}
-        # Recalcula a probabilidade combinada com as duas pernas ajustadas
-        p_ft = confronto["prob_over15_ft"]
-        p_ht = confronto["prob_under25_ht"]
-        if p_ft is not None and p_ht is not None:
-            confronto = {**confronto, "prob_combinada": round(p_ft * p_ht, 4)}
+        # Propaga o ajuste pra probabilidade do PAR.
+        #
+        # Nao da' pra refazer `prob_combinada` como p_ft x p_ht (era o que a V1
+        # fazia aqui): desde a V2 ela nao e' um produto, e sim a decomposicao em
+        # duas metades combinada com a frequencia historica do par. O que se faz
+        # e' aplicar ao par o MESMO fator relativo que o contexto aplicou as
+        # pernas -- o tie_effect mede deslocamento, nao nivel, e deslocamento se
+        # transporta. O teto de 1.0 existe porque probabilidade nao passa disso.
+        p_ft_novo, p_ht_novo = confronto["prob_over15_ft"], confronto["prob_under25_ht"]
+        if None not in (p_ft_novo, p_ht_novo, prob_ft_antes, prob_ht_antes):
+            antes = float(prob_ft_antes) * float(prob_ht_antes)
+            depois = float(p_ft_novo) * float(p_ht_novo)
+            par = confronto.get("prob_combinada")
+            if antes > 0 and par is not None:
+                confronto = {**confronto,
+                             "prob_combinada": round(min(1.0, float(par) * depois / antes), 4),
+                             "fator_contexto": round(depois / antes, 4)}
 
     calculo = scoring.calcular(confronto, perfil_home, perfil_away)
-    resultado["score"] = calculo["score"]
+    resultado["score_estatistico"] = calculo["score"]
+    resultado["pernas"] = {"ft": perna_ft, "ht": perna_ht}
+
+    # -- risco, qualidade e convergencia (V2) --------------------------------
+    dist_ht = confronto.get("distribuicao_ht") or {}
+    risco_ht = ht_risk.calcular(confronto.get("lambda_ht"), dist_ht)
+    tail = ht_risk.tail_risk(dist_ht)
+    qualidade = quality.data_quality(perfil_home, perfil_away, hist_home, hist_away)
+
+    tend = confronto.get("tendencia") or {}
+    deltas = [tend.get("over15"), tend.get("under25_ht")]
+    deltas = [float(d) for d in deltas if d is not None]
+    mando_freq = [p.get("freq_over15_mando") for p in (perfil_home, perfil_away)]
+    mando_freq = [float(m) for m in mando_freq if m is not None]
+    convergencia = quality.convergencia({
+        "freq_over15": confronto.get("freq_over15"),
+        "freq_over15_mando": sum(mando_freq) / len(mando_freq) if mando_freq else None,
+        "prob_modelo_ft": confronto.get("prob_modelo_ft"),
+        "margem_ft": confronto.get("margem_ft"),
+        "freq_under25_ht": confronto.get("freq_under25_ht"),
+        "prob_modelo_ht": confronto.get("prob_modelo_ht"),
+        "margem_ht": confronto.get("margem_ht"),
+        "tendencia_media": sum(deltas) / len(deltas) if deltas else None,
+    })
+
+    # -- probabilidade, calibracao e VALOR (V2) ------------------------------
+    #
+    # A ORDEM MUDOU, e e' a mudanca principal do motor: aqui a V1 ja' tinha
+    # escrito `aprovado = True`, e EV/edge eram calculados depois, como enfeite.
+    # Agora eles sao calculados ANTES de qualquer decisao, sobre a probabilidade
+    # CALIBRADA, e reprovam.
+    prob_par = confronto.get("prob_combinada")
+    calibrada = calibration.calibrar(prob_par)
+    prob_final = calibrada.get("prob")
+    amostra_classe = shrinkage.classe_de_amostra(
+        min((confronto.get("consistencia") or {}).get("min_amostra_ft") or 0,
+            (confronto.get("consistencia") or {}).get("min_amostra_ht") or 0))
+    confianca = calibration.confianca(
+        prob_final, qualidade, convergencia, amostra_classe,
+        confronto.get("divergencia_modelo_historico"))
+
+    resultado["probabilidade"] = prob_final
+    resultado["confianca"] = confianca
+    resultado["fair_odd"] = round(1 / prob_final, 3) if prob_final else None
+    resultado["ev"] = (round(prob_final * odd_combinada - 1, 4) if prob_final else None)
+    resultado["edge"] = (round(prob_final - 1 / odd_combinada, 4) if prob_final else None)
+
+    contradicoes = contradiction.detectar(confronto, risco_ht, resultado["ev"],
+                                          calculo["score"])
+    dimensoes = decision.scores(confronto, calculo["score"], risco_ht, qualidade,
+                                convergencia, perfil_home, perfil_away, resultado["ev"])
+    punicoes = decision.penalidades(risco_ht, confronto, resultado["edge"])
+    score_final = decision.score_final(dimensoes, punicoes)
+    resultado["score"] = score_final
+
     resultado["indicadores"] = {
         "confronto": confronto, "mandante": perfil_home, "visitante": perfil_away,
         "parcelas": calculo["parcelas"], "pontos_fracos": calculo["pontos_fracos"],
+        "score_estatistico": calculo["score"],
+        "dimensoes": dimensoes, "penalidades": punicoes,
+        "risco_ht": risco_ht, "tail_risk": tail, "qualidade": qualidade,
+        "convergencia": convergencia, "contradicoes": contradicoes,
+        "calibracao": calibrada, "amostra_classe": amostra_classe,
+        "confianca": confianca,
     }
-    resultado["pernas"] = {"ft": perna_ft, "ht": perna_ht}
-    resultado["probabilidade"] = confronto.get("prob_combinada")
 
-    # -- cortes duros --------------------------------------------------------
+    # -- cortes duros das PERNAS (herdados da V1) ----------------------------
+    # Continuam antes das portas novas: uma perna abaixo do minimo invalida a
+    # combinacao inteira, e nao ha' o que discutir de valor num par que ja' nao
+    # se sustenta.
     prob_ft, prob_ht = confronto.get("prob_over15_ft"), confronto.get("prob_under25_ht")
     if prob_ft is None or prob_ht is None:
         resultado["motivo"] = MOTIVO_PROB_BAIXA
+        resultado["codigo"] = decision.NO_PICK_LOW_DATA_QUALITY
         return resultado
     if prob_ft < cfg.PROB_MINIMA_FT or prob_ht < cfg.PROB_MINIMA_HT:
         resultado["motivo"] = (f"{MOTIVO_PROB_BAIXA} "
                                f"(FT {prob_ft * 100:.0f}%, HT {prob_ht * 100:.0f}%)")
-        return resultado
-    if calculo["score"] < cfg.SCORE_MINIMO:
-        resultado["motivo"] = scoring.motivo_do_descarte(calculo)
+        resultado["codigo"] = MOTIVO_PROB_BAIXA
         return resultado
 
-    # -- odd justa e EV, informacao SECUNDARIA -------------------------------
-    prob_par = confronto.get("prob_combinada")
-    resultado["fair_odd"] = round(1 / prob_par, 3) if prob_par else None
-    resultado["ev"] = (round(prob_par * odd_combinada - 1, 4) if prob_par else None)
-    resultado["edge"] = (round(prob_par - 1 / odd_combinada, 4) if prob_par else None)
+    # -- as nove portas ------------------------------------------------------
+    veredito = decision.avaliar(
+        ev=resultado["ev"], edge=resultado["edge"], qualidade=qualidade,
+        convergencia=convergencia, risco_ht=risco_ht, tail=tail,
+        confronto=confronto, contradicoes=contradicoes, calibrada=calibrada,
+        amostra_classe=amostra_classe, score_final_valor=score_final)
+    resultado["indicadores"]["veredito"] = veredito
+    resultado["codigo"] = veredito.get("codigo")
+    if veredito["decision"] != "PICK":
+        resultado["motivo"] = veredito["motivo"]
+        return resultado
+
     resultado["aprovado"] = True
     resultado["match_context"] = match_context
     return resultado
 
 
 def _engine_debug(c: dict) -> str:
+    """O rastro. Os blocos novos da V2 ficam no MESMO nivel dos antigos.
+
+    Nenhuma chave da V1 foi removida nem renomeada: o painel de auditoria e a
+    tela "Entenda esta analise" leem as antigas, e trocar o contrato pra
+    acrescentar informacao quebraria as duas pra ganhar arrumacao. `score`
+    continua sendo o numero que decidiu -- so' que agora ele e' o Score Final, e
+    o Estatistico esta' ao lado, em `score_estatistico`.
+    """
     ind = c.get("indicadores") or {}
+    confronto = ind.get("confronto") or {}
+    veredito = ind.get("veredito") or {}
+    calib = ind.get("calibracao") or {}
+    qual = ind.get("qualidade") or {}
+    conv = ind.get("convergencia") or {}
+    risco = ind.get("risco_ht") or {}
+    tail = ind.get("tail_risk") or {}
     return json.dumps({
-        "modelo": "pick_engine_boost/poisson_gols",
+        "modelo": "pick_engine_boost/v2_poisson_decomposto",
         "score": c.get("score"),
+        "score_estatistico": ind.get("score_estatistico"),
         "parcelas": ind.get("parcelas"),
         "pontos_fracos": ind.get("pontos_fracos"),
-        "confronto": ind.get("confronto"),
+
+        # -- os blocos da V2, na estrutura pedida -----------------------------
+        "probabilidade": {
+            "historica": confronto.get("freq_par"),
+            "modelo": confronto.get("prob_modelo_par"),
+            "calibrada": calib.get("prob"),
+            "final": c.get("probabilidade"),
+            "produto_v1": confronto.get("prob_combinada_produto_v1"),
+            "fonte_calibracao": calib.get("fonte"),
+            "confianca": ind.get("confianca"),
+        },
+        "valor": {
+            "odd": c.get("odd"),
+            "fair_odd": c.get("fair_odd"),
+            "implied_probability": (round(1 / c["odd"], 4) if c.get("odd") else None),
+            "edge": c.get("edge"),
+            "ev": c.get("ev"),
+        },
+        "projecao": {
+            "lambda_ft": confronto.get("lambda_ft"),
+            "lambda_ht": confronto.get("lambda_ht"),
+            "lambda_ht_cru": confronto.get("lambda_ht_cru"),
+            "lambda_2t": confronto.get("lambda_2t"),
+            "margin_ft": confronto.get("margem_ft"),
+            "margin_ht": confronto.get("margem_ht"),
+        },
+        "historico": {
+            "home_last5": (ind.get("mandante") or {}).get("freq_over15_curta"),
+            "home_last10": (ind.get("mandante") or {}).get("freq_over15"),
+            "home_context": (ind.get("mandante") or {}).get("freq_over15_mando"),
+            "away_last5": (ind.get("visitante") or {}).get("freq_over15_curta"),
+            "away_last10": (ind.get("visitante") or {}).get("freq_over15"),
+            "away_context": (ind.get("visitante") or {}).get("freq_over15_mando"),
+            "freq_over15_cru": confronto.get("freq_over15_cru"),
+            "freq_under25_ht_cru": confronto.get("freq_under25_ht_cru"),
+            "deslocamento_encolhimento": {
+                "over15": confronto.get("deslocamento_freq_ft"),
+                "under25_ht": confronto.get("deslocamento_freq_ht"),
+            },
+            "baseline": confronto.get("baseline"),
+        },
+        "risco": {
+            "ht_risk": risco.get("score"),
+            "ht_risk_classe": risco.get("classe"),
+            "ht_risk_componentes": risco.get("componentes"),
+            "tail_risk": tail.get("score"),
+            "concentracao_em_2": tail.get("concentracao_em_2"),
+            "distribuicao_ht": confronto.get("distribuicao_ht"),
+            "penalidades": ind.get("penalidades"),
+        },
+        "qualidade": {
+            "sample_score": (ind.get("dimensoes") or {}).get("amostra"),
+            "amostra_classe": ind.get("amostra_classe"),
+            "data_quality": qual.get("score"),
+            "data_quality_classe": qual.get("classe"),
+            "data_quality_partes": qual.get("partes"),
+            "convergence": conv.get("fracao"),
+            "convergence_sinais": conv.get("sinais"),
+        },
+        "dimensoes": ind.get("dimensoes"),
+        "contradicoes": (ind.get("contradicoes") or {}).get("achados"),
+        "gates": veredito.get("gates"),
+        "gates_reprovados": veredito.get("gates_reprovados"),
+        "decision": veredito.get("decision") or ("PICK" if c.get("aprovado") else "NO_PICK"),
+        "no_pick_code": c.get("codigo"),
+
+        # -- o que a V1 ja' gravava, intacto ----------------------------------
+        "confronto": confronto,
         "mandante": ind.get("mandante"),
         "visitante": ind.get("visitante"),
         # A AMOSTRA: quais jogos entraram na conta, ate' 10 por time, com o
@@ -302,8 +471,14 @@ def _salvar(cur, c: dict) -> int | None:
     """Grava o pick e devolve o id, ou None se ja' existia."""
     f, pernas = c["fixture"], c["pernas"]
     prob = c.get("probabilidade")
+    # CONFIANCA E PROBABILIDADE DEIXARAM DE SER O MESMO NUMERO (V2).
+    # Ate' 11/09 as duas colunas recebiam `prob`, o que tornava `confidence`
+    # uma copia sem informacao. Confianca e' a qualidade da evidencia (amostra,
+    # cobertura, convergencia, desacordo entre modelo e historico); a stake
+    # passa a ser dimensionada por ela, que e' o proposito da coluna.
+    confianca = c.get("confianca") or prob
     stake_pct, stake_units = calculate_stake(
-        confidence=prob, odd=c["odd"], ev=c.get("ev") or 0, pick_type="free",
+        confidence=confianca, odd=c["odd"], ev=c.get("ev") or 0, pick_type="free",
     )
     cur.execute(f"""
         INSERT INTO picks_boost
@@ -336,7 +511,7 @@ def _salvar(cur, c: dict) -> int | None:
         c["odd"], pernas["ft"]["odd"], pernas["ht"]["odd"],
         pernas["ft"]["bookmaker"], pernas["ht"]["bookmaker"],
         pernas["ft"]["market_id"], pernas["ht"]["market_id"],
-        c["score"], prob, prob,
+        c["score"], confianca, prob,
         (c.get("indicadores") or {}).get("confronto", {}).get("prob_over15_ft"),
         (c.get("indicadores") or {}).get("confronto", {}).get("prob_under25_ht"),
         c.get("fair_odd"), c.get("ev"), c.get("edge"),
@@ -370,6 +545,21 @@ def _dados_da_auditoria(c: dict) -> dict:
         "parcelas": ind.get("parcelas"),
         "pontos_fracos": ind.get("pontos_fracos"),
         "amostra": c.get("amostra"),
+        # O suficiente pra responder "por que este jogo nao virou pick?" sem
+        # abrir o engine_debug -- que so' existe pro pick SALVO. O codigo e' o
+        # que vira GROUP BY no painel; o resto e' o numero que o produziu.
+        "codigo": c.get("codigo"),
+        "score_estatistico": ind.get("score_estatistico"),
+        "dimensoes": ind.get("dimensoes"),
+        "penalidades": ind.get("penalidades"),
+        "ht_risk": (ind.get("risco_ht") or {}).get("score"),
+        "tail_risk": (ind.get("tail_risk") or {}).get("score"),
+        "data_quality": (ind.get("qualidade") or {}).get("score"),
+        "convergencia": (ind.get("convergencia") or {}).get("fracao"),
+        "amostra_classe": ind.get("amostra_classe"),
+        "ev": c.get("ev"), "edge": c.get("edge"), "fair_odd": c.get("fair_odd"),
+        "contradicoes": (ind.get("contradicoes") or {}).get("achados"),
+        "gates": (ind.get("veredito") or {}).get("gates"),
     }
 
 
@@ -377,12 +567,25 @@ def run_pick_boost_engine():
     conn = get_connection()
     cur = conn.cursor()
 
+    # Baseline e' cache de PROCESSO. Limpar na entrada evita que uma execucao
+    # longa (ou um processo reaproveitado) carregue o baseline de ontem.
+    baseline.limpar_cache()
+
     with EngineRun(MOTOR, METODO, resumo={
+        "versao": "v2",
         "score_minimo": cfg.SCORE_MINIMO,
         "prob_minima_ft": cfg.PROB_MINIMA_FT,
         "prob_minima_ht": cfg.PROB_MINIMA_HT,
         "faixa_odd_combinada": [cfg.ODD_MIN_COMBINADA, cfg.ODD_MAX_COMBINADA],
         "teto_picks": cfg.MAX_PICKS_POR_RODADA,
+        "ev_minimo": cfg.EV_MINIMO,
+        "edge_minimo": cfg.EDGE_MINIMO,
+        "ht_risk_bloqueia": cfg.HT_RISK_BLOQUEIA,
+        "data_quality_minimo": cfg.DATA_QUALITY_MINIMO,
+        "convergencia_minima": cfg.CONVERGENCIA_MINIMA,
+        "margem_min_ft": cfg.MARGEM_MIN_FT,
+        "divergencia_max": cfg.DIVERGENCIA_MAX,
+        "calibracao": "medida" if cfg.CALIBRACAO_MEDIDA else "sem_medicao",
     }) as run:
         fixtures = _fixtures_de_hoje(cur)
         if not fixtures:
