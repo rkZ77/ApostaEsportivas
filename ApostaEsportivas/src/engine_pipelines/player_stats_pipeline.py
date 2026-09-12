@@ -48,7 +48,7 @@ from services.player_stats_engine import (contradiction, count_model, decision,
                                           opponent_model, quality, selection)
 from services.player_stats_engine import methods as cat
 from services.player_stats_engine import player_history
-from utils.data_br import HOJE_BR, data_br_de
+from utils.data_br import HOJE_BR
 from utils.db_utils import get_connection
 
 MOTOR = "PLAYER_STATS"
@@ -147,7 +147,13 @@ def _dias_desde_a_ultima(atuacoes: list, fixture: dict) -> int | None:
     if not atuacoes:
         return None
     ultima = atuacoes[0].get("match_date")
-    hoje = data_br_de(fixture.get("match_datetime"))
+    # `.date()` DIRETO, sem `data_br_de`: `fixtures.match_datetime` ja' e'
+    # Brasilia (o coletor grava convertido). Passar por `data_br_de` tirava 3
+    # horas de um horario que ja era BR e devolvia o dia anterior pra todo jogo
+    # entre 00:00 e 02:59 BRT, somando um dia falso nesta conta. Ver o
+    # docstring de utils.data_br.data_br_de.
+    inicio = fixture.get("match_datetime")
+    hoje = inicio.date() if inicio else None
     if not ultima or not hoje:
         return None
     try:

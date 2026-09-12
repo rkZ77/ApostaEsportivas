@@ -45,11 +45,24 @@ HOJE_BR = f"((NOW() AT TIME ZONE '{TZ_BR}')::date)"
 
 
 def data_br_de(dt):
-    """Versao Python de `data_br`, pra quando a data ja veio pro processo.
+    """Versao Python de `data_br`: data brasileira de um datetime EM UTC.
 
-    `match_datetime` chega do banco como datetime ingenuo em UTC. Chamar
-    `.date()` direto nele devolve a data UTC -- que e' o dia seguinte pra
-    qualquer jogo a partir de 21:00 de Brasilia. Recebe None e devolve None.
+    CUIDADO COM A COLUNA QUE VOCE ESTA PASSANDO. Ate 2026-09-12 o docstring
+    daqui dizia que "`match_datetime` chega do banco como datetime ingenuo em
+    UTC" -- e o cabecalho deste mesmo modulo, trinta linhas acima, diz o
+    contrario e esta' certo: `fixtures.match_datetime` ja' e' Brasilia, gravado
+    assim por `convert_utc_to_br_naive` no coletor.
+
+    Passar `match_datetime` aqui tirava 3 horas de um horario que ja era
+    brasileiro, jogando pro dia anterior todo jogo entre 00:00 e 02:59 BRT --
+    justamente os jogos de virada de meia-noite que o coletor faz questao de
+    incluir. Era o unico chamador (player_stats_pipeline), e o efeito era um
+    dia a mais em `_dias_desde_a_ultima`.
+
+    Quem usa: coluna em UTC, como `match_statistics.match_date`.
+    Quem NAO usa: `fixtures.match_datetime` -- essa chama `.date()` direto.
+
+    Recebe None e devolve None.
     """
     if dt is None:
         return None
