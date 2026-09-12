@@ -1,20 +1,20 @@
 ﻿import os
 import re
-import requests
 
 from psycopg2.extras import execute_batch
 from utils.db_utils import get_connection
+from utils.api_client import buscar, ApiFootballError, ApiQuotaEsgotada
 from dotenv import load_dotenv, find_dotenv
 from services.pick_engine.stats_model import classify_market
-from services import api_quota
 
 load_dotenv(find_dotenv())
 
+# A chave e' lida e validada aqui pra falhar no import, cedo, em vez de no
+# meio de uma rodada. Quem MONTA o header e' o `api_client`, que e' o unico
+# lugar do motor que fala com a API-Football.
 API_KEY = os.getenv("API_FOOTBALL_KEY")
 if not API_KEY:
     raise RuntimeError("API_FOOTBALL_KEY não definida no .env")
-
-HEADERS = {"x-apisports-key": API_KEY}
 
 # ============================================================
 # CASAS DE APOSTAS PERMITIDAS
@@ -396,8 +396,12 @@ def detect_market_type(bet_id: int, bet_name: str) -> str:
 class OddsCollectorService:
 
     def __init__(self):
-        self.api_url = "https://v3.football.api-sports.io/odds"
         self._casas = None
+        #: Quantas chamadas de odd FALHARAM nesta rodada (rede, HTTP, recusa).
+        #: Separado do contador de cobertura de proposito: cobertura responde
+        #: "a casa cotou este jogo?", isto responde "eu consegui perguntar?".
+        #: Quem decide se a rodada serve pra alimentar motor le' este numero.
+        self._falhas_na_rodada = 0
 
     @property
     def casas(self) -> set:
@@ -501,9 +505,18 @@ class OddsCollectorService:
         mudas = []
         for bm_id in sorted(cobertura):
             r = cobertura[bm_id]
+            # FALHA FORA DO DENOMINADOR. A fracao responde "de quantos jogos
+            # que eu CONSEGUI perguntar esta casa cotou", e jogo que nao deu
+            # pra perguntar nao responde essa pergunta -- misturar os dois
+            # fazia queda de rede parecer casa muda, que e' o diagnostico
+            # errado e manda procurar o defeito no lugar errado (foi o que
+            # custou o dia 05/09).
+            falhou = r.get("falhou", 0)
             total = r["com"] + r["sem"]
             fracao = (r["com"] / total) if total else 0.0
-            print(f"   casa {bm_id}: {r['com']}/{total} jogos ({fracao * 100:.0f}%)")
+            sufixo = f" · {falhou} falha(s) de API" if falhou else ""
+            print(f"   casa {bm_id}: {r['com']}/{total} jogos "
+                  f"({fracao * 100:.0f}%){sufixo}")
             if total and fracao < self.COBERTURA_MINIMA:
                 mudas.append(bm_id)
         if mudas:
@@ -517,6 +530,11 @@ class OddsCollectorService:
             # "a API parou de servir essa casa".
             print("[ODDS] Pra saber se e' da API: "
                   "DB_ENV=prod python src/scripts/checar_casas_na_api.py")
+
+        if self._falhas_na_rodada:
+            print(f"[ODDS] {self._falhas_na_rodada} chamada(s) FALHARAM nesta "
+                  f"rodada (rede/HTTP/recusa). Isso nao e' 'a casa nao cotou': "
+                  f"sao jogos que ficaram sem preco por defeito nosso.")
 
     # --------------------------------------------------------
     # DETECTA SIDE (home / away / total)
