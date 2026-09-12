@@ -82,7 +82,13 @@ MIN_LEG_SCORE_PARA_TRIPLA = 0.70
 MIN_EV_PERNA = 0.0                # estritamente positivo
 MIN_EDGE_PERNA = 0.05
 MIN_DATA_QUALITY = 0.50
-MIN_SAMPLE_QUALITY = 0.30
+MIN_SAMPLE_QUALITY = 0.30         # na pratica isto e' AMOSTRA >= 5, um jogo
+                                  # a mais que o piso do motor (min_amostra=4).
+                                  # E' proposital e e' a regra que separa a
+                                  # perna de bilhete da pick simples: uma pick
+                                  # de 4 jogos que erra custa uma unidade, uma
+                                  # perna de 4 jogos que erra derruba o bilhete
+                                  # inteiro junto com pernas que acertaram.
 MIN_PROB_CALIBRADA = 0.58         # abaixo do piso cru (0.60) de proposito: a
                                   # calibracao so' DESCE, e cobrar 0.60 depois
                                   # dela seria cobrar 0.60 duas vezes.

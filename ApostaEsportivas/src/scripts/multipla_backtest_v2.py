@@ -96,6 +96,38 @@ def _rastro_do_dia(cur, dias: int) -> dict:
     return indice
 
 
+def _pool_por_dia(cur, dias: int) -> dict:
+    """{match_date: [perna, ...]} a partir dos candidatos ELEGIVEIS que o motor
+    viu em cada dia. E' o insumo da simulacao de volume.
+
+    So' entra `eligible=true`: sao os candidatos que passaram nos gates do
+    motor pre-jogo, exatamente o pool que a multipla recebe em producao.
+    """
+    cur.execute("""
+        SELECT match_date, fixture_id, home_team, away_team, candidates
+          FROM engine_decisions
+         WHERE pipeline = 'MULTIPLA_ENGINE'
+           AND match_date >= CURRENT_DATE - %s::int
+    """, (dias,))
+    por_dia = defaultdict(list)
+    for match_date, fixture_id, home, away, candidatos in cur.fetchall():
+        for c in _json(candidatos):
+            if not c.get("eligible") or c.get("amostra") is None:
+                continue
+            por_dia[match_date].append(_perna_reconstruida(
+                {"fixture_id": fixture_id, "market_type": c.get("market_type"),
+                 "line": c.get("line"), "odd": c.get("odd"),
+                 "prob_real": c.get("taxa_real"), "confidence": c.get("confidence"),
+                 "bet_house": None, "home_team": home, "away_team": away,
+                 # Os ids de time nao estao no log de decisao. Sem eles a regra
+                 # de "mesma equipe" nao pode agir, e a simulacao fica
+                 # PERMISSIVA nesse ponto -- mais um motivo pra o numero ser
+                 # teto, e nao previsao.
+                 "home_team_id": None, "away_team_id": None, "league_id": None},
+                fixture_id, {(fixture_id, c.get("market_type"), c.get("line")): c}))
+    return por_dia
+
+
 def _perna_reconstruida(leg: dict, fixture_id, rastro: dict) -> dict:
     """Uma perna no formato que a V2 le, com o que o historico permite.
 
@@ -158,7 +190,13 @@ def reprocessar(bilhete: dict, rastro: dict) -> dict | None:
     for leg in legs:
         fixture_id = leg.get("fixture_id")
         p = _perna_reconstruida(leg, fixture_id, rastro)
-        if p["taxa_real"] is None or p["odd"] is None:
+        # PERNA SEM RASTRO NAO E' PERNA REPROVADA, e confundir as duas coisas
+        # foi o primeiro resultado errado que este script produziu: sem a linha
+        # do log, `amostra`, `ev` e `edge` vem None, o gate reprova nos tres --
+        # e a tabela anunciava "a V2 cortaria 6 bilhetes por amostra" quando a
+        # amostra apenas nao tinha sido gravada. O bilhete inteiro sai da conta.
+        if (p["taxa_real"] is None or p["odd"] is None
+                or p["amostra"] is None or p["ev"] is None or p["edge"] is None):
             return None
         pernas.append(component.avaliar(p))
 
@@ -322,6 +360,57 @@ def secao_volume(linhas):
         _linha(f"bilhete #{p} do dia", d["n"], d["g"], d["r"], d["lucro"])
 
 
+def secao_simulacao(_linhas, pool_por_dia=None):
+    """QUANTOS BILHETES A V2 PUBLICARIA, dia a dia, a partir do pool de
+    candidatos que o motor VIU naquele dia (engine_decisions).
+
+    E' a unica secao que nao olha bilhete publicado, e e' a que responde a
+    pergunta que mais pode derrubar a V2: a faixa apertada (2.00-3.00) somada
+    aos gates novos zera o produto?
+
+    O que ela NAO e': uma previsao de ROI. Nenhum destes bilhetes existiu,
+    entao nao ha' resultado pra eles. E' contagem de OFERTA, nao de acerto.
+
+    As mesmas ressalvas de sempre: data quality, risco e projecao entram
+    neutros, e `bookmaker_odds` nao foi gravado -- a regra de CASA UNICA nao
+    pode ser aplicada aqui, entao o numero de bilhetes e' um TETO.
+    """
+    from services.pick_engine_multipla import portfolio
+
+    print()
+    print("== SIMULACAO DE VOLUME: quantos bilhetes a V2 publicaria ==")
+    print("   (a partir do pool de candidatos do dia · e' TETO: sem casa unica)")
+    if not pool_por_dia:
+        print("   Sem pool de candidatos no periodo.")
+        return
+
+    distribuicao = defaultdict(int)
+    total_bilhetes = 0
+    motivos = defaultdict(int)
+    for dia, pernas in sorted(pool_por_dia.items()):
+        aprovadas, _ = component.avaliar_pool(pernas)
+        jogos = len({component.jogo(p) for p in aprovadas})
+        resultado = portfolio.montar(aprovadas, jogos_elegiveis=jogos)
+        quantos = len(resultado["multiples"])
+        distribuicao[quantos] += 1
+        total_bilhetes += quantos
+        if not quantos:
+            motivos[resultado.get("reason") or "?"] += 1
+
+    dias = sum(distribuicao.values())
+    for quantos in sorted(distribuicao):
+        n = distribuicao[quantos]
+        print(f"  {quantos} bilhete(s) no dia                        "
+              f"dias={n:<4} ({n / dias * 100:5.1f}% dos dias)")
+    print(f"  {'-' * 78}")
+    print(f"  {dias} dia(s) · {total_bilhetes} bilhete(s) · "
+          f"media {total_bilhetes / dias:.2f} por dia")
+    if motivos:
+        print("   nos dias sem bilhete, o motivo:")
+        for codigo, n in sorted(motivos.items(), key=lambda kv: -kv[1]):
+            print(f"     {codigo:<48} {n}")
+
+
 SECOES = {
     "portas": secao_portas,
     "faixas": secao_faixas,
@@ -329,6 +418,7 @@ SECOES = {
     "estrutura": secao_estrutura,
     "calibracao": secao_calibracao,
     "volume": secao_volume,
+    "simulacao": secao_simulacao,
 }
 
 
@@ -352,6 +442,7 @@ def main():
     colunas = [d[0] for d in cur.description]
     bilhetes = [dict(zip(colunas, r)) for r in cur.fetchall()]
     rastro = _rastro_do_dia(cur, args.dias)
+    pool_por_dia = _pool_por_dia(cur, args.dias)
     cur.close()
     conn.close()
 
@@ -374,7 +465,10 @@ def main():
         return
 
     for nome in (args.secao or list(SECOES)):
-        SECOES[nome](linhas)
+        if nome == "simulacao":
+            secao_simulacao(linhas, pool_por_dia)
+        else:
+            SECOES[nome](linhas)
 
     print("\nLEIA O CORTE COMO PISO: data quality, risco e projecao nao foram "
           "gravados nestes bilhetes e entram neutros. A V2 real corta pelo "
