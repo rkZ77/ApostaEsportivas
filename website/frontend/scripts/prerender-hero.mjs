@@ -158,9 +158,22 @@ const estatico = `<div data-hero-estatico class="min-h-screen bg-surface-0 text-
  * Marcar o <html> com um script sincrono no <head> resolve antes da primeira
  * pintura · CSS sozinho nao sabe o caminho da URL, e esperar JavaScript de
  * modulo seria tarde demais (e o flash aconteceria).
+ *
+ * E ELE SAI DO DOM, NAO SO' DA TELA (12/09/2026).
+ *
+ * Esconder por CSS resolvia o flash e parava ali: o <h1> do hero da Home
+ * continuava no documento de /resultados, /planos, /blog e /performance, e o
+ * Google renderiza JavaScript -- ele via duas <h1> em cada pagina, a primeira
+ * sendo "Palpites de futebol com valor calculado", que nao e' o assunto
+ * daquela pagina.
+ *
+ * O `display:none` continua porque e' ele que garante o "antes da primeira
+ * pintura"; a remocao acontece no DOMContentLoaded, quando o <body> ja'
+ * existe. Fora da Home o no' nunca mais e' necessario, e na Home este ramo nem
+ * roda (quem o remove la' e' o proprio componente, ao montar).
  */
 const soNaHome = `<style>[data-fora-da-home] [data-hero-estatico]{display:none}</style>
-    <script>if(location.pathname!=='/')document.documentElement.setAttribute('data-fora-da-home','')</script>
+    <script>if(location.pathname!=='/'){document.documentElement.setAttribute('data-fora-da-home','');document.addEventListener('DOMContentLoaded',function(){var h=document.querySelector('[data-hero-estatico]');if(h)h.remove()})}</script>
   </head>`
 
 pagina = pagina.replace(MARCA, estatico).replace('</head>', soNaHome)

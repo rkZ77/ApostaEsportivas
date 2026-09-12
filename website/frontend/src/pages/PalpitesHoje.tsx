@@ -104,7 +104,7 @@ export default function PalpitesHoje() {
         <SpinnerBlock />
       ) : (
         <>
-          {data && <PlacarPublico dados={data.desempenho} rotulo="Histórico público acumulado, todos os campeonatos." />}
+          {data?.desempenho && <PlacarPublico dados={data.desempenho} rotulo="Histórico público acumulado, todos os campeonatos." />}
           <ListaDeJogos jogos={jogos} comLiga titulo="Jogos de hoje na fila da análise" />
           <LinksDeLigas ligas={ligas} />
           <UltimosPicks

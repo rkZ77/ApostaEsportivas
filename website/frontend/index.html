@@ -143,15 +143,37 @@
 
     <!-- Primary Meta -->
     <title>Pick IA · Picks de Futebol com Inteligência Artificial</title>
-    <meta name="description" content="Picks de futebol com IA e análise estatística real. Picks VIP e ao vivo, múltiplas, alavancagem, Pick Boost, estatística de jogador e mercados de faltas e defesas. Brasileirão e as principais ligas europeias. Histórico público e teste grátis de 2 dias." />
+    <meta data-rh="true" name="description" content="Picks de futebol com IA e análise estatística real. Picks VIP e ao vivo, múltiplas, alavancagem, Pick Boost, estatística de jogador e mercados de faltas e defesas. Brasileirão e as principais ligas europeias. Histórico público e teste grátis de 2 dias." />
     <meta name="keywords" content="picks futebol, apostas esportivas IA, inteligência artificial apostas, palpites futebol hoje, picks brasileirão, picks ao vivo, pick boost, estatística de jogador, mercado de faltas, defesas de goleiro, pick ia, apostas com IA" />
-    <meta name="robots" content="index, follow" />
+    <!-- `data-rh` pelo mesmo motivo do canonical: sem ele, toda tela privada
+         servia DUAS diretivas contraditorias -- esta e o "noindex, nofollow"
+         que o PageShell publica. Agora o Helmet e' dono da tag: nas paginas
+         publicas ela simplesmente sai (index,follow ja' e' o padrao do robo) e
+         nas privadas fica so' o noindex. -->
+    <meta data-rh="true" name="robots" content="index, follow" />
     <meta name="author" content="Pick IA" />
     <!-- Reescrita em tempo de execucao pela troca de tema · ver src/lib/theme.ts -->
     <meta name="theme-color" content="#0a0a0c" />
 
-    <!-- Canonical -->
-    <link rel="canonical" href="https://pickia.com.br/" />
+    <!-- Canonical e description levam `data-rh` de proposito (12/09/2026).
+
+         Sem esse atributo o react-helmet-async nao os SUBSTITUI: ele acrescenta
+         os dele ao lado. Medido em producao, toda pagina secundaria servia dois
+         <link rel=canonical> -- o primeiro apontando pra home -- e duas
+         <meta name=description>. Com mais de um canonical o Google pode
+         ignorar os dois, e quem pagava eram justamente as landing pages de
+         busca (/palpites-de-futebol-hoje, /palpites/<liga>, /resultados).
+
+         Com `data-rh`, o Helmet passa a ser dono das duas tags: o que esta
+         aqui vale enquanto o React nao subiu, e some assim que a pagina
+         declara a sua. O PageShell garante que TODA pagina declare (ver a nota
+         la'), entao nunca sobra pagina sem nenhuma.
+
+         As tags de Open Graph NAO levam `data-rh` e continuam so' aqui: quem
+         as le' e' o robo do WhatsApp e do Facebook, que nao executa
+         JavaScript. Tirar daqui pra montar por pagina quebraria a previa do
+         link compartilhado, que e' um canal de verdade do produto. -->
+    <link data-rh="true" rel="canonical" href="https://pickia.com.br/" />
 
     <!-- Open Graph -->
     <meta property="og:type"        content="website" />

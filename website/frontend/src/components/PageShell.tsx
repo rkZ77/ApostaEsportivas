@@ -1,4 +1,5 @@
 import { Helmet } from 'react-helmet-async'
+import { useLocation } from 'react-router-dom'
 import { cn } from '../lib/cn'
 import Navbar from './Navbar'
 import Footer from './Footer'
@@ -16,6 +17,20 @@ import { useRevelacao, classesRevelacao, FADE_REVELACAO_MS } from '../hooks/useR
  *
  * A escala de largura e o porquê de cada degrau vivem em lib/pageWidth.
  */
+
+/** Origem do site. Fixa, e não `window.location.origin`: o canonical precisa
+ *  apontar pro endereço público mesmo quando a página é aberta por
+ *  localhost:5173 ou pelo domínio do Railway. */
+const ORIGEM = 'https://pickia.com.br'
+
+/** Description de fallback · a mesma do index.html. Serve as cinco páginas que
+ *  não passam uma própria (Login, VerifyEmail, ForgotPassword, NotFound e o
+ *  link público de pick), que hoje não competem na busca. */
+const DESCRICAO_PADRAO =
+  'Picks de futebol com IA e análise estatística real. Picks VIP e ao vivo, ' +
+  'múltiplas, alavancagem, Pick Boost, estatística de jogador e mercados de ' +
+  'faltas e defesas. Brasileirão e as principais ligas europeias. Histórico ' +
+  'público e teste grátis de 2 dias.'
 
 export interface PageBar {
   title: React.ReactNode
@@ -82,22 +97,39 @@ export default function PageShell({
   revelacao?: boolean
 }) {
   const revelado = useRevelacao(!revelacao)
+  const { pathname } = useLocation()
   const fullTitle = title
     ? (title.includes('Pick IA') ? title : `${title} | Pick IA`)
     : undefined
 
+  /*
+   * O <Helmet> daqui é INCONDICIONAL, e as duas tags abaixo saem sempre.
+   *
+   * O index.html marca a description e o canonical dele com `data-rh`, ou
+   * seja, entrega os dois pro Helmet gerenciar (ver a nota lá). A partir daí
+   * quem não declarar fica sem nenhum -- e por isso não dá pra deixar a
+   * emissão condicionada a a página ter passado o texto.
+   *
+   * `canonical` continua aceitando um valor explícito porque há caso em que a
+   * URL canônica não é a que o usuário está vendo (a página de liga monta a
+   * dela a partir do slug). Quando ninguém passa, o próprio caminho responde,
+   * sem query string: `?aba=vip` não é outra página.
+   *
+   * Página com noindex não declara canonical de propósito. Ela não deve entrar
+   * no índice, e apontar uma URL canônica é justamente pedir para entrar.
+   */
+  const canonicalFinal = noindex ? null : (canonical ?? `${ORIGEM}${pathname}`)
+
   return (
     <div className={cn('min-h-screen bg-surface-0 text-ink-1 flex flex-col', className)}>
-      {(fullTitle || description || noindex || canonical) && (
-        <Helmet>
-          {fullTitle && <title>{fullTitle}</title>}
-          {description && <meta name="description" content={description} />}
-          {canonical && <link rel="canonical" href={canonical} />}
-          {/* Tela de usuário não deve indexar: o robô só veria a casca vazia,
-              e essas URLs competiam com as páginas públicas na busca. */}
-          {noindex && <meta name="robots" content="noindex, nofollow" />}
-        </Helmet>
-      )}
+      <Helmet>
+        {fullTitle && <title>{fullTitle}</title>}
+        <meta name="description" content={description ?? DESCRICAO_PADRAO} />
+        {canonicalFinal && <link rel="canonical" href={canonicalFinal} />}
+        {/* Tela de usuário não deve indexar: o robô só veria a casca vazia,
+            e essas URLs competiam com as páginas públicas na busca. */}
+        {noindex && <meta name="robots" content="noindex, nofollow" />}
+      </Helmet>
 
       {nav === true ? <Navbar width={width} /> : nav || null}
 

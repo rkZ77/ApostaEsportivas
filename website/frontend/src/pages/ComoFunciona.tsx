@@ -196,10 +196,14 @@ export default function ComoFunciona() {
         <div className="inline-flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-sm px-4 py-1.5 mb-6">
           <span className="text-green-400 text-xs font-bold">Bem-vindo ao PickIA</span>
         </div>
-        <h1 className="text-3xl sm:text-4xl font-bold mb-4 leading-tight">
+        {/* h2, e nao h1: a barra do PageShell ja publica o <h1> da pagina
+            ("Como funciona"), e ate 12/09 esta tela servia as duas -- dois
+            titulos de primeiro nivel disputando o assunto no mesmo documento.
+            O tamanho na tela e o mesmo; muda so o nivel semantico. */}
+        <h2 className="text-3xl sm:text-4xl font-bold mb-4 leading-tight">
           Como a plataforma<br />
           <span className="text-accent-ink">funciona</span>
-        </h1>
+        </h2>
         <p className="text-ink-2 text-sm max-w-lg mx-auto leading-relaxed">
           O PickIA usa inteligência artificial para gerar picks diários com base em dados estatísticos reais.
           Veja tudo que você tem disponível.
