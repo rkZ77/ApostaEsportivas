@@ -92,6 +92,50 @@ def registrar(headers, origem: str = "motor") -> None:
         pass
 
 
+def restante_conhecido() -> int | None:
+    """Quantas requisicoes sobraram hoje, se alguma resposta ja contou.
+
+    `None` = ainda nao sabemos (primeira chamada da rodada, ou headers
+    ausentes). Nao e' zero, e a diferenca importa: quem confundir os dois se
+    recusa a comecar a rodada.
+    """
+    with _lock:
+        if _estado["dia"] != date.today():
+            return None
+        return _estado["restante_min"]
+
+
+def pode_gastar(quantas: int, margem: int = 50) -> bool:
+    """Da' pra gastar `quantas` requisicoes sem raspar a cota do dia?
+
+    POR QUE ISTO EXISTE (2026-09-12)
+    --------------------------------
+    O modulo inteiro era so' MEDICAO: `registrar()` anota o que cada origem
+    gastou e o painel mostra. Nenhum coletor perguntava nada antes de entrar
+    num laco de centenas de requisicoes, entao a cota acabava NO MEIO da
+    coleta -- e ai' a API passa a responder HTTP 200 com `errors`, o que antes
+    de `utils/api_client.py` virava "a casa nao cotou este jogo".
+
+    Com o `api_client` levantando `ApiQuotaEsgotada`, o estouro deixou de ser
+    silencioso. Isto aqui e' o passo seguinte: deixar de estourar. Perguntar
+    antes custa zero requisicao, e parar de proposito com metade da lista e'
+    melhor que descobrir o limite batendo nele.
+
+    `margem` e' a reserva pro que nao passa por aqui (status sync, resultado,
+    motor ao vivo). Sem ela, um laco autorizado a gastar ate o ultimo credito
+    deixaria a liquidacao do dia sem cota.
+
+    CONSULTIVO, NAO IMPEDITIVO: devolve bool e nao levanta. `True` quando
+    ainda nao ha medida (`None`) -- na duvida a coleta roda, porque recusar
+    por falta de informacao pararia o motor num dia em que nada ha' de errado.
+    Ver o cabecalho do modulo: instrumentacao nao pode derrubar o motor.
+    """
+    restante = restante_conhecido()
+    if restante is None:
+        return True
+    return restante - quantas >= margem
+
+
 def _gravar(dia: date, limite: int | None, restante: int, origem: str) -> None:
     """UPSERT do minimo do dia, na MESMA tabela que o site escreve.
 

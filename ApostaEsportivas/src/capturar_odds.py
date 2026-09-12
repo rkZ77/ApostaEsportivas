@@ -1,6 +1,8 @@
 import time
 from utils.db_utils import get_connection
 from utils.data_br import HOJE_BR
+from utils.api_client import ApiQuotaEsgotada
+from services import api_quota
 from collectors.odds_collector_service import OddsCollectorService, prune_odds_snapshots
 
 
@@ -171,8 +173,23 @@ class OddsMain:
         print(f"[ODDS] Fixtures NS/TBD encontrados: {len(fixtures)}")
 
         total_start = time.perf_counter()
+        casas = len(self.odds_collector.casas)
 
         for index, fixture_id in enumerate(fixtures, start=1):
+
+            # PERGUNTA ANTES DE GASTAR. Cada fixture custa uma requisicao POR
+            # CASA, e a cota e' do dia: estourar no meio da lista deixa a
+            # coleta pela metade E ainda tira credito da liquidacao de
+            # resultado, que roda depois. Parar de proposito com aviso e' o
+            # unico desfecho aqui que nao produz dado incompleto em silencio.
+            if not api_quota.pode_gastar(casas):
+                restante = api_quota.restante_conhecido()
+                print(f"\n[ODDS] COLETA INTERROMPIDA em {index - 1}/{len(fixtures)} "
+                      f"fixtures: cota do dia quase no fim (restam {restante}). "
+                      f"Os jogos seguintes ficaram SEM ODD -- o motor nao vai "
+                      f"gerar pick pra eles, e isso e' falta de coleta, nao "
+                      f"falta de valor.")
+                break
 
             print(
                 f"\n[ODDS] ({index}/{len(fixtures)}) Processando fixture {fixture_id}")
@@ -181,7 +198,13 @@ class OddsMain:
 
             # ---------------- API ----------------
             api_start = time.perf_counter()
-            data = self.odds_collector.fetch_odds_by_fixture(fixture_id)
+            try:
+                data = self.odds_collector.fetch_odds_by_fixture(fixture_id)
+            except ApiQuotaEsgotada:
+                print(f"\n[ODDS] COLETA INTERROMPIDA em {index - 1}/{len(fixtures)} "
+                      f"fixtures: a API recusou por cota esgotada. Insistir nos "
+                      f"jogos seguintes so' produz recusas identicas.")
+                break
             api_time = time.perf_counter() - api_start
             print(f"[TIMER] API levou {api_time:.4f}s")
 
