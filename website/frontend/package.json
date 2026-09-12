@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "prebuild": "node scripts/gerar-blog-index.mjs",
+    "typecheck": "tsc --noEmit",
     "build": "tsc && vite build && node scripts/prerender-hero.mjs",
     "build:comprimir": "node scripts/precomprimir.mjs",
     "preview": "vite preview"
