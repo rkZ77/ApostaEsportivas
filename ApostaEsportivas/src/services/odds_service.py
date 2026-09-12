@@ -70,7 +70,20 @@ class OddsService:
                 v.team_id,
                 v.team_name,
                 v.value_name,
-                v.line_value
+                v.line_value,
+                -- IDADE DA COTACAO, em segundos. Ate 2026-09-12 o motor
+                -- pre-jogo recebia preco sem carimbo de tempo nenhum: a coluna
+                -- existia e esta query nao a lia, entao nao havia como sequer
+                -- perguntar "esta odd e' de quando?".
+                --
+                -- O TRUNCATE diario (capturar_odds.cleanup_all_odds) impede
+                -- usar a odd de ONTEM, e isso resolve metade do problema. A
+                -- outra metade e' dentro do dia: como nada roda agendado, o
+                -- intervalo entre coletar odd e gerar pick e' a rotina do
+                -- operador, nao uma regra do sistema. Coletar as 08:00 e gerar
+                -- as 18:00 fazia o motor decidir sobre um mercado de 10 horas
+                -- atras chamando aquilo de preco atual.
+                EXTRACT(EPOCH FROM (NOW() - v.updated_at))::int AS odd_idade_seg
             FROM odds_values v
             WHERE v.fixture_id = %s
             ORDER BY v.market_row_id, v.bookmaker_id;
@@ -95,6 +108,7 @@ class OddsService:
                 "bookmaker":      r["bookmaker_name"],
                 "bookmaker_name": r["bookmaker_name"],
                 "team":           r["team_name"] if r["team_id"] else None,
+                "odd_idade_seg":  r.get("odd_idade_seg"),
             })
 
         return structured
@@ -231,6 +245,18 @@ class OddsService:
                 # já metade do desalinho a menos que pegar a maior.
                 "consensus_odd":    round(median(all_odds), 2),
                 "bookmakers_count": len(bk_odds),
+                # A MAIS VELHA das casas que sustentam esta linha. O recorte e'
+                # pessimista de proposito: a linha so' existe porque o conjunto
+                # de casas a cota, e o conjunto so' e' tao atual quanto o seu
+                # membro mais atrasado. Usar a mais nova deixaria uma casa
+                # parada ha' horas passar escondida atras de outra recem
+                # coletada -- que e' exatamente o caso que este numero existe
+                # pra denunciar.
+                "odd_idade_seg": max(
+                    (r["odd_idade_seg"] for r in rows
+                     if r.get("odd_idade_seg") is not None),
+                    default=None,
+                ),
                 "odds_range": {
                     "min": round(min(all_odds), 2),
                     "max": round(max(all_odds), 2),

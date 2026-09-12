@@ -615,6 +615,14 @@ def analyze_fixture_markets(
                 "value":            m.get("value"),
                 "line":             m.get("line"),
                 "value_label":      m.get("value_label"),
+                # Idade da cotacao que sustenta esta linha, em segundos (a mais
+                # velha das casas -- ver odds_service.load_odds_structured).
+                # NAO decide nada hoje, de proposito: e' medicao primeiro,
+                # limiar depois, pelo mesmo motivo do piso de amostra medido.
+                # Sem isto gravado no rastro nao ha' como responder "as picks
+                # ruins usavam odd velha?" -- e essa e' a pergunta que precisa
+                # de resposta antes de escolher qualquer numero de corte.
+                "odd_idade_seg":    m.get("odd_idade_seg"),
                 # A odd de AVALIACAO e' a que vira `odd` do pick -- e' ela que
                 # passa nos gates, no line_score e na faixa, e e' ela que o
                 # site publica. Publicar a melhor casa aqui criaria uma pick
