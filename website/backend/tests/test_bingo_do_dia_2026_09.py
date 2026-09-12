@@ -312,18 +312,43 @@ class TestOGateDeAdmin:
 
     # ── O gate em si ──────────────────────────────────────────────────────
 
-    def test_admin_ve_e_assinante_nao(self):
-        import feature_flags as ff
-        assert ff.bingo_visivel({"plan": "admin"}) is True
-        assert ff.bingo_visivel({"plan": "vip"}) is False
-        assert ff.bingo_visivel({"plan": "free"}) is False
+    def test_o_gate_fechado_deixa_so_o_admin(self):
+        """A REGRA do gate, medida com ele FECHADO, e nao o valor da flag.
 
-    def test_o_publico_sem_sessao_tambem_nao_ve(self):
-        """`user=None` e' o endpoint publico. Um total que conta cartela
-        invisivel e' pior que nao contar: o usuario soma os produtos da tela e
-        nao chega no numero que o site mostra."""
+        A flag abriu em 12/09 e estes dois testes afirmavam o valor dela --
+        eram justamente os que o comentario da classe dizia pra nao escrever.
+        Agora o teste liga a flag no lugar (monkeypatch) e cobra a regra, que
+        e' a coisa que nao pode quebrar quando o produto for escondido de novo.
+        """
         import feature_flags as ff
-        assert ff.bingo_visivel(None) is False
+        monkey = ff.BINGO_BETA_ADMIN_ONLY
+        ff.BINGO_BETA_ADMIN_ONLY = True
+        try:
+            assert ff.bingo_visivel({"plan": "admin"}) is True
+            assert ff.bingo_visivel({"plan": "vip"}) is False
+            assert ff.bingo_visivel({"plan": "free"}) is False
+            # `user=None` e' o endpoint publico: com o gate fechado ele nao ve'
+            # o produto nem no placar. Um total que conta cartela invisivel e'
+            # pior que nao contar -- o usuario soma os produtos da tela e nao
+            # chega no numero que o site mostra.
+            assert ff.bingo_visivel(None) is False
+        finally:
+            ff.BINGO_BETA_ADMIN_ONLY = monkey
+
+    def test_o_gate_aberto_vale_pra_todo_mundo(self):
+        """Aberto, `bingo_visivel` para de ser um filtro: some' do caminho e
+        deixa o paywall decidir (_FOLLOW_SO_VIP em banca.py, teaser em
+        suggestions.py). Inclusive pro publico sem sessao, que passa a ver a
+        cartela liquidada no placar, com o peso de 1u."""
+        import feature_flags as ff
+        monkey = ff.BINGO_BETA_ADMIN_ONLY
+        ff.BINGO_BETA_ADMIN_ONLY = False
+        try:
+            assert ff.bingo_visivel({"plan": "vip"}) is True
+            assert ff.bingo_visivel({"plan": "free"}) is True
+            assert ff.bingo_visivel(None) is True
+        finally:
+            ff.BINGO_BETA_ADMIN_ONLY = monkey
 
     def test_a_flag_e_uma_constante_e_nao_uma_env(self):
         """Variavel de ambiente que ninguem configura e' so' um caminho a mais

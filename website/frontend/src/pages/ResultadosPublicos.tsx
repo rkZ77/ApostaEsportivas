@@ -180,12 +180,13 @@ interface FechamentoMes {
    picks_goleiros parou de crescer quando o Player Stats nasceu, e o mercado
    aparecia em menos de 1% dos jogos ate' la'. O historico dele continua no
    placar somado -- so' nao vale uma linha num menu que a pessoa le' hoje. */
-/* O Bingo so' entra no filtro pra quem pode ve-lo (em teste, admin · ver
-   `bingoVisivel` em config.ts). Sem isso a lista ofereceria um produto que a
-   tela nao mostra em lugar nenhum, e o recorte dele viria vazio -- o backend
-   ja' derruba a fonte do UNION publico. `SOURCE_LABELS` continua com a chave:
-   ela nomeia a fonte na quebra por produto, e o historico nao pode aparecer
-   sem nome. */
+/* O Bingo so' entra no filtro pra quem pode ve-lo. Liberado pra todos em
+   12/09, entao hoje isso e' todo mundo, inclusive quem chega sem sessao -- o
+   Bingo passa a somar no placar publico com o peso de 1u (stake_plan.py).
+   A checagem fica de pe' porque esconder de novo tem que continuar sendo uma
+   linha: sem ela a lista ofereceria um produto que a tela nao mostra em lugar
+   nenhum, e o recorte viria vazio, ja' que o backend derruba a fonte do UNION
+   publico. Ver `bingoVisivel` em config.ts. */
 const PRODUTOS_BASE = [
   'all', 'vip', 'live', 'boost', 'multiplas', 'bingo', 'alavancagem',
   'free', 'player_stats', 'faltas',

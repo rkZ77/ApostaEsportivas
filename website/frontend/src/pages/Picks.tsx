@@ -158,7 +158,8 @@ function TabBar({ tab, setTab, canSeeVip, verAoVivo, verBingo, temFaltasHoje, co
   tab: Tab; setTab: (t: Tab) => void; canSeeVip: boolean
   /** Ver `podeVerAoVivo` no Picks · admin enxerga antes do produto abrir. */
   verAoVivo: boolean
-  /** Bingo do Dia em teste: só admin · ver `bingoVisivel` em config.ts. */
+  /** O Bingo entra na barra? Liberado pra todos em 12/09, então hoje isto é
+   *  sempre true · ver `bingoVisivel` em config.ts. */
   verBingo: boolean
   /** A aba Pick Falta some no dia sem pick: falta e' o metodo mais
    *  seletivo do motor, e aba vazia todo dia le como produto morto. */
@@ -284,7 +285,9 @@ function TabBar({ tab, setTab, canSeeVip, verAoVivo, verBingo, temFaltasHoje, co
        explicar qual é qual, que é justamente o serviço da barra. */
     /* `oculta` e nao remocao da lista: a aba some da barra, mas o hash
        `/picks#bingo` continua sendo um destino valido pra quem PODE ver.
-       Ver `bingoVisivel` em config.ts · em teste, so' admin. */
+       Ver `bingoVisivel` em config.ts. Liberado pra todos em 12/09, entao a
+       aba esta' na barra de todo mundo -- o cadeado de `premiumOnly` e' que
+       separa quem assina de quem nao assina, como nos outros produtos VIP. */
     { key: 'bingo',        label: 'Bingo do Dia',    premiumOnly: true,
       oculta: !verBingo },
     { key: 'alavancagem',  label: 'Alavancagem',      premiumOnly: true },
@@ -2606,12 +2609,14 @@ export default function Picks() {
    */
   const podeVerAoVivo = LIVE_PICKS_ENABLED || isAdmin
   /*
-   * Quem enxerga o Bingo do Dia · em teste com dado de produção (10/09).
+   * Quem enxerga o Bingo do Dia · liberado pra todos em 12/09, depois do teste
+   * com dado de produção que começou em 10/09.
    *
    * O corte que VALE é o do servidor (`feature_flags.py`): sem cartela na
    * resposta, não há o que desenhar nem o que ler no DevTools. Isto aqui é o
    * par dele no front, e serve pra tela não anunciar o que não vem -- uma aba
-   * "Bingo do Dia" que abre sempre vazia é pior do que aba nenhuma.
+   * "Bingo do Dia" que abre sempre vazia é pior do que aba nenhuma. A função
+   * fica no lugar porque esconder de novo tem que continuar sendo uma linha.
    */
   const verBingo = bingoVisivel(isAdmin)
   const canSeeVip = isVip || isAdmin

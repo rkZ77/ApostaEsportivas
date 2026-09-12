@@ -22,32 +22,25 @@ export const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY ?? ''
 export const LIVE_PICKS_ENABLED = true
 
 /**
- * Bingo do Dia · em teste com dado de PRODUÇÃO, visível só para admin.
+ * Bingo do Dia · LIBERADO para todos os usuários em 12/09/2026.
  *
- * O produto está INTEIRO no código (motor, liquidação, banca, placar) e agora
- * roda em `main`, contra o banco de produção · decisão do usuário em 10/09.
- * Medir em dev não servia: dev enxerga 8 ligas e produção enxerga 14, então a
- * cartela de lá não é a cartela que o assinante receberia.
+ * O produto passou 09/09 a 12/09 em teste com dado de PRODUÇÃO, visível só
+ * para admin: medir em dev não servia, porque dev enxerga 8 ligas e produção
+ * enxerga 14, então a cartela de lá não é a cartela que o assinante receberia.
+ * A medição acabou e a flag virou.
  *
- * O QUE MUDOU EM 10/09: até aqui o Bingo era escondido por um booleano do
- * front que subia `false` para `main`. Com o motor publicando cartela em
- * produção, esconder no front deixou de bastar -- a resposta de
- * `/api/suggestions/today` traria a cartela inteira para qualquer assinante
- * que abrisse o DevTools. Então o corte de verdade passou a ser o do SERVIDOR
- * (`website/backend/feature_flags.py::BINGO_BETA_ADMIN_ONLY`), e esta
- * constante virou o par dele: mesmo nome, mesmo valor, e o front só deixa de
- * desenhar o que o servidor já não manda.
+ * ISTO NÃO É O PAYWALL. Liberado quer dizer que o produto existe na tela para
+ * quem não é admin: a aba aparece, a seção da aba Hoje aparece e o filtro de
+ * Resultados oferece o Bingo. Quem não assina vê a aba com o mesmo cadeado dos
+ * outros produtos VIP, e quem decide o DADO continua sendo o backend
+ * (`website/backend/feature_flags.py::BINGO_BETA_ADMIN_ONLY`, o par desta
+ * constante, com o mesmo nome de propósito, para não saírem de sincronia).
  *
- * PARA LIBERAR PARA TODO MUNDO são duas linhas, e as duas aparecem no diff:
- * esta e a do `feature_flags.py`. Variável de ambiente já sumiu sem rastro uma
- * vez neste projeto (ver LIVE_PICKS_ENABLED acima).
- *
- * Os lugares que `bingoVisivel` fecha: a aba na barra, a seção da aba Hoje e o
- * filtro de produto em Resultados. O /admin NÃO entra na lista: a página
- * inteira já é de admin, e é lá que o produto é gerado e medido durante o
- * teste.
+ * PARA ESCONDER DE NOVO são duas linhas, e as duas aparecem no diff: esta e a
+ * do `feature_flags.py`. Variável de ambiente já sumiu sem rastro uma vez
+ * neste projeto (ver LIVE_PICKS_ENABLED acima).
  */
-export const BINGO_BETA_ADMIN_ONLY = true
+export const BINGO_BETA_ADMIN_ONLY = false
 
 /** O Bingo aparece para ESTE usuário? `isAdmin` vem do useAuth(). */
 export const bingoVisivel = (isAdmin: boolean) => !BINGO_BETA_ADMIN_ONLY || isAdmin
