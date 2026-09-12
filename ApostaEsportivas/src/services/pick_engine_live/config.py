@@ -64,6 +64,14 @@ def _inteiro(nome: str, padrao: int) -> int:
         return padrao
 
 
+def _e_decimal(bruto: str) -> bool:
+    try:
+        float(bruto.strip())
+        return True
+    except (TypeError, ValueError):
+        return False
+
+
 def _decimal(nome: str, padrao: float) -> float:
     try:
         return float(os.getenv(nome, str(padrao)))
@@ -200,6 +208,56 @@ class LiveEngineConfig:
     #: jogo com 0 escanteios aos 20 minutos nao sustenta estimativa nenhuma.
     minutos_minimos_observados: int = 15
 
+    # ── Camada V2: historico, qualidade de dado e contradicao (2026-09-11) ─
+    #: INTERRUPTOR MESTRE DAS PORTAS NOVAS.
+    #:
+    #: True  -> os gates de cobertura, contradicao, alinhamento historico,
+    #:          margem de projecao e EV ajustado REPROVAM o candidato.
+    #: False -> tudo continua sendo calculado e gravado no engine_debug, e
+    #:          NADA e' reprovado por eles ("modo sombra").
+    #:
+    #: O modo sombra existe por causa de um erro que este projeto ja' cometeu e
+    #: documentou (ver `confianca_minima` logo acima): trocar uma formula por
+    #: uma versao mais correta, sozinha, derrubou 6 dos 7 picks abaixo do piso
+    #: -- o que nao e' uma correcao, e' desligar o motor sem dizer. Nenhum dos
+    #: limiares desta secao foi MEDIDO contra resultado; eles sao a regra de
+    #: produto pedida em 2026-09-11, e a forma honesta de descobrir o preco
+    #: deles e' rodar uma semana em sombra e contar quantos picks cada porta
+    #: teria cortado (o `live_backtest.py` faz essa contagem).
+    v2_enforce: bool = True
+
+    #: Cobertura minima de dados pra o pick existir. Escala em data_quality:
+    #: >=0.90 excelente, 0.80-0.89 boa, 0.70-0.79 limitada, <0.70 insuficiente.
+    cobertura_minima: float = 0.70
+    #: Acima disto as fontes se contradizem demais pra o motor escolher um lado.
+    contradicao_maxima: float = 0.60
+    #: Alinhamento historico minimo. 0.50 e' o historico caindo exatamente na
+    #: linha; 0.35 e' o historico razoavelmente contra. Nao e' 0.50 de proposito:
+    #: exigir que o historico ja' favoreca o pick eliminaria a classe inteira de
+    #: pick que o motor ao vivo existe pra achar -- o jogo que esta' se
+    #: comportando diferente do que os dois times costumam fazer. O que a porta
+    #: corta e' o historico FORTEMENTE contra.
+    alinhamento_minimo: float = 0.35
+    #: Folga minima entre a projecao e a linha, no sentido do pick, em eventos.
+    #: Projecao colada na linha e' moeda ao ar mesmo com EV positivo: meio
+    #: evento decide. Os numeros sao proporcionais ao desvio tipico de cada
+    #: familia (escanteio varia muito mais que gol), e sao declarados.
+    margem_minima_por_familia: dict = field(default_factory=lambda: {
+        "corners": 0.75, "goals": 0.25, "cards": 0.40, "fouls": 1.50,
+        "shots": 1.50, "shots_on_target": 0.80,
+    })
+    #: EV ajustado minimo. O EV cru ja' tem o gate `ev_minimo`; este e' sobre o
+    #: EV depois de descontado por cobertura, contradicao e alinhamento -- a
+    #: regra de que "EV nao basta sozinho". Mesmo valor do cru: a intencao nao
+    #: e' um segundo piso mais alto, e' que o desconto tenha consequencia.
+    ev_ajustado_minimo: float = 0.05
+    #: Pesos do baseline historico, na ordem de history_model.PESOS_PADRAO
+    #: (last5 contexto, last10 contexto, temporada contexto, geral, liga).
+    pesos_historicos: tuple = (0.40, 0.25, 0.15, 0.10, 0.10)
+    #: Jogos lidos por lado pra montar a serie historica. 20 cobre last5,
+    #: last10 e uma temporada parcial sem trazer jogo de dois anos atras.
+    jogos_historicos_por_lado: int = 20
+
     # ── Anti-inundacao ───────────────────────────────────────────────────
     #: Quantos picks a mesma partida pode gerar na vida inteira dela.
     #:
@@ -316,6 +374,11 @@ class LiveEngineConfig:
 
     @classmethod
     def do_ambiente(cls) -> "LiveEngineConfig":
+        pesos_bruto = (os.getenv("LIVE_HIST_WEIGHTS") or "").strip()
+        pesos = tuple(
+            float(p) for p in pesos_bruto.replace(";", ",").split(",")
+            if _e_decimal(p)
+        )
         ligas_bruto = (os.getenv("LIVE_LEAGUES") or "").strip()
         ligas = tuple(
             int(p) for p in ligas_bruto.replace(";", ",").split(",")
@@ -346,6 +409,17 @@ class LiveEngineConfig:
             atraso_maximo_minutos=_inteiro("LIVE_MAX_DATA_AGE_MINUTES", 4),
             limiar_tendencia=_decimal("LIVE_TREND_THRESHOLD", 0.25),
             sinais_minimos_convergentes=_inteiro("LIVE_MIN_CONVERGENT_SIGNALS", 3),
+            # ── Camada V2 ────────────────────────────────────────────────
+            v2_enforce=_flag("LIVE_V2_ENFORCE", True),
+            cobertura_minima=_decimal("LIVE_MIN_DATA_COVERAGE", 0.70),
+            contradicao_maxima=_decimal("LIVE_MAX_CONTRADICTION", 0.60),
+            alinhamento_minimo=_decimal("LIVE_MIN_HIST_ALIGNMENT", 0.35),
+            ev_ajustado_minimo=_decimal("LIVE_MIN_ADJUSTED_EV", 0.05),
+            # Pesos so' entram se vierem os cinco: uma lista pela metade
+            # significa que alguem errou a variavel, e completar com o padrao
+            # produziria uma combinacao que ninguem escolheu.
+            **({"pesos_historicos": pesos} if len(pesos) == 5 else {}),
+            jogos_historicos_por_lado=_inteiro("LIVE_HIST_GAMES_PER_SIDE", 20),
         )
 
     def resumo(self) -> str:
@@ -355,7 +429,11 @@ class LiveEngineConfig:
             f"janela={self.minuto_inicial}'-{self.minuto_final}' "
             f"ev_min={self.ev_minimo:+.0%} conf_min={self.confianca_minima:.0%} "
             f"prob_min={self.probabilidade_minima:.0%} "
-            f"odd=[{self.odd_minima}, {self.odd_maxima}]"
+            f"odd=[{self.odd_minima}, {self.odd_maxima}] "
+            f"v2={'enforce' if self.v2_enforce else 'sombra'} "
+            f"cob_min={self.cobertura_minima:.0%} "
+            f"contra_max={self.contradicao_maxima:.0%} "
+            f"align_min={self.alinhamento_minimo:.0%}"
         )
 
 
@@ -366,7 +444,10 @@ DEFAULT_LIVE_CONFIG = LiveEngineConfig()
 
 #: Versao do motor gravada em cada pick. Muda quando a matematica muda -- e'
 #: o que permite, depois, separar "pick ruim" de "pick de outra versao".
-ENGINE_VERSION = "live_v1.1.0"
+#: v2.0.0 em 2026-09-11: baseline historico ponderado por mando e recencia,
+#: historical_alignment, data_coverage, regime de jogo, contradiction_score,
+#: margem de projecao e EV ajustado. Ver o modo sombra em `v2_enforce`.
+ENGINE_VERSION = "live_v2.0.0"
 
 
 def exigir_ambiente_dev() -> None:

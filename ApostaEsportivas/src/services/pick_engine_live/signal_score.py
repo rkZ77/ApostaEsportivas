@@ -40,23 +40,56 @@ from services.pick_engine_live.live_state import DELAYED, FRESH, STALE, UNKNOWN
 #: Peso de cada sinal na convergencia. Como os pesos de pressao, sao um ponto
 #: de partida declarado -- ficam aqui pra serem calibrados contra resultado.
 PESOS = {
-    "pressao_total": 0.20,
-    "ritmo": 0.20,
-    "tendencia": 0.18,
-    "janela_recente": 0.16,
-    "contexto_placar": 0.09,
-    "qualidade_da_chance": 0.07,
+    "pressao_total": 0.17,
+    "ritmo": 0.17,
+    "tendencia": 0.15,
+    "janela_recente": 0.13,
+    "contexto_placar": 0.08,
+    "qualidade_da_chance": 0.06,
+    #: HISTORICO DO CONFRONTO (2026-09-11). Entra com o maior peso individual
+    #: depois de pressao e ritmo, e nao com um peso simbolico, porque ele e' a
+    #: unica fonte da lista que NAO vem dos ultimos minutos -- os outros seis
+    #: sinais leem o mesmo trecho de jogo por seis janelas diferentes, e um
+    #: jogo estranho os move todos juntos. O historico e' o que discorda
+    #: quando o trecho observado nao representa a partida.
+    "historico": 0.16,
     # Necessidade do resultado (2026-08-14). Entra com peso proximo ao do
     # contexto de placar porque mede a mesma familia de coisa -- mas com a
     # informacao que faltava: quem precisa, quanto, e se o cronometro ja'
     # transformou isso em comportamento. Os outros pesos foram reduzidos
     # proporcionalmente pra a soma continuar em 1.0.
-    "necessidade_resultado": 0.10,
+    "necessidade_resultado": 0.08,
 }
 
 #: Abaixo disso o sinal e' fraco demais pra contar como "convergente" na
 #: contagem de sinais (ele ainda entra no score, com peso baixo).
 FORCA_MINIMA_PARA_CONTAR = 0.15
+
+#: SINAIS CRITICOS · ausencia deles NAO sai do denominador (2026-09-11).
+#:
+#: O DEFEITO. Ate' hoje todo sinal indisponivel era removido de `soma_pesos`, e
+#: a media era tirada so' sobre os que sobraram. Com 4 dos 7 ausentes, os 3
+#: restantes definiam 100% da convergencia -- e um score de 0.90 feito de 3
+#: sinais era publicado, gravado e comparado como igual a um score de 0.90
+#: feito de 7. Renormalizar transformava "nao sei" em "nao se aplica".
+#:
+#: O caso mais caro era `tendencia = INDEFINIDA`, que quer dizer exatamente
+#: "nao existe evidencia suficiente" (rhythm_model.tendencia devolve isso em
+#: quatro situacoes diferentes, todas de amostra faltando). Ela saia pelo mesmo
+#: caminho de um contador que o provedor nao publicou, e o resultado era que
+#: nao ter nenhuma leitura anterior da partida AUMENTAVA a convergencia
+#: relativa dos sinais que sobravam.
+#:
+#: A CORRECAO E' MINIMA DE PROPOSITO: para estes dois sinais, ausencia mantem o
+#: peso no denominador e contribui ZERO -- ou seja, puxa o score para o ponto
+#: neutro (0.5) em vez de desaparecer. Nao vira -1: "nao sei" nao e' evidencia
+#: contraria, e' falta de evidencia. Os outros cinco continuam renormalizando,
+#: porque neles a ausencia e' do PROVEDOR (a folha nao publicou xG, nao ha
+#: contexto de placar) e nao do motor.
+#:
+#: Quem cobra o preco INTEIRO da ausencia -- de qualquer um dos sete -- e'
+#: `data_quality.cobertura`, que desconta a confianca e pode recusar o pick.
+SINAIS_CRITICOS = ("tendencia", "janela_recente")
 
 
 def _clamp(v: float) -> float:
@@ -196,17 +229,37 @@ def _sinal_necessidade(nec: dict | None) -> float | None:
     return _clamp(intensidade)
 
 
+def _sinal_historico(alinhamento: dict | None, orientacao: float) -> float | None:
+    """O historico do confronto, na escala dos outros sinais.
+
+    `historical_alignment` ja' nasce ORIENTADO pela direcao do pick (0.5 =
+    historico na linha, 1.0 = fortemente a favor). Os outros sinais sao
+    direcao-agnosticos e so' ganham orientacao no laco de `convergencia`, que
+    multiplica tudo por `orientacao`. Multiplicar aqui tambem devolve o valor
+    orientado no lugar certo, porque orientacao e' +-1 e o quadrado e' 1 --
+    e' o que evita um `if` especial dentro do laco pra um unico sinal.
+    """
+    if not alinhamento or not alinhamento.get("disponivel"):
+        return None
+    valor = alinhamento.get("alinhamento")
+    if valor is None:
+        return None
+    return _clamp((float(valor) - 0.5) * 2.0) * orientacao
+
+
 def convergencia(direcao: str, familia: str, estado: dict, pressao: dict,
                  ritmo: dict, tendencia: dict, janelas: dict,
                  taxa_estimada_min: float | None, eventos: dict | None = None,
                  config: LiveEngineConfig = DEFAULT_LIVE_CONFIG,
-                 necessidade: dict | None = None) -> dict:
+                 necessidade: dict | None = None,
+                 alinhamento_historico: dict | None = None) -> dict:
     """Quantos sinais sustentam a direcao do pick, e com que forca.
 
     `direcao` e' "over" ou "under". Um sinal positivo (mais eventos vindo)
     sustenta um Over e contradiz um Under -- e' a mesma leitura, com o sinal
     invertido.
     """
+    orientacao = 1.0 if (direcao or "").lower() == "over" else -1.0
     brutos = {
         "pressao_total": _sinal_pressao(pressao),
         "ritmo": _sinal_ritmo(ritmo),
@@ -215,19 +268,28 @@ def convergencia(direcao: str, familia: str, estado: dict, pressao: dict,
         "contexto_placar": _sinal_contexto(estado, eventos),
         "qualidade_da_chance": _sinal_qualidade_da_chance(estado, familia),
         "necessidade_resultado": _sinal_necessidade(necessidade),
+        "historico": _sinal_historico(alinhamento_historico, orientacao),
     }
-    orientacao = 1.0 if (direcao or "").lower() == "over" else -1.0
 
     detalhes = []
     soma_pesos = 0.0
     soma_ponderada = 0.0
     a_favor = 0
     contra = 0
+    criticos_ausentes: list[str] = []
     for nome, valor in brutos.items():
         peso = PESOS[nome]
         if valor is None:
+            # Sinal critico ausente MANTEM o peso e contribui zero · ver
+            # SINAIS_CRITICOS. Os demais saem do denominador como antes.
+            critico = nome in SINAIS_CRITICOS
+            if critico:
+                criticos_ausentes.append(nome)
+                soma_pesos += peso
             detalhes.append({"sinal": nome, "valor": None, "peso": peso,
-                             "disponivel": False, "posicao": "indisponivel"})
+                             "disponivel": False,
+                             "posicao": "sem_evidencia" if critico else "indisponivel",
+                             "penaliza": critico})
             continue
         alinhado = valor * orientacao  # +1 sustenta o pick, -1 contradiz
         if alinhado >= FORCA_MINIMA_PARA_CONTAR:
@@ -259,6 +321,13 @@ def convergencia(direcao: str, familia: str, estado: dict, pressao: dict,
         "contra": contra,
         "cobertura": round(soma_pesos, 3),
         "sinais": detalhes,
+        # Peso dos sinais que existem de verdade, sobre o peso total. Com os
+        # criticos ausentes contando no denominador, `cobertura` deixou de ser
+        # essa medida -- e ela e' a que responde "este score foi feito de
+        # quantos sinais?".
+        "cobertura_real": round(
+            sum(d["peso"] for d in detalhes if d.get("disponivel")) / sum(PESOS.values()), 3),
+        "criticos_ausentes": criticos_ausentes,
         "convergente": a_favor >= config.sinais_minimos_convergentes and contra == 0,
         "motivo": None,
     }
@@ -273,7 +342,9 @@ FATOR_FRESHNESS = {FRESH: 1.0, DELAYED: 0.75, UNKNOWN: 0.6, STALE: 0.3}
 def live_confidence(prob_final: float, prob_mercado: float | None,
                     minuto: int, conv: dict, fresh: dict,
                     distancia_da_linha: float | None = None,
-                    prob_modelo_puro: float | None = None) -> dict:
+                    prob_modelo_puro: float | None = None,
+                    fator_qualidade: float = 1.0,
+                    contradicao: float = 0.0) -> dict:
     """Confianca do pick Live. Formula PROPRIA, nao a do pre-jogo.
 
     Cinco termos, e cada um responde uma pergunta diferente:
@@ -356,12 +427,29 @@ def live_confidence(prob_final: float, prob_mercado: float | None,
     score = c * 0.28 + q * 0.12 + a * 0.28 + v * 0.22 + d * 0.10
     fator = FATOR_FRESHNESS.get((fresh or {}).get("nivel"), 0.6)
     score = score * fator
+    # DOIS DESCONTOS NOVOS (2026-09-11), os dois multiplicativos e os dois
+    # aplicados ANTES do truncamento -- entao o piso de 0.20 continua sendo o
+    # piso, e nenhum deles consegue produzir confianca negativa.
+    #
+    # Qualidade do dado: a renormalizacao silenciosa de pressao e convergencia
+    # deixava um pick feito de meia folha sair com a confianca de um pick feito
+    # de folha inteira. Ver data_quality.
+    #
+    # Contradicao: fontes brigando entre si NAO sao um pick mais arriscado com
+    # a mesma leitura -- sao uma leitura em que o motor nao sabe qual lado esta'
+    # certo. Ela desconta ate' 45%, e acima do limiar de config ela reprova
+    # (em `_gates`), que e' o caso em que nenhum desconto resolve.
+    fator_qualidade = max(0.0, min(1.0, float(fator_qualidade)))
+    fator_contradicao = 1.0 - 0.45 * max(0.0, min(1.0, float(contradicao)))
+    score = score * fator_qualidade * fator_contradicao
     score = max(0.20, min(0.92, score))
     return {
         "confidence": round(score, 4),
         "C": round(c, 4), "Q": round(q, 4), "A": round(a, 4),
         "V": round(v, 4), "D": round(d, 4),
         "fator_freshness": fator,
+        "fator_qualidade": round(fator_qualidade, 4),
+        "fator_contradicao": round(fator_contradicao, 4),
         "freshness": (fresh or {}).get("nivel"),
         "divergencia_mercado": round(divergencia, 4) if divergencia is not None else None,
         # A que o score usa e' `divergencia_mercado`; esta e' a real.

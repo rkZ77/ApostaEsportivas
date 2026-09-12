@@ -574,6 +574,16 @@ def _live_candidate_summary(c: dict) -> dict:
         "observado_na_criacao": c.get("observado_na_criacao"),
         "projecao_total": c.get("projecao_total"),
         "distancia_da_linha": c.get("distancia_da_linha"),
+        # Camada V2 (2026-09-11). Os quatro entram aqui e nao so' no
+        # engine_debug por um motivo pratico: `picks_live` so' guarda o
+        # engine_debug do pick ESCOLHIDO, entao os candidatos reprovados --
+        # que sao a amostra inteira da pergunta "quanto cada porta nova custa"
+        # -- so' existem neste log. Sem eles, medir o preco da V2 exigiria
+        # rodar o motor de novo contra partidas que ja' acabaram.
+        "historical_alignment": c.get("historical_alignment"),
+        "data_coverage": c.get("data_coverage"),
+        "contradiction_score": c.get("contradiction_score"),
+        "adjusted_ev": c.get("adjusted_ev"),
         "eligible": bool(c.get("aprovado")),
         # A razao inteira deste log existir. `avaliar()` devolve TODOS os
         # motivos, sem short-circuit -- um candidato pode cair por EV e por

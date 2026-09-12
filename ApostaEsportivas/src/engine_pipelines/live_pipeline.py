@@ -54,7 +54,9 @@ from services import cartoes_validos, h2h_api_fetcher
 from services.pick_engine import context_gate, referee_model, stats_model
 from services.pick_engine.ai_review import review_gate
 from services.pick_engine.staking import calculate_stake
-from services.pick_engine_live import live_odds, live_state, orchestrator
+from services.pick_engine_live import (
+    history_model, live_odds, live_state, orchestrator,
+)
 from services.pick_engine_live.config import (
     ENGINE_VERSION, AmbienteInvalido, LiveEngineConfig, exigir_ambiente_dev,
 )
@@ -616,6 +618,179 @@ def baseline_do_confronto(cur, estado: dict) -> dict:
     return saida
 
 
+#: Familia -> como extrair o TOTAL DA PARTIDA de uma linha de
+#: `match_statistics`. E' a mesma unidade do mercado: o pick e' liquidado pelo
+#: total do jogo (services/settlement.py), entao a serie historica tambem
+#: termina em total.
+#:
+#: `None` em qualquer parcela devolve None pra familia inteira naquele jogo --
+#: e esse None e' respeitado ate' o fim (history_model.media_com_recencia tira
+#: o jogo da media daquela familia sem tirar das outras). Somar com 0 o lado
+#: que o provedor nao publicou produziria um total pela metade, que e' pior que
+#: nao ter o jogo.
+def _total_corners(l: dict):
+    return l.get("total_corners")
+
+
+def _total_goals(l: dict):
+    return l.get("total_goals")
+
+
+def _total_cards(l: dict):
+    amarelo, vermelho = l.get("total_yellow_cards"), l.get("total_red_cards")
+    if amarelo is None:
+        return None
+    # PONTOS (amarelo=1, vermelho=2), a unidade do mercado no resto do projeto.
+    return float(amarelo) + 2 * float(vermelho or 0)
+
+
+def _soma(a, b):
+    return None if a is None or b is None else float(a) + float(b)
+
+
+TOTAL_DA_FAMILIA = {
+    "corners": _total_corners,
+    "goals": _total_goals,
+    "cards": _total_cards,
+    "fouls": lambda l: _soma(l.get("home_fouls"), l.get("away_fouls")),
+    "shots": lambda l: _soma(l.get("home_total_shots"), l.get("away_total_shots")),
+    "shots_on_target": lambda l: _soma(l.get("home_shots_on"), l.get("away_shots_on")),
+}
+
+#: Janela de historico, em dias. Mesmo numero das outras camadas do motor --
+#: a recencia dentro da janela quem faz e' `history_model`, com meia-vida em
+#: JOGOS, que e' a unidade certa: um time que jogou 3 vezes em 400 dias e outro
+#: que jogou 40 nao tem a mesma "ultima temporada".
+DIAS_DE_HISTORICO = 400
+
+
+def serie_historica(cur, estado: dict, config: LiveEngineConfig) -> dict | None:
+    """As partidas recentes dos dois times, separadas por MANDO.
+
+    UMA consulta, zero requisicao de API. Devolve, por time, duas listas
+    ordenadas do mais recente pro mais antigo: os jogos naquele mando e os
+    jogos dele em geral.
+
+    POR QUE NAO USA `team_statistics` COMO `baseline_do_mando` FAZ. Aquela
+    tabela ja' guarda a media por HOME/AWAY, e e' mais barata -- mas e' uma
+    MEDIA AGREGADA DA TEMPORADA. Dela nao sai "ultimos 5 em casa" nem peso por
+    recencia, que sao exatamente as duas coisas que esta camada existe pra
+    trazer. A serie crua e' a unica fonte que responde as duas.
+
+    FOLHA FANTASMA FICA DE FORA. Posse 0 nos dois lados e' o marcador de folha
+    que o provedor devolveu vazia (ver scripts/backfill_folha_fantasma.py):
+    escanteio 0, falta 0, chute 0 num jogo que aconteceu. Sem este filtro cada
+    fantasma entraria como uma partida de zero eventos e puxaria todo Under.
+    """
+    home_id, away_id = estado.get("home_team_id"), estado.get("away_team_id")
+    league_id = estado.get("league_id")
+    if not (home_id and away_id and league_id):
+        return None
+    limite = max(5, int(config.jogos_historicos_por_lado)) * 4
+    try:
+        cur.execute(f"""
+            SELECT fixture_id, home_team_id, away_team_id, match_date,
+                   total_corners, total_goals,
+                   total_yellow_cards, total_red_cards,
+                   home_fouls, away_fouls,
+                   home_total_shots, away_total_shots,
+                   home_shots_on, away_shots_on
+              FROM match_statistics
+             WHERE league_id = %s
+               AND status IN ('FT', 'AET', 'PEN')
+               AND (home_team_id IN (%s, %s) OR away_team_id IN (%s, %s))
+               AND match_date >= NOW() - INTERVAL '{DIAS_DE_HISTORICO} days'
+               AND NOT (COALESCE(home_possession, -1) = 0
+                        AND COALESCE(away_possession, -1) = 0)
+             ORDER BY match_date DESC
+             LIMIT %s
+        """, (league_id, home_id, away_id, home_id, away_id, limite))
+        colunas = [d[0] for d in cur.description]
+        linhas = [dict(zip(colunas, r)) for r in cur.fetchall()]
+    except Exception:
+        return None
+    if not linhas:
+        return None
+
+    fixture_atual = estado.get("fixture_id")
+    por_lado = {
+        "home": {"contexto": [], "geral": []},
+        "away": {"contexto": [], "geral": []},
+    }
+    teto = int(config.jogos_historicos_por_lado)
+    for linha in linhas:
+        if fixture_atual and linha.get("fixture_id") == fixture_atual:
+            continue
+        for lado, team_id, mando in (("home", home_id, "home_team_id"),
+                                     ("away", away_id, "away_team_id")):
+            jogou = (linha["home_team_id"] == team_id
+                     or linha["away_team_id"] == team_id)
+            if not jogou:
+                continue
+            if len(por_lado[lado]["geral"]) < teto:
+                por_lado[lado]["geral"].append(linha)
+            # O CONTEXTO E' O MANDO DESTA PARTIDA, nao o do time: o mandante
+            # entra com os jogos dele EM CASA e o visitante com os dele FORA.
+            if linha[mando] == team_id and len(por_lado[lado]["contexto"]) < teto:
+                por_lado[lado]["contexto"].append(linha)
+    return por_lado
+
+
+def historico_contextual(cur, estado: dict, baselines_liga: dict,
+                         config: LiveEngineConfig) -> dict:
+    """Baseline historico ponderado por familia · a camada V2.
+
+    Cada familia vira: media ponderada de (ultimos 5 no mando, ultimos 10 no
+    mando, temporada no mando, geral do time, media da liga), com recencia
+    dentro de cada janela, feita para cada lado e combinada nos dois.
+
+    O QUE ELA SUBSTITUI, E O QUE NAO. Ela entra como mais uma camada na pilha
+    de baselines, DEPOIS de `baseline_do_mando` -- entao ela vence onde tem o
+    que dizer, e onde nao tem (familia sem amostra nos dois lados) a camada
+    anterior continua valendo, exatamente como antes. Arbitro e h2h continuam
+    rodando DEPOIS dela, pelos motivos que as docstrings deles explicam.
+
+    Devolve DOIS dicionarios de proposito: `baselines` (familia -> numero, pra
+    pilha de camadas) e `detalhe` (familia -> a estrutura inteira com lados,
+    componentes e cobertura, pro alinhamento historico e pro rastro).
+    """
+    series = serie_historica(cur, estado, config)
+    if not series:
+        return {"baselines": {}, "detalhe": {}}
+
+    pesos = dict(zip(history_model.PESOS_PADRAO.keys(),
+                     config.pesos_historicos or ()))
+    if len(pesos) != len(history_model.PESOS_PADRAO):
+        pesos = history_model.PESOS_PADRAO
+
+    baselines: dict = {}
+    detalhe: dict = {}
+    for familia in config.familias:
+        extrator = TOTAL_DA_FAMILIA.get(familia)
+        if extrator is None:
+            continue
+        lados = {}
+        for lado in ("home", "away"):
+            lados[lado] = history_model.componentes_do_lado(
+                serie_contexto=[extrator(l) for l in series[lado]["contexto"]],
+                serie_geral=[extrator(l) for l in series[lado]["geral"]],
+                baseline_liga=baselines_liga.get(familia))
+        combinado = history_model.baseline_do_confronto(
+            lados["home"], lados["away"], pesos)
+        if not combinado or not combinado["valor"]:
+            continue
+        detalhe[familia] = combinado
+        # SO' VIRA BASELINE SE A COBERTURA JUSTIFICAR. Com meia cobertura o
+        # numero e' quase so' a media da liga com um verniz de recorte -- e
+        # nesse caso a camada anterior (mando ou times) descreve melhor, porque
+        # ela exige amostra minima antes de existir. O detalhe continua sendo
+        # devolvido: o alinhamento historico e a cobertura de dados usam o
+        # numero mesmo quando ele nao manda no baseline.
+        if combinado["cobertura"] >= 0.60:
+            baselines[familia] = combinado["valor"]
+    return {"baselines": baselines, "detalhe": detalhe}
+
+
 def contexto_pre_jogo(cur, estado: dict) -> dict | None:
     """Regulamento da partida pro motor Live: agregado do mata-mata e
     necessidade de tabela.
@@ -1042,6 +1217,24 @@ def montar_engine_debug(analise: dict, candidato: dict, config: LiveEngineConfig
             "origem": info.get("baseline_origem"),
             "taxa": info.get("taxa"),
         },
+        # ── Camada V2 (2026-09-11) ───────────────────────────────────────
+        # Cada bloco daqui pra baixo responde uma pergunta que o rastro antigo
+        # nao respondia: de onde veio o historico, se ele favorece este pick,
+        # em que estado o jogo estava, quanto dado existia de verdade, e o que
+        # cada porta nova achou. Tudo e' gravado mesmo em modo sombra
+        # (config.v2_enforce=False), que e' o que permite medir o preco de
+        # cada porta antes de liga-la.
+        "historical": {
+            "baseline_historico": (info.get("historico") or {}).get("valor"),
+            "cobertura": (info.get("historico") or {}).get("cobertura"),
+            "home": (info.get("historico") or {}).get("home"),
+            "away": (info.get("historico") or {}).get("away"),
+            "alignment": candidato["debug"].get("historical_alignment"),
+        },
+        "regime": info.get("regime"),
+        "contradiction": candidato["debug"].get("contradiction"),
+        "data_quality": candidato["debug"].get("data_quality"),
+        "adjusted_ev": candidato["debug"].get("ev_ajustado"),
         "current_state": {k: v for k, v in estado.items() if not k.startswith("_")},
         "folha_bruta": {"home": estado.get("_folha_home"), "away": estado.get("_folha_away")},
         "freshness": analise.get("freshness"),
@@ -1071,6 +1264,23 @@ def montar_engine_debug(analise: dict, candidato: dict, config: LiveEngineConfig
         "edge": candidato["edge"],
         "confidence": candidato["confidence"],
         "confidence_breakdown": candidato["debug"].get("confianca"),
+        "risk_gate": {
+            "projection_margin": candidato.get("distancia_da_linha"),
+            "margem_minima": (config.margem_minima_por_familia or {}).get(familia),
+            "historical_ok": (candidato.get("historical_alignment") is None
+                              or candidato["historical_alignment"] >= config.alinhamento_minimo),
+            "data_quality_ok": (candidato.get("data_coverage") is None
+                                or candidato["data_coverage"] >= config.cobertura_minima),
+            "contradiction_ok": (candidato.get("contradiction_score") is None
+                                 or candidato["contradiction_score"] <= config.contradicao_maxima),
+            "adjusted_ev_ok": (candidato.get("adjusted_ev") is None
+                               or candidato["adjusted_ev"] >= config.ev_ajustado_minimo),
+            # FALSE aqui com `approved` TRUE nao e' inconsistencia: e' o modo
+            # sombra funcionando. As portas foram avaliadas e nao reprovaram.
+            "enforce": config.v2_enforce,
+            "approved": bool(candidato["aprovado"]),
+            "reasons": candidato.get("motivos_reprovacao") or [],
+        },
         "decision": "PICK" if candidato["aprovado"] else "NO_PICK",
         "motivos_reprovacao": candidato.get("motivos_reprovacao"),
         # O parecer inteiro, `status` incluso: e' o que distingue "a IA
@@ -1588,12 +1798,20 @@ def _processar_partida(indice: int, bruto: dict, cur, conn, feed: LiveFeed,
             baselines[familia] = valor
             origens[familia] = rotulo
 
-    camada(baselines_por_liga(cur, estado.get("league_id")), "liga")
+    da_liga = baselines_por_liga(cur, estado.get("league_id"))
+    camada(da_liga, "liga")
     camada(baseline_do_confronto(cur, estado), "times")
     # DEPOIS do confronto sem mando, porque e' o mesmo dado com recorte melhor:
     # quando ha' amostra nos dois lados, o mando manda. Familia sem amostra no
     # mando nao aparece aqui e a media misturada continua valendo.
     camada(baseline_do_mando(cur, estado), "mando")
+    # HISTORICO PONDERADO (2026-09-11) · o mesmo recorte de mando do anterior,
+    # com duas coisas que `team_statistics` nao tem: janelas (ultimos 5 e 10 no
+    # mando) e recencia. Vem depois porque, quando existe, e' estritamente mais
+    # informativo; familia sem cobertura minima nao aparece aqui e o mando
+    # continua valendo.
+    hist = historico_contextual(cur, estado, da_liga, config)
+    camada(hist["baselines"], "historico")
     # Por ultimo de proposito: em cartao, quem apita manda mais que a media da
     # liga e a dos times. Nas outras familias esta chamada devolve vazio e nao
     # sobrescreve nada.
@@ -1629,7 +1847,8 @@ def _processar_partida(indice: int, bruto: dict, cur, conn, feed: LiveFeed,
     pre_jogo = contexto_pre_jogo(cur, estado)
     analise = orchestrator.analisar(estado, observacoes, config, baselines, eventos, fresh,
                                     baseline_origens=origens,
-                                    contexto_pre_jogo=pre_jogo)
+                                    contexto_pre_jogo=pre_jogo,
+                                    historico=hist["detalhe"])
     _observar(cur, conn, estado)
 
     pressao = analise.get("pressao") or {}
@@ -1662,6 +1881,17 @@ def _processar_partida(indice: int, bruto: dict, cur, conn, feed: LiveFeed,
         extra = ""
         if janela:
             extra = f" · ultimos {janela['largura_real']}': {janela['eventos']}"
+        historico = info.get("historico") or {}
+        if historico.get("valor"):
+            casa = (historico.get("home") or {}).get("valor")
+            fora = (historico.get("away") or {}).get("valor")
+            extra += (f" · historico {historico['valor']:.1f}"
+                      + (f" (casa {casa:.1f} / fora {fora:.1f})"
+                         if casa is not None and fora is not None else "")
+                      + f", cobertura {historico['cobertura']:.0%}")
+        reg = info.get("regime") or {}
+        if reg.get("estado") and reg["estado"] != "NORMAL":
+            extra += f" · regime {reg['estado']} ({reg['confianca']:.0%})"
         print(f"  {familia}: {info['observado']} agora · projecao {info['projecao_total']} "
               f"vs baseline {info['baseline']} ({info['baseline_origem']}) · "
               f"tendencia {tend}{extra}")

@@ -22,8 +22,9 @@ from __future__ import annotations
 
 from services.pick_engine import market_model
 from services.pick_engine_live import (
-    live_state, need_model, pressure_model, residual_model as rm,
-    rhythm_model as rit, signal_score,
+    contradiction_model, data_quality, history_model, live_state, need_model,
+    pressure_model, regime_model, residual_model as rm, rhythm_model as rit,
+    signal_score,
 )
 from services.pick_engine_live.config import (
     DEFAULT_LIVE_CONFIG, ENGINE_VERSION, LiveEngineConfig,
@@ -94,7 +95,8 @@ def _dados_completos(estado: dict, familia: str) -> bool:
 def analisar(estado: dict, observacoes: list, config: LiveEngineConfig = DEFAULT_LIVE_CONFIG,
              baselines: dict | None = None, eventos: dict | None = None,
              fresh: dict | None = None, contexto_pre_jogo: dict | None = None,
-             baseline_origens: dict | None = None) -> dict:
+             baseline_origens: dict | None = None,
+             historico: dict | None = None) -> dict:
     """Le a partida inteira: pressao, ritmo, tendencia, janelas, necessidade do
     resultado e projecao por familia. Nenhuma chamada de API acontece aqui.
 
@@ -110,6 +112,14 @@ def analisar(estado: dict, observacoes: list, config: LiveEngineConfig = DEFAULT
     agora. Ausente, o motor roda como antes, so' sem esse sinal.
     """
     baselines = baselines or {}
+    #: Historico contextual por familia, montado pelo pipeline
+    #: (`live_pipeline.historico_contextual`) a partir de `match_statistics`:
+    #: uma entrada por familia, com o baseline ponderado, os dois lados
+    #: separados e a cobertura dos componentes. E' de onde sai o
+    #: `historical_alignment` na hora de avaliar cada linha -- aqui ele so'
+    #: e' guardado, porque alinhamento depende da LINHA e a linha so' existe
+    #: depois da odd.
+    historico = historico or {}
     #: Quem escreveu o baseline de cada familia (liga, times, mando, arbitro,
     #: h2h). Quem monta as camadas e' o pipeline, e sem este mapa este modulo
     #: so' conseguia dizer "veio de fora" ou "e' a constante" -- que era o que
@@ -153,6 +163,12 @@ def analisar(estado: dict, observacoes: list, config: LiveEngineConfig = DEFAULT
         familias[familia] = {
             "disponivel": lam is not None,
             "observado": observado,
+            "historico": historico.get(familia),
+            # Regime do jogo NA UNIDADE DA FAMILIA -- conversao de gol e
+            # conversao de escanteio sao contas diferentes, entao um regime so'
+            # pra partida inteira diria "CONVERSION_LOW" sobre um mercado que
+            # nao tem conversao definida. Ver regime_model.
+            "regime": regime_model.regime(estado, pressao, ritmo, eventos, familia),
             "baseline": round(baseline, 2) if baseline else None,
             "baseline_origem": baseline_origens.get(
                 familia, "liga" if baselines.get(familia) else "padrao"),
@@ -297,13 +313,39 @@ def avaliar(analise: dict, cotacoes: list, config: LiveEngineConfig = DEFAULT_LI
             baseline_mercado = market_model.implied_prob(odd)
         valor = market_model.edge_and_ev(prob, odd, baseline_mercado)
 
+        # ── Camada V2 (2026-09-11) ───────────────────────────────────────
+        # O historico so' vira ALINHAMENTO aqui, e nao em `analisar`, porque
+        # "o historico favorece?" e' uma pergunta sobre a LINHA, e a linha so'
+        # existe depois que a odd chegou.
+        hist = info.get("historico") or {}
+        alinhamento = history_model.historical_alignment(
+            baseline_historico=hist.get("valor"), linha=linha, direcao=direcao,
+            familia=familia,
+            lado_casa=((hist.get("home") or {}).get("valor")),
+            lado_fora=((hist.get("away") or {}).get("valor")))
+
         conv = signal_score.convergencia(
             direcao=direcao, familia=familia, estado=estado,
             pressao=analise.get("pressao"), ritmo=analise.get("ritmo"),
             tendencia=info.get("tendencia"), janelas=info.get("janelas"),
             taxa_estimada_min=(info.get("taxa") or {}).get("taxa_estimada_min"),
             eventos=analise.get("eventos"), config=config,
-            necessidade=analise.get("necessidade"))
+            necessidade=analise.get("necessidade"),
+            alinhamento_historico=alinhamento)
+
+        qualidade = data_quality.cobertura(
+            info_familia=info, pressao=analise.get("pressao"),
+            fresh=analise.get("freshness"), historico=hist,
+            prob_mercado=entrada["prob_mercado"])
+
+        divergencia_real = (
+            abs(encolhido["prob_pre_encolhimento"] - float(entrada["prob_mercado"]))
+            if (entrada["prob_mercado"] is not None
+                and encolhido["prob_pre_encolhimento"] is not None) else None)
+        contra = contradiction_model.contradicao(
+            alinhamento=alinhamento, projecao=info["projecao_total"], linha=linha,
+            direcao=direcao, regime=info.get("regime"), conv=conv,
+            divergencia_modelo=divergencia_real)
 
         # Folga entre a projecao e a linha, no sentido do pick. Projecao colada
         # na linha e' moeda ao ar mesmo com EV positivo: meio evento decide.
@@ -316,14 +358,25 @@ def avaliar(analise: dict, cotacoes: list, config: LiveEngineConfig = DEFAULT_LI
             # Nao entra no score -- entra no rastro. Ver a nota longa em
             # live_confidence: a divergencia que pontua e' a de depois do
             # encolhimento, e ela subestima o desacordo real por construcao.
-            prob_modelo_puro=encolhido["prob_pre_encolhimento"])
+            prob_modelo_puro=encolhido["prob_pre_encolhimento"],
+            fator_qualidade=data_quality.fator_de_confianca(qualidade["coverage"]),
+            contradicao=contra["score"])
+
+        ajustado = ev_ajustado(valor["ev"], qualidade, contra, alinhamento)
 
         motivos = _gates(entrada, prob, valor, conf, conv, observado, linha, direcao,
                          analise.get("freshness"), config,
-                         familia=familia, ritmo=analise.get("ritmo"))
+                         familia=familia, ritmo=analise.get("ritmo"),
+                         qualidade=qualidade, contradicao=contra,
+                         alinhamento=alinhamento, distancia=distancia,
+                         ev_ajustado_valor=ajustado["adjusted_ev"])
         avaliados.append({
             **entrada,
             "observado_na_criacao": observado,
+            "historical_alignment": alinhamento.get("alinhamento"),
+            "data_coverage": qualidade["coverage"],
+            "contradiction_score": contra["score"],
+            "adjusted_ev": ajustado["adjusted_ev"],
             "prob_modelo_puro": encolhido["prob_pre_encolhimento"],
             "peso_modelo": encolhido["peso_modelo"],
             "probability": prob,
@@ -337,6 +390,12 @@ def avaliar(analise: dict, cotacoes: list, config: LiveEngineConfig = DEFAULT_LI
             "aprovado": not motivos,
             "motivos_reprovacao": motivos,
             "debug": {
+                "historico": hist,
+                "historical_alignment": alinhamento,
+                "regime": info.get("regime"),
+                "data_quality": qualidade,
+                "contradiction": contra,
+                "ev_ajustado": ajustado,
                 "lambda": lam_info,
                 "taxa": info.get("taxa"),
                 "janelas": info.get("janelas"),
@@ -355,14 +414,66 @@ def avaliar(analise: dict, cotacoes: list, config: LiveEngineConfig = DEFAULT_LI
             },
         })
 
-    avaliados.sort(key=lambda c: (not c["aprovado"], -c["ev"]))
+    # A ordenacao e' so' de EXIBICAO (o log imprime os 6 primeiros); quem
+    # escolhe o pick e' `melhor_candidato`, por score estatistico. Passou a ser
+    # pelo EV ajustado pra a lista impressa contar a mesma historia que a
+    # decisao: com o EV cru no topo, o log mostrava como "melhor candidato" uma
+    # linha que os gates novos tinham acabado de reprovar.
+    avaliados.sort(key=lambda c: (not c["aprovado"], -(c.get("adjusted_ev") or c["ev"])))
     return avaliados
+
+
+def ev_ajustado(ev: float, qualidade: dict, contradicao: dict,
+                alinhamento: dict) -> dict:
+    """O EV depois de descontado pelo que o motor NAO sabe.
+
+    A REGRA DE PRODUTO: "EV nao e' suficiente sozinho". Um EV de +20% com
+    cobertura de dados baixa, historico contra e fontes se contradizendo nao e'
+    a mesma oportunidade que um EV de +20% com tudo alinhado -- e ate' hoje o
+    motor tratava os dois exatamente igual, porque `ev_minimo` e' um numero so'.
+
+    Tres descontos, todos multiplicativos, todos limitados a 1.0. NENHUM DELES
+    PODE AUMENTAR O EV: alinhamento historico perfeito devolve fator 1.0, e nao
+    1.3. Inflar EV por confirmacao e' como se produz o pick que parece otimo no
+    log e perde no campo -- e' o mesmo motivo pelo qual o pre-jogo tirou a odd
+    da ORDENACAO em vez de dar a ela um peso menor.
+
+    O sinal negativo tambem e' preservado: EV negativo multiplicado por um
+    fator < 1 fica MENOS negativo, o que seria um desconto premiando um
+    candidato ruim. Por isso o desconto so' se aplica a EV positivo; EV
+    negativo passa intacto (ele ja' reprova no gate do EV cru).
+    """
+    fator_dado = data_quality.fator_de_confianca(qualidade.get("coverage") or 0.0)
+    fator_contra = 1.0 - 0.5 * max(0.0, min(1.0, contradicao.get("score") or 0.0))
+    align = alinhamento.get("alinhamento")
+    if align is None:
+        # Sem historico o EV nao e' punido como se o historico fosse contra --
+        # a ausencia ja' custou na cobertura, e cobrar duas vezes pelo mesmo
+        # buraco e' o defeito que este modulo existe pra nao repetir.
+        fator_align = 1.0
+    else:
+        # 0.5 (historico na linha) -> 1.0 ; 0.0 (fortemente contra) -> 0.7
+        fator_align = min(1.0, 0.70 + 0.60 * float(align))
+    fator = fator_dado * fator_contra * fator_align
+    bruto = float(ev or 0.0)
+    ajustado = bruto * fator if bruto > 0 else bruto
+    return {
+        "ev_bruto": round(bruto, 4),
+        "adjusted_ev": round(ajustado, 4),
+        "fator": round(fator, 4),
+        "fator_dado": round(fator_dado, 4),
+        "fator_contradicao": round(fator_contra, 4),
+        "fator_alinhamento": round(fator_align, 4),
+    }
 
 
 def _gates(entrada: dict, prob: float, valor: dict, conf: dict, conv: dict,
            observado: int, linha: float, direcao: str, fresh: dict | None,
            config: LiveEngineConfig = DEFAULT_LIVE_CONFIG,
-           familia: str | None = None, ritmo: dict | None = None) -> list[str]:
+           familia: str | None = None, ritmo: dict | None = None,
+           qualidade: dict | None = None, contradicao: dict | None = None,
+           alinhamento: dict | None = None, distancia: float | None = None,
+           ev_ajustado_valor: float | None = None) -> list[str]:
     """Todos os motivos de reprovacao, nao o primeiro.
 
     Sem short-circuit de proposito: saber que um candidato reprovou por EV E
@@ -433,6 +544,71 @@ def _gates(entrada: dict, prob: float, valor: dict, conf: dict, conv: dict,
     if not entrada.get("tem_par"):
         motivos.append("linha sem o lado contrario cotado (sem no-vig)")
 
+    motivos.extend(_gates_v2(config, familia, direcao, qualidade, contradicao,
+                             alinhamento, distancia, ev_ajustado_valor))
+    return motivos
+
+
+def _gates_v2(config: LiveEngineConfig, familia: str | None, direcao: str,
+              qualidade: dict | None, contradicao: dict | None,
+              alinhamento: dict | None, distancia: float | None,
+              ev_ajustado_valor: float | None) -> list[str]:
+    """As cinco portas da camada V2, todas obedecendo `config.v2_enforce`.
+
+    Em modo sombra (`v2_enforce=False`) esta funcao devolve lista VAZIA e nada
+    e' reprovado -- mas tudo continua calculado e gravado no engine_debug, que
+    e' o que permite contar depois quantos picks cada porta TERIA cortado antes
+    de liga-la. Ver a nota longa em config.v2_enforce: este projeto ja' desligou
+    o motor ao vivo sem querer trocando uma formula por outra mais correta.
+    """
+    if not config.v2_enforce:
+        return []
+    motivos: list[str] = []
+
+    # 1 · QUALIDADE DO DADO. Renormalizar pesos e seguir como se tivesse a
+    # folha inteira e' o defeito que data_quality mede; aqui ele custa o pick.
+    cobertura = (qualidade or {}).get("coverage")
+    if cobertura is not None and cobertura < config.cobertura_minima:
+        falta = "; ".join((qualidade.get("missing") or [])[:3]) or "sem detalhe"
+        motivos.append(
+            f"cobertura de dados {cobertura:.0%} abaixo do minimo "
+            f"({config.cobertura_minima:.0%}): {falta}")
+
+    # 2 · CONTRADICAO. Fontes brigando nao e' risco maior com a mesma leitura:
+    # e' o motor sem saber qual lado esta' certo.
+    score_contra = (contradicao or {}).get("score")
+    if score_contra is not None and score_contra > config.contradicao_maxima:
+        razao = "; ".join((contradicao.get("reasons") or [])[:2]) or "sem detalhe"
+        motivos.append(
+            f"contradicao {score_contra:.0%} acima do maximo "
+            f"({config.contradicao_maxima:.0%}): {razao}")
+
+    # 3 · ALINHAMENTO HISTORICO. Nao exige que o historico CONFIRME o pick --
+    # exige que ele nao esteja fortemente contra. Ver config.alinhamento_minimo.
+    align = (alinhamento or {}).get("alinhamento")
+    if align is not None and align < config.alinhamento_minimo:
+        motivos.append(
+            f"historico {(alinhamento or {}).get('rotulo')} "
+            f"({align:.0%} abaixo do minimo {config.alinhamento_minimo:.0%}): "
+            f"{(alinhamento or {}).get('baseline_historico')} de media contra a "
+            f"linha {(alinhamento or {}).get('linha')}")
+
+    # 4 · MARGEM DE PROJECAO. Projecao colada na linha ja' descontava confianca
+    # (termo D); agora ela REPROVA, porque meio evento decidindo o pick nao e'
+    # um pick menos confiavel, e' um cara-ou-coroa com EV.
+    margem_minima = (config.margem_minima_por_familia or {}).get(familia)
+    if margem_minima is not None and distancia is not None and distancia < margem_minima:
+        motivos.append(
+            f"projecao a {distancia:+.2f} da linha, abaixo da margem minima de "
+            f"{margem_minima} para {familia}")
+
+    # 5 · EV AJUSTADO. A regra de que EV nao basta sozinho.
+    if ev_ajustado_valor is not None and ev_ajustado_valor < config.ev_ajustado_minimo:
+        motivos.append(
+            f"EV ajustado {ev_ajustado_valor:+.1%} abaixo do minimo "
+            f"({config.ev_ajustado_minimo:+.1%}) depois do desconto por "
+            f"qualidade de dado, contradicao e historico")
+
     return motivos
 
 
@@ -471,6 +647,20 @@ def _gates(entrada: dict, prob: float, valor: dict, conf: dict, conv: dict,
 #: mesma natureza do prior de mercado que o pre-jogo adotou em 08/08.
 #: `confidence` carrega junto os sinais ao vivo (convergencia, ritmo, folga
 #: ate' a linha, freshness), entao nao ha termo perdido.
+#: POR QUE A V2 NAO ACRESCENTOU TERMOS AQUI (2026-09-11)
+#: -----------------------------------------------------
+#: A camada V2 produziu quatro numeros novos -- alinhamento historico,
+#: cobertura de dado, contradicao e EV ajustado -- e a tentacao e' somar os
+#: quatro neste score. Seria repetir, pela terceira vez no mesmo motor, o
+#: defeito que as duas notas acima descrevem: os quatro JA' estao dentro de
+#: `confidence`. O alinhamento entra por `convergencia` (sinal "historico"), a
+#: cobertura e a contradicao entram como multiplicadores em `live_confidence`,
+#: e o EV ajustado nao pertence a uma ordenacao que e' estatistica por decisao.
+#:
+#: Um sinal que ja' pesa dentro de `confidence` e ganha um termo proprio aqui
+#: passa a pesar duas vezes -- e ninguem consegue dizer quanto, porque os dois
+#: caminhos tem pesos diferentes. Os quatro numeros novos ELIMINAM (em
+#: `_gates_v2`) e DESCONTAM (na confianca). Ordenar continua sendo dos dois.
 PESO_PROBABILIDADE = 0.60
 PESO_CONFIANCA = 0.40
 
