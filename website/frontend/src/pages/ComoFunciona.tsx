@@ -145,7 +145,7 @@ const features = [
     bg: 'bg-teal-500/10 border-teal-500/20',
     badge: null,
     badgeColor: '',
-    title: 'Resultados da IA',
+    title: 'Resultado Geral',
     desc: 'Acompanhe o histórico de performance de todos os picks gerados. Filtre por tipo, período e veja a curva de lucro da IA ao longo do tempo.',
     items: ['Histórico completo de picks', 'ROI e win rate por período', 'VIP, Free, Múltipla e Alavancagem'],
   },

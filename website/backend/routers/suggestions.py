@@ -2368,16 +2368,31 @@ def get_quick_stats(
                 COUNT(*) FILTER (WHERE result IS NOT NULL)   AS total,
                 COUNT(*) FILTER (WHERE result = 'GREEN')     AS greens,
                 COUNT(*) FILTER (WHERE result = 'RED')       AS reds,
+                COUNT(*) FILTER (WHERE result = 'HALF-WIN')  AS half_wins,
+                COUNT(*) FILTER (WHERE result = 'PUSH')      AS push,
                 COALESCE(SUM(profit) FILTER (WHERE result IS NOT NULL), 0) AS profit
             FROM (
 {uniao}
             ) AS all_picks
             WHERE result IS NOT NULL
         """)
-        stats = dict(month_row) if month_row else {"total": 0, "greens": 0, "reds": 0, "profit": 0}
+        stats = dict(month_row) if month_row else {"total": 0, "greens": 0, "reds": 0,
+                                                   "half_wins": 0, "push": 0, "profit": 0}
         total  = stats["total"] or 0
         greens = stats["greens"] or 0
-        stats["win_rate"] = round(greens / total * 100, 1) if total > 0 else 0.0
+
+        # MESMA regra de /public/results (by_source) e de utils/format.ts:
+        # meio-green e' acerto e anulada sai do denominador. Este numero era
+        # greens/total puro, entao a mesma base (780 picks, 494 greens, 31
+        # anuladas) saia 63,3% no topo da aba Picks e 66% na tela de
+        # Resultados. Dois placares do mesmo produto discordando em publico e'
+        # pior que um placar conservador: quem compara conclui que um dos dois
+        # mente. As anuladas ficam no `total` de proposito, porque o card
+        # "Picks" conta pick publicado, nao pick liquidado.
+        half_wins  = stats.get("half_wins") or 0
+        resolvidos = total - (stats.get("push") or 0)
+        acertos    = greens + half_wins
+        stats["win_rate"] = round(acertos / resolvidos * 100, 1) if resolvidos > 0 else 0.0
 
         # Sequência atual · mesma base do numero acima.
         #

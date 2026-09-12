@@ -738,8 +738,8 @@ export default function ResultadosPublicos() {
       nav={user ? true : <PublicNav width="full" />}
       bar={{
         back: true,
-        title: 'Resultados da IA',
-        sub: 'Histórico auditável de todos os picks. Atualizado automaticamente.',
+        title: 'Resultado Geral',
+        sub: 'Placar somado de todos os produtos, desde o primeiro pick. É o mesmo número que abre a aba Picks.',
       }}
     >
         <AnimatePresence>
