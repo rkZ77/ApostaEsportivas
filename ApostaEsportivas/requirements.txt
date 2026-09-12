@@ -13,3 +13,9 @@ openai         # so services/league_analysis_service.py (comando "ligas")
 psycopg2-binary
 python-dotenv
 requests
+
+# Mesmo motivo do requirements do site: `zoneinfo` le o banco de fusos do
+# sistema, o Windows nao tem nenhum, e os coletores e os dois pipelines ao vivo
+# chamam ZoneInfo("America/Sao_Paulo") pra decidir o dia de hoje em Brasilia.
+# Sem isto o motor nao roda num Python limpo fora do Linux.
+tzdata

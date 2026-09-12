@@ -27,3 +27,18 @@ rapidfuzz==3.14.5
 # O pin anterior (11.4.0) QUEBROU O BUILD: aquela versao nunca existiu. Pinar
 # sem conferir o indice custou um deploy.
 Pillow==12.3.0
+
+# O `zoneinfo` do Python NAO traz banco de fusos proprio: ele le o do sistema
+# operacional. No Linux isso existe (/usr/share/zoneinfo) e por isso o
+# container e o CI sempre funcionaram. No Windows nao existe, e sem este
+# pacote todo `ZoneInfo("America/Sao_Paulo")` -- que e como admin.py, banca.py,
+# live.py e live_picks.py convertem hora -- estoura com ZoneInfoNotFoundError.
+#
+# Estava funcionando na maquina de desenvolvimento por acidente: alguma outra
+# biblioteca puxou o tzdata pro Python global. Num `venv` limpo, 24 arquivos de
+# teste nem chegam a ser coletados. Dependencia que so funciona por acidente e
+# dependencia nao declarada.
+#
+# Declarado tambem porque congela a VERSAO do banco de fusos junto com o resto
+# do requirements, em vez de depender de quando a imagem base foi atualizada.
+tzdata==2026.2
