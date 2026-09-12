@@ -165,22 +165,28 @@ def _um_confronto(fid):
 
 @pytest.fixture
 def api(monkeypatch):
-    """Substitui a rede e registra CADA url chamada, que e' o que estes testes
-    medem -- o numero de requisicoes, nao o conteudo delas."""
+    """Substitui a rede e registra CADA recurso chamado, que e' o que estes
+    testes medem -- o numero de requisicoes, nao o conteudo delas.
+
+    Dubla `api_client.buscar` desde 2026-09-12: o modulo deixou de chamar
+    `requests.get` direto, o que tambem fez estas chamadas passarem a CONTAR
+    na cota global (antes o H2H gastava sem aparecer no painel -- e' o custo
+    invisivel descrito no cabecalho do proprio h2h_api_fetcher).
+    """
     from services import h2h_api_fetcher
 
     chamadas = []
 
-    def _get(url, headers=None, params=None, timeout=None):
-        chamadas.append(url)
-        if "headtohead" in url:
-            return _Resposta({"response": [_um_confronto(100 + i) for i in range(6)]})
-        return _Resposta({"response": [
+    def _buscar(recurso, params=None, origem=None, **kwargs):
+        chamadas.append(recurso)
+        if "headtohead" in recurso:
+            return [_um_confronto(100 + i) for i in range(6)]
+        return [
             {"team": {"id": 1}, "statistics": [{"type": "Yellow Cards", "value": 2}]},
             {"team": {"id": 2}, "statistics": [{"type": "Yellow Cards", "value": 3}]},
-        ]})
+        ]
 
-    monkeypatch.setattr(h2h_api_fetcher.requests, "get", _get)
+    monkeypatch.setattr(h2h_api_fetcher, "buscar", _buscar)
     monkeypatch.setattr(h2h_api_fetcher, "_API_KEY", "chave-de-teste")
     monkeypatch.setattr(h2h_api_fetcher, "_cache", {})
     h2h_api_fetcher.zerar_contador()

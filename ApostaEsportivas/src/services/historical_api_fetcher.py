@@ -1,15 +1,16 @@
 ﻿import os
-import requests
 from dotenv import load_dotenv, find_dotenv
 
 from utils.stat_sheet import folha_publicada, ler_valor, somar
+from utils.api_client import buscar, ApiFootballError
 
 load_dotenv(find_dotenv())
 
 API_KEY = os.getenv("API_FOOTBALL_KEY")
-HEADERS = {"x-apisports-key": API_KEY}
-FIXTURES_URL  = "https://v3.football.api-sports.io/fixtures"
-STATS_URL     = "https://v3.football.api-sports.io/fixtures/statistics"
+
+# Recursos no formato do `api_client` (caminho, nao URL).
+FIXTURES_URL  = "fixtures"
+STATS_URL     = "fixtures/statistics"
 
 FINISHED = {"FT", "AET", "PEN"}
 
@@ -27,19 +28,20 @@ class HistoricalApiFetcher:
     # --------------------------------------------------------
     def get_recent_matches(self, team_id: int, n: int = 8) -> list[dict]:
         try:
-            r = requests.get(
-                FIXTURES_URL,
-                headers=HEADERS,
-                params={"team": team_id, "last": n},
-                timeout=15,
-            )
-            r.raise_for_status()
-        except Exception as e:
+            itens = buscar(FIXTURES_URL, {"team": team_id, "last": n},
+                           origem="historico_api")
+        except ApiFootballError as e:
+            # FALHA ABERTA de proposito, e a razao e' o papel deste modulo:
+            # ele e' o FALLBACK de quando o banco nao tem historico (inicio de
+            # copa, amistoso de selecao, competicao nova). Quem chama ja trata
+            # lista vazia como "sem historico" e recusa estimar -- entao o
+            # desfecho de uma falha aqui e' no-pick, nao pick com dado ruim.
             print(f"[HIST_API] Erro ao buscar fixtures do time {team_id}: {e}")
             return []
 
         matches = []
-        for item in r.json().get("response", []):
+        self._ultimos_itens = itens
+        for item in itens:
             fixture = item["fixture"]
             status  = fixture["status"]["short"]
 
@@ -94,34 +96,20 @@ class HistoricalApiFetcher:
         if not matches:
             return []
 
-        # Busca fixture_ids para depois pegar stats
-        try:
-            r = requests.get(
-                FIXTURES_URL,
-                headers=HEADERS,
-                params={"team": team_id, "last": n},
-                timeout=15,
-            )
-            r.raise_for_status()
-        except Exception as e:
-            print(f"[HIST_API] Erro ao buscar fixture_ids para stats: {e}")
-            return matches  # retorna sem stats se falhar
-
+        # REAPROVEITA a resposta de get_recent_matches em vez de repetir a
+        # requisicao. Eram duas chamadas IDENTICAS (mesmo endpoint, mesmo
+        # team, mesmo last) a cada uso deste metodo -- a segunda existia so'
+        # pra extrair os fixture_id de um payload que o metodo anterior ja
+        # tinha lido inteiro e jogado fora.
         fixture_ids = []
-        for item in r.json().get("response", []):
+        for item in getattr(self, "_ultimos_itens", []):
             if item["fixture"]["status"]["short"] in FINISHED:
                 fixture_ids.append(item["fixture"]["id"])
 
         for i, (fx_id, match) in enumerate(zip(fixture_ids, matches)):
             try:
-                rs = requests.get(
-                    STATS_URL,
-                    headers=HEADERS,
-                    params={"fixture": fx_id},
-                    timeout=15,
-                )
-                rs.raise_for_status()
-                stats_list = rs.json().get("response", [])
+                stats_list = buscar(STATS_URL, {"fixture": fx_id},
+                                    origem="historico_api")
 
                 if len(stats_list) < 2:
                     continue

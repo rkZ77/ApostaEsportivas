@@ -1,9 +1,8 @@
 ﻿import os
-import requests
 from dotenv import load_dotenv, find_dotenv
 
 from utils.db_utils import get_connection
-from services import api_quota
+from utils.api_client import buscar
 
 load_dotenv(find_dotenv())
 
@@ -12,7 +11,6 @@ if not API_KEY:
     raise RuntimeError("API_FOOTBALL_KEY não definida no ambiente")
 
 BASE_URL = "https://v3.football.api-sports.io"
-HEADERS = {"x-apisports-key": API_KEY}
 
 
 # ================================================================
@@ -54,27 +52,22 @@ class LeagueTeamsSyncService:
     # Busca times da API por liga
     # ---------------------------------------------------------
     def _fetch_teams_from_api(self, league_id, season):
-        url = f"{BASE_URL}/teams"
+        """Times da liga. LEVANTA em falha -- nao devolve lista vazia.
 
-        params = {
-            "league": league_id,
-            "season": season
-        }
-
-        try:
-            response = requests.get(
-                url,
-                headers=HEADERS,
-                params=params,
-                timeout=15
-            )
-            api_quota.registrar(getattr(response, "headers", None), "coletor_times")
-            response.raise_for_status()
-        except Exception as e:
-            print(f"[ERRO] Falha API | League {league_id}: {e}")
-            return []
-
-        data = response.json().get("response", [])
+        Aqui o `return []` do `except` custava mais caro que na maioria dos
+        coletores, e de um jeito que nao aparecia neste arquivo: a tabela
+        `teams` e' o FILTRO do coletor de fixtures
+        (`FixtureCollectorService._get_all_team_ids`), que so' aceita jogo com
+        pelo menos um time cadastrado. Uma liga que falhasse aqui saia do
+        radar inteiro -- sem time cadastrado, nenhum jogo dela vira fixture,
+        nenhuma odd e' coletada, nenhum pick existe. E o log dizia
+        "[ERRO] Falha API" numa linha e seguia para a proxima liga.
+        """
+        data = buscar(
+            "teams",
+            {"league": league_id, "season": season},
+            origem="coletor_times",
+        )
 
         teams = []
         for item in data:

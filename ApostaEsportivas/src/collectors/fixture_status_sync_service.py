@@ -1,16 +1,13 @@
 ﻿import os
-import requests
 from datetime import datetime, date, timezone
 from zoneinfo import ZoneInfo
 from utils.db_utils import get_connection
 from dotenv import load_dotenv, find_dotenv
-from services import api_quota
+from utils.api_client import buscar, ApiFootballError, ApiQuotaEsgotada
 
 load_dotenv(find_dotenv())
 
 API_KEY = os.getenv("API_FOOTBALL_KEY")
-HEADERS = {"x-apisports-key": API_KEY}
-API_URL = "https://v3.football.api-sports.io/fixtures"
 
 FINALIZED_STATUSES = {
     "FT", "AET", "PEN", "CANC", "PST", "ABD", "WO"
@@ -41,12 +38,15 @@ class FixtureStatusSyncService:
         pass
 
     def fetch_fixture_status(self, fixture_id):
-        r = requests.get(API_URL, headers=HEADERS, params={
-                         "id": fixture_id}, timeout=20)
-        api_quota.registrar(getattr(r, "headers", None), "coletor_status")
-        r.raise_for_status()
+        """Status do jogo, ou None quando a API nao conhece esse fixture.
 
-        response = r.json().get("response", [])
+        `buscar` levanta em falha, entao `None` volta a significar uma coisa
+        so'. Importa aqui porque o status errado nao fica parado: fixture que
+        nao atualiza pra FT continua entrando nas consultas de jogo pendente,
+        e fixture que nao atualiza pra PST/CANC segue elegivel a pick.
+        """
+        response = buscar(
+            "fixtures", {"id": fixture_id}, origem="coletor_status")
         if not response:
             return None
 
@@ -78,14 +78,22 @@ class FixtureStatusSyncService:
         for i in range(0, len(ids), self.BULK_SIZE):
             lote = ids[i:i + self.BULK_SIZE]
             try:
-                r = requests.get(
-                    API_URL, headers=HEADERS,
-                    params={"ids": "-".join(str(f) for f in lote)}, timeout=20,
+                response = buscar(
+                    "fixtures",
+                    {"ids": "-".join(str(f) for f in lote)},
+                    origem="coletor_status",
                 )
-                api_quota.registrar(getattr(r, "headers", None), "coletor_status")
-                r.raise_for_status()
-                response = r.json().get("response", [])
-            except Exception as e:
+            except ApiQuotaEsgotada:
+                # Os lotes seguintes so' produziriam a mesma recusa.
+                print(f"[STATUS] Cota esgotada; {len(ids) - i} fixture(s) "
+                      f"ficaram sem checagem de status nesta rodada.")
+                break
+            except ApiFootballError as e:
+                # Lote que falha continua sendo pulado (um lote ruim nao pode
+                # travar a sincronizacao inteira), mas agora o `except` pega
+                # SO' falha de API -- antes era `except Exception`, que engolia
+                # junto o KeyError de um payload em formato inesperado e fazia
+                # defeito de parsing parecer instabilidade de rede.
                 print(f"[STATUS] Erro no lote {lote}: {e}")
                 continue
 

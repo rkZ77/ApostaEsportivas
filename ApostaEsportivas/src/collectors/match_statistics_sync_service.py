@@ -1,7 +1,6 @@
 ﻿import os
 import sys
 import psycopg2
-import requests
 from zoneinfo import ZoneInfo
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv, find_dotenv
@@ -11,16 +10,18 @@ load_dotenv(find_dotenv())
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.db_utils import get_connection
 from utils.stat_sheet import folha_publicada, ler_valor, somar
-from services import api_quota
+from utils.api_client import buscar
 
 API_KEY = os.getenv("API_FOOTBALL_KEY")
 if not API_KEY:
     raise RuntimeError("API_FOOTBALL_KEY não definida")
 
-HEADERS = {"x-apisports-key": API_KEY}
+# Recursos da API-Football, no formato que `utils.api_client.buscar` espera
+# (caminho relativo, nao URL inteira). Quem monta header, timeout, retry,
+# checagem de `errors` e paginacao e' o api_client.
 
-FIXTURES_URL = "https://v3.football.api-sports.io/fixtures"
-STATS_URL = "https://v3.football.api-sports.io/fixtures/statistics"
+FIXTURES_URL = "fixtures"
+STATS_URL = "fixtures/statistics"
 
 
 #: Status que contam como jogo apitado. Mesma tripla que o resto do projeto
@@ -220,11 +221,12 @@ class MatchStatisticsSyncService:
                 "season": lg["season"]
             }
 
-            r = requests.get(FIXTURES_URL, headers=HEADERS, params=params)
-            api_quota.registrar(getattr(r, "headers", None), "coletor_stats")
-            r.raise_for_status()
-
-            response = r.json().get("response", [])
+            # PAGINA. Uma temporada de liga passa de 100 jogos com
+            # folga, e a API entrega 100 por pagina: esta chamada lia so' a
+            # primeira e devolvia uma resposta bem formada e incompleta, sem
+            # erro nenhum. Tambem nao tinha timeout -- era a unica chamada do
+            # projeto que podia pendurar a coleta indefinidamente.
+            response = buscar(FIXTURES_URL, params, origem="coletor_stats")
 
             for fx in response:
                 fixture = fx["fixture"]
@@ -327,11 +329,7 @@ class MatchStatisticsSyncService:
         self.conn.commit()
 
     def _fetch_match_stats(self, fixture_id):
-        r = requests.get(STATS_URL, headers=HEADERS,
-                         params={"fixture": fixture_id}, timeout=15)
-        api_quota.registrar(getattr(r, "headers", None), "coletor_stats")
-        r.raise_for_status()
-        return r.json().get("response", [])
+        return buscar(STATS_URL, {"fixture": fixture_id}, origem="coletor_stats")
 
     # ---------------------------------------------------------
     # SAVE COMPLETO
@@ -761,10 +759,7 @@ class MatchStatisticsSyncService:
 
         Custa 2 requisicoes. Requer a conexao ja' aberta (`self._open()`).
         """
-        r = requests.get(FIXTURES_URL, headers=HEADERS, params={"id": fixture_id}, timeout=15)
-        api_quota.registrar(getattr(r, "headers", None), "coletor_stats")
-        r.raise_for_status()
-        response = r.json().get("response", [])
+        response = buscar(FIXTURES_URL, {"id": fixture_id}, origem="coletor_stats")
 
         if not response:
             print(f"[MATCH_STATS] fixture_id={fixture_id} não encontrado na API.")

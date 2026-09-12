@@ -59,17 +59,15 @@ from __future__ import annotations
 import os
 import time
 
-import requests
 from dotenv import find_dotenv, load_dotenv
+
+from utils.api_client import buscar, ApiFootballError
 
 from utils.stat_sheet import folha_publicada, ler_valor, somar
 
 load_dotenv(find_dotenv())
 
 _API_KEY = os.getenv("API_FOOTBALL_KEY")
-_HEADERS = {"x-apisports-key": _API_KEY}
-_H2H_URL = "https://v3.football.api-sports.io/fixtures/headtohead"
-_STATS_URL = "https://v3.football.api-sports.io/fixtures/statistics"
 _FINISHED = {"FT", "AET", "PEN"}
 
 # Quantos confrontos buscar. 6 cobre ~3 temporadas de clássico nacional
@@ -146,12 +144,21 @@ def get_h2h(team_a: int, team_b: int,
     if before_date:
         params["to"] = before_date
 
+    # H2H CONTINUA FALHANDO ABERTO, e aqui isso e' uma decisao e nao um
+    # descuido: confronto direto e' contexto, nao base de estimativa. O
+    # rivalry_model e o context_gate sabem lidar com lista vazia, e
+    # data_validation ja exclui h2h do calculo de DQS de proposito (gap de
+    # coleta conhecido). Derrubar a analise inteira por causa dele seria
+    # trocar um pick a menos por nenhum pick.
+    #
+    # O QUE MUDOU: `buscar` REGISTRA A COTA, coisa que este modulo nunca fez.
+    # O custo invisivel de H2H (documentado no cabecalho: 7 requisicoes onde o
+    # teto do motor ao vivo enxergava 1) era invisivel justamente porque
+    # nenhuma destas chamadas passava por `api_quota`. Agora passa.
     try:
         _requisicoes += 1
-        r = requests.get(_H2H_URL, headers=_HEADERS, params=params, timeout=15)
-        r.raise_for_status()
-        itens = r.json().get("response", [])
-    except Exception as e:
+        itens = buscar("fixtures/headtohead", params, origem="h2h")
+    except ApiFootballError as e:
         print(f"[H2H_API] Erro ao buscar H2H {team_a}-{team_b}: {e}")
         return []
 
@@ -200,12 +207,8 @@ def get_h2h(team_a: int, team_b: int,
         if fx_id and com_estatisticas:
             try:
                 _requisicoes += 1
-                rs = requests.get(
-                    _STATS_URL, headers=_HEADERS,
-                    params={"fixture": fx_id}, timeout=15,
-                )
-                rs.raise_for_status()
-                stats_list = rs.json().get("response", [])
+                stats_list = buscar(
+                    "fixtures/statistics", {"fixture": fx_id}, origem="h2h")
                 if len(stats_list) >= 2:
                     if stats_list[0]["team"]["id"] == home_id:
                         home_s, away_s = stats_list[0]["statistics"], stats_list[1]["statistics"]

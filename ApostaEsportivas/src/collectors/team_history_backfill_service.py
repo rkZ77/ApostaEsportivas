@@ -61,7 +61,6 @@ import os
 import sys
 from datetime import datetime
 
-import requests
 from dotenv import load_dotenv, find_dotenv
 
 load_dotenv(find_dotenv())
@@ -69,11 +68,11 @@ load_dotenv(find_dotenv())
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.db_utils import get_connection
 from utils.data_br import HOJE_BR
+from utils.api_client import buscar
 from services.match_stats_service import DEFAULT_LIMIT_MULTI
 from services.pick_engine import competition_profile as cp
 from collectors.match_statistics_sync_service import (
     MatchStatisticsSyncService,
-    HEADERS,
     FIXTURES_URL,
     STATS_URL,
 )
@@ -146,11 +145,14 @@ class TeamHistoryBackfillService:
     # ---------------------------------------------------------
     # API (toda chamada passa por aqui -- e' o unico contador de cota)
     # ---------------------------------------------------------
-    def _api_get(self, url: str, params: dict) -> list:
+    def _api_get(self, recurso: str, params: dict) -> list:
+        """Unico ponto de saida deste servico -- e o unico contador de cota
+        dele. Passa por `api_client`, entao agora tambem CONTA na cota global
+        (`api_quota`): este modulo gastava requisicao sem aparecer no painel,
+        mesmo problema do H2H.
+        """
         self.requisicoes += 1
-        r = requests.get(url, headers=HEADERS, params=params, timeout=15)
-        r.raise_for_status()
-        return r.json().get("response", [])
+        return buscar(recurso, params, origem="backfill_historico")
 
     def _cota_esgotada(self) -> bool:
         return self.requisicoes >= self.teto_requisicoes

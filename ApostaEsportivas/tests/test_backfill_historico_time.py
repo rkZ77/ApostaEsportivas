@@ -11,7 +11,7 @@ pode gastar requisicao, e o teto tem que cortar a rodada de verdade.
 O resto cobre o que ja mordeu neste repositorio antes: lado trocado na folha de
 estatistica e placar de prorrogacao entrando como placar dos 90 minutos.
 
-Nenhum teste aqui toca banco nem API. O `requests` do modulo e substituido por
+Nenhum teste aqui toca banco nem API. O `buscar` do modulo e substituido por
 um duble, entao _api_get roda de verdade -- inclusive o contador de cota, que e
 justamente o que nao pode ser simulado.
 """
@@ -62,17 +62,23 @@ class _RespostaFake:
 
 
 class _RequestsFake:
-    """Substitui o modulo `requests` inteiro dentro do coletor."""
+    """Substitui `utils.api_client.buscar` dentro do coletor.
+
+    O nome ficou por continuidade com o resto do arquivo. O que ele dubla
+    mudou em 2026-09-12: o coletor deixou de chamar `requests.get` direto e
+    passou a usar `api_client.buscar`, que ja devolve a lista `response` --
+    por isso aqui nao ha mais `_RespostaFake` no meio. O que os testes medem
+    (quantas chamadas, com que params) continua igual.
+    """
 
     def __init__(self, jogos=None, folha=None):
         self.jogos = jogos if jogos is not None else []
         self.folha = folha if folha is not None else []
         self.chamadas = []
 
-    def get(self, url, headers=None, params=None, timeout=None):
+    def __call__(self, recurso, params=None, origem=None, **kwargs):
         self.chamadas.append(params)
-        payload = self.jogos if "team" in (params or {}) else self.folha
-        return _RespostaFake(payload)
+        return self.jogos if "team" in (params or {}) else self.folha
 
 
 def _servico(monkeypatch, jogos=None, folha=None, ja_no_banco=(), **kwargs):
@@ -83,7 +89,7 @@ def _servico(monkeypatch, jogos=None, folha=None, ja_no_banco=(), **kwargs):
     svc.stats_sync._save_stats = lambda fx, h, a: svc.gravados.append((fx, h, a))
     svc.stats_sync._gravar_rodadas = lambda pares: None
     svc.http = _RequestsFake(jogos=jogos, folha=folha)
-    monkeypatch.setattr(backfill, "requests", svc.http)
+    monkeypatch.setattr(backfill, "buscar", svc.http)
     return svc
 
 

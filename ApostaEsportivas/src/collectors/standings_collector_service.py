@@ -1,17 +1,12 @@
 ﻿import os
-import requests
 from dotenv import load_dotenv, find_dotenv
 from psycopg2.extras import execute_batch
 from utils.db_utils import get_connection
-from services import api_quota
+from utils.api_client import buscar
 
 load_dotenv(find_dotenv())
 
 API_KEY = os.getenv("API_FOOTBALL_KEY")
-
-HEADERS = {
-    "x-apisports-key": API_KEY
-}
 
 
 class StandingsCollectorService:
@@ -61,21 +56,20 @@ class StandingsCollectorService:
     # FETCH API
     # ----------------------------------------------------------
     def fetch_standings(self, league_id, season):
+        """Classificacao da liga, ou None quando a API nao tem essa tabela.
 
-        r = requests.get(
-            self.url,
-            headers=HEADERS,
-            params={
-                "league": league_id,
-                "season": season
-            },
-            timeout=20
+        `buscar` levanta em falha: `None` aqui passa a significar so' "esta
+        liga nao publica classificacao", que e' caso real (copa em fase de
+        grupos ainda nao sorteada, liga sem tabela). Antes, cota estourada
+        devolvia o mesmo `None` e o time ficava sem rank -- e sem rank o
+        motor cai no peso neutro de adversario (stats_model.opponent_weight),
+        ou seja, a forca do oponente sumia da conta em silencio.
+        """
+        data = buscar(
+            "standings",
+            {"league": league_id, "season": season},
+            origem="coletor_tabela",
         )
-        api_quota.registrar(getattr(r, "headers", None), "coletor_tabela")
-
-        r.raise_for_status()
-
-        data = r.json().get("response", [])
 
         if not data:
             return None
