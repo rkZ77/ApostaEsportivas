@@ -2831,6 +2831,58 @@ def _leg_nao_iniciada(fid: int, market: str, line: str, odd: float,
     }
 
 
+#: Status em que o PRIMEIRO TEMPO ja' acabou. E' a fronteira do Under
+#: 2.5 HT: daqui pra frente aquele placar nao muda mais, entao 2 gols
+#: ou menos viram GREEN definitivo. Antes disso (1H) o mesmo numero e'
+#: so' um piso.
+_BOOST_1T_ENCERRADO = {"HT", "2H", "ET", "BT", "P", "FT", "AET", "PEN"}
+
+
+def _pernas_do_boost(status, gols_agora, gols_1t):
+    """As duas pernas do Boost, cada uma so' quando JA' E' IRREVERSIVEL.
+
+    Devolve (res_ft, res_ht), com None em quem o jogo ainda pode virar.
+
+    O BOOST ERA O UNICO PRODUTO QUE ESPERAVA O APITO (corrigido em
+    2026-09-12). VIP, free, ao vivo, faltas e as pernas de multipla,
+    bingo e alavancagem ja' fechavam com a bola rolando desde que o
+    contador passa o teto da linha (`_travado_antes_do_apito`). Aqui o
+    bloco comecava com `if status in FT_STATUSES` e nao olhava nada
+    antes disso -- entao o Boost ficava "Pendente" na tela enquanto o
+    VIP do MESMO jogo ja' tinha fechado.
+
+    A regra e' a mesma daquela funcao, aplicada a duas pernas de linha
+    fixa (Over 1.5 no jogo, Under 2.5 no primeiro tempo). Gol nao
+    desmarca, entao contador de gol so' SOBE -- e e' isso que torna
+    cada conclusao abaixo definitiva:
+
+      Over 1.5 FT   · 2 gols  -> GREEN na hora, em qualquer minuto.
+                      RED so' no apito: falta jogo pra sair o segundo.
+
+      Under 2.5 HT  · 3 gols no 1T -> RED na hora. O quarto nao muda
+                      nada, e com esta perna vermelha o BILHETE ja'
+                      esta' perdido.
+                      GREEN so' quando o primeiro tempo ACABA com 2 ou
+                      menos -- 2 gols aos 20' ainda comportam o
+                      terceiro.
+
+    Por isso `gols_1t` tem dois significados conforme o status, e os
+    dois estao corretos: durante o 1H ele e' um PISO (o placar de agora
+    e' o do primeiro tempo, e pode crescer), e dali em diante e' o
+    numero FINAL. O piso so' autoriza a conclusao que cresce contra o
+    pick, que e' o RED -- mesmo raciocinio de
+    settlement.settle_over_under_com_piso.
+    """
+    res_ft = "GREEN" if (gols_agora is not None and gols_agora > 1.5) else None
+    res_ht = None
+    if gols_1t is not None:
+        if gols_1t > 2.5:
+            res_ht = "RED"
+        elif status in _BOOST_1T_ENCERRADO:
+            res_ht = "GREEN"
+    return res_ft, res_ht
+
+
 def resolve_all_pending(max_age_days: int | None = None) -> dict:
     """
     Tenta resolver todos os picks pendentes usando dados ao vivo da API.
@@ -3381,9 +3433,7 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
         # com "current transaction is aborted". Um JOIN derrubou tres blocos.
         _janela_pb = _janela.replace("match_date", "pb.match_date") if _janela else ""
 
-        def _fecha_boost(pid, odd, gols_ft, gols_ht):
-            res_ft = "GREEN" if gols_ft > 1.5 else "RED"
-            res_ht = "GREEN" if gols_ht < 2.5 else "RED"
+        def _fecha_boost(pid, odd, res_ft, res_ht):
             res = "GREEN" if (res_ft == "GREEN" and res_ht == "GREEN") else "RED"
             c = conn.cursor()
             c.execute("""UPDATE picks_boost
@@ -3413,26 +3463,69 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
                     fix_data = _fetch_fixture(p["fixture_id"])
                     fix = fix_data.get("fixture") or {}
                     status = (fix.get("status") or {}).get("short")
-                    gols_ft = gols_ht = None
-                    if status in FT_STATUSES:
-                        score = fix_data.get("score") or {}
-                        ht = score.get("halftime") or {}
-                        if ht.get("home") is not None and ht.get("away") is not None:
-                            gols_ht = int(ht["home"]) + int(ht["away"])
-                        # AET/PEN: `goals` ja' traz o tempo extra somado, e a
-                        # casa liquida pelos 90. Mesma regra de `_enrich_leg`.
-                        base = (score.get("fulltime") or {}) if status in ("AET", "PEN")                                else (fix_data.get("goals") or {})
-                        if base.get("home") is not None and base.get("away") is not None:
-                            gols_ft = int(base["home"]) + int(base["away"])
+                    score = fix_data.get("score") or {}
+                    gols = fix_data.get("goals") or {}
 
-                    # Segunda chance: a folha que o site ja' tem.
-                    if (gols_ft is None or gols_ht is None)                        and p["ms_status"] in ("FT", "AET", "PEN")                        and p["total_goals"] is not None                        and p["home_goals_ht"] is not None                        and p["away_goals_ht"] is not None:
-                        gols_ft = int(p["total_goals"])
-                        gols_ht = int(p["home_goals_ht"]) + int(p["away_goals_ht"])
+                    #: Placar de AGORA. Serve nos dois regimes: com o jogo
+                    #: rolando e' o piso do Over 1.5 (so' sobe), e no apito e'
+                    #: o total. AET/PEN: `goals` ja' traz o tempo extra somado
+                    #: e a casa liquida pelos 90, entao ali vale o `fulltime`.
+                    #: Mesma regra de `_enrich_leg`.
+                    base = (score.get("fulltime") or {}) if status in ("AET", "PEN") else gols
+                    gols_agora = (int(base["home"]) + int(base["away"])
+                                  if base.get("home") is not None and base.get("away") is not None
+                                  else None)
 
-                    if gols_ft is None or gols_ht is None:
-                        continue          # pendente, e nao zero
-                    _fecha_boost(p["id"], p["odd"], gols_ft, gols_ht)
+                    #: Gols do PRIMEIRO TEMPO. Enquanto o 1H corre a API ainda
+                    #: nao publica `score.halftime`, e o placar corrente E' o
+                    #: do primeiro tempo -- por isso ele entra aqui. O
+                    #: `_pernas_do_boost` sabe que nesse caso o numero e' piso
+                    #: e nao final (ver a nota la').
+                    ht = score.get("halftime") or {}
+                    if ht.get("home") is not None and ht.get("away") is not None:
+                        gols_1t = int(ht["home"]) + int(ht["away"])
+                    elif status in ("1H", "HT"):
+                        gols_1t = gols_agora
+                    else:
+                        gols_1t = None
+
+                    # Segunda chance: a folha que o site ja' tem. So' vale pra
+                    # jogo encerrado -- `match_statistics` nao acompanha jogo
+                    # em andamento (quem a preenche e' o stats_sweep).
+                    folha_fechada = p["ms_status"] in ("FT", "AET", "PEN")
+                    if folha_fechada and status not in LIVE_STATUSES:
+                        if gols_agora is None and p["total_goals"] is not None:
+                            gols_agora = int(p["total_goals"])
+                        if (gols_1t is None and p["home_goals_ht"] is not None
+                                and p["away_goals_ht"] is not None):
+                            gols_1t = int(p["home_goals_ht"]) + int(p["away_goals_ht"])
+
+                    encerrado = status in FT_STATUSES or (status is None and folha_fechada)
+                    res_ft, res_ht = _pernas_do_boost(
+                        "FT" if encerrado else status, gols_agora, gols_1t)
+
+                    if encerrado:
+                        # No apito as duas pernas fecham: o que nao travou
+                        # antes cai no lado que sobrou. Sem os dois numeros o
+                        # pick fica PENDENTE -- estatistica ausente nunca vira
+                        # zero (invariante 1 de services/settlement.py).
+                        if gols_agora is None or gols_1t is None:
+                            continue
+                        res_ft = res_ft or "RED"
+                        res_ht = res_ht or "GREEN"
+                    elif res_ht == "RED":
+                        # Perna perdida trava o BILHETE inteiro, e o resto do
+                        # jogo nao muda mais nada. `res_ft` fica como esta' --
+                        # GREEN se o segundo gol ja' saiu, NULL se ainda nao ha'
+                        # o que afirmar. Escrever "RED" ali seria mentir na
+                        # unica coluna que existe pra dizer qual perna quebrou.
+                        pass
+                    elif res_ft == "GREEN" and res_ht == "GREEN":
+                        pass              # as duas ganharam: fecha GREEN
+                    else:
+                        continue          # ainda ha' jogo pra virar
+
+                    _fecha_boost(p["id"], p["odd"], res_ft, res_ht)
                 except Exception as e:
                     logger.error("[AUTO-RESULT] boost #%s erro: %s", p["id"], e)
         except Exception as e:

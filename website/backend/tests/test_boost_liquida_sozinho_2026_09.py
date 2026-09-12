@@ -51,10 +51,19 @@ def test_a_folha_virou_segunda_chance_e_nao_exigencia():
 
 
 def test_sem_placar_do_intervalo_fica_pendente():
-    """A primeira invariante do settlement: ausencia nunca vira zero."""
+    """A primeira invariante do settlement: ausencia nunca vira zero.
+
+    As variaveis mudaram de nome em 12/09, quando o Boost passou a fechar com
+    a bola rolando: `gols_ft`/`gols_ht` viraram `gols_agora`/`gols_1t`, porque
+    no meio do jogo elas nao sao mais o total e o placar final do 1T -- sao o
+    placar de agora e um piso. A guarda que este teste protege e' a mesma, e
+    continua no ramo de jogo encerrado. Ver
+    test_boost_green_no_meio_do_jogo_2026_09.py.
+    """
     bloco = _bloco_do_boost()
-    assert "if gols_ft is None or gols_ht is None:" in bloco
-    assert "continue" in bloco.split("if gols_ft is None or gols_ht is None:")[1][:120]
+    guarda = "if gols_agora is None or gols_1t is None:"
+    assert guarda in bloco
+    assert "continue" in bloco.split(guarda)[1][:120]
 
 
 def test_prorrogacao_liquida_pelos_90():
