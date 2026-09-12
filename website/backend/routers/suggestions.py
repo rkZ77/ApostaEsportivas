@@ -730,6 +730,13 @@ def get_today_suggestions(
             # consumidores ja leem esse nome). `probability` e' o campo LIMPO,
             # so' preenchido quando ha prob_combinada de verdade.
             #
+            # O LIMIT ACOMPANHA O TETO DO MOTOR (2026-09-11). Ele era 3, de
+            # quando o motor publicava no maximo 3 bilhetes por dia. O teto da
+            # Multipla V2 e' 5 num dia de 31+ jogos elegiveis, e a janela aqui
+            # tem cauda de 3 dias pros bilhetes ainda sem resultado -- um LIMIT
+            # de 3 cortaria bilhete publicado, em silencio, justamente no dia
+            # cheio. 8 cobre o teto do dia com folga pra cauda.
+            #
             # A distincao importa no card: score_combo e' a media dos
             # final_score das pernas, nao uma probabilidade. Com um campo so',
             # o front nao tinha como saber se o numero que recebeu era chance
@@ -745,7 +752,7 @@ def get_today_suggestions(
                 FROM picks_multiplas
                 WHERE {_m_where}
                 ORDER BY match_date DESC, created_at DESC
-                LIMIT 3
+                LIMIT 8
             """, _d)
             result["multiplas"] = _enrich_multipla_legs(cur, rows_m)
 

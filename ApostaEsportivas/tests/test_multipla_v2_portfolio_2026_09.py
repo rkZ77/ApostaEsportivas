@@ -80,7 +80,9 @@ def test_maximo_nao_e_meta():
                                                for i in range(3, 22)])
     resultado = portfolio.montar(pool, jogos_elegiveis=20)
     assert resultado["max_multiples"] == 3
-    assert len(resultado["multiples"]) <= 3
+    # As 19 pernas fracas nao passam no gate individual, entao sobra 1 bilhete
+    # possivel -- o teto de 3 nao vira meta de 3.
+    assert len(resultado["multiples"]) == 1
 
 
 # ------------------------------------------------------------------ NO_MULTIPLA
@@ -261,6 +263,10 @@ def test_o_dia_prefere_a_mais_b_e_c_mais_d_a_tres_bilhetes_girando_em_a():
     pernas = [perna(i, odd=1.48, league_id=i) for i in range(1, 9)]
     pool, _, jogos = _pool(pernas)
     resultado = portfolio.montar(pool, jogos_elegiveis=jogos)
+    # Sem isto o teste passa vazio: "nenhuma perna se repete" e' trivialmente
+    # verdade quando nenhum bilhete foi publicado.
+    assert resultado["multiples"], resultado.get("reason")
+    assert len(resultado["multiples"]) >= 2
 
     vistas = []
     for bilhete in resultado["multiples"]:
@@ -273,6 +279,7 @@ def test_exposicao_por_jogo_tem_limite():
     pernas = [perna(i, odd=1.48, league_id=i) for i in range(1, 9)]
     pool, _, jogos = _pool(pernas)
     resultado = portfolio.montar(pool, jogos_elegiveis=jogos)
+    assert resultado["multiples"], resultado.get("reason")
 
     contagem = {}
     for bilhete in resultado["multiples"]:
@@ -287,7 +294,9 @@ def test_o_teto_conta_o_dia_e_nao_a_execucao():
     pernas = [perna(i, odd=1.48, league_id=i) for i in range(1, 9)]
     pool, _, jogos = _pool(pernas)
     resultado = portfolio.montar(pool, jogos_elegiveis=jogos, vagas=1)
-    assert len(resultado["multiples"]) <= 1
+    assert len(resultado["multiples"]) == 1
+    # Sem a vaga limitada o mesmo pool publicaria mais de um.
+    assert len(portfolio.montar(pool, jogos_elegiveis=jogos)["multiples"]) > 1
 
 
 def test_o_resumo_do_dia_responde_por_que():
@@ -324,3 +333,47 @@ def test_o_gate_individual_aprova_uma_perna_boa():
     passam a testar o vazio."""
     aprovadas, reprovadas, _ = _pool([perna(1), perna(2, league_id=9)])
     assert len(aprovadas) == 2, [p["motivos"] for p in reprovadas]
+
+
+# ------------------------------------------------------------------ GRAVACAO
+#
+# O DEFEITO QUE ESTES DOIS TESTES FECHAM (achado 2026-09-11):
+#
+# Em 2026-09-05 o produto passou a publicar mais de um bilhete por dia. O
+# indice unico do banco -- UNIQUE (match_date) WHERE multipla_name =
+# 'MULTIPLA_ENGINE' -- nao acompanhou. O laco montava o segundo bilhete,
+# pagava a revisao de IA, chamava o INSERT, e o ON CONFLICT ... DO NOTHING
+# engolia a gravacao EM SILENCIO: o motor dizia que ia publicar varios e o
+# banco publicava um, sem erro nenhum no log.
+#
+# Nenhum teste pegou porque todos testavam a MONTAGEM em memoria. Estes olham
+# a gravacao -- sem banco, lendo a fonte, que e' o que da' pra fazer aqui.
+def test_a_trava_do_banco_permite_mais_de_um_bilhete_por_dia():
+    import inspect
+
+    import engine_pipelines.multipla_pipeline as mult
+
+    fonte = inspect.getsource(mult._create_table_if_needed)
+    assert "DROP INDEX IF EXISTS idx_picks_multiplas_match_date_unique" in fonte, \
+        "o indice de 1-por-dia continua no banco e engole o segundo bilhete"
+    assert "(match_date, multipla_name)" in fonte
+
+
+def test_cada_bilhete_do_dia_grava_num_slot_proprio():
+    import inspect
+
+    import engine_pipelines.multipla_pipeline as mult
+
+    fonte = inspect.getsource(mult._save_multipla)
+    # O nome carrega o slot: e' ele que torna a chave unica por bilhete, e nao
+    # por dia. Sem isso o segundo INSERT colide com o primeiro.
+    assert 'f"MULTIPLA_ENGINE_{slot}"' in fonte
+    assert "ON CONFLICT (match_date, multipla_name)" in fonte
+
+
+def test_o_teto_absoluto_do_pipeline_e_o_do_config():
+    import engine_pipelines.multipla_pipeline as mult
+
+    assert mult.MAX_MULTIPLAS_POR_DIA == mcfg.TETO_ABSOLUTO_POR_DIA
+    assert (mult.ODD_TOTAL_MIN, mult.ODD_TOTAL_MAX) == (mcfg.ODD_TOTAL_MIN,
+                                                        mcfg.ODD_TOTAL_MAX)

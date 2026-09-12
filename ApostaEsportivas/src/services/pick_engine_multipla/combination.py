@@ -89,7 +89,13 @@ def avaliar(pernas, config: cfg.MultiplaConfig | None = None) -> dict:
     dizer por que.
     """
     config = config or cfg.padrao()
-    pernas = list(pernas)
+    # Perna que nao passou por component.avaliar entra enriquecida aqui. Nao
+    # e' conveniencia: e' o que impede este modulo de ter DUAS entradas com
+    # contratos diferentes -- uma que exige `component_score` e outra que
+    # estoura com KeyError num campo que o chamador nao tinha como saber que
+    # precisava existir.
+    pernas = [p if "component_score" in p else component.avaliar(p, config)
+              for p in pernas]
     motivos = []
 
     if _excludente(pernas, config):

@@ -34,23 +34,37 @@ def test_tetos_declarados():
 
 
 def test_multipla_nao_repete_perna_entre_bilhetes():
-    """Duas voltas de `_find_combo` sobre o pool, tirando o que ja foi usado:
-    e' assim que o pipeline monta o segundo bilhete."""
-    legs = [
-        {"final_score": 90 - i, "odd": 1.6, "taxa_real": 0.7,
-         "market_type": f"m{i}", "_fixture": {"fixture_id": 100 + i}}
-        for i in range(6)
-    ]
-    restantes = list(legs)
-    vistos = []
-    for _ in range(2):
-        r = mult._find_combo(restantes)
-        if not r:
-            break
-        combo = r[0]
-        vistos.extend(id(p) for p in combo)
-        usadas = {id(p) for p in combo}
-        restantes = [p for p in restantes if id(p) not in usadas]
+    """Na V2 quem monta o dia inteiro e' o portfolio, nao um guloso chamado
+    em laco (`_find_combo` deixou de existir aqui em 2026-09-11). A REGRA nao
+    mudou, so' o lugar onde ela e' aplicada: perna gasta sai do pool."""
+    from services.pick_engine_multipla import component, portfolio
+
+    def perna(fixture_id):
+        return {
+            "market_type": "goals", "market_name": "goals", "value_label": "Over 1.5",
+            "_direction": "over", "odd": 1.50, "melhor_odd": 1.50,
+            "best_bookmaker": "Betano",
+            "bookmaker_odds": [{"bookmaker": "Betano", "odd": 1.50}],
+            "taxa_real": 0.76, "amostra": 32,
+            "wilson": {"lower": 0.60, "upper": 0.88, "width": 0.28},
+            "confidence": 0.80, "Q": 0.85, "ev": 0.14, "edge": 0.10,
+            "risco": "BAIXO", "data_quality_score": 0.85,
+            "projecao": {"classe": "folgada", "margem_em_sigmas": 0.9},
+            "convergence": {"converged": True, "diff_pct": 0.04},
+            "final_score": 0.88,
+            "_fixture": {"fixture_id": fixture_id,
+                         "home_team": f"A{fixture_id}", "away_team": f"B{fixture_id}",
+                         "home_team_id": fixture_id * 10,
+                         "away_team_id": fixture_id * 10 + 1,
+                         "league_id": fixture_id},
+        }
+
+    pool, _ = component.avaliar_pool([perna(100 + i) for i in range(6)])
+    resultado = portfolio.montar(pool, jogos_elegiveis=6)
+    assert resultado["multiples"], resultado.get("reason")
+
+    vistos = [(p["_fixture"]["fixture_id"], p["market_type"])
+              for b in resultado["multiples"] for p in b["pernas"]]
     assert len(vistos) == len(set(vistos)), "a mesma perna entrou em dois bilhetes"
 
 

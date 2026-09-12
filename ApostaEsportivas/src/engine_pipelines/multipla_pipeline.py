@@ -35,9 +35,10 @@ o que e' de pipeline: ler o dia, chamar o motor por fixture, gravar e logar.
 import json
 import textwrap
 import traceback
+from datetime import datetime, timezone
 
 from utils.db_utils import get_connection
-from utils.data_br import HOJE_BR, data_br
+from utils.data_br import HOJE_BR, data_br_de
 from services.fixtures_service import FixturesService
 from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
@@ -604,7 +605,10 @@ def run_multipla_engine():
         conn.close()
         return
 
-    contexto = portfolio.resumo(resultado, data_br())
+    # A data do resumo e' a de BRASILIA, nao a do processo: entre 21:00 e
+    # 00:00 o servidor ja' virou o dia e o Brasil nao, e o log sairia
+    # carimbado com o dia seguinte dos bilhetes que ele descreve.
+    contexto = portfolio.resumo(resultado, data_br_de(datetime.now(timezone.utc)))
     salvas = 0
     for i, bilhete in enumerate(resultado["multiples"], start=1):
         # A IA SO' VETA, nunca monta nem reordena (regra do gate de IA). Ela

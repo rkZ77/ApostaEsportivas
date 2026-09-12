@@ -143,16 +143,26 @@ PESOS_COMPONENTE = {
     "risco":          0.05,
 }
 
-#: Normalizadores das parcelas que nao nascem em 0-1. EV de +25% e edge de
-#: +20pp saturam o topo: acima disso o numero costuma ser erro de estimativa,
-#: nao qualidade (ver a regra "valor estatistico, nao odd desalinhada").
-EV_SATURA_EM = 0.25
-EDGE_SATURA_EM = 0.20
+#: Normalizadores das parcelas que nao nascem em 0-1. Eles nao sao enfeite:
+#: e' deles que sai a ESCALA do score, e portanto o significado de
+#: MIN_LEG_SCORE. Estao calibrados contra a perna que o motor de fato entrega
+#: -- EV entre 5% e 15%, edge entre 5pp (o piso do motor) e 12pp -- e nao
+#: contra um intervalo teorico.
+#:
+#: O topo e' BAIXO de proposito. Saturar em +25% de EV faria uma perna normal
+#: pontuar 0.26 nessa parcela e empurraria o score inteiro pra baixo da faixa
+#: 0.60-0.80 em que os limiares foram escritos. Pior: daria vantagem
+#: crescente a odd alta dentro do score, que e' exatamente o que o motor nao
+#: faz -- preco elimina nos gates e nunca ordena. Acima do topo o numero
+#: costuma ser erro de estimativa, nao qualidade.
+EV_SATURA_EM = 0.15
+EDGE_SATURA_EM = 0.12
 
 #: Probabilidade calibrada normalizada entre estes dois pontos. 0.50 e' moeda
-#: jogada pro alto; 0.85 e' o teto pratico de qualquer perna do motor.
+#: jogada pro alto; 0.80 e' o teto pratico de uma perna DEPOIS do
+#: encolhimento (a taxa crua chega a 0.85, a calibrada quase nunca).
 PROB_PISO_ESCALA = 0.50
-PROB_TETO_ESCALA = 0.85
+PROB_TETO_ESCALA = 0.80
 
 RISCO_PARA_NOTA = {"BAIXO": 1.0, "MEDIO": 0.5, "ALTO": 0.0}
 
@@ -168,10 +178,12 @@ PESOS_COMBINACAO = {
 
 MIN_COMBINATION_SCORE = 0.65
 
-#: Probabilidade combinada normalizada. 0.35 e' o piso pratico de um bilhete
-#: de 2 pernas na faixa 2.00-3.00 (0.59 x 0.59); 0.60 e' um bilhete excelente.
-PROB_COMBINADA_PISO_ESCALA = 0.35
-PROB_COMBINADA_TETO_ESCALA = 0.60
+#: Probabilidade combinada normalizada. 0.32 e' o piso pratico de um bilhete
+#: de 2 pernas na faixa 2.00-3.00 depois do encolhimento; 0.55 e' um bilhete
+#: excelente. Mesma logica do topo baixo acima: a escala segue o que o motor
+#: entrega, nao o intervalo teorico 0-1.
+PROB_COMBINADA_PISO_ESCALA = 0.32
+PROB_COMBINADA_TETO_ESCALA = 0.55
 
 FAIXAS_DE_SCORE = (
     (0.80, "EXCELENTE"),
