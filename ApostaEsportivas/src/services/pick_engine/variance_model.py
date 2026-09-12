@@ -63,7 +63,9 @@ def variance_stats(family: str, scope: str, last10_home: list, last10_away: list
 # media=10 -> CV~0.32 so de ruido aleatorio esperado). O limiar de 0.45
 # fica acima disso pra so penalizar dispersao REAL (alem do que o proprio
 # acaso Poisson ja explicaria), nao a variabilidade normal de contagens.
-_CV_HIGH_THRESHOLD = 0.45
+CV_HIGH_THRESHOLD = 0.45
+# Nome antigo, mantido porque o resto do modulo o usa em linha.
+_CV_HIGH_THRESHOLD = CV_HIGH_THRESHOLD
 _CV_PENALTY_MAX = 0.10
 
 

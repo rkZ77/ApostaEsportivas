@@ -175,6 +175,24 @@ def build_explanation(candidate: dict) -> dict:
                     f"· aproximação por cruzamento de nome entre lesões e escalações recentes"
                 )
 
+    # Projecao x linha em texto. Os dois lados aparecem: folga confortavel e'
+    # argumento a favor, projecao colada na linha (ou apontando pro lado
+    # contrario) e' risco declarado. Sem isso o usuario lia a probabilidade e
+    # nunca o numero que a sustentava.
+    proj = candidate.get("projecao")
+    if proj and proj.get("classe"):
+        rotulo = "acima" if proj["direcao"] == "over" else "abaixo"
+        base = (f"Projeção de {proj['valor']:.2f} contra linha de {proj['linha']:.2f} "
+                f"({proj['margem']:+.2f} {rotulo}, {proj['margem_em_sigmas']:.2f} desvios)")
+        if proj["classe"] == "folgada":
+            positive_factors.append(base + ", com folga confortável")
+        elif proj["classe"] == "apertada":
+            negative_factors.append(base + ", margem apertada")
+        elif proj["classe"] == "em_cima_da_linha":
+            risks.append(base + ": a projeção está praticamente em cima da linha")
+        else:
+            risks.append(base + ": a projeção aponta para o lado contrário da entrada")
+
     return {
         "market": candidate["market_name"],
         "line": candidate["value_label"],

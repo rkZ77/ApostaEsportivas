@@ -111,6 +111,13 @@ def build_score_breakdown_section(candidate: dict, data_quality_score: float | N
             "diff": candidate.get("model_fit_diff"),
             "adjustment": candidate.get("model_fit_adjustment"),
         },
+        # Projecao x linha: o valor esperado do mercado, a linha comprada e a
+        # distancia entre os dois em desvios da contagem. Ate' 2026-09-11 o
+        # engine_debug guardava a probabilidade que a projecao gerou e nunca a
+        # projecao -- e' a diferenca entre auditar um RED sabendo que o modelo
+        # dizia 71% e saber que ele dizia 71% porque projetava 5.6 numa linha
+        # de 5.5. None nas familias sem valor esperado (btts/resultado/handicap).
+        "projecao": candidate.get("projecao"),
         "confidence": candidate.get("confidence"),
         "risco": candidate.get("risco"),
         "chosen_via_fallback": candidate.get("chosen_via_fallback", False),

@@ -6,7 +6,7 @@ from services.pick_engine import (
     stats_model, market_model, confidence, calibration, ranking, explanation,
     context_model, team_profile_model, news_model, probability_model, variance_model,
     data_validation, bayesian_model, referee_model,
-    market_anchor, selection_bias, context_gate, tie_effect,
+    market_anchor, selection_bias, context_gate, tie_effect, projection,
 )
 
 _CARDS_FAMILIES = ("cards", "handicap_cards")
@@ -108,6 +108,23 @@ def _rastrear(rastro, **campos) -> None:
     if rastro is None:
         return
     rastro.append(campos)
+
+
+def _risco_do_candidato(c: dict, config: PickEngineConfig,
+                        data_quality_score: float | None) -> str:
+    """Risco do candidato com TODOS os sinais que o motor tem em maos.
+    Existe como funcao pra que os dois pontos que classificam risco (o
+    nascimento do candidato e o recalculo depois do efeito de contexto)
+    nunca divirjam -- ate' 2026-09-11 os dois chamavam risco_from_confidence
+    e bastava um esquecer o outro pra um pick publicar um risco que a
+    confianca ja' nao sustentava."""
+    return confidence.classify_risk(
+        c["confidence"], config,
+        data_quality=data_quality_score,
+        amostra=c.get("amostra"),
+        coeficiente_variacao=(c.get("variance") or {}).get("coefficient_of_variation"),
+        projecao=c.get("projecao"),
+    )
 
 
 def analyze_fixture_markets(
@@ -586,6 +603,12 @@ def analyze_fixture_markets(
                 team_id=side_team_id,
                 home_team_id=home_team_id, away_team_id=away_team_id,
             )
+            # Projecao x linha DESTA linha candidata. Nao entra em
+            # probabilidade nem em confidence (ver projection.py: a mesma
+            # distancia ja' esta' dentro de poisson_linha) -- serve ao rastro
+            # e a classificacao de risco.
+            projecao_linha = projection.margem(
+                lambda_familia, line_val, direcao, family=family, scope=scope)
             line_candidates.append({
                 "market_id":        m.get("market_id"),
                 "market_name":      m.get("market_pt") or m.get("market_name"),
@@ -644,6 +667,7 @@ def analyze_fixture_markets(
                 # encolhimento estava escondendo -- ver config.disagreement_on_raw_rate.
                 "model_fit_diff_bruta":   fit_poisson_bruta,
                 "referee_fit_diff_bruta": fit_referee_bruta,
+                "projecao":               projecao_linha,
                 **({"taxa_real_pre_desacordo": taxa_pre_desacordo}
                    if taxa_pre_desacordo is not None else {}),
                 "_direction":       direcao,
@@ -771,7 +795,6 @@ def analyze_fixture_markets(
             # "Escanteios Casa" e "Escanteios Totais" como o mesmo mercado.
             "scope": scope,
             "confidence": conf,
-            "risco": confidence.risco_from_confidence(conf, config),
             "convergence": convergence,
             "calibration_delta": cal_delta,
             "variance": var_stats,
@@ -796,6 +819,11 @@ def analyze_fixture_markets(
             "referee_signal": referee_sig if family in _CARDS_FAMILIES else None,
             "game_intensity": game_intensity if family in _CARDS_FAMILIES else None,
         }
+        # Depois do dict e nao dentro dele: o risco le "variance"/"amostra"/
+        # "projecao" do proprio candidato, que so' existem quando ele esta'
+        # montado.
+        candidate["risco"] = _risco_do_candidato(candidate, config, data_quality_score)
+
         if debug:
             candidate["_all_lines"] = ranking.evaluate_all_lines(line_candidates, config, data_quality_score)
         candidates.append(candidate)
@@ -868,7 +896,7 @@ def analyze_fixture_markets(
                 # Risco DERIVA do confidence -- recalcular aqui e' o que impede
                 # um pick sair anunciando "BAIXO" com a confianca ja' descontada
                 # pelo regime da partida.
-                c["risco"] = confidence.risco_from_confidence(c["confidence"], config)
+                c["risco"] = _risco_do_candidato(c, config, data_quality_score)
 
     candidates = apply_probability_layer(
         candidates, config, calibrators=calibrators, clv_by_market=clv_by_market,

@@ -1,5 +1,6 @@
 """Score de confianca (C/Q/K) e classificacao de risco."""
 from services.pick_engine.config import PickEngineConfig, DEFAULT_CONFIG
+from services.pick_engine.variance_model import CV_HIGH_THRESHOLD
 
 
 def confidence_score(C: float, Q: float, K: float, config: PickEngineConfig = DEFAULT_CONFIG) -> float:
@@ -86,9 +87,97 @@ def model_fit_adjustment(model_fit_diff: float | None,
     return 0.0
 
 
+_NIVEIS = ("BAIXO", "MEDIO", "ALTO")
+
+# Amostra: os mesmos cortes de qualidade que o resto do motor usa (ver
+# stats_model/amostra_label). Abaixo de 5 jogos nao ha' estimativa, so'
+# ruido; de 5 a 7 ha' estimativa, com incerteza grande demais pra um pick
+# ser anunciado como risco baixo.
+_AMOSTRA_INSUFICIENTE = 5
+_AMOSTRA_LIMITADA = 8
+
+# Data Quality Score (data_validation.data_quality_score, 0-100). Abaixo de
+# 70 a propria validacao chama a base de insuficiente; entre 70 e 80 ela ja'
+# eleva o edge minimo exigido, e aqui cobra um degrau de risco pelo mesmo
+# motivo.
+_DQ_INSUFICIENTE = 70
+_DQ_LIMITADA = 80
+
+
 def risco_from_confidence(conf: float, config: PickEngineConfig = DEFAULT_CONFIG) -> str:
+    """Nivel de risco olhando SO' o confidence. Continua sendo o ponto de
+    partida de classify_risk() -- e o valor final pros chamadores que nao
+    tem os outros sinais em maos."""
     if conf >= config.risco_baixo_min:
         return "BAIXO"
     if conf >= config.risco_medio_min:
         return "MEDIO"
     return "ALTO"
+
+
+def classify_risk(conf: float, config: PickEngineConfig = DEFAULT_CONFIG, *,
+                  data_quality: float | None = None,
+                  amostra: int | None = None,
+                  coeficiente_variacao: float | None = None,
+                  projecao: dict | None = None) -> str:
+    """Risco do pick a partir do confidence E dos sinais que dizem quanto
+    aquele confidence merece credito.
+
+    POR QUE NAO BASTA O CONFIDENCE
+    ------------------------------
+    Ate' agora `risco` era funcao unica de `conf`, e conf e' um score
+    composto que ja' foi arredondado, somado e teto-limitado varias vezes
+    antes de chegar aqui. Um pick com 5 jogos de amostra, dispersao alta e
+    projecao em cima da linha podia terminar em 0.81 -- e sair anunciado
+    como "BAIXO" -- porque cada penalidade sozinha cabe dentro da folga do
+    score. Risco baixo tem que significar "da' pra confiar nesta
+    estimativa", nao "a probabilidade saiu alta".
+
+    SO' REBAIXA, NUNCA PROMOVE
+    --------------------------
+    Nenhum sinal aqui pode transformar um ALTO em MEDIO. Confidence ja' e'
+    o unico lugar onde evidencia vira nota; este passo so' cobra dela o que
+    o score composto deixou passar. Um sinal ausente (None) e' neutro --
+    nao vira nem credito nem penalidade, conforme a regra do motor de nunca
+    tratar dado ausente como favoravel.
+
+    A ODD FICA DE FORA DE PROPOSITO
+    -------------------------------
+    `risco` participa da escolha do is_best_pick (ranking.select_final_picks
+    prefere um candidato nao-ALTO). Preco entrando aqui seria preco
+    ORDENANDO pick, e no motor a odd elimina nos gates e nunca ordena.
+    """
+    nivel = _NIVEIS.index(risco_from_confidence(conf, config))
+
+    def rebaixa(degraus: int) -> None:
+        nonlocal nivel
+        nivel = min(len(_NIVEIS) - 1, nivel + degraus)
+
+    if data_quality is not None:
+        if data_quality < _DQ_INSUFICIENTE:
+            rebaixa(2)
+        elif data_quality < _DQ_LIMITADA:
+            rebaixa(1)
+
+    if amostra is not None:
+        if amostra < _AMOSTRA_INSUFICIENTE:
+            rebaixa(2)
+        elif amostra < _AMOSTRA_LIMITADA:
+            rebaixa(1)
+
+    # Dispersao acima do limiar ja' desconta confidence (variance_penalty),
+    # mas o desconto satura em 0.10 -- um mercado muito instavel com taxa
+    # muito alta sobrevive a ele. O degrau aqui e' o que impede esse caso
+    # de se anunciar como risco baixo.
+    if coeficiente_variacao is not None and coeficiente_variacao > CV_HIGH_THRESHOLD:
+        rebaixa(1)
+
+    classe = (projecao or {}).get("classe")
+    if classe == "contra_a_linha":
+        # A propria projecao aponta pro lado oposto do pick: o que sustenta
+        # a entrada e' so' a contagem historica, contra o valor esperado.
+        rebaixa(2)
+    elif classe == "em_cima_da_linha":
+        rebaixa(1)
+
+    return _NIVEIS[nivel]
