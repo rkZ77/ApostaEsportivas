@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { SelectMenu, Spinner } from '../components/ui'
+import { SelectMenu, Spinner, SkeletonPickGrid } from '../components/ui'
 import { PERIODOS, PERIODO_PADRAO, dentroDoPeriodo, nomeDoMes, type PeriodoKey } from '../lib/periodo'
 import { ChevronLeft, ChevronRight, Trash2, RotateCcw } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
@@ -328,15 +328,19 @@ export default function MeusPicks() {
       )}
       </AnimatePresence>
 
+        {/* Esqueleto no desenho do card real, nao um spinner dentro de uma
+            caixa de 128px: a grade que entra depois e' varias vezes mais
+            alta, e a troca empurrava a pagina inteira pra baixo. */}
         {loading ? (
-          <div className="card p-16 flex items-center justify-center">
-            <Spinner size="lg" />
-          </div>
+          <SkeletonPickGrid cards={4} />
         ) : error ? (
           <div className="card p-10 text-center">
             <p className="text-ink-2 font-semibold mb-1">Erro ao carregar seus picks</p>
-            <p className="text-ink-4 text-sm mb-4">Não foi possível conectar ao servidor. Verifique sua conexão.</p>
-            <button onClick={load} className="text-sm text-green-400 hover:text-green-300 font-semibold transition-colors">
+            {/* A causa nem sempre e' a internet de quem le': servidor lento e
+                sessao expirada caiam nesta mesma frase e mandavam a pessoa
+                conferir o wi-fi. */}
+            <p className="text-ink-4 text-sm mb-4">Pode ser instabilidade momentânea. Tente de novo em instantes.</p>
+            <button onClick={load} className="inline-block px-4 py-2.5 rounded-lg text-sm text-accent-ink hover:bg-surface-2 font-semibold transition-colors">
               Tentar novamente
             </button>
           </div>

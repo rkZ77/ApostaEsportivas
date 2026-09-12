@@ -239,7 +239,7 @@ export default function PickPublico() {
 
           {isVip && (
             <div className="px-5 py-4 text-center">
-              <Link to="/picks" className="text-sm text-green-400 hover:text-green-300 font-semibold transition-colors">
+              <Link to="/picks" className="inline-block px-4 py-2.5 rounded-lg text-sm text-accent-ink hover:bg-surface-2 font-semibold transition-colors">
                 Ver todos os picks de hoje
               </Link>
             </div>

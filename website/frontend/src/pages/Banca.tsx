@@ -399,7 +399,7 @@ export default function Banca() {
           <div className="card p-10 text-center">
             <p className="text-ink-2 font-semibold mb-1">Erro ao carregar sua banca</p>
             <p className="text-ink-4 text-sm mb-4">Não foi possível conectar ao servidor. Verifique sua conexão.</p>
-            <button onClick={() => load(period, produto)} className="text-sm text-green-400 hover:text-green-300 font-semibold transition-colors">
+            <button onClick={() => load(period, produto)} className="inline-block px-4 py-2.5 rounded-lg text-sm text-accent-ink hover:bg-surface-2 font-semibold transition-colors">
               Tentar novamente
             </button>
           </div>

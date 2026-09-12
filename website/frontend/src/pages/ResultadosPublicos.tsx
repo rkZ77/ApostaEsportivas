@@ -13,7 +13,7 @@ import PageShell from '../components/PageShell'
 import { PERIODOS, PERIODO_PADRAO, janelaDoPeriodo, nomeDoMes, type PeriodoKey } from '../lib/periodo'
 import CaminhosDaIA from '../components/CaminhosDaIA'
 import { PAGE_WIDTH } from '../lib/pageWidth'
-import { Button, SelectMenu, Spinner } from '../components/ui'
+import { Button, SelectMenu, Spinner, SkeletonRows } from '../components/ui'
 import SuggestionDetail from '../components/SuggestionDetail'
 import PublicNav from '../components/PublicNav'
 import DailyGreensChart from '../components/DailyGreensChart'
@@ -1166,9 +1166,14 @@ export default function ResultadosPublicos() {
               )}
 
               <p className="text-ink-4 text-xs mb-4">{gamesTotal} picks no filtro</p>
+              {/* Esqueleto, e nao spinner: esta lista tem 50 linhas e o
+                  spinner a encolhia pra 128px de altura, entao a pagina dava
+                  um pulo pra baixo quando o conteudo chegava. O esqueleto
+                  reserva o desenho da linha real e a barra de rolagem fica
+                  parada. Ver a regra em ui/Skeleton. */}
               {gamesLoading ? (
-                <div className="flex justify-center py-16">
-                  <Spinner size="lg" />
+                <div className="bg-surface-0 border border-line rounded-lg overflow-hidden">
+                  <SkeletonRows rows={8} />
                 </div>
               ) : games.length === 0 ? (
                 <div className="text-center py-16 text-ink-3 text-sm">Nenhum pick encontrado.</div>
