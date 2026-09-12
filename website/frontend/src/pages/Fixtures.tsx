@@ -8,7 +8,7 @@ import { capitalizarFrase } from '../utils/format'
 import FixtureStatsModal from '../components/FixtureStatsModal'
 import { EstatisticasContent } from './Estatisticas'
 import { useAuth } from '../context/AuthContext'
-import { Badge, LiveDot, Spinner } from '../components/ui'
+import { Badge, ErrorState, LiveDot, Spinner } from '../components/ui'
 import AgendaInteligente from '../components/AgendaInteligente'
 import ExplorarLigas from '../components/ExplorarLigas'
 import { sinalizarNavegacao } from '../services/progressBus'
@@ -218,12 +218,17 @@ export default function Fixtures() {
   const [lockPrompt, setLockPrompt]    = useState(false)
   const [collapsed, setCollapsed]      = useState<Set<string>>(new Set())
   const [liveStats, setLiveStats]      = useState<Record<number, LiveStats>>({})
+  const [erro, setErro]                = useState(false)
 
   function fetchFixtures(d: string) {
     setLoading(true)
+    /* A falha nao pode terminar na mesma frase que o vazio: ate' 12/09 ela
+       caia em `setFixtures([])` e a tela dizia "Nenhum jogo encontrado para
+       esta data", que e' uma afirmacao sobre o dia -- e ela era falsa. */
+    setErro(false)
     api.get('/fixtures/today', { params: { date: d } })
       .then(r => setFixtures(r.data))
-      .catch(() => setFixtures([]))
+      .catch(() => { setFixtures([]); setErro(true) })
       .finally(() => setLoading(false))
   }
 
@@ -420,6 +425,13 @@ export default function Fixtures() {
         {loading ? (
           <div className="card p-16 flex items-center justify-center">
             <Spinner size="lg" />
+          </div>
+        ) : erro ? (
+          <div className="card">
+            <ErrorState
+              title="Não deu pra carregar os jogos"
+              onRetry={() => fetchFixtures(date)}
+            />
           </div>
         ) : fixtures.length === 0 ? (
           <div className="card p-12 text-center border-dashed">

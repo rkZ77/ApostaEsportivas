@@ -7,7 +7,7 @@ import {
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import PageShell from '../components/PageShell'
-import { SpinnerBlock } from '../components/ui'
+import { SpinnerBlock, EmptyState, ErrorState } from '../components/ui'
 import FilterPanel from '../components/FilterPanel'
 
 const LEAGUE_LOGO = (id: number) => `/api/proxy/league/${id}.png`
@@ -141,6 +141,10 @@ export function EstatisticasContent() {
   const [games, setGames]           = useState<Game[]>([])
   const [summary, setSummary]       = useState<Summary | null>(null)
   const [loading, setLoading]       = useState(false)
+  const [erro, setErro]             = useState(false)
+  /** Contador de "tentar de novo". Mudar o valor reexecuta o efeito de carga
+   *  sem precisar duplicar a chamada num handler. */
+  const [tentativa, setTentativa]   = useState(0)
   const [leaguesLoading, setLeaguesLoading] = useState(true)
   const [ranking, setRanking]       = useState<TeamRank[]>([])
   const [context, setContext]       = useState<Context>('all')
@@ -180,12 +184,17 @@ export function EstatisticasContent() {
   useEffect(() => {
     if (!leagueId || !isVip) return
     setLoading(true)
+    /* "Não carregou" e "não existe" são coisas diferentes, e até 12/09 as duas
+       terminavam na mesma frase: a falha caía em `setGames([])` e a tela dizia
+       "Sem dados para esta liga ainda". Quem lia concluía que a liga estava
+       vazia e ia embora. */
+    setErro(false)
     const apiLimit = limit === 0 ? 500 : limit
     api.get('/suggestions/liga/tendencias', { params: { league_id: leagueId, limit: apiLimit } })
       .then(r => { setGames(r.data.games ?? []); setSummary(r.data.summary ?? null) })
-      .catch(() => { setGames([]); setSummary(null) })
+      .catch(() => { setGames([]); setSummary(null); setErro(true) })
       .finally(() => setLoading(false))
-  }, [leagueId, limit, isVip])
+  }, [leagueId, limit, isVip, tentativa])
 
   useEffect(() => {
     if (!leagueId || !isVip) return
@@ -269,9 +278,19 @@ export function EstatisticasContent() {
           />
         )}
 
-        {loading ? <StatsLoading /> : !summary ? (
-          <div className="card p-12 text-center">
-            <p className="text-ink-3 text-sm">Sem dados para esta liga ainda.</p>
+        {loading ? <StatsLoading /> : erro ? (
+          <div className="card">
+            <ErrorState
+              title="Não deu pra carregar as estatísticas desta liga"
+              onRetry={() => setTentativa(t => t + 1)}
+            />
+          </div>
+        ) : !summary ? (
+          <div className="card">
+            <EmptyState
+              title="Sem dados para esta liga ainda"
+              description="Assim que houver jogos analisados nesta temporada, eles aparecem aqui."
+            />
           </div>
         ) : (
           <>

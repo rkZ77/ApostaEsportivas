@@ -100,14 +100,20 @@ export default function Footer() {
             </div>
           </div>
 
-          {/* Links numa fita só · ver o comentário de LINKS */}
-          <nav className="flex flex-wrap gap-x-5 gap-y-1 md:justify-end md:max-w-md">
+          {/* Links numa fita só · ver o comentário de LINKS.
+
+              `py-2.5` (e não o `py-1.5` de antes) porque o público é de
+              celular: medidos em 390px, estes nove links tinham 28px de
+              altura, empilhados um sobre o outro. Passa no mínimo de 24px da
+              WCAG 2.2 e fica longe dos 44px que o dedo pede -- e num rodapé
+              de links vizinhos, errar o alvo leva pra outra página. */}
+          <nav className="flex flex-wrap gap-x-5 md:justify-end md:max-w-md">
             {LINKS.map(l => (
               l.to ? (
                 <Link
                   key={l.label}
                   to={l.to}
-                  className="py-1.5 text-xs text-ink-3 hover:text-ink-1 transition-colors duration-1 ease-smooth"
+                  className="py-2.5 text-xs text-ink-3 hover:text-ink-1 transition-colors duration-1 ease-smooth"
                 >
                   {l.label}
                 </Link>
@@ -117,7 +123,7 @@ export default function Footer() {
                   href={l.href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="py-1.5 text-xs text-ink-3 hover:text-ink-1 transition-colors duration-1 ease-smooth"
+                  className="py-2.5 text-xs text-ink-3 hover:text-ink-1 transition-colors duration-1 ease-smooth"
                 >
                   {l.label}
                 </a>
