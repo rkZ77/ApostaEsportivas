@@ -42,6 +42,10 @@ from services.pick_engine.fouls_model import (
     MIN_JOGOS_ARBITRO,
     MIN_JOGOS_TIME,
     analyze_fouls_market,
+    data_quality_score,
+    media_ponderada,
+    probabilidade_calibrada,
+    qualidade_da_amostra,
 )
 from services.pick_engine.fouls_calibration import recalibrar
 from services.pick_engine.market_pick_score import faixa_config, pick_score
@@ -135,6 +139,53 @@ AMOSTRA_SATURACAO = 159
 # a tabela se recalibra sozinha junto, sem nenhuma outra mudanca de codigo.
 USAR_MANDO = False
 
+# RECENCIA NA MEDIA (interruptor, 2026-09-11). Mesmo desenho e mesmo motivo do
+# USAR_MANDO acima: False = media simples de todo o historico (o jogo da
+# primeira rodada pesa igual ao de ontem), True = media ponderada de
+# fouls_model.media_ponderada (ultimos 5 pesam 45%, os 5 anteriores 30%, o
+# resto 25%).
+#
+# O bloqueio aqui NAO e' de consistencia -- esse a recalibragem resolve, e ela
+# ja' recebe este mesmo booleano, entao os dois lados andam juntos. O bloqueio
+# e' de QUALIDADE: ponderar por recencia preve melhor? Isso e' medicao, e a
+# resposta sai da Parte D de scripts/medir_faltas_mando_e_pressao.py, que
+# compara os dois metodos PAREADOS por jogo (erro medio da projecao e taxa de
+# acerto por faixa). Ligar antes disso seria inventar peso, que e' exatamente o
+# que a docstring do fouls_model proibe.
+USAR_RECENCIA = False
+
+# DECISOES DE NO_PICK, nomeadas (2026-09-11).
+#
+# `_avaliar_fixture` devolvia None em SEIS pontos diferentes -- sem odds, sem
+# oferta na linha suportada, historico curto, probabilidade abaixo do piso,
+# edge abaixo do minimo, projecao dentro do proprio erro -- e todos caiam no
+# mesmo `log_skip(..., MOTIVO_SEM_CANDIDATO)`. Na aba de Auditoria, um dia sem
+# pick por historico curto era indistinguivel de um dia em que a margem nao
+# apareceu, e nao havia como responder "por que este jogo nao virou pick".
+#
+# Os nomes seguem as causas do proprio pedido de auditoria, pra o RED de amanha
+# poder ser classificado contra a mesma lista.
+SEM_ODDS = "sem odds coletadas"
+SEM_LINHA = "nenhuma linha de faltas suportada no mercado"
+AMOSTRA_INSUFICIENTE = "historico curto (< {n} jogos em um dos times)"
+PROB_BAIXA = "probabilidade abaixo do piso em todas as linhas"
+EDGE_BAIXO = "margem abaixo do minimo em todas as linhas"
+PROJECAO_CURTA = "projecao dentro do proprio erro de amostragem"
+QUALIDADE_BAIXA = "qualidade de dados insuficiente"
+
+# PISO DE QUALIDADE DE DADOS (2026-09-11). `data_quality_score` pontua o que
+# alimentou a decisao: historico dos times (40), n da celula empirica que
+# produziu a probabilidade (35) e arbitro (25).
+#
+# 45 E' ESCOLHIDO PRA NAO BINDAR SOZINHO, e vale dizer por que. Um pick no piso
+# de amostra (10 jogos por time) com a faixa mais forte da tabela (n=159) e sem
+# arbitro tira 50 -- passa. O mesmo pick com a faixa mais fraca (n=50) tira 26
+# -- nao passa. Ou seja, o gate nao repete o MIN_JOGOS_PICK nem o PROB_MIN: ele
+# pega a COMBINACAO de amostra no piso com celula empirica fraca, que e'
+# exatamente o caso que nenhum dos gates isolados enxerga, porque cada um deles
+# olha um numero so'.
+DATA_QUALITY_MIN = 45
+
 # PISO DE AMOSTRA E MARGEM MINIMA (2026-09-10).
 #
 # O motor validava `probability` e `edge` e nunca olhava QUANTOS jogos tinham
@@ -212,7 +263,8 @@ NOMES_MERCADO_TOTAL = ("fouls. total", "total fouls", "fouls")
 
 
 def _media_faltas(historico: list, team_id: int,
-                  mando: str | None = None) -> tuple[float | None, int]:
+                  mando: str | None = None,
+                  usar_recencia: bool = False) -> tuple[float | None, int]:
     """Faltas por jogo que o time comete, no historico dele.
 
     O historico traz a linha do jogo inteiro (home_fouls e away_fouls), entao
@@ -223,6 +275,14 @@ def _media_faltas(historico: list, team_id: int,
     `mando` None conta os dois mandos no mesmo balde (comportamento historico).
     "home"/"away" conta so' os jogos naquele mando -- ver USAR_MANDO, e lembrar
     que a tabela empirica precisa ter sido calibrada do mesmo jeito.
+
+    `usar_recencia` troca a media simples pela ponderada -- ver USAR_RECENCIA,
+    e vale a mesma ressalva sobre a tabela.
+
+    O historico chega do MatchStatsService em `match_date DESC` (mais novo
+    primeiro) e `media_ponderada` espera ordem cronologica, dai a inversao
+    antes da chamada. Trocar a ordem sem mexer aqui inverteria os pesos em
+    silencio, que e' o pior jeito de errar isto.
     """
     valores = []
     for jogo in historico:
@@ -238,6 +298,8 @@ def _media_faltas(historico: list, team_id: int,
             valores.append(float(v))
     if not valores:
         return None, 0
+    if usar_recencia:
+        return media_ponderada(list(reversed(valores))), len(valores)
     return round(sum(valores) / len(valores), 3), len(valores)
 
 
@@ -325,8 +387,13 @@ def _avaliar_fixture(fixture: dict, match_stats: MatchStatsService,
                      odds_service: OddsService,
                      referee_service: RefereeStatsService,
                      standings_service: StandingsService | None = None,
-                     faixas: dict | None = None) -> dict | None:
-    """Candidato de faltas pra um jogo, ou None se nao der pra avaliar."""
+                     faixas: dict | None = None) -> tuple[dict | None, str | None]:
+    """`(candidato, motivo)` -- exatamente um dos dois e' None.
+
+    O motivo nao e' enfeite de log: e' o que a aba de Auditoria mostra quando
+    alguem pergunta por que um jogo nao virou pick, e e' a lista contra a qual
+    um RED e' classificado depois. Ver o bloco SEM_ODDS..QUALIDADE_BAIXA.
+    """
     # load_odds_by_fixture (RAW), nao load_odds_structured: aquele agrupa por
     # line_value e valida pares Over/Under por probabilidade implicita. Em
     # faltas o line_value vem NULL (a linha esta no texto do value_name),
@@ -336,25 +403,27 @@ def _avaliar_fixture(fixture: dict, match_stats: MatchStatsService,
     # _odds_over_faltas.
     structured = odds_service.load_odds_by_fixture(fixture["fixture_id"])
     if not structured:
-        return None
+        return None, SEM_ODDS
 
     ofertas = _odds_over_faltas(structured)
     if not ofertas:
-        return None
+        return None, SEM_LINHA
 
     hist_casa = _historico(match_stats, fixture, fixture["home_team_id"])
     hist_fora = _historico(match_stats, fixture, fixture["away_team_id"])
 
     media_casa, n_casa = _media_faltas(
-        hist_casa, fixture["home_team_id"], "home" if USAR_MANDO else None)
+        hist_casa, fixture["home_team_id"], "home" if USAR_MANDO else None,
+        usar_recencia=USAR_RECENCIA)
     media_fora, n_fora = _media_faltas(
-        hist_fora, fixture["away_team_id"], "away" if USAR_MANDO else None)
+        hist_fora, fixture["away_team_id"], "away" if USAR_MANDO else None,
+        usar_recencia=USAR_RECENCIA)
 
     # Piso de amostra · ver MIN_JOGOS_PICK. Sai ANTES de consultar contexto,
     # arbitro e faixas: nenhuma dessas camadas conserta uma media de 5 jogos, e
     # gastar consulta pra reprovar depois e' so' desperdicio.
     if min(n_casa or 0, n_fora or 0) < MIN_JOGOS_PICK:
-        return None
+        return None, AMOSTRA_INSUFICIENTE.format(n=MIN_JOGOS_PICK)
 
     # Contexto de confronto (2026-08-20). Faltas era um dos dois pipelines
     # cegos ao agregado, e e' o mercado com o efeito MEDIDO mais forte de
@@ -396,6 +465,10 @@ def _avaliar_fixture(fixture: dict, match_stats: MatchStatsService,
     # linha sozinho. O score pesa a probabilidade (0.45) e a seguranca do preco
     # (0.28) acima do edge (0.10), que e' o mesmo desenho do motor generico.
     melhor = None
+    # Guarda ate' onde cada linha chegou antes de cair -- dizer "margem baixa"
+    # e' mais util que "probabilidade baixa" quando uma linha passou da
+    # probabilidade e travou depois. A ordem de leitura e' a ordem dos gates.
+    motivos_vistos = set()
     for linha, oferta in sorted(ofertas.items()):
         analise = analyze_fouls_market(
             media_casa=media_casa, media_fora=media_fora,
@@ -411,8 +484,10 @@ def _avaliar_fixture(fixture: dict, match_stats: MatchStatsService,
             analise, contexto, familia="fouls", escopo="total", direcao="over",
             linha=linha, lambda_esperado=analise.get("expected_fouls"))
         if analise.get("probability", 0) < PROB_MIN:
+            motivos_vistos.add(PROB_BAIXA)
             continue
         if analise.get("edge", 0) < EDGE_MIN:
+            motivos_vistos.add(EDGE_BAIXO)
             continue
         # A PROJECAO PRECISA CABER FORA DO PROPRIO ERRO DE AMOSTRAGEM.
         #
@@ -432,7 +507,53 @@ def _avaliar_fixture(fixture: dict, match_stats: MatchStatsService,
         margem = (analise.get("expected_fouls") or 0) - linha
         exigido = erro_de_amostragem(n_casa, n_fora)
         if margem < exigido:
+            motivos_vistos.add(PROJECAO_CURTA)
             continue
+
+        # CALIBRAGEM DA CONFIANCA (2026-09-11). `probability` e' a taxa CRUA da
+        # celula da tabela empirica; ela nao sabe quantos jogos produziram a
+        # media dos times, nem que a propria celula pode ter sido medida em 50
+        # jogos, nem que a projecao passou raspando do minimo exigido. Aqui os
+        # tres viram um peso e a taxa encolhe em direcao a' frequencia
+        # historica da linha. O que vai pra tela e pro stake e' a calibrada.
+        n_time = min(n_casa, n_fora)
+        calibrada, detalhe = probabilidade_calibrada(
+            analise["probability"], linha, n_time,
+            analise.get("faixa_amostra") or 0, margem, exigido, faixas=faixas)
+
+        # O PISO VALE PRA CALIBRADA TAMBEM. Sem isto o encolhimento seria
+        # cosmetico: um pick de 68% que vira 58% depois de penalizado
+        # continuaria sendo publicado, so' que com o numero menor impresso. Se
+        # a evidencia derrubou a probabilidade abaixo do piso, o pick nao
+        # existe.
+        if calibrada < PROB_MIN:
+            motivos_vistos.add(PROB_BAIXA)
+            continue
+
+        qualidade = data_quality_score(
+            n_casa, n_fora, analise.get("faixa_amostra") or 0,
+            analise.get("usou_arbitro", False), n_arbitro)
+        if qualidade < DATA_QUALITY_MIN:
+            motivos_vistos.add(QUALIDADE_BAIXA)
+            continue
+
+        # `edge` e `ev` tem que sair da MESMA probabilidade que o pick publica,
+        # senao o bilhete diz 58% e a margem foi calculada com 68% -- que e'
+        # precisamente o tipo de incoerencia que esta revisao veio fechar.
+        analise["probability_raw"] = analise["probability"]
+        analise["probability"] = calibrada
+        analise["calibragem_confianca"] = detalhe
+        analise["fair_odd"] = round(1 / calibrada, 3)
+        analise["edge"] = round(calibrada - 1 / oferta["odd"], 4)
+        analise["ev"] = round(calibrada * (oferta["odd"] - 1) - (1 - calibrada), 4)
+        if analise["edge"] < EDGE_MIN:
+            motivos_vistos.add(EDGE_BAIXO)
+            continue
+
+        analise["projection_margin"] = round(margem, 3)
+        analise["margem_exigida"] = exigido
+        analise["data_quality"] = qualidade
+        analise["sample_quality"] = qualidade_da_amostra(n_time)
         analise["pick_score"] = pick_score(
             probability=analise["probability"], odd=oferta["odd"],
             edge=analise["edge"], amostra=analise.get("faixa_amostra"),
@@ -442,7 +563,10 @@ def _avaliar_fixture(fixture: dict, match_stats: MatchStatsService,
             melhor = (analise, oferta)
 
     if melhor is None:
-        return None
+        for motivo in (PROJECAO_CURTA, QUALIDADE_BAIXA, EDGE_BAIXO, PROB_BAIXA):
+            if motivo in motivos_vistos:
+                return None, motivo
+        return None, MOTIVO_SEM_CANDIDATO
     analise, oferta = melhor
 
     return {
@@ -465,6 +589,26 @@ def _avaliar_fixture(fixture: dict, match_stats: MatchStatsService,
             historico_home=hist_casa, historico_away=hist_fora,
             home_team=fixture.get("home_team"), away_team=fixture.get("away_team"),
             match_context=contexto),
+        "match_context": contexto,
+        # CONTRATO COM A REVISAO DE IA (2026-09-11). `build_review_payload` le
+        # chaves com os nomes do motor generico (`value_label`, `taxa_real`,
+        # `confidence`, `data_quality_score`...), e este pipeline nunca teve
+        # nenhuma delas -- entao o payload que a IA recebia era: nome do
+        # mercado, odd, edge, ev, e `selection: null`. A IA vetava picks de
+        # faltas sem saber QUAL selecao estava vetando. Como o gate so' VETA e
+        # falha aberto, isso nao derrubava nada: so' transformava a revisao em
+        # ruido caro. Os aliases abaixo completam o payload sem tocar em
+        # ai_review.py, que e' compartilhado por oito motores.
+        "value_label": "Over " + str(analise["line"]),
+        "market_type": "Over " + str(analise["line"]),
+        "taxa_real": analise.get("probability_raw"),
+        "confidence": analise.get("probability"),
+        "data_quality_score": analise.get("data_quality"),
+        "market_sample": analise.get("faixa_amostra"),
+        "referee_signal": (
+            {"media_faltas": media_arbitro, "jogos": n_arbitro}
+            if analise.get("usou_arbitro") else None),
+        "context_gate": analise.get("tie_effect"),
     }
 
 
@@ -479,10 +623,26 @@ def _explicar(c: dict) -> str:
             f"O arbitro marca {c['media_arbitro']} faltas por jogo em "
             f"{c['n_arbitro']} jogos apitados."
         )
+    # A TAXA MEDIDA E A CRUA, nao a calibrada. Esta frase e' uma afirmacao
+    # sobre o passado ("bateu em X% dos jogos medidos"); imprimir a calibrada
+    # aqui seria atribuir a' medicao um numero que o motor inventou depois.
     partes.append(
         f"Nessa faixa de previsao, Over {c['line']} bateu em "
-        f"{c['probability'] * 100:.1f}% dos {c['faixa_amostra']} jogos medidos."
+        f"{(c.get('probability_raw') or c['probability']) * 100:.1f}% dos "
+        f"{c['faixa_amostra']} jogos medidos."
     )
+    if c.get("projection_margin") is not None:
+        partes.append(
+            f"A projecao passa {c['projection_margin']:.1f} falta(s) da linha, "
+            f"acima das {c['margem_exigida']:.1f} que o tamanho da amostra exige."
+        )
+    bruta = c.get("probability_raw")
+    if bruta is not None and abs(bruta - c["probability"]) >= 0.01:
+        partes.append(
+            f"Confianca ajustada de {bruta * 100:.1f}% para "
+            f"{c['probability'] * 100:.1f}% pelo tamanho da amostra "
+            f"({c.get('sample_quality')})."
+        )
     partes.append(
         f"Odd justa {c['fair_odd']} contra {c['odd']} oferecida "
         f"(margem de {c['edge'] * 100:+.1f}%)."
@@ -494,20 +654,40 @@ def _explicar(c: dict) -> str:
 
 def _salvar(cur, c: dict) -> None:
     f = c["fixture"]
-    # confidence aqui e' a propria probabilidade empirica: diferente dos
-    # outros pipelines, nao ha score composto pra derivar: a tabela de faixas
-    # JA E' a medida de confianca, medida em jogo real.
+    # confidence e' a probabilidade CALIBRADA (`c["probability"]`, ja' encolhida
+    # em `_avaliar_fixture`); `prob_real` guarda a taxa crua da celula da tabela
+    # empirica. Ate' 2026-09-11 as duas colunas recebiam o MESMO numero cru, o
+    # que tornava impossivel medir calibracao depois: sem separar o que o modelo
+    # disse do que ele mediu, a curva de confiabilidade compara o numero consigo
+    # mesmo. O stake usa a calibrada, que e' a que o pick promete.
     stake_pct, stake_units = calculate_stake(
         confidence=c["probability"], odd=c["odd"], ev=c["ev"], pick_type="free",
     )
     engine_debug = json.dumps({
         "modelo": "fouls_model/empirico_condicional",
+        "metodo_media": ("ponderada_recencia" if USAR_RECENCIA else "simples"),
+        "mando_separado": USAR_MANDO,
         "expected_fouls": c["expected_fouls"],
         "faixa_amostra": c["faixa_amostra"],
         "usou_arbitro": c["usou_arbitro"],
         "media_casa": c["media_casa"], "n_casa": c["n_casa"],
         "media_fora": c["media_fora"], "n_fora": c["n_fora"],
         "media_arbitro": c["media_arbitro"], "n_arbitro": c["n_arbitro"],
+        # A PROJECAO CONTRA A LINHA, explicita. Era o numero que faltava pra
+        # responder o caso que motivou esta revisao ("Over 20.5 com 67% e
+        # expected 17.6"): a margem existia no codigo, morria dentro da funcao
+        # e nunca era gravada. Agora fica no pick, com a folga que foi exigida
+        # dele ao lado -- as duas so' dizem alguma coisa juntas.
+        "projection_margin": c.get("projection_margin"),
+        "margem_exigida": c.get("margem_exigida"),
+        "probability": {
+            "raw": c.get("probability_raw"),
+            "calibrated": c["probability"],
+            "calibragem": c.get("calibragem_confianca"),
+        },
+        "data_quality": c.get("data_quality"),
+        "sample_quality": c.get("sample_quality"),
+        "decision": "PICK",
         "fair_odd": c["fair_odd"], "edge": c["edge"], "ev": c["ev"],
         "pick_score": c.get("pick_score"),
         # De QUAL tabela saiu a probabilidade deste pick. Sem isto, dois picks
@@ -534,7 +714,8 @@ def _salvar(cur, c: dict) -> None:
         f["fixture_id"], f["home_team"], f["away_team"],
         f["home_team_id"], f["away_team_id"], f["league_id"], f.get("league_name"),
         c["market_name"], f"Over {c['line']}", c["odd"], c["bookmaker"], c["market_id"],
-        c["probability"], c["probability"], c["edge"], _explicar(c),
+        c["probability"], c.get("probability_raw") or c["probability"],
+        c["edge"], _explicar(c),
         stake_pct, stake_units, engine_debug,
     ))
 
@@ -565,11 +746,13 @@ def run_faltas_engine():
     # contra os jogos que existem HOJE, em vez de usar pra sempre a foto tirada
     # em 01/08. Celula sem amostra nova suficiente mantem o valor congelado, e
     # falha de banco devolve a tabela antiga inteira -- ver fouls_calibration.
-    faixas, calibragem = recalibrar(cur, usar_mando=USAR_MANDO)
+    faixas, calibragem = recalibrar(cur, usar_mando=USAR_MANDO,
+                                    usar_recencia=USAR_RECENCIA)
     print(f"[FALTAS_ENGINE] Tabela {calibragem['origem']}: "
           f"{calibragem['jogos']} jogos, {calibragem['amostras']} amostras, "
           f"{calibragem['celulas_trocadas']} celula(s) atualizada(s) "
-          f"(mando {'separado' if USAR_MANDO else 'misturado'}).")
+          f"(mando {'separado' if USAR_MANDO else 'misturado'}, "
+          f"media {'ponderada por recencia' if USAR_RECENCIA else 'simples'}).")
     if calibragem.get("erro"):
         print(f"[FALTAS_ENGINE] Recalibragem falhou ({calibragem['erro']}); "
               f"seguindo com a tabela congelada.")
@@ -584,8 +767,9 @@ def run_faltas_engine():
     candidatos = []
     for fixture in fixtures:
         try:
-            c = _avaliar_fixture(fixture, match_stats, odds_service,
-                                 referee_service, standings_service, faixas=faixas)
+            c, motivo = _avaliar_fixture(fixture, match_stats, odds_service,
+                                         referee_service, standings_service,
+                                         faixas=faixas)
         except Exception as e:
             # Stack trace completo, como nos outros pipelines. Sem ele este
             # handler ja' escondeu um bug por dias: o NameError de
@@ -604,7 +788,11 @@ def run_faltas_engine():
             # Ate 2026-08-07 o jogo que nao virava candidato saia daqui sem
             # deixar rastro: log_decision so' era chamado no loop de baixo, com
             # os aprovados. Dia sem pick era indistinguivel de dia sem rodar.
-            log_skip("FALTAS_ENGINE", fixture, MOTIVO_SEM_CANDIDATO)
+            #
+            # E ate' 2026-09-11 deixava rastro, mas sempre o MESMO rastro: os
+            # seis descartes diferentes viravam "nenhum candidato". Agora o
+            # motivo vem nomeado de `_avaliar_fixture`.
+            log_skip("FALTAS_ENGINE", fixture, motivo or MOTIVO_SEM_CANDIDATO)
 
     if not candidatos:
         motivo = ("nenhum candidato passou (historico curto, probabilidade "

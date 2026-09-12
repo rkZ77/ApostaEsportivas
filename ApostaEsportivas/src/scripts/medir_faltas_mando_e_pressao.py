@@ -55,7 +55,7 @@ from utils.db_utils import get_connection
 from services.pick_engine import competitive_pressure as cp
 from services.pick_engine import fouls_calibration as fc
 from services.pick_engine.fouls_model import (
-    LINHAS_SUPORTADAS, MIN_JOGOS_TIME, _FAIXAS_POR_LINHA,
+    LINHAS_SUPORTADAS, MIN_JOGOS_TIME, PESOS_RECENCIA, _FAIXAS_POR_LINHA,
 )
 
 # Os limites vem do modulo de calibragem, nao repetidos aqui: desde 2026-08-16 o
@@ -458,6 +458,86 @@ def imprimir_parte_b(medidos):
           "\nnao muda a faixa, entao nao mudaria pick nenhum.")
 
 
+###############################################################################
+# PARTE D -- recencia na media de faltas (2026-09-11)
+###############################################################################
+
+def medir_recencia(jogos):
+    """Previsao pelos metodos SIMPLES e PONDERADO POR RECENCIA, pareada por jogo.
+
+    A pergunta: o jogo da primeira rodada deve pesar igual ao de ontem? O motor
+    de faltas respondeu "sim" desde sempre, por omissao -- `_media_faltas` faz
+    media aritmetica de todo o historico. `fouls_model.media_ponderada` da 45%
+    aos ultimos 5, 30% aos 5 anteriores e 25% ao resto.
+
+    Isso NAO e' obviamente melhor, e e' por isso que existe medicao em vez de
+    interruptor ligado: ponderar joga fora amostra efetiva (o erro da media
+    sobe) em troca de acompanhar mudanca de estilo. Qual dos dois efeitos ganha
+    e' empirico.
+
+    LER ASSIM: se o erro absoluto medio NAO cair, `USAR_RECENCIA` fica em False
+    no faltas_pipeline. Se cair, ligar o interruptor ja' recalibra a tabela pelo
+    mesmo metodo sozinho (fouls_calibration recebe o mesmo booleano).
+
+    O pareamento e' por fixture_id pelo mesmo motivo da Parte A -- aqui os dois
+    metodos produzem o mesmo conjunto de jogos, mas parear por posicao seria uma
+    suposicao gratuita que quebraria no dia em que o criterio mudasse.
+    """
+    por_metodo = {
+        "recencia": fc.previsoes(jogos, usar_mando=False, usar_recencia=True),
+        "simples": fc.previsoes(jogos, usar_mando=False, usar_recencia=False),
+    }
+    indexado = {
+        metodo: {a["fixture_id"]: a for a in amostras}
+        for metodo, amostras in por_metodo.items()
+    }
+    comuns = set(indexado["recencia"]) & set(indexado["simples"])
+    return [
+        {"real": indexado["simples"][fid]["real"],
+         "recencia": indexado["recencia"][fid]["previsto"],
+         "simples": indexado["simples"][fid]["previsto"]}
+        for fid in sorted(comuns)
+    ]
+
+
+def imprimir_parte_d(amostras):
+    print("\n" + "=" * 78)
+    print("PARTE D - MEDIA SIMPLES x MEDIA PONDERADA POR RECENCIA")
+    print("=" * 78)
+
+    if not amostras:
+        print("Nenhum jogo com os dois metodos disponiveis. Base curta demais.")
+        return
+
+    e_simples = erro_medio(amostras, "simples")
+    e_recencia = erro_medio(amostras, "recencia")
+    print("\nAmostra pareada: %d jogos" % len(amostras))
+    print("Erro absoluto medio da previsao (media simples):   %.3f faltas" % e_simples)
+    print("Erro absoluto medio da previsao (por recencia):    %.3f faltas" % e_recencia)
+    delta = e_recencia - e_simples
+    print("Diferenca: %+.3f falta (%s)" % (
+        delta, "recencia melhor" if delta < 0 else "recencia PIOR ou igual"))
+    print("\nPesos testados: %s" % (PESOS_RECENCIA,))
+    print("\nSe a diferenca nao for negativa e relevante (ordem de 0.1 falta ou"
+          "\nmais), USAR_RECENCIA fica False em faltas_pipeline. Ponderar custa"
+          "\namostra efetiva; so' compensa se comprar previsao melhor de volta.")
+
+    for metodo in ("simples", "recencia"):
+        tab = tabela_de_faixas(amostras, metodo)
+        print("\n--- metodo: %s ---" % metodo.upper())
+        cabecalho = "faixa".ljust(16) + "n".rjust(5) + "real".rjust(8)
+        for linha in LINHAS_SUPORTADAS:
+            cabecalho += ("Ov%s" % linha).rjust(9)
+        print(cabecalho)
+        for idx in sorted(tab):
+            d = tab[idx]
+            row = (ROTULO_FAIXA[idx].ljust(16) + str(d["n"]).rjust(5)
+                   + ("%.1f" % d["real_medio"]).rjust(8))
+            for linha in LINHAS_SUPORTADAS:
+                row += ("%.1f%%" % (d["taxas"][linha] * 100)).rjust(9)
+            print(row)
+
+
 def run():
     conn = get_connection()
     cur = conn.cursor()
@@ -468,6 +548,7 @@ def run():
             return
         imprimir_parte_a(medir_mando(jogos))
         imprimir_parte_c(medir_por_time(jogos))
+        imprimir_parte_d(medir_recencia(jogos))
         imprimir_parte_b(reconstruir_e_medir(jogos, carregar_descricoes(cur)))
     finally:
         cur.close()

@@ -218,3 +218,162 @@ def analyze_fouls_market(media_casa: float | None, media_fora: float | None,
         resultado["edge"] = round(prob - 1 / float(odd), 4)
         resultado["ev"] = round(prob * (float(odd) - 1) - (1 - prob), 4)
     return resultado
+
+
+# ---------------------------------------------------------------------------
+# RECENCIA (2026-09-11) · media ponderada por quao recente e' o jogo
+# ---------------------------------------------------------------------------
+# Ate' aqui a media de faltas de um time era media SIMPLES de todo o historico:
+# o jogo da primeira rodada pesava igual ao de ontem. Faltas e' justamente o
+# mercado onde isso incomoda -- estilo de marcacao, tecnico e escalacao mudam
+# dentro da temporada, e o proprio pipeline ja' respeita
+# `get_structural_change_date` por reconhecer isso.
+#
+# Os pesos sao TIERED e nao exponenciais de proposito: exponencial tem uma
+# constante de decaimento que ninguem mediu, tier reproduz a pergunta que o
+# usuario faz ("ultimos 5 contra ultimos 10 contra o resto") e e' auditavel
+# olhando a lista de jogos.
+#
+# O PESO E' POR JOGO, NAO POR BLOCO -- e essa distincao nao e' estetica, foi
+# um bug de verdade na primeira versao disto. Com peso de BLOCO ("ultimos 5
+# valem 45%, os 5 anteriores 30%, o resto 25%") um time com 11 jogos dava 25%
+# do total ao UNICO jogo mais antigo da serie, enquanto cada jogo recente valia
+# 9%. Numa serie crescente (10, 11, ... 20) a media "ponderada por recencia"
+# saia 14.5 contra 15.0 da media simples: o peso de recencia estava puxando
+# pra TRAS. Peso por jogo nao tem como fazer isso -- cada jogo antigo vale
+# exatamente um terco de um recente, independente de quantos existam.
+#
+# ESTES PESOS NAO SAO DEFINITIVOS. Sao ponto de partida pra medicao (Parte D de
+# scripts/medir_faltas_mando_e_pressao.py). Enquanto a medicao nao existir o
+# pipeline roda com USAR_RECENCIA=False -- ver o comentario la'.
+PESOS_RECENCIA = ((5, 3.0), (10, 2.0), (None, 1.0))
+
+
+def media_ponderada(valores: list[float]) -> float | None:
+    """Media de faltas com os jogos recentes pesando mais.
+
+    `valores` vem em ordem CRONOLOGICA (mais antigo primeiro) -- e' a ordem que
+    tanto o historico do pipeline quanto a calibragem produzem. Cada um dos 5
+    jogos mais recentes pesa 3, cada um dos 5 anteriores pesa 2 e cada jogo mais
+    antigo pesa 1. Ver o comentario de PESOS_RECENCIA pro motivo de o peso ser
+    por jogo e nao por bloco.
+
+    Com 10 jogos ou menos nenhum jogo cai no terceiro tier, entao a diferenca
+    pra media simples vem so' da separacao 5/5 -- que e' o comportamento certo:
+    um time com pouco historico nao tem passado remoto pra descontar.
+    """
+    if not valores:
+        return None
+    recentes = list(reversed(valores))  # mais novo primeiro
+    soma = peso_total = 0.0
+    inicio = 0
+    for corte, peso in PESOS_RECENCIA:
+        fim = len(recentes) if corte is None else min(corte, len(recentes))
+        for v in recentes[inicio:fim]:
+            soma += v * peso
+            peso_total += peso
+        inicio = fim
+    if not peso_total:
+        return None
+    return round(soma / peso_total, 3)
+
+
+# ---------------------------------------------------------------------------
+# QUALIDADE DA AMOSTRA E DA EVIDENCIA (2026-09-11)
+# ---------------------------------------------------------------------------
+# O motor gravava `confidence` = probabilidade CRUA da tabela empirica. Duas
+# coisas erradas nisso:
+#
+#   1. a taxa da faixa foi medida em 50 a 159 jogos -- 0.716 medido em 116
+#      jogos tem erro padrao de ~4pp, e isso nunca aparecia em lugar nenhum;
+#   2. um pick com 10 jogos de historico por time saia com a MESMA confianca
+#      de um com 25, embora o erro da projecao seja quase o dobro (ver
+#      _ERRO_POR_AMOSTRA em faltas_pipeline).
+#
+# `pick_score` ja' usava o n da faixa pra ORDENAR, mas a confianca publicada e o
+# stake continuavam lendo a taxa crua. Aqui a evidencia fraca encolhe a
+# probabilidade em direcao a' taxa base da linha (a media de todas as faixas
+# daquela linha), que e' o que sobra quando a previsao nao merece credito.
+QUALIDADE_AMOSTRA = ((5, "insuficiente"), (8, "baixa"), (13, "moderada"),
+                     (21, "boa"), (None, "forte"))
+
+
+def qualidade_da_amostra(n: int) -> str:
+    for corte, rotulo in QUALIDADE_AMOSTRA:
+        if corte is None or n < corte:
+            return rotulo
+    return "forte"
+
+
+def taxa_base(linha: float, faixas: dict | None = None) -> float | None:
+    """Taxa media da linha entre todas as faixas, ponderada pelo n de cada uma.
+
+    E' o alvo do encolhimento: a resposta honesta pra "Over nesta linha bate
+    com que frequencia?" quando a previsao especifica do jogo nao e' confiavel.
+    """
+    tabela = _FAIXAS_POR_LINHA if faixas is None else faixas
+    celulas = tabela.get(round(linha, 1))
+    if not celulas:
+        return None
+    total = sum(n for _, _, n in celulas)
+    if not total:
+        return None
+    return sum(taxa * n for _, taxa, n in celulas) / total
+
+
+def probabilidade_calibrada(prob: float, linha: float, n_time: int,
+                            n_faixa: int, margem: float, exigido: float,
+                            faixas: dict | None = None) -> tuple[float, dict]:
+    """Probabilidade encolhida pela qualidade da evidencia, e o porque.
+
+    Tres fatores, todos em [0,1], multiplicados -- basta um ser fraco pra o
+    pick perder confianca, que e' a regra de "um unico indicador nao libera
+    aposta":
+
+        amostra  historico dos times. Satura em 20 jogos (onde o erro da
+                 projecao ja' caiu pra ~0.6 falta) e vale 0.5 no piso de 10.
+        faixa    n da celula da tabela empirica. Satura no maior n medido.
+        margem   quanto a projecao passa do minimo exigido pelo proprio erro
+                 de amostragem. Colado no limite (margem == exigido) vale 0.6;
+                 dobro da folga vale 1.0. Projecao encostada na linha e' moeda
+                 ao ar mesmo com EV positivo.
+
+    O encolhimento e' em direcao a `taxa_base`, nunca em direcao a zero: a
+    linha continua tendo a frequencia historica dela.
+    """
+    base = taxa_base(linha, faixas)
+    if base is None:
+        return round(prob, 4), {"peso": 1.0, "base": None}
+
+    f_amostra = min(1.0, 0.5 + 0.5 * max(0, n_time - 10) / 10)
+    f_faixa = min(1.0, (n_faixa or 0) / 159)
+    folga = (margem - exigido) / exigido if exigido > 0 else 1.0
+    f_margem = max(0.6, min(1.0, 0.6 + 0.4 * folga))
+
+    peso = round(f_amostra * f_faixa * f_margem, 4)
+    calibrada = round(base + (prob - base) * peso, 4)
+    return calibrada, {
+        "peso": peso, "base": round(base, 4),
+        "fator_amostra": round(f_amostra, 3),
+        "fator_faixa": round(f_faixa, 3),
+        "fator_margem": round(f_margem, 3),
+    }
+
+
+def data_quality_score(n_casa: int, n_fora: int, n_faixa: int,
+                       usou_arbitro: bool, n_arbitro: int | None) -> int:
+    """0-100. Quantidade e procedencia do que alimentou a decisao.
+
+    Nao inclui odd nem edge de proposito: preco nao e' dado de entrada do
+    modelo, e misturar os dois faria odd generosa parecer dado bom.
+    """
+    n_time = min(n_casa or 0, n_fora or 0)
+    score = 40 * min(1.0, max(0, n_time - 4) / 16)          # 4 -> 0, 20 -> 40
+    # A escala comeca em 4 (MIN_JOGOS_TIME) e nao no piso de 10 do pipeline de
+    # proposito: este score descreve o dado, nao repete o gate. Um pick no piso
+    # tira 50 aqui, e 50 e' uma descricao honesta de "10 jogos por time, sem
+    # arbitro" -- nao e' nota de reprovacao.
+    score += 35 * min(1.0, (n_faixa or 0) / 159)
+    score += 15 if usou_arbitro else 0
+    score += 10 * min(1.0, (n_arbitro or 0) / 12)
+    return int(round(score))

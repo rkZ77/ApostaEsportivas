@@ -43,7 +43,7 @@ from __future__ import annotations
 from collections import defaultdict
 
 from services.pick_engine.fouls_model import (
-    LINHAS_SUPORTADAS, MIN_JOGOS_TIME, _FAIXAS_POR_LINHA,
+    LINHAS_SUPORTADAS, MIN_JOGOS_TIME, _FAIXAS_POR_LINHA, media_ponderada,
 )
 
 #: Limites superiores de cada faixa de previsao. Sao os MESMOS da tabela
@@ -84,7 +84,7 @@ def carregar_jogos(cur) -> list:
     ]
 
 
-def previsoes(jogos: list, usar_mando: bool) -> list:
+def previsoes(jogos: list, usar_mando: bool, usar_recencia: bool = False) -> list:
     """[{fixture_id, previsto, real}] por jogo, sem lookahead.
 
     O fixture_id vai junto porque quem compara os dois metodos precisa PAREAR
@@ -95,6 +95,12 @@ def previsoes(jogos: list, usar_mando: bool) -> list:
     os jogos do time em casa e fora entram no mesmo balde. True conta so' os
     jogos no mando em que o time vai jogar, que e' o que stats_model.
     pool_and_field faz no motor generico desde 2026-08-08.
+
+    usar_recencia=True troca a media simples pela ponderada de fouls_model
+    (ultimos 5 pesam 45%, os 5 anteriores 30%, o resto 25%). Ele existe aqui
+    pelo MESMO motivo que usar_mando: a tabela empirica so' vale se tiver sido
+    calibrada com o mesmo metodo que monta a previsao do pick. Quem decide e' o
+    pipeline; esta funcao obedece.
     """
     historico: dict = defaultdict(list)
     amostras = []
@@ -106,9 +112,13 @@ def previsoes(jogos: list, usar_mando: bool) -> list:
 
         casa, fora = historico[chave_casa], historico[chave_fora]
         if len(casa) >= MIN_JOGOS_TIME and len(fora) >= MIN_JOGOS_TIME:
+            if usar_recencia:
+                m_casa, m_fora = media_ponderada(casa), media_ponderada(fora)
+            else:
+                m_casa, m_fora = sum(casa) / len(casa), sum(fora) / len(fora)
             amostras.append({
                 "fixture_id": j["fixture_id"],
-                "previsto": sum(casa) / len(casa) + sum(fora) / len(fora),
+                "previsto": m_casa + m_fora,
                 "real": j["home_fouls"] + j["away_fouls"],
             })
 
@@ -179,19 +189,21 @@ def mesclar(medida: dict, min_amostra: int = MIN_AMOSTRA_CELULA) -> tuple[dict, 
 
 
 def recalibrar(cur, usar_mando: bool = False,
-               min_amostra: int = MIN_AMOSTRA_CELULA) -> tuple[dict, dict]:
+               min_amostra: int = MIN_AMOSTRA_CELULA,
+               usar_recencia: bool = False) -> tuple[dict, dict]:
     """(tabela, diagnostico). Nunca levanta: falha devolve a congelada.
 
     Calibragem e' melhoria, nao requisito -- derrubar a geracao de pick porque a
     remedicao falhou seria trocar um problema pequeno por um grande. Mesmo
     criterio que StandingsService ja' usa pra classificacao.
     """
-    diagnostico = {"usou_mando": usar_mando, "origem": "congelada",
+    diagnostico = {"usou_mando": usar_mando, "usou_recencia": usar_recencia,
+                   "origem": "congelada",
                    "jogos": 0, "amostras": 0, "celulas_trocadas": 0,
                    "mudancas": [], "erro": None}
     try:
         jogos = carregar_jogos(cur)
-        amostras = previsoes(jogos, usar_mando)
+        amostras = previsoes(jogos, usar_mando, usar_recencia)
         diagnostico["jogos"] = len(jogos)
         diagnostico["amostras"] = len(amostras)
         if not amostras:
