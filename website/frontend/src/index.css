@@ -97,6 +97,17 @@
   --c-purple-300: 216 180 254;
   --c-purple-400: 192 132 252;
   --c-purple-500: 168  85 247;
+  /* Indigo · a cor do AO VIVO. Ver a nota em components/ui/Badge.tsx: verde e'
+     a marca, amarelo o VIP, azul a multipla, laranja a alavancagem, roxo as
+     faltas, ciano o Boost, e vermelho fica RESERVADO pro RED -- num site de
+     aposta nenhum produto pode vestir a cor de "perdeu".
+
+     Ele vivia na escala fixa do Tailwind, e por isso era o unico produto sem
+     tom proprio no tema claro: indigo-300 (#a5b4fc) sobre branco da' 2.0:1 e
+     o selo "AO VIVO" sumia. */
+  --c-indigo-300: 165 180 252;
+  --c-indigo-400: 129 140 248;
+  --c-indigo-500:  99 102 241;
   --c-teal-400:   45 212 191;
   --c-teal-500:   20 184 166;
   --c-sky-400:    56 189 248;
@@ -218,6 +229,9 @@
   --c-purple-300: 126  34 206; /* #7e22ce */
   --c-purple-400: 168  85 247; /* #a855f7 · 4.0:1 */
   --c-purple-500: 147  51 234; /* #9333ea */
+  --c-indigo-300:  67  56 202; /* #4338ca · 8.1:1 */
+  --c-indigo-400:  79  70 229; /* #4f46e5 · 6.3:1 */
+  --c-indigo-500:  79  70 229; /* #4f46e5 */
   --c-teal-400:   13 148 136;  /* #0d9488 · 3.7:1 */
   --c-teal-500:   20 184 166;  /* #14b8a6 */
   --c-sky-400:     2 132 199;  /* #0284c7 · 4.1:1 */

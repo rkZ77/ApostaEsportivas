@@ -313,7 +313,9 @@ function TabBar({ tab, setTab, canSeeVip, verAoVivo, verBingo, temFaltasHoje, co
          porque é aqui que ele acompanha o dinheiro dele. */
       key: 'minhas_apostas' as Tab, label: 'Minhas Apostas',
       badge: (liveCount ?? 0) > 0 ? String(liveCount) : undefined,
-      badgeCls: 'bg-red-500/20 text-red-300 border-red-400/40 animate-pulse',
+      /* Indigo, e nao vermelho: este contador diz "tem jogo rolando", nao
+         "voce perdeu N". Mesma troca da faixa de aviso logo abaixo. */
+      badgeCls: 'bg-indigo-500/20 text-indigo-300 border-indigo-400/40 animate-pulse',
     },
   ]
 
@@ -1132,8 +1134,8 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
             {resultStyle.label}
           </span>
         ) : isLive ? (
-          <span className="flex items-center gap-1 text-[10px] font-black text-red-300 bg-red-500/20 border border-red-400/40 px-2 py-1 rounded-lg animate-pulse">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-400" /> AO VIVO
+          <span className="flex items-center gap-1 text-[10px] font-black text-indigo-300 bg-indigo-500/20 border border-indigo-400/40 px-2 py-1 rounded-lg animate-pulse">
+            <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" /> AO VIVO
           </span>
         ) : (
           <span className="text-[10px] text-ink-3 border border-line px-2 py-1 rounded-lg">Pendente</span>
@@ -1531,8 +1533,8 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
             {resultStyle.label}
           </span>
         ) : isLive ? (
-          <span className="flex items-center gap-1 text-[10px] font-black text-red-300 bg-red-500/20 border border-red-400/40 px-2 py-1 rounded-lg animate-pulse">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-400" /> AO VIVO
+          <span className="flex items-center gap-1 text-[10px] font-black text-indigo-300 bg-indigo-500/20 border border-indigo-400/40 px-2 py-1 rounded-lg animate-pulse">
+            <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" /> AO VIVO
           </span>
         ) : (
           <span className="text-[10px] text-yellow-500 border border-yellow-500/20 bg-yellow-500/10 px-2 py-1 rounded-lg font-bold">Pendente</span>
@@ -3165,18 +3167,24 @@ export default function Picks() {
         {/* Aparece só enquanto a análise do dia está rodando. */}
         <EngineStatus />
 
+        {/* O AVISO DE AO VIVO NAO VESTE VERMELHO (12/09/2026).
+            Ele era vermelho, e num site de aposta vermelho e' RED -- um aviso
+            vermelho no topo da pagina de picks e' lido como "algo deu errado"
+            antes de ser lido. A regra ja' estava escrita em ui/Badge.tsx: o
+            vermelho fica reservado pro resultado, e a cor do Ao Vivo e' o
+            indigo. Aqui e' so' a barra alcancando a decisao. */}
         {hasLive && tab !== 'minhas_apostas' && (
-          <div className="mb-4 flex items-center justify-between bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3">
+          <div className="mb-4 flex items-center justify-between bg-indigo-500/10 border border-indigo-500/30 rounded-lg px-4 py-3">
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse shrink-0" />
-              <span className="text-red-300 text-sm font-semibold">
+              <span className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse shrink-0" />
+              <span className="text-indigo-300 text-sm font-semibold">
                 {liveCount > 1 ? `${liveCount} jogos que você apostou estão ao vivo!` : 'Um jogo que você apostou está ao vivo!'}
               </span>
             </div>
             <div className="flex items-center gap-3">
               <button
                 onClick={() => { clearLive(); setTab('minhas_apostas') }}
-                className="text-xs font-bold text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-400/50 px-2.5 py-1 rounded-lg transition-colors"
+                className="text-xs font-bold text-indigo-300 hover:text-indigo-400 border border-indigo-500/30 hover:border-indigo-400/50 px-2.5 py-1 rounded-lg transition-colors"
               >
                 Acompanhar
               </button>
@@ -3233,10 +3241,19 @@ export default function Picks() {
             {!topoPronto ? <PickLoading /> : todayError ? (
             <div className="card p-10 text-center">
               <p className="text-ink-2 font-semibold mb-1">Erro ao carregar picks</p>
-              <p className="text-ink-4 text-sm mb-4">Não foi possível conectar ao servidor. Verifique sua conexão.</p>
+              {/* A causa nao e' sempre a internet de quem le'. A frase unica
+                  mandava a pessoa conferir o wi-fi mesmo quando o problema era
+                  nosso (servidor lento) ou a sessao dela (401) -- e aponta pro
+                  lugar errado nos dois casos. `services/api.ts` ja' faz essa
+                  separacao no aviso global; aqui a tela so' passou a dizer o
+                  que sabe, sem palpitar na causa. */}
+              <p className="text-ink-4 text-sm mb-4">Pode ser instabilidade momentânea. Tente de novo em instantes.</p>
               <button
                 onClick={() => { setTodayError(false); setTodayLoading(true); const p = selectedOffset < 0 ? { date: getBrasiliaDateIso(selectedOffset) } : {}; api.get('/suggestions/today', { params: p }).then(r => setToday(r.data)).catch(() => setTodayError(true)).finally(() => setTodayLoading(false)) }}
-                className="text-sm text-green-400 hover:text-green-300 font-semibold transition-colors"
+                /* `px-4 py-2.5` e nao so' texto: medido em 390px este botao
+                   tinha 20px de altura, o menor alvo de toque do site -- e e'
+                   justo o que alguem aperta com pressa. */
+                className="px-4 py-2.5 rounded-lg text-sm text-accent-ink hover:bg-surface-2 font-semibold transition-colors"
               >
                 Tentar novamente
               </button>

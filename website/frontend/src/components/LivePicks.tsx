@@ -575,8 +575,13 @@ function PickCard({ pick, unitValue, onRefresh, syncedAt }: {
   ) : displayProb != null ? (
     <span className={`font-mono text-xs font-black border px-1.5 py-0.5 rounded ${probCls}`}>{displayProb}%</span>
   ) : isLive ? (
-    <span className="flex items-center gap-1 text-[9px] font-black text-green-400">
-      <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+    /* Indigo, como no resto do site. Este selo era VERDE enquanto o mesmo
+       "AO VIVO" em Picks.tsx era VERMELHO -- o mesmo estado com duas cores
+       em dois componentes do mesmo produto. Verde tambem nao servia aqui:
+       ele e' GREEN, e um selo verde em cima de um pick em andamento sugere
+       resultado. Ver a tabela de cores em ui/Badge.tsx. */
+    <span className="flex items-center gap-1 text-[9px] font-black text-indigo-300">
+      <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
       AO VIVO
     </span>
   ) : (

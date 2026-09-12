@@ -99,6 +99,12 @@ export default {
           400: token('c-purple-400'),
           500: token('c-purple-500'),
         },
+        // a cor do Ao Vivo · ver a nota em index.css
+        indigo: {
+          300: token('c-indigo-300'),
+          400: token('c-indigo-400'),
+          500: token('c-indigo-500'),
+        },
         teal: {
           400: token('c-teal-400'),
           500: token('c-teal-500'),
