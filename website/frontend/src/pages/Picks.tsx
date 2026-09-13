@@ -19,7 +19,7 @@ import { ComoFunciona,
 import { aplicarFiltro, FILTRO_INICIAL } from '../lib/mercadoFiltro'
 import EngineStatus from '../components/EngineStatus'
 import FiltrosDePicks, { filtrarPicks, ordenarPicks,
-         type OrdemDePick } from '../components/FiltrosDePicks'
+         type OrdemDePick, type BilheteFiltro } from '../components/FiltrosDePicks'
 import { Escada, LinhaCaminho,
          type AlavStep, type CaminhoEncerrado } from '../components/alavancagem/caminho'
 import AnalysisModal from '../components/AnalysisModal'
@@ -2712,6 +2712,13 @@ export default function Picks() {
    */
   /* Um par de estados por aba: o recorte de uma nao pode valer na outra -- as
      listas sao de produtos diferentes e as ligas nem sempre coincidem. */
+  /* BILHETE E' UM ESTADO SO' PRA PAGINA INTEIRA, ao contrario de liga e
+     resultado (2026-09-12, pedido do usuario). "Quero ver so' o que ja'
+     peguei" e' uma intencao sobre a PESSOA, nao sobre o produto: ela vale
+     igual no VIP, no Boost e no Jogador, e zerar a cada troca de aba faria o
+     usuario remarcar o mesmo recorte sete vezes. Liga e resultado continuam
+     por aba porque falam da lista daquela aba. */
+  const [bilheteFiltro, setBilheteFiltro] = useState<BilheteFiltro>('')
   const [boostLiga, setBoostLiga] = useState(''); const [boostResultado, setBoostResultado] = useState('')
   const [jogLiga, setJogLiga] = useState(''); const [jogResultado, setJogResultado] = useState('')
   const [multLiga, setMultLiga] = useState(''); const [multResultado, setMultResultado] = useState('')
@@ -2771,22 +2778,22 @@ export default function Picks() {
      lendo as originais: lá o bloco é resumo do dia, e um recorte feito noutra
      aba mudaria o resumo sem nada na tela explicando por quê. */
   const boostDaAba = useMemo(
-    () => ordenarPicks(filtrarPicks(boost ?? [], boostLiga, boostResultado), boostOrdem),
-    [boost, boostLiga, boostResultado, boostOrdem])
+    () => ordenarPicks(filtrarPicks(boost ?? [], boostLiga, boostResultado, bilheteFiltro), boostOrdem),
+    [boost, boostLiga, boostResultado, boostOrdem, bilheteFiltro])
   const boostFreeF = useMemo(() => boostDaAba.filter(p => p.plano !== 'vip'), [boostDaAba])
   const boostVipF  = useMemo(() => boostDaAba.filter(p => p.plano === 'vip'),  [boostDaAba])
   const jogadoresDaAba = useMemo(
-    () => ordenarPicks(filtrarPicks(playerStatsOrdenados ?? [], jogLiga, jogResultado), jogOrdem),
-    [playerStatsOrdenados, jogLiga, jogResultado, jogOrdem])
+    () => ordenarPicks(filtrarPicks(playerStatsOrdenados ?? [], jogLiga, jogResultado, bilheteFiltro), jogOrdem),
+    [playerStatsOrdenados, jogLiga, jogResultado, jogOrdem, bilheteFiltro])
   const faltasDaAba = useMemo(
-    () => ordenarPicks(filtrarPicks(faltasOrdenadas ?? [], falLiga, falResultado), falOrdem),
-    [faltasOrdenadas, falLiga, falResultado, falOrdem])
+    () => ordenarPicks(filtrarPicks(faltasOrdenadas ?? [], falLiga, falResultado, bilheteFiltro), falOrdem),
+    [faltasOrdenadas, falLiga, falResultado, falOrdem, bilheteFiltro])
   const multiplasDaAba = useMemo(
-    () => filtrarPicks((today?.multiplas ?? []) as any[], multLiga, multResultado),
-    [today?.multiplas, multLiga, multResultado])
+    () => filtrarPicks((today?.multiplas ?? []) as any[], multLiga, multResultado, bilheteFiltro),
+    [today?.multiplas, multLiga, multResultado, bilheteFiltro])
   const bingoDaAba = useMemo(
-    () => filtrarPicks((today?.bingo ?? []) as any[], bingoLiga, bingoResultado),
-    [today?.bingo, bingoLiga, bingoResultado])
+    () => filtrarPicks((today?.bingo ?? []) as any[], bingoLiga, bingoResultado, bilheteFiltro),
+    [today?.bingo, bingoLiga, bingoResultado, bilheteFiltro])
   /* Defesas parou de crescer em 27/08 (virou o método `saves` do Player
      Stats). A seção continua existindo pro dia antigo, mas desenhar todo dia
      um bloco que nunca mais vai ter pick é ruído · ela só aparece quando tem
@@ -3716,7 +3723,12 @@ export default function Picks() {
                    esticar (flex-1) ate' passar da largura da grade no desktop.
                    Liga, resultado e ordem respondem as mesmas perguntas com o
                    mesmo componente que Boost, Jogadores e Ao Vivo usam. */
-                const byBusca = byResult
+                /* Mesmo recorte que `filtrarPicks` faz nas outras abas · aqui
+                   a cadeia e' escrita a mao desde antes daquele helper. */
+                const byBilhete = bilheteFiltro
+                  ? byResult.filter((x: any) => Boolean(x.is_followed) === (bilheteFiltro === 'sim'))
+                  : byResult
+                const byBusca = byBilhete
                 /* `rank` é a ordem que o motor entregou · é o default porque é
                    a única que carrega julgamento do motor. As outras três
                    reordenam a MESMA lista, nunca filtram. */
@@ -3748,6 +3760,7 @@ export default function Picks() {
                         <FiltrosDePicks
                           picks={vips} liga={leagueFilter} setLiga={setLeagueFilter}
                           resultado={vipResultFilter} setResultado={setVipResultFilter}
+                          bilhete={bilheteFiltro} setBilhete={setBilheteFiltro}
                           ordem={vipOrdem as OrdemDePick} setOrdem={v => setVipOrdem(v)}
                           mostrados={filteredVips.length}
                         />
@@ -3822,6 +3835,7 @@ export default function Picks() {
                   <FiltrosDePicks
                     picks={(today?.multiplas ?? []) as any[]} liga={multLiga} setLiga={setMultLiga}
                     resultado={multResultado} setResultado={setMultResultado}
+                    bilhete={bilheteFiltro} setBilhete={setBilheteFiltro}
                     mostrados={multiplasDaAba.length}
                   />
                 )}
@@ -3889,6 +3903,7 @@ export default function Picks() {
                   <FiltrosDePicks
                     picks={(today?.bingo ?? []) as any[]} liga={bingoLiga} setLiga={setBingoLiga}
                     resultado={bingoResultado} setResultado={setBingoResultado}
+                    bilhete={bilheteFiltro} setBilhete={setBilheteFiltro}
                     mostrados={bingoDaAba.length}
                   />
                 )}
@@ -4415,6 +4430,7 @@ export default function Picks() {
               <FiltrosDePicks
                 picks={boost ?? []} liga={boostLiga} setLiga={setBoostLiga}
                 resultado={boostResultado} setResultado={setBoostResultado}
+                bilhete={bilheteFiltro} setBilhete={setBilheteFiltro}
                 ordem={boostOrdem} setOrdem={setBoostOrdem}
                 mostrados={boostDaAba.length}
               />
@@ -4507,6 +4523,7 @@ export default function Picks() {
                   <FiltrosDePicks
                     picks={faltasOrdenadas ?? []} liga={falLiga} setLiga={setFalLiga}
                     resultado={falResultado} setResultado={setFalResultado}
+                    bilhete={bilheteFiltro} setBilhete={setBilheteFiltro}
                     ordem={falOrdem} setOrdem={setFalOrdem}
                     mostrados={faltasDaAba.length}
                   />
@@ -4583,6 +4600,7 @@ export default function Picks() {
                   <FiltrosDePicks
                     picks={playerStatsOrdenados ?? []} liga={jogLiga} setLiga={setJogLiga}
                     resultado={jogResultado} setResultado={setJogResultado}
+                    bilhete={bilheteFiltro} setBilhete={setBilheteFiltro}
                     ordem={jogOrdem} setOrdem={setJogOrdem}
                     mostrados={jogadoresDaAba.length}
                   />

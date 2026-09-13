@@ -57,7 +57,8 @@ import { pctProb } from '../utils/format'
 import { rotuloDoStatus, escudoDoTime } from '../lib/aoVivo'
 import { calcVipStake } from '../utils/stakeUtils'
 import { sinalizarNavegacao } from '../services/progressBus'
-import FiltrosDePicks, { filtrarPicks, ordenarPicks, type OrdemDePick } from './FiltrosDePicks'
+import FiltrosDePicks, { filtrarPicks, ordenarPicks,
+         type OrdemDePick, type BilheteFiltro } from './FiltrosDePicks'
 
 /* Teto de unidades do Live · espelha STAKE_LIMITS["live"] em
  * backend/routers/banca.py. É o mais baixo de qualquer produto, e a razão está
@@ -1659,10 +1660,11 @@ export default function LivePicksFeed({ isActive, banca }: {
      uma, entao aqui nao ha' regra propria. */
   const [liveLiga, setLiveLiga]           = useState('')
   const [liveResultado, setLiveResultado] = useState('')
+  const [liveBilhete, setLiveBilhete]     = useState<BilheteFiltro>('')
   const [liveOrdem, setLiveOrdem]         = useState<OrdemDePick>('rank')
   const encerradosDaAba = useMemo(
-    () => ordenarPicks(filtrarPicks(encerrados as any[], liveLiga, liveResultado), liveOrdem),
-    [encerrados, liveLiga, liveResultado, liveOrdem],
+    () => ordenarPicks(filtrarPicks(encerrados as any[], liveLiga, liveResultado, liveBilhete), liveOrdem),
+    [encerrados, liveLiga, liveResultado, liveBilhete, liveOrdem],
   )
 
   /* SUAS APOSTAS PRIMEIRO, E SEPARADAS (2026-08-29, pedido do usuário).
@@ -1893,6 +1895,7 @@ export default function LivePicksFeed({ isActive, banca }: {
             <FiltrosDePicks
               picks={encerrados as any[]} liga={liveLiga} setLiga={setLiveLiga}
               resultado={liveResultado} setResultado={setLiveResultado}
+              bilhete={liveBilhete} setBilhete={setLiveBilhete}
               ordem={liveOrdem} setOrdem={setLiveOrdem}
               mostrados={encerradosDaAba.length}
             />

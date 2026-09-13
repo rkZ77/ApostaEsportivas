@@ -14,14 +14,19 @@ import SelectMenu from './ui/SelectMenu'
  * do filtro de mês dos Resultados.
  */
 export type OrdemDePick = 'rank' | 'prob' | 'odd' | 'hora'
+/** `''` = tanto faz; `sim` = ja' registrou na banca; `nao` = ainda nao. */
+export type BilheteFiltro = '' | 'sim' | 'nao'
 
 export default function FiltrosDePicks({
   picks, liga, setLiga, resultado, setResultado, ordem, setOrdem, mostrados,
+  bilhete, setBilhete,
 }: {
   picks: any[]
   liga: string; setLiga: (v: string) => void
   resultado: string; setResultado: (v: string) => void
   ordem?: OrdemDePick; setOrdem?: (v: OrdemDePick) => void
+  /** Pegou o bilhete ou não · `''` mostra os dois. */
+  bilhete?: BilheteFiltro; setBilhete?: (v: BilheteFiltro) => void
   /** Quantos sobraram depois do filtro · só aparece com filtro ativo. */
   mostrados?: number
 }) {
@@ -29,7 +34,16 @@ export default function FiltrosDePicks({
   if (picks.length < 2) return null
 
   const porLiga = (lg: string) => picks.filter(p => p.league_name === lg).length
-  const ativo = Boolean(liga || resultado)
+
+  /* O MENU DE BILHETE SO' APARECE PRA QUEM TEM BILHETE (2026-09-12).
+     `is_followed` so' vem preenchido pra usuario logado, e um menu "Peguei o
+     bilhete / Nao peguei" numa lista onde ninguem pegou nada abre os dois
+     recortes vazios · pior que nao existir. Some tambem quando a pessoa ja'
+     pegou TODOS os picks da aba, porque ai o filtro nao separa nada. */
+  const comBilhete = picks.filter(p => p.is_followed).length
+  const mostraBilhete = Boolean(setBilhete) && comBilhete > 0 && comBilhete < picks.length
+
+  const ativo = Boolean(liga || resultado || bilhete)
 
   return (
     /* O RESPIRO E' DAQUI, e nao de cada aba (10/09/2026).
@@ -59,6 +73,18 @@ export default function FiltrosDePicks({
         value={resultado}
         onChange={setResultado}
       />
+      {mostraBilhete && (
+        <SelectMenu
+          ariaLabel="Bilhete"
+          options={[
+            { value: '', label: 'Todos os bilhetes' },
+            { value: 'sim', label: 'Peguei o bilhete', meta: String(comBilhete) },
+            { value: 'nao', label: 'Ainda não peguei', meta: String(picks.length - comBilhete) },
+          ]}
+          value={bilhete ?? ''}
+          onChange={v => setBilhete!(v as BilheteFiltro)}
+        />
+      )}
       {setOrdem && (
         <SelectMenu
           ariaLabel="Ordenar"
@@ -74,7 +100,7 @@ export default function FiltrosDePicks({
       )}
       {ativo && (
         <button
-          onClick={() => { setLiga(''); setResultado('') }}
+          onClick={() => { setLiga(''); setResultado(''); setBilhete?.('') }}
           className="text-[11px] font-bold text-accent-ink hover:text-accent-hover transition-colors"
         >
           Limpar
@@ -87,10 +113,15 @@ export default function FiltrosDePicks({
   )
 }
 
-/** Aplica liga + resultado, na ordem em que a tela oferece. */
-export function filtrarPicks(picks: any[], liga: string, resultado: string): any[] {
+/** Aplica liga + resultado + bilhete, na ordem em que a tela oferece. */
+export function filtrarPicks(
+  picks: any[], liga: string, resultado: string, bilhete: BilheteFiltro = '',
+): any[] {
   return picks.filter(p => {
     if (liga && p.league_name !== liga) return false
+    /* `Boolean(...)`: o backend manda `is_followed` ausente em pick de quem
+       nao esta logado, e `undefined === false` e' falso. */
+    if (bilhete && Boolean(p.is_followed) !== (bilhete === 'sim')) return false
     if (!resultado) return true
     return resultado === 'pending' ? !p.result : p.result === resultado
   })

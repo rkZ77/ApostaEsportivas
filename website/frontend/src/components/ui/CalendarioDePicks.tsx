@@ -108,8 +108,14 @@ export default function CalendarioDePicks({
         onClick={() => setAberto(a => !a)}
         aria-label="Escolher o dia"
         aria-expanded={aberto}
-        className="flex items-center gap-2 px-3 py-2 rounded-md border border-line bg-surface-1
-                   text-xs font-semibold text-ink-2 hover:text-ink-1 hover:border-line-strong
+        /* MESMAS CLASSES DO GATILHO DO SelectMenu (ui/SelectMenu.tsx).
+           Este botao divide a linha com dois ou tres menus de lista, e vinha
+           com outra borda (`line` contra `line-strong`), outro raio (`md`
+           contra `lg`), outro peso de fonte e um fundo que os vizinhos nao
+           tinham: na mesma barra, o controle do dia parecia de outro sistema
+           e a linha inteira parecia desalinhada. */
+        className="flex items-center gap-2 px-3 py-2 rounded-lg border border-line-strong
+                   text-xs font-bold text-ink-2 hover:border-ink-4
                    transition-colors min-h-[36px]"
       >
         <CalendarDays className="w-3.5 h-3.5 text-ink-3 shrink-0" />

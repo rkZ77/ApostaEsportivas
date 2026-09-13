@@ -92,6 +92,10 @@ export default function SelectMenu({
         onClick={() => setOpen(o => !o)}
         className={cn(
           'flex items-center gap-2 w-full px-3 py-2 rounded-lg border text-xs font-bold transition-colors',
+          /* `min-h` e nao so' o padding: o menu do dia carrega icone e os de
+             lista nao, entao a altura da linha decidia a altura do botao e os
+             controles da barra fechavam com 1px de diferenca entre si. */
+          'min-h-[36px]',
           'disabled:opacity-40 disabled:cursor-not-allowed',
           open
             ? 'border-accent/40 bg-accent/10 text-accent-ink'
