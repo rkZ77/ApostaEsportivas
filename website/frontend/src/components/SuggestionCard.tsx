@@ -9,7 +9,7 @@ import { calcVipStake, calcFreeStake, calcMultiplaStake, calcProfitUnits } from 
 import { stakeDe, contaEmUnidades } from '../utils/stakePlan'
 import ApostaModal from './ApostaModal'
 import { translateMarket, translateLine, translateTeamName, linhaDoJogador, valorLiquidado } from '../utils/marketTranslate'
-import { PICK_TYPE_BORDER, cascaDoPick } from '../utils/resultStyle'
+import { PICK_TYPE_BORDER, cascaDoPick, caixaDoPick } from '../utils/resultStyle'
 import AnalysisModal from './AnalysisModal'
 import { Badge, PickTypeBadge, ResultBadge } from './ui'
 import {
@@ -652,6 +652,13 @@ function SuggestionCard({
 
       {/* Times + mercado */}
       <div className="px-5 py-3 space-y-2">
+        {/* A MESMA CAIXA DA PERNA DO BILHETE (ver caixaDoPick). Sem ela, o VIP
+            e a multipla ficavam um embaixo do outro na aba Hoje com desenhos
+            diferentes pro mesmo conteudo: o bilhete com o jogo numa caixa que
+            fica verde ao dar green, e o simples com o jogo solto no fundo do
+            card. Quando o pick TEM pernas cada uma ja' traz a sua, entao aqui
+            a caixa sai de cena pra nao virar moldura dentro de moldura. */}
+        <div className={temPernas ? 'space-y-2' : `rounded-md border px-3 py-2 space-y-2 ${caixaDoPick(s.result)}`}>
         <div className="flex items-center gap-2">
           <TeamLogo id={s.home_team_id} name={s.home_team_name} />
           <span className="text-sm font-bold text-ink-1 truncate">{s.home_team_name}</span>
@@ -693,9 +700,7 @@ function SuggestionCard({
                  qual caiu e pintar as duas de vermelho inventa metade. */
               const lr = (leg.result ?? (s.result === 'GREEN' ? 'GREEN' : undefined)) as
                 'GREEN' | 'RED' | undefined
-              const boxClass = lr === 'GREEN' ? 'border-green-500/20 bg-green-500/5'
-                : lr === 'RED' ? 'border-red-500/20 bg-red-500/5'
-                : 'border-line bg-surface-1/60'
+              const boxClass = caixaDoPick(lr)
               const cor = COR_DA_PERNA[s.pick_type ?? ''] ?? COR_DA_PERNA_PADRAO
               const circleClass = lr === 'GREEN' ? 'bg-green-500/20 text-green-400'
                 : lr === 'RED' ? 'bg-red-500/20 text-red-400'
@@ -863,6 +868,7 @@ function SuggestionCard({
             )}
           </dl>
         )}
+        </div>
 
         {/* PICK ANULADO, E O CARD FICA, DIZENDO POR QUÊ.
           *

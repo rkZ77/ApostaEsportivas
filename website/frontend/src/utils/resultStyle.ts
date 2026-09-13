@@ -44,6 +44,24 @@ export const RESULT_STYLE: Record<PickResult, ResultStyle> = {
 export const CASCA_GREEN =
   'border-green-500/50 shadow-[0_0_0_1px_rgb(34_197_94/0.18)]'
 
+/* A CAIXA DO JOGO DENTRO DO CARD (2026-09-12, pedido do usuario).
+ *
+ * A perna da multipla ja' nascia numa caixa que muda de cor com o resultado
+ * dela, e o pick SIMPLES nao tinha caixa nenhuma: os dois produtos apareciam
+ * um embaixo do outro na aba Hoje, o bilhete com as selecoes verdes e o VIP
+ * com o jogo solto no fundo do card. Mesma ideia, dois desenhos.
+ *
+ * Aqui o pick simples passa a usar a caixa da perna, com os mesmos tres
+ * estados. O RED existe para a caixa (ao contrario da CASCA, que so' destaca o
+ * GREEN): dentro do card ela e' leitura de conferencia, nao vitrine, e deixar
+ * o RED cinza faria parecer pendente.
+ */
+export function caixaDoPick(result?: string | null): string {
+  if (result === 'GREEN' || result === 'HALF-WIN') return 'border-green-500/20 bg-green-500/5'
+  if (result === 'RED' || result === 'HALF-LOSS')  return 'border-red-500/20 bg-red-500/5'
+  return 'border-line bg-surface-1/60'
+}
+
 /** Borda do card: a do GREEN quando ele deu green, a do produto no resto. */
 export function cascaDoPick(result: string | null | undefined, bordaDoProduto: string): string {
   return result === 'GREEN' ? CASCA_GREEN : bordaDoProduto

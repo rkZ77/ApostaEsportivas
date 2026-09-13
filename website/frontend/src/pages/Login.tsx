@@ -1,7 +1,7 @@
 import { useState, useRef, FormEvent, useEffect } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { AnimatePresence, motion } from 'framer-motion'
-import { PartyPopper, Eye, EyeOff, ArrowLeft, House, ShieldCheck, LineChart, Lock } from 'lucide-react'
+import { PartyPopper, Eye, EyeOff, ArrowLeft, House, ShieldCheck, LineChart, Lock, Mail, Crown, Check } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { taxaAcerto } from '../utils/format'
 import { useAuth } from '../context/AuthContext'
@@ -147,6 +147,106 @@ function SeloDeConfianca({ className = 'mt-7' }: { className?: string }) {
 
 type LoginMethod = 'username' | 'email' | 'phone'
 
+/*
+ * O PASSO QUE FALTA · tela imediatamente depois do cadastro.
+ *
+ * Ela existe porque a promessa do site ("2 dias de VIP grátis") e a regra do
+ * backend (o trial nasce na verificação do contato) estavam separadas por uma
+ * navegação: a pessoa terminava o cadastro e ia parar na lista de picks, onde
+ * a única pista do que faltava era um aviso de rodapé que o tour de
+ * boas-vindas segurava.
+ *
+ * Aqui a recompensa é o título e o passo é o corpo. Nada é obrigatório: o
+ * link de baixo entra no site do mesmo jeito, no plano free, que é o que
+ * acontecia antes sem ninguém explicar.
+ */
+function ConfirmacaoDeCadastro({ email, onEntrar }: { email: string; onEntrar: () => void }) {
+  const [enviando, setEnviando] = useState(false)
+  const [reenviado, setReenviado] = useState(false)
+
+  const reenviar = async () => {
+    setEnviando(true)
+    try {
+      await api.post('/auth/resend-verification')
+      setReenviado(true)
+    } catch {
+      /* Silencioso: o e-mail original já saiu no cadastro, e um erro aqui não
+         muda o que a pessoa precisa fazer, que é abrir a caixa de entrada. */
+      setReenviado(true)
+    } finally {
+      setEnviando(false)
+    }
+  }
+
+  return (
+    <div className="relative min-h-screen bg-surface-0 flex flex-col overflow-hidden">
+      <Helmet>
+        <title>Confirme seu e-mail | Pick IA</title>
+        <meta name="robots" content="noindex" />
+      </Helmet>
+
+      <PublicNav width="full" />
+      <FundoDeCampo />
+
+      <main className="relative flex-1 flex justify-center px-5 sm:px-6 py-8 sm:py-12">
+        <div className="relative w-full max-w-md">
+          <div className="w-14 h-14 rounded-full bg-yellow-400/10 border border-yellow-400/30 flex items-center justify-center mb-5">
+            <Crown className="w-6 h-6 text-yellow-400" aria-hidden="true" />
+          </div>
+
+          <h1 className="text-2xl font-bold text-ink-1 mb-2">
+            Falta um clique para os 2 dias de VIP
+          </h1>
+          <p className="text-ink-3 text-sm leading-relaxed mb-6">
+            Sua conta está criada. Mandamos um link para{' '}
+            <strong className="text-ink-1 break-all">{email}</strong>: ao abrir, o acesso VIP
+            completo liga na hora e vale por 2 dias.
+          </p>
+
+          <ul className="space-y-2.5 mb-6">
+            {[
+              'Picks VIP, múltiplas, alavancagem e ao vivo, tudo aberto',
+              'Sem cartão e sem renovação automática',
+              'O acesso vence sozinho, não cobramos nada no fim',
+            ].map(t => (
+              <li key={t} className="flex items-start gap-2.5">
+                <Check className="w-4 h-4 text-accent-ink shrink-0 mt-0.5" aria-hidden="true" />
+                <span className="text-sm text-ink-2 leading-snug">{t}</span>
+              </li>
+            ))}
+          </ul>
+
+          <div className="bg-surface-1 border border-line rounded-lg p-4 mb-6">
+            <p className="flex items-center gap-2 text-xs text-ink-3 mb-3">
+              <Mail className="w-4 h-4 text-ink-4 shrink-0" aria-hidden="true" />
+              Não chegou? Confira o lixo eletrônico antes de pedir outro.
+            </p>
+            <button
+              type="button"
+              onClick={reenviar}
+              disabled={enviando || reenviado}
+              className="btn-ghost w-full text-sm min-h-[44px] disabled:opacity-60"
+            >
+              {reenviado ? 'Link reenviado' : enviando ? 'Enviando...' : 'Reenviar o link'}
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={onEntrar}
+            className="text-sm text-ink-3 hover:text-ink-1 transition-colors underline underline-offset-4"
+          >
+            Entrar sem confirmar agora
+          </button>
+          <p className="text-[11px] text-ink-4 mt-1.5">
+            Você entra no plano free e o link continua valendo depois.
+          </p>
+        </div>
+      </main>
+    </div>
+  )
+}
+
 export default function Login() {
   /* Portão de revelação · o mesmo das telas com PageShell. Também é quem
      encerra a barra verde do index.html. Ver hooks/useRevelacao. */
@@ -177,6 +277,7 @@ export default function Login() {
 
   const [error, setError]     = useState('')
   const [loading, setLoading] = useState(false)
+  const [cadastrado, setCadastrado] = useState(false)
   const [kickedDevice, setKickedDevice] = useState<string | null>(null)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirm, setShowConfirm]   = useState(false)
@@ -259,10 +360,23 @@ export default function Login() {
       } else {
         await register(name.trim(), email, password, phone, username.trim(), refCode || undefined, acceptedTerms, captchaToken || undefined)
         localStorage.removeItem('ref_code')
-        // `#guia` saiu: não havia âncora com esse id em /picks, e o onboarding
-        // que ele tentava anunciar agora abre sozinho na tela (ver
-        // context/OnboardingContext.tsx).
-        navigate(redirectTo ?? '/picks')
+        /*
+         * NÃO VAI DIRETO PRO PRODUTO (12/09).
+         *
+         * O site inteiro vende "2 dias de VIP grátis", e desde a saída do CPF
+         * o trial só nasce quando o contato é provado, no link do e-mail ou no
+         * código do WhatsApp (ver `_ativar_trial_se_elegivel` no backend).
+         * Quem se cadastrava caía em /picks como FREE, com o tour de
+         * boas-vindas na frente e o aviso de confirmar e-mail represado atrás
+         * dele: a recompensa prometida três telas antes não aparecia em
+         * nenhuma. É o vazamento mais caro do funil, porque acontece depois
+         * de a pessoa já ter feito o trabalho todo.
+         *
+         * Agora o passo que falta é a própria tela. `#guia` continua fora, e
+         * quem quiser entrar sem confirmar tem o link secundário abaixo.
+         */
+        setCadastrado(true)
+        return
       }
     } catch (err: any) {
       turnstileRef.current?.reset()
@@ -341,6 +455,12 @@ export default function Login() {
      O conteúdo daquele painel não se perdeu: o win rate real virou a primeira
      linha do selo abaixo do card, e a lista do trial virou uma faixa acima
      dele, visível TAMBÉM no celular, onde antes não aparecia. */
+  /* Cadastro concluído: a tela vira o passo que falta (ver
+     ConfirmacaoDeCadastro, acima). O formulário já cumpriu o papel dele. */
+  if (cadastrado) {
+    return <ConfirmacaoDeCadastro email={email} onEntrar={() => navigate(redirectTo ?? '/picks')} />
+  }
+
   return (
     <div className={`relative min-h-screen bg-surface-0 flex flex-col overflow-hidden ${classesRevelacao(revelado)}`} style={{ transitionDuration: `${FADE_REVELACAO_MS}ms` }} aria-busy={!revelado}>
       <Helmet>

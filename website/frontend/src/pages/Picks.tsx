@@ -49,7 +49,7 @@ import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronDown, ChevronLeft, Che
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import { stakeDe } from '../utils/stakePlan'
 import { fmtUnits, pctProb, capitalizarFrase, plural } from '../utils/format'
-import { getResultStyle, PICK_TYPE_CLS, PICK_TYPE_BORDER, cascaDoPick } from '../utils/resultStyle'
+import { getResultStyle, PICK_TYPE_CLS, PICK_TYPE_BORDER, cascaDoPick, caixaDoPick } from '../utils/resultStyle'
 import { useShareStoryImage, useShareAlavancagemImage, useShareBilheteImage } from '../hooks/useShareStoryImage'
 import { useOddAtualizada } from '../hooks/useOddAtualizada'
 import { useOddAgora } from '../hooks/useOddsAgora'
@@ -818,6 +818,8 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
 
       {/* Times + mercado */}
       <div className="px-5 py-3 space-y-2">
+        {/* A MESMA CAIXA DA PERNA DO BILHETE · ver caixaDoPick. */}
+        <div className={`rounded-md border px-3 py-2 space-y-2 ${caixaDoPick(dica.result)}`}>
         <div className="flex items-center gap-2">
           <TeamLogo id={dica.home_team_id} name={dica.home_team ?? ''} size={22} />
           <span className="text-sm font-bold text-ink-1 truncate">{dica.home_team}</span>
@@ -846,6 +848,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
             </CampoDoPick>
           )}
         </dl>
+        </div>
       </div>
 
       <PickProbability confidence={dica.confidence} probability={dica.probability} />

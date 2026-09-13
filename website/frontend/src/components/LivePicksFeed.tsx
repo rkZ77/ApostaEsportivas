@@ -749,7 +749,7 @@ function unidadesSugeridas(
   // mesmo número que o pick carrega no /admin.
   return Math.min(pick.stake_units ?? 1, MAX_UNIDADES_LIVE)
 }
-import { PICK_TYPE_BORDER, cascaDoPick } from '../utils/resultStyle'
+import { PICK_TYPE_BORDER, cascaDoPick, caixaDoPick } from '../utils/resultStyle'
 
 
 
@@ -1278,6 +1278,8 @@ const CardLive = forwardRef<HTMLDivElement, {
       {/* Times, placar e mercado · o placar entra no lugar do "vs" porque ao
           vivo ele é parte da identificação do jogo, não um detalhe. */}
       <div className="px-5 py-3 space-y-2">
+        {/* A MESMA CAIXA DA PERNA DO BILHETE · ver caixaDoPick. */}
+        <div className={`rounded-md border px-3 py-2 space-y-2 ${caixaDoPick(pick.result)}`}>
         <div className="flex items-center gap-2">
           <TeamLogo id={pick.home_team_id} name={pick.home_team_name} size={18} />
           <span className="text-sm font-bold text-ink-1 truncate">{pick.home_team_name}</span>
@@ -1327,6 +1329,7 @@ const CardLive = forwardRef<HTMLDivElement, {
             </CampoDoPick>
           )}
         </dl>
+        </div>
       </div>
 
       <PickProbability confidence={pick.confidence} probability={pick.probability}
