@@ -178,3 +178,51 @@ def test_sem_liga_ou_temporada_nao_abre():
     assert jovem is False and rodadas == 0
     assert player_history.partidas_na_competicao(
         _CursorFalso(9), team_id=33, league_id=None, season=None) == 0
+
+
+# ---------------------------------------------------------------------------
+# 4 · o phi de `saves` estava sendo medido no elenco inteiro
+# ---------------------------------------------------------------------------
+
+class _CursorDeDispersao:
+    """Guarda o SQL e os parametros. A pergunta e' quem entrou na conta."""
+
+    def __init__(self):
+        self.sql = None
+        self.params = None
+
+    def execute(self, sql, params=None):
+        self.sql = sql
+        self.params = params
+
+    def fetchone(self):
+        return (5000, 1.0, 1.5)
+
+    @property
+    def description(self):
+        return (("n",), ("media",), ("variancia",))
+
+
+def test_saves_mede_dispersao_so_em_goleiro(monkeypatch):
+    """Depois do backfill de zero implicito, `saves = 0` existe na folha de todo
+    jogador de linha. Sem o recorte de posicao a medida saia sobre 28.415
+    atuacoes (phi 4.124) em vez das 2.783 de goleiro (phi 1.384)."""
+    from services.player_stats_engine import count_model
+    cur = _CursorDeDispersao()
+    monkeypatch.setattr(count_model, "linha_dict",
+                        lambda _c: {"n": 5000, "media": 1.0, "variancia": 1.5})
+    count_model.medir_dispersao(cur, cat.SAVES)
+    assert "position = ANY" in cur.sql
+    assert cur.params == (["G"],)
+
+
+def test_contador_de_todo_mundo_nao_ganha_recorte(monkeypatch):
+    """`shots_on` e' de jogador de linha E de goleiro: recortar aqui seria
+    inventar um filtro que o catalogo nao declara."""
+    from services.player_stats_engine import count_model
+    cur = _CursorDeDispersao()
+    monkeypatch.setattr(count_model, "linha_dict",
+                        lambda _c: {"n": 5000, "media": 1.0, "variancia": 1.5})
+    count_model.medir_dispersao(cur, cat.SHOTS_ON)
+    assert "position = ANY" not in cur.sql
+    assert cur.params == ()

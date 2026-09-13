@@ -54,6 +54,16 @@ fixtures, quando existem, e mostra quantos dos candidatos que passam no piso de
 probabilidade ainda passam no piso de edge. E' onde se ve' se o motor esta'
 morrendo de probabilidade ou de preco.
 
+    ATENCAO: `odds_values` E' SNAPSHOT, NAO HISTORICO (medido em PROD,
+    2026-09-13: 7.249 linhas, todas do MESMO dia, 2 fixtures). A coleta
+    sobrescreve. Entao a Parte C so' tem o que casar quando a janela da
+    caminhada alcanca o dia que esta' gravado agora -- no resto ela imprime
+    "nenhuma atuacao casou" e isso NAO quer dizer que a casa nao cotou.
+
+    Pra medir o edge de verdade e' preciso acumular: ou `odds_snapshot_service`
+    passa a guardar prop de jogador, ou a Parte C roda todo dia sobre o dia
+    corrente e alguem soma. Mesma limitacao que o CLV ja' tinha.
+
 O QUE ELE NAO FAZ
 -----------------
 Nao mede titularidade, minutos, qualidade do dado nem contradicao. Aquelas
@@ -131,12 +141,14 @@ def _odds_do_metodo(cur, metodo: cat.Metodo, dias: int) -> dict:
     from services.player_stats_engine import name_match
 
     nomes = tuple(sorted(metodo.nomes_mercado))
+    #  e nao : o nome da coluna em . E a data sai da
+    # PROPRIA tabela (), sem join em fixtures -- ela ja' carrega
+    # o retrato da partida, e o join so' adicionava um jeito de perder linha.
     cur.execute("""
-        SELECT ov.fixture_id, ov.value_name, ov.odd
+        SELECT ov.fixture_id, ov.value_name, ov.odd_value AS odd
           FROM odds_values ov
-          JOIN fixtures f ON f.fixture_id = ov.fixture_id
          WHERE LOWER(TRIM(ov.market_name)) = ANY(%s)
-           AND f.match_date >= CURRENT_DATE - %s
+           AND ov.match_datetime::date >= CURRENT_DATE - %s
     """, (list(nomes), dias))
     melhor: dict = {}
     for linha in linhas_dict(cur):

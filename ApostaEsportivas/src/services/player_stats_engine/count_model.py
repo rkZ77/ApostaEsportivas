@@ -44,6 +44,30 @@ def medir_dispersao(cur, metodo: cat.Metodo) -> dict:
     """
     congelado = {"phi": metodo.phi_congelado, "origem": "congelada",
                  "atuacoes": 0, "erro": None}
+    # O RECORTE DE POSICAO NAO E' DETALHE (2026-09-13). `Metodo.posicoes` existe
+    # e o catalogo declara `posicoes={"G"}` pra `saves` -- esta consulta e' que
+    # nao lia.
+    #
+    # Ate' 03/09 isso nao aparecia: `saves IS NOT NULL` selecionava goleiro
+    # sozinho, porque a API omite o contador de quem nao defende. O backfill do
+    # zero implicito preencheu `saves = 0` em toda folha de 60+ minutos, e a
+    # populacao virou o elenco inteiro DA NOITE PRO DIA, sem uma linha de codigo
+    # mudar. Medido em PROD:
+    #
+    #     todos        n=28.415  media 0.301  var 1.241  phi 4.124
+    #     so' goleiro  n= 2.783  media 3.040  var 4.207  phi 1.384
+    #
+    # phi 4.124 num contador cujo phi real e' 1.384 achata a cauda e reprovaria
+    # todo "N ou mais defesas". Hoje o estrago e' menor do que parece porque
+    # `saves` nao passa por `analisar` -- ele vem do goalkeeper_model, que
+    # calibra em match_statistics e nao foi contaminado. Mas o numero errado ja'
+    # estava sendo GRAVADO como "a calibragem da rodada", que e' o que alguem
+    # vai ler daqui a dois meses pra explicar um RED. Mesma familia do mercado
+    # renomeado em 04/09: a populacao muda embaixo e o motor nao percebe.
+    filtro_posicao, params = "", []
+    if metodo.posicoes:
+        filtro_posicao = "AND position = ANY(%s)"
+        params = [list(metodo.posicoes)]
     try:
         cur.execute(f"""
             SELECT COUNT(*) AS n,
@@ -52,7 +76,8 @@ def medir_dispersao(cur, metodo: cat.Metodo) -> dict:
               FROM player_match_stats
              WHERE {metodo.coluna} IS NOT NULL
                AND COALESCE(minutes, 0) >= 60
-        """)
+               {filtro_posicao}
+        """, tuple(params))
         linha = linha_dict(cur)
         if not linha:
             return congelado
