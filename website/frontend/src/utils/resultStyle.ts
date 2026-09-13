@@ -35,8 +35,14 @@ export const RESULT_STYLE: Record<PickResult, ResultStyle> = {
  * So' o GREEN. Dar o mesmo tratamento ao RED transformaria a tela num painel
  * onde a derrota grita igual, e o pedido era destacar o acerto.
  */
+/* BORDA, E NENHUM FUNDO (2026-09-12, ajuste do usuario). A casca chegou a ter
+   um `bg-green-500/[0.03]` junto, e o tinte competia com o fundo esverdeado
+   das PERNAS do bilhete: no card de alavancagem e de boost as duas camadas de
+   verde empilhavam e a perna deixava de se destacar dentro do card. O padrao
+   passa a ser o daqueles dois cards, que ja' estavam certos: fundo normal,
+   verde so' no contorno. */
 export const CASCA_GREEN =
-  'border-green-500/50 bg-green-500/[0.03] shadow-[0_0_0_1px_rgb(34_197_94/0.18)]'
+  'border-green-500/50 shadow-[0_0_0_1px_rgb(34_197_94/0.18)]'
 
 /** Borda do card: a do GREEN quando ele deu green, a do produto no resto. */
 export function cascaDoPick(result: string | null | undefined, bordaDoProduto: string): string {
