@@ -24,7 +24,7 @@ import { Escada, LinhaCaminho,
          type AlavStep, type CaminhoEncerrado } from '../components/alavancagem/caminho'
 import AnalysisModal from '../components/AnalysisModal'
 import {
-  CampoDoPick, PickCardFooter, PickExplainButton, PickProbability,
+  CampoDoPick, PickCardFooter, PickExplainButton, PickProbability, SeloDeResultado,
 } from '../components/PickCardParts'
 /*
  * As duas abas mais pesadas não entram no chunk desta página.
@@ -821,6 +821,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
         {/* A MESMA CAIXA DA PERNA DO BILHETE · ver caixaDoPick. */}
         <div className={`rounded-md border px-3 py-2 space-y-2 ${caixaDoPick(dica.result)}`}>
         <div className="flex items-center gap-2">
+          <SeloDeResultado result={dica.result} />
           <TeamLogo id={dica.home_team_id} name={dica.home_team ?? ''} size={22} />
           <span className="text-sm font-bold text-ink-1 truncate">{dica.home_team}</span>
           <span className="text-ink-4 text-xs shrink-0">vs</span>

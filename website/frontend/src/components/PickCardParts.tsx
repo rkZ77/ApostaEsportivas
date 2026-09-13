@@ -294,3 +294,62 @@ export function CampoDoPick({ rotulo, children, className }: {
  * card tem um `<div className="flex-1" />` no lugar exato onde este bloco
  * ficava.
  */
+
+/* ── O selo redondo de resultado ─────────────────────────────────────────── */
+
+/*
+ * O CIRCULO COM O SINAL, dentro da caixa do jogo (2026-09-12, pedido do
+ * usuario).
+ *
+ * A perna do bilhete sempre teve: circulo verde com "certo", vermelho com
+ * "errado", ou o numero da selecao enquanto o jogo corre. O pick simples ganhou
+ * a caixa colorida em 730d931d e ficou sem o sinal -- a cor dizia o resultado e
+ * nada o confirmava, que e' justo o que ajuda quem enxerga mal cor.
+ *
+ * PUSH GANHA SINAL PROPRIO, o "=". Ele nao e' acerto nem erro: a linha empatou
+ * (ou o pick foi anulado) e a entrada volta pra banca. Sem simbolo dele, o
+ * anulado herdava o circulo neutro e ficava igual a um pick ainda aberto.
+ *
+ * Meio-green e meio-red seguem o sinal do lado que venceu, com a fracao junto:
+ * "½✓" e' mais honesto que um "certo" inteiro numa aposta que pagou metade.
+ */
+export function SeloDeResultado({
+  result,
+  /** O que aparece no lugar do sinal enquanto o pick esta' aberto · a perna usa
+      o numero dela; o pick simples nao passa nada e o selo some. */
+  vazio,
+  className,
+}: {
+  result?: string | null
+  vazio?: React.ReactNode
+  className?: string
+}) {
+  const sinal =
+    result === 'GREEN'      ? '✓'
+    : result === 'RED'        ? '✗'
+    : result === 'HALF-WIN'   ? '½✓'
+    : result === 'HALF-LOSS'  ? '½✗'
+    : result === 'PUSH'       ? '='
+    : null
+
+  if (sinal == null && vazio == null) return null
+
+  const cor =
+    result === 'GREEN' || result === 'HALF-WIN' ? 'bg-green-500/20 text-green-400'
+    : result === 'RED' || result === 'HALF-LOSS' ? 'bg-red-500/20 text-red-400'
+    : result === 'PUSH' ? 'bg-surface-3 text-ink-2'
+    : 'bg-surface-3 text-ink-3'
+
+  return (
+    <span
+      /* `aria-label` porque o glifo sozinho e' lido como pontuacao solta por
+         leitor de tela · o selo e' a confirmacao do resultado, entao precisa
+         chegar em palavra tambem. */
+      aria-label={result ? `Resultado: ${result}` : undefined}
+      className={cn('w-5 h-5 flex items-center justify-center rounded-full shrink-0',
+                    'text-[10px] font-black', cor, className)}
+    >
+      {sinal ?? vazio}
+    </span>
+  )
+}

@@ -13,7 +13,7 @@ import { PICK_TYPE_BORDER, cascaDoPick, caixaDoPick } from '../utils/resultStyle
 import AnalysisModal from './AnalysisModal'
 import { Badge, PickTypeBadge, ResultBadge } from './ui'
 import {
-  CampoDoPick, PickCardFooter, PickExplainButton, PickProbability,
+  CampoDoPick, PickCardFooter, PickExplainButton, PickProbability, SeloDeResultado,
 } from './PickCardParts'
 import { useShareStoryImage, useShareBilheteImage } from '../hooks/useShareStoryImage'
 import { useOddAtualizada } from '../hooks/useOddAtualizada'
@@ -660,6 +660,9 @@ function SuggestionCard({
             a caixa sai de cena pra nao virar moldura dentro de moldura. */}
         <div className={temPernas ? 'space-y-2' : `rounded-md border px-3 py-2 space-y-2 ${caixaDoPick(s.result)}`}>
         <div className="flex items-center gap-2">
+          {/* O sinal vem antes do jogo, no lugar onde a perna do bilhete poe o
+              dela · e' a mesma leitura, da esquerda pra direita. */}
+          <SeloDeResultado result={s.result} />
           <TeamLogo id={s.home_team_id} name={s.home_team_name} />
           <span className="text-sm font-bold text-ink-1 truncate">{s.home_team_name}</span>
           <span className="text-ink-4 text-xs shrink-0">vs</span>
@@ -702,16 +705,14 @@ function SuggestionCard({
                 'GREEN' | 'RED' | undefined
               const boxClass = caixaDoPick(lr)
               const cor = COR_DA_PERNA[s.pick_type ?? ''] ?? COR_DA_PERNA_PADRAO
-              const circleClass = lr === 'GREEN' ? 'bg-green-500/20 text-green-400'
-                : lr === 'RED' ? 'bg-red-500/20 text-red-400'
-                : cor.circulo
               return (
                 <div key={i} className={`rounded-md border px-3 py-2 ${boxClass}`}>
                   <div className="flex items-center gap-2">
-                    <span className={`w-5 h-5 flex items-center justify-center rounded-full
-                                      ${circleClass} text-[10px] font-black shrink-0`}>
-                      {lr === 'GREEN' ? '✓' : lr === 'RED' ? '✗' : i + 1}
-                    </span>
+                    {/* Perna aberta mostra o numero dela; liquidada, o sinal
+                        · a cor do circulo neutro e' a do PRODUTO (azul na
+                        multipla, ciano no boost), dai o `className`. */}
+                    <SeloDeResultado result={lr} vazio={i + 1}
+                                     className={lr ? undefined : cor.circulo} />
                     <span className="text-xs text-ink-2 font-semibold truncate">
                       Seleção {i + 1}
                     </span>

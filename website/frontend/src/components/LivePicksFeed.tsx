@@ -47,7 +47,7 @@ import api from '../services/api'
 import ApostaModal from './ApostaModal'
 import { Badge, Button, ComoFunciona, EmptyState, ErrorState, LiveDot, PickTypeBadge,
          ResultBadge, Skeleton, SkeletonPickGrid } from './ui'
-import { CampoDoPick, PickExplainButton, PickProbability } from './PickCardParts'
+import { CampoDoPick, PickExplainButton, PickProbability, SeloDeResultado } from './PickCardParts'
 import LiveAnalysisModal from './LiveAnalysisModal'
 import VarreduraDoRadar from './VarreduraDoRadar'
 import { translateLine, translateMarket, metadesDaLinha, nomeDoMercadoComGrade } from '../utils/marketTranslate'
@@ -1281,6 +1281,7 @@ const CardLive = forwardRef<HTMLDivElement, {
         {/* A MESMA CAIXA DA PERNA DO BILHETE · ver caixaDoPick. */}
         <div className={`rounded-md border px-3 py-2 space-y-2 ${caixaDoPick(pick.result)}`}>
         <div className="flex items-center gap-2">
+          <SeloDeResultado result={pick.result} />
           <TeamLogo id={pick.home_team_id} name={pick.home_team_name} size={18} />
           <span className="text-sm font-bold text-ink-1 truncate">{pick.home_team_name}</span>
           <span className={`text-xs font-black tabular-nums shrink-0 px-1 ${
