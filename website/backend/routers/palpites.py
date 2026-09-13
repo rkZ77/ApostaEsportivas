@@ -39,6 +39,7 @@ from fastapi import APIRouter, Query
 
 from data_br import TZ_BR
 from database import get_connection
+from taxa_acerto import taxa_acerto
 
 # `_builders` e `_build_union` montam o UNION normalizado das tabelas de pick
 # (colunas iguais, so' resolvido, peso de stake ja aplicado). Duplicar isso
@@ -146,6 +147,8 @@ def _desempenho(cur, league_id: Optional[int]) -> dict:
         SELECT COUNT(*)                                   AS total,
                COUNT(*) FILTER (WHERE t.result = 'GREEN') AS greens,
                COUNT(*) FILTER (WHERE t.result = 'RED')   AS reds,
+               COUNT(*) FILTER (WHERE t.result = 'HALF-WIN') AS half_wins,
+               COUNT(*) FILTER (WHERE t.result = 'PUSH')     AS push,
                COALESCE(SUM(t.profit), 0)                 AS profit,
                COALESCE(SUM(t.stake),  0)                 AS stake_total
         FROM ({union}) t
@@ -161,7 +164,8 @@ def _desempenho(cur, league_id: Optional[int]) -> dict:
         "greens": greens,
         "reds": int(d.get("reds") or 0),
         "profit": round(profit, 2),
-        "win_rate": round(greens / total * 100, 1) if total else 0.0,
+        "win_rate": taxa_acerto(greens, total,
+                                int(d.get("half_wins") or 0), int(d.get("push") or 0)),
         "roi": round(profit / stake * 100, 1) if stake else 0.0,
     }
 
@@ -234,7 +238,9 @@ def hub(limite_jogos: int = Query(12, ge=1, le=40)):
         for r in _q(cur, f"""
             SELECT t.league_id,
                    COUNT(*)                                   AS total,
-                   COUNT(*) FILTER (WHERE t.result = 'GREEN') AS greens
+                   COUNT(*) FILTER (WHERE t.result = 'GREEN') AS greens,
+                   COUNT(*) FILTER (WHERE t.result = 'HALF-WIN') AS half_wins,
+                   COUNT(*) FILTER (WHERE t.result = 'PUSH')     AS push
             FROM ({union}) t
             WHERE t.league_id IS NOT NULL
             GROUP BY t.league_id
@@ -254,7 +260,9 @@ def hub(limite_jogos: int = Query(12, ge=1, le=40)):
                 continue
             item = dict(liga)
             item["picks_resolvidos"] = total
-            item["win_rate"] = round(greens / total * 100, 1) if total else None
+            item["win_rate"] = taxa_acerto(
+                greens, total, int(ag.get("half_wins") or 0), int(ag.get("push") or 0),
+            ) if total else None
             item["tem_jogo_hoje"] = liga["league_id"] in com_jogo
             saida.append(item)
         saida.sort(key=lambda l: (not l["tem_jogo_hoje"], -l["picks_resolvidos"]))

@@ -11,7 +11,7 @@ import {
 } from '../components/ui'
 import DailyGreensChart from '../components/DailyGreensChart'
 import ActivityHeatmap from '../components/ActivityHeatmap'
-import { winRate as calcWinRate, fmtUnits, STAKE_LABEL_PADRAO } from '../utils/format'
+import { taxaAcerto, fmtUnits, STAKE_LABEL_PADRAO } from '../utils/format'
 
 /*
  * Performance da IA.
@@ -184,7 +184,7 @@ export default function PerformanceIA() {
   const s = results?.summary
   const byDay = results?.by_day ?? []
   const byLeague = results?.by_league ?? []
-  const wr = calcWinRate(s?.greens ?? 0, s?.total ?? 0) ?? 0
+  const wr = (s ? taxaAcerto(s) : null) ?? 0
   const roi = Number(s?.roi ?? 0)
   const lucro = Number(s?.profit ?? 0)
   const stakeLabel = results?.stake_label ?? STAKE_LABEL_PADRAO
@@ -274,7 +274,7 @@ export default function PerformanceIA() {
                 <PanelHead label="Win rate por campeonato" meta={`${byLeague.length} ligas`} />
                 <div className="px-5 py-4 space-y-3">
                   {[...byLeague]
-                    .map(lg => ({ ...lg, wr: calcWinRate(lg.greens, lg.total) ?? 0 }))
+                    .map(lg => ({ ...lg, wr: taxaAcerto(lg) ?? 0 }))
                     .sort((a, b) => b.wr - a.wr)
                     .map(lg => (
                       <div key={lg.league_id ?? lg.league_name} className="flex items-center gap-3">

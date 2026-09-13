@@ -39,6 +39,7 @@ from pydantic import BaseModel
 
 from auth_utils import get_current_user, is_vip_active, require_admin, require_vip
 from database import get_connection
+from taxa_acerto import taxa_acerto
 from settlement_bridge import settlement
 
 # Reuso da camada de dado ao vivo. Os nomes com underscore sao privados por
@@ -1379,7 +1380,11 @@ def estatisticas(
         "push": int(linha.get("push") or 0),
         "half_wins": int(linha.get("half_wins") or 0),
         "half_losses": int(linha.get("half_losses") or 0),
-        "win_rate": round(greens / resolvidos * 100, 1) if resolvidos else 0.0,
+        # `resolvidos` inclui PUSH e HALF, entao a conta nao pode ser
+        # greens/resolvidos: ver taxa_acerto.py.
+        "win_rate": taxa_acerto(greens, resolvidos,
+                                int(linha.get("half_wins") or 0),
+                                int(linha.get("push") or 0)),
         "profit": round(lucro, 2),
         # ROI sobre 1 unidade por pick, mesma convencao do resto do site.
         "roi": round(lucro / resolvidos * 100, 1) if resolvidos else 0.0,

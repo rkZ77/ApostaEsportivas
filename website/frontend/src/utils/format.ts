@@ -6,16 +6,21 @@ export function fmtSigned(value: number): string {
   return (value >= 0 ? '+' : '−') + fmtBRL(value)
 }
 
-export function winRate(greens: number, total: number): number | null {
-  if (!total) return null
-  return Math.round((greens / total) * 100)
-}
+/* `winRate(greens, total)` FOI REMOVIDA (2026-09-12).
+ *
+ * Ela fazia greens/total puro, e conviveu por meses com a `taxaAcerto` logo
+ * abaixo, que e' a conta certa. Quem escrevia tela nova sorteava uma das duas:
+ * a Home, a faixa de prova das telas de pagamento, a Performance da IA, os
+ * cards de divulgacao e o resumo de Meus Picks caíram na errada, e a pagina de
+ * Resultados na certa · dai a mesma base de 780 picks anunciar 63,3% num lugar
+ * e 66% no outro. Duas funcoes para a mesma pergunta e' um bug esperando
+ * acontecer, entao sobrou uma. */
 
 /**
  * Taxa de acerto com TODOS os status de liquidacao, nao so' GREEN e RED.
  *
- * `winRate` acima e' greens/total puro, e ele mente em dois casos que o motor
- * produz todo dia:
+ * A conta ingenua (greens/total) mente em dois casos que o motor produz todo
+ * dia:
  *
  *   HALF-WIN  · linha asiatica que ganhou metade. E' acerto, e sumia.
  *   PUSH      · anulada (inclusive a anulacao por falta de estatistica). Nao

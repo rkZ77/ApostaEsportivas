@@ -3,6 +3,7 @@ import { Helmet } from 'react-helmet-async'
 import { AnimatePresence, motion } from 'framer-motion'
 import { PartyPopper, Eye, EyeOff, ArrowLeft, House, ShieldCheck, LineChart, Lock } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { taxaAcerto } from '../utils/format'
 import { useAuth } from '../context/AuthContext'
 import { maskPhone } from '../utils/format'
 import api from '../services/api'
@@ -29,7 +30,7 @@ function RealWinRate({ className = 'mt-5' }: { className?: string }) {
     api.get('/public/results', { params: { slim: 1, recent_limit: 1 } })
       .then(r => {
         const s = r.data?.summary
-        if (s && s.total > 0) setPct(Math.round((s.greens / s.total) * 100))
+        if (s && s.total > 0) setPct(taxaAcerto(s))
       })
       .catch(() => {})
   }, [])

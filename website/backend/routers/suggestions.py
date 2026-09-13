@@ -6,6 +6,7 @@ import logging
 import re
 import psycopg2.extras
 from database import get_connection
+from taxa_acerto import taxa_acerto
 from auth_utils import get_current_user, get_current_user_optional, require_vip, is_vip_active
 from routers.banca import _compute_bankroll_current
 from routers.live import _stat_for_market, maybe_resolve_pending
@@ -2389,10 +2390,8 @@ def get_quick_stats(
         # pior que um placar conservador: quem compara conclui que um dos dois
         # mente. As anuladas ficam no `total` de proposito, porque o card
         # "Picks" conta pick publicado, nao pick liquidado.
-        half_wins  = stats.get("half_wins") or 0
-        resolvidos = total - (stats.get("push") or 0)
-        acertos    = greens + half_wins
-        stats["win_rate"] = round(acertos / resolvidos * 100, 1) if resolvidos > 0 else 0.0
+        stats["win_rate"] = taxa_acerto(
+            greens, total, stats.get("half_wins") or 0, stats.get("push") or 0)
 
         # Sequência atual · mesma base do numero acima.
         #

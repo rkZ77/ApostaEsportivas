@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 import alavancagem_caminho
 from data_br import data_br
 from database import get_connection
+from taxa_acerto import taxa_acerto
 from auth_utils import get_current_user, is_vip_active
 from feature_flags import bingo_visivel
 from routers.payments import PLANS
@@ -577,6 +578,10 @@ def _quebra_por_pipeline(entries: list, unit_value: float) -> list[dict]:
         total = len(linhas)
         greens = sum(1 for e in linhas if e["result"] == "GREEN")
         reds   = sum(1 for e in linhas if e["result"] == "RED")
+        # Meio-green e anulada existem na banca do usuario como em qualquer
+        # outro placar do site, e a taxa tem que trata-los igual · taxa_acerto.py
+        half_w = sum(1 for e in linhas if e["result"] == "HALF-WIN")
+        push_n = sum(1 for e in linhas if e["result"] == "PUSH")
         pnl    = sum(e["pnl"] for e in linhas)
         staked = sum(e["stake_units"] for e in linhas)
         units  = (pnl / unit_value) if unit_value else 0.0
@@ -589,7 +594,7 @@ def _quebra_por_pipeline(entries: list, unit_value: float) -> list[dict]:
             "pnl":          round(pnl, 2),
             "units":        round(units, 2),
             "staked_units": round(staked, 2),
-            "win_rate":     round(greens / total * 100) if total else 0,
+            "win_rate":     round(taxa_acerto(greens, total, half_w, push_n)),
             "yield":        round(units / staked * 100, 1) if staked > 0 else 0.0,
         })
 
@@ -906,7 +911,7 @@ def get_banca(
         half_wins = sum(1 for e in resolved if e["result"] == "HALF-WIN")
         half_loss = sum(1 for e in resolved if e["result"] == "HALF-LOSS")
         total_pnl = sum(e["pnl"] for e in resolved if e["pnl"] is not None)
-        win_rate  = round(greens / len(resolved) * 100) if resolved else 0
+        win_rate  = round(taxa_acerto(greens, len(resolved), half_wins, push))
         # ROI de crescimento: ganho sobre banca inicial em R$
         roi = round(total_pnl / bankroll_start * 100, 1) if bankroll_start else 0
         # Yield tipster: lucro em unidades / unidades apostadas × 100

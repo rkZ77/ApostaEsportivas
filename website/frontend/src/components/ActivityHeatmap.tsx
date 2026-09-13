@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { taxaAcerto } from '../utils/format'
 import { cn } from '../lib/cn'
 
 /*
@@ -17,6 +18,11 @@ interface DayData {
   match_date: string
   total: number
   greens: number
+  /* A fonte (by_day de /public/results) sempre mandou os dois; o mapa de calor
+     e' que nao lia, e por isso pintava de amarelo um dia que a pagina de
+     Resultados mostrava verde. */
+  half_wins?: number
+  push?: number
 }
 
 const DOW = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S']
@@ -59,7 +65,7 @@ export default function ActivityHeatmap({
       const rec = byDate.get(iso)
       cells.push({
         iso,
-        wr: rec && rec.total > 0 ? Math.round((rec.greens / rec.total) * 100) : null,
+        wr: rec ? taxaAcerto(rec) : null,
         total: rec?.total ?? 0,
         greens: rec?.greens ?? 0,
       })

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Share2 } from 'lucide-react'
 import api from '../services/api'
-import { winRate as calcWinRate } from '../utils/format'
+import { taxaAcerto } from '../utils/format'
 import { useShareResultsImage, useShareTodayGamesImage, useShareLeagueResultsImage } from '../hooks/useShareStoryImage'
 
 interface DayResult { match_date: string; total: number; greens: number; reds: number; profit: number }
@@ -65,12 +65,12 @@ export default function AdminShareResults() {
   const now = new Date()
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   const todayResult   = byDay.find(d => d.match_date === todayStr)
-  const todayWinRate  = todayResult ? calcWinRate(todayResult.greens, todayResult.total) : null
+  const todayWinRate  = todayResult ? taxaAcerto(todayResult) : null
 
   const currentMonthStr   = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   const currentMonthLabel = now.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
 
-  const winRatePct = summary && summary.total > 0 ? calcWinRate(summary.greens, summary.total) : null
+  const winRatePct = summary && summary.total > 0 ? taxaAcerto(summary) : null
   const profit     = summary ? Number(summary.profit) : null
 
   /* O PLACAR DO AO VIVO E' MEDIDO A PARTE (ver live_picks.estatisticas).
@@ -96,7 +96,7 @@ export default function AdminShareResults() {
   ) => {
     const d = (await api.get('/live-picks/stats', { params })).data
     if (!d?.disponivel || !d.resolvidos) return
-    const wr = calcWinRate(d.greens, d.resolvidos) ?? 0
+    const wr = taxaAcerto({ ...d, total: d.resolvidos }) ?? 0
     hook.share({
       winRatePct: wr, total: d.resolvidos, greens: d.greens, reds: d.reds,
       profit: Number(d.profit ?? 0),
@@ -108,7 +108,7 @@ export default function AdminShareResults() {
   const shareThisMonth = async () => {
     const monthSummary = (await api.get('/public/results', { params: { month: currentMonthStr } })).data?.summary
     if (!monthSummary || monthSummary.total === 0) return
-    const wr = calcWinRate(monthSummary.greens, monthSummary.total)
+    const wr = taxaAcerto(monthSummary)
     shareCurrentMonth.share({
       winRatePct: wr ?? 0, total: monthSummary.total, greens: monthSummary.greens, reds: monthSummary.reds, profit: Number(monthSummary.profit),
       badgeLabel: `RESULTADOS, ${currentMonthLabel.toUpperCase()}`,
@@ -178,7 +178,7 @@ export default function AdminShareResults() {
                 .sort((a, b) => b.total - a.total)
                 .map(lg => ({
                   leagueId: lg.league_id, leagueName: lg.league_name,
-                  total: lg.total, winRatePct: calcWinRate(lg.greens, lg.total) ?? 0,
+                  total: lg.total, winRatePct: taxaAcerto(lg) ?? 0,
                   profit: Number(lg.profit),
                 })),
             )}

@@ -7,7 +7,7 @@ import {
   buildLeagueResultsStoryImage, LeagueResultItem,
   buildAlavancagemStoryImage, AlavancagemStoryInput,
 } from '../utils/shareStoryImage'
-import { winRate as calcWinRate } from '../utils/format'
+import { taxaAcerto } from '../utils/format'
 
 export type SharePickInput = Omit<StoryImageInput, 'shareUrl'> & {
   pickId: number
@@ -87,7 +87,7 @@ export function useShareStoryImage() {
       ])
       const refCode = refResult.status === 'fulfilled' ? (refResult.value.data?.referral_code ?? '') : ''
       const summary = statsResult.status === 'fulfilled' ? statsResult.value.data?.summary : null
-      const winRatePct = summary ? calcWinRate(summary.greens ?? 0, summary.total ?? 0) : null
+      const winRatePct = summary ? taxaAcerto(summary) : null
 
       const shareUrl = `${window.location.origin}/p/${input.pickTypeRoute}/${input.pickId}${refCode ? `?ref=${refCode}` : ''}`
       const blob = await buildStoryImage({ ...input, shareUrl, winRatePct })

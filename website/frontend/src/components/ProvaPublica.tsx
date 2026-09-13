@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
 import api from '../services/api'
 import { Skeleton } from './ui'
-import { winRate as calcWinRate, fmtUnits, STAKE_LABEL_PADRAO } from '../utils/format'
+import { taxaAcerto, fmtUnits, STAKE_LABEL_PADRAO } from '../utils/format'
 
 /*
  * Faixa de números reais, para as telas em que a pessoa está decidindo pagar.
@@ -63,7 +63,7 @@ export default function ProvaPublica({ compacta = false }: {
      botão de pagar é pior do que faixa nenhuma. */
   if (carregou && (!resumo || !resumo.total)) return null
 
-  const wr = resumo ? calcWinRate(resumo.greens, resumo.total) : null
+  const wr = resumo ? taxaAcerto(resumo) : null
 
   const tiles = [
     { rotulo: 'Win rate', valor: wr != null ? `${wr}%` : null, destaque: true },

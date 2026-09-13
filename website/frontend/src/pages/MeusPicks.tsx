@@ -11,7 +11,7 @@ import { translateMarket, translateLine } from '../utils/marketTranslate'
 import SuggestionDetail from '../components/SuggestionDetail'
 import ProfitChart from '../components/ProfitChart'
 import DiasVerdeVermelho from '../components/DiasVerdeVermelho'
-import { fmtBRL, fmtSigned, winRate as calcWinRate, capitalizarFrase } from '../utils/format'
+import { fmtBRL, fmtSigned, taxaAcerto, capitalizarFrase } from '../utils/format'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { TeamLogo } from '../components/TeamLogo'
 import ResetMonthModal from '../components/ResetMonthModal'
@@ -393,7 +393,11 @@ export default function MeusPicks() {
               const pnl = daysBack === 'tudo'
                 ? (data?.total_pnl ?? 0)
                 : resolved.reduce((acc: number, e: any) => acc + (Number(e.pnl) || 0), 0)
-              const wr = calcWinRate(greenCount, resolved.length) ?? 0
+              /* `greenCount` ja' soma o meio-green; faltava tirar a anulada
+                 do denominador, como o resto do site faz. */
+              const pushCount = resolved.filter((e: any) => e.result === 'PUSH').length
+              const wr = taxaAcerto({ greens: greenCount, total: resolved.length,
+                                      push: pushCount }) ?? 0
               const pnlStr = pnl === 0 ? 'R$ 0' : fmtSigned(pnl)
               return (
                 <div className="font-mono grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">

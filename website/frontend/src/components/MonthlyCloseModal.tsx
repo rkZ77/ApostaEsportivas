@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { TrendingUp, TrendingDown, X, BadgeCheck, Share2, Check, ChevronRight, ArrowLeft } from 'lucide-react'
 import api from '../services/api'
-import { fmtBRL, fmtUnits } from '../utils/format'
+import { fmtBRL, fmtUnits, taxaAcerto } from '../utils/format'
 import { backdropFade, sheetUp, tabFade } from '../lib/motion'
 import { useNotifications } from '../context/NotificationContext'
 import { useAuth } from '../context/AuthContext'
@@ -224,7 +224,12 @@ export default function MonthlyCloseModal({ onClose }: Props) {
   const isProfit  = data.total_pnl >= 0
   const pnlAbs    = Math.abs(data.total_pnl)
   const ganhoU    = data.unit_value > 0 ? data.total_pnl / data.unit_value : 0
-  const winRate   = data.total_resolved > 0 ? Math.round(data.greens / data.total_resolved * 100) : 0
+  /* Mesma regra do resto do site: meio-green e' acerto, anulada sai do
+     denominador. O fechamento tinha os cinco status na mao (desenha a barra de
+     distribuicao logo abaixo com todos eles) e mesmo assim contava a anulada
+     como derrota. */
+  const winRate   = taxaAcerto({ greens: data.greens, total: data.total_resolved,
+                                 half_wins: data.half_wins, push: data.push }) ?? 0
   const paidPlan  = data.paid_plan
   const accent    = isProfit ? 'text-green-400' : 'text-red-400'
   const accentBg  = isProfit ? 'bg-green-500/10 border-green-500/20' : 'bg-red-500/10 border-red-500/20'

@@ -35,6 +35,8 @@ from dataclasses import dataclass
 from typing import Callable, Optional
 
 from fastapi import APIRouter, Request, Response
+
+from taxa_acerto import taxa_acerto
 from fastapi.concurrency import run_in_threadpool
 
 logger = logging.getLogger(__name__)
@@ -258,7 +260,8 @@ def md_resultados() -> str:
     profit = float(s.get("profit") or 0)
     roi = s.get("roi")
     ligas = int(s.get("leagues_count") or 0)
-    acerto = round(greens / total * 100, 1) if total else 0.0
+    acerto = taxa_acerto(greens, total,
+                         int(s.get("half_wins") or 0), int(s.get("push") or 0))
 
     linhas_fonte = []
     for fonte in dados.get("by_source") or []:

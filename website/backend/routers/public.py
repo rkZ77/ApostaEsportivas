@@ -6,6 +6,7 @@ from typing import Optional
 from auth_utils import get_current_user_optional
 import cache_publico
 from database import get_connection
+from taxa_acerto import taxa_acerto
 from data_br import HOJE_BR, TZ_BR, data_br
 import alavancagem_caminho
 from stake_plan import STAKE_PADRAO, stake_de, rotulo_curto
@@ -826,9 +827,8 @@ def _resultados_publicos(month, source, recent_limit, recent_offset, slim, bloco
             acc["stake_total"] = round(acc["stake_total"], 2)
             # Taxa de acerto com TODOS os status: meio-green conta como acerto,
             # anulada sai do denominador (ninguem ganhou nem perdeu nela).
-            resolvidos = acc["total"] - acc["push"]
-            acertos    = acc["greens"] + acc["half_wins"]
-            acc["win_rate"] = round(acertos / resolvidos * 100, 1) if resolvidos else 0.0
+            acc["win_rate"] = taxa_acerto(
+                acc["greens"], acc["total"], acc["half_wins"], acc["push"])
             acc["roi"] = round(acc["profit"] / acc["stake_total"] * 100, 1) if acc["stake_total"] else 0.0
             by_source.append(acc)
         by_source.sort(key=lambda a: a["profit"], reverse=True)

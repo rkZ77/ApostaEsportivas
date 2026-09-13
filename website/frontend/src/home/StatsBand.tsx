@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 import { NumberTicker, Skeleton } from '../components/ui'
-import { winRate as calcWinRate, fmtUnits, STAKE_LABEL_PADRAO } from '../utils/format'
+import { taxaAcerto, fmtUnits, STAKE_LABEL_PADRAO } from '../utils/format'
 import { fadeInUp, staggerContainer } from '../lib/motion'
 
 /*
@@ -39,6 +39,9 @@ export interface PublicSummary {
   vip_total?: number
   free_profit?: number
   free_total?: number
+  /** Anuladas e meio-greens · entram na taxa de acerto (ver taxaAcerto). */
+  push?: number
+  half_wins?: number
 }
 
 /** Média de unidades por pick · null quando o pipeline ainda não tem resolvido. */
@@ -72,7 +75,11 @@ export default function StatsBand({
 
   if (!summary || summary.total === 0) return null
 
-  const wr = calcWinRate(summary.greens, summary.total) ?? 0
+  /* A MESMA CONTA DA PAGINA DE RESULTADOS (ver utils/format.ts::taxaAcerto).
+     Aqui era greens/total puro, entao a Home anunciava uma taxa MENOR do que a
+     tela que ela linka: as anuladas entravam no denominador como se fossem
+     derrota. O resumo ja' trazia `push` e `half_wins`, so' nao eram lidos. */
+  const wr = taxaAcerto(summary) ?? 0
   const lucro = Number(summary.profit ?? 0)
   const mediaVip  = media(summary.vip_profit, summary.vip_total)
   const mediaFree = media(summary.free_profit, summary.free_total)

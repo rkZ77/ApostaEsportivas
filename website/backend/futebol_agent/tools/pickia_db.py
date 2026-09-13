@@ -31,6 +31,7 @@ import logging
 from datetime import date
 
 from database import get_connection
+from taxa_acerto import taxa_acerto
 
 logger = logging.getLogger(__name__)
 
@@ -220,6 +221,8 @@ def desempenho_da_ia(mes: str | None, tipo: str | None) -> str:
             linha = _consulta(f"""
                 SELECT COUNT(*)                                  AS total,
                        COUNT(*) FILTER (WHERE result = 'GREEN')  AS greens,
+                       COUNT(*) FILTER (WHERE result = 'HALF-WIN') AS half_wins,
+                       COUNT(*) FILTER (WHERE result = 'PUSH')     AS push,
                        COUNT(*) FILTER (WHERE result = 'RED')    AS reds,
                        COALESCE(SUM(profit), 0)::float           AS lucro
                   FROM {tabela} WHERE {onde}
@@ -233,10 +236,11 @@ def desempenho_da_ia(mes: str | None, tipo: str | None) -> str:
             saida.append(f"  {rotulo.upper()}: nenhum pick resolvido nesse recorte.")
             continue
         greens = d.get("greens") or 0
-        acerto = round(greens / total * 100, 1)
+        acerto = taxa_acerto(greens, total,
+                             int(d.get("half_wins") or 0), int(d.get("push") or 0))
         lucro = round(float(d.get("lucro") or 0), 2)
         saida.append(
-            f"  {rotulo.upper()}: {total} resolvidos · {greens} green / "
+            f"  {rotulo.upper()}: {total} resolvidos, {greens} green / "
             f"{d.get('reds') or 0} red · acerto {acerto}% · lucro {lucro:+.2f}u"
         )
     return "\n".join(saida)
