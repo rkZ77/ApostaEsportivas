@@ -202,13 +202,17 @@ export default function PickPublico() {
                   <p className="text-[11px] text-ink-3 mt-0.5">Disponível apenas para assinantes VIP</p>
                 </div>
               </div>
-              <div className="mt-2 space-y-1.5">
-                {['Mercado: ████████████', 'Linha: ██████', 'Análise da IA...'].map((t, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <div className="h-3 bg-surface-2 rounded-sm flex-1 opacity-40 select-none blur-[2px]">
-                      <span className="text-[10px] text-ink-4 px-2">{t}</span>
-                    </div>
-                  </div>
+              {/* RÉGUAS, E NÃO TEXTO FALSO BORRADO.
+                  As três linhas aqui eram "Mercado: ████████████" atrás de um
+                  blur · o mesmo recurso que saiu do cadeado dos picks em
+                  21/08, e pelo mesmo motivo: fingir um conteúdo específico não
+                  informa nada e ainda faz o visitante achar que existe algo
+                  para decifrar. A régua diz "tem conteúdo aqui" sem inventar
+                  qual, e esta é a página que estranho de fora recebe por link
+                  compartilhado. */}
+              <div className="mt-2 space-y-2" aria-hidden="true">
+                {['70%', '45%', '90%'].map((largura, i) => (
+                  <div key={i} className="h-2 rounded-full bg-surface-2" style={{ width: largura }} />
                 ))}
               </div>
             </div>
@@ -231,7 +235,12 @@ export default function PickPublico() {
               </Link>
               {!user && (
                 <p className="text-center text-[10px] text-ink-4">
-                  2 dias de VIP grátis no cadastro
+                  {/* "no cadastro" estava errado desde 18/08: o teste nasce da
+                      confirmação do contato, não da criação da conta (ver
+                      pages/ConfirmarEmail). Prometer o que não sai no clique
+                      seguinte é o jeito mais barato de perder a confiança de
+                      quem chegou por um link compartilhado. */}
+                  2 dias de VIP grátis ao confirmar o e-mail
                 </p>
               )}
             </div>

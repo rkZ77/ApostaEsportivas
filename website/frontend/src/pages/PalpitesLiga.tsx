@@ -7,7 +7,7 @@ import PublicNav from '../components/PublicNav'
 import { useAuth } from '../context/AuthContext'
 import { EmptyState, SpinnerBlock } from '../components/ui'
 import {
-  ChamadaFinal, LinksDeLigas, ListaDeJogos, PlacarPublico, UltimosPicks,
+  ChamadaFinal, ConviteDeTopo, LinksDeLigas, ListaDeJogos, PlacarPublico, UltimosPicks,
   type DesempenhoPublico, type JogoPublico, type PickPublico,
 } from '../components/PalpitesBlocos'
 
@@ -127,6 +127,7 @@ export default function PalpitesLiga() {
           time no campeonato e só publica o mercado quando a probabilidade calculada
           supera a odd oferecida.
         </p>
+        <ConviteDeTopo ehVip={user?.plan === 'vip' || user?.plan === 'admin'} />
       </section>
 
       {data.desempenho && (

@@ -6,7 +6,7 @@ import PublicNav from '../components/PublicNav'
 import { useAuth } from '../context/AuthContext'
 import { SpinnerBlock } from '../components/ui'
 import {
-  ChamadaFinal, LinksDeLigas, ListaDeJogos, PlacarPublico, UltimosPicks,
+  ChamadaFinal, ConviteDeTopo, LinksDeLigas, ListaDeJogos, PlacarPublico, UltimosPicks,
   type DesempenhoPublico, type JogoPublico, type PickPublico,
 } from '../components/PalpitesBlocos'
 
@@ -98,6 +98,7 @@ export default function PalpitesHoje() {
           publicados ficam registrados, acerto e erro, e o placar abaixo sai desse mesmo
           histórico.
         </p>
+        <ConviteDeTopo ehVip={user?.plan === 'vip' || user?.plan === 'admin'} />
       </section>
 
       {loading ? (

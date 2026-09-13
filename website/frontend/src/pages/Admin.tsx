@@ -15,6 +15,7 @@ import AdminAuditoriaMotores from '../components/AdminAuditoriaMotores'
 import AdminFluxoDosMotores from '../components/AdminFluxoDosMotores'
 import AdminPendencias from '../components/AdminPendencias'
 import AdminPlanosVencidos from '../components/AdminPlanosVencidos'
+import AdminFunil from '../components/AdminFunil'
 import { fmtBRL } from '../utils/format'
 import { sinalizarNavegacao } from '../services/progressBus'
 
@@ -1500,6 +1501,9 @@ export default function Admin() {
           * ninguém deu opt-in, então os quatro cartões eram zero permanente
           * com um aviso explicando por que eram zero. O arquivo do componente
           * fica no disco pra voltar quando o WhatsApp de fato disparar. */}
+        {/* Passagem de etapa, antes do estoque: os cartões acima dizem
+            quantos SÃO VIP, e este painel diz onde a base para de andar. */}
+        <AdminFunil />
         <AdminPlanosVencidos />
         {/* Criar usuário */}
         {creating && (

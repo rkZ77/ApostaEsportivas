@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { CalendarDays, ListChecks } from 'lucide-react'
+import { ArrowRight, CalendarDays, ListChecks } from 'lucide-react'
 import {
   Button, EmptyState, Panel, PanelHead, PickTypeBadge, ResultBadge, StatTile,
   Table, type Column,
@@ -194,6 +194,34 @@ export function UltimosPicks({
  * Fim de página. Quem chegou por busca não conhece o produto, então a saída
  * precisa dizer o que ele ganha em vez de só oferecer um botão.
  */
+/*
+ * O convite do TOPO, ao lado do texto de abertura.
+ *
+ * A ChamadaFinal, logo abaixo, é a mesma oferta no fim da página. Ela sozinha
+ * não bastava: estas duas telas são a porta de busca do site, recebem visita
+ * fria que chegou por uma frase digitada no Google, e são longas (placar,
+ * jogos do dia, links de liga, últimos palpites). Quem não rola até o fim não
+ * encontrava, em lugar nenhum, o que fazer com o que acabou de ler.
+ *
+ * É uma linha, e não um painel: o conteúdo é que tem que ganhar a pessoa, e um
+ * bloco de venda antes do primeiro dado a faria voltar pra busca.
+ *
+ * Some para quem já assina · não há o que oferecer a quem já tem tudo.
+ */
+export function ConviteDeTopo({ ehVip = false }: { ehVip?: boolean }) {
+  if (ehVip) return null
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-4">
+      <Button to="/login?mode=register" size="sm" IconRight={ArrowRight}>
+        Testar o VIP grátis por 2 dias
+      </Button>
+      <span className="text-xs text-ink-4">
+        O histórico desta página é público e continua aberto sem conta.
+      </span>
+    </div>
+  )
+}
+
 export function ChamadaFinal() {
   return (
     <section className="card p-6 sm:p-8 text-center">

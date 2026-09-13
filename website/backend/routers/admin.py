@@ -2490,6 +2490,122 @@ def admin_stats(current_user: dict = Depends(require_admin)):
         conn.close()
 
 
+@router.get("/funil")
+def admin_funil(days: int = 30, current_user: dict = Depends(require_admin)):
+    """Onde a base para de andar, entre o cadastro e o pagamento.
+
+    POR QUE ISTO NAO E' O /admin/stats. Aquele conta quem ESTA em cada plano
+    hoje -- um retrato do estoque. Esta rota conta PASSAGEM DE ETAPA numa
+    coorte de cadastro, que e' outra pergunta: de cem pessoas que se
+    cadastraram no ultimo mes, quantas provaram o contato, quantas chegaram a
+    usar o teste e quantas pagaram. Sem isso, "o trial converte pouco" e "pouca
+    gente chega no trial" sao indistinguiveis, e o remedio de um nao serve pro
+    outro.
+
+    A ETAPA QUE SO' EXISTE AQUI e' a segunda. Desde a saida do CPF (18/08) o
+    trial nasce da prova de contato, nao do cadastro (ver
+    `_ativar_trial_se_elegivel` em routers/auth.py): quem nao confirma e-mail
+    nem telefone fica free sem nunca ter visto o produto que o site anuncia na
+    home. Esse degrau nao aparecia em relatorio nenhum.
+
+    A quebra por Google existe pela mesma razao: aquele cadastro chega com
+    `email_verified` de fabrica, entao ele mede o teto da etapa 2 -- e a
+    diferenca entre as duas colunas e' o tamanho do problema.
+    """
+    dias = max(1, min(int(days or 30), 365))
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"""
+            WITH coorte AS (
+                SELECT
+                    u.id,
+                    u.google_sub IS NOT NULL                                  AS por_google,
+                    COALESCE(u.email_verified, FALSE)
+                        OR COALESCE(u.phone_verified, FALSE)                  AS verificou,
+                    COALESCE(u.trial_used, FALSE)                             AS usou_trial,
+                    EXISTS (
+                        SELECT 1 FROM payments p
+                        WHERE p.user_id = u.id AND p.status = 'approved'
+                    )                                                          AS pagou
+                FROM users u
+                WHERE u.plan <> 'admin'
+                  AND u.created_at >= NOW() - INTERVAL '{dias} days'
+            )
+            SELECT
+                COUNT(*)                                          AS cadastros,
+                COUNT(*) FILTER (WHERE verificou)                  AS verificados,
+                COUNT(*) FILTER (WHERE usou_trial)                 AS testaram,
+                COUNT(*) FILTER (WHERE pagou)                      AS pagantes,
+                COUNT(*) FILTER (WHERE NOT verificou)              AS parados_sem_verificar,
+                COUNT(*) FILTER (WHERE por_google)                 AS por_google,
+                COUNT(*) FILTER (WHERE por_google AND verificou)   AS por_google_verificados,
+                COUNT(*) FILTER (WHERE NOT por_google)             AS por_senha,
+                COUNT(*) FILTER (WHERE NOT por_google AND verificou) AS por_senha_verificados,
+                COUNT(*) FILTER (WHERE usou_trial AND pagou)       AS testaram_e_pagaram
+            FROM coorte
+        """)
+        c = dict(cur.fetchone())
+
+        # Dias entre o cadastro e o primeiro pagamento aprovado. Mediana, e nao
+        # media: uma unica conta antiga que paga hoje puxa a media pra semanas e
+        # some com a informacao que interessa, que e' o prazo do caso tipico.
+        cur.execute(f"""
+            SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (
+                       ORDER BY EXTRACT(EPOCH FROM (primeiro - u.created_at)) / 86400.0
+                   ) AS mediana
+            FROM users u
+            JOIN LATERAL (
+                SELECT MIN(p.created_at) AS primeiro
+                FROM payments p
+                WHERE p.user_id = u.id AND p.status = 'approved'
+            ) pp ON pp.primeiro IS NOT NULL
+            WHERE u.created_at >= NOW() - INTERVAL '{dias} days'
+        """)
+        linha = cur.fetchone()
+        mediana = linha["mediana"] if linha else None
+
+        def pct(parte: int, todo: int) -> float:
+            return round(parte / todo * 100, 1) if todo else 0.0
+
+        cadastros = int(c["cadastros"] or 0)
+        return {
+            "dias": dias,
+            "cadastros": cadastros,
+            "etapas": [
+                {"chave": "cadastro",  "rotulo": "Criaram conta",
+                 "usuarios": cadastros, "pct_do_topo": 100.0, "pct_da_anterior": 100.0},
+                {"chave": "verificou", "rotulo": "Provaram o contato",
+                 "usuarios": int(c["verificados"] or 0),
+                 "pct_do_topo": pct(int(c["verificados"] or 0), cadastros),
+                 "pct_da_anterior": pct(int(c["verificados"] or 0), cadastros)},
+                {"chave": "trial",     "rotulo": "Usaram o teste VIP",
+                 "usuarios": int(c["testaram"] or 0),
+                 "pct_do_topo": pct(int(c["testaram"] or 0), cadastros),
+                 "pct_da_anterior": pct(int(c["testaram"] or 0), int(c["verificados"] or 0))},
+                {"chave": "pagou",     "rotulo": "Assinaram o VIP",
+                 "usuarios": int(c["pagantes"] or 0),
+                 "pct_do_topo": pct(int(c["pagantes"] or 0), cadastros),
+                 "pct_da_anterior": pct(int(c["pagantes"] or 0), int(c["testaram"] or 0))},
+            ],
+            "parados_sem_verificar": int(c["parados_sem_verificar"] or 0),
+            "google": {
+                "cadastros":   int(c["por_google"] or 0),
+                "verificados": int(c["por_google_verificados"] or 0),
+                "pct":         pct(int(c["por_google_verificados"] or 0), int(c["por_google"] or 0)),
+            },
+            "senha": {
+                "cadastros":   int(c["por_senha"] or 0),
+                "verificados": int(c["por_senha_verificados"] or 0),
+                "pct":         pct(int(c["por_senha_verificados"] or 0), int(c["por_senha"] or 0)),
+            },
+            "dias_ate_pagar": round(float(mediana), 1) if mediana is not None else None,
+        }
+    finally:
+        cur.close()
+        conn.close()
+
+
 @router.post("/resolve-picks")
 def admin_resolve_picks(current_user: dict = Depends(require_admin)):
     """Resolve os picks pendentes. Unica forma de resolver em lote desde que o

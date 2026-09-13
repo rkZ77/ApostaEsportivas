@@ -97,7 +97,7 @@ export default function ConfirmarEmail() {
           <ul className="space-y-2.5 mb-6">
             {[
               'Picks VIP, múltiplas, alavancagem e ao vivo, tudo aberto',
-              'Sem cartão e sem renovação automática',
+              'Não pedimos dados de pagamento para testar',
               'O acesso vence sozinho, não cobramos nada no fim',
             ].map(t => (
               <li key={t} className="flex items-start gap-2.5">
