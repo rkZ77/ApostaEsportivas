@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
-  Bell, BellOff, CalendarCheck, CheckCheck, CheckCircle2, Crown, Lock, MinusCircle, Radio, TimerReset, X, XCircle, Zap,
+  Activity, Bell, BellOff, CalendarCheck, CheckCheck, CheckCircle2, Crown, Lock, MinusCircle,
+  PlayCircle, TimerReset, X, XCircle, Zap,
 } from 'lucide-react'
 import { useNotifications, type AppNotification } from '../context/NotificationContext'
 import { backdropFade, popIn, sheetUp } from '../lib/motion'
@@ -45,11 +46,22 @@ function NotificationIcon({ n }: { n: AppNotification }) {
      vocabulário visual do produto que ele vende. */
   if (n.type === 'plan_upsell')   return <Crown className={`${base} text-yellow-400`} />
   if (n.type === 'new_picks')     return <Zap className={`${base} text-green-400`} />
-  if (n.type === 'pick_live')     return <Radio className={`${base} text-accent-ink`} />
-  /* Mesmo ícone e mesma cor do `pick_live`: pro usuário os dois são "ao vivo",
-     e o que os separa está no título, não no símbolo. Vermelho é a cor do Live
-     no site inteiro (ver PICK_TYPE_HEX). */
-  if (n.type === 'live_novo')     return <Radio className={`${base} text-accent-ink`} />
+  /* DOIS EVENTOS, DOIS SIMBOLOS (2026-09-12, pedido do usuario).
+  
+     Os dois usavam o mesmo `Radio` na mesma cor, e sao coisas diferentes:
+     `pick_live` e' "o jogo do pick QUE VOCE PEGOU comecou" (informacao, sem
+     nada a fazer) e `live_novo` e' "o motor achou uma oportunidade agora"
+     (acao, com a odd vencendo em minutos). Numa lista de sino, dois itens
+     seguidos com o mesmo icone leem como repeticao do mesmo aviso.
+  
+     `PlayCircle` em cinza pro comeco de jogo: o triangulo de play e' o unico
+     simbolo que ja' significa "comecou" sem legenda, e cinza porque nao pede
+     nada de ninguem. */
+  if (n.type === 'pick_live')     return <PlayCircle className={`${base} text-ink-2`} />
+  /* `Activity` no verde do produto (PICK_TYPE_HEX.live e' verde, nao
+     vermelho): a linha de batimento e' partida em andamento, e a cor e' a
+     mesma do selo do card e do aviso em tela (LivePickToast). */
+  if (n.type === 'live_novo')     return <Activity className={`${base} text-accent-ink`} />
   /* Âmbar e não vermelho: vencimento é prazo, não perda. O vermelho aqui já
      significa RED de pick e confundiria as duas leituras. */
   if (n.type === 'plan_expiring') return <TimerReset className={`${base} text-yellow-400`} />

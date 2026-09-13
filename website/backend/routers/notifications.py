@@ -249,6 +249,9 @@ def send_push_to_all_vip(title: str, body: str, url: str = "/picks"):
 # usuário reencontrar depois. Foi exatamente o buraco do fechamento mensal,
 # que vivia só num localStorage e sumia pra sempre ao fechar o popup.
 
+# O PONTO DO MEIO SAIU DOS TEXTOS DE AVISO (2026-09-12). Ele e' proibido no
+# texto de tela do site (ver CLAUDE.md) e estes titulos e corpos vao pro sino,
+# pro toast e pra bandeja do sistema -- sao texto de tela como qualquer outro.
 TYPE_MONTHLY_CLOSE = "monthly_close"
 TYPE_NEW_PICKS     = "new_picks"
 TYPE_PICK_LIVE     = "pick_live"
@@ -427,9 +430,9 @@ def notify_pick_result(cur, pick_id: int, pick_type: str, result: str) -> None:
                 parts.append(f"{sign}{fmt_brl(pnl_r)} ({sign}{profit_u:.2f}u)")
             create_notification(
                 cur, f["user_id"], TYPE_PICK_RESULT,
-                title=f"{label} · {match_label}",
+                title=f"{label}: {match_label}",
                 dedupe_key=f"pick_result:{pick_type}:{pick_id}",
-                body=" · ".join(parts) or None,
+                body=" ".join(parts) or None,
                 url="/banca",
                 payload={
                     "pick_id":      pick_id,
@@ -482,7 +485,7 @@ def notify_picks_went_live(user_id: int, live_items: list[dict]) -> None:
                 label = f"{home} x {away}" if home and away else "Pick seguido"
             create_notification(
                 cur, user_id, TYPE_PICK_LIVE,
-                title=f"Começou · {label}",
+                title=f"Começou: {label}",
                 dedupe_key=f"pick_live:{pick_type}:{pick_id}",
                 body="Seu pick está em jogo. Acompanhe ao vivo.",
                 url="/picks?tab=ao-vivo",
@@ -528,11 +531,11 @@ def notificar_pick_live_novo(picks: list) -> int:
         # entregava a analise do produto pra base inteira.
         criadas += notify_vip_users(
             TYPE_LIVE_NOVO,
-            title=f"Pick ao vivo · {jogo}",
+            title=f"Pick ao vivo: {jogo}",
             dedupe_key=f"live_novo:{pick_id}",
             body=(f"{p.get('market') or 'Mercado'} {p.get('line') or ''} @ "
                   f"{p.get('odd')}"
-                  + (f" · criado aos {minuto}'" if minuto is not None else "")).strip(),
+                  + (f" (criado aos {minuto}')" if minuto is not None else "")).strip(),
             url="/picks#ao_vivo",
             payload={"pick_id": pick_id, "pick_type": "live"},
         )

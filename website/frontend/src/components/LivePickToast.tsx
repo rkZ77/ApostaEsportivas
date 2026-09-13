@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Radio, X } from 'lucide-react'
+import { Activity, X } from 'lucide-react'
 import { useNotifications } from '../context/NotificationContext'
 import { LiveDot } from './ui'
 import { toastUp } from '../lib/motion'
@@ -79,9 +79,23 @@ export default function LivePickToast() {
              permanente, e são dois cartões grandes para uma tela de celular. */
           className="w-full max-w-md pointer-events-auto"
         >
-          <div className="w-full bg-surface-1 border border-red-500/40 rounded-lg shadow-2xl px-4 py-4 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-red-500/10">
-              <Radio className="w-4 h-4 text-red-400" aria-hidden="true" />
+          {/* VERDE, E NAO VERMELHO (2026-09-12, pedido do usuario).
+          
+              O cartao inteiro era vermelho -- borda, circulo do icone e botao
+              -- e vermelho neste site significa RED de pick. Um aviso de
+              OPORTUNIDADE chegando com a cor da derrota lia como erro, e era o
+              unico aviso da pilha que gritava. Pior: nem era a cor do proprio
+              produto, que e' verde em PICK_TYPE_HEX.live e no selo do card.
+          
+              O ponto pulsante continua vermelho, sozinho: ele e' a convencao
+              universal de "ao vivo" e cabe num ponto de 6px, sem pintar o
+              cartao de alerta. */}
+          <div className="w-full bg-surface-1 border border-accent/40 rounded-lg shadow-2xl px-4 py-4 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-accent/10">
+              {/* `Activity` e nao `Radio`: a antena de transmissao e' o simbolo
+                  de "estamos no ar", e o que este aviso anuncia e' uma partida
+                  em andamento. A linha de batimento diz jogo correndo. */}
+              <Activity className="w-4 h-4 text-accent-ink" aria-hidden="true" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="flex items-center gap-1.5 text-sm font-black text-ink-1 leading-snug">
@@ -95,7 +109,8 @@ export default function LivePickToast() {
             <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={abrir}
-                className="px-3 py-1.5 rounded-lg text-xs font-black bg-red-500 hover:bg-red-400 text-white transition-colors"
+                className="px-3 py-1.5 rounded-lg text-xs font-black bg-accent hover:bg-accent-hover
+                           active:bg-accent-press text-black transition-colors"
               >
                 Ver pick
               </button>
