@@ -187,8 +187,27 @@ def _contexto_do_jogador(cur, jogador: dict, metodo: cat.Metodo,
     atuacoes = player_history.carregar(
         cur, jogador["player_id"], metodo.coluna,
         league_id=fixture["league_id"], season=fixture["season"])
+    # O PISO DE AMOSTRA NAO PODE SER INALCANCAVEL POR CALENDARIO (2026-09-12).
+    #
+    # So' abre quando a liga de hoje ainda nao teve jogos suficientes pra
+    # ninguem alcancar o piso -- e' medida de COMPETICAO, nao do jogador. Quem
+    # tem poucas atuacoes numa liga madura continua reprovando: a leitura
+    # travada e' a regra, e esta e' a excecao com motivo nomeado. Ver
+    # `player_history.competicao_jovem_demais`.
+    recorte = "competicao"
     if len(atuacoes) < metodo.min_atuacoes:
-        return None
+        jovem, rodadas = player_history.competicao_jovem_demais(
+            cur, jogador.get("team_id"), fixture["league_id"], fixture["season"],
+            metodo.min_atuacoes)
+        if not jovem:
+            return None
+        atuacoes = player_history.carregar(
+            cur, jogador["player_id"], metodo.coluna,
+            league_id=fixture["league_id"], season=fixture["season"],
+            todas_competicoes=True)
+        recorte = f"temporada ({rodadas} rodadas na liga, piso {metodo.min_atuacoes})"
+        if len(atuacoes) < metodo.min_atuacoes:
+            return None
 
     serie = [a["valor"] for a in atuacoes]
     mando_hoje = _mando_do_jogador(jogador, fixture)
@@ -205,16 +224,28 @@ def _contexto_do_jogador(cur, jogador: dict, metodo: cat.Metodo,
     esperados = minutes_model.minutos_esperados(perfil_min)
     # O fator compara os minutos de HOJE com os minutos que geraram a media --
     # e nao com 90. Ver a docstring do minutes_model.
+    #
+    # O NUMERADOR E' `minutos_do_regime` E NAO `esperados` (2026-09-12). O
+    # denominador abaixo sai de `atuacoes`, que o `player_history` ja' filtrou em
+    # 60 minutos; `esperados` inclui a titularidade que acabou aos 45. Com os
+    # dois filtros diferentes a razao media dava menos que 1 pra titular que nao
+    # tinha mudado de regime nenhum, e a contradicao MINUTOS_CONTRA_MEDIA
+    # (critica em fator <= 0.85) reprovava o pick por isso.
+    #
+    # `esperados` continua sendo o que a auditoria mostra e o que o gate dos 60
+    # minutos le': ele responde "quanto ele joga hoje", que e' outra pergunta.
     minutos_lidos = [int(a.get("minutes") or 0) for a in atuacoes if a.get("minutes")]
     minutos_da_amostra = (round(sum(minutos_lidos) / len(minutos_lidos), 1)
                           if minutos_lidos else None)
-    fator = (minutes_model.fator_de_minutos(esperados, minutos_da_amostra)
+    fator = (minutes_model.fator_de_minutos(
+                 minutes_model.minutos_do_regime(perfil_min), minutos_da_amostra)
              if metodo.depende_de_minutos else 1.0)
     risco_funcao, posicao = minutes_model.risco_de_funcao(perfil_min, atuacoes, metodo)
 
     minutos = {
         "status": minutes_model.status_de_titularidade(jogador, perfil_min),
         "esperados": esperados,
+        "do_regime": minutes_model.minutos_do_regime(perfil_min),
         "da_amostra": minutos_da_amostra,
         "fator": fator,
         "risco": minutes_model.risco_de_minutos(perfil_min, jogador),
@@ -244,7 +275,7 @@ def _contexto_do_jogador(cur, jogador: dict, metodo: cat.Metodo,
         "atuacoes": atuacoes,
         "serie": serie,
         "serie_no_mando": serie_no_mando,
-        "composicao": player_history.composicao(atuacoes),
+        "composicao": {**player_history.composicao(atuacoes), "recorte": recorte},
         "minutos": minutos,
         "dispersao": disp,
         "outliers": quality.outliers(serie, disp),
@@ -258,7 +289,8 @@ def _contexto_do_jogador(cur, jogador: dict, metodo: cat.Metodo,
             amostra=len(serie), min_atuacoes=metodo.min_atuacoes,
             perfil_minutos=perfil_min, status_titular=minutos["status"],
             risco_minutos=minutos["risco"], dias_desde_ultima=dias,
-            adversario=ajuste_adv),
+            adversario=ajuste_adv,
+            limite_leitura=player_history.LIMITE_ATUACOES),
         "mando": mando_hoje,
     }
 

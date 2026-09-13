@@ -155,7 +155,8 @@ PESO_ADVERSARIO = 10
 def data_quality_score(*, amostra: int | None, min_atuacoes: int,
                        perfil_minutos: dict | None, status_titular: str,
                        risco_minutos: str, dias_desde_ultima: int | None,
-                       adversario: dict | None) -> dict:
+                       adversario: dict | None,
+                       limite_leitura: int | None = None) -> dict:
     """0 a 100 (§32), com a conta aberta -- o total sozinho nao se explica.
 
     Devolve os componentes porque a auditoria precisa responder POR QUE um pick
@@ -167,12 +168,24 @@ def data_quality_score(*, amostra: int | None, min_atuacoes: int,
     # AMOSTRA · o piso do metodo vale a metade dos pontos; o dobro do piso vale
     # todos. Crescer sem teto premiaria ler a carreira inteira, que
     # `player_history.LIMITE_ATUACOES` ja' recusa de proposito.
+    #
+    # E O DOBRO DO PISO PODE NAO CABER NA LEITURA (2026-09-12). `shots_on` tem
+    # piso 12 e o motor le' no maximo 15 atuacoes: o dobro seriam 24, que a
+    # leitura proibe. O componente mais pesado da qualidade (35 de 100) ficava
+    # com teto real de 21.9, e o metodo entrava na auditoria final devendo 13
+    # pontos que nao tinha como ganhar -- contra um DATA_QUALITY_MINIMO de 70
+    # que e' item CRITICO. `limite_leitura` fecha isso: a saturacao e' o dobro
+    # do piso OU o maximo que o motor le', o que vier primeiro.
     n = int(amostra or 0)
     if n <= 0 or min_atuacoes <= 0:
         componentes["amostra"] = 0
     else:
-        razao = n / min_atuacoes
-        componentes["amostra"] = round(PESO_AMOSTRA * min(max(razao / 2, 0.0), 1.0), 1)
+        saturacao = min_atuacoes * 2
+        if limite_leitura:
+            saturacao = min(saturacao, int(limite_leitura))
+        saturacao = max(saturacao, min_atuacoes)
+        componentes["amostra"] = round(
+            PESO_AMOSTRA * min(max(n / saturacao, 0.0), 1.0), 1)
 
     # MINUTOS · classe, nao numero: a folha nao sustenta precisao maior.
     componentes["minutos"] = {"LOW": PESO_MINUTOS,

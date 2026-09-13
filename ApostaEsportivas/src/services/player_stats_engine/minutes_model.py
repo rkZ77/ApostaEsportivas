@@ -100,10 +100,15 @@ def perfil(cur, player_id: int, *, league_id=None, season=None,
     if not folhas:
         return {"amostra": 0, "minutos_medios": None, "minutos_ultimo": None,
                 "jogos_completos": 0, "titularidades": 0, "curtas": 0,
+                "minutos_do_regime": None, "titularidades_longas": 0,
                 "posicoes": [], "erro": None}
 
     minutos = [int(f.get("minutes") or 0) for f in folhas]
     titular = [f for f in folhas if f.get("is_substitute") is not True]
+    # As titularidades que o historico do contador tambem leu -- ver
+    # `minutos_do_regime` no retorno.
+    titular_longo = [f for f in titular
+                     if int(f.get("minutes") or 0) >= MINUTOS_MINIMOS]
     posicoes = [f.get("position") for f in folhas if f.get("position")]
     return {
         "amostra": len(folhas),
@@ -116,6 +121,24 @@ def perfil(cur, player_id: int, *, league_id=None, season=None,
         "minutos_como_titular": (
             round(sum(int(f.get("minutes") or 0) for f in titular) / len(titular), 1)
             if titular else None),
+        #: A MESMA POPULACAO QUE GEROU A MEDIA DO HISTORICO (2026-09-12).
+        #:
+        #: `minutos_como_titular` conta TODA titularidade, inclusive a que
+        #: acabou aos 45. O historico do contador nao: `player_history` corta em
+        #: MIN_MINUTOS. Dividir um pelo outro em `fator_de_minutos` comparava
+        #: duas populacoes diferentes e devolvia um fator menor que 1 pra
+        #: qualquer titular que ja' tenha saido cedo -- o que encolhia a projecao
+        #: de todo mundo e, abaixo de 0.85, virava contradicao CRITICA.
+        #:
+        #: O risco das saidas cedo continua cobrado, e no lugar certo: `curtas`
+        #: alimenta `risco_de_minutos`, e `minutos_esperados` (que segue olhando
+        #: todas as titularidades) alimenta o gate dos 60 minutos. Cobrar de
+        #: novo no multiplicador era contar o mesmo defeito duas vezes.
+        "minutos_do_regime": (
+            round(sum(int(f.get("minutes") or 0) for f in titular_longo)
+                  / len(titular_longo), 1)
+            if titular_longo else None),
+        "titularidades_longas": len(titular_longo),
         #: Atuacao curta com o jogador em campo -- entrou no segundo tempo ou
         #: saiu cedo. Zero minuto e' AUSENCIA (suspenso, lesionado, banco sem
         #: entrar) e conta em outro lugar: misturar os dois faria "nao foi
@@ -146,11 +169,36 @@ def minutos_esperados(perfil_min: dict) -> float | None:
     return float(perfil_min.get("minutos_medios") or 0) or None
 
 
+def minutos_do_regime(perfil_min: dict) -> float | None:
+    """Os minutos das titularidades QUE O HISTORICO DO CONTADOR TAMBEM LEU.
+
+    E' o numerador do `fator_de_minutos`, e existe separado de
+    `minutos_esperados` por um motivo aritmetico: o denominador daquele fator e'
+    a media de minutos das atuacoes do historico, que ja' vem filtrada em 60
+    (`player_history.MIN_MINUTOS`). Comparar com uma media que inclui a
+    titularidade de 45 minutos nao mede mudanca de regime, mede a diferenca
+    entre os dois filtros -- e devolvia fator menor que 1 pra titular nenhum
+    motivo.
+
+    `None` quando nao ha' titularidade longa na janela: o fator sai neutro e
+    quem responde por esse jogador sao `risco_de_minutos` e o gate dos 60
+    minutos, que e' onde a ausencia de regime de titular ja' era tratada.
+    """
+    if not perfil_min or not perfil_min.get("amostra"):
+        return None
+    regime = perfil_min.get("minutos_do_regime")
+    return float(regime) if regime else None
+
+
 def fator_de_minutos(esperados: float | None, minutos_da_amostra: float | None) -> float:
     """Multiplicador da expectativa, pelo regime de minutos de hoje.
 
     1.0 quando hoje e' o mesmo regime que gerou a media -- que e' o caso comum,
     e por isso o motor nao fica mais conservador de graca com esta camada.
+
+    `esperados` TEM QUE VIR DE `minutos_do_regime`, e nao de
+    `minutos_esperados`: os dois lados da razao precisam sair do mesmo filtro de
+    minutos. Ver a docstring daquela funcao.
     """
     if not esperados or not minutos_da_amostra or minutos_da_amostra <= 0:
         return 1.0

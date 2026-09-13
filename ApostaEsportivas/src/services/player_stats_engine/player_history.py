@@ -64,7 +64,8 @@ LIMITE_ATUACOES = 15
 
 def carregar(cur, player_id: int, coluna: str, *, limite: int = LIMITE_ATUACOES,
              min_minutos: int = MIN_MINUTOS,
-             league_id: int | None = None, season: int | None = None) -> list[dict]:
+             league_id: int | None = None, season: int | None = None,
+             todas_competicoes: bool = False) -> list[dict]:
     """Atuacoes recentes do jogador com o contador `coluna` publicado.
 
     `coluna` vem do catalogo de metodos (methods.Metodo.coluna), nunca de
@@ -74,9 +75,13 @@ def carregar(cur, player_id: int, coluna: str, *, limite: int = LIMITE_ATUACOES,
     `league_id`/`season` sao a competicao da PARTIDA DE HOJE, e o recorte que
     sai deles esta explicado no topo do modulo. Sem `league_id`, le tudo (o
     comportamento anterior a 27/08).
+
+    `todas_competicoes` liga o caminho multi-competicao PELA MEDIDA, e nao pelo
+    tipo da competicao -- ver `competicao_jovem_demais`. A temporada continua
+    valendo: "todas as competicoes" e' sobre COMPETICAO, nunca sobre ANO.
     """
     filtros, params = [], [player_id, min_minutos]
-    if league_id is not None:
+    if league_id is not None or (todas_competicoes and season is not None):
         # Temporada sempre entra quando ha' recorte, inclusive no caminho
         # multi-competicao: "todas as competicoes" e' sobre COMPETICAO, nunca
         # sobre ANO. Sem isso um jogador com poucos jogos puxaria a temporada
@@ -84,7 +89,8 @@ def carregar(cur, player_id: int, coluna: str, *, limite: int = LIMITE_ATUACOES,
         if season is not None:
             filtros.append("AND season = %s")
             params.append(season)
-        if not competition_profile.uses_all_competitions_history(league_id):
+        if (league_id is not None and not todas_competicoes
+                and not competition_profile.uses_all_competitions_history(league_id)):
             filtros.append("AND league_id = %s")
             params.append(league_id)
 
@@ -111,6 +117,65 @@ def carregar(cur, player_id: int, coluna: str, *, limite: int = LIMITE_ATUACOES,
          LIMIT %s
     """, tuple(params) + (limite,))
     return linhas_dict(cur)
+
+
+def partidas_na_competicao(cur, team_id: int, league_id, season) -> int:
+    """Quantas partidas o time ja' jogou NESTA liga e temporada.
+
+    E' o denominador que faltava pro piso de amostra fazer sentido. Sai da
+    propria `player_match_stats` (mesma fonte do resto do motor) e conta
+    fixtures distintas, nao folhas.
+    """
+    if not team_id or league_id is None or season is None:
+        return 0
+    cur.execute("""
+        SELECT COUNT(DISTINCT fixture_id)
+          FROM player_match_stats
+         WHERE team_id = %s AND league_id = %s AND season = %s
+    """, (team_id, league_id, season))
+    linha = cur.fetchone()
+    if not linha:
+        return 0
+    valor = linha[0] if not isinstance(linha, dict) else list(linha.values())[0]
+    return int(valor or 0)
+
+
+def competicao_jovem_demais(cur, team_id: int, league_id, season,
+                            min_atuacoes: int) -> tuple:
+    """(True, rodadas) quando o piso de amostra e' inalcancavel por CALENDARIO.
+
+    POR QUE ISTO EXISTE (2026-09-12)
+    --------------------------------
+    O recorte por competicao de 27/08 esta' certo e continua valendo: chute em
+    Brasileirao e chute em Libertadores nao sao a mesma populacao. O que ele nao
+    previu foi o piso subir. Desde 10/09 `shots_on` exige 12 atuacoes e `shots`
+    exige 8, contadas DENTRO da liga e temporada de hoje.
+
+    Em setembro uma liga europeia de 2026/27 tem quatro rodadas. Nenhum jogador
+    chega a 12 atuacoes de 60+ minutos nela -- nao por ser reserva, nem por ter
+    historico ruim, mas porque o campeonato nao teve 12 jogos ainda. O motor
+    reprovava a fixture inteira em silencio, com o motivo "nenhum jogador com
+    historico suficiente", que descreve o jogador e nao a causa.
+
+    A SAIDA JA' EXISTIA NO PROJETO, e e' a mesma do lado dos times:
+    `competition_profile.uses_all_competitions_history` abre o historico pra
+    todas as competicoes da temporada em copa e selecao, com esta justificativa
+    escrita la': "a propria competicao nao acumula jogo suficiente e travar nela
+    reprova a fixture inteira em silencio". A situacao e' identica; o que muda e'
+    que aqui ela e' MEDIDA por rodada jogada em vez de declarada por tipo de
+    competicao -- a liga jovem vira madura sozinha, sem ninguem editar tabela.
+
+    O recorte usado fica gravado em `composicao` (`multi_competicao` e
+    `por_competicao`), entao a media aberta e a media travada nao sao o mesmo
+    numero na tela.
+    """
+    # Sem liga ou temporada nao ha' competicao pra chamar de jovem, e a
+    # ausencia de dado nao pode escolher justamente o caminho mais permissivo
+    # (§33): devolve False, que e' a leitura travada de sempre.
+    if league_id is None or season is None:
+        return (False, 0)
+    rodadas = partidas_na_competicao(cur, team_id, league_id, season)
+    return (rodadas < int(min_atuacoes or 0), rodadas)
 
 
 def composicao(atuacoes: list) -> dict:
