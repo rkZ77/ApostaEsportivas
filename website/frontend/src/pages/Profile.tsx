@@ -409,7 +409,7 @@ export default function Profile() {
                 <button
                   type="button"
                   onClick={() => navigate('/planos')}
-                  className="shrink-0 bg-green-600 hover:bg-green-500 text-white font-bold text-sm px-5 py-2.5 rounded-md transition-colors"
+                  className="shrink-0 bg-green-600 hover:bg-green-500 text-on-fill font-bold text-sm px-5 py-2.5 rounded-md transition-colors"
                 >
                   Assinar
                 </button>
@@ -769,7 +769,7 @@ export default function Profile() {
                     <button
                       type="submit"
                       disabled={smsVerificando || smsCodigo.length < 6}
-                      className="w-full py-2.5 rounded-md bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-bold text-sm transition-colors"
+                      className="w-full py-2.5 rounded-md bg-green-600 hover:bg-green-500 disabled:opacity-50 text-on-fill font-bold text-sm transition-colors"
                     >
                       {smsVerificando ? 'Verificando…' : 'Confirmar código'}
                     </button>

@@ -652,7 +652,7 @@ export default function Admin() {
       }}
     >
       {toast && (
-        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] px-5 py-3 rounded-md shadow-elev text-sm font-semibold whitespace-nowrap transition-all ${toast.ok ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] px-5 py-3 rounded-md shadow-elev text-sm font-semibold whitespace-nowrap transition-all ${toast.ok ? 'bg-green-600 text-on-fill' : 'bg-red-600 text-on-fill'}`}>
           {toast.msg}
         </div>
       )}

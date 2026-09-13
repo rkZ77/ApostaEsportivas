@@ -146,7 +146,7 @@ export default function AgentePanel({ onClose }: { onClose: () => void }) {
                   )}
                   <div className={`max-w-[82%] rounded-md px-3 py-2 text-xs leading-relaxed
                     ${msg.role === 'user'
-                      ? 'bg-green-600 text-white rounded-tr-sm'
+                      ? 'bg-green-600 text-on-fill rounded-tr-sm'
                       : 'bg-surface-1 border border-line rounded-tl-sm'}`}>
                     {msg.role === 'user' ? (
                       <p className="whitespace-pre-wrap">{msg.content}</p>
@@ -188,7 +188,7 @@ export default function AgentePanel({ onClose }: { onClose: () => void }) {
               onClick={() => sendMessage()}
               disabled={!input.trim() || loading}
               aria-label="Enviar"
-              className="w-9 h-9 rounded-md bg-green-600 hover:bg-green-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center text-white shrink-0"
+              className="w-9 h-9 rounded-md bg-green-600 hover:bg-green-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center text-on-fill shrink-0"
             >
               <Send className="w-3.5 h-3.5" />
             </button>

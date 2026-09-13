@@ -111,7 +111,7 @@ export default function ApostaModal({
               <button
                 onClick={() => onConfirm(parsed, house, units)}
                 disabled={loading}
-                className="flex-1 py-2.5 rounded-md bg-yellow-600 hover:bg-yellow-500 disabled:opacity-50 text-ink-1 font-bold text-sm transition-colors"
+                className="flex-1 py-2.5 rounded-md bg-yellow-600 hover:bg-yellow-500 disabled:opacity-50 text-on-fill font-bold text-sm transition-colors"
               >
                 {loading ? '...' : 'Estou ciente'}
               </button>
@@ -230,8 +230,8 @@ export default function ApostaModal({
                 disabled={!valid || loading}
                 className={`flex-1 py-2.5 rounded-md font-bold text-sm transition-colors disabled:opacity-50 ${
                   exceedsSuggested
-                    ? 'bg-yellow-600 hover:bg-yellow-500 text-ink-1'
-                    : 'bg-green-600 hover:bg-green-500 text-white'
+                    ? 'bg-yellow-600 hover:bg-yellow-500 text-on-fill'
+                    : 'bg-green-600 hover:bg-green-500 text-on-fill'
                 }`}
               >
                 {loading || conferindoOdd ? '...' : exceedsSuggested ? `Pegar bilhete de ${units}u` : 'Pegar bilhete'}

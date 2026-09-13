@@ -30,8 +30,20 @@ export interface BarraLucro {
   icon?: ReactNode
 }
 
-const VERDE = '#22c55e'
-const VERMELHO = '#f87171'
+/*
+ * Token, e não hexadecimal.
+ *
+ * #22c55e sobre papel branco dá 2,3:1: no tema claro a barra de lucro e o
+ * número ao lado dela praticamente somem. O token já carrega o tom certo de
+ * cada tema (ver a nota da paleta semântica em index.css), e este gráfico
+ * aparece na Banca e nos Resultados públicos, que é onde o número precisa ser
+ * lido antes de qualquer outra coisa.
+ *
+ * Como `rgb(var(...))` e não classe do Tailwind porque os dois usos são valor
+ * calculado em runtime: `style` de div e atributo `fill` de SVG.
+ */
+const VERDE = 'rgb(var(--c-green-400))'
+const VERMELHO = 'rgb(var(--c-red-400))'
 
 export default function LucroBarChart({
   data,
@@ -171,7 +183,7 @@ export default function LucroBarChart({
             <g key={d.label}>
               <motion.rect
                 x={x(i)} width={barW} rx="2"
-                fill={positivo ? VERDE : VERMELHO}
+                style={{ fill: positivo ? VERDE : VERMELHO }}
                 opacity={hover === null || hover === i ? 0.9 : 0.45}
                 initial={{ height: 0, y: yZero }}
                 whileInView={{ height: alt, y: topo }}
@@ -189,9 +201,8 @@ export default function LucroBarChart({
                   fontSize="9"
                   fontWeight="700"
                   textAnchor="middle"
-                  fill={positivo ? VERDE : VERMELHO}
                   fontFamily="Inter, -apple-system, sans-serif"
-                  style={{ fontVariantNumeric: 'tabular-nums' }}
+                  style={{ fill: positivo ? VERDE : VERMELHO, fontVariantNumeric: 'tabular-nums' }}
                 >
                   {fmtUnits(v, 1)}
                 </text>

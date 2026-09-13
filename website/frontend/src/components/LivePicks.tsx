@@ -741,9 +741,16 @@ function PickCard({ pick, unitValue, onRefresh, syncedAt }: {
                  dizia o contrário. O alinhamento sai do wrapper e não de um
                  `ml-auto` no botão, que dependia do modo de layout do pai. */
               <div className="flex sm:justify-end mt-1">
+                {/* Era `bg-green-700` com texto branco, e green-700 não existe
+                    na paleta (ver tailwind.config.js): caía no verde-garrafa
+                    padrão do Tailwind, o mesmo tom que foi reprovado quando o
+                    tema claro nasceu, e ficava igual nos dois temas. O
+                    preenchimento tingido diz o que o comentário acima já dizia,
+                    esta não é a ação principal do card, e é o mesmo vocabulário
+                    do variante `vip` do Button. */}
                 <button
                   onClick={() => setShowCashout(true)}
-                  className="w-full sm:w-auto sm:px-6 text-sm font-bold text-white bg-green-700 hover:bg-green-600 border border-green-600/40 rounded-md py-2.5 transition-colors"
+                  className="w-full sm:w-auto sm:px-6 text-sm font-bold text-accent-ink bg-accent/10 hover:bg-accent/20 border border-accent/40 rounded-md py-2.5 transition-colors"
                 >
                   Registrar Cash Out
                 </button>

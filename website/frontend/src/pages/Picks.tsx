@@ -921,7 +921,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
     {showSuccess && (
       <motion.div
         variants={toastUp} initial="hidden" animate="visible" exit="exit"
-        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-md shadow-lg whitespace-nowrap"
+        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-on-fill text-sm font-semibold px-5 py-3 rounded-md shadow-lg whitespace-nowrap"
       >
         Pick registrado com sucesso!
       </motion.div>
@@ -1412,7 +1412,7 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
     {showSuccess && (
       <motion.div
         variants={toastUp} initial="hidden" animate="visible" exit="exit"
-        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-md shadow-lg whitespace-nowrap"
+        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-on-fill text-sm font-semibold px-5 py-3 rounded-md shadow-lg whitespace-nowrap"
       >
         Pick registrado com sucesso!
       </motion.div>
@@ -1748,7 +1748,7 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
     {showSuccess && (
       <motion.div
         variants={toastUp} initial="hidden" animate="visible" exit="exit"
-        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-md shadow-lg whitespace-nowrap"
+        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-on-fill text-sm font-semibold px-5 py-3 rounded-md shadow-lg whitespace-nowrap"
       >
         Pick registrado com sucesso!
       </motion.div>
@@ -2250,15 +2250,15 @@ interface ResumoBloqueado {
 
 const LOCK_CLS = {
   yellow: { icon: 'text-yellow-400', ring: 'bg-yellow-400/10 border-yellow-400/20', btn: 'bg-yellow-400 hover:bg-yellow-300 text-on-fill', borda: 'border-yellow-400/25' },
-  blue:   { icon: 'text-blue-400',   ring: 'bg-blue-400/10 border-blue-400/20',     btn: 'bg-blue-500 hover:bg-blue-400 text-ink-1',     borda: 'border-blue-400/25'   },
-  orange: { icon: 'text-orange-400', ring: 'bg-orange-400/10 border-orange-400/20', btn: 'bg-orange-500 hover:bg-orange-400 text-ink-1', borda: 'border-orange-400/25' },
-  purple: { icon: 'text-purple-400', ring: 'bg-purple-400/10 border-purple-400/20', btn: 'bg-purple-500 hover:bg-purple-400 text-ink-1', borda: 'border-purple-400/25' },
+  blue:   { icon: 'text-blue-400',   ring: 'bg-blue-400/10 border-blue-400/20',     btn: 'bg-blue-500 hover:bg-blue-400 text-on-fill',     borda: 'border-blue-400/25'   },
+  orange: { icon: 'text-orange-400', ring: 'bg-orange-400/10 border-orange-400/20', btn: 'bg-orange-500 hover:bg-orange-400 text-on-fill', borda: 'border-orange-400/25' },
+  purple: { icon: 'text-purple-400', ring: 'bg-purple-400/10 border-purple-400/20', btn: 'bg-purple-500 hover:bg-purple-400 text-on-fill', borda: 'border-purple-400/25' },
   /* Âmbar é a cor do Player Stats no site inteiro (PICK_TYPE_HEX.player_stats) ·
      o cadeado da aba Jogadores tem que ser reconhecível como o mesmo produto. */
   amber:  { icon: 'text-amber-400',  ring: 'bg-amber-400/10 border-amber-400/20',   btn: 'bg-amber-500 hover:bg-amber-400 text-on-fill',  borda: 'border-amber-400/25'  },
   /* Rosa é a cor do Bingo do Dia no site inteiro (PICK_TYPE_HEX.bingo) · o
      cadeado tem que ser reconhecível como o mesmo produto do card. */
-  rose:   { icon: 'text-rose-400',   ring: 'bg-rose-400/10 border-rose-400/20',     btn: 'bg-rose-500 hover:bg-rose-400 text-ink-1',     borda: 'border-rose-400/25'   },
+  rose:   { icon: 'text-rose-400',   ring: 'bg-rose-400/10 border-rose-400/20',     btn: 'bg-rose-500 hover:bg-rose-400 text-on-fill',     borda: 'border-rose-400/25'   },
 } as const
 
 type LockCls = typeof LOCK_CLS[keyof typeof LOCK_CLS]
@@ -4095,7 +4095,7 @@ export default function Picks() {
                         {userAlavSerie.can_close && !alavConfirmClose && (
                           <button
                             onClick={() => { setAlavConfirmClose(true); setAlavCloseMsg('') }}
-                            className="shrink-0 bg-orange-500 hover:bg-orange-400 text-ink-1 font-black px-3 py-2 rounded-md text-xs transition-colors"
+                            className="shrink-0 bg-orange-500 hover:bg-orange-400 text-on-fill font-black px-3 py-2 rounded-md text-xs transition-colors"
                           >
                             Encerrar
                           </button>
@@ -4230,7 +4230,7 @@ export default function Picks() {
                       <button
                         onClick={saveAlavInit}
                         disabled={alavInitSaving || !alavInitInput}
-                        className="bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-ink-1 font-black px-4 py-2 rounded-md text-sm transition-colors"
+                        className="bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-on-fill font-black px-4 py-2 rounded-md text-sm transition-colors"
                       >
                         {alavInitSaving ? '...' : userAlavSerie?.configured ? 'Alterar' : 'Definir'}
                       </button>

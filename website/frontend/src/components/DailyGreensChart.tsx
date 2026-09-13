@@ -113,8 +113,13 @@ export default function DailyGreensChart({
           const v = Math.round(maxTotal * pct)
           return (
             <g key={pct}>
-              <line x1={PL} y1={y} x2={W - PR} y2={y} stroke="#1f1f23" strokeWidth="0.8" />
-              <text x={PL - 4} y={y + 3} fill="#52525b" fontSize="8" textAnchor="end" fontFamily="Inter, -apple-system, sans-serif" style={{ fontVariantNumeric: 'tabular-nums' }}>{v}</text>
+              {/* Token, e não hexadecimal: #1f1f23 é a linha da grade do tema
+                  ESCURO, e sobre o papel branco do tema claro ela vira um
+                  traço quase preto atravessando o gráfico. Vai por `style`
+                  porque `var()` em atributo de apresentação (stroke=, fill=)
+                  não resolve em todo navegador. */}
+              <line x1={PL} y1={y} x2={W - PR} y2={y} style={{ stroke: 'rgb(var(--line))' }} strokeWidth="0.8" />
+              <text x={PL - 4} y={y + 3} fontSize="8" textAnchor="end" fontFamily="Inter, -apple-system, sans-serif" style={{ fill: 'rgb(var(--ink-4))', fontVariantNumeric: 'tabular-nums' }}>{v}</text>
             </g>
           )
         })}

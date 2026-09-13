@@ -87,24 +87,30 @@ function Donut({ pct, label, size = 56 }: { pct: number; label: string; size?: n
   const r = (size / 2) * 0.72
   const circ = 2 * Math.PI * r
   const dash = Math.min(pct / 100, 1) * circ
-  const color = pct >= 70 ? '#22c55e' : pct >= 40 ? '#f59e0b' : '#ef4444'
+  /* Token, e não hexadecimal: no tema claro #22c55e sobre papel branco dá
+     2,3:1 e tanto o arco quanto o "72%" escrito no meio dele somem. Vai por
+     `style` porque `var()` em atributo de apresentação (stroke=, fill=) não
+     resolve em todo navegador. */
+  const color = pct >= 70
+    ? 'rgb(var(--c-green-400))'
+    : pct >= 40 ? 'rgb(var(--c-amber-500))' : 'rgb(var(--c-red-500))'
   const cx = size / 2
   const cy = size / 2
   return (
     <div className="flex flex-col items-center gap-1.5 min-w-0">
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#27272a" strokeWidth={5} />
+        <circle cx={cx} cy={cy} r={r} fill="none" style={{ stroke: 'rgb(var(--surface-3))' }} strokeWidth={5} />
         {pct > 0 && (
           <circle
             cx={cx} cy={cy} r={r}
-            fill="none" stroke={color} strokeWidth={5}
+            fill="none" style={{ stroke: color }} strokeWidth={5}
             strokeDasharray={`${dash} ${circ - dash}`}
             strokeLinecap="round"
             transform={`rotate(-90 ${cx} ${cy})`}
           />
         )}
         <text x={cx} y={cy + 1} textAnchor="middle" dominantBaseline="central"
-          fill={color} fontSize={size * 0.21} fontWeight="700" fontFamily="system-ui,sans-serif">
+          style={{ fill: color }} fontSize={size * 0.21} fontWeight="700" fontFamily="system-ui,sans-serif">
           {pct}%
         </text>
       </svg>

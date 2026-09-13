@@ -1021,7 +1021,7 @@ function SuggestionCard({
     {showSuccess && (
       <motion.div
         variants={toastUp} initial="hidden" animate="visible" exit="exit"
-        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-lg shadow-lg whitespace-nowrap"
+        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-on-fill text-sm font-semibold px-5 py-3 rounded-lg shadow-lg whitespace-nowrap"
       >
         Pick registrado com sucesso!
       </motion.div>

@@ -306,7 +306,7 @@ export default function Checkout() {
                 {(plan.id === POPULAR_PLAN || plan.save_pct > 0) && (
                   <span className="absolute -top-2.5 inset-x-2 flex items-center justify-between gap-1 pointer-events-none">
                     {plan.id === POPULAR_PLAN ? (
-                      <span className="font-mono text-[10px] bg-green-600 text-white px-1.5 py-0.5 rounded-sm font-semibold truncate">
+                      <span className="font-mono text-[10px] bg-green-600 text-on-fill px-1.5 py-0.5 rounded-sm font-semibold truncate">
                         Popular
                       </span>
                     ) : <span />}

@@ -29,10 +29,19 @@ interface OddRow {
 
 const TEAM_LOGO = (id?: number) => id ? `/api/proxy/team/${id}.png` : null
 
+/*
+ * `on-fill` nos dois preenchimentos coloridos, e não `ink-1`.
+ *
+ * O selo do L era branco sobre #ef4444, que dá 3,8:1 · abaixo do piso de AA
+ * para um "L" de 12px em negrito, e é justamente a letra que a pessoa precisa
+ * contar de relance na régua de forma. `on-fill` é preto nos dois temas (5,6:1
+ * aqui) e é o token que existe para texto sobre cor sólida. O D continua em
+ * ink-1 porque o fundo dele é superfície, não cor.
+ */
 const resultColor: Record<string, string> = {
-  W: 'bg-green-500 text-black',
+  W: 'bg-green-500 text-on-fill',
   D: 'bg-surface-3 text-ink-1',
-  L: 'bg-red-500 text-ink-1',
+  L: 'bg-red-500 text-on-fill',
 }
 
 function FormBadge({ r }: { r: string }) {
@@ -314,7 +323,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
               </p>
               <Link
                 to="/planos"
-                className="mt-1 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm font-bold transition-colors"
+                className="mt-1 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-on-fill text-sm font-bold transition-colors"
               >
                 Assinar VIP
               </Link>

@@ -54,6 +54,18 @@ export default {
          *
          * green-500/600/700 NAO entram: e' o verde da marca, e ele e'
          * preenchimento nos dois temas. Verde como palavra usa text-accent-ink.
+         *
+         * NUNCA `text-white` POR CIMA DE PREENCHIMENTO COLORIDO.
+         *
+         * Branco sobre o verde da marca da' 3,1:1 no #00AA00 e 2,2:1 no
+         * #00CC00 do hover · ou seja, o botao ficava MENOS legivel quando o
+         * mouse encostava nele. Estava em 23 botoes escritos a mao, todos
+         * passando ao largo do <Button>, que sempre usou `text-black`. Sobre
+         * amarelo e vermelho a conta e' a mesma (2,9:1 e 3,8:1).
+         *
+         * O token e' `text-on-fill`: preto nos dois temas, 6,8:1 a 9,6:1 aqui.
+         * `text-ink-1` tambem nao serve, que ele e' branco no tema escuro.
+         * Texto sobre SUPERFICIE (surface-*) continua em ink-1..4 normalmente.
          */
         green: {
           300: token('c-green-300'),

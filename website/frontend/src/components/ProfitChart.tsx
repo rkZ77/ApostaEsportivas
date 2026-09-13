@@ -208,9 +208,12 @@ export default function ProfitChart({
             <line
               x1={px(hoverIdx)} y1={PT}
               x2={px(hoverIdx)} y2={PT + innerH}
-              stroke="#52525b" strokeWidth="1" strokeDasharray="3,3"
+              style={{ stroke: 'rgb(var(--line-strong))' }} strokeWidth="1" strokeDasharray="3,3"
             />
-            <circle cx={px(hoverIdx)} cy={py(hv)} r="4" fill={hv >= 0 ? '#22c55e' : '#ef4444'} />
+            <circle
+              cx={px(hoverIdx)} cy={py(hv)} r="4"
+              style={{ fill: hv >= 0 ? 'rgb(var(--c-green-400))' : 'rgb(var(--c-red-400))' }}
+            />
           </>
         )}
 
@@ -228,10 +231,9 @@ export default function ProfitChart({
             key={i}
             x={px(idx)}
             y={H - 6}
-            fill="#52525b" fontSize="9"
+            style={{ fill: 'rgb(var(--ink-4))', fontVariantNumeric: 'tabular-nums' }} fontSize="9"
             textAnchor={i === 0 ? 'start' : i === xTicks.length - 1 ? 'end' : 'middle'}
             fontFamily="Inter, -apple-system, sans-serif"
-            style={{ fontVariantNumeric: 'tabular-nums' }}
           >
             {fmtDate(dates[idx])}
           </text>

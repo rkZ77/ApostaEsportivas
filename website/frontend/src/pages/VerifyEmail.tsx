@@ -129,7 +129,7 @@ export default function VerifyEmail() {
             )}
             <button
               onClick={() => navigate('/picks')}
-              className="w-full py-3 rounded-md bg-green-600 hover:bg-green-500 text-white font-bold text-sm transition-colors"
+              className="w-full py-3 rounded-md bg-green-600 hover:bg-green-500 text-on-fill font-bold text-sm transition-colors"
             >
               {trialAtivado ? 'Ver os picks do VIP' : 'Acessar picks'}
             </button>
@@ -149,7 +149,7 @@ export default function VerifyEmail() {
               <button
                 onClick={handleResend}
                 disabled={resending || resent}
-                className="w-full py-3 rounded-md bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-bold text-sm transition-colors"
+                className="w-full py-3 rounded-md bg-green-600 hover:bg-green-500 disabled:opacity-50 text-on-fill font-bold text-sm transition-colors"
               >
                 {resent ? 'E-mail reenviado!' : resending ? 'Enviando…' : 'Reenviar e-mail de verificação'}
               </button>
@@ -178,7 +178,7 @@ export default function VerifyEmail() {
             {/* CTA principal · acessar o site sem verificar */}
             <button
               onClick={() => navigate('/picks')}
-              className="w-full py-3 rounded-md bg-green-600 hover:bg-green-500 text-white font-black text-sm transition-colors mb-3"
+              className="w-full py-3 rounded-md bg-green-600 hover:bg-green-500 text-on-fill font-black text-sm transition-colors mb-3"
             >
               Acessar os Picks agora
             </button>

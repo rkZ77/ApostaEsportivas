@@ -694,11 +694,18 @@ export default function Planos() {
             <p className="text-ink-1 font-bold text-sm">Precisa de ajuda?</p>
             <p className="text-ink-3 text-xs mt-0.5">Problemas com pagamento, acesso ou dúvidas? Fale direto conosco</p>
           </div>
+          {/* O #25D366 é o verde do WhatsApp, não do PickIA: fica cravado de
+              propósito, porque o botão é reconhecido pela cor DELES.
+              O que não podia ficar era `text-ink-1` por cima: branco sobre
+              esse verde dá 2,0:1 e reprova em AA, justamente no botão que quem
+              está com problema de pagamento precisa achar. `on-fill` é preto
+              nos dois temas (10,4:1) e é o token que existe para texto sobre
+              preenchimento colorido. */}
           <a
             href={WA_SUPPORT}
             target="_blank"
             rel="noopener noreferrer"
-            className="shrink-0 bg-[#25D366] hover:bg-[#20ba58] text-ink-1 font-black text-xs px-4 py-2.5 rounded-md transition-colors"
+            className="shrink-0 bg-[#25D366] hover:bg-[#20ba58] text-on-fill font-black text-xs px-4 py-2.5 rounded-md transition-colors"
           >
             WhatsApp
           </a>
