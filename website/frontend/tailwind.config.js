@@ -66,6 +66,12 @@ export default {
          * O token e' `text-on-fill`: preto nos dois temas, 6,8:1 a 9,6:1 aqui.
          * `text-ink-1` tambem nao serve, que ele e' branco no tema escuro.
          * Texto sobre SUPERFICIE (surface-*) continua em ink-1..4 normalmente.
+         *
+         * Sobraram DOIS `text-white` no site, e os dois estao certos: azul e
+         * vermelho fechados (blue-600 e red-600) sao escuros o bastante pra
+         * pedir tinta clara, e dao 5,2:1 e 4,9:1 com branco nos dois temas.
+         * Nao existe token de "tinta clara sobre preenchimento" porque esses
+         * dois sao a unica ocorrencia; se aparecer um terceiro, vale criar.
          */
         green: {
           300: token('c-green-300'),
@@ -105,6 +111,8 @@ export default {
           300: token('c-blue-300'),
           400: token('c-blue-400'),
           500: token('c-blue-500'),
+          // preenchimento, igual nos dois temas · ver a nota em index.css
+          600: token('c-blue-600'),
         },
         purple: {
           300: token('c-purple-300'),

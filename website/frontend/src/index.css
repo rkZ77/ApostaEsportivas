@@ -94,6 +94,19 @@
   --c-blue-300:  147 197 253;
   --c-blue-400:   96 165 250;
   --c-blue-500:   59 130 246;
+  /*
+   * blue-600 e' PREENCHIMENTO, e por isso e' igual nos dois temas.
+   *
+   * Ele vivia fora da paleta, caindo no #2563eb padrao do Tailwind por
+   * acidente · o mesmo acidente que fazia o botao de Cash Out virar
+   * verde-garrafa. Como aqui o valor herdado ja' era o certo, o token so'
+   * torna explicito o que era sorte: branco sobre ele da 5,2:1, e o azul
+   * fechado se le tanto sobre #0a0a0c quanto sobre #ffffff.
+   *
+   * Nao confundir com o -500 logo acima, que e' azul COMO COR (selo e texto
+   * da multipla) e muda de tom entre os temas.
+   */
+  --c-blue-600:   37  99 235;  /* #2563eb · 5,2:1 com texto branco */
   --c-purple-300: 216 180 254;
   --c-purple-400: 192 132 252;
   --c-purple-500: 168  85 247;
@@ -226,6 +239,8 @@
   --c-blue-300:   29  78 216;  /* #1d4ed8 */
   --c-blue-400:   59 130 246;  /* #3b82f6 · 3.7:1 */
   --c-blue-500:   37  99 235;  /* #2563eb */
+  /* Igual ao tema escuro de propósito · é preenchimento, não cor escrita. */
+  --c-blue-600:   37  99 235;  /* #2563eb */
   --c-purple-300: 126  34 206; /* #7e22ce */
   --c-purple-400: 168  85 247; /* #a855f7 · 4.0:1 */
   --c-purple-500: 147  51 234; /* #9333ea */

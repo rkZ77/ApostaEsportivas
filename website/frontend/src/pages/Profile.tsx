@@ -4,7 +4,7 @@ import { Bell, BellOff, Eye, EyeOff } from 'lucide-react'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import PageShell from '../components/PageShell'
-import { Spinner, planoMeta, rotuloDoPlano } from '../components/ui'
+import { Button, Spinner, planoMeta, rotuloDoPlano } from '../components/ui'
 import AlertsAndAchievements from '../components/AlertsAndAchievements'
 import Avatar from '../components/Avatar'
 import { usePushNotification } from '../hooks/usePushNotification'
@@ -577,15 +577,27 @@ export default function Profile() {
                   className="input w-full text-sm"
                 />
                 {passwordChangeErr && <p className="text-red-400 text-xs">{passwordChangeErr}</p>}
+                {/*
+                  * O PAR CONFIRMAR/CANCELAR VEM DO <Button>, E ELE NÃO É AZUL.
+                  *
+                  * Era `bg-blue-600 hover:bg-blue-500`, e as duas metades
+                  * estavam erradas. O hover CLAREAVA o preenchimento: no tema
+                  * escuro o texto branco caía de 5,2:1 para 3,7:1, ou seja, o
+                  * botão ficava menos legível justamente quando o dedo
+                  * encostava. E azul, neste sistema, é a cor da múltipla (ver
+                  * a nota da paleta em index.css): usá-lo para "salvar" fazia
+                  * uma cor com significado virar decoração.
+                  *
+                  * Confirmar é a ação principal do painel, então é `primary`,
+                  * o verde da marca com tinta preta. O par também ganha os
+                  * 44px de altura que o SIZE do Button fixou por causa de
+                  * dedo: escrito à mão, este par tinha 38px.
+                  */}
                 <div className="flex gap-2">
-                  <button type="button" onClick={handleRequestPasswordChange} disabled={passwordChanging}
-                    className="flex-1 py-2.5 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-sm transition-colors">
+                  <Button onClick={handleRequestPasswordChange} loading={passwordChanging} className="flex-1">
                     {passwordChanging ? 'Enviando…' : 'Enviar código de confirmação'}
-                  </button>
-                  <button type="button" onClick={resetPasswordChangeState}
-                    className="px-4 py-2.5 rounded-md border border-line-strong text-ink-2 text-sm hover:border-ink-4 transition-colors">
-                    Cancelar
-                  </button>
+                  </Button>
+                  <Button variant="ghost" onClick={resetPasswordChangeState}>Cancelar</Button>
                 </div>
                 <button type="button" onClick={() => navigate('/forgot-password')}
                   className="w-full text-xs font-semibold text-ink-3 hover:text-ink-1 border border-line hover:border-line-strong rounded-md py-2.5 min-h-[36px] transition-colors">
@@ -612,14 +624,15 @@ export default function Profile() {
                 />
                 {passwordChangeErr && <p className="text-red-400 text-xs">{passwordChangeErr}</p>}
                 <div className="flex gap-2">
-                  <button type="button" onClick={handleConfirmPasswordChange} disabled={passwordChanging || pwCode.length !== 6}
-                    className="flex-1 py-2.5 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-sm transition-colors">
+                  <Button
+                    onClick={handleConfirmPasswordChange}
+                    loading={passwordChanging}
+                    disabled={pwCode.length !== 6}
+                    className="flex-1"
+                  >
                     {passwordChanging ? 'Confirmando…' : 'Confirmar troca de senha'}
-                  </button>
-                  <button type="button" onClick={resetPasswordChangeState}
-                    className="px-4 py-2.5 rounded-md border border-line-strong text-ink-2 text-sm hover:border-ink-4 transition-colors">
-                    Cancelar
-                  </button>
+                  </Button>
+                  <Button variant="ghost" onClick={resetPasswordChangeState}>Cancelar</Button>
                 </div>
                 <button type="button" onClick={() => setPwStep('form')}
                   className="text-xs font-semibold text-ink-3 hover:text-ink-1 border border-line hover:border-line-strong rounded-md px-4 py-2 min-h-[36px] transition-colors">
@@ -703,14 +716,15 @@ export default function Profile() {
                     />
                     {emailChangeErr && <p className="text-red-400 text-xs">{emailChangeErr}</p>}
                     <div className="flex gap-2">
-                      <button type="submit" disabled={emailChanging}
-                        className="flex-1 py-2.5 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-sm transition-colors">
+                      <Button type="submit" loading={emailChanging} className="flex-1">
                         {emailChanging ? 'Salvando…' : 'Salvar e reenviar'}
-                      </button>
-                      <button type="button" onClick={() => { setShowEmailChange(false); setEmailChangeErr(''); setEmailPassword('') }}
-                        className="px-4 py-2.5 rounded-md border border-line-strong text-ink-2 text-sm hover:border-ink-4 transition-colors">
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        onClick={() => { setShowEmailChange(false); setEmailChangeErr(''); setEmailPassword('') }}
+                      >
                         Cancelar
-                      </button>
+                      </Button>
                     </div>
                   </form>
                 )}

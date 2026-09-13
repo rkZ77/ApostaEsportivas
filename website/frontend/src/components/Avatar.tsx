@@ -1,9 +1,28 @@
 import { useState } from 'react'
 
+/*
+ * A RODA DE COR DO AVATAR SÓ USA TOM QUE EXISTE NA PALETA.
+ *
+ * Ela era oito `-600`, e só dois deles eram token: `pink-600` nem existe no
+ * tailwind.config, e os outros caíam no valor padrão do Tailwind, igual nos
+ * dois temas. Com `text-ink-1` por cima, a inicial ficava ilegível em metade
+ * da roda, e em metades diferentes conforme o tema: no escuro (ink-1 branco)
+ * sumia no verde (3,1:1), no laranja (3,9:1) e no teal (3,9:1); no claro
+ * (ink-1 quase preto) sumia no roxo (3,9:1) e no índigo (3,2:1).
+ *
+ * Os `-400` são medidos: a nota da paleta clara em index.css registra que
+ * todo preenchimento semântico fica entre 5:1 e 9:1 contra o PRETO, e no tema
+ * escuro eles são tons claros, onde preto contrasta ainda mais. Por isso a
+ * tinta é `on-fill`, que é preto nos dois temas.
+ *
+ * Verde e vermelho ficam de fora de propósito: neste site verde é GREEN e
+ * vermelho é RED. Sortear a cor de "ganhou" para o avatar de quem tem a
+ * inicial certa seria dar significado a um hash.
+ */
 function nameColor(name: string): string {
   const colors = [
-    'bg-green-600', 'bg-blue-600', 'bg-purple-600', 'bg-orange-600',
-    'bg-pink-600',  'bg-teal-600', 'bg-indigo-600', 'bg-rose-600',
+    'bg-blue-400', 'bg-purple-400', 'bg-orange-400', 'bg-teal-400',
+    'bg-rose-400', 'bg-cyan-400',   'bg-amber-400',  'bg-emerald-400',
   ]
   let hash = 0
   for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash)
@@ -94,7 +113,7 @@ export default function Avatar({ name, imageUrl, size = 'md', className = '' }: 
   }
 
   return (
-    <div className={`${SIZE[size]} ${nameColor(nome)} rounded-full flex items-center justify-center font-black text-ink-1 shrink-0 select-none ${className}`}>
+    <div className={`${SIZE[size]} ${nameColor(nome)} rounded-full flex items-center justify-center font-black text-on-fill shrink-0 select-none ${className}`}>
       {initials}
     </div>
   )

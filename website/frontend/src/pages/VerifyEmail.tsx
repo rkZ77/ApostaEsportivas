@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Helmet } from 'react-helmet-async'
-import { Spinner } from '../components/ui'
+import { Button, Spinner } from '../components/ui'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
@@ -215,14 +215,20 @@ export default function VerifyEmail() {
                 />
                 {changeEmailErr && <p className="text-red-400 text-xs">{changeEmailErr}</p>}
                 <div className="flex gap-2">
-                  <button type="submit" disabled={changingEmail}
-                    className="flex-1 py-2.5 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-sm transition-colors">
+                  {/* Mesmo par do Profile, e pelo mesmo motivo: o hover azul
+                      clareava o fundo e derrubava o texto branco de 5,2:1 pra
+                      3,7:1 no tema escuro, e azul aqui é a cor da múltipla
+                      gasta em "salvar". Confirmar é a ação principal do
+                      painel, então é o `primary` do sistema. */}
+                  <Button type="submit" loading={changingEmail} className="flex-1">
                     {changingEmail ? 'Salvando…' : 'Salvar e reenviar'}
-                  </button>
-                  <button type="button" onClick={() => { setShowChangeEmail(false); setChangeEmailErr('') }}
-                    className="px-4 py-2.5 rounded-md border border-line-strong text-ink-2 text-sm hover:border-ink-4 transition-colors">
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => { setShowChangeEmail(false); setChangeEmailErr('') }}
+                  >
                     Cancelar
-                  </button>
+                  </Button>
                 </div>
               </form>
             )}
