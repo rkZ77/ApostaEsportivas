@@ -131,9 +131,14 @@ export function PickTypeBadge({
  */
 export function ResultBadge({
   result,
+  emDestaque = false,
   className,
 }: {
   result?: string | null
+  /** Nos CARDS, o GREEN sai maior · ver o porque em utils/resultStyle.ts.
+      Em tabela e lista fica no tamanho normal: ali o selo divide a linha com
+      outras colunas e crescer so' desalinharia o ritmo. */
+  emDestaque?: boolean
   className?: string
 }) {
   const rs = getResultStyle(result)
@@ -150,6 +155,7 @@ export function ResultBadge({
         'inline-flex items-center text-[10px] font-bold tracking-wide',
         'px-1.5 py-0.5 rounded-sm border shrink-0',
         rs.bg, rs.border, rs.text,
+        emDestaque && result === 'GREEN' && 'text-xs px-2 py-1 border-green-500/60',
         className,
       )}
     >

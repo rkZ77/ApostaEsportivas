@@ -749,7 +749,7 @@ function unidadesSugeridas(
   // mesmo número que o pick carrega no /admin.
   return Math.min(pick.stake_units ?? 1, MAX_UNIDADES_LIVE)
 }
-import { PICK_TYPE_BORDER } from '../utils/resultStyle'
+import { PICK_TYPE_BORDER, cascaDoPick } from '../utils/resultStyle'
 
 
 
@@ -1137,7 +1137,9 @@ const CardLive = forwardRef<HTMLDivElement, {
       layout
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`pick-card ${PICK_TYPE_BORDER.live} ${encerrado ? 'opacity-75' : ''}`}
+      /* O encerrado desbota (`opacity-75`) porque ja' nao aceita entrada; o
+         GREEN continua sendo lido por cima disso, que e' o ponto dele. */
+      className={`pick-card ${cascaDoPick(pick.result, PICK_TYPE_BORDER.live)} ${encerrado ? 'opacity-75' : ''}`}
     >
       {/* Cabeçalho · tipo, liga e minuto à esquerda; estado à direita. Mesma
           divisão do card VIP, e o minuto ocupa ali o lugar do horário do jogo:
@@ -1166,7 +1168,7 @@ const CardLive = forwardRef<HTMLDivElement, {
         </div>
         <div className="shrink-0">
           {encerrado ? (
-            <ResultBadge result={pick.result} />
+            <ResultBadge result={pick.result} emDestaque />
           ) : pick.is_live ? (
             <Badge tone="green" className="gap-1.5">
               <LiveDot className="w-1.5 h-1.5" />

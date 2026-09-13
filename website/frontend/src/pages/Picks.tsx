@@ -49,7 +49,7 @@ import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronDown, ChevronLeft, Che
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import { stakeDe } from '../utils/stakePlan'
 import { fmtUnits, pctProb, capitalizarFrase, plural } from '../utils/format'
-import { getResultStyle, PICK_TYPE_CLS, PICK_TYPE_BORDER } from '../utils/resultStyle'
+import { getResultStyle, PICK_TYPE_CLS, PICK_TYPE_BORDER, cascaDoPick } from '../utils/resultStyle'
 import { useShareStoryImage, useShareAlavancagemImage, useShareBilheteImage } from '../hooks/useShareStoryImage'
 import { useOddAtualizada } from '../hooks/useOddAtualizada'
 import { useOddAgora } from '../hooks/useOddsAgora'
@@ -638,7 +638,11 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
          agora e' o CSS · o `y` continua com a mola daqui. */
       whileTap={onClick ? { scale: 0.985 } : undefined}
       transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-      className={`pick-card hover-elev group ${isCopa ? 'border-yellow-500/20' + (onClick ? ' hover:border-yellow-500/40' : '') : PICK_TYPE_BORDER.free} ${onClick ? 'cursor-pointer' : ''}`}
+      className={`pick-card hover-elev group ${cascaDoPick(
+        dica.result,
+        isCopa ? 'border-yellow-500/20' + (onClick ? ' hover:border-yellow-500/40' : '')
+               : PICK_TYPE_BORDER.free,
+      )} ${onClick ? 'cursor-pointer' : ''}`}
       onClick={onClick}
       /* Mesma âncora do card VIP. Este vem antes na página e aparece para
          qualquer plano, então é ele que o tour costuma destacar. */
@@ -667,7 +671,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
           )}
         </div>
         {dica.result ? (
-          <ResultBadge result={dica.result} />
+          <ResultBadge result={dica.result} emDestaque />
         ) : isLive ? (
           <Badge tone="red" className="animate-pulse">Ao vivo</Badge>
         ) : (
@@ -1111,7 +1115,7 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
          agora e' o CSS · o `y` continua com a mola daqui. */
       whileTap={onClick ? { scale: 0.985 } : undefined}
       transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-      className={`pick-card hover-elev group ${onClick ? 'cursor-pointer' : ''} ${estilo.borda}`}
+      className={`pick-card hover-elev group ${onClick ? 'cursor-pointer' : ''} ${cascaDoPick(m.result, estilo.borda)}`}
       onClick={onClick}
     >
       {/* Accent bar */}

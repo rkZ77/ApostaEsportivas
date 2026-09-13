@@ -9,7 +9,7 @@ import { calcVipStake, calcFreeStake, calcMultiplaStake, calcProfitUnits } from 
 import { stakeDe, contaEmUnidades } from '../utils/stakePlan'
 import ApostaModal from './ApostaModal'
 import { translateMarket, translateLine, translateTeamName, linhaDoJogador, valorLiquidado } from '../utils/marketTranslate'
-import { PICK_TYPE_BORDER } from '../utils/resultStyle'
+import { PICK_TYPE_BORDER, cascaDoPick } from '../utils/resultStyle'
 import AnalysisModal from './AnalysisModal'
 import { Badge, PickTypeBadge, ResultBadge } from './ui'
 import {
@@ -450,25 +450,13 @@ function SuggestionCard({
          querer o tempo todo: dentro dele já moram "Apostar", "Compartilhar",
          "Entenda esta análise", o coração de favorito e o ícone de informação.
          Errar o alvo entre eles abria uma tela cheia por engano. */
-      className={`pick-card hover-elev group ${onClick ? 'cursor-pointer' : ''} ${
-        /* O GREEN TOMA A CASCA (2026-09-12, pedido do usuario).
-        
-           Um pick que ja' deu certo e' o melhor argumento do produto, e ele
-           saia igualzinho ao pendente: mesma borda da cor do PRODUTO, com a
-           unica diferenca sendo um selo de 10px no canto. Numa grade de quatro
-           colunas ninguem le' selo -- le' bloco de cor. Enquanto o pick esta'
-           aberto a borda continua sendo a do produto, que e' o que ajuda a
-           separar VIP de Boost na lista misturada; depois de liquidado esse
-           trabalho ja' foi feito e o que importa e' o resultado.
-        
-           So' o GREEN ganha isso. Fazer o mesmo com o RED transformaria a
-           tela num placar vermelho e verde onde a derrota grita igual, e o
-           pedido era destacar o acerto. */
-        s.result === 'GREEN'
-          ? 'border-green-500/50 bg-green-500/[0.03] shadow-[0_0_0_1px_rgb(34_197_94/0.18)]'
-          : isCopa ? 'border-yellow-500/20' + (onClick ? ' hover:border-yellow-500/40' : '')
-          : PICK_TYPE_BORDER[pickType] ?? PICK_TYPE_BORDER.vip
-      }`}
+      /* A casca do GREEN sai de `cascaDoPick`, a mesma dos outros cinco cards
+         do site · ver utils/resultStyle.ts. */
+      className={`pick-card hover-elev group ${onClick ? 'cursor-pointer' : ''} ${cascaDoPick(
+        s.result,
+        isCopa ? 'border-yellow-500/20' + (onClick ? ' hover:border-yellow-500/40' : '')
+               : PICK_TYPE_BORDER[pickType] ?? PICK_TYPE_BORDER.vip,
+      )}`}
       onClick={onClick}
       /* Âncora do tour: o passo "Encontre seus picks" destaca o PRIMEIRO card
          que existir na tela, e não um desenho de card. Ver
@@ -493,13 +481,9 @@ function SuggestionCard({
           )}
         </div>
         {s.result ? (
-          /* O selo do GREEN e' maior que o dos outros resultados de proposito:
-             ele e' a unica coisa do cabecalho que a pessoa precisa enxergar de
-             longe, e em 10px empatava com o horario do jogo ao lado. */
-          <ResultBadge
-            result={s.result}
-            className={s.result === 'GREEN' ? 'text-xs px-2 py-1 border-green-500/60' : undefined}
-          />
+          /* `emDestaque`: nos cards o selo do GREEN sai maior · em 10px ele
+             empatava com o horario do jogo ao lado. */
+          <ResultBadge result={s.result} emDestaque />
         ) : isLive ? (
           <Badge tone="red" className="animate-pulse">Ao vivo</Badge>
         ) : (

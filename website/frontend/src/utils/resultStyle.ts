@@ -20,6 +20,29 @@ export const RESULT_STYLE: Record<PickResult, ResultStyle> = {
   'HALF-LOSS':{ bg: 'bg-orange-500/15', border: 'border-orange-500/40', text: 'text-orange-400', label: '½ LOSS', hex: '#fb923c' },
 }
 
+/* A CASCA DO CARD QUE DEU GREEN (2026-09-12, pedido do usuario).
+ *
+ * Pick liquidado em GREEN sai com a borda verde e um fio de fundo, no lugar da
+ * borda da cor do PRODUTO. Antes ele era identico ao pendente e a unica
+ * diferenca era um selo de 10px no canto -- numa grade de quatro colunas
+ * ninguem le' selo, le' bloco de cor, e o acerto e' o melhor argumento que o
+ * produto tem.
+ *
+ * Enquanto o pick esta' aberto a borda continua sendo a do produto, que e' o
+ * que separa VIP de Boost numa lista misturada; depois de liquidado esse
+ * trabalho ja' foi feito.
+ *
+ * So' o GREEN. Dar o mesmo tratamento ao RED transformaria a tela num painel
+ * onde a derrota grita igual, e o pedido era destacar o acerto.
+ */
+export const CASCA_GREEN =
+  'border-green-500/50 bg-green-500/[0.03] shadow-[0_0_0_1px_rgb(34_197_94/0.18)]'
+
+/** Borda do card: a do GREEN quando ele deu green, a do produto no resto. */
+export function cascaDoPick(result: string | null | undefined, bordaDoProduto: string): string {
+  return result === 'GREEN' ? CASCA_GREEN : bordaDoProduto
+}
+
 export function getResultStyle(result?: string | null): ResultStyle | null {
   if (!result) return null
   return RESULT_STYLE[result as PickResult] ?? null

@@ -150,7 +150,7 @@ export default function FreePickHero({ revelar = true, onCarregou }: {
             <TeamLogo id={pick.away_team_id ?? undefined} name={pick.away_team_name} size={22} />
           </div>
 
-          {pick.result && <div className="mt-2"><ResultBadge result={pick.result} /></div>}
+          {pick.result && <div className="mt-2"><ResultBadge result={pick.result} emDestaque /></div>}
         </div>
 
         {/* Odd e mercado */}
