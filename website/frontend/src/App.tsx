@@ -85,6 +85,7 @@ const BancaFechamentos = lazy(() => import('./pages/BancaFechamentos'))
 const MeusPicks      = lazy(() => import('./pages/MeusPicks'))
 const BancaAlavancagem   = lazy(() => import('./pages/BancaAlavancagem'))
 const VerifyEmail    = lazy(() => import('./pages/VerifyEmail'))
+const ConfirmarEmail = lazy(() => import('./pages/ConfirmarEmail'))
 const Privacidade    = lazy(() => import('./pages/Privacidade'))
 const Termos         = lazy(() => import('./pages/Termos'))
 const Estatisticas   = lazy(() => import('./pages/Estatisticas'))
@@ -285,6 +286,10 @@ export default function App() {
                 <Route path="/banca/alavancagem" element={<PrivateRoute><BancaAlavancagem /></PrivateRoute>} />
                 <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
                 <Route path="/verify-email" element={<VerifyEmail />} />
+                {/* Fora do <PublicRoute> de propósito: quem chega aqui ACABOU
+                    de se cadastrar e já está autenticado, e aquele guarda manda
+                    todo mundo logado para /picks. Ver pages/ConfirmarEmail. */}
+                <Route path="/confirmar-email" element={<ConfirmarEmail />} />
                 <Route path="/privacidade" element={<Privacidade />} />
                 <Route path="/termos" element={<Termos />} />
                 <Route path="/estatisticas" element={<PrivateRoute><Estatisticas /></PrivateRoute>} />

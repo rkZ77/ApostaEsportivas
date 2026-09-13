@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Mail, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
@@ -33,6 +34,10 @@ function isSnoozed(): boolean {
 
 export default function VerifyEmailBanner() {
   const { user } = useAuth()
+  /* Em /confirmar-email a tela INTEIRA é este convite, com o mesmo botão de
+     reenviar (ver pages/ConfirmarEmail). O aviso flutuante por cima dela vira
+     a mesma mensagem duas vezes, uma tapando a outra. */
+  const { pathname } = useLocation()
   /*
    * Espera o tour de boas-vindas sair da frente.
    *
@@ -55,6 +60,7 @@ export default function VerifyEmailBanner() {
   const trialNaMesa = user?.trial_used !== true
 
   useEffect(() => {
+    if (pathname.startsWith('/confirmar-email')) { setVisible(false); return }
     if (!user) { setVisible(false); return }
     if (user.email_verified !== false) { setVisible(false); return }
     if (!trialNaMesa) { setVisible(false); return }
@@ -62,7 +68,7 @@ export default function VerifyEmailBanner() {
     if (isSnoozed()) return
     const t = setTimeout(() => setVisible(true), 1200)
     return () => clearTimeout(t)
-  }, [user?.id, user?.email_verified, trialNaMesa, tourNaFrente])
+  }, [user?.id, user?.email_verified, trialNaMesa, tourNaFrente, pathname])
 
   const reenviar = async () => {
     setSending(true)

@@ -36,6 +36,7 @@ const Plans      = lazy(() => import('../home/Plans'))
 const HowItWorks = lazy(() => import('../home/HowItWorks'))
 const Products   = lazy(() => import('../home/Products'))
 const Leagues    = lazy(() => import('../home/Leagues'))
+const ProvaSocial = lazy(() => import('../home/ProvaSocial'))
 const FinalCTA   = lazy(() => import('../home/FinalCTA'))
 
 /*
@@ -317,11 +318,22 @@ export default function Home() {
           e o conteúdo seguinte pulem quando a seção nasce. */}
       <SecaoAdiada alturaMinima={770}><RecentResults summary={data?.summary ?? null} /></SecaoAdiada>
 
-      <SecaoAdiada alturaMinima={920}><HowItWorks /></SecaoAdiada>
-
+      {/* PRODUTO ANTES DE MÉTODO (12/09).
+          A ordem era prova, método, produto. Quem acabou de ver o histórico
+          quer saber O QUE recebe, e recebia em troca três passos explicando
+          COMO a conta é feita, uma seção de 920px de altura entre a prova e a
+          oferta. O método continua na página, logo depois, para quem ficou com
+          a pergunta; ele deixou de ser pedágio para quem já se convenceu. */}
       <SecaoAdiada alturaMinima={510}><Products /></SecaoAdiada>
 
+      <SecaoAdiada alturaMinima={920}><HowItWorks /></SecaoAdiada>
+
       <SecaoAdiada alturaMinima={270}><Leagues /></SecaoAdiada>
+
+      {/* Prova social REAL, encostada no preço de propósito: é o último
+          argumento antes da tabela, e é o único bloco da home que fala de
+          gente em vez de motor. Some sozinha quando não há ranking. */}
+      <SecaoAdiada alturaMinima={360}><ProvaSocial /></SecaoAdiada>
 
       <SecaoAdiada alturaMinima={1890}><Plans monthly={monthly} /></SecaoAdiada>
 

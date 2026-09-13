@@ -259,10 +259,23 @@ export default function Login() {
       } else {
         await register(name.trim(), email, password, phone, username.trim(), refCode || undefined, acceptedTerms, captchaToken || undefined)
         localStorage.removeItem('ref_code')
-        // `#guia` saiu: não havia âncora com esse id em /picks, e o onboarding
-        // que ele tentava anunciar agora abre sozinho na tela (ver
-        // context/OnboardingContext.tsx).
-        navigate(redirectTo ?? '/picks')
+        /*
+         * NÃO VAI DIRETO PRO PRODUTO (12/09).
+         *
+         * O site inteiro vende "2 dias de VIP grátis", e desde a saída do CPF
+         * o trial só nasce quando o contato é provado, no link do e-mail ou no
+         * código do WhatsApp (ver `_ativar_trial_se_elegivel` no backend).
+         * Quem se cadastrava caía em /picks como FREE, com o tour de
+         * boas-vindas na frente e o aviso de confirmar e-mail represado atrás
+         * dele: a recompensa prometida três telas antes não aparecia em
+         * nenhuma. É o vazamento mais caro do funil, porque acontece depois
+         * de a pessoa já ter feito o trabalho todo.
+         *
+         * Agora o passo que falta é a própria tela. `#guia` continua fora, e
+         * quem quiser entrar sem confirmar tem o link secundário abaixo.
+         */
+        navigate('/confirmar-email', { replace: true, state: { email } })
+        return
       }
     } catch (err: any) {
       turnstileRef.current?.reset()

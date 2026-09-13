@@ -1493,7 +1493,15 @@ def public_alavancagem_caminhos():
 
 @router.get("/leaderboard")
 def public_leaderboard():
-    """Top 5 usuarios por yield ROI · anonimizados para landing page (min 5 picks resolvidos)."""
+    """Top 5 usuarios por yield ROI · anonimizados para landing page (min 5 picks resolvidos).
+
+    A TAXA DE ACERTO E' A MESMA DO RESTO DO SITE (taxa_acerto.py). Esta rota
+    ficou de fora da varredura de 12/09 e continuava em `greens / total`: um
+    usuario com anuladas aparecia na home com taxa MENOR do que a que a
+    propria banca dele mostra, e a home ja' exibe a conta certa na faixa de
+    indicadores logo acima. Duas contas na mesma tela e' o defeito que aquela
+    varredura existiu pra matar.
+    """
     conn = get_connection()
     cur  = conn.cursor()
     try:
@@ -1522,12 +1530,12 @@ def public_leaderboard():
             user_stats AS (
                 SELECT
                     user_id,
-                    COUNT(*) FILTER (WHERE result IS NOT NULL)  AS total,
-                    COUNT(*) FILTER (WHERE result = 'GREEN')    AS greens,
-                    ROUND(
-                        COUNT(*) FILTER (WHERE result = 'GREEN')::numeric /
-                        NULLIF(COUNT(*) FILTER (WHERE result IS NOT NULL), 0) * 100
-                    ) AS win_rate,
+                    COUNT(*) FILTER (WHERE result IS NOT NULL)    AS total,
+                    COUNT(*) FILTER (WHERE result = 'GREEN')      AS greens,
+                    -- Meio-green e anulada saem daqui em bruto: a divisao e'
+                    -- feita por taxa_acerto.py, a conta unica do site.
+                    COUNT(*) FILTER (WHERE result = 'HALF-WIN')   AS half_wins,
+                    COUNT(*) FILTER (WHERE result = 'PUSH')       AS push,
                     ROUND(
                         COALESCE(SUM(profit) FILTER (WHERE result IS NOT NULL), 0) /
                         NULLIF(COALESCE(SUM(stake_units) FILTER (WHERE result IS NOT NULL), 0), 0) * 100,
@@ -1537,7 +1545,8 @@ def public_leaderboard():
                 GROUP BY user_id
                 HAVING COUNT(*) FILTER (WHERE result IS NOT NULL) >= 5
             )
-            SELECT u.name, u.avatar_url, us.total, us.greens, us.win_rate, us.yield_roi
+            SELECT u.name, u.avatar_url, us.total, us.greens,
+                   us.half_wins, us.push, us.yield_roi
             FROM user_stats us
             JOIN users u ON u.id = us.user_id
             ORDER BY us.yield_roi DESC
@@ -1550,7 +1559,10 @@ def public_leaderboard():
                 "avatar_url": r["avatar_url"],
                 "total":     int(r["total"]),
                 "greens":    int(r["greens"]),
-                "win_rate":  int(r["win_rate"]),
+                "win_rate":  round(taxa_acerto(
+                    int(r["greens"]), int(r["total"]),
+                    int(r["half_wins"] or 0), int(r["push"] or 0),
+                )),
                 "yield_roi": float(r["yield_roi"]),
             }
             for r in rows
