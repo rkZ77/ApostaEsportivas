@@ -22,6 +22,8 @@ interface Contexto {
   sair: () => Promise<void>
   recarregarUsuario: () => Promise<void>
   isVip: boolean
+  /** Assina o Pick IA Pro · quem enxerga o Ao Vivo e o agente. */
+  isPro: boolean
   isAdmin: boolean
 }
 
@@ -120,6 +122,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       sair,
       recarregarUsuario,
       isVip: Boolean(vipAtivo),
+      /* Espelho de `auth_utils.tem_tier_pro`. Como o `isVip` acima, não é ele
+         que tranca nada: o backend já corta o conteúdo do feed, e isto aqui só
+         escolhe entre o cadeado de "assine" e o de "faça upgrade". */
+      isPro: Boolean(
+        vipAtivo &&
+          (usuario?.plan !== 'vip' || (usuario?.plan_tier ?? 'pro') === 'pro'),
+      ),
       isAdmin: usuario?.plan === 'admin',
     }
   }, [usuario, carregando, sessaoDerrubadaEm, entrar, cadastrar, sair, recarregarUsuario])

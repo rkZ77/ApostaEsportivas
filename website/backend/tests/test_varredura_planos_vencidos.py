@@ -34,7 +34,10 @@ class CursorFalso:
 
     def execute(self, sql, params=None):
         s = " ".join(sql.split()).lower()
-        if s.startswith("select id, name, email, plan, expires_at from users"):
+        # `plan_tier` entrou no SELECT em 12/09/2026: o aviso de vencimento
+        # nomeia o produto (Pick IA ou Pick IA Pro), e sem a coluna todo
+        # assinante do plano de entrada receberia o texto do Pro.
+        if s.startswith("select id, name, email, plan, plan_tier, expires_at from users"):
             planos, limite = params
             vencidos = [u for u in self.usuarios.values()
                         if u["plan"] in planos and u["expires_at"]

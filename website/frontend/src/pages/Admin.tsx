@@ -26,6 +26,7 @@ interface User {
   phone?: string | null
   plan: string
   subscription_type: string | null
+  plan_tier?: string | null
   active: boolean
   expires_at: string | null
   created_at: string
@@ -64,12 +65,34 @@ interface AIReviewStatus {
   migration_pending?: boolean
 }
 
+/*
+ * OS OITO PLANOS, com o produto no rótulo.
+ *
+ * A lista tinha só as quatro chaves antigas, e em 12/09/2026 nasceram as
+ * `_base`. O admin que tentasse corrigir na mão um assinante do Pick IA levava
+ * "Tipo inválido" do backend, justamente na tela que existe pra consertar o
+ * que o webhook errou.
+ *
+ * O rótulo diz o produto porque "Mensal" sozinho deixou de identificar o que a
+ * pessoa comprou: são dois mensais, com preços diferentes.
+ */
 const SUBSCRIPTION_TYPES = [
-  { value: '',           label: ''          },
-  { value: 'mensal',     label: 'Mensal'     },
-  { value: 'trimestral', label: 'Trimestral' },
-  { value: 'semestral',  label: 'Semestral'  },
-  { value: 'anual',      label: 'Anual'      },
+  { value: '',                label: ''                      },
+  { value: 'mensal_base',     label: 'Pick IA · Mensal'      },
+  { value: 'trimestral_base', label: 'Pick IA · Trimestral'  },
+  { value: 'semestral_base',  label: 'Pick IA · Semestral'   },
+  { value: 'anual_base',      label: 'Pick IA · Anual'       },
+  { value: 'mensal',          label: 'Pro · Mensal'          },
+  { value: 'trimestral',      label: 'Pro · Trimestral'      },
+  { value: 'semestral',       label: 'Pro · Semestral'       },
+  { value: 'anual',           label: 'Pro · Anual'           },
+]
+
+/** Qual produto o assinante tem. Editável à parte do ciclo: conceder o Pro
+ *  de cortesia não devia obrigar a inventar uma data de cobrança. */
+const PLAN_TIERS = [
+  { value: 'base', label: 'Pick IA'     },
+  { value: 'pro',  label: 'Pick IA Pro' },
 ]
 
 const PLAN_FILTER = ['todos', 'free', 'trial', 'vip', 'admin'] as const
@@ -179,6 +202,7 @@ export default function Admin() {
   const [sincronizando, setSincronizando] = useState(false)
   const [revenue, setRevenue] = useState<{
     total: number; count: number; avg_ticket: number; active_vip: number;
+    active_base: number; active_pro: number;
     monthly: { month: string; total: number; count: number }[];
     by_plan: { plan: string; total: number; count: number }[];
   } | null>(null)
@@ -533,6 +557,14 @@ export default function Admin() {
       setUsers(u => u.map(x => x.id === id ? { ...x, plan } : x))
       showToast('Plano atualizado')
     } catch { showToast('Erro ao atualizar plano', false) }
+  }
+
+  const setPlanTier = async (id: number, plan_tier: string) => {
+    try {
+      await api.put(`/admin/users/${id}`, { plan_tier })
+      setUsers(u => u.map(x => x.id === id ? { ...x, plan_tier } : x))
+      showToast('Produto salvo')
+    } catch { showToast('Erro ao salvar produto', false) }
   }
 
   const setSubscriptionType = async (id: number, subscription_type: string) => {
@@ -956,7 +988,12 @@ export default function Admin() {
                 { label: 'Receita Total',    value: fmtBRL(revenue.total),        color: 'text-green-400' },
                 { label: 'Assinaturas',      value: String(revenue.count),        color: 'text-ink-1'    },
                 { label: 'Ticket Médio',     value: fmtBRL(revenue.avg_ticket),   color: 'text-blue-400' },
-                { label: 'VIPs Ativos Agora',value: String(revenue.active_vip),                                                   color: 'text-yellow-400' },
+                /* Os dois planos no MESMO tile: somar num número só esconde
+                   exatamente o que a mudança de preço quis medir, que é
+                   quantos ficaram na entrada e quantos subiram. */
+                { label: 'Assinantes Ativos (IA / Pro)',
+                  value: `${revenue.active_base} / ${revenue.active_pro}`,
+                  color: 'text-yellow-400' },
               ].map(({ label, value, color }) => (
                 <div key={label} className="stat-card text-center py-4">
                   <div className={`font-mono text-2xl font-black ${color}`}>{value}</div>
@@ -1021,20 +1058,29 @@ export default function Admin() {
                 {revenue.by_plan.length === 0 ? (
                   <p className="text-center text-ink-4 text-sm py-6">Sem dados.</p>
                 ) : (() => {
+                  /* A cor é do CICLO, e o nome vem do catálogo.
+                     Com o sufixo `_base` a chave deixou de casar no mapa, e o
+                     `capitalize` mostrava "Mensal_base" cru no lugar do nome
+                     do produto. */
                   const planColors: Record<string, string> = {
                     mensal: 'text-blue-400', trimestral: 'text-purple-400',
                     semestral: 'text-orange-400', anual: 'text-green-400',
                   }
+                  const rotuloDaChave = (chave: string) => {
+                    const doCatalogo = SUBSCRIPTION_TYPES.find(t => t.value === chave)
+                    return doCatalogo?.label ?? chave
+                  }
+                  const cicloDaChave = (chave: string) => chave.replace(/_base$/, '')
                   const maxTotal = Math.max(...revenue.by_plan.map(p => p.total), 1)
                   return (
                     <div className="p-4 space-y-4">
                       {revenue.by_plan.map(p => {
                         const pct = (p.total / maxTotal) * 100
-                        const color = planColors[p.plan] ?? 'text-ink-2'
+                        const color = planColors[cicloDaChave(p.plan)] ?? 'text-ink-2'
                         return (
                           <div key={p.plan}>
                             <div className="flex items-center justify-between mb-1">
-                              <span className={`text-xs font-bold capitalize ${color}`}>{p.plan}</span>
+                              <span className={`text-xs font-bold ${color}`}>{rotuloDaChave(p.plan)}</span>
                               <div className="font-mono text-right">
                                 <span className="text-xs text-ink-1 font-semibold">{fmtBRL(p.total)}</span>
                                 <span className="text-[10px] text-ink-4 ml-1">({p.count}x)</span>
@@ -1589,6 +1635,25 @@ export default function Admin() {
                             <option key={t.value} value={t.value}>{t.label}</option>
                           ))}
                         </select>
+                        {/* O tier é separado do ciclo de propósito: conceder o
+                            Pro de cortesia não devia obrigar a inventar uma
+                            data de cobrança que nunca existiu.
+
+                            Só para quem PAGA: a coluna nasce com DEFAULT 'pro'
+                            em toda linha, então numa conta free o seletor
+                            mostrava "Pick IA Pro" para quem não assina nada, e
+                            oferecia uma troca que não muda coisa alguma. */}
+                        {u.plan === 'vip' && (
+                        <select
+                          value={u.plan_tier ?? 'pro'}
+                          onChange={e => setPlanTier(u.id, e.target.value)}
+                          className="bg-surface-2 border border-line-strong rounded-lg px-2 py-1 text-xs text-ink-2 focus:outline-none focus:border-green-500"
+                        >
+                          {PLAN_TIERS.map(t => (
+                            <option key={t.value} value={t.value}>{t.label}</option>
+                          ))}
+                        </select>
+                        )}
                         <div className="flex items-center gap-1">
                           <input
                             type="date"
@@ -1702,7 +1767,17 @@ export default function Admin() {
               </div>
 
               <div className="grid grid-cols-2 gap-2 text-xs text-ink-3 mb-3">
-                <div>Tipo: <span className="text-ink-2">{u.subscription_type ?? ''}</span></div>
+                {/* O rótulo do catálogo, e não a chave: "mensal_base" cru não
+                    diz qual produto a pessoa comprou. */}
+                <div>Tipo: <span className="text-ink-2">
+                  {SUBSCRIPTION_TYPES.find(t => t.value === u.subscription_type)?.label
+                    ?? u.subscription_type ?? ''}
+                </span></div>
+                {u.plan === 'vip' && (
+                  <div>Produto: <span className="text-ink-2">
+                    {(u.plan_tier ?? 'pro') === 'base' ? 'Pick IA' : 'Pick IA Pro'}
+                  </span></div>
+                )}
                 <div className="flex items-center gap-1">
                   Expira: <span className="text-ink-2">{u.expires_at ? u.expires_at.slice(0, 10) : ''}</span>
                   {expiryWarning(u.expires_at)}

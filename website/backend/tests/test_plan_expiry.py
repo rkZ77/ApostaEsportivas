@@ -42,9 +42,9 @@ class CursorFalso:
         return (1,) if self._ultimo_select else None
 
 
-def _usuario(plan="vip", dias=2):
+def _usuario(plan="vip", dias=2, tier="pro"):
     return {"id": 7, "name": "Fulano de Tal", "email": "fulano@exemplo.com",
-            "plan": plan, "expires_at": _daqui(dias)}
+            "plan": plan, "plan_tier": tier, "expires_at": _daqui(dias)}
 
 
 # ── contagem ──────────────────────────────────────────────────────────────
@@ -165,11 +165,40 @@ def test_sem_funcao_de_email_ainda_notifica():
 
 # ── texto ─────────────────────────────────────────────────────────────────
 def test_nome_do_plano_aparece_no_titulo():
+    """O aviso nomeia o PRODUTO, e não "Plano VIP" (12/09/2026).
+
+    Quem assina lê "Pick IA" ou "Pick IA Pro" em toda tela do site, e um aviso
+    que fala de outro nome parece ser de outro serviço.
+    """
     cur, enviados = CursorFalso(), []
     avisar_plano_expirando(cur, _usuario("vip", 0), "https://x", enviar_email=lambda *a: enviados.append(a), agora=AGORA)
 
-    assert "Plano VIP" in enviados[0][1]
+    assert "Pick IA Pro" in enviados[0][1]
     assert "expira hoje" in enviados[0][1]
+
+
+def test_o_aviso_do_plano_de_entrada_nao_promete_o_que_ele_nao_tem():
+    """Citar ao vivo e agente pra quem nunca teve os dois é prometer o que o
+    plano dela não entrega, e é o que faz o aviso virar reclamação."""
+    cur, enviados = CursorFalso(), []
+    avisar_plano_expirando(cur, _usuario("vip", 0, tier="base"), "https://x",
+                           enviar_email=lambda *a: enviados.append(a), agora=AGORA)
+
+    assunto, corpo = enviados[0][1], enviados[0][2]
+    assert "Pick IA" in assunto and "Pro" not in assunto
+    assert "ao vivo" not in corpo and "agente" not in corpo
+
+
+def test_tier_ausente_e_lido_como_pro():
+    """Quem assinou antes da mudança não tem valor na coluna quando o dict vem
+    de um caminho que não a seleciona. O default nunca rebaixa ninguém."""
+    cur, enviados = CursorFalso(), []
+    usuario = _usuario("vip", 0)
+    usuario.pop("plan_tier")
+    avisar_plano_expirando(cur, usuario, "https://x",
+                           enviar_email=lambda *a: enviados.append(a), agora=AGORA)
+
+    assert "Pick IA Pro" in enviados[0][1]
 
 
 def test_trial_tem_rotulo_e_texto_proprios():

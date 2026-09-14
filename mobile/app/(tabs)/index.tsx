@@ -12,6 +12,7 @@ import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Activity, ChevronRight, Crown, Target } from 'lucide-react-native'
 import { useAuth } from '../../src/auth/AuthContext'
+import { rotuloDoPlano } from '../../src/auth/plano'
 import { useDados } from '../../src/hooks/useDados'
 import { aoVivo, minhasApostas, picks as apiPicks, publico } from '../../src/api/endpoints'
 import { Botao, Card, Carregando, Dado, Selo, Txt, Vazio } from '../../src/components/ui'
@@ -20,7 +21,7 @@ import { cores, espaco, raio } from '../../src/theme/tokens'
 import { reais } from '../../src/lib/formato'
 
 export default function Inicio() {
-  const { usuario, isVip } = useAuth()
+  const { usuario, isVip, isPro } = useAuth()
   const router = useRouter()
   const insets = useSafeAreaInsets()
 
@@ -29,14 +30,14 @@ export default function Inicio() {
   const banca = useDados(() => minhasApostas.carregar({ resolved_limit: 1 }), [])
   // O feed ao vivo é VIP no backend · para o free isso responde 403, que o
   // hook trata como erro silencioso e a seção simplesmente não aparece.
-  const live = useDados(() => aoVivo.feed(5, false), [], { habilitado: isVip })
+  const live = useDados(() => aoVivo.feed(5, false), [], { habilitado: isPro })
 
   const atualizarTudo = useCallback(() => {
     hoje.atualizar()
     resumo.atualizar()
     banca.atualizar()
-    if (isVip) live.atualizar()
-  }, [hoje, resumo, banca, live, isVip])
+    if (isPro) live.atualizar()
+  }, [hoje, resumo, banca, live, isPro])
 
   const destaque = hoje.dados?.vip?.[0] ?? hoje.dados?.dica_do_dia ?? null
   const emAberto = (live.dados?.picks ?? []).filter((p) => !p.result)
@@ -58,7 +59,7 @@ export default function Inicio() {
         {isVip ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: espaco.xs }}>
             <Crown size={14} color={cores.accent} />
-            <Selo texto={usuario?.plan === 'admin' ? 'Admin' : usuario?.plan === 'trial' ? 'Trial' : 'VIP'} cor={cores.accent} />
+            <Selo texto={rotuloDoPlano(usuario)} cor={cores.accent} />
           </View>
         ) : (
           <Selo texto="Free" cor={cores.ink3} />
@@ -76,7 +77,7 @@ export default function Inicio() {
       ) : null}
 
       {/* ao vivo · só entra na home quando há algo acontecendo agora */}
-      {isVip && emAberto.length > 0 ? (
+      {isPro && emAberto.length > 0 ? (
         <Card
           onPress={() => router.push('/(tabs)/ao-vivo')}
           style={{ flexDirection: 'row', alignItems: 'center', gap: espaco.md }}
@@ -129,15 +130,21 @@ export default function Inicio() {
         </View>
       ) : null}
 
-      {/* convite ao VIP · só para quem não tem */}
-      {!isVip ? (
+      {/* convite · o de assinar pra quem não tem nada, o de upgrade pra quem
+          já assina o Pick IA. São ofertas diferentes, e o cartão único falava
+          de "liberar o feed ao vivo" pra quem já pagava e não o tinha. */}
+      {!isPro ? (
         <Card elevado style={{ gap: espaco.md }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: espaco.sm }}>
             <Activity size={18} color={cores.accent} />
-            <Txt variante="corpo" cor={cores.ink1}>Picks ao vivo e todos os picks do dia</Txt>
+            <Txt variante="corpo" cor={cores.ink1}>
+              {isVip ? 'Picks ao vivo e agente de futebol' : 'Picks ao vivo e todos os picks do dia'}
+            </Txt>
           </View>
           <Txt variante="apoio">
-            O plano VIP libera o feed ao vivo, as múltiplas e a alavancagem, além de todos os picks pré-jogo.
+            {isVip
+              ? 'Seu plano é o Pick IA. O Pick IA Pro acrescenta o feed ao vivo e o agente de futebol.'
+              : 'O Pick IA libera as múltiplas, a alavancagem e todos os picks pré-jogo. O Pick IA Pro acrescenta o feed ao vivo e o agente.'}
           </Txt>
           <Botao titulo="Ver planos" variante="secundario" onPress={() => router.push('/(tabs)/perfil')} />
         </Card>

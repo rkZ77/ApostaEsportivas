@@ -7,12 +7,20 @@
 
 export type Plano = 'free' | 'trial' | 'vip' | 'admin'
 
+/*
+ * Qual dos dois produtos pagos (12/09/2026). Ausente vale 'pro': quem assinou
+ * antes da mudança tinha tudo, e um campo que ainda não chegou não pode tirar
+ * acesso de ninguém.
+ */
+export type PlanTier = 'base' | 'pro'
+
 export interface Usuario {
   id: number
   name: string
   email: string
   phone?: string | null
   plan: Plano
+  plan_tier?: PlanTier | null
   active: boolean
   expires_at?: string | null
   avatar_url?: string | null

@@ -867,7 +867,7 @@ def login(body: LoginBody, response: Response, request: Request, background_task
         # referencial e a pergunta se responde sozinha. Os dois valores
         # interpolados sao constantes do modulo, nunca entrada de usuario.
         _LOGIN_COLS = (
-            "id, name, email, phone, username, password_hash, plan, active, expires_at, "
+            "id, name, email, phone, username, password_hash, plan, plan_tier, active, expires_at, "
             "email_verified, avatar_url, "
             f"(email_verified IS NOT TRUE "
             f" AND created_at >= DATE '{EMAIL_GATE_DESDE}' "
@@ -1404,7 +1404,7 @@ def refresh_token(request: Request, response: Response):
     cur = conn.cursor()
     try:
         cur.execute(
-            "SELECT id, name, email, plan, active, expires_at, avatar_url FROM users WHERE id = %s",
+            "SELECT id, name, email, plan, plan_tier, active, expires_at, avatar_url FROM users WHERE id = %s",
             (int(payload["sub"]),),
         )
         row = cur.fetchone()

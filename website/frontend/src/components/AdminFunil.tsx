@@ -11,7 +11,7 @@ import api from '../services/api'
  * Sem essa quebra, "o teste converte pouco" e "pouca gente chega no teste"
  * viram a mesma frase, e o remédio de um não serve pro outro.
  *
- * A SEGUNDA ETAPA É A QUE NINGUÉM VIA. Desde a saída do CPF o teste VIP nasce
+ * A SEGUNDA ETAPA É A QUE NINGUÉM VIA. Desde a saída do CPF o teste nasce
  * da prova de contato, não do cadastro: quem não confirma e-mail nem telefone
  * fica free sem nunca ter visto o produto que a home anuncia. A linha
  * "parados sem verificar" é esse grupo, e é o único número desta tela que
@@ -118,7 +118,7 @@ export default function AdminFunil() {
               <Mail className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" aria-hidden="true" />
               <p className="text-xs text-ink-2 leading-relaxed">
                 <strong className="text-ink-1">{d.parados_sem_verificar}</strong> contas pararam antes de
-                provar o contato. Elas não chegaram a ver o produto: o teste VIP nasce da verificação,
+                provar o contato. Elas não chegaram a ver o produto: o teste nasce da verificação,
                 não do cadastro.
               </p>
             </div>

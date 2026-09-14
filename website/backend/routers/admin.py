@@ -125,12 +125,26 @@ def _motor_no_path():
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 _VALID_PLANS = {"free", "trial", "vip", "admin"}
-_VALID_SUB_TYPES = {"mensal", "trimestral", "semestral", "anual", None}
+
+# OS CICLOS VALIDOS SAEM DO CATALOGO, e nao de uma lista escrita aqui.
+#
+# A lista era literal com as quatro chaves antigas, e em 12/09/2026 nasceram
+# mais quatro (`mensal_base` e companhia). O admin que tentasse ajustar na mao
+# um assinante do Pick IA levava "Tipo invalido" -- justamente na tela que
+# existe pra consertar o que o webhook errou.
+def _valid_sub_types() -> set:
+    from routers.payments import PLANS
+    return set(PLANS) | {None}
+
+_VALID_TIERS = {"base", "pro"}
 
 
 class UpdateUserBody(BaseModel):
     plan: Optional[str] = None
     subscription_type: Optional[str] = None
+    #: Qual dos dois produtos pagos. Sem isto o admin nao conseguia conceder
+    #: nem corrigir o Pick IA Pro na mao, so' o plano e a data.
+    plan_tier: Optional[str] = None
     active: Optional[bool] = None
     expires_at: Optional[datetime] = None
 
@@ -144,8 +158,17 @@ class UpdateUserBody(BaseModel):
     @field_validator("subscription_type")
     @classmethod
     def validate_sub_type(cls, v):
-        if v not in _VALID_SUB_TYPES:
-            raise ValueError(f"Tipo inválido. Use: mensal, trimestral, semestral, anual")
+        validos = _valid_sub_types()
+        if v not in validos:
+            nomes = ", ".join(sorted(x for x in validos if x))
+            raise ValueError(f"Tipo inválido. Use: {nomes}")
+        return v
+
+    @field_validator("plan_tier")
+    @classmethod
+    def validate_tier(cls, v):
+        if v is not None and v not in _VALID_TIERS:
+            raise ValueError("Tier inválido. Use: base, pro")
         return v
 
 
@@ -170,6 +193,7 @@ def list_users(current_user: dict = Depends(require_admin)):
     try:
         cur.execute("""
             SELECT u.id, u.name, u.email, u.phone, u.plan, u.subscription_type,
+                   u.plan_tier,
                    u.active, u.expires_at, u.created_at, u.last_login_at,
                    ub.bankroll_start AS bankroll_current, ub.unit_value
             FROM users u
@@ -222,6 +246,8 @@ def update_user(user_id: int, body: UpdateUserBody, current_user: dict = Depends
             fields.append("plan = %s"); values.append(body.plan)
         if "subscription_type" in sent:
             fields.append("subscription_type = %s"); values.append(body.subscription_type or None)
+        if body.plan_tier is not None:
+            fields.append("plan_tier = %s"); values.append(body.plan_tier)
         if body.active is not None:
             fields.append("active = %s"); values.append(body.active)
         if "expires_at" in sent:
@@ -234,7 +260,7 @@ def update_user(user_id: int, body: UpdateUserBody, current_user: dict = Depends
         values.append(user_id)
 
         cur.execute(
-            f"UPDATE users SET {', '.join(fields)} WHERE id = %s RETURNING id, name, email, plan, subscription_type, active, expires_at",
+            f"UPDATE users SET {', '.join(fields)} WHERE id = %s RETURNING id, name, email, plan, subscription_type, plan_tier, active, expires_at",
             values,
         )
         row = cur.fetchone()
@@ -1629,11 +1655,20 @@ def admin_revenue(current_user: dict = Depends(require_admin)):
         """)
         by_plan = [dict(r) for r in cur.fetchall()]
 
+        # O assinante ativo SEPARADO POR PRODUTO (12/09/2026). `active_vip`
+        # continua sendo o total, porque e' ele que o resto da tela usa, mas
+        # somar os dois planos num numero so' esconde justamente o que a
+        # mudanca de preco quis medir: quantos ficaram na entrada e quantos
+        # subiram. `plan_tier` so' e' lido de quem paga em 'vip'.
         cur.execute("""
-            SELECT COUNT(*) AS active_vip FROM users
+            SELECT
+                COUNT(*) AS active_vip,
+                COUNT(*) FILTER (WHERE COALESCE(plan_tier, 'pro') = 'base') AS active_base,
+                COUNT(*) FILTER (WHERE COALESCE(plan_tier, 'pro') = 'pro')  AS active_pro
+            FROM users
             WHERE plan = 'vip' AND expires_at > NOW() AND active = true
         """)
-        active_vip = cur.fetchone()["active_vip"]
+        ativos = cur.fetchone()
 
         return {
             "total":      float(totals["total"]),
@@ -1641,7 +1676,9 @@ def admin_revenue(current_user: dict = Depends(require_admin)):
             "avg_ticket": float(totals["avg_ticket"]),
             "monthly":    [{"month": r["month"], "total": float(r["total"]), "count": int(r["count"])} for r in monthly],
             "by_plan":    [{"plan": r["plan_key"], "total": float(r["total"]), "count": int(r["count"])} for r in by_plan],
-            "active_vip": int(active_vip),
+            "active_vip":  int(ativos["active_vip"]),
+            "active_base": int(ativos["active_base"]),
+            "active_pro":  int(ativos["active_pro"]),
         }
     finally:
         cur.close()
@@ -2435,6 +2472,10 @@ def admin_stats(current_user: dict = Depends(require_admin)):
             SELECT
                 COUNT(*)                                        AS total,
                 COUNT(*) FILTER (WHERE plan = 'vip')           AS vip,
+                COUNT(*) FILTER (WHERE plan = 'vip'
+                    AND COALESCE(plan_tier, 'pro') = 'base')   AS vip_base,
+                COUNT(*) FILTER (WHERE plan = 'vip'
+                    AND COALESCE(plan_tier, 'pro') = 'pro')    AS vip_pro,
                 COUNT(*) FILTER (WHERE plan = 'trial')         AS trial,
                 COUNT(*) FILTER (WHERE plan = 'free')          AS free,
                 COUNT(*) FILTER (WHERE active = true)          AS ativos,
@@ -2579,7 +2620,7 @@ def admin_funil(days: int = 30, current_user: dict = Depends(require_admin)):
                  "usuarios": int(c["verificados"] or 0),
                  "pct_do_topo": pct(int(c["verificados"] or 0), cadastros),
                  "pct_da_anterior": pct(int(c["verificados"] or 0), cadastros)},
-                {"chave": "trial",     "rotulo": "Usaram o teste VIP",
+                {"chave": "trial",     "rotulo": "Usaram o teste",
                  "usuarios": int(c["testaram"] or 0),
                  "pct_do_topo": pct(int(c["testaram"] or 0), cadastros),
                  "pct_da_anterior": pct(int(c["testaram"] or 0), int(c["verificados"] or 0))},

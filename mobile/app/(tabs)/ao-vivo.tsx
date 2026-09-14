@@ -25,12 +25,12 @@ const INTERVALO_MS = 20000
 export default function AoVivo() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const { isVip } = useAuth()
+  const { isVip, isPro } = useAuth()
 
   const { dados, carregando, atualizando, erro, atualizar } = useDados(
     () => aoVivo.feed(30, true),
     [],
-    { intervaloMs: INTERVALO_MS, habilitado: isVip },
+    { intervaloMs: INTERVALO_MS, habilitado: isPro },
   )
 
   /* Em aberto primeiro; encerrados descem. Quem está acompanhando um jogo
@@ -42,13 +42,20 @@ export default function AoVivo() {
 
   const emAberto = lista.filter((p) => !p.result).length
 
-  if (!isVip) {
+  /* O Ao Vivo é do Pick IA Pro desde 12/09/2026. Quem já assina o plano de
+     entrada precisa de um recado diferente de quem não assina nada: dizer
+     "assine" pra quem já assinou parece defeito do app. */
+  if (!isPro) {
     return (
       <View style={{ flex: 1, justifyContent: 'center' }}>
         <Vazio
           icone={<Lock size={32} color={cores.ink4} />}
-          titulo="Ao vivo é exclusivo do VIP"
-          descricao="O motor Live acompanha as partidas em andamento e publica oportunidades com a odd ainda válida. Disponível no plano VIP."
+          titulo="Ao vivo é do Pick IA Pro"
+          descricao={
+            isVip
+              ? 'O motor Live acompanha as partidas em andamento e publica oportunidades com a odd ainda válida. Seu plano atual é o Pick IA: faça o upgrade no site para liberar.'
+              : 'O motor Live acompanha as partidas em andamento e publica oportunidades com a odd ainda válida. Disponível no plano Pick IA Pro.'
+          }
         />
       </View>
     )

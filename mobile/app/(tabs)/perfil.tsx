@@ -11,6 +11,7 @@ import { Alert, Linking, ScrollView, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Crown, ExternalLink, ServerCog } from 'lucide-react-native'
 import { useAuth } from '../../src/auth/AuthContext'
+import { rotuloDoPlano } from '../../src/auth/plano'
 import { Botao, Card, Dado, Selo, Separador, Txt } from '../../src/components/ui'
 import { cores, espaco } from '../../src/theme/tokens'
 import { AMBIENTE, API_BASE_URL } from '../../src/config/env'
@@ -18,7 +19,7 @@ import { AMBIENTE, API_BASE_URL } from '../../src/config/env'
 const SITE = 'https://pickia.com.br'
 
 export default function Perfil() {
-  const { usuario, isVip, sair } = useAuth()
+  const { usuario, isVip, isPro, sair } = useAuth()
   const insets = useSafeAreaInsets()
   const [saindo, setSaindo] = useState(false)
 
@@ -37,8 +38,7 @@ export default function Perfil() {
     ])
   }
 
-  const rotuloPlano =
-    usuario?.plan === 'admin' ? 'Admin' : usuario?.plan === 'trial' ? 'Trial' : usuario?.plan === 'vip' ? 'VIP' : 'Free'
+  const rotuloPlano = rotuloDoPlano(usuario)
 
   const expira = usuario?.expires_at ? usuario.expires_at.slice(0, 10).split('-').reverse().join('/') : null
 
@@ -66,11 +66,17 @@ export default function Perfil() {
         </View>
       </Card>
 
-      {!isVip ? (
+      {/* `!isPro` e não `!isVip`: quem assina o Pick IA também tem pra onde
+          subir, e sem isto o app não oferecia o upgrade em lugar nenhum. */}
+      {!isPro ? (
         <Card elevado style={{ gap: espaco.md }}>
-          <Txt variante="corpo" cor={cores.ink1}>Assinar o VIP</Txt>
+          <Txt variante="corpo" cor={cores.ink1}>
+            {isVip ? 'Fazer upgrade para o Pick IA Pro' : 'Ver os planos'}
+          </Txt>
           <Txt variante="apoio">
-            A assinatura é feita no site, com o mesmo login desta conta. Ao voltar ao app, seu plano já estará ativo.
+            {isVip
+              ? 'O Pick IA Pro acrescenta os picks ao vivo e o agente de futebol. A troca é feita no site, com o mesmo login desta conta.'
+              : 'A assinatura é feita no site, com o mesmo login desta conta. Ao voltar ao app, seu plano já estará ativo.'}
           </Txt>
           <Botao
             titulo="Abrir planos no site"

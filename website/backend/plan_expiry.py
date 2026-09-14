@@ -69,6 +69,12 @@ logger = logging.getLogger(__name__)
 # ("seu plano") faria o trial parecer cobrança.
 LABEL_PLANO = {"vip": "Plano VIP", "trial": "Teste grátis"}
 
+#: O nome do plano PAGO depende do tier desde 12/09/2026. "Plano VIP" virou
+#: rótulo de nenhum dos dois produtos: quem assina lê "Pick IA" ou "Pick IA
+#: Pro" em toda tela do site, e um aviso que fala de outro nome parece ser de
+#: outro serviço. `plan_tier` ausente vale 'pro', igual em todo o resto.
+LABEL_TIER = {"base": "Pick IA", "pro": "Pick IA Pro"}
+
 #: Faixas de aviso em HORAS restantes, por plano, da mais distante pra mais
 #: próxima. Ver o cabeçalho: em horas porque o dia truncado disparava a faixa
 #: no ato da criação, e por plano porque o teste dura 2 dias e não cabe numa
@@ -132,16 +138,25 @@ def _texto_prazo(dias: int) -> str:
     return f"expira em {dias} dias"
 
 
-def _mensagem(plan: str, dias: int) -> tuple[str, str]:
+def _mensagem(plan: str, dias: int, tier: str | None = None) -> tuple[str, str]:
     """(título, corpo) do aviso, já com o nome do plano na frente."""
-    label = LABEL_PLANO.get(plan, "Plano")
+    if plan == "vip":
+        label = LABEL_TIER.get(tier or "pro", LABEL_TIER["pro"])
+    else:
+        label = LABEL_PLANO.get(plan, "Plano")
     titulo = f"Seu {label} {_texto_prazo(dias)}"
     if plan == "trial":
         corpo = ("Quando o teste acabar você volta pro plano free e perde os picks VIP, "
                  "múltiplas, alavancagem e o agente de futebol. Assine para continuar.")
-    else:
+    elif (tier or "pro") == "base":
+        # O corpo nomeia o que a pessoa REALMENTE perde. Citar o ao vivo e o
+        # agente pra quem nunca teve os dois é prometer o que o plano dela não
+        # entrega, e é o tipo de erro que faz o aviso virar reclamação.
         corpo = ("Renove para não perder os picks VIP, múltiplas, alavancagem, "
-                 "mercados de faltas e defesas e o agente de futebol.")
+                 "Pick Boost, Pick Jogador e os mercados de faltas e defesas.")
+    else:
+        corpo = ("Renove para não perder os picks VIP, os picks ao vivo, múltiplas, "
+                 "alavancagem, mercados de faltas e defesas e o agente de futebol.")
     return titulo, corpo
 
 
@@ -195,7 +210,7 @@ def avisar_plano_expirando(cur, user: dict, site_url: str,
 
     from routers.notifications import TYPE_PLAN_EXPIRING, create_notification
 
-    titulo, corpo = _mensagem(plan, dias)
+    titulo, corpo = _mensagem(plan, dias, user.get("plan_tier"))
     create_notification(
         cur, user["id"], TYPE_PLAN_EXPIRING, titulo, chave,
         body=corpo, url="/checkout",
@@ -410,7 +425,7 @@ _lock = threading.Lock()
 def _vencidos(cur, limite: int) -> list[dict]:
     cur.execute(
         """
-        SELECT id, name, email, plan, expires_at
+        SELECT id, name, email, plan, plan_tier, expires_at
           FROM users
          WHERE plan = ANY(%s) AND expires_at IS NOT NULL AND expires_at < NOW()
          ORDER BY expires_at
