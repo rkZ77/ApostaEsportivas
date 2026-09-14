@@ -133,10 +133,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [user?.expires_at, user?.plan])
 
+  /*
+   * DIAS INTEIROS QUE FALTAM, truncados pra baixo.
+   *
+   * Era `Math.ceil`, e num trial de 2 dias recém-ativado a tela mostrava
+   * "3 dias restantes" em letra grande com "Expira em 2d 2h 59m" logo acima:
+   * dois números sobre a mesma coisa, discordando, e o maior deles sendo o
+   * mais visível. Arredondar pra cima também promete um dia que a pessoa não
+   * tem.
+   *
+   * Truncar é a mesma regra que `plan_expiry.dias_restantes` já usa no
+   * backend, e é o que faz o número bater com o relógio ao lado.
+   */
   const daysUntilExpiry: number | null = (() => {
     if (!user?.expires_at) return null
     const diff = new Date(user.expires_at).getTime() - Date.now()
-    return Math.ceil(diff / (1000 * 60 * 60 * 24))
+    if (diff <= 0) return 0
+    return Math.floor(diff / (1000 * 60 * 60 * 24))
   })()
 
   /* "Paga e não venceu", que é a pergunta que `isVip` e `isPro` compartilham. */

@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Lightbulb, Crown, User, Check } from 'lucide-react'
+import { Lightbulb, Crown, User, Check, Lock } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
@@ -149,7 +149,7 @@ function CardDeAssinatura({
 export default function Planos() {
   const navigate = useNavigate()
   const { user, isVip, isAdmin, daysUntilExpiry, updateUser } = useAuth()
-  const { plans, monthly, byId, byTier, loaded } = usePlans()
+  const { plans, monthly, monthlyBase, byId, byTier, loaded } = usePlans()
 
   const [meData, setMeData]               = useState<any>(null)
   const [trialUsed, setTrialUsed]         = useState<boolean | null>(null)
@@ -238,8 +238,22 @@ export default function Planos() {
    * a barra nunca promete mais do que 100%.
    */
   const totalDays    = Math.max(cicloDoPlano, remaining)
-  const pct          = Math.max(0, Math.min(100, daysUntilExpiry !== null ? (remaining / totalDays) * 100 : 100))
-  const urgent       = remaining <= (isTrial ? 1 : 5)
+  /*
+   * A BARRA MEDE TEMPO, NÃO DIAS INTEIROS.
+   *
+   * Com a contagem truncada (ver AuthContext), no último dia `remaining` vira
+   * 0 e a barra zerava com o acesso ainda valendo. A fração sai do relógio:
+   * quem tem 5 horas de um mensal vê uma barra quase vazia, que é a verdade.
+   */
+  const msRestantes  = user?.expires_at
+    ? Math.max(0, new Date(user.expires_at).getTime() - Date.now())
+    : null
+  const pct          = Math.max(0, Math.min(100, msRestantes !== null
+    ? (msRestantes / (totalDays * 86400000)) * 100
+    : 100))
+  /* Ainda tem acesso, mesmo que não complete mais um dia inteiro. */
+  const aindaVale    = msRestantes === null || msRestantes > 0
+  const urgent       = aindaVale && remaining <= (isTrial ? 1 : 5)
   const expiryDate   = user?.expires_at
     ? new Date(user.expires_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
     : null
@@ -252,6 +266,23 @@ export default function Planos() {
   const memberSince  = meData?.created_at
     ? new Date(meData.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
     : null
+
+  /*
+   * QUAL PRODUTO ESTA CONTA TEM, e o que ela ainda não tem.
+   *
+   * O trial abre o Pro inteiro (é o que `auth_utils.tem_tier_pro` faz no
+   * backend), então ele não é candidato a upgrade: oferecer o Pro pra quem
+   * está testando o Pro é o tipo de coisa que faz a tela parecer desatenta.
+   */
+  const tierAtual      = isTrial || isAdmin ? 'pro' : (user?.plan_tier ?? 'pro')
+  const temPickIABase  = isVip && !isTrial && !isAdmin && tierAtual === 'base'
+  const modulosDoPlano = temPickIABase ? MODULOS_PAGOS : [...MODULOS_PAGOS, ...MODULOS_PRO]
+  /* Quanto custa a mais por mês subir pro Pro, no MESMO ciclo que ela já
+     paga: comparar com o mensal enquanto ela tem anual daria um número que
+     não é o dela. */
+  const planoDeUpgrade = temPickIABase && planoAtual
+    ? byTier('pro').find(p => p.cycle === planoAtual.cycle)
+    : undefined
 
   // Total gasto em pagamentos aprovados
   const totalSpent = payments.reduce((acc, p) => acc + Number(p.amount), 0)
@@ -447,9 +478,21 @@ export default function Planos() {
                   </p>
                 )}
 
+                {/* "Último dia" e não "Expirado" quando falta menos de 24h:
+                    com a contagem truncada, `remaining` chega a 0 com o acesso
+                    ainda valendo, e dizer "Expirado" pra quem ainda pode usar o
+                    produto é o pior erro possível nesta tela. */}
                 <p className={`font-mono font-black text-3xl ${urgent ? 'text-red-400' : 'text-ink-1'}`}>
-                  {daysUntilExpiry === null ? 'Ativo' : remaining <= 0 ? 'Expirado' : `${remaining} dia${remaining === 1 ? '' : 's'}`}
-                  {remaining > 0 && daysUntilExpiry !== null && <span className="text-ink-3 font-normal text-sm ml-1">restantes</span>}
+                  {daysUntilExpiry === null
+                    ? 'Ativo'
+                    : !aindaVale
+                      ? 'Expirado'
+                      : remaining <= 0
+                        ? 'Último dia'
+                        : `${remaining} dia${remaining === 1 ? '' : 's'}`}
+                  {remaining > 0 && aindaVale && daysUntilExpiry !== null && (
+                    <span className="text-ink-3 font-normal text-sm ml-1">restantes</span>
+                  )}
                 </p>
               </div>
               <button onClick={() => navigate('/checkout')}
@@ -486,7 +529,7 @@ export default function Planos() {
               )}
               {expiryDate && (
                 <div className="bg-surface-2/60 rounded-md p-3">
-                  <p className="text-[10px] text-ink-3 mb-0.5">{remaining <= 0 ? 'Expirou' : 'Expira'}</p>
+                  <p className="text-[10px] text-ink-3 mb-0.5">{aindaVale ? 'Expira' : 'Expirou'}</p>
                   <p className={`text-xs font-semibold ${urgent ? 'text-red-400' : 'text-ink-1'}`}>{expiryDate}</p>
                 </div>
               )}
@@ -504,32 +547,106 @@ export default function Planos() {
               )}
             </div>
 
-            {/* Features incluídas */}
+            {/* O QUE ESTE PLANO ABRE, lido de lib/oferta.
+                A lista era escrita à mão aqui e tinha envelhecido: prometia
+                seis itens e não citava Pick Boost, Pick Jogador, faltas,
+                goleiros nem o ao vivo. Pior, com dois planos ela passou a
+                MENTIR pra quem tem o Pick IA, anunciando o agente de futebol,
+                que é do Pro. */}
             <div className="grid grid-cols-2 gap-2">
-              {['Picks VIP (10 a 20/dia)', 'Múltiplas por IA', 'Alavancagem de risco calculado', 'Agente IA de futebol', 'Histórico com ROI', 'Análise detalhada'].map(f => (
-                <div key={f} className="flex items-center gap-1.5 text-xs text-ink-2">
-                  <svg className="w-3.5 h-3.5 text-accent-ink shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                  {f}
+              {modulosDoPlano.map(({ titulo }) => (
+                <div key={titulo} className="flex items-center gap-1.5 text-xs text-ink-2">
+                  <Check className="w-3.5 h-3.5 text-accent-ink shrink-0" aria-hidden="true" />
+                  {titulo}
                 </div>
               ))}
             </div>
+
+            {/* O GANCHO DO UPGRADE mora aqui, e não numa faixa separada: é o
+                lugar em que a pessoa já está olhando o que tem, então é onde
+                falta algo é uma informação e não um anúncio. */}
+            {temPickIABase && (
+              <div className="mt-4 pt-4 border-t border-line flex flex-wrap items-center justify-between gap-3">
+                <p className="text-ink-3 text-xs">
+                  O Pick IA Pro acrescenta {MODULOS_PRO.map(m => m.titulo.toLowerCase()).join(' e ')}
+                  {/* A DIFERENÇA, e não o preço cheio do Pro: quem já paga não
+                      vai pagar de novo o que já paga, e o número que decide o
+                      upgrade é o quanto ele custa A MAIS. */}
+                  {planoDeUpgrade && planoAtual && (
+                    <> por {fmtPlanPrice(planoDeUpgrade.price_per_month - planoAtual.price_per_month)} a mais por mês</>
+                  )}.
+                </p>
+                <button onClick={() => navigate('/checkout')}
+                  className="shrink-0 btn-ghost text-xs px-4 py-2 min-h-[36px]">
+                  Ver o Pro
+                </button>
+              </div>
+            )}
           </div>
         )}
 
+        {/* A CONTA SEM PLANO É A TELA QUE MAIS PRECISA DIZER ALGO.
+
+            Era uma faixa de uma linha: a letra "F", "1 pick gratuito por dia" e
+            um botão. Quem abre "Meu Plano" sem ter plano está exatamente na
+            pergunta "vale a pena?", e a resposta era um card que não mostrava
+            preço, não mostrava o que existe do outro lado e não mostrava
+            resultado nenhum.
+
+            Agora responde as três, na ordem em que a dúvida aparece: o que
+            você tem hoje, o que está fechado, quanto custa abrir. A prova vem
+            junto porque é o único argumento que não é opinião nossa, e é a
+            mesma de /public/results que a Home e a página de Resultados usam. */}
         {user && !activated && !isVip && !isAdmin && !isTrial && (
-          <div className="bg-surface-1 border border-line rounded-lg p-5 flex items-center gap-4">
-            <div className="w-10 h-10 bg-surface-2 rounded-full flex items-center justify-center shrink-0 text-ink-3 font-black text-sm">F</div>
-            <div className="flex-1">
-              <p className="text-ink-1 font-bold text-sm">Plano Free</p>
-              <p className="text-ink-3 text-xs mt-0.5">1 pick gratuito por dia, sem expiração</p>
-              {memberSince && <p className="text-ink-4 text-xs mt-0.5">Membro desde {memberSince}</p>}
+          <div className="space-y-4">
+            <div className="relative bg-surface-1 border border-yellow-400/25 rounded-lg p-6 overflow-hidden">
+              <div aria-hidden="true" className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-yellow-400/70 to-transparent" />
+
+              {/* Só o status no topo. "Membro desde" dividia esta linha e, em
+                  390px, a data quebrava em duas e empurrava o status pra fora
+                  do alinhamento. Ela desceu pro rodapé do card, onde é detalhe
+                  e não disputa espaço com a informação principal. */}
+              <div className="mb-1">
+                <span className="text-ink-3 text-xs">Status atual:</span>
+                <span className="text-ink-2 text-xs font-black ml-2">FREE</span>
+              </div>
+
+              <h2 className="font-display text-xl font-bold text-ink-1 mt-2 mb-1.5">
+                Você está vendo 1 pick por dia. A IA publica o resto.
+              </h2>
+              <p className="text-ink-3 text-sm leading-relaxed mb-5">
+                Todo dia o motor calcula os jogos das ligas cobertas e publica só o que passou
+                no corte. A dica do dia é um deles. Os outros ficam fechados.
+              </p>
+
+              <ProvaPublica compacta />
+
+              <p className="text-ink-2 text-xs font-bold mt-5 mb-2.5">O que está fechado hoje</p>
+              <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-2 mb-5">
+                {[...MODULOS_PAGOS, ...MODULOS_PRO].map(({ titulo }) => (
+                  <li key={titulo} className="flex items-center gap-2 text-xs text-ink-3">
+                    <Lock className="w-3.5 h-3.5 text-ink-4 shrink-0" aria-hidden="true" />
+                    {titulo}
+                  </li>
+                ))}
+              </ul>
+
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 pt-4 border-t border-line">
+                <p className="flex-1 text-ink-3 text-xs">
+                  {monthlyBase
+                    ? <>A partir de <span className="text-ink-1 font-bold">{fmtPlanPrice(monthlyBase.price)}</span> por mês. {SEM_RENOVACAO_AUTOMATICA}</>
+                    : SEM_RENOVACAO_AUTOMATICA}
+                </p>
+                <button onClick={() => navigate('/checkout')}
+                  className="btn-primary shrink-0 text-sm px-6 min-h-[44px]">
+                  Ver os planos
+                </button>
+              </div>
+
+              {memberSince && (
+                <p className="text-ink-4 text-[11px] mt-3">Membro desde {memberSince}</p>
+              )}
             </div>
-            <button onClick={() => navigate('/checkout')}
-              className="shrink-0 bg-yellow-400 hover:bg-yellow-300 text-on-fill font-black text-xs px-4 py-2 rounded-md transition-colors">
-              Fazer upgrade
-            </button>
           </div>
         )}
 
@@ -555,14 +672,20 @@ export default function Planos() {
               <div className="flex-1">
                 <p className="text-sm text-accent-ink font-bold mb-1">Disponível para você</p>
                 <h2 className="text-xl font-bold text-ink-1 mb-1">2 dias do Pro grátis</h2>
-                <p className="text-ink-2 text-sm mb-4">Acesse todos os picks VIP, Múltiplas, Alavancagem e Agente IA por 2 dias.</p>
-                <ul className="space-y-1.5 mb-5">
-                  {['Picks VIP completos (10 a 20/dia)', 'Múltiplas e Alavancagem', 'Agente IA de futebol', 'Histórico completo com ROI'].map(f => (
-                    <li key={f} className="flex items-center gap-2 text-sm text-ink-2">
-                      <svg className="w-4 h-4 text-accent-ink shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                      </svg>
-                      {f}
+                <p className="text-ink-2 text-sm mb-4">
+                  O Pick IA Pro inteiro aberto por 2 dias, sem nenhum produto de fora.
+                </p>
+                {/* A SEGUNDA LISTA ESCRITA À MÃO desta tela, e a mais cara de
+                    estar errada: é o convite pro teste, ou seja, a primeira
+                    coisa que a pessoa lê sobre o produto. Ela citava quatro
+                    itens de nove e deixava fora justamente os mais recentes.
+                    Em duas colunas porque em uma a lista inteira empurrava o
+                    botão pra fora da tela no celular. */}
+                <ul className="grid sm:grid-cols-2 gap-x-5 gap-y-1.5 mb-5">
+                  {[...MODULOS_PAGOS, ...MODULOS_PRO].map(({ titulo }) => (
+                    <li key={titulo} className="flex items-center gap-2 text-sm text-ink-2">
+                      <Check className="w-4 h-4 text-accent-ink shrink-0" aria-hidden="true" />
+                      {titulo}
                     </li>
                   ))}
                 </ul>
@@ -776,18 +899,16 @@ export default function Planos() {
           </a>
         </div>
 
-        {user && !isAdmin && !isVip && !isEligibleForTrial && !activated && (
-          <div className="bg-surface-1 border border-yellow-400/20 rounded-lg p-6 flex items-center justify-between gap-4">
-            <div>
-              <p className="text-ink-1 font-black text-sm">Quer o acesso completo?</p>
-              <p className="text-ink-3 text-xs mt-0.5">Picks VIP, Múltiplas, Alavancagem e Agente IA, a partir de {fmtPlanPrice(monthly.price)}/mês</p>
-            </div>
-            <button onClick={() => navigate('/checkout')}
-              className="shrink-0 bg-yellow-400 hover:bg-yellow-300 text-on-fill font-black text-xs px-5 py-2.5 rounded-md transition-colors">
-              Assinar
-            </button>
-          </div>
-        )}
+        {/* A FAIXA DE "QUER O ACESSO COMPLETO?" SAIU DAQUI (14/09/2026).
+
+            Ela era a segunda oferta da MESMA tela pra mesma pessoa, e as duas
+            discordavam: dizia "a partir de R$ 39,90" com a lista de quatro
+            módulos escrita à mão, enquanto o card do topo já mostrava o
+            catálogo inteiro a partir de R$ 29,90. Duas ofertas com dois preços
+            é pior que nenhuma: a pessoa não sabe qual é a verdadeira.
+
+            O convite agora acontece uma vez só, no card de status lá em cima,
+            que é onde o olho cai ao abrir a tela. */}
 
     </PageShell>
   )
