@@ -690,8 +690,17 @@ def test_rodape_do_card_de_pick_desce_pro_fim():
     bloco = bloco[:bloco.index("}")]
     assert "flex flex-col h-full" in bloco, "a casca do card nao e' coluna de altura cheia"
 
+    # A BORDA MUDOU DE LUGAR, A GARANTIA NAO (2026-09-14). O rodape escrevia
+    # `border-t border-line/60` na propria classe; desde que o card ganhou
+    # superficie propria, o tom e a borda do rodape vivem em `.pick-tray`
+    # (index.css) e o card so' a veste. O que este teste guarda continua sendo
+    # o mesmo: o rodape e' separado do corpo e desce sozinho pro fim do card.
+    bandeja = css[css.index(".pick-tray {"):]
+    bandeja = bandeja[:bandeja.index("}")]
+    assert "border-t border-line/60" in bandeja, "a bandeja do rodape perdeu a borda"
+
     partes = _front_codigo("components/PickCardParts.tsx")
-    assert "border-t border-line/60 mt-auto" in partes, "rodape nao desce sozinho"
+    assert "pick-tray" in partes and "mt-auto" in partes, "rodape nao desce sozinho"
 
     # ALGUEM PRECISA ABSORVER A FOLGA, e ate' 2026-09-02 era o bloco do "Fato"
     # (PickReasoning, `rounded-md flex-1`). O "Fato" saiu de todos os cards --
