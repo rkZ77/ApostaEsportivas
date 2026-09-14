@@ -2279,6 +2279,8 @@ interface TeaserBloqueado {
 interface PickResolvidoAberto extends TeaserBloqueado {
   /** Bilhete de várias pernas: "Múltipla, 3 seleções". Vem no lugar do confronto. */
   titulo?: string | null
+  /** As pernas do bilhete, só os times. Ver JogoPreview. */
+  jogos_preview?: JogoPreview[] | null
   market?: string | null
   line?: string | null
   result?: string | null
@@ -2286,10 +2288,67 @@ interface PickResolvidoAberto extends TeaserBloqueado {
   match_date?: string | null
 }
 
+/*
+ * A PERNA DO BILHETE COMO CONFRONTO, E NAO COMO FRASE (2026-09-14, pedido do
+ * usuario).
+ *
+ * O bilhete trancado e o bilhete resolvido eram as duas unicas coisas da tela
+ * sem escudo: um mostrava "Bahia x Remo" em texto corrido, o outro so' o
+ * "Multipla, 2 selecoes". Ao lado, o card do VIP mostrava os dois times com o
+ * brasao. Nao havia razao de produto pra diferenca -- faltava o id do time na
+ * resposta, e so'. Ver `_jogos_com_escudo` em routers/suggestions.py.
+ */
+interface JogoPreview {
+  home_team?: string | null
+  away_team?: string | null
+  home_team_id?: number | null
+  away_team_id?: number | null
+}
+
 interface ResumoBloqueado {
   odd?: number | string | null
   total_legs?: number | null
-  teams_preview?: string[] | null
+  jogos_preview?: JogoPreview[] | null
+}
+
+/** O confronto com os dois escudos · a linha que todo card de pick abre. */
+function LinhaDeConfronto({ casa, fora, casaId, foraId, tamanho = 22 }: {
+  casa?: string | null
+  fora?: string | null
+  casaId?: number | null
+  foraId?: number | null
+  tamanho?: number
+}) {
+  return (
+    <div className="flex items-center gap-2 min-w-0">
+      <TeamLogo id={casaId ?? undefined} name={casa ?? ''} size={tamanho} />
+      <span className="text-sm font-semibold text-ink-1 truncate">{casa}</span>
+      <span className="text-[10px] text-ink-4 shrink-0">vs</span>
+      <TeamLogo id={foraId ?? undefined} name={fora ?? ''} size={tamanho} />
+      <span className="text-sm font-semibold text-ink-1 truncate">{fora}</span>
+    </div>
+  )
+}
+
+/** As pernas de um bilhete, na mesma caixa numerada do card de multipla
+ *  aberto. Sem mercado nem linha: aqui isso e' a analise. */
+function PernasEmPreview({ jogos }: { jogos: JogoPreview[] }) {
+  return (
+    <div className="space-y-2">
+      {jogos.map((g, i) => (
+        <div key={i} className={`rounded-md border px-3 py-2 ${caixaDoPick(null)}`}>
+          <div className="flex items-center gap-2">
+            <span className="w-5 h-5 flex items-center justify-center rounded-full bg-surface-3 text-ink-3 text-[10px] font-black shrink-0">
+              {i + 1}
+            </span>
+            <LinhaDeConfronto casa={g.home_team} fora={g.away_team}
+                              casaId={g.home_team_id} foraId={g.away_team_id}
+                              tamanho={20} />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 const LOCK_CLS = {
@@ -2339,14 +2398,23 @@ function soDoTipo(lista: PickResolvidoAberto[] | undefined, tipo: string) {
 }
 
 
+/** Numero que chegou da API, ou null. Sem isto um campo que veio torto escreve
+ *  "NaN" no lugar da odd, em corpo 24, no meio do card. */
+function numeroOuNada(v: unknown): number | null {
+  if (v == null) return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
 function CardResolvido({ p }: { p: PickResolvidoAberto }) {
-  const odd = p.odd != null ? Number(p.odd) : null
-  /* Bilhete de várias pernas não tem confronto: vem com `titulo` no lugar
-     ("Múltipla, 3 seleções"), e aí não há escudo nem "vs" a mostrar. */
+  const odd = numeroOuNada(p.odd)
+  const lucro = numeroOuNada(p.profit)
+  /* Bilhete de várias pernas não tem confronto único: vem com `titulo`
+     ("Múltipla, 3 seleções") e com as pernas em `jogos_preview`. */
   const ehBilhete = !!p.titulo && !p.away_team_name
 
   return (
-    <div className="pick-card border-line">
+    <div className={`pick-card ${cascaDoPick(p.result, 'border-line')}`}>
       <div className="pick-head">
         <div className="flex items-center gap-2 flex-wrap min-w-0">
           <PickTypeBadge type={p.pick_type ?? 'vip'} />
@@ -2357,38 +2425,68 @@ function CardResolvido({ p }: { p: PickResolvidoAberto }) {
             </div>
           )}
         </div>
-        <SeloDeResultado result={p.result} />
+        {p.result && <ResultBadge result={p.result} emDestaque />}
       </div>
 
-      <div className="px-5 py-3 space-y-3">
-        {ehBilhete ? (
-          <div className="flex items-center gap-2 min-w-0">
-            <Ticket className="w-4 h-4 text-ink-4 shrink-0" aria-hidden="true" />
-            <span className="text-sm font-semibold text-ink-1 truncate">{p.titulo}</span>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2 min-w-0">
-            <TeamLogo id={p.home_team_id ?? undefined} name={p.home_team_name ?? ''} size={22} />
-            <span className="text-sm font-semibold text-ink-1 truncate">{p.home_team_name}</span>
-            <span className="text-[10px] text-ink-4 shrink-0">vs</span>
-            <TeamLogo id={p.away_team_id ?? undefined} name={p.away_team_name ?? ''} size={22} />
-            <span className="text-sm font-semibold text-ink-1 truncate">{p.away_team_name}</span>
-          </div>
-        )}
-
-        {/* No lugar exato da TarjaDeAnalise do card trancado. */}
-        {p.market && (
-          <p className="text-sm text-ink-2">
-            {p.market}{p.line ? ` ${p.line}` : ''}
-          </p>
-        )}
-
+      {/* A MESMA FAIXA DE NUMEROS DOS OUTROS CARDS. A odd aparecia como uma
+          linha de texto no pe' do card, entao o pick resolvido era o unico
+          produto do site em que o numero nao era o que se le' primeiro. */}
+      {(odd != null || lucro != null) && (
+      <div className="pick-hero">
         {odd != null && (
-          <div className="flex items-baseline gap-2">
-            <span className="text-[10px] text-ink-4">Odd</span>
-            <span className="font-mono text-lg font-black text-ink-1">{odd.toFixed(2)}</span>
+          <div className="flex-1 px-5 py-3 text-center">
+            <div className="text-[10px] text-ink-3 mb-0.5">Odd</div>
+            <div className="text-2xl font-black text-ink-1">{odd.toFixed(2)}</div>
           </div>
         )}
+        {lucro != null && (
+          <div className="flex-1 px-4 py-3 text-center">
+            <div className="text-[10px] text-ink-3 mb-0.5">Lucro do pick</div>
+            <div className={`text-xl font-black ${lucro >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {lucro >= 0 ? '+' : ''}{lucro.toFixed(2)}u
+            </div>
+          </div>
+        )}
+      </div>
+      )}
+
+      <div className="px-5 py-3 space-y-2">
+        <div className={`rounded-md border px-3 py-2 space-y-2 ${caixaDoPick(p.result)}`}>
+          {ehBilhete ? (
+            <>
+              <div className="flex items-center gap-2 min-w-0">
+                <SeloDeResultado result={p.result} />
+                <Ticket className="w-4 h-4 text-ink-4 shrink-0" aria-hidden="true" />
+                <span className="text-sm font-bold text-ink-1 truncate">{p.titulo}</span>
+              </div>
+              {!!p.jogos_preview?.length && <PernasEmPreview jogos={p.jogos_preview} />}
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-2 min-w-0">
+                <SeloDeResultado result={p.result} />
+                <LinhaDeConfronto casa={p.home_team_name} fora={p.away_team_name}
+                                  casaId={p.home_team_id} foraId={p.away_team_id} />
+              </div>
+              {/* Mercado e linha ROTULADOS, como em todo card do site desde
+                  02/09. Aqui saiam grudados num paragrafo so'
+                  ("Gols Mais/Menos Mais de 1.5"), sem dizer onde acaba o
+                  mercado e comeca a linha. */}
+              {p.market && (
+                <dl className="space-y-0.5">
+                  <CampoDoPick rotulo="Mercado">
+                    <dd className="text-xs font-semibold text-ink-2 truncate">{p.market}</dd>
+                  </CampoDoPick>
+                  {p.line && (
+                    <CampoDoPick rotulo="Linha">
+                      <dd className="text-xs text-ink-2 truncate">{p.line}</dd>
+                    </CampoDoPick>
+                  )}
+                </dl>
+              )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -2399,7 +2497,7 @@ function CardTrancado({ p, cls }: { p: TeaserBloqueado; cls: LockCls }) {
   /* Horário por fatia de string, nunca `new Date`: `match_datetime` já vem em
      horário de Brasília sem fuso. Mesma leitura do SuggestionCard. */
   const kickoff = p.match_datetime ? String(p.match_datetime).slice(11, 16) : null
-  const odd = p.odd != null ? Number(p.odd) : null
+  const odd = numeroOuNada(p.odd)
 
   return (
     <div className="pick-card border-line">
@@ -2421,41 +2519,47 @@ function CardTrancado({ p, cls }: { p: TeaserBloqueado; cls: LockCls }) {
         )}
       </div>
 
-      <div className="px-5 py-3 space-y-3">
-        <div className="flex items-center gap-2 min-w-0">
-          <TeamLogo id={p.home_team_id ?? undefined} name={p.home_team_name ?? ''} size={22} />
-          <span className="text-sm font-semibold text-ink-1 truncate">{p.home_team_name}</span>
-          <span className="text-[10px] text-ink-4 shrink-0">vs</span>
-          <TeamLogo id={p.away_team_id ?? undefined} name={p.away_team_name ?? ''} size={22} />
-          <span className="text-sm font-semibold text-ink-1 truncate">{p.away_team_name}</span>
-        </div>
-
-        <TarjaDeAnalise cls={cls} />
-
-        {odd != null && (
-          <div className="flex items-baseline gap-2">
-            <span className="text-[10px] text-ink-4">Odd</span>
-            <span className="font-mono text-lg font-black text-ink-2">{odd.toFixed(2)}</span>
+      {/* A ODD NA FAIXA, como em todo card aberto. Ela ja' era publica: o que
+          a assinatura abre e' a analise, e essa continua atras da tarja. */}
+      {odd != null && (
+        <div className="pick-hero">
+          <div className="flex-1 px-5 py-3 text-center">
+            <div className="text-[10px] text-ink-3 mb-0.5">Odd</div>
+            <div className="text-2xl font-black text-ink-2">{odd.toFixed(2)}</div>
           </div>
-        )}
+        </div>
+      )}
+
+      <div className="px-5 py-3 space-y-2">
+        {/* A MESMA CAIXA DO JOGO dos cards abertos · o confronto nao fica solto
+            no corpo em card nenhum do site. A tarja ocupa exatamente o lugar
+            dos campos "Mercado" e "Linha", que e' o que ela esconde. */}
+        <div className={`rounded-md border px-3 py-2 space-y-2 ${caixaDoPick(null)}`}>
+          <LinhaDeConfronto casa={p.home_team_name} fora={p.away_team_name}
+                            casaId={p.home_team_id} foraId={p.away_team_id} />
+          <TarjaDeAnalise cls={cls} />
+        </div>
       </div>
     </div>
   )
 }
 
-function VipLockOverlay({ color = 'yellow', picks, resumo, rotulo = 'picks', resolvidos }: {
+function VipLockOverlay({ color = 'yellow', picks, resumo, rotulo = 'picks', resolvidos,
+                         tipoBilhete = 'multipla' }: {
   color?: keyof typeof LOCK_CLS
   /** Teaser vindo do servidor, sem análise. Vazio = não há pick trancado hoje. */
   picks?: TeaserBloqueado[]
-  /** Múltipla e alavancagem não têm grade: viram uma linha com os jogos. */
+  /** Múltipla, bingo e alavancagem: um card só, com as pernas do bilhete. */
   resumo?: ResumoBloqueado | null
   rotulo?: string
+  /** Qual bilhete é · o selo do cabeçalho do card trancado sai deste tipo. */
+  tipoBilhete?: 'multipla' | 'bingo' | 'alavancagem'
   /** Os picks da janela que já terminaram, abertos. Ver PickResolvidoAberto. */
   resolvidos?: PickResolvidoAberto[]
 }) {
   const cls = LOCK_CLS[color] ?? LOCK_CLS.yellow
   const lista = picks ?? []
-  const odd = resumo?.odd != null ? Number(resumo.odd) : null
+  const odd = numeroOuNada(resumo?.odd)
   const temTeaser = lista.length > 0 || !!resumo
 
   const chamada = lista.length
@@ -2472,31 +2576,46 @@ function VipLockOverlay({ color = 'yellow', picks, resumo, rotulo = 'picks', res
         </div>
       )}
 
-      {/* Múltipla e alavancagem: os jogos do bilhete, sem o mercado de cada perna. */}
+      {/* Multipla, bingo e alavancagem: os jogos do bilhete, sem o mercado de
+          cada perna.
+
+          O MESMO CARD DOS OUTROS PRODUTOS (2026-09-14, pedido do usuario). Era
+          um `.card` solto com lista de texto: o mesmo bilhete que, aberto, sai
+          na casca de pick com cabecalho, selo e pernas numeradas com escudo.
+          Duas telas pro mesmo produto, e a trancada era a que a pessoa ve'
+          ANTES de assinar. Agora e' a casca de sempre -- cabecalho com o selo
+          do produto e a contagem, pernas numeradas com escudo, tarja no lugar
+          do mercado e a odd fechando, na mesma ordem do CardTrancado. */}
       {lista.length === 0 && resumo && (
-        <div className="card p-5 space-y-3">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <span className="text-xs text-ink-3">
-              {resumo.total_legs ? plural(resumo.total_legs, 'seleção', 'seleções') : 'Bilhete do dia'}
-            </span>
-            {odd != null && (
-              <span className="flex items-baseline gap-1.5">
-                <span className="text-[10px] text-ink-4">Odd combinada</span>
-                <span className="font-mono text-lg font-black text-ink-2">{odd.toFixed(2)}</span>
+        /* NA LARGURA DE UM CARD, e nao na da tela. O bilhete e' um card so',
+           e esticado de ponta a ponta a faixa da odd ficava com o numero
+           sozinho no meio de mil pixels vazios. A grade e' a mesma dos outros
+           produtos, com um item. */
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        <div className="pick-card border-line">
+          <div className="pick-head">
+            <div className="flex items-center gap-2 flex-wrap min-w-0">
+              <PickTypeBadge type={tipoBilhete} />
+              <span className="text-[10px] text-ink-4">
+                {resumo.total_legs ? plural(resumo.total_legs, 'seleção', 'seleções') : 'Bilhete do dia'}
               </span>
-            )}
+            </div>
           </div>
-          {!!resumo.teams_preview?.length && (
-            <ul className="space-y-1.5">
-              {resumo.teams_preview.map(t => (
-                <li key={t} className="flex items-center gap-2 text-xs text-ink-2">
-                  <Ticket className="w-3.5 h-3.5 shrink-0 text-ink-4" aria-hidden="true" />
-                  <span className="truncate">{t}</span>
-                </li>
-              ))}
-            </ul>
+
+          {odd != null && (
+            <div className="pick-hero">
+              <div className="flex-1 px-5 py-3 text-center">
+                <div className="text-[10px] text-ink-3 mb-0.5">Odd combinada</div>
+                <div className="text-2xl font-black text-ink-2">{odd.toFixed(2)}</div>
+              </div>
+            </div>
           )}
-          <TarjaDeAnalise cls={cls} />
+
+          <div className="px-5 py-3 space-y-2">
+            {!!resumo.jogos_preview?.length && <PernasEmPreview jogos={resumo.jogos_preview} />}
+            <TarjaDeAnalise cls={cls} />
+          </div>
+        </div>
         </div>
       )}
 
@@ -3579,7 +3698,7 @@ export default function Picks() {
                 return (
                   <section>
                     <SectionHeader color="bg-blue-400" label="Múltipla do Dia" />
-                    {!canSeeVip ? <VipLockOverlay color="blue" resumo={today?.bloqueados?.multipla} rotulo="múltiplas" resolvidos={today?.bloqueados?.resolvidos_cartelas} /> : (
+                    {!canSeeVip ? <VipLockOverlay color="blue" resumo={today?.bloqueados?.multipla} rotulo="múltiplas" tipoBilhete="multipla" resolvidos={today?.bloqueados?.resolvidos_cartelas} /> : (
                       /* Colunas seguem a quantidade real de múltiplas. O grid
                          fixo de 3-4 colunas foi feito pensando em vitrine cheia,
                          mas o dia normal tem UMA múltipla · ela caía em 1/3 da
@@ -3610,7 +3729,7 @@ export default function Picks() {
                 return (
                   <section>
                     <SectionHeader color="bg-rose-400" label="Bingo do Dia" />
-                    {!canSeeVip ? <VipLockOverlay color="rose" resumo={today?.bloqueados?.bingo} rotulo="cartelas" resolvidos={today?.bloqueados?.resolvidos_cartelas} /> : (
+                    {!canSeeVip ? <VipLockOverlay color="rose" resumo={today?.bloqueados?.bingo} rotulo="cartelas" tipoBilhete="bingo" resolvidos={today?.bloqueados?.resolvidos_cartelas} /> : (
                       /* Uma cartela por dia, então a largura de leitura basta ·
                          mesmo raciocínio do card de múltipla logo acima, e aqui
                          ele é ainda mais forte: são quatro pernas empilhadas. */
@@ -3629,7 +3748,7 @@ export default function Picks() {
               {(canSeeVip ? !!today?.alavancagem : true) && (
                 <section>
                   <SectionHeader color="bg-orange-400" label="Alavancagem do Dia" />
-                  {!canSeeVip ? <VipLockOverlay color="orange" resumo={today?.bloqueados?.alavancagem} rotulo="caminhos" resolvidos={today?.bloqueados?.resolvidos_alavancagem} /> : (
+                  {!canSeeVip ? <VipLockOverlay color="orange" resumo={today?.bloqueados?.alavancagem} rotulo="caminhos" tipoBilhete="alavancagem" resolvidos={today?.bloqueados?.resolvidos_alavancagem} /> : (
                     <>
                       <div className="card p-4 border-orange-500/10 bg-orange-500/5 mb-3">
                         <p className="text-xs text-ink-2 leading-relaxed">
@@ -4003,7 +4122,7 @@ export default function Picks() {
                   />
                 )}
               </div>
-              {!canSeeVip ? <VipLockOverlay color="blue" resumo={today?.bloqueados?.multipla} rotulo="múltiplas" resolvidos={today?.bloqueados?.resolvidos_cartelas} /> : todayLoading ? <PickLoading /> : (
+              {!canSeeVip ? <VipLockOverlay color="blue" resumo={today?.bloqueados?.multipla} rotulo="múltiplas" tipoBilhete="multipla" resolvidos={today?.bloqueados?.resolvidos_cartelas} /> : todayLoading ? <PickLoading /> : (
                 today?.multiplas?.length > 0 ? (
                   <>
                     <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-4 mt-4">
@@ -4071,7 +4190,7 @@ export default function Picks() {
                   />
                 )}
               </div>
-              {!canSeeVip ? <VipLockOverlay color="rose" resumo={today?.bloqueados?.bingo} rotulo="cartelas" resolvidos={today?.bloqueados?.resolvidos_cartelas} /> : todayLoading ? <PickLoading /> : (
+              {!canSeeVip ? <VipLockOverlay color="rose" resumo={today?.bloqueados?.bingo} rotulo="cartelas" tipoBilhete="bingo" resolvidos={today?.bloqueados?.resolvidos_cartelas} /> : todayLoading ? <PickLoading /> : (
                 today?.bingo?.length > 0 ? (
                   <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-4 mt-4">
                     {bingoDaAba.map((b: any) => <BingoCard key={b.id} m={b} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isMultiplaLive(b)} />)}
@@ -4166,7 +4285,7 @@ export default function Picks() {
             {!canSeeVip ? (
               <div>
                 <SectionHeader color="bg-orange-400" label="Alavancagem do Dia" />
-                <VipLockOverlay color="orange" resumo={today?.bloqueados?.alavancagem} rotulo="caminhos" resolvidos={today?.bloqueados?.resolvidos_alavancagem} />
+                <VipLockOverlay color="orange" resumo={today?.bloqueados?.alavancagem} rotulo="caminhos" tipoBilhete="alavancagem" resolvidos={today?.bloqueados?.resolvidos_alavancagem} />
               </div>
             ) : (
               <>
