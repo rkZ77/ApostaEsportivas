@@ -150,9 +150,17 @@ def test_o_resolvido_usa_o_card_do_produto():
     tela = (_FRONT / "pages" / "Picks.tsx").read_text(encoding="utf-8")
     assert "function CardResolvido(" in tela
     card = tela[tela.index("function CardResolvido("):tela.index("function CardTrancado(")]
-    # mesma casca e mesmo cabeçalho do card trancado
-    assert 'className="pick-card border-line"' in card
+    # Mesma casca e mesmo cabeçalho do card trancado. A borda passou a sair de
+    # `cascaDoPick` (14/09): o pick que fechou em GREEN veste a borda verde,
+    # como todo card resolvido do site, e no resto continua a borda neutra.
+    assert "pick-card" in card and "cascaDoPick(" in card
+    assert '"pick-head"' in card
     assert "<PickTypeBadge" in card and "<LeagueLogo" in card
+    # A faixa de números e a caixa do jogo são as MESMAS dos cards abertos · a
+    # odd saía como uma linha de texto no pé, e mercado e linha vinham grudados
+    # num parágrafo só, sem rótulo.
+    assert '"pick-hero"' in card
+    assert "caixaDoPick(" in card and "<CampoDoPick" in card
     # e o que muda: mercado no lugar da tarja, resultado no lugar do cadeado
     assert "<SeloDeResultado" in card
     # `<TarjaDeAnalise`, com o sinal de menor: sem ele o teste reprovava o
