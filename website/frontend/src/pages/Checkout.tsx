@@ -315,12 +315,27 @@ export default function Checkout() {
   const selected = byTierCycle(selectedTier, selectedCycle) ?? doTier[0] ?? plans[0]
   const modulos = selectedTier === 'pro' ? [...MODULOS_PAGOS, ...MODULOS_PRO] : MODULOS_PAGOS
 
+  /*
+   * `wide`, A MESMA LARGURA DE /planos (14/09/2026).
+   *
+   * As duas telas são a mesma decisão em dois passos, e a pessoa vem de uma
+   * direto pra outra: sair de uma grade de 1152px pra uma coluna de 672px no
+   * clique do botão faz a segunda parecer quebrada, e foi assim que ele notou.
+   *
+   * `narrow` descreve "formulário e conversa, onde foco vale mais que espaço",
+   * e esta tela deixou de ser isso: com o seletor de produto, a lista de dez
+   * módulos e a grade de períodos, todos em duas colunas, ela virou grade de
+   * cards. A medida de leitura continua garantida, só que pela GRADE e não
+   * pela página, exatamente como em ComoFunciona: cada card fica em ~560px,
+   * dentro da faixa confortável. Se a grade cair pra uma coluna, o teto tem
+   * que voltar.
+   */
   return (
     <PageShell
       title="Assinar"
       description="Acesso completo a todos os picks da IA, múltiplas, alavancagem e gestão de banca."
       noindex
-      width="narrow"
+      width="wide"
       bar={{ back: true, title: 'Assinar', sub: 'Escolha o plano e o período' }}
       mainClassName="space-y-6"
     >

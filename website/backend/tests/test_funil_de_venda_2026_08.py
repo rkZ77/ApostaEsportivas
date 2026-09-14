@@ -41,9 +41,9 @@ def test_catalogo_de_modulos_existe_e_separa_free_de_vip():
 
 
 @pytest.mark.parametrize("modulo", [
-    "Picks VIP", "Picks ao vivo", "Múltiplas", "Alavancagem", "Pick Boost",
-    "Estatística de jogador", "Mercado de faltas", "Defesas de goleiro",
-    "Agente de futebol",
+    "Picks VIP", "Picks ao vivo", "Múltiplas", "Bingo do Dia", "Alavancagem",
+    "Pick Boost", "Estatística de jogador", "Mercado de faltas",
+    "Defesas de goleiro", "Agente de futebol",
 ])
 def test_todo_produto_pago_esta_no_catalogo(modulo):
     """O que a assinatura abre tem que estar listado onde ela e vendida.

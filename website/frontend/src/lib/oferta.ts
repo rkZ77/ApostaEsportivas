@@ -1,6 +1,6 @@
 import {
   Crown, Gift, Layers, Rocket, Wallet, BarChart3, Bot, CalendarDays,
-  ShieldHalf, Flag, Radio, Zap, UserSquare,
+  ShieldHalf, Flag, Radio, Zap, UserSquare, Grid3x3,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { BadgeTone } from '../components/ui'
@@ -74,6 +74,13 @@ export const MODULOS: Modulo[] = [
     Icon: Layers,
     titulo: 'Múltiplas',
     desc: 'Combinações montadas pela IA só quando todas as seleções passam no critério estatístico.',
+    plano: 'pago',
+    tag: { label: 'Pick IA', tone: 'blue' },
+  },
+  {
+    Icon: Grid3x3,
+    titulo: 'Bingo do Dia',
+    desc: 'Uma cartela de várias pernas por dia, montada com o mesmo critério das múltiplas.',
     plano: 'pago',
     tag: { label: 'Pick IA', tone: 'blue' },
   },

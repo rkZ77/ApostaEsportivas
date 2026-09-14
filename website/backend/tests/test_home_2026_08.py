@@ -396,10 +396,16 @@ def test_barra_do_app_acompanha_a_largura_do_conteudo():
 def test_texto_para_ler_nao_vai_pra_largura_cheia():
     """A medida de leitura e' o unico teto que nao se negocia: 45 a 75
     caracteres por linha. Estas telas sao texto corrido ou formulario."""
+    # Checkout SAIU desta lista em 14/09/2026, pelo mesmo motivo que tirou o
+    # ComoFunciona de `prose` (ver o teste logo abaixo): ele deixou de ser
+    # formulario. Com o seletor de produto, a lista de modulos e a grade de
+    # periodos, todos em duas colunas, virou grade de cards -- e ficava com
+    # METADE da largura de /planos, que e' a tela anterior do mesmo fluxo.
+    # A medida de leitura passou a ser garantida pela grade.
     for pagina, largura in (
         ("Termos", "prose"), ("Privacidade", "prose"),
         ("Blog", "prose"), ("BlogPost", "narrow"),
-        ("Checkout", "narrow"), ("Agente", "narrow"),
+        ("Agente", "narrow"),
     ):
         src = _front(f"pages/{pagina}.tsx")
         assert f'width="{largura}"' in src, f"{pagina} devia seguir em {largura}"
