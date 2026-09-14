@@ -17,6 +17,7 @@ import AdminFluxoDosMotores from '../components/AdminFluxoDosMotores'
 import AdminPendencias from '../components/AdminPendencias'
 import AdminPlanosVencidos from '../components/AdminPlanosVencidos'
 import AdminFunil from '../components/AdminFunil'
+import AdminDisparos from '../components/AdminDisparos'
 import { fmtBRL } from '../utils/format'
 import { sinalizarNavegacao } from '../services/progressBus'
 
@@ -162,6 +163,10 @@ const PICK_LABEL: Record<string, string> = {
 // isso por step, com log.
 const ABAS = [
   { key: 'usuarios',   label: 'Usuários'    },
+  // Logo depois de Usuarios de proposito: a aba ao lado mede quem sumiu
+  // (Funil, planos vencidos) e esta e' a unica que age sobre isso. Separadas
+  // por outras cinco, "quantos sumiram" e "falar com eles" viram duas visitas.
+  { key: 'disparos',   label: 'Disparos'    },
   { key: 'pipeline',   label: 'Pipeline'    },
   { key: 'live',       label: 'Ao Vivo'     },
   { key: 'ia',         label: 'IA'          },
@@ -943,6 +948,8 @@ export default function Admin() {
 
 
         </>)}
+
+        {aba === 'disparos' && <AdminDisparos />}
 
         {aba === 'live' && <AdminMotorLive />}
 
