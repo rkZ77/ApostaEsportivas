@@ -1008,3 +1008,43 @@ def test_perna_nao_herda_o_vermelho_do_bilhete():
 
     # Alavancagem nao tem coluna de resultado por perna: verde ou neutro.
     assert "const lr: 'GREEN' | undefined = pick.result === 'GREEN'" in tela
+
+
+def test_todo_card_de_pick_usa_a_mesma_anatomia():
+    """As tres faixas do card sao CLASSE, e nao string copiada a mao.
+
+    Cabecalho, faixa de numeros e rodape viviam escritos a mao em oito arquivos
+    (VIP, free, multipla, alavancagem, boost, ao vivo, pick publico e o
+    esqueleto). Eram identicos por disciplina, e cada card novo nascia de um
+    copiar e colar -- foi assim que o `CardResolvido` chegou em 09/2026 com o
+    cabecalho proprio, e que a faixa de numeros do bilhete ficou sangrando de
+    ponta a ponta enquanto o resto do card ja' era caixa recuada.
+
+    Agora `.pick-head`, `.pick-hero` e `.pick-tray` moram no index.css. Este
+    teste guarda a porta: quem escrever a cadeia antiga de novo quebra aqui.
+    """
+    telas = (
+        "pages/Picks.tsx",
+        "pages/PickPublico.tsx",
+        "components/SuggestionCard.tsx",
+        "components/LivePicksFeed.tsx",
+        "components/ui/Skeleton.tsx",
+    )
+    proibido = (
+        "px-5 pt-4 pb-3 border-b border-line/60",
+        "divide-x divide-line/60 border-b border-line/60",
+    )
+    for tela in telas:
+        fonte = _front_codigo(tela)
+        for cadeia in proibido:
+            assert cadeia not in fonte, (
+                f"{tela} desenha a faixa do card na mao · use .pick-head/.pick-hero"
+            )
+
+    # E a faixa de numeros e' uma CAIXA, com a mesma borda e o mesmo recuo da
+    # caixa do jogo logo abaixo dela. Sem isto ela volta a sangrar.
+    css = _front("index.css")
+    faixa = css[css.index(".pick-hero {"):]
+    faixa = faixa[:faixa.index("}")]
+    for marca in ("mx-5", "rounded-md", "border border-line"):
+        assert marca in faixa, f"a faixa de numeros perdeu `{marca}` e deixou de ser caixa"
