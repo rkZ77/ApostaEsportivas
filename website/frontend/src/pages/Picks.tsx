@@ -240,7 +240,9 @@ function TabBar({ tab, setTab, canSeeVip, canSeePro, verAoVivo, verBingo, temFal
 
   const tabs: { key: Tab; label: string; badge?: string; badgeCls?: string; premiumOnly?: boolean; proOnly?: boolean; oculta?: boolean }[] = [
     { key: 'hoje',         label: 'Hoje'            },
-    { key: 'pick_seguro',  label: 'Picks Free',      badge: 'FREE', badgeCls: 'bg-green-500/10 text-green-400 border-green-500/20' },
+    /* Sem selo "FREE": o nome da aba já diz. Ver o comentário da marcação
+       lá embaixo, no render. */
+    { key: 'pick_seguro',  label: 'Picks Free' },
     { key: 'vip',          label: 'Picks VIP',       premiumOnly: true },
     {
       /* Pick Boost · combinação fixa (Over 1.5 FT + Under 2.5 HT) em que o
@@ -249,7 +251,9 @@ function TabBar({ tab, setTab, canSeeVip, canSeePro, verAoVivo, verBingo, temFal
          que abre com um pick liberado dentro contradiz o próprio selo. O
          restante do dia vem trancado, com o mesmo teaser dos outros. */
       key: 'boost' as Tab, label: 'Pick Boost',
-      badge: 'NOVO', badgeCls: 'bg-cyan-400/10 text-cyan-400 border-cyan-400/20',
+      /* O "NOVO" saiu: o Pick Boost estreou em 28/08/2026 e um selo de
+         novidade que ninguém retira vira mobília. Se um produto realmente
+         estrear, o selo volta com data pra sair. */
     },
     {
       /* O produto novo: oportunidades que o motor achou durante o jogo.
@@ -391,6 +395,8 @@ function TabBar({ tab, setTab, canSeeVip, canSeePro, verAoVivo, verBingo, temFal
               }`}
             >
               {t.label}
+              {/* Badge com moldura: sobrou pro contador pulsante de Minhas
+                  Apostas, que precisa puxar o olho porque tem jogo rolando. */}
               {t.badge && (
                 <span className={`ml-1.5 text-[10px] border px-1.5 py-0.5 rounded font-bold ${t.badgeCls ?? 'bg-yellow-400/10 text-yellow-400 border-yellow-400/20'}`}>
                   {t.badge}
@@ -423,8 +429,25 @@ function TabBar({ tab, setTab, canSeeVip, canSeePro, verAoVivo, verBingo, temFal
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
               )}
+              {/* O CONTADOR É UM NÚMERO, NÃO UM SELO (14/09/2026).
+
+                  Era um badge verde com moldura, do mesmo tamanho e peso do
+                  selo de plano ao lado. Numa barra com "FREE" verde, "NOVO"
+                  azul, "VIP" amarelo e "Pro" roxo, mais um retângulo colorido
+                  fazia tudo competir e nada informar: o olho não separava "o
+                  que esta aba é" de "quantos picks ela tem".
+
+                  Verde também dizia a coisa errada. Neste site verde é GREEN,
+                  o pick que ganhou; aqui o número é só quantidade, e três
+                  picks pendentes não são três acertos.
+
+                  Agora ele acompanha o rótulo: herda a cor da aba (forte na
+                  ativa, apagado nas outras) e fica em `tabular-nums` pra não
+                  dançar quando vira de um para dois dígitos. */}
               {count != null && count > 0 && (
-                <span className="ml-1 text-[10px] bg-green-500/15 text-green-400 border border-green-500/30 px-1.5 py-0.5 rounded font-black">
+                <span className={`ml-1.5 text-[11px] font-bold tabular-nums ${
+                  tab === t.key ? 'text-ink-2' : 'text-ink-4'
+                }`}>
                   {count}
                 </span>
               )}
