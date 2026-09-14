@@ -1690,6 +1690,20 @@ def _combined_profit(legs_results: list[str], legs_odds: list | None,
     return _profit_for_result(result, ticket_odd)
 
 
+def _perna_sem_veredito(perna, nao_iniciados: set | frozenset | None = None) -> bool:
+    """A perna ainda nao tem resultado gravado e ha' o que perguntar sobre ela.
+
+    `result` fora do vocabulario de settlement conta como ausente: e' o mesmo
+    criterio de ai_result_checker_multiplas, e cobre tanto o `null` quanto
+    lixo gravado por versao antiga.
+    """
+    if not isinstance(perna, dict) or not perna.get("fixture_id"):
+        return False
+    if perna.get("result") in settlement.RESULT_LABELS:
+        return False
+    return not (nao_iniciados and perna["fixture_id"] in nao_iniciados)
+
+
 def _gravar_resultado_das_pernas(cur, tabela: str, pick_id: int,
                                  legs_results: list[str | None]) -> str | None:
     """Anota o resultado de CADA perna dentro do JSONB `games`.
@@ -1722,8 +1736,14 @@ def _gravar_resultado_das_pernas(cur, tabela: str, pick_id: int,
         # uma perna em cima de outra. Melhor não anotar nada.
         return None
     for perna, r in zip(pernas, legs_results):
-        if isinstance(perna, dict):
-            perna["result"] = r
+        if not isinstance(perna, dict):
+            continue
+        # `None` nao apaga veredito: o bilhete pode fechar com perna em aberto
+        # (uma perna RED ja o mata) e reescrever `null` por cima de um GREEN
+        # ja' gravado seria perder o dado numa reconferencia.
+        if r is None and perna.get("result") in settlement.RESULT_LABELS:
+            continue
+        perna["result"] = r
     return json.dumps(pernas, default=str)
 
 
@@ -2914,7 +2934,12 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
                       "player_stats": 0, "boost": 0,
                       # Ao Vivo entrou na varredura em 28/08. Ate' aqui ele so'
                       # era liquidado pelo caminho das picks SEGUIDAS.
-                      "live": 0}
+                      "live": 0,
+                      # NAO e' pick: e' perna de bilhete ja' fechado que ficou
+                      # sem veredito (ver "A PERNA QUE FICOU PRA TRAS"). Fica
+                      # no mesmo retorno porque sai da mesma passada, e a tela
+                      # do /admin conta ela separado do total de picks.
+                      "pernas": 0}
     today_br = datetime.now(_BR_TZ).date()
     agora_br = datetime.now(_BR_TZ).replace(tzinfo=None)
     desde = today_br - timedelta(days=max_age_days) if max_age_days is not None else None
@@ -3114,6 +3139,78 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
                             resolved[_pt] += 1
                     except Exception as e:
                         logger.error("[AUTO-RESULT] %s #%s erro: %s", _pt, p["id"], e)
+
+                # ── A PERNA QUE FICOU PRA TRAS ───────────────────────────
+                #
+                # O bilhete acima pode fechar ANTES de todas as pernas terem
+                # veredito: uma perna RED ja mata a multipla (`_bilhete_morto`)
+                # e o atalho esta certo -- o dinheiro nao depende do resto.
+                # So' que ele grava `result: null` nas pernas que ainda nao
+                # tinham jogado, e a varredura nunca mais volta nesse bilhete:
+                # as duas consultas de cima filtram `result IS NULL`, e ele
+                # deixou de ser pendente no instante em que virou RED.
+                #
+                # O efeito na tela e' o que apareceu em 13/09: bilhete RED, a
+                # perna perdida com o X e a outra sem selo nenhum, parada pra
+                # sempre. O bilhete estava certo; o detalhe dele, incompleto.
+                #
+                # Esta passada e' SO' o detalhe: le as pernas sem veredito de
+                # bilhete ja' fechado e escreve o que a folha do jogo ja'
+                # responde. NAO toca em `result` nem em `profit` -- quem
+                # corrige o bilhete e' a reconferencia
+                # (`reverify_recent_stats_results`), e mexer em lucro aqui
+                # mudaria a banca de quem seguiu por causa de exibicao.
+                cur.execute(
+                    f"SELECT id, games FROM {_tab} "
+                    f"WHERE result IS NOT NULL AND games IS NOT NULL "
+                    f"AND match_date <= %s {_janela}",
+                    _args(),
+                )
+                inacabados = []
+                for p in cur.fetchall():
+                    pernas = p["games"]
+                    if isinstance(pernas, str):
+                        try:    pernas = json.loads(pernas)
+                        except Exception: continue
+                    if not isinstance(pernas, list):
+                        continue
+                    if any(_perna_sem_veredito(g, nao_iniciados) for g in pernas):
+                        inacabados.append((p["id"], pernas))
+
+                _fetch_fixtures_bulk([
+                    g["fixture_id"] for _pid, pernas in inacabados
+                    for g in pernas if _perna_sem_veredito(g, nao_iniciados)
+                ])
+
+                for _pid, pernas in inacabados:
+                    try:
+                        mudou = False
+                        for g in pernas:
+                            if not _perna_sem_veredito(g, nao_iniciados):
+                                continue
+                            leg = _enrich_leg(
+                                g["fixture_id"], g.get("market", ""), g.get("line", ""),
+                                g.get("home") or g.get("home_team") or "",
+                                g.get("away") or g.get("away_team") or "",
+                                g.get("home_team_id"), g.get("away_team_id"),
+                                float(g.get("odd", 1)), market_type=g.get("market_type"),
+                            )
+                            r = _locked_leg_result(leg)
+                            if r is None:
+                                continue  # o jogo ainda nao respondeu · segue pendente
+                            g["result"] = r
+                            mudou = True
+                            resolved["pernas"] += 1
+                        if not mudou:
+                            continue
+                        c = conn.cursor()
+                        c.execute(f"UPDATE {_tab} SET games = %s WHERE id = %s",
+                                  (json.dumps(pernas, default=str), _pid))
+                        conn.commit()
+                        c.close()
+                        logger.info("[AUTO-RESULT] %s #%s: pernas completadas", _pt, _pid)
+                    except Exception as e:
+                        logger.error("[AUTO-RESULT] %s #%s pernas erro: %s", _pt, _pid, e)
             except Exception as e:
                 # `picks_bingo` nasce do motor: onde ele nunca rodou a tabela
                 # nao existe, e o erro sujaria a transacao das proximas secoes.
@@ -3936,6 +4033,19 @@ def reverify_recent_stats_results(days: int | None = None,
                         leg_odds    = [l.get("odd") for l in legs_out]
                         total_odd   = float(p["total_odd"] or 1)
                         computed = _multipla_combined_result(leg_results, leg_odds, total_odd)
+                        # O detalhe das pernas e' reescrito mesmo quando o
+                        # bilhete nao muda: aqui TODAS as pernas ja' encerraram
+                        # (o `continue` acima garante), entao esta e' a melhor
+                        # leitura que existe de cada uma. Antes so' o bilhete
+                        # era atualizado, e perna deixada em aberto por um
+                        # fechamento antecipado no RED nunca era preenchida.
+                        c = conn.cursor()
+                        games_json = _gravar_resultado_das_pernas(c, _tab, p["id"], leg_results)
+                        if games_json is not None:
+                            c.execute(f"UPDATE {_tab} SET games=%s WHERE id=%s",
+                                      (games_json, p["id"]))
+                            conn.commit()
+                        c.close()
                         if computed and computed != p["result"]:
                             profit = _combined_profit(leg_results, leg_odds, total_odd, computed)
                             c = conn.cursor()

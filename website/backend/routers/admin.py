@@ -6,7 +6,7 @@ import logging
 import threading
 from contextlib import contextmanager
 from collections import deque
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.concurrency import run_in_threadpool
@@ -18,7 +18,7 @@ from auth_utils import require_admin, hash_password, get_current_user, invalidar
 # Catalogo de motores/metodos do MOTOR, nao uma copia daqui -- ver o comentario
 # em settlement_bridge.py. Alimenta a aba Auditoria dos Motores com os rotulos
 # e as versoes que o proprio motor grava.
-from settlement_bridge import engine_registry
+from settlement_bridge import engine_registry, settlement
 import api_quota
 
 _pipeline_status: dict = {}  # command -> {status, started_at, finished_at, returncode}
@@ -2140,6 +2140,584 @@ def admin_reparar_pernas(
         conn.rollback()
         raise
     finally:
+        cur.close()
+        conn.close()
+
+
+#: Tipos cuja perna mora num JSONB `games` · a auditoria recombina o bilhete
+#: a partir das pernas dele e confere o resultado gravado.
+_CARTELAS = ("multipla", "bingo")
+
+#: Tipos de perna única cuja liquidação o motor sabe refazer a partir da folha
+#: que já está em `match_statistics`.
+#:
+#: Jogador e Pick Boost ficam de fora, e por motivos diferentes: a folha do
+#: jogador é outra (`/fixtures/players`, que não mora nesta tabela) e o Boost é
+#: um pick de dois tempos com dois resultados (`result_ft`/`result_ht`), que não
+#: cabe na pergunta de um mercado só. Os dois continuam conferidos pelo resto da
+#: auditoria (lucro, pendência, seguidor), só não pela estatística.
+_CONFERIVEIS_PELA_FOLHA = ("vip", "free", "faltas", "goleiros", "live")
+
+
+def _lucro_esperado(result: str, odd: float | None) -> float | None:
+    """Lucro por unidade de um pick de perna única.
+
+    Mesma conta de settlement.profit_units; aqui ela vira função local porque a
+    auditoria compara MUITAS linhas e só precisa do número esperado.
+    """
+    if result == "RED":       return -1.0
+    if result == "PUSH":      return 0.0
+    if result == "HALF-LOSS": return -0.5
+    if odd is None:           return None
+    if result == "GREEN":     return round(odd - 1, 4)
+    if result == "HALF-WIN":  return round((odd - 1) / 2, 4)
+    return None
+
+
+def _hoje_br() -> date:
+    """Hoje em Brasília.
+
+    `HOJE_BR` de data_br é o trecho de SQL, não uma função: quem precisa da
+    data em Python tem que montá-la aqui (mesmo caminho de /picks/pendentes).
+    """
+    from zoneinfo import ZoneInfo
+    return datetime.now(ZoneInfo("America/Sao_Paulo")).date()
+
+
+def _mes_em_datas(mes: str | None) -> tuple[date, date, str]:
+    """(primeiro dia, último dia a conferir, rótulo) do mês pedido.
+
+    Sem parâmetro é o mês CORRENTE em horário de Brasília, e o fim é HOJE, não
+    o fim do mês: pick de jogo que ainda não aconteceu não é pendência.
+    """
+    hoje = _hoje_br()
+    if mes:
+        try:
+            ano, m = (int(x) for x in mes.split("-", 1))
+            inicio = date(ano, m, 1)
+        except Exception:
+            raise HTTPException(400, "Mês inválido. Use AAAA-MM.")
+    else:
+        inicio = hoje.replace(day=1)
+    fim_do_mes = (date(inicio.year + (inicio.month == 12), inicio.month % 12 + 1, 1)
+                  - timedelta(days=1))
+    # Só o mês CORRENTE para em hoje. Mês fechado vai até o último dia dele, e
+    # `min()` sozinho encurtava dezembro para setembro.
+    fim = hoje if inicio <= hoje <= fim_do_mes else fim_do_mes
+    return inicio, fim, f"{inicio.year:04d}-{inicio.month:02d}"
+
+
+#: Os cinco contadores que o coletor exige pra considerar a folha COMPLETA
+#: (collectors/match_statistics_sync_service.py::sync_pending_fixtures). A
+#: auditoria usa o mesmo corte de propósito: folha pela metade não serve pra
+#: acusar ninguém, e é o coletor quem decide o que é metade.
+_CONTADORES_DA_FOLHA = ("total_corners", "total_yellow_cards", "total_red_cards",
+                        "home_fouls", "home_total_shots")
+
+
+def _folha_da_partida(cur, fixture_id) -> dict | None:
+    """A folha gravada do jogo, ou None se ela não existe.
+
+    Devolve também `completa`, com o mesmo critério do coletor. A folha NÃO tem
+    carimbo de quando foi coletada (não existe coluna), então não dá pra dizer
+    se ela é velha: o que dá pra dizer é se ela está inteira.
+    """
+    if not fixture_id:
+        return None
+    try:
+        cur.execute(f"""
+            SELECT status, total_goals, home_goals_ht, away_goals_ht,
+                   {", ".join(_CONTADORES_DA_FOLHA)}
+              FROM match_statistics WHERE fixture_id = %s LIMIT 1
+        """, (fixture_id,))
+        linha = cur.fetchone()
+    except Exception:
+        return None
+    if not linha:
+        return None
+    d = dict(linha)
+    d["completa"] = all(d.get(c) is not None for c in _CONTADORES_DA_FOLHA)
+    return d
+
+
+def _resultado_do_boost(folha: dict | None) -> tuple[str | None, str | None, str | None]:
+    """(result, result_ft, result_ht) do Pick Boost pela folha do jogo.
+
+    As duas pernas são fixas e moram na mesma partida: Over 1.5 no jogo e
+    Under 2.5 no primeiro tempo, e as duas precisam pagar (routers/live.py::
+    _pernas_do_boost). Prorrogação fica de fora: `total_goals` traz o tempo
+    extra somado e a casa liquida pelos 90, então ali o número da folha não
+    responde a pergunta.
+    """
+    if not folha or folha.get("status") not in ("FT",):
+        return None, None, None
+    total = folha.get("total_goals")
+    ht_casa, ht_fora = folha.get("home_goals_ht"), folha.get("away_goals_ht")
+    if total is None or ht_casa is None or ht_fora is None:
+        return None, None, None
+    res_ft = "GREEN" if int(total) > 1.5 else "RED"
+    res_ht = "GREEN" if int(ht_casa) + int(ht_fora) <= 2.5 else "RED"
+    combinado = "GREEN" if res_ft == "GREEN" and res_ht == "GREEN" else "RED"
+    return combinado, res_ft, res_ht
+
+
+def _resultado_do_jogador(cur, pick: dict) -> str | None:
+    """O que a folha do jogador diz, ou None quando ela não fecha a pergunta.
+
+    A folha por jogador é outra tabela (`player_match_stats`, alimentada por
+    `python main.py player_stats`) e o mercado é sempre "N ou mais", então não
+    existe PUSH: bate a linha ou não bate.
+
+    A REGRA DA VAGA É O QUE OBRIGA A CAUTELA. O pick é do titular e acompanha a
+    vaga dele: saindo, o que o substituto fizer depois da troca soma. Buscar
+    substituto custa requisição, e a auditoria não gasta cota. Então ela só
+    afirma o que a folha sozinha já prova:
+
+      valor >= linha  ->  GREEN, sempre. O substituto só somaria mais.
+      valor <  linha  ->  RED apenas quando o titular jogou os 90 minutos, que
+                          é quando não há substituto pra somar. Com menos que
+                          isso, a auditoria cala.
+    """
+    coluna = pick.get("stat_column")
+    if not coluna or coluna not in _COLUNAS_DE_JOGADOR:
+        return None
+    try:
+        cur.execute(f"""
+            SELECT {coluna} AS valor, minutes
+              FROM player_match_stats
+             WHERE fixture_id = %s AND player_id = %s
+        """, (pick.get("fixture_id"), pick.get("player_id")))
+        linha_folha = cur.fetchone()
+    except Exception:
+        return None
+    if not linha_folha:
+        return None
+    # `null` num contador de quem ENTROU EM CAMPO é zero: a API omite o zero em
+    # vez de escrevê-lo (medido em 02/09, 169 zeros contra 8.115 nulls no mesmo
+    # `shots_on`). Quem não entrou não tem minutos, e aí não há o que ler.
+    minutos = linha_folha["minutes"]
+    if minutos is None:
+        return None
+    valor = int(linha_folha["valor"] or 0)
+    alvo = int(pick.get("line_value") or 0)
+    if valor >= alvo:
+        return "GREEN"
+    return "RED" if int(minutos) >= 90 else None
+
+
+#: As colunas de folha que o pick de jogador usa · mesma lista de
+#: routers/live.py::_COLUNAS_PLAYER_STATS. Interpolar nome de coluna em SQL só
+#: é seguro contra uma lista fechada.
+_COLUNAS_DE_JOGADOR = frozenset({
+    "saves", "shots_on", "shots_total", "fouls_committed",
+    "tackles_total", "passes_total",
+})
+
+
+class _Conferidor:
+    """Refaz a liquidação de um pick a partir da folha gravada do jogo.
+
+    É o MOTOR que responde, não uma conta escrita aqui: `AIResultCheckerService`
+    lê `match_statistics` e chama `services/settlement.py`, a mesma função que
+    liquidou o pick na origem. Uma segunda leitura da folha dentro do backend é
+    exatamente o que produziu, no passado, dois vereditos diferentes para o
+    mesmo jogo.
+
+    NÃO GASTA COTA. Tudo sai do banco, e `market` não é passado para
+    `get_fixture_result` de propósito: é ele que dispara a validação de cartão,
+    que custa duas requisições por partida. Sem validação o motor devolve
+    "pendente" para pick de cartão, e pendente não é divergência: a auditoria
+    cala em vez de acusar.
+
+    O cursor é próprio e posicional. O backend inteiro usa RealDictCursor e o
+    checker do motor lê a linha por índice (`row[i]`), então emprestar o cursor
+    do site quebraria dentro do motor.
+    """
+
+    def __init__(self, conn):
+        self._checker = None
+        self._cur = None
+        try:
+            import psycopg2.extras
+            from services.ai_result_checker_service import AIResultCheckerService
+            self._checker = AIResultCheckerService()
+            self._cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        except Exception:
+            # Ambiente sem o motor no caminho: a auditoria continua fazendo
+            # todo o resto. Conferir menos é melhor que não abrir.
+            logger.warning("[AUDITORIA] motor indisponível · sem conferência pela folha")
+
+    @property
+    def ativo(self) -> bool:
+        return self._checker is not None
+
+    def resultado(self, fixture_id, market, market_type, line, odd, home, away) -> str | None:
+        """O que a folha do jogo diz, ou None quando ela não responde."""
+        if not self.ativo or not fixture_id:
+            return None
+        try:
+            stats = self._checker.get_fixture_result(fixture_id, self._cur)
+            if not stats:
+                return None
+            calculado, _factor = self._checker.evaluate_pick(
+                market or "", line or "", float(odd or 1), stats, home, away,
+                market_type=market_type)
+            return calculado
+        except Exception:
+            return None
+
+    def fechar(self):
+        if self._cur is not None:
+            try:    self._cur.close()
+            except Exception: pass
+
+
+@router.get("/resultados/auditoria")
+def admin_auditoria_resultados(
+    mes: Optional[str] = Query(None, description="AAAA-MM · vazio = mês corrente"),
+    folha: bool = Query(True, description="conferir também contra a estatística do jogo"),
+    current_user: dict = Depends(require_admin),
+):
+    """Confere TODO resultado gravado no mês, pick por pick, sem gastar cota.
+
+    POR QUE ELA EXISTE, E POR QUE NÃO É A RECONFERÊNCIA QUE JÁ HAVIA
+    ---------------------------------------------------------------
+    `POST /admin/reverify-stats-results` pergunta a mesma coisa pra API: uma
+    requisição por fixture, e ela CORRIGE. É cara, e é a última palavra sobre o
+    número do jogo. Esta rota não conversa com o provedor e não escreve nada:
+    confere o que já está no banco contra ele mesmo e contra a folha do jogo já
+    coletada, que é onde mora a maior parte dos defeitos de liquidação que
+    apareceram até hoje.
+
+    O QUE ELA PERGUNTA
+    ------------------
+      não bate com a estatística       refaz a liquidação pela folha gravada em
+                                       `match_statistics`, com o motor, e
+                                       compara com o `result` do pick, de cada
+                                       perna e do bilhete
+      bilhete não bate com as pernas   recombina as pernas pela fonte única
+                                       (settlement.combine_legs) e compara com
+                                       o `result` gravado
+      perna sem resultado              bilhete fechado com perna em aberto · é
+                                       o rastro do fechamento antecipado no RED
+      lucro não bate                   `profit` contra o que o resultado e a
+                                       odd obrigam
+      pendente com o jogo encerrado    passou do dia e ninguém liquidou
+      resultado inválido               texto fora do vocabulário do settlement
+      seguidor com resultado diferente `user_followed_picks` dessincronizada da
+                                       origem, que é o que muda a banca de quem
+                                       seguiu
+
+    O QUE ELA NÃO CONSEGUE AFIRMAR
+    ------------------------------
+    Pick resolvido cuja folha não está no banco não vira achado: ele foi
+    liquidado pelo caminho ao vivo, que lê direto da API, e cobrar dele uma
+    folha que nunca foi coletada seria acusar o que está certo. Esses vão pro
+    resumo em `nao_conferidos`, com o motivo de cada um.
+
+    E a folha pode estar VELHA sem que dê pra saber: `match_statistics` não tem
+    coluna de quando foi coletada, e o coletor pula toda partida cuja folha já
+    esteja completa (os cinco contadores preenchidos), então uma revisão tardia
+    do provedor não é rebuscada por ele. Por isso divergência apontada aqui é
+    suspeita, não veredito: quem dá a última palavra é a reconferência, que
+    pergunta ao provedor. O que esta rota garante é que a folha usada estava
+    inteira, pelo mesmo critério do coletor.
+
+    Nada aqui altera o banco. Auditoria que corrige por conta própria deixa de
+    ser auditoria: a correção tem botão próprio, e cada motivo acima aponta pra
+    um deles.
+    """
+    inicio, fim, rotulo = _mes_em_datas(mes)
+
+    conn = get_connection()
+    cur = conn.cursor()
+    conferidor = _Conferidor(conn) if folha else None
+    achados: list[dict] = []
+    por_tipo: list[dict] = []
+    # POR QUE O NÃO CONFERIDO VEM COM MOTIVO. "A auditoria não olhou 40 picks"
+    # sozinho não diz nada: pode ser o coletor que não rodou, o provedor que não
+    # publicou a folha, ou um mercado que o motor não resolve pela folha. Cada
+    # um pede uma ação diferente, e o vocabulário é o mesmo de /picks/pendentes.
+    nao_conferidos = {
+        "sem folha do jogo":    0,
+        "folha incompleta":     0,
+        "mercado não conferível pela folha": 0,
+        "sem folha do jogador": 0,
+    }
+
+    def achar(tipo, pid, dia, motivo, detalhe=None, gravado=None, esperado=None):
+        achados.append({
+            "pick_type": tipo, "id": pid,
+            "match_date": str(dia) if dia else None,
+            "motivo": motivo, "detalhe": detalhe,
+            "gravado": gravado, "esperado": esperado,
+        })
+
+    def pela_folha(fixture_id, market, market_type, line, odd, home, away):
+        if conferidor is None or not conferidor.ativo:
+            return None
+        return conferidor.resultado(fixture_id, market, market_type, line, odd, home, away)
+
+    def nao_conferido(fixture_id):
+        """Por que este pick não foi conferido pela estatística.
+
+        Só é chamado quando a conferência já falhou, então a consulta extra
+        acontece uma vez por pick não conferido, nunca no caminho normal.
+        """
+        folha = _folha_da_partida(cur, fixture_id)
+        if folha is None:
+            nao_conferidos["sem folha do jogo"] += 1
+        elif not folha["completa"]:
+            nao_conferidos["folha incompleta"] += 1
+        else:
+            nao_conferidos["mercado não conferível pela folha"] += 1
+
+    try:
+        for tipo, (tabela, home_col, away_col) in _PICK_TABLES.items():
+            odd_col = _ODD_COL[tipo]
+            if tipo in _CARTELAS:
+                colunas = "games"
+            elif tipo == "alavancagem":
+                colunas = ", ".join(
+                    f"fixture_id_{i}, market_{i}, market_type_{i}, line_{i}, odd_{i}, "
+                    f"home_team_{i}, away_team_{i}" for i in (1, 2, 3))
+            elif tipo == "boost":
+                # As duas pernas do Boost são fixas e têm coluna própria de
+                # resultado · dá pra dizer QUAL delas não bate.
+                colunas = "fixture_id, market, line, result_ft, result_ht"
+            elif tipo == "player_stats":
+                colunas = ("fixture_id, player_id, player_name, stat_column, "
+                           "line_value, market, line")
+            else:
+                colunas = (f"fixture_id, market, market_type, line, "
+                           f"{home_col} AS home_team, {away_col} AS away_team")
+            try:
+                cur.execute(f"""
+                    SELECT id, result, profit, {odd_col} AS odd, match_date, {colunas}
+                      FROM {tabela}
+                     WHERE match_date BETWEEN %s AND %s
+                     ORDER BY match_date, id
+                """, (inicio, fim))
+                linhas = [dict(r) for r in cur.fetchall()]
+            except Exception:
+                # Instância sem a tabela (motor que nunca rodou ali): o tipo
+                # some do relatório em vez de derrubar a auditoria inteira.
+                conn.rollback()
+                continue
+
+            contagem = {"GREEN": 0, "RED": 0, "PUSH": 0, "HALF-WIN": 0, "HALF-LOSS": 0}
+            pendentes = 0
+            lucro = 0.0
+            antes = len(achados)
+
+            for r in linhas:
+                res, dia = r["result"], r["match_date"]
+                odd = float(r["odd"]) if r["odd"] is not None else None
+                profit = float(r["profit"]) if r["profit"] is not None else None
+
+                if res is None:
+                    pendentes += 1
+                    if dia and dia < _hoje_br():
+                        achar(tipo, r["id"], dia, "pendente com o jogo encerrado")
+                elif res not in contagem:
+                    achar(tipo, r["id"], dia, "resultado inválido", gravado=res)
+                else:
+                    contagem[res] += 1
+                    lucro += profit or 0.0
+                    if profit is None:
+                        achar(tipo, r["id"], dia, "sem lucro gravado", gravado=res)
+                    elif tipo in _CARTELAS or tipo == "alavancagem":
+                        # Bilhete combinado com perna anulada paga menos que a
+                        # odd cheia, então o número exato só sai das pernas
+                        # (conferido logo abaixo). O que vale pra todo bilhete é
+                        # o SINAL: RED custa a entrada, PUSH devolve, GREEN paga.
+                        piso = {"RED": -1.0, "PUSH": 0.0, "HALF-LOSS": -0.5}.get(res)
+                        if piso is not None and abs(profit - piso) > 0.01:
+                            achar(tipo, r["id"], dia, "lucro não bate com o resultado",
+                                  gravado=profit, esperado=piso)
+                        elif res in ("GREEN", "HALF-WIN") and profit <= 0:
+                            achar(tipo, r["id"], dia, "lucro não bate com o resultado",
+                                  gravado=profit, esperado="maior que zero")
+                    else:
+                        esperado = _lucro_esperado(res, odd)
+                        if esperado is not None and abs(profit - esperado) > 0.01:
+                            achar(tipo, r["id"], dia, "lucro não bate com o resultado",
+                                  gravado=profit, esperado=esperado)
+
+                # ── PERNA ÚNICA · o que a folha do jogo diz ─────────────────
+                if tipo in _CONFERIVEIS_PELA_FOLHA and res in contagem:
+                    calculado = pela_folha(r.get("fixture_id"), r.get("market"),
+                                           r.get("market_type"), r.get("line"), odd,
+                                           r.get("home_team"), r.get("away_team"))
+                    if calculado is None:
+                        nao_conferido(r.get("fixture_id"))
+                    elif calculado != res:
+                        achar(tipo, r["id"], dia, "não bate com a estatística do jogo",
+                              detalhe=f"{r.get('market')} {r.get('line')}",
+                              gravado=res, esperado=calculado)
+
+                # ── PICK BOOST · duas pernas fixas na mesma partida ─────────
+                if tipo == "boost" and res in contagem and conferidor is not None:
+                    folha = _folha_da_partida(cur, r.get("fixture_id"))
+                    combinado, res_ft, res_ht = _resultado_do_boost(folha)
+                    if combinado is None:
+                        nao_conferido(r.get("fixture_id"))
+                    else:
+                        if combinado != res:
+                            achar(tipo, r["id"], dia, "não bate com a estatística do jogo",
+                                  detalhe=f"jogo {res_ft}, 1o tempo {res_ht}",
+                                  gravado=res, esperado=combinado)
+                        # Qual perna quebrou é a única pergunta útil depois de
+                        # um RED, e é pra isso que as duas colunas existem.
+                        for coluna, calculado in (("result_ft", res_ft), ("result_ht", res_ht)):
+                            gravado_perna = r.get(coluna)
+                            if gravado_perna and gravado_perna != calculado:
+                                achar(tipo, r["id"], dia,
+                                      "perna não bate com a estatística do jogo",
+                                      detalhe=coluna.replace("result_", "perna "),
+                                      gravado=gravado_perna, esperado=calculado)
+
+                # ── PICK JOGADOR · a folha é outra, e a vaga pede cautela ───
+                if tipo == "player_stats" and res in contagem and conferidor is not None:
+                    calculado = _resultado_do_jogador(cur, r)
+                    if calculado is None:
+                        nao_conferidos["sem folha do jogador"] += 1
+                    elif calculado != res:
+                        achar(tipo, r["id"], dia, "não bate com a estatística do jogo",
+                              detalhe=f"{r.get('player_name')}, {r.get('line_value')} "
+                                      f"{r.get('stat_column')}",
+                              gravado=res, esperado=calculado)
+
+                # ── ALAVANCAGEM · as pernas moram em colunas ────────────────
+                if tipo == "alavancagem" and res in contagem:
+                    vereditos, odds = [], []
+                    for i in (1, 2, 3):
+                        if not r.get(f"fixture_id_{i}"):
+                            continue
+                        odds.append(r.get(f"odd_{i}"))
+                        vereditos.append(pela_folha(
+                            r[f"fixture_id_{i}"], r.get(f"market_{i}"),
+                            r.get(f"market_type_{i}"), r.get(f"line_{i}"),
+                            r.get(f"odd_{i}"), r.get(f"home_team_{i}"),
+                            r.get(f"away_team_{i}")))
+                    if vereditos and all(v in settlement.RESULT_LABELS for v in vereditos):
+                        combinado, _lp, _eff = settlement.combine_legs(vereditos, odds, odd)
+                        if combinado is not None and combinado != res:
+                            achar(tipo, r["id"], dia, "não bate com a estatística do jogo",
+                                  detalhe=" + ".join(vereditos),
+                                  gravado=res, esperado=combinado)
+                    elif vereditos:
+                        nao_conferido(r.get("fixture_id_1"))
+
+                if tipo not in _CARTELAS:
+                    continue
+
+                pernas = r.get("games")
+                if isinstance(pernas, str):
+                    try:
+                        pernas = json.loads(pernas)
+                    except Exception:
+                        pernas = None
+                if not isinstance(pernas, list) or not pernas:
+                    if res is not None:
+                        achar(tipo, r["id"], dia, "bilhete fechado sem pernas gravadas")
+                    continue
+                if res is None:
+                    continue
+
+                vereditos = [p.get("result") if isinstance(p, dict) else None for p in pernas]
+                em_aberto = [v for v in vereditos if v not in settlement.RESULT_LABELS]
+                if em_aberto:
+                    achar(tipo, r["id"], dia, "perna sem resultado em bilhete fechado",
+                          detalhe=f"{len(em_aberto)} de {len(vereditos)}")
+                    continue
+
+                # ── AS PERNAS CONTRA A FOLHA DE CADA JOGO ───────────────────
+                # A perna é o que a tela mostra, e ela também pode estar errada
+                # sozinha: o bilhete fecha por uma perna só, e as outras já
+                # foram gravadas por caminhos diferentes ao longo dos meses.
+                for p, veredito in zip(pernas, vereditos):
+                    if not isinstance(p, dict):
+                        continue
+                    calculado = pela_folha(
+                        p.get("fixture_id"), p.get("market"), p.get("market_type"),
+                        p.get("line"), p.get("odd"),
+                        p.get("home") or p.get("home_team"),
+                        p.get("away") or p.get("away_team"))
+                    if calculado is None:
+                        nao_conferido(p.get("fixture_id"))
+                    elif calculado != veredito:
+                        achar(tipo, r["id"], dia, "perna não bate com a estatística do jogo",
+                              detalhe=f"{p.get('market')} {p.get('line')}",
+                              gravado=veredito, esperado=calculado)
+
+                odds = [p.get("odd") for p in pernas]
+                combinado, lucro_pernas, _eff = settlement.combine_legs(vereditos, odds, odd)
+                if combinado is not None and combinado != res:
+                    achar(tipo, r["id"], dia, "bilhete não bate com as pernas",
+                          detalhe=" + ".join(str(v) for v in vereditos),
+                          gravado=res, esperado=combinado)
+                elif (combinado is not None and lucro_pernas is not None
+                      and profit is not None
+                      and abs(profit - float(lucro_pernas)) > 0.01):
+                    achar(tipo, r["id"], dia, "lucro não bate com as pernas",
+                          gravado=profit, esperado=round(float(lucro_pernas), 4))
+
+            # Seguidor com resultado diferente da origem · é o que muda saldo.
+            try:
+                cur.execute(f"""
+                    SELECT uf.pick_id, COUNT(*) AS n
+                      FROM user_followed_picks uf
+                      JOIN {tabela} p ON p.id = uf.pick_id
+                     WHERE uf.pick_type = %s
+                       AND p.match_date BETWEEN %s AND %s
+                       AND uf.result IS DISTINCT FROM p.result
+                     GROUP BY uf.pick_id
+                """, (tipo, inicio, fim))
+                for d in cur.fetchall():
+                    achar(tipo, d["pick_id"], None, "seguidor com resultado diferente",
+                          detalhe=f"{d['n']} seguidor(es)")
+            except Exception:
+                conn.rollback()
+
+            por_tipo.append({
+                "pick_type": tipo,
+                "total":     len(linhas),
+                "pendentes": pendentes,
+                "green":     contagem["GREEN"], "red": contagem["RED"],
+                "push":      contagem["PUSH"],
+                "half_win":  contagem["HALF-WIN"], "half_loss": contagem["HALF-LOSS"],
+                "lucro":     round(lucro, 2),
+                "problemas": len(achados) - antes,
+            })
+
+        por_motivo: dict[str, int] = {}
+        for a in achados:
+            por_motivo[a["motivo"]] = por_motivo.get(a["motivo"], 0) + 1
+
+        return {
+            "mes": rotulo,
+            "de":  str(inicio),
+            "ate": str(fim),
+            "folha": bool(conferidor and conferidor.ativo),
+            "resumo": {
+                "total":      sum(t["total"] for t in por_tipo),
+                "resolvidos": sum(t["total"] - t["pendentes"] for t in por_tipo),
+                "pendentes":  sum(t["pendentes"] for t in por_tipo),
+                "problemas":  len(achados),
+                "nao_conferidos": sum(nao_conferidos.values()),
+                "lucro":      round(sum(t["lucro"] for t in por_tipo), 2),
+            },
+            "por_nao_conferido": {k: v for k, v in nao_conferidos.items() if v},
+            "por_tipo":   sorted(por_tipo, key=lambda t: -t["problemas"]),
+            "por_motivo": por_motivo,
+            # Do dia mais recente pra trás: o defeito de ontem é o que ainda dá
+            # pra corrigir antes de alguém ver.
+            "achados": sorted(achados, key=lambda a: (a["match_date"] or ""), reverse=True)[:300],
+        }
+    finally:
+        if conferidor is not None:
+            conferidor.fechar()
         cur.close()
         conn.close()
 

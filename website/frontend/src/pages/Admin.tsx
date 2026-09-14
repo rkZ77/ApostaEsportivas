@@ -12,6 +12,7 @@ import AdminMotorLive from '../components/AdminMotorLive'
 import AdminDados from '../components/AdminDados'
 import AdminMotorDecisoes from '../components/AdminMotorDecisoes'
 import AdminAuditoriaMotores from '../components/AdminAuditoriaMotores'
+import AdminAuditoriaResultados from '../components/AdminAuditoriaResultados'
 import AdminFluxoDosMotores from '../components/AdminFluxoDosMotores'
 import AdminPendencias from '../components/AdminPendencias'
 import AdminPlanosVencidos from '../components/AdminPlanosVencidos'
@@ -1318,6 +1319,7 @@ export default function Admin() {
         )}
 
         <AdminShareResults />
+        <AdminAuditoriaResultados />
         <AdminPendencias />
         {/* Ações de resultado. Os dois endpoints já existiam no backend desde
             que o scheduler foi removido, mas não tinham botão nenhum -- só
@@ -1350,7 +1352,11 @@ export default function Admin() {
               try {
                 const r = await api.post('/admin/resolve-picks')
                 const res = r.data?.resolved ?? {}
-                const total = Object.values(res).reduce((a: number, b: any) => a + Number(b || 0), 0)
+                // `pernas` sai da mesma passada mas NAO e pick: e perna de
+                // bilhete ja fechado que estava sem resultado. Somar junto
+                // inflaria a contagem de picks resolvidos.
+                const { pernas = 0, ...tipos } = res as Record<string, number>
+                const total = Object.values(tipos).reduce((a: number, b: any) => a + Number(b || 0), 0)
 
                 setAcaoResultado('reverify')
                 let corrigidos = 0
@@ -1367,9 +1373,10 @@ export default function Admin() {
 
                 const partes: string[] = []
                 if (total > 0) {
-                  partes.push(`${total} resolvido(s): ${Object.entries(res)
+                  partes.push(`${total} resolvido(s): ${Object.entries(tipos)
                     .filter(([, v]) => Number(v) > 0).map(([k, v]) => `${k} ${v}`).join(', ')}`)
                 }
+                if (Number(pernas) > 0) partes.push(`${pernas} perna(s) de bilhete completada(s)`)
                 if (corrigidos > 0) partes.push(`${corrigidos} corrigido(s) após revisão da API`)
                 showToast(partes.length ? partes.join(', ') : 'Nada pendente e nada a corrigir.')
                 carregarOverview()
