@@ -337,3 +337,101 @@ def aviso_de_plano_html(nome: str, titulo: str, corpo: str,
           {_botao(f"{site_url}/checkout", cta)}
         </td></tr>"""
     return casca(conteudo, logo_url, nota_rodape=nota)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 6. CAMPANHA DE REENGAJAMENTO
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# O único e-mail do produto que NÃO é transacional: os cinco acima nascem de
+# uma ação da pessoa (cadastrou, pediu senha, pagou, venceu), e este nasce de
+# uma decisão nossa de falar com quem sumiu.
+#
+# Essa diferença tem duas consequências no HTML, e nenhuma é estética:
+#
+#   * o rodapé ganha link de DESCADASTRO, e ele não pode depender de login ·
+#     quem sumiu não vai entrar no site pra desligar um e-mail, vai marcar
+#     como spam, e spam derruba a entrega dos transacionais também;
+#   * os números vêm calculados de fora (`numeros`), do mesmo lugar que a
+#     página pública de resultados lê. E-mail que anuncia taxa de acerto
+#     diferente da que o site mostra é pior que e-mail sem número nenhum.
+
+NOTA_CAMPANHA = "Você recebeu este e-mail porque tem uma conta no Pick IA."
+
+
+def _bloco_numeros(numeros: dict) -> str:
+    """Placar dos últimos 30 dias em três células. Vazio quando não há dado.
+
+    Silêncio em vez de zero: mês sem pick liquidado existe (o motor corta
+    volume de propósito quando a cauda não paga), e "0% de acerto" num e-mail
+    de reengajamento diz o contrário do que os dados dizem.
+    """
+    if not numeros or not numeros.get("total"):
+        return ""
+    celulas = [
+        (f'{numeros["win_rate"]}%', "de acerto"),
+        (str(numeros["total"]),     "picks resolvidos"),
+        (f'{numeros["lucro"]:+.1f}u'.replace(".", ","), "no periodo"),
+    ]
+    tds = "".join(
+        f'<td width="33%" align="center" style="background:{CAIXA};'
+        f'border:1px solid {CAIXA_BORDA};border-radius:12px;padding:14px 6px;">'
+        f'<div style="color:{VERDE_CLARO};font-size:22px;font-weight:900;">{valor}</div>'
+        f'<div style="color:{TEXTO_3};font-size:11px;margin-top:2px;">{rotulo}</div>'
+        f'</td><td width="8"></td>'
+        for valor, rotulo in celulas
+    )
+    return (f'<table width="100%" cellpadding="0" cellspacing="0" '
+            f'style="margin:0 0 24px;"><tr>{tds}</tr></table>')
+
+
+def _bloco_novidades(itens) -> str:
+    """Lista do que entrou no produto. Uma linha por item, marcador verde."""
+    if not itens:
+        return ""
+    linhas = "".join(
+        f'<tr><td width="18" valign="top" style="color:{VERDE_CLARO};'
+        f'font-size:15px;line-height:1.5;">&#9679;</td>'
+        f'<td style="padding-bottom:12px;">'
+        f'<div style="color:{TEXTO};font-size:14px;font-weight:700;">{titulo}</div>'
+        f'<div style="color:{TEXTO_3};font-size:13px;line-height:1.5;">{desc}</div>'
+        f'</td></tr>'
+        for titulo, desc in itens
+    )
+    return (f'<table width="100%" cellpadding="0" cellspacing="0" '
+            f'style="margin:0 0 24px;">{linhas}</table>')
+
+
+def campanha_html(primeiro_nome: str, titulo: str, paragrafos, cta_url: str,
+                  cta_rotulo: str, descadastro_url: str, logo_url: str = "",
+                  numeros: dict | None = None, novidades=None) -> str:
+    corpo = "".join(
+        f'<p style="margin:0 0 14px;color:{TEXTO_2};font-size:15px;line-height:1.65;">{p}</p>'
+        for p in paragrafos
+    )
+    conteudo = f"""        <tr><td style="background:{CARTAO};padding:32px 40px;">
+          <h2 style="margin:0 0 18px;color:{TEXTO};font-size:21px;font-weight:800;line-height:1.3;">{titulo}</h2>
+          {corpo}
+          <div style="height:12px;"></div>
+          {_bloco_numeros(numeros or {})}
+          {_bloco_novidades(novidades)}
+          <div style="text-align:center;">{_botao(cta_url, cta_rotulo)}</div>
+        </td></tr>"""
+    nota = (
+        f'{NOTA_CAMPANHA} '
+        f'<a href="{descadastro_url}" style="color:{TEXTO_3};text-decoration:underline;">'
+        f'Nao quero mais receber</a>.'
+    )
+    return casca(conteudo, logo_url, nota_rodape=nota)
+
+
+def campanha_texto(paragrafos, cta_url: str, descadastro_url: str) -> str:
+    """Versão em texto puro · vai junto no mesmo envio.
+
+    Não é acessibilidade só: e-mail de marketing sem parte textual cai em
+    spam com mais frequência, e o filtro é justamente o que este e-mail não
+    pode enfrentar.
+    """
+    linhas = list(paragrafos) + ["", cta_url, "",
+                                 f"Para nao receber mais: {descadastro_url}"]
+    return "\n\n".join(linhas)

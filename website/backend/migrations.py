@@ -1075,6 +1075,102 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_tier "
             "VARCHAR(10) NOT NULL DEFAULT 'pro';")
 
+        # DISPAROS E AVISO NO WHATSAPP (2026-09-14).
+        #
+        # Duas coisas diferentes que moram na mesma migration porque nascem da
+        # mesma aba do /admin:
+        #
+        #   1. CAMPANHA. E-mail de reengajamento pra quem sumiu. Isto e'
+        #      marketing, nao transacional, entao precisa de porta de saida
+        #      propria: `email_marketing_opt_out` NAO pode ser a mesma coisa
+        #      que `active`, senao quem so' queria parar de receber propaganda
+        #      perderia a conta. O default FALSE e' o unico possivel · a base
+        #      existente nunca foi perguntada, e assumir opt-out apagaria o
+        #      canal inteiro no dia em que ele nasce.
+        #
+        #   2. AVISO EM TEMPO REAL. O `whatsapp_opt_in` ja existia desde
+        #      08/2026 e nunca teve tela: era uma coluna que ninguem podia
+        #      ligar. Agora ela e' o interruptor geral do perfil, e as tres
+        #      colunas abaixo sao o que a pessoa escolhe DENTRO dele.
+        #
+        # Por que tres colunas e nao um JSONB de preferencias: o publico de
+        # cada aviso e' calculado em SQL (`campanhas.py`, `notifications.py`), e
+        # filtro em JSONB nao usa indice sem GIN. Coluna booleana e' o que
+        # deixa "quem recebe o aviso de ao vivo" ser uma pergunta barata.
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS "
+                    "email_marketing_opt_out BOOLEAN NOT NULL DEFAULT FALSE;")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS "
+                    "email_marketing_opt_out_at TIMESTAMP;")
+        # DEFAULT TRUE nas tres, e isso nao e' contradicao com o opt-in: elas
+        # so' sao lidas DEPOIS de `whatsapp_opt_in` passar. Quem liga o
+        # interruptor geral quer os avisos; quem quiser menos desliga um.
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS "
+                    "whatsapp_ao_vivo BOOLEAN NOT NULL DEFAULT TRUE;")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS "
+                    "whatsapp_picks_do_dia BOOLEAN NOT NULL DEFAULT TRUE;")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS "
+                    "whatsapp_resultado BOOLEAN NOT NULL DEFAULT TRUE;")
+
+        # QUEM JA RECEBEU O QUE.
+        #
+        # O indice unico e' a trava: sem ele, dois cliques no botao de disparo
+        # mandam o mesmo e-mail duas vezes, e o segundo e' o que faz a pessoa
+        # marcar como spam. Mesmo papel do `dedupe_key` do sino.
+        #
+        # `canal` entra na chave porque o mesmo texto sai por e-mail (sozinho) e
+        # por WhatsApp (na mao, pelo wa.me): sao dois envios distintos pra mesma
+        # pessoa, e um nao pode calar o outro.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS campanha_envios (
+                id          SERIAL PRIMARY KEY,
+                campanha    VARCHAR(40) NOT NULL,
+                canal       VARCHAR(12) NOT NULL,
+                user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                enviado_em  TIMESTAMP NOT NULL DEFAULT NOW(),
+                enviado_por INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                status      VARCHAR(12) NOT NULL DEFAULT 'enviado',
+                erro        TEXT
+            )
+        """)
+        cur.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_campanha_envios_unico
+            ON campanha_envios (campanha, canal, user_id)
+        """)
+        # A janela de 14 dias entre campanhas (campanhas.py) consulta por
+        # usuario + canal + data. Sem este indice ela e' seq scan na tabela
+        # inteira pra CADA linha do publico.
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_campanha_envios_user_canal
+            ON campanha_envios (user_id, canal, enviado_em DESC)
+        """)
+
+        # AVISO AUTOMATICO NO WHATSAPP · tabela separada de campanha_envios.
+        #
+        # Nao e' a mesma coisa: campanha e' um lote que o admin dispara uma vez
+        # e nunca repete, e isto aqui e' um fluxo que roda sozinho varias vezes
+        # por dia. Juntar os dois faria a janela de 14 dias entre campanhas
+        # engolir o aviso de pick ao vivo, e o produto que a pessoa pediu pra
+        # receber pararia de chegar por causa de um e-mail de marketing.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS whatsapp_envios (
+                id          SERIAL PRIMARY KEY,
+                user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                tipo        VARCHAR(24) NOT NULL,
+                dedupe_key  VARCHAR(120) NOT NULL,
+                enviado_em  TIMESTAMP NOT NULL DEFAULT NOW(),
+                status      VARCHAR(12) NOT NULL DEFAULT 'enviado',
+                erro        TEXT
+            )
+        """)
+        cur.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_whatsapp_envios_unico
+            ON whatsapp_envios (user_id, dedupe_key)
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_whatsapp_envios_dia
+            ON whatsapp_envios (user_id, enviado_em DESC)
+        """)
+
         conn.commit()
         return True
     except Exception as e:

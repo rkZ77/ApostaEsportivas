@@ -484,6 +484,13 @@ def notify_pick_result(cur, pick_id: int, pick_type: str, result: str) -> None:
                     "pnl":          round(pnl_r, 2) if pnl_r is not None else None,
                 },
             )
+            # O mesmo resultado no WhatsApp, pra quem ligou. Depois do sino
+            # pelo motivo de sempre: o item do sino é a fonte da verdade e não
+            # pode depender de a Meta responder.
+            avisar_resultado_no_whatsapp(
+                f["user_id"], pick_type, pick_id, label, match_label,
+                " ".join(parts) or market or "",
+            )
     except Exception as e:
         logger.warning("[NOTIF] Falha ao notificar resultado de %s #%s: %s", pick_type, pick_id, e)
 
@@ -583,7 +590,232 @@ def notificar_pick_live_novo(picks: list) -> int:
             url="/picks#ao_vivo",
             payload={"pick_id": pick_id, "pick_type": "live"},
         )
+        # O MESMO AVISO NO WHATSAPP, pra quem ligou (2026-09-14).
+        #
+        # Depois do sino de proposito: o item do sino e' a fonte da verdade e
+        # nao pode depender da Meta responder. Se o WhatsApp falhar, o aviso
+        # continua existindo no site.
+        avisar_ao_vivo_no_whatsapp(p)
     return criadas
+
+
+# ── WhatsApp · o mesmo aviso do sino, saindo por outra porta ────────────────
+#
+# TRES AVISOS, E CADA UM TEM UM MOTIVO PRA EXISTIR NESTE CANAL
+#
+#   AO VIVO      · o sino resolve o pick de pre-jogo: a pessoa abre o site
+#                  quando puder e o pick ainda esta la'. O ao vivo nao tem esse
+#                  conforto -- a odd vence em minutos, e quem nao esta com a
+#                  aba aberta perde. E' o aviso que mais justifica tocar o
+#                  celular de alguem.
+#   PICKS DO DIA · uma por dia, no fim do pipeline. Nao e' urgente, e' ancora:
+#                  e' o que faz a pessoa lembrar de abrir.
+#   RESULTADO    · so' pra quem SEGUIU o pick. E' o mais barato dos tres e o
+#                  menos sujeito a reclamacao, porque responde uma coisa que a
+#                  propria pessoa comecou.
+#
+# AS TRAVAS, e nenhuma e' zelo abstrato: o numero do WhatsApp e' UM so', e a
+# politica da Meta pra vertical de aposta trata denuncia no nivel da CONTA.
+#   1. opt-in explicito no perfil, com telefone verificado por SMS;
+#   2. cada aviso tem a propria coluna de preferencia, entao desligar um nao
+#      desliga os outros;
+#   3. dedupe por chave, que e' o que deixa isto ser chamado de dentro de um
+#      poll sem virar metralhadora;
+#   4. teto diario no ao vivo, que e' o unico que dispara em rajada.
+
+#: Teto de avisos de pick ao vivo por pessoa, por dia.
+#:
+#: Quatro porque o motor ao vivo publica em rajada: dia cheio de jogo produz
+#: mais pick numa tarde do que qualquer um entra pra apostar. Sem teto, o
+#: produto que a pessoa PEDIU vira o motivo de ela bloquear o numero -- e
+#: bloqueio em massa e' exatamente o sinal que a Meta usa pra derrubar conta.
+TETO_WHATSAPP_AO_VIVO_DIA = 4
+
+#: (coluna de preferencia, teto diario) de cada tipo de aviso.
+#:
+#: Declarado numa tabela so' porque o SQL de quem recebe e' identico nos tres:
+#: escrito a mao em cada lugar, viraria o mesmo defeito do `pick_sources` --
+#: uma copia esquecendo de checar o opt-in e mandando mensagem pra quem nao
+#: pediu, sem dar erro nenhum.
+_AVISOS_WA = {
+    "ao_vivo":      ("whatsapp_ao_vivo",      TETO_WHATSAPP_AO_VIVO_DIA),
+    "picks_do_dia": ("whatsapp_picks_do_dia", 1),
+    "resultado":    ("whatsapp_resultado",    8),
+}
+
+
+def _primeiro_nome(destino: dict) -> str:
+    """O nome como ele entra no template. "tudo bem" no lugar do vazio porque
+    "Ola , sua entrada" e' pior do que uma saudacao generica."""
+    partes = (destino.get("name") or "").strip().split()
+    return partes[0] if partes else "tudo bem"
+
+
+def _destinos_whatsapp(cur, tipo: str, dedupe_key: str,
+                       gate: str = "", user_id: int | None = None) -> list:
+    """Quem pode receber ESTE aviso agora. Uma consulta pros tres tipos.
+
+    `gate` e' a clausula de plano (SQL_PRO_ATIVO no ao vivo, vazio nos outros):
+    o corpo do aviso de ao vivo carrega mercado, linha e odd, que e' a analise
+    que a aba cobra, entao ele nao pode sair pra quem nao assina o Pro.
+    """
+    coluna, teto = _AVISOS_WA[tipo]
+    cur.execute(f"""
+        SELECT u.id, u.name, u.phone
+          FROM users u
+         WHERE u.active AND u.deleted_at IS NULL
+           {"AND " + gate if gate else ""}
+           {"AND u.id = %(user_id)s" if user_id is not None else ""}
+           AND COALESCE(u.whatsapp_opt_in, FALSE)
+           AND COALESCE(u.{coluna}, TRUE)
+           AND COALESCE(u.phone_verified, FALSE)
+           AND u.phone IS NOT NULL AND u.phone <> ''
+           AND NOT EXISTS (
+                 SELECT 1 FROM whatsapp_envios e
+                  WHERE e.user_id = u.id AND e.dedupe_key = %(dedupe)s
+               )
+           AND (
+                 SELECT COUNT(*) FROM whatsapp_envios e
+                  WHERE e.user_id = u.id
+                    AND e.tipo = %(tipo)s
+                    AND e.enviado_em >= DATE_TRUNC('day', NOW())
+               ) < {teto}
+    """, {"dedupe": dedupe_key, "tipo": tipo, "user_id": user_id})
+    return [dict(r) for r in cur.fetchall()]
+
+
+def _disparar_whatsapp(tipo: str, dedupe_key: str, template: str,
+                       variaveis, gate: str = "",
+                       user_id: int | None = None) -> int:
+    """Manda `template` pra quem pode receber. Devolve quantos sairam.
+
+    NUNCA levanta: isto e' chamado de dentro do poll do sino e do fim do
+    pipeline, e uma falha da Meta nao pode derrubar a requisicao de quem so'
+    queria ver a bolinha vermelha, nem fazer o pipeline (que ja gravou os
+    picks) parecer que falhou. Falha vira linha de log e nada mais.
+
+    `variaveis` pode ser uma lista (igual pra todo mundo) ou uma funcao que
+    recebe o destinatario e devolve a lista dele.
+    """
+    from runtime_env import side_effects_enabled
+    import whatsapp as wa
+
+    # O noprod aponta pro banco de PRODUCAO. Sem este freio, uma aba aberta no
+    # staging tocaria o celular do assinante real -- e pior: gravaria o dedupe,
+    # entao o aviso de verdade nao sairia depois.
+    if not side_effects_enabled():
+        return 0
+    if not wa.whatsapp_configurado():
+        return 0
+
+    conn = get_connection()
+    cur = conn.cursor()
+    enviados = 0
+    try:
+        destinos = _destinos_whatsapp(cur, tipo, dedupe_key, gate, user_id)
+        for d in destinos:
+            # O INSERT vem ANTES do envio. Se a Meta demorar e a requisicao
+            # cair no meio, o pior caso vira "aviso que nao saiu" em vez de
+            # "mesmo aviso tres vezes" -- e o segundo e' o que faz bloquear.
+            try:
+                cur.execute("""
+                    INSERT INTO whatsapp_envios (user_id, tipo, dedupe_key)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (user_id, dedupe_key) DO NOTHING
+                """, (d["id"], tipo, dedupe_key))
+                if cur.rowcount == 0:
+                    continue
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                logger.warning("[WA] Nao registrou envio do user %s: %s", d["id"], e)
+                continue
+
+            try:
+                vars_dele = variaveis(d) if callable(variaveis) else variaveis
+                wa.enviar_template(d["phone"], template, vars_dele)
+                enviados += 1
+            except Exception as e:
+                cur.execute("""
+                    UPDATE whatsapp_envios SET status = 'falhou', erro = %s
+                     WHERE user_id = %s AND dedupe_key = %s
+                """, (str(e)[:300], d["id"], dedupe_key))
+                conn.commit()
+                logger.warning("[WA] Falha no aviso %s do user %s: %s", tipo, d["id"], e)
+        return enviados
+    except Exception as e:
+        conn.rollback()
+        logger.warning("[WA] Aviso %s (%s) nao saiu: %s", tipo, dedupe_key, e)
+        return 0
+    finally:
+        cur.close()
+        conn.close()
+
+
+def avisar_ao_vivo_no_whatsapp(pick: dict) -> int:
+    """O pick ao vivo pra quem tem o Pro e ligou o aviso."""
+    import whatsapp as wa
+
+    pick_id = pick.get("id")
+    if pick_id is None:
+        return 0
+    home, away = pick.get("home_team_name"), pick.get("away_team_name")
+    jogo = f"{home} x {away}" if home and away else "Jogo ao vivo"
+    mercado = (f"{pick.get('market') or 'Mercado'} "
+               f"{pick.get('line') or ''}").strip()
+    return _disparar_whatsapp(
+        "ao_vivo", f"ao_vivo:{pick_id}", wa.TEMPLATE_AO_VIVO,
+        # A ORDEM E' A DO TEMPLATE APROVADO NA META (ver
+        # website/scripts/whatsapp/README.md). Trocar aqui sem trocar la' manda
+        # o nome do jogo pro lugar da odd, e a mensagem sai errada sem dar erro
+        # nenhum -- a Meta so' confere a QUANTIDADE de variaveis.
+        lambda d: [_primeiro_nome(d), jogo, mercado, str(pick.get("odd"))],
+        gate=SQL_PRO_ATIVO,
+    )
+
+
+def avisar_picks_do_dia_no_whatsapp(data_iso: str) -> int:
+    """Uma mensagem por dia, no fim do pipeline · a mesma chave do sino.
+
+    Sem gate de plano de propósito: o corpo não carrega pick nenhum, só diz que
+    a leva do dia saiu, e o free tem a Dica do dia pra abrir.
+
+    SEM CONTAGEM no texto, e isso é decisão. O número de picks que vale pra
+    cada pessoa depende do plano dela (o free vê os abertos pra ele, não o
+    total), e um número só pra base toda estaria errado pra metade dela · o
+    tipo de erro que a pessoa confere em dois cliques e não esquece.
+    """
+    import whatsapp as wa
+
+    return _disparar_whatsapp(
+        "picks_do_dia", f"picks_do_dia:{data_iso}", wa.TEMPLATE_PICKS_DO_DIA,
+        lambda d: [_primeiro_nome(d)],
+    )
+
+
+def avisar_resultado_no_whatsapp(user_id: int, pick_type: str, pick_id,
+                                 rotulo: str, jogo: str, resumo: str) -> int:
+    """O resultado da entrada, pra quem seguiu aquele pick.
+
+    Por usuário e não em lote porque o resultado É por usuário: o mesmo pick
+    encerra GREEN pra um e RED pra quem fez cashout no vermelho, e o valor em
+    reais depende da odd declarada e da unidade de cada um.
+
+    ANULADA NÃO SAI DAQUI. A régua do canal é "se não muda uma decisão sua, não
+    é enviada", e PUSH é exatamente o caso: ninguém ganhou nem perdeu, a banca
+    não mexeu. O item continua no sino, que é onde histórico mora.
+    """
+    import whatsapp as wa
+
+    if rotulo == "PUSH":
+        return 0
+    template = (wa.TEMPLATE_RESULTADO_GREEN if rotulo in ("GREEN", "HALF-WIN")
+                else wa.TEMPLATE_RESULTADO_RED)
+    return _disparar_whatsapp(
+        "resultado", f"resultado:{pick_type}:{pick_id}", template,
+        # A ordem é a do template aprovado: nome, jogo e mercado, P&L.
+        lambda d: [_primeiro_nome(d), jogo, resumo], user_id=user_id,
+    )
 
 
 #: Idade máxima de um pick ao vivo pra ainda valer aviso.
@@ -777,6 +1009,112 @@ def mark_all_notifications_read(current_user: dict = Depends(get_current_user)):
         count = cur.rowcount
         conn.commit()
         return {"ok": True, "marked": count}
+    finally:
+        cur.close()
+        conn.close()
+
+
+# ── Avisos no WhatsApp · a tela onde o usuário autoriza ──────────────────────
+#
+# A coluna `whatsapp_opt_in` existe desde 08/2026 e nunca teve interruptor:
+# era um campo que ninguém podia ligar, e por isso a audiência de WhatsApp no
+# /admin era zero permanente. Estas duas rotas são o que faltava.
+#
+# O TELEFONE VERIFICADO É PRÉ-REQUISITO, e a rota recusa sem ele. Telefone não
+# verificado pode ser o do vizinho · foi por isso que o SMS entrou quando o CPF
+# saiu do cadastro (18/08/2026), e mandar aviso pro número errado é denúncia na
+# certa. A denúncia custa o número inteiro, não uma mensagem.
+
+class PrefsWhatsApp(BaseModel):
+    opt_in: bool
+    ao_vivo: bool = True
+    picks_do_dia: bool = True
+    resultado: bool = True
+
+
+@router.get("/whatsapp")
+def get_prefs_whatsapp(current_user: dict = Depends(get_current_user)):
+    """O que a pessoa escolheu, mais o que o ambiente consegue entregar.
+
+    `disponivel` vem junto de propósito: sem provedor configurado a tela tem
+    que dizer isso, em vez de aceitar o toggle e prometer um aviso que nunca
+    vai sair. Mesmo raciocínio do `sms_configurado`.
+    """
+    import whatsapp as wa
+
+    conn = get_connection()
+    cur  = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT phone, COALESCE(phone_verified, FALSE) AS phone_verified,
+                   COALESCE(whatsapp_opt_in, FALSE)      AS opt_in,
+                   whatsapp_opt_in_at,
+                   COALESCE(whatsapp_ao_vivo, TRUE)      AS ao_vivo,
+                   COALESCE(whatsapp_picks_do_dia, TRUE) AS picks_do_dia,
+                   COALESCE(whatsapp_resultado, TRUE)    AS resultado
+              FROM users WHERE id = %s
+        """, (current_user["id"],))
+        u = dict(cur.fetchone() or {})
+        # O telefone volta MASCARADO: a tela só precisa confirmar qual número
+        # é, e o corpo da resposta acaba em log de proxy com mais frequência do
+        # que se imagina.
+        tel = (u.get("phone") or "")
+        return {
+            "disponivel":     wa.whatsapp_configurado(),
+            "telefone":       (f"{tel[:-4].replace(tel[3:-4], '*' * len(tel[3:-4]))}{tel[-4:]}"
+                               if len(tel) > 7 else ""),
+            "phone_verified": bool(u.get("phone_verified")),
+            "opt_in":         bool(u.get("opt_in")),
+            "opt_in_at":      u.get("whatsapp_opt_in_at"),
+            "ao_vivo":        bool(u.get("ao_vivo")),
+            "picks_do_dia":   bool(u.get("picks_do_dia")),
+            "resultado":      bool(u.get("resultado")),
+            # Só quem tem o Pro recebe aviso de ao vivo, porque só ele vê o
+            # produto. Dizer isso na tela evita o toggle ligado que não toca.
+            "ao_vivo_no_plano": bool(current_user.get("plan") in ("admin", "trial")
+                                     or (current_user.get("plan") == "vip"
+                                         and (current_user.get("plan_tier") or "pro") == "pro")),
+            "teto_dia":       TETO_WHATSAPP_AO_VIVO_DIA,
+        }
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.put("/whatsapp")
+def put_prefs_whatsapp(body: PrefsWhatsApp,
+                       current_user: dict = Depends(get_current_user)):
+    conn = get_connection()
+    cur  = conn.cursor()
+    try:
+        cur.execute("SELECT COALESCE(phone_verified, FALSE) AS ok, phone FROM users WHERE id = %s",
+                    (current_user["id"],))
+        row = dict(cur.fetchone() or {})
+        if body.opt_in and not (row.get("ok") and row.get("phone")):
+            raise HTTPException(
+                400,
+                "Confirme seu telefone antes de ligar os avisos no WhatsApp.",
+            )
+        # `opt_in_at` só é carimbado quando LIGA, e nunca é apagado ao
+        # desligar: é a prova de consentimento, e ela precisa sobreviver ao
+        # desligamento pra responder "quando essa pessoa autorizou".
+        cur.execute("""
+            UPDATE users
+               SET whatsapp_opt_in = %s,
+                   whatsapp_opt_in_at = CASE
+                       WHEN %s AND NOT COALESCE(whatsapp_opt_in, FALSE) THEN NOW()
+                       ELSE whatsapp_opt_in_at END,
+                   whatsapp_ao_vivo = %s,
+                   whatsapp_picks_do_dia = %s,
+                   whatsapp_resultado = %s
+             WHERE id = %s
+        """, (body.opt_in, body.opt_in, body.ao_vivo, body.picks_do_dia,
+              body.resultado, current_user["id"]))
+        conn.commit()
+        return {"ok": True, "opt_in": body.opt_in}
+    except HTTPException:
+        conn.rollback()
+        raise
     finally:
         cur.close()
         conn.close()

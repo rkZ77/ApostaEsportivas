@@ -1691,3 +1691,80 @@ def public_market_movement(days: int = Query(30, ge=1, le=365)):
             for r in rows[:40]
         ],
     }
+
+
+# ─────────────────────── Descadastro de e-mail (1 clique) ───────────────────
+#
+# Rota PÚBLICA e sem login, de propósito. O e-mail de campanha vai justamente
+# pra quem sumiu, e exigir login pra desligar propaganda é o desenho que faz a
+# pessoa clicar em "marcar como spam" · e reclamação de spam derruba a entrega
+# dos e-mails TRANSACIONAIS junto (confirmação de cadastro, senha, pagamento),
+# que são os que o produto não pode perder.
+#
+# Devolve HTML e não JSON porque o destino é um clique dentro do Gmail: a
+# pessoa sai do e-mail e cai aqui. Página do backend em vez de rota no
+# frontend porque ela precisa funcionar mesmo que o clique venha de um cliente
+# que não executa JavaScript.
+#
+# NÃO desativa a conta. Só o marketing para · o transacional continua, porque
+# ele não é escolha nossa: é resposta a uma ação da pessoa.
+
+def _pagina_descadastro(titulo: str, texto: str) -> "HTMLResponse":
+    from fastapi.responses import HTMLResponse
+
+    return HTMLResponse(f"""<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>{titulo} · Pick IA</title></head>
+<body style="margin:0;background:#0a0a0a;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;">
+  <div style="max-width:440px;margin:0 auto;padding:64px 20px;text-align:center;">
+    <div style="color:#22c55e;font-size:26px;font-weight:900;letter-spacing:-0.5px;">Pick<span style="color:#bbf7d0;">IA</span></div>
+    <h1 style="margin:28px 0 12px;color:#fff;font-size:20px;font-weight:800;">{titulo}</h1>
+    <p style="margin:0 0 28px;color:#a1a1aa;font-size:15px;line-height:1.6;">{texto}</p>
+    <a href="/" style="display:inline-block;background:#16a34a;color:#fff;text-decoration:none;
+       font-weight:700;font-size:14px;padding:12px 28px;border-radius:10px;">Ir para o site</a>
+  </div>
+</body></html>""")
+
+
+@router.get("/descadastrar")
+def descadastrar_email(token: str = Query(..., max_length=80)):
+    import campanhas
+
+    user_id = campanhas.user_de_token(token)
+    if not user_id:
+        return _pagina_descadastro(
+            "Link inválido",
+            "Este link de descadastro não é válido ou foi digitado errado. "
+            "Se quiser parar de receber, responda o e-mail que avisamos por aqui.",
+        )
+
+    conn = get_connection()
+    cur  = conn.cursor()
+    try:
+        cur.execute("""
+            UPDATE users
+               SET email_marketing_opt_out = TRUE,
+                   email_marketing_opt_out_at = NOW()
+             WHERE id = %s
+        """, (user_id,))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        logger.exception("[DESCADASTRO] Falha para o user %s", user_id)
+        return _pagina_descadastro(
+            "Não deu certo agora",
+            "Tivemos um problema ao registrar seu pedido. Tente de novo em "
+            "alguns minutos, ou responda o e-mail que resolvemos na mão.",
+        )
+    finally:
+        cur.close()
+        conn.close()
+
+    return _pagina_descadastro(
+        "Pronto, não mandamos mais",
+        "Você saiu dos e-mails de novidade do Pick IA. Sua conta continua "
+        "ativa, e os avisos de cadastro, senha e pagamento continuam chegando "
+        "normalmente, porque esses respondem a algo que você fez.",
+    )

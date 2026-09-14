@@ -836,6 +836,16 @@ def _notificar_picks_publicados():
             payload={"date": today_key},
         )
         logger.info("[NOTIF] Picks do dia: %d notificacoes criadas.", created)
+
+        # O MESMO AVISO NO WHATSAPP, pra quem ligou no perfil. Depois do sino
+        # de proposito: o item do sino e' a fonte da verdade e nao pode
+        # depender de a Meta responder. Mesma chave de dedupe (a data), entao
+        # pipeline rodado duas vezes no mesmo dia continua sendo um aviso so'.
+        from routers.notifications import avisar_picks_do_dia_no_whatsapp
+
+        saiu = avisar_picks_do_dia_no_whatsapp(today_key)
+        if saiu:
+            logger.info("[WA] Picks do dia: %d avisos enviados.", saiu)
     except Exception as notif_err:
         logger.warning("[NOTIF] Erro ao criar notificacoes pos-pipeline: %s", notif_err)
 
@@ -7300,6 +7310,386 @@ def desativar_bookmaker(bookmaker_id: int, current_user: dict = Depends(require_
             "desativada": row["bookmaker_name"],
             "aviso": "Odds já coletadas não são afetadas. Só a coleta futura ignora esta casa.",
         }
+    finally:
+        cur.close()
+        conn.close()
+
+
+# ═══════════════════════════════ DISPAROS ═══════════════════════════════════
+#
+# A aba que faltava no /admin: dava pra MEDIR quem sumiu (Funil, Engajamento) e
+# não dava pra falar com essa gente. Quem recebe, o que diz e por que existe
+# mora em `campanhas.py` · aqui só tem a execução.
+#
+# TRÊS TRAVAS, e nenhuma é enfeite:
+#
+#   1. O envio em lote exige `side_effects_enabled()`. O noprod aponta pro
+#      banco de PRODUÇÃO: um clique ali mandaria e-mail de verdade pra base
+#      real e, pior, gravaria o dedupe · o disparo de verdade não sairia
+#      depois. Mesmo raciocínio do `varredura_habilitada`.
+#   2. `limite` é obrigatório e tem teto. Campanha nova sempre sai primeiro pra
+#      um punhado de gente: taxa de rejeição só aparece depois do envio, e
+#      descobrir isso com a base inteira já queimada não tem volta.
+#   3. O teste vai pro e-mail do próprio admin e NÃO grava dedupe. Sem isso,
+#      testar a campanha gastaria um destinatário real de propósito.
+
+#: Teto de destinatários por clique. Não é limite técnico (o Resend aguenta
+#: mais): é o que obriga o disparo a ser acompanhado em lotes, que é como se
+#: descobre um assunto ruim antes de ele alcançar a base toda.
+_DISPARO_LIMITE_MAX = 500
+
+
+def _numeros_30d(cur) -> dict:
+    """Placar dos últimos 30 dias, no formato que o e-mail de campanha lê.
+
+    Mesma conta do resto do site (`taxa_acerto.py`): meio-green é acerto,
+    anulada sai do denominador. Um e-mail anunciando taxa diferente da que a
+    página pública mostra é pior que um e-mail sem número nenhum · quem
+    comparar conclui que uma das duas mente.
+    """
+    from pick_sources import fontes
+    from taxa_acerto import taxa_acerto
+
+    partes = [
+        f"SELECT result, COALESCE(profit, 0) AS profit FROM {tabela} "
+        f"WHERE result IS NOT NULL AND match_date >= CURRENT_DATE - INTERVAL '30 days'"
+        for _tipo, tabela, _alias, _odd, _opc in fontes(cur)
+    ]
+    if not partes:
+        return {}
+    cur.execute(f"""
+        WITH todos AS ({" UNION ALL ".join(partes)})
+        SELECT COUNT(*)                                   AS total,
+               COUNT(*) FILTER (WHERE result = 'GREEN')    AS greens,
+               COUNT(*) FILTER (WHERE result = 'HALF-WIN') AS half_wins,
+               COUNT(*) FILTER (WHERE result = 'PUSH')     AS push,
+               COALESCE(SUM(profit), 0)                    AS lucro
+          FROM todos
+    """)
+    r = dict(cur.fetchone() or {})
+    total = int(r.get("total") or 0)
+    if not total:
+        return {}
+    return {
+        "total":    total,
+        "win_rate": taxa_acerto(int(r.get("greens") or 0), total,
+                                int(r.get("half_wins") or 0),
+                                int(r.get("push") or 0)),
+        "lucro":    round(float(r.get("lucro") or 0), 1),
+    }
+
+
+def _monta_email(c, destinatario: dict, site_url: str, numeros: dict) -> tuple:
+    """(assunto, html, texto) de UM destinatário. Sai tudo da mesma função
+    porque a prévia da tela e o envio de verdade têm que ser o mesmo e-mail."""
+    import campanhas
+    from email_templates import campanha_html, campanha_texto, url_logo
+
+    nome = campanhas.primeiro_nome(destinatario.get("name") or "")
+    paragrafos = [p.format(nome=nome) for p in c.paragrafos]
+    cta_url = f"{site_url}{c.cta_caminho}"
+    unsub = (f"{site_url}/api/public/descadastrar"
+             f"?token={campanhas.token_descadastro(destinatario['id'])}")
+    html = campanha_html(
+        nome, c.titulo, paragrafos, cta_url, c.cta_rotulo, unsub,
+        logo_url=url_logo(site_url),
+        numeros=numeros if c.mostra_numeros else None,
+        novidades=campanhas.NOVIDADES if c.mostra_novidades else None,
+    )
+    return c.assunto, html, campanha_texto(paragrafos, cta_url, unsub)
+
+
+@router.get("/disparos")
+def admin_disparos(current_user: dict = Depends(require_admin)):
+    """O catálogo com o público de cada campanha, nos dois canais.
+
+    A contagem sai do MESMO SQL do envio (`campanhas.sql_publico`). Uma
+    consulta "parecida" só pra contar é como o painel começa a prometer 300
+    envios e a fila sai com 180.
+    """
+    import campanhas
+    from runtime_env import side_effects_enabled
+    import whatsapp as wa
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        saida = []
+        for c in campanhas.CAMPANHAS:
+            linha = {
+                "id": c.id, "nome": c.nome, "objetivo": c.objetivo,
+                "assunto": c.assunto, "cta": c.cta_rotulo,
+            }
+            for canal in ("email", "whatsapp"):
+                cur.execute(
+                    f"SELECT COUNT(*) AS n FROM ({campanhas.sql_publico(c, canal)}) q",
+                    {"campanha": c.id, "canal": canal},
+                )
+                linha[f"publico_{canal}"] = int((cur.fetchone() or {}).get("n") or 0)
+            cur.execute("""
+                SELECT canal, COUNT(*) AS n, MAX(enviado_em) AS ultimo
+                  FROM campanha_envios WHERE campanha = %s GROUP BY canal
+            """, (c.id,))
+            linha["ja_enviados"] = {
+                r["canal"]: {"n": int(r["n"]), "ultimo": r["ultimo"]}
+                for r in cur.fetchall()
+            }
+            saida.append(linha)
+
+        # Por que a base inteira aparece aqui: sem ela, "412 elegíveis" não quer
+        # dizer nada · pode ser metade da base ou pode ser 3%.
+        cur.execute("""
+            SELECT COUNT(*) AS total,
+                   COUNT(*) FILTER (WHERE COALESCE(email_marketing_opt_out, FALSE)) AS opt_out,
+                   COUNT(*) FILTER (WHERE COALESCE(whatsapp_opt_in, FALSE))         AS wa_opt_in,
+                   COUNT(*) FILTER (WHERE COALESCE(phone_verified, FALSE))          AS tel_verificado
+              FROM users WHERE active AND deleted_at IS NULL AND plan <> 'admin'
+        """)
+        base = {k: int(v or 0) for k, v in dict(cur.fetchone() or {}).items()}
+
+        return {
+            "campanhas": saida,
+            "base": base,
+            "envio_email_ativo": bool(os.getenv("RESEND_API_KEY")) and side_effects_enabled(),
+            "whatsapp_automatico": wa.whatsapp_configurado(),
+            "limite_max": _DISPARO_LIMITE_MAX,
+        }
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.get("/disparos/{campanha_id}/previa")
+def admin_disparo_previa(campanha_id: str,
+                         current_user: dict = Depends(require_admin)):
+    """O e-mail exatamente como vai sair, mais os 10 primeiros da fila.
+
+    A prévia é renderizada pro PRÓPRIO admin (nome e link de descadastro dele):
+    montá-la com o dado de um usuário real colocaria o token de descadastro de
+    outra pessoa numa resposta de API.
+    """
+    import campanhas
+    from routers.auth import _site_url
+
+    try:
+        c = campanhas.campanha(campanha_id)
+    except KeyError:
+        raise HTTPException(404, "Campanha desconhecida.")
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        numeros = _numeros_30d(cur)
+        assunto, html, texto = _monta_email(c, dict(current_user), _site_url(), numeros)
+
+        cur.execute(campanhas.sql_publico(c, "email") + " LIMIT 10",
+                    {"campanha": c.id, "canal": "email"})
+        fila = [
+            {
+                "nome": r["name"],
+                # E-mail mascarado: a fila serve pra conferir "é esse povo
+                # mesmo?", não é lista de contatos, e o corpo da resposta acaba
+                # em log de proxy com mais frequência do que se imagina.
+                "email": (r["email"][:2] + "***@" + r["email"].split("@")[-1])
+                         if r["email"] and "@" in r["email"] else "",
+                "plano": r["plan"],
+                "ultimo_login": r["last_login_at"],
+            }
+            for r in cur.fetchall()
+        ]
+        return {"assunto": assunto, "html": html, "texto": texto,
+                "numeros": numeros, "fila": fila}
+    finally:
+        cur.close()
+        conn.close()
+
+
+class DisparoBody(BaseModel):
+    limite: int = 50
+    #: Manda só pro e-mail do admin logado, e não grava dedupe nenhum.
+    teste: bool = False
+
+    @field_validator("limite")
+    @classmethod
+    def _limite_sao(cls, v: int) -> int:
+        if v < 1 or v > _DISPARO_LIMITE_MAX:
+            raise ValueError(f"limite tem que ficar entre 1 e {_DISPARO_LIMITE_MAX}")
+        return v
+
+
+@router.post("/disparos/{campanha_id}/enviar")
+def admin_disparo_enviar(campanha_id: str, body: DisparoBody,
+                         current_user: dict = Depends(require_admin)):
+    import campanhas
+    from routers.auth import _send_email, _site_url
+    from runtime_env import side_effects_enabled
+
+    try:
+        c = campanhas.campanha(campanha_id)
+    except KeyError:
+        raise HTTPException(404, "Campanha desconhecida.")
+
+    site_url = _site_url()
+
+    if body.teste:
+        # O teste não abre a fila e não grava dedupe: ele só prova que o HTML
+        # chega inteiro num cliente de e-mail de verdade.
+        conn = get_connection()
+        cur = conn.cursor()
+        try:
+            numeros = _numeros_30d(cur)
+        finally:
+            cur.close()
+            conn.close()
+        assunto, html, texto = _monta_email(c, dict(current_user), site_url, numeros)
+        _send_email(to=current_user["email"], subject=f"[teste] {assunto}",
+                    body=texto, html=html)
+        return {"ok": True, "teste": True, "enviados": 1,
+                "para": current_user["email"]}
+
+    if not side_effects_enabled():
+        raise HTTPException(
+            409,
+            "Disparo desligado neste ambiente. O staging aponta pro banco de "
+            "producao: enviar daqui gravaria o dedupe da base real e o disparo "
+            "de verdade nao sairia depois.",
+        )
+    if not os.getenv("RESEND_API_KEY"):
+        raise HTTPException(409, "RESEND_API_KEY nao configurado · nada sairia.")
+
+    conn = get_connection()
+    cur = conn.cursor()
+    enviados, falhas = 0, 0
+    try:
+        numeros = _numeros_30d(cur)
+        cur.execute(campanhas.sql_publico(c, "email") + f" LIMIT {body.limite}",
+                    {"campanha": c.id, "canal": "email"})
+        fila = [dict(r) for r in cur.fetchall()]
+
+        for d in fila:
+            # O registro vem ANTES do envio, igual no aviso de WhatsApp: se a
+            # requisição cair no meio, o pior caso vira "e-mail que não saiu"
+            # em vez de "mesmo e-mail duas vezes" · e é o segundo que faz a
+            # pessoa marcar como spam.
+            try:
+                cur.execute("""
+                    INSERT INTO campanha_envios (campanha, canal, user_id, enviado_por)
+                    VALUES (%s, 'email', %s, %s)
+                    ON CONFLICT (campanha, canal, user_id) DO NOTHING
+                """, (c.id, d["id"], current_user["id"]))
+                if cur.rowcount == 0:
+                    continue
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                falhas += 1
+                continue
+
+            assunto, html, texto = _monta_email(c, d, site_url, numeros)
+            try:
+                _send_email(to=d["email"], subject=assunto, body=texto, html=html)
+                enviados += 1
+            except Exception as e:
+                falhas += 1
+                cur.execute("""
+                    UPDATE campanha_envios SET status = 'falhou', erro = %s
+                     WHERE campanha = %s AND canal = 'email' AND user_id = %s
+                """, (str(e)[:300], c.id, d["id"]))
+                conn.commit()
+
+        # Quantos AINDA faltam, pra o próximo lote não depender de recarregar.
+        cur.execute(f"SELECT COUNT(*) AS n FROM ({campanhas.sql_publico(c, 'email')}) q",
+                    {"campanha": c.id, "canal": "email"})
+        restam = int((cur.fetchone() or {}).get("n") or 0)
+        return {"ok": True, "enviados": enviados, "falhas": falhas, "restam": restam}
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.get("/disparos/{campanha_id}/whatsapp")
+def admin_disparo_whatsapp(campanha_id: str,
+                           limite: int = Query(30, ge=1, le=100),
+                           current_user: dict = Depends(require_admin)):
+    """A fila do WhatsApp com o link `wa.me` de cada um, texto já montado.
+
+    NÃO DISPARA NADA, e isso é a decisão, não uma etapa que ficou faltando. A
+    política da Meta pra vertical de aposta trata denúncia no nível da CONTA
+    (ver website/scripts/whatsapp/README.md), e o número é um só: campanha de
+    marketing em lote pra quem não pediu é o caminho mais curto pra perdê-lo.
+    O aviso automático que existe (pick ao vivo) é outro caso · aquele a pessoa
+    ligou no próprio perfil, com telefone verificado.
+
+    Aqui o admin abre uma conversa por vez e clica em "marquei" depois.
+    """
+    import campanhas
+    from routers.auth import _site_url
+
+    try:
+        c = campanhas.campanha(campanha_id)
+    except KeyError:
+        raise HTTPException(404, "Campanha desconhecida.")
+
+    site_url = _site_url()
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(campanhas.sql_publico(c, "whatsapp") + f" LIMIT {limite}",
+                    {"campanha": c.id, "canal": "whatsapp"})
+        fila = []
+        for r in cur.fetchall():
+            nome = campanhas.primeiro_nome(r["name"] or "")
+            texto = c.whatsapp.format(nome=nome, url=f"{site_url}{c.cta_caminho}")
+            fila.append({
+                "user_id": r["id"], "nome": r["name"], "telefone": r["phone"],
+                "plano": r["plan"], "ultimo_login": r["last_login_at"],
+                "texto": texto, "link": campanhas.link_whatsapp(r["phone"], texto),
+            })
+        return {"fila": fila, "total": len(fila)}
+    finally:
+        cur.close()
+        conn.close()
+
+
+class MarcarEnvioBody(BaseModel):
+    user_ids: list[int]
+    canal: str = "whatsapp"
+
+
+@router.post("/disparos/{campanha_id}/marcar")
+def admin_disparo_marcar(campanha_id: str, body: MarcarEnvioBody,
+                         current_user: dict = Depends(require_admin)):
+    """Registra o envio manual · é o que tira a pessoa da fila da próxima vez.
+
+    Separado do envio porque no WhatsApp quem manda é o dedo do admin: sem esta
+    rota a mesma lista reapareceria inteira amanhã, e alguém receberia a mesma
+    mensagem duas vezes.
+    """
+    import campanhas
+
+    try:
+        campanhas.campanha(campanha_id)
+    except KeyError:
+        raise HTTPException(404, "Campanha desconhecida.")
+    if body.canal not in ("whatsapp", "email"):
+        raise HTTPException(400, "Canal invalido.")
+    if not body.user_ids:
+        return {"ok": True, "marcados": 0}
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.executemany("""
+            INSERT INTO campanha_envios (campanha, canal, user_id, enviado_por)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (campanha, canal, user_id) DO NOTHING
+        """, [(campanha_id, body.canal, uid, current_user["id"])
+              for uid in body.user_ids[:200]])
+        conn.commit()
+        return {"ok": True, "marcados": len(body.user_ids[:200])}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(500, f"Falha ao registrar: {e}")
     finally:
         cur.close()
         conn.close()

@@ -9,9 +9,70 @@ telefone e libera o trial, papel que era do CPF até 18/08/2026.
 
 | Aviso | Quem recebe | Frequência máxima | Gatilho no código |
 |---|---|---|---|
-| Picks do dia publicados | Todo mundo com opt-in | 1x por dia | `_notificar_picks_publicados()` · [admin.py:462](../../backend/routers/admin.py#L462) |
-| Resultado da entrada | Só quem seguiu o pick | 1x por pick resolvido, agrupado | `notify_pick_result()` · [notifications.py:313](../../backend/routers/notifications.py#L313) |
-| Reengajamento | Sem login há 10+ dias | 1x a cada 30 dias, máximo 2 no total | botão no `/admin` |
+| Oportunidade ao vivo | Pick IA Pro com opt-in | 4x por dia, 1x por pick | `avisar_ao_vivo_no_whatsapp()` · [notifications.py](../../backend/routers/notifications.py) |
+| Picks do dia publicados | Todo mundo com opt-in | 1x por dia | `_notificar_picks_publicados()` · [admin.py](../../backend/routers/admin.py) |
+| Resultado da entrada | Só quem seguiu o pick | 1x por pick resolvido | `notify_pick_result()` · [notifications.py](../../backend/routers/notifications.py) |
+| Reengajamento | Campanha do `/admin` | manual, uma conversa por vez | aba Disparos · [AdminDisparos.tsx](../../frontend/src/components/AdminDisparos.tsx) |
+
+## Estado (14/09/2026)
+
+O canal **existe no código**. O que falta é do lado da Meta, não do nosso.
+
+Pronto e ligado:
+
+- `website/backend/whatsapp.py` · envio pela Cloud API, com modo `log` no
+  default (mesmo desenho do `sms.py`: sem `WHATSAPP_PROVIDER=cloud` nada sai da
+  máquina, e o fluxo inteiro continua testável).
+- O interruptor no `/perfil` ([AvisosWhatsApp.tsx](../../frontend/src/components/AvisosWhatsApp.tsx)).
+  A coluna `whatsapp_opt_in` existia desde 08/2026 e **nunca teve tela** · era um
+  campo que ninguém podia ligar, e por isso a audiência no `/admin` era zero
+  permanente. O card exige telefone verificado por SMS e some inteiro quando o
+  ambiente não tem provedor.
+- Uma coluna de preferência por aviso (`whatsapp_ao_vivo`,
+  `whatsapp_picks_do_dia`, `whatsapp_resultado`): desligar um não desliga os
+  outros.
+- `whatsapp_envios` com `UNIQUE (user_id, dedupe_key)` e teto diário por tipo.
+- A aba **Disparos** no `/admin`, com campanha por e-mail (em lote, com
+  descadastro de um clique) e fila de WhatsApp manual por `wa.me`.
+
+Falta, e é o que segura tudo:
+
+1. a autorização da Meta para vertical regulada (seção "Riscos de política");
+2. subir os cinco templates abaixo e esperar aprovação;
+3. `WHATSAPP_PROVIDER=cloud`, `WHATSAPP_TOKEN` e `WHATSAPP_PHONE_ID` no Railway.
+
+**O nome do template no painel tem que bater com a constante em `whatsapp.py`.**
+Nome errado devolve erro 132001 e a mensagem não sai · e a Meta só confere a
+QUANTIDADE de variáveis, então trocar a ordem aqui sem trocar lá manda o nome do
+jogo pro lugar da odd sem dar erro nenhum.
+
+---
+
+## 0. Oportunidade ao vivo
+
+O aviso que mais justifica tocar o celular de alguém, e o motivo é de produto: o
+sino resolve o pick de pré-jogo (a pessoa abre o site quando puder e ele ainda
+está lá), e o ao vivo não tem esse conforto · a odd vence em minutos, e quem não
+está com a aba aberta perde.
+
+Só pra quem tem o **Pick IA Pro**, porque o corpo carrega mercado, linha e odd,
+que é a análise que a aba cobra. Teto de 4 por dia: o motor ao vivo publica em
+rajada, e sem teto o produto que a pessoa pediu vira o motivo de ela bloquear o
+número.
+
+**Nome:** `pick_ao_vivo_v1` · **Categoria:** UTILITY · **Idioma:** pt_BR
+
+```
+{{1}}, saiu uma entrada ao vivo agora.
+
+{{2}} · {{3}} @ {{4}}
+
+A janela é curta, o preço muda com o jogo.
+```
+
+- **Botão URL:** `Ver ao vivo` → `https://pickia.com.br/picks#ao_vivo`
+- **Variáveis:** `{{1}}` primeiro nome · `{{2}}` `Ceará x Cuiabá` · `{{3}}` `Escanteios Over 8.5` · `{{4}}` `1.92`
+
 
 ---
 
@@ -22,8 +83,9 @@ foram gravados · VIP, free, múltipla, alavancagem e defesas. Não existe envio
 parcial: se o pipeline rodar duas vezes no mesmo dia, a chave de dedupe
 `whatsapp:new_picks:{data}` segura o segundo envio, igual o sino já faz.
 
-Free e VIP recebem o mesmo aviso, com contagem diferente: o free vê quantos
-picks abertos existem pra ele, não o total.
+**Sem contagem no texto** (mudou em 14/09). O número de picks que vale pra cada
+pessoa depende do plano dela, e um número só pra base toda estaria errado pra
+metade · é o tipo de erro que a pessoa confere em dois cliques e não esquece.
 
 **Nome:** `picks_do_dia_v1`
 **Categoria:** MARKETING · **Idioma:** pt_BR
@@ -31,16 +93,15 @@ picks abertos existem pra ele, não o total.
 ```
 Olá {{1}}, a análise de hoje já está publicada.
 
-🟢 {{2}} entradas liberadas pra você agora.
-
-Cada uma vem com o raciocínio por trás e a unidade sugerida. Bom jogo.
+As entradas do dia estão liberadas, cada uma com o raciocínio por trás e a
+unidade sugerida. Bom jogo.
 ```
 
 - **Rodapé:** `Você recebe este aviso no máximo uma vez por dia.`
 - **Botão URL:** `Ver análise de hoje` → `https://pickia.com.br/picks`
 - **Botão resposta rápida:** `Parar de receber`
-- **Variáveis:** `{{1}}` primeiro nome · `{{2}}` quantidade de picks abertos pro plano do usuário
-- **Exemplo p/ aprovação:** `Rafael` · `6`
+- **Variáveis:** `{{1}}` primeiro nome
+- **Exemplo p/ aprovação:** `Rafael`
 
 ---
 
@@ -84,7 +145,12 @@ Está registrado na sua banca. O que decide o mês é o acumulado, não a entrad
 
 - **Botão URL:** `Abrir minha banca` → `https://pickia.com.br/banca`
 
-### 2c. Fechamento agrupado
+### 2c. Fechamento agrupado · NÃO IMPLEMENTADO
+
+Continua sendo a próxima coisa a fazer neste aviso, e não está no código: hoje
+sai uma mensagem por pick resolvido, com dedupe por pick. A anulada (`PUSH`) já
+não vira mensagem nenhuma · ninguém ganhou nem perdeu, a banca não mexeu, e a
+régua do canal é "se não muda uma decisão sua, não é enviada".
 
 Necessário, não opcional. A resolução de resultado é puxada por visita e roda em
 lote, então uma rodada inteira resolve junto e o usuário levaria cinco mensagens
@@ -110,14 +176,27 @@ fora da contagem e entra só no saldo · anulado não é vitória nem derrota.
 
 ---
 
-## 3. Reengajamento
+## 3. Reengajamento · hoje é a aba Disparos, e sai na mão
 
-Segmento: `last_login_at < NOW() - INTERVAL '10 days'` e com opt-in. Teto rígido
-de 1 envio a cada 30 dias e no máximo 2 no total · se não voltou depois de dois,
-não volta por mensagem, e insistir só queima o número.
+Implementado em 14/09, com uma diferença em relação ao plano acima: **não existe
+botão de disparo em lote no WhatsApp, e a ausência é a decisão.** Campanha de
+marketing pra quem não pediu é o caminho mais curto pro número ser denunciado, e
+a política da Meta trata denúncia no nível da CONTA.
 
-Como nada roda agendado neste projeto, o envio sai de um botão no `/admin`,
-quando você quiser, e não de um cron.
+O que a aba Disparos entrega é a FILA, com o texto montado e um link `wa.me` por
+pessoa. Quem manda é o admin, uma conversa por vez, e clica em "Mandei" pra a
+pessoa sair da fila (`campanha_envios`, `UNIQUE (campanha, canal, user_id)`).
+
+Só entra quem tem telefone verificado por SMS. Os cinco segmentos (quem sumiu,
+quem nunca entrou, quem testou e não assinou, quem deixou vencer, quem nunca
+seguiu pick) e o texto de cada um vivem em
+[campanhas.py](../../backend/campanhas.py) · não na rota e não no componente.
+
+O aviso automático (seção 0) é outro caso: ali a pessoa ligou o opt-in no
+próprio perfil, pra aquilo.
+
+O template abaixo fica documentado pra quando a autorização sair e o envio em
+lote passar a fazer sentido.
 
 **Nome:** `senti_sua_falta_v1` · **Categoria:** MARKETING · **Idioma:** pt_BR
 
@@ -179,28 +258,34 @@ está justamente esperando uma mensagem.
 
 ---
 
-## O que falta no banco
+## O que já existe no banco
 
-`users.phone` já existe em E.164, é obrigatório no cadastro e agora é único,
-então o destino já está pronto.
-
-`users.phone_verified` e o índice único de `phone` já entraram em 18/08/2026
-junto com a saída do CPF · ver `migrations.py`. Falta o resto:
+Tudo o que esta seção pedia entrou em 14/09/2026, com dois ajustes de desenho.
 
 ```sql
-ALTER TABLE users ADD COLUMN IF NOT EXISTS whatsapp_opt_in BOOLEAN DEFAULT FALSE;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS whatsapp_opt_in_at TIMESTAMP;
+-- opt-in geral (já existia desde 08/2026, agora com tela no /perfil)
+whatsapp_opt_in, whatsapp_opt_in_at
 
-CREATE TABLE IF NOT EXISTS whatsapp_sends (
-    id          SERIAL PRIMARY KEY,
-    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    template    VARCHAR(60) NOT NULL,
-    dedupe_key  VARCHAR(120) NOT NULL,
-    status      VARCHAR(20) NOT NULL DEFAULT 'sent',
-    created_at  TIMESTAMP DEFAULT NOW(),
-    UNIQUE (user_id, dedupe_key)
-);
+-- uma preferência por aviso: desligar um não desliga os outros
+whatsapp_ao_vivo, whatsapp_picks_do_dia, whatsapp_resultado
+
+-- avisos automáticos
+whatsapp_envios  UNIQUE (user_id, dedupe_key)
+
+-- campanhas do /admin, e-mail e WhatsApp manual
+campanha_envios  UNIQUE (campanha, canal, user_id)
+email_marketing_opt_out, email_marketing_opt_out_at
 ```
+
+**Duas tabelas e não uma.** Campanha é um lote que o admin dispara uma vez e
+nunca repete; aviso automático roda sozinho várias vezes por dia. Juntas, a
+janela de 14 dias entre campanhas engoliria o aviso de pick ao vivo, e o produto
+que a pessoa pediu pra receber pararia de chegar por causa de um e-mail de
+marketing.
+
+**Booleana e não JSONB.** O público de cada aviso é calculado em SQL, e filtro em
+JSONB não usa índice sem GIN. Coluna booleana é o que deixa "quem recebe o aviso
+de ao vivo" ser uma pergunta barata.
 
 O `UNIQUE (user_id, dedupe_key)` é o que garante o "uma vez por dia" e o "uma vez
 por pick", pela mesma razão que o sino usa: todo gerador roda mais de uma vez
@@ -208,8 +293,7 @@ sobre o mesmo evento.
 
 **O opt-in não é burocracia.** O telefone foi coletado no cadastro pra conta, não
 pra marketing · disparar pra essa base sem consentimento explícito é o caminho
-mais rápido pro número ser denunciado e banido. Precisa de um toggle no `/perfil`
-e de registro da data.
+mais rápido pro número ser denunciado e banido.
 
 ---
 
