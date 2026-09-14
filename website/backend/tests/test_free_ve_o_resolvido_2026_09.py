@@ -97,3 +97,64 @@ def test_a_tela_explica_por_que_uns_abrem_e_outros_nao():
     fechados, na mesma tela, sem critério visível."""
     tela = (_FRONT / "pages" / "Picks.tsx").read_text(encoding="utf-8")
     assert "enquanto a odd ainda vale" in tela
+
+
+# ── os outros produtos, no mesmo método (14/09/2026, pedido dele) ─────────
+def _suggestions() -> str:
+    return (_BACKEND / "routers" / "suggestions.py").read_text(encoding="utf-8")
+
+
+def test_todo_produto_com_teaser_tem_resolvido():
+    """Ele pediu o mesmo método em todos. Se um produto ganhar teaser e não
+    ganhar resolvido, a aba dele volta a ser só cadeado."""
+    src = _suggestions()
+    for chave in ("resolvidos", "resolvidos_mercados",
+                  "resolvidos_cartelas", "resolvidos_alavancagem"):
+        assert f'"{chave}":' in src, chave
+
+
+def test_a_cartela_resolvida_nao_entrega_as_pernas():
+    """`/public/results` publica a múltipla resolvida como "Múltipla, 3 sel."
+    com a odd do bilhete, e as pernas NÃO saem. O que cada perna é continua
+    sendo a análise, resolvida ou não."""
+    src = _suggestions()
+    ini = src.index("def _cartela_resolvida(")
+    corpo = src[ini:src.index("resolvidos_cartelas = (", ini)]
+    assert 'd.pop("games", None)' in corpo, "o games tem que sair da resposta"
+    assert '"titulo"' in corpo
+
+
+def test_o_mercado_resolvido_traz_o_que_foi_apostado():
+    """Faltas, goleiros, jogador e Boost têm a forma de picks_free, e é assim
+    que `_sub_mercado` já os publica."""
+    src = _suggestions()
+    ini = src.index("resolvidos_mercados = []")
+    trecho = src[ini:src.index("def _cartela_resolvida", ini)]
+    for coluna in ("p.market", "p.line", "p.odd", "p.result"):
+        assert coluna in trecho, coluna
+    assert "reasoning" not in trecho
+
+
+def test_a_aba_de_um_mercado_nao_mostra_o_de_outro():
+    """Os quatro mercados próprios chegam na mesma lista: sem o filtro, a aba
+    Pick Falta mostraria pick de jogador."""
+    tela = (_FRONT / "pages" / "Picks.tsx").read_text(encoding="utf-8")
+    assert "function soDoTipo(" in tela
+    for tipo in ("'faltas'", "'player_stats'", "'boost'"):
+        assert f"soDoTipo(today?.bloqueados?.resolvidos_mercados, {tipo})" in tela, tipo
+
+
+def test_o_resolvido_usa_o_card_do_produto():
+    """Lista de texto fazia a seção parecer extrato. A pessoa precisa
+    reconhecer que aquilo é o mesmo produto que está trancado acima."""
+    tela = (_FRONT / "pages" / "Picks.tsx").read_text(encoding="utf-8")
+    assert "function CardResolvido(" in tela
+    card = tela[tela.index("function CardResolvido("):tela.index("function CardTrancado(")]
+    # mesma casca e mesmo cabeçalho do card trancado
+    assert 'className="pick-card border-line"' in card
+    assert "<PickTypeBadge" in card and "<LeagueLogo" in card
+    # e o que muda: mercado no lugar da tarja, resultado no lugar do cadeado
+    assert "<SeloDeResultado" in card
+    # `<TarjaDeAnalise`, com o sinal de menor: sem ele o teste reprovava o
+    # COMENTÁRIO que explica a troca ("no lugar exato da TarjaDeAnalise").
+    assert "<TarjaDeAnalise" not in card

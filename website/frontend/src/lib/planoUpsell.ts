@@ -80,8 +80,8 @@ export function convitePlano(
     if (podeGanharTrial) return null
     return {
       titulo: 'Você está no plano gratuito',
-      texto: '1 pick por dia. O VIP abre todos.',
-      cta: 'Conhecer o VIP',
+      texto: '1 pick por dia. A assinatura abre todos.',
+      cta: 'Ver os planos',
       to: '/planos',
       tone: 'yellow',
     }
@@ -89,9 +89,9 @@ export function convitePlano(
 
   if (user.plan === 'trial') {
     return {
-      titulo: prazo ? `Seu teste do VIP termina ${prazo}` : 'Seu teste do VIP está em andamento',
+      titulo: prazo ? `Seu teste termina ${prazo}` : 'Seu teste está em andamento',
       texto: 'Assine para não perder o acesso.',
-      cta: 'Assinar VIP',
+      cta: 'Assinar',
       to: '/checkout',
       tone: 'amber',
     }

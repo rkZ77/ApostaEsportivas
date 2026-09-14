@@ -511,7 +511,7 @@ function UserGreeting({ user, isVip, isAdmin, daysUntilExpiry }: {
         {!isAdmin && !isVip && !isTrial && (
           <Link to="/checkout" className="flex items-center justify-center gap-1.5 text-yellow-400 hover:text-yellow-300 transition-colors text-xs border border-yellow-400/20 hover:border-yellow-400/40 bg-yellow-400/5 px-3 py-2 rounded-lg font-semibold">
             <Rocket className="w-3.5 h-3.5" />
-            Upgrade VIP
+            Assinar
           </Link>
         )}
       </div>
@@ -2266,6 +2266,8 @@ interface TeaserBloqueado {
  * O QUE foi apostado e como terminou, nunca POR QUE o motor escolheu aquilo.
  */
 interface PickResolvidoAberto extends TeaserBloqueado {
+  /** Bilhete de várias pernas: "Múltipla, 3 seleções". Vem no lugar do confronto. */
+  titulo?: string | null
   market?: string | null
   line?: string | null
   result?: string | null
@@ -2306,6 +2308,81 @@ function TarjaDeAnalise({ cls }: { cls: LockCls }) {
     </div>
   )
 }
+
+/*
+ * O MESMO CARD DO PRODUTO, so' que aberto.
+ *
+ * E' irmao do CardTrancado de proposito: mesma casca, mesmo cabecalho, mesma
+ * linha de times, mesma odd. O que muda sao duas coisas, e sao justamente as
+ * que importam -- no lugar da tarja de analise vai O MERCADO, e no lugar do
+ * cadeado vai o RESULTADO.
+ *
+ * Desenhar isto como lista de texto (foi a primeira versao) fazia a secao
+ * parecer um extrato, e nao os picks do produto. A pessoa precisa reconhecer
+ * que aquilo ali e' a mesma coisa que esta' trancada logo acima.
+ */
+/** Os resolvidos de UM mercado. A aba Pick Falta não pode mostrar pick de
+ *  jogador só porque os quatro mercados próprios chegam na mesma lista. */
+function soDoTipo(lista: PickResolvidoAberto[] | undefined, tipo: string) {
+  return (lista ?? []).filter(p => p.pick_type === tipo)
+}
+
+
+function CardResolvido({ p }: { p: PickResolvidoAberto }) {
+  const odd = p.odd != null ? Number(p.odd) : null
+  /* Bilhete de várias pernas não tem confronto: vem com `titulo` no lugar
+     ("Múltipla, 3 seleções"), e aí não há escudo nem "vs" a mostrar. */
+  const ehBilhete = !!p.titulo && !p.away_team_name
+
+  return (
+    <div className="pick-card border-line">
+      <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-3 border-b border-line/60">
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
+          <PickTypeBadge type={p.pick_type ?? 'vip'} />
+          {(p.league_id || p.league_name) && (
+            <div className="flex items-center gap-1 min-w-0">
+              <LeagueLogo id={p.league_id ?? undefined} name={p.league_name ?? undefined} />
+              {p.league_name && <span className="text-[10px] text-ink-4 truncate max-w-[90px]">{p.league_name}</span>}
+            </div>
+          )}
+        </div>
+        <SeloDeResultado result={p.result} />
+      </div>
+
+      <div className="px-5 py-3 space-y-3">
+        {ehBilhete ? (
+          <div className="flex items-center gap-2 min-w-0">
+            <Ticket className="w-4 h-4 text-ink-4 shrink-0" aria-hidden="true" />
+            <span className="text-sm font-semibold text-ink-1 truncate">{p.titulo}</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 min-w-0">
+            <TeamLogo id={p.home_team_id ?? undefined} name={p.home_team_name ?? ''} size={22} />
+            <span className="text-sm font-semibold text-ink-1 truncate">{p.home_team_name}</span>
+            <span className="text-[10px] text-ink-4 shrink-0">vs</span>
+            <TeamLogo id={p.away_team_id ?? undefined} name={p.away_team_name ?? ''} size={22} />
+            <span className="text-sm font-semibold text-ink-1 truncate">{p.away_team_name}</span>
+          </div>
+        )}
+
+        {/* No lugar exato da TarjaDeAnalise do card trancado. */}
+        {p.market && (
+          <p className="text-sm text-ink-2">
+            {p.market}{p.line ? ` ${p.line}` : ''}
+          </p>
+        )}
+
+        {odd != null && (
+          <div className="flex items-baseline gap-2">
+            <span className="text-[10px] text-ink-4">Odd</span>
+            <span className="font-mono text-lg font-black text-ink-1">{odd.toFixed(2)}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 
 function CardTrancado({ p, cls }: { p: TeaserBloqueado; cls: LockCls }) {
   /* Horário por fatia de string, nunca `new Date`: `match_datetime` já vem em
@@ -2422,29 +2499,19 @@ function VipLockOverlay({ color = 'yellow', picks, resumo, rotulo = 'picks', res
           O dado não é novo nem vazado: é o mesmo que /resultados entrega
           publicamente. O que nunca aparece aqui é a análise. */}
       {!!resolvidos?.length && (
-        <div className="card p-5 space-y-3">
+        <div className="space-y-3">
           <div className="flex items-baseline justify-between gap-3 flex-wrap">
             <p className="text-ink-2 text-xs font-bold">Os últimos que já fecharam</p>
             <Link to="/resultados" className="text-xs text-ink-3 hover:text-ink-1 transition-colors">
               Ver o histórico completo
             </Link>
           </div>
-          <ul className="space-y-2">
-            {resolvidos.slice(0, 5).map(p => (
-              <li key={p.id} className="flex items-center justify-between gap-3 py-1.5 border-b border-line last:border-0">
-                <div className="min-w-0">
-                  <p className="text-sm text-ink-1 truncate">
-                    {p.home_team_name} x {p.away_team_name}
-                  </p>
-                  <p className="text-[11px] text-ink-4 truncate">
-                    {p.market}{p.line ? ` ${p.line}` : ''}
-                    {p.odd != null && ` · ${Number(p.odd).toFixed(2)}`}
-                  </p>
-                </div>
-                <SeloDeResultado result={p.result} />
-              </li>
-            ))}
-          </ul>
+          {/* A MESMA GRADE dos cards trancados logo acima, e não uma lista:
+              é o que faz a pessoa reconhecer que aquilo ali é o mesmo produto
+              que está fechado, e não um extrato à parte. */}
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            {resolvidos.slice(0, 4).map(p => <CardResolvido key={`${p.pick_type ?? 'vip'}-${p.id}`} p={p} />)}
+          </div>
           <p className="text-ink-4 text-[11px]">
             Estes são picks de assinante, abertos porque já terminaram. Os de hoje
             ficam fechados enquanto a odd ainda vale.
@@ -3501,7 +3568,7 @@ export default function Picks() {
                 return (
                   <section>
                     <SectionHeader color="bg-blue-400" label="Múltipla do Dia" />
-                    {!canSeeVip ? <VipLockOverlay color="blue" resumo={today?.bloqueados?.multipla} rotulo="múltiplas" /> : (
+                    {!canSeeVip ? <VipLockOverlay color="blue" resumo={today?.bloqueados?.multipla} rotulo="múltiplas" resolvidos={today?.bloqueados?.resolvidos_cartelas} /> : (
                       /* Colunas seguem a quantidade real de múltiplas. O grid
                          fixo de 3-4 colunas foi feito pensando em vitrine cheia,
                          mas o dia normal tem UMA múltipla · ela caía em 1/3 da
@@ -3532,7 +3599,7 @@ export default function Picks() {
                 return (
                   <section>
                     <SectionHeader color="bg-rose-400" label="Bingo do Dia" />
-                    {!canSeeVip ? <VipLockOverlay color="rose" resumo={today?.bloqueados?.bingo} rotulo="cartelas" /> : (
+                    {!canSeeVip ? <VipLockOverlay color="rose" resumo={today?.bloqueados?.bingo} rotulo="cartelas" resolvidos={today?.bloqueados?.resolvidos_cartelas} /> : (
                       /* Uma cartela por dia, então a largura de leitura basta ·
                          mesmo raciocínio do card de múltipla logo acima, e aqui
                          ele é ainda mais forte: são quatro pernas empilhadas. */
@@ -3551,7 +3618,7 @@ export default function Picks() {
               {(canSeeVip ? !!today?.alavancagem : true) && (
                 <section>
                   <SectionHeader color="bg-orange-400" label="Alavancagem do Dia" />
-                  {!canSeeVip ? <VipLockOverlay color="orange" resumo={today?.bloqueados?.alavancagem} rotulo="caminhos" /> : (
+                  {!canSeeVip ? <VipLockOverlay color="orange" resumo={today?.bloqueados?.alavancagem} rotulo="caminhos" resolvidos={today?.bloqueados?.resolvidos_alavancagem} /> : (
                     <>
                       <div className="card p-4 border-orange-500/10 bg-orange-500/5 mb-3">
                         <p className="text-xs text-ink-2 leading-relaxed">
@@ -3607,7 +3674,8 @@ export default function Picks() {
                   {!canSeeVip && boostVipCards.length > 0 && (
                     <div className="mt-3">
                       <VipLockOverlay color="blue" picks={today?.bloqueados?.mercados}
-                        rotulo="Pick Boost" />
+                        rotulo="Pick Boost"
+                        resolvidos={soDoTipo(today?.bloqueados?.resolvidos_mercados, 'boost')} />
                     </div>
                   )}
                   {(() => {
@@ -3924,7 +3992,7 @@ export default function Picks() {
                   />
                 )}
               </div>
-              {!canSeeVip ? <VipLockOverlay color="blue" resumo={today?.bloqueados?.multipla} rotulo="múltiplas" /> : todayLoading ? <PickLoading /> : (
+              {!canSeeVip ? <VipLockOverlay color="blue" resumo={today?.bloqueados?.multipla} rotulo="múltiplas" resolvidos={today?.bloqueados?.resolvidos_cartelas} /> : todayLoading ? <PickLoading /> : (
                 today?.multiplas?.length > 0 ? (
                   <>
                     <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-4 mt-4">
@@ -3992,7 +4060,7 @@ export default function Picks() {
                   />
                 )}
               </div>
-              {!canSeeVip ? <VipLockOverlay color="rose" resumo={today?.bloqueados?.bingo} rotulo="cartelas" /> : todayLoading ? <PickLoading /> : (
+              {!canSeeVip ? <VipLockOverlay color="rose" resumo={today?.bloqueados?.bingo} rotulo="cartelas" resolvidos={today?.bloqueados?.resolvidos_cartelas} /> : todayLoading ? <PickLoading /> : (
                 today?.bingo?.length > 0 ? (
                   <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-4 mt-4">
                     {bingoDaAba.map((b: any) => <BingoCard key={b.id} m={b} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isMultiplaLive(b)} />)}
@@ -4087,7 +4155,7 @@ export default function Picks() {
             {!canSeeVip ? (
               <div>
                 <SectionHeader color="bg-orange-400" label="Alavancagem do Dia" />
-                <VipLockOverlay color="orange" resumo={today?.bloqueados?.alavancagem} rotulo="caminhos" />
+                <VipLockOverlay color="orange" resumo={today?.bloqueados?.alavancagem} rotulo="caminhos" resolvidos={today?.bloqueados?.resolvidos_alavancagem} />
               </div>
             ) : (
               <>
@@ -4546,7 +4614,7 @@ export default function Picks() {
               (boostVipF.length > 0 || (today?.bloqueados?.mercados?.length ?? 0) > 0) && (
                 <div>
                   <SectionHeader color="bg-cyan-400" label="Os outros do dia" badge="VIP" />
-                  <VipLockOverlay color="blue" picks={today?.bloqueados?.mercados} rotulo="Pick Boost" />
+                  <VipLockOverlay color="blue" picks={today?.bloqueados?.mercados} rotulo="Pick Boost" resolvidos={soDoTipo(today?.bloqueados?.resolvidos_mercados, 'boost')} />
                 </div>
               )
             ) : boostVipF.length > 0 && (
@@ -4596,7 +4664,7 @@ export default function Picks() {
             </ComoFunciona>
 
             {!canSeeVip ? (
-              <VipLockOverlay color="purple" picks={today?.bloqueados?.mercados} rotulo="picks de falta" />
+              <VipLockOverlay color="purple" picks={today?.bloqueados?.mercados} rotulo="picks de falta" resolvidos={soDoTipo(today?.bloqueados?.resolvidos_mercados, 'faltas')} />
             ) : (
               <>
                 {/* Dia e filtros na mesma linha · ver o comentario na aba VIP. */}
@@ -4647,7 +4715,7 @@ export default function Picks() {
                 <div className="mt-6">
                   <SectionHeader color="bg-amber-400" label="Pick Jogador" />
                 </div>
-                <VipLockOverlay color="amber" picks={today?.bloqueados?.mercados} rotulo="picks de jogador" />
+                <VipLockOverlay color="amber" picks={today?.bloqueados?.mercados} rotulo="picks de jogador" resolvidos={soDoTipo(today?.bloqueados?.resolvidos_mercados, 'player_stats')} />
               </div>
             ) : (
               <>

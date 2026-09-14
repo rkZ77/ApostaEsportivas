@@ -1095,6 +1095,95 @@ def get_today_suggestions(
                 LIMIT 12
             """, _d)
 
+            # OS OUTROS PRODUTOS, no MESMO corte de /public/results.
+            #
+            # Cada familia expoe o que a rota publica ja' expoe dela, e nada
+            # alem:
+            #
+            #   mercado proprio  igual ao VIP -- um jogo, um mercado, uma odd
+            #                    (faltas, goleiros, jogador e Boost tem a forma
+            #                    de picks_free, e e' assim que _sub_mercado ja'
+            #                    os publica);
+            #   cartela          "Multipla, 3 selecoes" com a odd do bilhete.
+            #                    AS PERNAS NAO SAEM, nem depois de resolvida:
+            #                    _sub_cartela tambem nao as publica, e o que
+            #                    cada perna e' continua sendo a analise;
+            #   alavancagem      o caminho e a odd combinada, mesma regra.
+            #
+            # Um `for` sobre as tabelas de mercado em vez de quatro consultas
+            # copiadas: e' o mesmo motivo do teaser logo acima, e do
+            # `_sub_mercado` do lado publico.
+            resolvidos_mercados = []
+            for tipo, tabela in (("faltas", "picks_faltas"),
+                                 ("goleiros", "picks_goleiros"),
+                                 ("player_stats", "picks_player_stats"),
+                                 ("boost", "picks_boost")):
+                resolvidos_mercados += [
+                    {**dict(r), "pick_type": tipo,
+                     "market": _tr(r["market"]) if r.get("market") else r.get("market")}
+                    for r in _safe_query(cur, f"""
+                        SELECT p.id, p.match_date,
+                               p.home_team AS home_team_name,
+                               p.away_team AS away_team_name,
+                               p.home_team_id, p.away_team_id,
+                               p.league_id, p.market, p.line, p.odd,
+                               p.result, p.profit,
+                               f.match_datetime, l.name AS league_name
+                        FROM {tabela} p
+                        LEFT JOIN fixtures f ON f.fixture_id = p.fixture_id
+                        LEFT JOIN leagues  l ON l.league_id  = p.league_id
+                        WHERE ({_merc_where.replace('match_date', 'p.match_date').replace('result IS NULL', 'p.result IS NOT NULL')})
+                          AND p.result IS NOT NULL
+                        ORDER BY p.match_date DESC, p.id DESC
+                        LIMIT 12
+                    """, _d)
+                ]
+
+            def _cartela_resolvida(tabela: str, rotulo: str, ligado: bool = True):
+                """Bilhete que ja' fechou: quantas selecoes, a odd e o
+                resultado. O `games` e' lido so' pra CONTAR as pernas -- ele
+                nao entra na resposta."""
+                if not ligado:
+                    return []
+                saida = []
+                for r in _safe_query(cur, f"""
+                    SELECT id, match_date, total_odd AS odd, result, profit, games
+                    FROM {tabela}
+                    WHERE ({_m_where.replace('result IS NULL', 'result IS NOT NULL')})
+                      AND result IS NOT NULL
+                    ORDER BY match_date DESC, created_at DESC
+                    LIMIT 6
+                """, _d):
+                    d = dict(r)
+                    jogos = d.pop("games", None)
+                    if isinstance(jogos, str):
+                        try:
+                            jogos = json.loads(jogos)
+                        except Exception:
+                            jogos = []
+                    n = len(jogos or [])
+                    d["titulo"] = f"{rotulo}, {n} {'seleção' if n == 1 else 'seleções'}"
+                    saida.append(d)
+                return saida
+
+            resolvidos_cartelas = (
+                _cartela_resolvida("picks_multiplas", "Múltipla")
+                + _cartela_resolvida("picks_bingo", "Bingo do Dia", ver_bingo)
+            )
+
+            resolvidos_alav = [
+                {**dict(r), "titulo": "Alavancagem"}
+                for r in _safe_query(cur, f"""
+                    SELECT pa.id, pa.match_date, pa.odd_combined AS odd,
+                           pa.result, pa.profit
+                    FROM picks_alavancagem pa
+                    WHERE ({_alav_where.replace('result IS NULL', 'result IS NOT NULL')})
+                      AND pa.result IS NOT NULL
+                    ORDER BY pa.match_date DESC, pa.created_at DESC
+                    LIMIT 6
+                """, _d)
+            ]
+
             result["bloqueados"] = {
                 "vip": [dict(r) for r in teaser_vip],
                 #: Os picks da janela que JA' terminaram, com mercado e
@@ -1105,6 +1194,11 @@ def get_today_suggestions(
                     {**dict(r), "market": _tr(r["market"]) if r.get("market") else r.get("market")}
                     for r in resolvidos_vip
                 ],
+                #: Uma chave por familia, com o mesmo formato, pra tela poder
+                #: usar um componente so' em todas as abas.
+                "resolvidos_mercados": resolvidos_mercados,
+                "resolvidos_cartelas": resolvidos_cartelas,
+                "resolvidos_alavancagem": resolvidos_alav,
                 "multipla": _teaser_de_multipla(teaser_mult[0]) if teaser_mult else None,
                 # O teaser do bingo tem o MESMO corte do da multipla: quantas
                 # selecoes e quais jogos, sem os mercados. O que cada perna e'
