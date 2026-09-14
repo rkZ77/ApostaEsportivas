@@ -555,7 +555,46 @@ def _enrich_multipla_legs(cur, rows: list) -> list:
 
 
 
-def _teaser_de_multipla(row) -> dict:
+def _jogos_com_escudo(cur, jogos: list) -> list:
+    """As pernas de um bilhete no formato que o card do site desenha.
+
+    O teaser mandava uma lista de FRASES ("Bahia x Remo"), e por isso o bilhete
+    trancado era a unica coisa da tela sem escudo: o card do VIP mostra os dois
+    times com o brasao, e o da multipla mostrava texto corrido. Faltava o id do
+    time, e so'.
+
+    Sai `{home_team, away_team, home_team_id, away_team_id}` por perna. O corte
+    de exposicao NAO muda: mercado e linha continuam de fora, que e' a analise.
+    O id do time vem da tabela `fixtures` em UMA consulta pro bilhete inteiro,
+    como ja' faz `_enrich_multipla_legs` -- o JSON de `games` guarda o nome, nem
+    sempre o id.
+    """
+    jogos = jogos or []
+    fids = [g.get("fixture_id") for g in jogos if isinstance(g, dict) and g.get("fixture_id")]
+    por_fixture: dict = {}
+    if fids:
+        por_fixture = {r["fixture_id"]: r for r in _safe_query(cur, """
+            SELECT fixture_id, home_team, away_team, home_team_id, away_team_id
+            FROM fixtures WHERE fixture_id = ANY(%s)
+        """, (fids,))}
+
+    saida = []
+    for g in jogos[:4]:
+        if not isinstance(g, dict):
+            continue
+        fx = por_fixture.get(g.get("fixture_id")) or {}
+        saida.append({
+            "home_team":    fx.get("home_team") or g.get("home_team"),
+            "away_team":    fx.get("away_team") or g.get("away_team"),
+            # Sem fixture na tabela (jogo antigo, ja' limpo) o card cai no
+            # escudo generico -- que e' o que o TeamLogo ja' faz sem id.
+            "home_team_id": fx.get("home_team_id") or g.get("home_team_id"),
+            "away_team_id": fx.get("away_team_id") or g.get("away_team_id"),
+        })
+    return saida
+
+
+def _teaser_de_multipla(cur, row) -> dict:
     """Multipla trancada: quantas selecoes e quais jogos, sem os mercados.
 
     "3 selecoes, odd 4.20" ja diz se vale a pena olhar. O que cada perna e' --
@@ -572,22 +611,24 @@ def _teaser_de_multipla(row) -> dict:
     jogos = jogos or []
     d.pop("games", None)
     d["total_legs"] = len(jogos)
-    d["teams_preview"] = [
-        f"{g.get('home_team', '?')} x {g.get('away_team', '?')}" for g in jogos[:4]
-    ]
+    d["jogos_preview"] = _jogos_com_escudo(cur, jogos)
     return d
 
 
 def _teaser_de_alavancagem(row) -> dict:
     """Alavancagem trancada: os jogos do caminho e a odd combinada."""
     d = dict(row)
-    times = []
+    jogos = []
     for i in (1, 2, 3):
         casa, fora = d.pop(f"home_team_{i}", None), d.pop(f"away_team_{i}", None)
+        casa_id, fora_id = d.pop(f"home_team_id_{i}", None), d.pop(f"away_team_id_{i}", None)
         if casa and fora:
-            times.append(f"{casa} x {fora}")
-    d["total_legs"] = len(times)
-    d["teams_preview"] = times
+            jogos.append({"home_team": casa, "away_team": fora,
+                          "home_team_id": casa_id, "away_team_id": fora_id})
+    d["total_legs"] = len(jogos)
+    # A alavancagem guarda o time em coluna numerada, entao nao passa pelo
+    # `_jogos_com_escudo`: o id ja' esta' na propria linha.
+    d["jogos_preview"] = jogos
     return d
 
 
@@ -1023,7 +1064,10 @@ def get_today_suggestions(
                 SELECT pa.id, pa.match_date, pa.odd_combined AS odd,
                        pa.home_team_1, pa.away_team_1,
                        pa.home_team_2, pa.away_team_2,
-                       pa.home_team_3, pa.away_team_3
+                       pa.home_team_3, pa.away_team_3,
+                       pa.home_team_id_1, pa.away_team_id_1,
+                       pa.home_team_id_2, pa.away_team_id_2,
+                       pa.home_team_id_3, pa.away_team_id_3
                 FROM picks_alavancagem pa
                 WHERE ({_alav_where}) AND pa.result IS NULL
                 ORDER BY pa.match_date DESC, pa.created_at DESC
@@ -1139,10 +1183,18 @@ def get_today_suggestions(
                     """, _d)
                 ]
 
-            def _cartela_resolvida(tabela: str, rotulo: str, ligado: bool = True):
-                """Bilhete que ja' fechou: quantas selecoes, a odd e o
-                resultado. O `games` e' lido so' pra CONTAR as pernas -- ele
-                nao entra na resposta."""
+            def _cartela_resolvida(tabela: str, rotulo: str, tipo: str,
+                                   ligado: bool = True):
+                """Bilhete que ja' fechou: quantas selecoes, quais jogos, a odd
+                e o resultado.
+
+                O `games` continua sem sair inteiro: dele saem os TIMES de cada
+                perna (com o id, pro escudo), e o mercado e a linha de cada uma
+                ficam onde sempre estiveram, dentro da analise. E' o mesmo corte
+                do bilhete trancado logo acima -- e foi o que faltava pro card
+                resolvido parecer o mesmo produto: ele mostrava so' "Multipla, 2
+                selecoes" enquanto o card do VIP ao lado mostrava os dois times
+                com o brasao."""
                 if not ligado:
                     return []
                 saida = []
@@ -1163,19 +1215,35 @@ def get_today_suggestions(
                             jogos = []
                     n = len(jogos or [])
                     d["titulo"] = f"{rotulo}, {n} {'seleção' if n == 1 else 'seleções'}"
+                    d["jogos_preview"] = _jogos_com_escudo(cur, jogos or [])
+                    # SEM ISTO O SELO SAI "VIP". O card resolvido usa o mesmo
+                    # `PickTypeBadge` do resto do site, e sem `pick_type` ele
+                    # cai no VIP: a multipla que ja' fechou aparecia com o selo
+                    # de outro produto.
+                    d["pick_type"] = tipo
                     saida.append(d)
                 return saida
 
             resolvidos_cartelas = (
-                _cartela_resolvida("picks_multiplas", "Múltipla")
-                + _cartela_resolvida("picks_bingo", "Bingo do Dia", ver_bingo)
+                _cartela_resolvida("picks_multiplas", "Múltipla", "multipla")
+                + _cartela_resolvida("picks_bingo", "Bingo do Dia", "bingo", ver_bingo)
             )
 
             resolvidos_alav = [
-                {**dict(r), "titulo": "Alavancagem"}
+                # `_teaser_de_alavancagem` faz a mesma leitura das colunas
+                # numeradas (e tira elas da resposta), entao a alavancagem
+                # resolvida e a trancada saem no mesmo formato.
+                {**_teaser_de_alavancagem(r), "titulo": "Alavancagem",
+                 "pick_type": "alavancagem"}
                 for r in _safe_query(cur, f"""
                     SELECT pa.id, pa.match_date, pa.odd_combined AS odd,
-                           pa.result, pa.profit
+                           pa.result, pa.profit,
+                           pa.home_team_1, pa.away_team_1,
+                           pa.home_team_2, pa.away_team_2,
+                           pa.home_team_3, pa.away_team_3,
+                           pa.home_team_id_1, pa.away_team_id_1,
+                           pa.home_team_id_2, pa.away_team_id_2,
+                           pa.home_team_id_3, pa.away_team_id_3
                     FROM picks_alavancagem pa
                     WHERE ({_alav_where.replace('result IS NULL', 'result IS NOT NULL')})
                       AND pa.result IS NOT NULL
@@ -1199,11 +1267,11 @@ def get_today_suggestions(
                 "resolvidos_mercados": resolvidos_mercados,
                 "resolvidos_cartelas": resolvidos_cartelas,
                 "resolvidos_alavancagem": resolvidos_alav,
-                "multipla": _teaser_de_multipla(teaser_mult[0]) if teaser_mult else None,
+                "multipla": _teaser_de_multipla(cur, teaser_mult[0]) if teaser_mult else None,
                 # O teaser do bingo tem o MESMO corte do da multipla: quantas
                 # selecoes e quais jogos, sem os mercados. O que cada perna e'
                 # continua sendo a analise, e a analise fica dentro do VIP.
-                "bingo": _teaser_de_multipla(teaser_bingo[0]) if teaser_bingo else None,
+                "bingo": _teaser_de_multipla(cur, teaser_bingo[0]) if teaser_bingo else None,
                 "alavancagem": _teaser_de_alavancagem(teaser_alav[0]) if teaser_alav else None,
                 "mercados": teaser_mercados,
             }
