@@ -180,7 +180,7 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
                       : ''}
                   </span>
                   <span className={planBadge[user?.plan ?? 'free']}>
-                    {rotuloDoPlano(user?.plan)}
+                    {rotuloDoPlano(user?.plan, user?.plan_tier)}
                   </span>
                 </div>
               </button>
@@ -318,7 +318,7 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
           <div>
             <div className="text-ink-1 text-sm font-semibold">{user?.name}</div>
             <span className={`mt-1 ${planBadge[user?.plan ?? 'free']}`}>
-              {rotuloDoPlano(user?.plan)}
+              {rotuloDoPlano(user?.plan, user?.plan_tier)}
             </span>
           </div>
           {emailPendente && (

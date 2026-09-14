@@ -68,24 +68,46 @@ export default function Badge({
  * TESTE · quem quiser outro rótulo muda aqui e muda em todo lugar.
  */
 export const PLANO_META: Record<string, { tone: BadgeTone; label: string; cor: string }> = {
-  vip:   { tone: 'yellow',  label: 'VIP',   cor: 'text-yellow-400' },
+  /*
+   * `vip` é a CHAVE NO BANCO dos dois planos pagos, não um nome de tela.
+   * Desde 12/09/2026 o nome depende do tier, e quem resolve isso é
+   * `planoMeta` logo abaixo: este rótulo é só o que sobra quando o tier não
+   * veio junto (uma conta antiga, um caminho que não seleciona a coluna).
+   * "Assinante" e não "VIP", porque VIP deixou de ser o nome de qualquer
+   * plano e ninguém lê isso em tela nenhuma.
+   */
+  vip:   { tone: 'yellow',  label: 'Assinante', cor: 'text-yellow-400' },
   admin: { tone: 'purple',  label: 'Admin', cor: 'text-purple-400' },
   trial: { tone: 'amber',   label: 'Teste', cor: 'text-amber-400' },
   free:  { tone: 'neutral', label: 'Free',  cor: 'text-ink-2' },
 }
 
-export function planoMeta(plan?: string) {
-  return PLANO_META[plan ?? 'free'] ?? PLANO_META.free
+/** Os dois produtos pagos, pelo nome que eles têm na página de planos. */
+const TIER_LABEL: Record<string, string> = { base: 'Pick IA', pro: 'Pick IA Pro' }
+
+/**
+ * O selo do plano da conta.
+ *
+ * `tier` é opcional de propósito: sem ele o assinante cai em "Assinante", que
+ * é verdadeiro e não inventa um produto que ele talvez não tenha. Passe o
+ * tier sempre que a tela o tiver em mãos.
+ */
+export function planoMeta(plan?: string, tier?: string | null) {
+  const meta = PLANO_META[plan ?? 'free'] ?? PLANO_META.free
+  if (plan === 'vip' && tier && TIER_LABEL[tier]) {
+    return { ...meta, label: TIER_LABEL[tier] }
+  }
+  return meta
 }
 
 /** Rótulo em caixa alta, pro selo e pros títulos que gritam. */
-export function rotuloDoPlano(plan?: string): string {
-  return planoMeta(plan).label.toUpperCase()
+export function rotuloDoPlano(plan?: string, tier?: string | null): string {
+  return planoMeta(plan, tier).label.toUpperCase()
 }
 
 /** Plano do usuário. Mesmas cores das classes .badge-* legadas. */
-export function PlanBadge({ plan, className }: { plan?: string; className?: string }) {
-  const { tone, label } = planoMeta(plan)
+export function PlanBadge({ plan, tier, className }: { plan?: string; tier?: string | null; className?: string }) {
+  const { tone, label } = planoMeta(plan, tier)
   return <Badge tone={tone} className={className}>{label}</Badge>
 }
 

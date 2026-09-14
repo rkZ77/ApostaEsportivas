@@ -97,6 +97,22 @@ const PLAN_TIERS = [
 ]
 
 const PLAN_FILTER = ['todos', 'free', 'trial', 'vip', 'admin'] as const
+
+/*
+ * O rótulo do filtro, separado da chave.
+ *
+ * A chave continua sendo `users.plan`, e lá 'vip' é o valor dos DOIS planos
+ * pagos. O que mudou é a tela: "VIP" deixou de ser o nome de qualquer plano em
+ * 12/09/2026, e um botão escrito VIP ao lado de uma coluna que diz "Pick IA"
+ * fazia o admin procurar um terceiro plano que não existe.
+ *
+ * Quem separa Pick IA de Pro é o seletor de PRODUTO na linha do usuário, não
+ * este filtro: aqui a pergunta é "quem paga?".
+ */
+const FILTRO_LABEL: Record<string, string> = {
+  todos: 'Todos', free: 'Free', trial: 'Teste',
+  vip: 'Assinantes', admin: 'Admin',
+}
 type PlanFilter = typeof PLAN_FILTER[number]
 
 interface ContagemPick { n: number; pendentes: number }
@@ -173,6 +189,24 @@ const planBadge = (plan: string) => {
   if (plan === 'trial') return 'badge-trial'
   if (plan === 'admin') return 'badge-admin'
   return 'badge-free'
+}
+
+/*
+ * O QUE O SELO DA COLUNA "PLANO" ESCREVE.
+ *
+ * Era `u.plan.toUpperCase()`, que devolvia "VIP" pros dois planos pagos e
+ * obrigava o admin a olhar outra coluna pra saber QUAL deles. Aqui o nome do
+ * produto é a informação: é a coluna que responde "o que essa pessoa tem".
+ *
+ * Tier ausente vira "ASSINANTE" em vez de chutar um produto: quem assinou
+ * antes de 12/09 não tem valor na coluna, e inventar "PRO" pra ele seria
+ * afirmar o que o banco não diz.
+ */
+const planLabel = (plan: string, tier?: string | null) => {
+  if (plan !== 'vip') return plan.toUpperCase()
+  if (tier === 'base') return 'PICK IA'
+  if (tier === 'pro')  return 'PICK IA PRO'
+  return 'ASSINANTE'
 }
 
 const expiryWarning = (expires_at: string | null) => {
@@ -1139,7 +1173,7 @@ export default function Admin() {
                     const r = await api.post('/admin/sync-payment', { mp_payment_id: id })
                     showToast(r.data.duplicate
                       ? 'Pagamento já estava registrado.'
-                      : `VIP ativado: ${r.data.user.name}, ${r.data.plan}`)
+                      : `Acesso ativado: ${r.data.user.name}, ${r.data.plan}`)
                     api.get('/admin/payments').then(r2 => setPayments(r2.data)).catch(() => {})
                   } catch (e: any) {
                     showToast('Erro: ' + (e.response?.data?.detail || e.message), false)
@@ -1433,7 +1467,7 @@ export default function Admin() {
               <label className="text-[10px] text-ink-3 font-semibold">Tipo</label>
               <select className="input text-sm" value={pickTypeFilter} onChange={e => setPickTypeFilter(e.target.value)}>
                 <option value="">Todos</option>
-                <option value="vip">VIP</option>
+                <option value="vip">Assinante</option>
                 <option value="free">Free</option>
                 <option value="multipla">Múltipla</option>
                 <option value="bingo">Bingo do Dia</option>
@@ -1535,11 +1569,11 @@ export default function Admin() {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
             {[
               { label: 'Total',         value: stats.total,          color: 'text-ink-1' },
-              { label: 'VIP',           value: stats.vip,            color: 'text-yellow-400' },
+              { label: 'Assinantes',    value: stats.vip,            color: 'text-yellow-400' },
               { label: 'Teste',         value: stats.trial,          color: 'text-blue-400' },
               { label: 'Free',          value: stats.free,           color: 'text-ink-2' },
               { label: 'Ativos',        value: stats.ativos,         color: 'text-accent-ink' },
-              { label: 'VIP expirando', value: stats.vip_expirando,  color: stats.vip_expirando > 0 ? 'text-orange-400' : 'text-ink-4' },
+              { label: 'Expirando',     value: stats.vip_expirando,  color: stats.vip_expirando > 0 ? 'text-orange-400' : 'text-ink-4' },
             ].map(({ label, value, color }) => (
               <div key={label} className="stat-card text-center py-3">
                 <div className={`font-mono text-3xl font-black ${color}`}>{value}</div>
@@ -1567,7 +1601,7 @@ export default function Admin() {
             <select className="input" value={newUser.plan} onChange={e => setNewUser(v => ({ ...v, plan: e.target.value }))}>
               <option value="free">Free</option>
               <option value="trial">Teste</option>
-              <option value="vip">VIP</option>
+              <option value="vip">Assinante</option>
               <option value="admin">Admin</option>
             </select>
             <div className="flex gap-2">
@@ -1596,7 +1630,7 @@ export default function Admin() {
                     : 'border-line-strong text-ink-2 hover:border-ink-4'
                 }`}
               >
-                {p === 'todos' ? 'Todos' : p.toUpperCase()}
+                {FILTRO_LABEL[p]}
               </button>
             ))}
           </div>
@@ -1628,7 +1662,7 @@ export default function Admin() {
                     </td>
                     <td className="px-4 py-3">
                       <span className={planBadge(u.plan)}>
-                        {u.plan.toUpperCase()}
+                        {planLabel(u.plan, u.plan_tier)}
                       </span>
                     </td>
                     <td className="px-4 py-3">
@@ -1706,7 +1740,7 @@ export default function Admin() {
                         >
                           <option value="free">Free</option>
                           <option value="trial">Teste</option>
-                          <option value="vip">VIP</option>
+                          <option value="vip">Assinante</option>
                           <option value="admin">Admin</option>
                         </select>
                         <button
@@ -1765,7 +1799,7 @@ export default function Admin() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={planBadge(u.plan)}>
-                    {u.plan.toUpperCase()}
+                    {planLabel(u.plan, u.plan_tier)}
                   </span>
                   <span className={u.active ? 'badge-green' : 'badge-red'}>
                     {u.active ? 'Ativo' : 'Inativo'}
@@ -1780,11 +1814,6 @@ export default function Admin() {
                   {SUBSCRIPTION_TYPES.find(t => t.value === u.subscription_type)?.label
                     ?? u.subscription_type ?? ''}
                 </span></div>
-                {u.plan === 'vip' && (
-                  <div>Produto: <span className="text-ink-2">
-                    {(u.plan_tier ?? 'pro') === 'base' ? 'Pick IA' : 'Pick IA Pro'}
-                  </span></div>
-                )}
                 <div className="flex items-center gap-1">
                   Expira: <span className="text-ink-2">{u.expires_at ? u.expires_at.slice(0, 10) : ''}</span>
                   {expiryWarning(u.expires_at)}
@@ -1801,9 +1830,23 @@ export default function Admin() {
                 >
                   <option value="free">Free</option>
                   <option value="trial">Teste</option>
-                  <option value="vip">VIP</option>
+                  <option value="vip">Assinante</option>
                   <option value="admin">Admin</option>
                 </select>
+                {/* Paridade com a tabela do desktop: o card mostrava o produto
+                    e não deixava trocar, então corrigir um assinante no celular
+                    exigia abrir o admin num computador. */}
+                {u.plan === 'vip' && (
+                  <select
+                    value={u.plan_tier ?? 'pro'}
+                    onChange={e => setPlanTier(u.id, e.target.value)}
+                    className="bg-surface-2 border border-line-strong rounded-lg px-2 py-1 text-xs text-ink-1 focus:outline-none flex-1"
+                  >
+                    {PLAN_TIERS.map(t => (
+                      <option key={t.value} value={t.value}>{t.label}</option>
+                    ))}
+                  </select>
+                )}
                 <button
                   onClick={() => toggleActive(u.id, u.active)}
                   className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${

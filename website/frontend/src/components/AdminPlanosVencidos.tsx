@@ -3,7 +3,7 @@ import { AlertTriangle, CheckCircle2, RefreshCw } from 'lucide-react'
 import api from '../services/api'
 
 /*
- * Quem venceu e continua marcado como VIP/trial.
+ * Quem venceu e continua marcado como assinante ou trial.
  *
  * O rebaixamento é preguiçoso: acontece quando a pessoa aparece (login,
  * refresh, /auth/me). Isso cobre quem volta, e deixa de fora exatamente quem
@@ -95,7 +95,7 @@ export default function AdminPlanosVencidos() {
 
       {d.total === 0 ? (
         <p className="text-[11px] text-ink-4 mt-2 leading-relaxed">
-          Ninguém pendente, todo VIP e teste vencido já voltou pro plano free e
+          Ninguém pendente, toda assinatura e teste vencidos já voltaram pro plano free e
           recebeu o aviso.
         </p>
       ) : (
@@ -127,7 +127,7 @@ export default function AdminPlanosVencidos() {
 
       {resumo && (
         <p className="text-[11px] text-green-400 mt-2">
-          {resumo.rebaixados} conta(s) rebaixada(s), {resumo.trial} teste, {resumo.vip} VIP.
+          {resumo.rebaixados} conta(s) rebaixada(s), {resumo.trial} teste, {resumo.vip} assinatura(s).
         </p>
       )}
       {erro && <p className="text-[11px] text-red-400 mt-2">{erro}</p>}

@@ -320,7 +320,7 @@ export default function Profile() {
     return () => clearInterval(id)
   }, [user?.expires_at, user?.plan])
 
-  const pm = { label: rotuloDoPlano(user?.plan), color: planoMeta(user?.plan).cor }
+  const pm = { label: rotuloDoPlano(user?.plan, user?.plan_tier), color: planoMeta(user?.plan, user?.plan_tier).cor }
 
   const currentAvatar = avatarPreview ?? user?.avatar_url ?? null
 

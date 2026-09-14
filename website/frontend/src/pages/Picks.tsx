@@ -396,22 +396,30 @@ function TabBar({ tab, setTab, canSeeVip, canSeePro, verAoVivo, verBingo, temFal
                   {t.badge}
                 </span>
               )}
-              {/* DUAS TRANCAS DESDE 12/09. `premiumOnly` é qualquer plano
-                  pago, `proOnly` é só o Pick IA Pro · e quem assina a entrada
-                  passa na primeira e não na segunda. Um gate só mostraria o
-                  selo de "você tem" na aba Ao Vivo pra quem não tem. */}
-              {t.premiumOnly && canSeeVip && (
-                <span className="ml-1.5 text-[10px] bg-yellow-400/10 text-yellow-400 border border-yellow-400/20 px-1.5 py-0.5 rounded font-bold">
-                  VIP
-                </span>
-              )}
+              {/* O SELO DIZ O QUE DISTINGUE, E SÓ ISSO (14/09/2026).
+
+                  A barra misturava "VIP" amarelo em sete abas e "Pro" roxo
+                  numa, como se fossem da mesma família. E o selo só aparece
+                  pra quem TEM acesso, então o "VIP" não informava nada: dizia
+                  "isto é pago" ao assinante, em sete das dez abas, numa barra
+                  que já rola no celular. Com dois planos ele ficou pior que
+                  inútil, porque "VIP" deixou de ser o nome de qualquer plano.
+
+                  Sobra o "Pro", que é o único que responde uma pergunta real:
+                  esta aba é do plano de cima. As de pré-jogo não precisam de
+                  selo, porque quem assina qualquer um dos dois já as tem, e
+                  quem não assina vê o cadeado. */}
               {t.proOnly && canSeePro && (
                 <span className="ml-1.5 text-[10px] bg-indigo-400/10 text-indigo-300 border border-indigo-400/20 px-1.5 py-0.5 rounded font-bold">
                   Pro
                 </span>
               )}
+              {/* O cadeado herda a cor do que falta: roxo quando o que falta é
+                  o Pro, amarelo quando é a assinatura. Um cadeado amarelo numa
+                  aba de selo roxo mandava dois sinais diferentes sobre a mesma
+                  tranca. */}
               {((t.premiumOnly && !canSeeVip) || (t.proOnly && !canSeePro)) && (
-                <svg className="ml-1 w-3 h-3 text-yellow-400 inline-block align-middle" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <svg className={`ml-1 w-3 h-3 inline-block align-middle ${t.proOnly ? 'text-indigo-300' : 'text-yellow-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
               )}
@@ -447,7 +455,10 @@ function UserGreeting({ user, isVip, isAdmin, daysUntilExpiry }: {
   const isTrial = user.plan === 'trial'
 
   const planBadgeCls = isAdmin ? 'badge-admin' : isTrial ? 'badge-trial' : isVip ? 'badge-vip' : 'badge-free'
-  const planLabel = rotuloDoPlano(isAdmin ? 'admin' : isTrial ? 'trial' : isVip ? 'vip' : 'free')
+  const planLabel = rotuloDoPlano(
+    isAdmin ? 'admin' : isTrial ? 'trial' : isVip ? 'vip' : 'free',
+    user?.plan_tier,
+  )
 
   // Countdown ao vivo
   const [countdown, setCountdown] = useState('')
