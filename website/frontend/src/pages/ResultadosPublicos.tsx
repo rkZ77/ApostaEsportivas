@@ -1277,7 +1277,7 @@ export default function ResultadosPublicos() {
           <div className="mt-12 text-center">
             <p className="text-ink-3 text-sm mb-4">Quer receber esses picks antes de acontecerem?</p>
             <Button to="/login?mode=register" size="lg">
-              Testar o VIP grátis por 2 dias
+              Testar o Pro grátis por 2 dias
             </Button>
           </div>
           )}

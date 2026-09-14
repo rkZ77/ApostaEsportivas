@@ -127,25 +127,59 @@ router = APIRouter(prefix="/api/payments", tags=["payments"])
 # Quem quiser mostrar preço na tela lê de GET /api/payments/plans (público).
 # Não copiar número daqui pro front.
 #
+# CATALOGO · dois produtos (tier) x quatro ciclos de cobranca.
+#
+# As quatro chaves sem sufixo continuam existindo com o mesmo nome e o mesmo
+# preco de antes de 12/09/2026, e agora sao o Pick IA Pro. Isso nao e' estetica:
+# o `external_reference` do MercadoPago e' "<user_id>:<chave>", entao renomear
+# "mensal" quebraria a conciliacao de todo pagamento ja feito e qualquer link
+# de checkout que ainda esteja aberto no navegador de alguem.
+#
+# A diferenca entre os dois produtos e' o Ao Vivo (e o agente de chat), que sao
+# os unicos que gastam cota de API por assinante ativo. O corte e' esse, e nao
+# uma contagem de abas: e' o que faz o preco de cima se pagar.
 PLANS = {
-    "mensal":     {"price": 39.90,  "title": "Plano Picks Mensal",     "days": 30},
-    "trimestral": {"price": 99.90,  "title": "Plano Picks Trimestral", "days": 90},
-    "semestral":  {"price": 199.90, "title": "Plano Picks Semestral",  "days": 180},
-    "anual":      {"price": 359.90, "title": "Plano Picks Anual",      "days": 365},
+    # Pick IA · todo o pre-jogo
+    "mensal_base":     {"price": 29.90,  "title": "Pick IA Mensal",     "days": 30,  "tier": "base", "cycle": "mensal"},
+    "trimestral_base": {"price": 74.90,  "title": "Pick IA Trimestral", "days": 90,  "tier": "base", "cycle": "trimestral"},
+    "semestral_base":  {"price": 149.90, "title": "Pick IA Semestral",  "days": 180, "tier": "base", "cycle": "semestral"},
+    "anual_base":      {"price": 269.90, "title": "Pick IA Anual",      "days": 365, "tier": "base", "cycle": "anual"},
+    # Pick IA Pro · o pre-jogo + Ao Vivo + agente de chat
+    "mensal":     {"price": 39.90,  "title": "Pick IA Pro Mensal",     "days": 30,  "tier": "pro", "cycle": "mensal"},
+    "trimestral": {"price": 99.90,  "title": "Pick IA Pro Trimestral", "days": 90,  "tier": "pro", "cycle": "trimestral"},
+    "semestral":  {"price": 199.90, "title": "Pick IA Pro Semestral",  "days": 180, "tier": "pro", "cycle": "semestral"},
+    "anual":      {"price": 359.90, "title": "Pick IA Pro Anual",      "days": 365, "tier": "pro", "cycle": "anual"},
 }
 
+#: Nome de cada produto na tela. A chave tecnica no banco continua sendo
+#: `users.plan = 'vip'` pros dois: renomear a coluna arrastaria picks_vip,
+#: vip_tour_status, TYPE_VIP_ENDED e os e-mails, sem mudar nada pro assinante.
+TIER_LABELS = {"base": "Pick IA", "pro": "Pick IA Pro"}
+
+#: O mensal de cada tier e' a regua de desconto dos ciclos mais longos dele.
+TIER_MENSAL = {"base": "mensal_base", "pro": "mensal"}
+
 # Rótulo curto de cada ciclo, pra tela não precisar traduzir a chave.
-PLAN_LABELS = {
+CYCLE_LABELS = {
     "mensal": "Mensal", "trimestral": "Trimestral",
     "semestral": "Semestral", "anual": "Anual",
 }
-PLAN_PERIODS = {
+CYCLE_PERIODS = {
     "mensal": "1 mês", "trimestral": "3 meses",
     "semestral": "6 meses", "anual": "12 meses",
 }
 # ISO 8601 de duração, exigido pelo billingIncrement do schema.org.
-PLAN_ISO_PERIOD = {
-    "mensal": "P1M", "trimestral": "P3M", "semestral": "P6M", "anual": "P1Y",
+CYCLE_ISO_PERIOD = {
+    "mensal": "P1M", "trimestral": "P3M",
+    "semestral": "P6M", "anual": "P1Y",
+}
+
+# Compatibilidade: o e-mail de ativacao e o admin ainda pedem o rotulo pela
+# chave do plano. Agora o rotulo diz o produto E o ciclo, porque "Mensal"
+# sozinho deixou de identificar o que a pessoa comprou.
+PLAN_LABELS = {
+    k: f'{TIER_LABELS[v["tier"]]} {CYCLE_LABELS[v["cycle"]]}'
+    for k, v in PLANS.items()
 }
 
 
@@ -157,26 +191,35 @@ def _plan_payload(key: str) -> dict:
     de novo no meio da expressão.
     """
     info = PLANS[key]
+    tier = info["tier"]
+    cycle = info["cycle"]
     months = round(info["days"] / 30) or 1
     per_month = info["price"] / months
-    monthly_price = PLANS["mensal"]["price"]
+    # A régua é o mensal DO MESMO produto: comparar o anual do Pick IA com o
+    # mensal do Pro anunciaria um desconto que não existe.
+    mensal_key = TIER_MENSAL[tier]
+    monthly_price = PLANS[mensal_key]["price"]
     full_price = monthly_price * months
     savings = round(full_price - info["price"], 2)
     save_pct = round((1 - info["price"] / full_price) * 100) if full_price > 0 else 0
+    e_mensal = key == mensal_key
 
     return {
         "id":            key,
-        "label":         PLAN_LABELS[key],
+        "tier":          tier,
+        "tier_label":    TIER_LABELS[tier],
+        "cycle":         cycle,
+        "label":         CYCLE_LABELS[cycle],
         "title":         info["title"],
         "price":         info["price"],
         "days":          info["days"],
-        "period":        PLAN_PERIODS[key],
+        "period":        CYCLE_PERIODS[cycle],
         "months":        months,
         "price_per_month": round(per_month, 2),
-        "iso_period":    PLAN_ISO_PERIOD[key],
+        "iso_period":    CYCLE_ISO_PERIOD[cycle],
         # 0 no mensal, que é a própria régua de comparação
-        "savings":       savings if key != "mensal" else 0.0,
-        "save_pct":      save_pct if key != "mensal" else 0,
+        "savings":       0.0 if e_mensal else savings,
+        "save_pct":      0 if e_mensal else save_pct,
     }
 
 
@@ -284,7 +327,7 @@ def _apply_approved_payment(payment: dict, source: str) -> dict:
         # com "agora + dias do plano" -- sem isso, quem renova antes de vencer
         # (comportamento comum) perdia os dias restantes que ja tinha pago.
         # Mesmo padrao ja usado abaixo pro credito de indicacao (GREATEST).
-        cur.execute("SELECT name, email, expires_at, ga_client_id FROM users WHERE id = %s", (user_id_int,))
+        cur.execute("SELECT name, email, expires_at, ga_client_id, plan, plan_tier FROM users WHERE id = %s", (user_id_int,))
         row = cur.fetchone()
         if not row:
             logger.error("[PAYMENTS] user_id=%s não encontrado · pagamento %s ignorado", user_id, payment_id)
@@ -298,6 +341,20 @@ def _apply_approved_payment(payment: dict, source: str) -> dict:
         now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
         base = current_expires if (current_expires and current_expires > now_naive) else now_naive
         expires_at = base + timedelta(days=plan_info["days"])
+
+        # TIER · pelo mesmo motivo do GREATEST acima: comprar nao pode tirar
+        # nada de quem ja pagou. Quem tem Pro ativo e compra o Pick IA continua
+        # Pro ate o fim do periodo que ja tinha pago, e so' entao cai pro
+        # produto que acabou de comprar. No sentido contrario o upgrade vale na
+        # hora: quem tem Pick IA e compra o Pro ganha o Ao Vivo no mesmo
+        # request, sem esperar o ciclo antigo vencer.
+        tier_atual = (row["plan_tier"] or "pro") if row["plan"] in ("vip", "trial") else "base"
+        pro_ainda_ativo = (
+            tier_atual == "pro"
+            and current_expires is not None
+            and current_expires > now_naive
+        )
+        tier_novo = "pro" if (plan_info["tier"] == "pro" or pro_ainda_ativo) else "base"
 
         # Registra pagamento ANTES do UPDATE · garante idempotência real
         # ON CONFLICT DO NOTHING: se payment_id já existe, rowcount=0 e não ativa VIP de novo
@@ -314,11 +371,11 @@ def _apply_approved_payment(payment: dict, source: str) -> dict:
             logger.info("[PAYMENTS] Pagamento %s já processado anteriormente · ignorando", payment_id)
             return {"status": "duplicate", "payment_id": payment_id, "user_id": user_id_int, "plan": plan_key}
 
-        logger.info("[PAYMENTS] Ativando VIP para user_id=%s plano=%s expires=%s (via %s)",
-                    user_id, plan_key, expires_at, source)
+        logger.info("[PAYMENTS] Ativando VIP para user_id=%s plano=%s tier=%s expires=%s (via %s)",
+                    user_id, plan_key, tier_novo, expires_at, source)
         cur.execute(
-            "UPDATE users SET plan='vip', expires_at=%s, subscription_type=%s WHERE id=%s",
-            (expires_at, plan_key, user_id_int),
+            "UPDATE users SET plan='vip', plan_tier=%s, expires_at=%s, subscription_type=%s WHERE id=%s",
+            (tier_novo, expires_at, plan_key, user_id_int),
         )
 
         # Crédito de indicação: +2 dias VIP para o referrer quando indicado assina VIP
@@ -332,6 +389,12 @@ def _apply_approved_payment(payment: dict, source: str) -> dict:
                 """
                 UPDATE users
                 SET plan       = CASE WHEN plan IN ('free', 'trial') THEN 'vip' ELSE plan END,
+                    -- O brinde de indicacao e' o produto de entrada. A coluna
+                    -- nasce com DEFAULT 'pro' (pra nao rebaixar a base antiga),
+                    -- entao sem este CASE o free indicador ganharia dois dias
+                    -- de Ao Vivo de presente. Quem ja e' assinante mantem o
+                    -- tier que pagou.
+                    plan_tier  = CASE WHEN plan IN ('free', 'trial') THEN 'base' ELSE plan_tier END,
                     expires_at = GREATEST(COALESCE(expires_at, NOW()), NOW()) + INTERVAL '2 days'
                 WHERE id = %s
                 """,

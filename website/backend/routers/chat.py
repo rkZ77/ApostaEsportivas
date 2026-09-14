@@ -6,7 +6,7 @@ from collections import defaultdict
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from auth_utils import get_current_user
+from auth_utils import get_current_user, is_vip_active, tem_tier_pro
 from database import get_connection
 
 logger = logging.getLogger(__name__)
@@ -31,8 +31,19 @@ from futebol_agent.faq import match_faq
 
 _UPGRADE_NUDGE = (
     "Essa pergunta precisa de análise ao vivo (estatísticas, odds, jogos em tempo real), "
-    "disponível só pra assinantes VIP ou trial.\n\n"
-    "Assine o VIP ou ative seu trial gratuito de 2 dias em Perfil → Ativar Trial pra ter acesso completo."
+    "disponível nos planos pagos.\n\n"
+    "Assine o Pick IA Pro ou ative seu trial gratuito de 2 dias em Perfil → Ativar Trial "
+    "pra ter acesso completo."
+)
+
+#: Recado pra quem JA' paga, mas no plano de entrada. E' separado porque dizer
+#: "assine" pra quem ja' assinou parece defeito do site, e porque o que falta
+#: aqui tem nome: o agente entra junto com o Ao Vivo, no Pick IA Pro.
+_UPGRADE_PRO = (
+    "Essa pergunta precisa de análise ao vivo (estatísticas, odds, jogos em tempo real), "
+    "que faz parte do Pick IA Pro.\n\n"
+    "Seu plano atual é o Pick IA. Em Planos você faz o upgrade e passa a ter o agente "
+    "e os picks ao vivo."
 )
 
 
@@ -269,10 +280,17 @@ async def chat(body: ChatRequest, current_user: dict = Depends(get_current_user)
     if faq_answer:
         return StreamingResponse(_stream_text(faq_answer), media_type="text/event-stream")
 
-    # Análise real de jogos (tools + Claude) é exclusiva de quem paga — free só tem
-    # acesso ao FAQ acima, pra não gerar custo de API
-    if current_user.get("plan") not in ("vip", "trial", "admin"):
+    # Análise real de jogos (tools + Claude) é exclusiva de quem paga, free só tem
+    # acesso ao FAQ acima, pra não gerar custo de API.
+    #
+    # Desde 12/09/2026 o agente acompanha o Ao Vivo e fica no Pick IA Pro: os
+    # dois são o que custa por assinante ativo (aqui, token de API a cada
+    # pergunta), e é essa conta que o preço de cima paga. O free e o assinante
+    # de entrada recebem recados diferentes de propósito.
+    if not is_vip_active(current_user):
         return StreamingResponse(_stream_text(_UPGRADE_NUDGE), media_type="text/event-stream")
+    if not tem_tier_pro(current_user):
+        return StreamingResponse(_stream_text(_UPGRADE_PRO), media_type="text/event-stream")
 
     if not _AGENT_OK or run_agent is None:
         raise HTTPException(503, "Agente indisponível. Configure ANTHROPIC_API_KEY.")

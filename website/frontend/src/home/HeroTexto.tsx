@@ -78,7 +78,7 @@ export default function HeroTexto({ animar = true }: { animar?: boolean }) {
             ou a conta. Aqui o verbo é testar, o objeto é o VIP e o preço
             aparece antes do clique. */}
         <Button to="/login?mode=register" size="lg" IconRight={ArrowRight}>
-          Testar o VIP grátis por 2 dias
+          Testar o Pro grátis por 2 dias
         </Button>
         <Button to="/resultados" variant="ghost" size="lg">
           Ver resultados reais

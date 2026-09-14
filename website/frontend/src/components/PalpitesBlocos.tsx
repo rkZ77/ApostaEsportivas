@@ -213,7 +213,7 @@ export function ConviteDeTopo({ ehVip = false }: { ehVip?: boolean }) {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-4">
       <Button to="/login?mode=register" size="sm" IconRight={ArrowRight}>
-        Testar o VIP grátis por 2 dias
+        Testar o Pro grátis por 2 dias
       </Button>
       <span className="text-xs text-ink-4">
         O histórico desta página é público e continua aberto sem conta.
@@ -234,7 +234,7 @@ export function ChamadaFinal() {
         sem cobrança.
       </p>
       <div className="flex flex-col sm:flex-row gap-3 justify-center">
-        <Button to="/login?mode=register" size="lg">Testar o VIP grátis por 2 dias</Button>
+        <Button to="/login?mode=register" size="lg">Testar o Pro grátis por 2 dias</Button>
         <Button to="/resultados" variant="ghost" size="lg">Ver o histórico completo</Button>
       </div>
     </section>

@@ -11,6 +11,12 @@ interface User {
   email: string
   phone?: string | null
   plan: 'free' | 'trial' | 'vip' | 'admin'
+  /*
+   * Qual dos dois produtos pagos (12/09/2026). Ausente e' lido como 'pro':
+   * quem assinou antes da mudanca tinha tudo, e um campo que ainda nao chegou
+   * nao pode tirar acesso de ninguem.
+   */
+  plan_tier?: 'base' | 'pro' | null
   active: boolean
   expires_at?: string | null
   avatar_url?: string | null
@@ -27,6 +33,8 @@ interface AuthContextType {
   updateUser: (patch: Partial<User>) => void
   refreshUser: () => Promise<void>
   isVip: boolean
+  /** Assina o Pick IA Pro · quem enxerga o Ao Vivo e o agente de chat. */
+  isPro: boolean
   isAdmin: boolean
   daysUntilExpiry: number | null
 }
@@ -131,6 +139,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return Math.ceil(diff / (1000 * 60 * 60 * 24))
   })()
 
+  /* "Paga e não venceu", que é a pergunta que `isVip` e `isPro` compartilham. */
+  const vipAtivo = user?.plan === 'admin'
+    || ((user?.plan === 'vip' || user?.plan === 'trial')
+        && (!user.expires_at || new Date(user.expires_at) > new Date()))
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -140,9 +153,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       logout,
       updateUser,
       refreshUser,
-      isVip: user?.plan === 'admin'
-        || ((user?.plan === 'vip' || user?.plan === 'trial')
-            && (!user.expires_at || new Date(user.expires_at) > new Date())),
+      isVip: vipAtivo,
+      /*
+       * Espelho de `auth_utils.tem_tier_pro`. A tela NUNCA decide acesso
+       * sozinha: quem tranca é o backend, e isto aqui só escolhe entre
+       * mostrar o cadeado de "assine" e o de "faça upgrade". Errar aqui
+       * mostra o recado errado, não abre o produto.
+       */
+      isPro: vipAtivo
+        && (user?.plan !== 'vip' || (user?.plan_tier ?? 'pro') === 'pro'),
       isAdmin: user?.plan === 'admin',
       daysUntilExpiry,
     }}>

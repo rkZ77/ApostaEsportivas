@@ -18,12 +18,25 @@ import type { BadgeTone } from '../components/ui'
  * menos contava o que ela ia levar. Quem vende o produto tem que ler do mesmo
  * lugar que quem o descreve.
  *
- * O `plano` é o que separa a coluna Free da coluna VIP na página de planos ·
- * não é enfeite. Mudar um item aqui muda a Home, a página de planos e o
- * checkout de uma vez, que é exatamente o ponto.
+ * O `plano` é o que separa as três colunas da página de planos, não é enfeite.
+ * Mudar um item aqui muda a Home, a página de planos e o checkout de uma vez,
+ * que é exatamente o ponto.
  */
 
-export type PlanoDoModulo = 'free' | 'vip' | 'ambos'
+/*
+ * QUAL PLANO ABRE O MODULO (12/09/2026, dois planos).
+ *
+ *   'ambos' · aberto pra qualquer conta, inclusive free
+ *   'pago'  · entra nos dois planos pagos (Pick IA e Pick IA Pro)
+ *   'pro'   · exclusivo do Pick IA Pro
+ *
+ * So' dois modulos sao 'pro', e nao foi escolha estetica: Picks ao vivo e
+ * Agente de futebol sao os unicos que custam por assinante ativo (cota da API
+ * de futebol num, token de IA no outro). E' essa conta que a diferenca de
+ * preco paga, e e' por isso que o corte esta' neles e nao numa contagem de
+ * abas.
+ */
+export type PlanoDoModulo = 'free' | 'pago' | 'pro' | 'ambos'
 
 export interface Modulo {
   Icon: LucideIcon
@@ -40,8 +53,8 @@ export const MODULOS: Modulo[] = [
     Icon: Crown,
     titulo: 'Picks VIP',
     desc: 'Os picks de maior confiança do dia, com mercado, odd, stake sugerida e a análise que sustenta cada um.',
-    plano: 'vip',
-    tag: { label: 'VIP', tone: 'yellow' },
+    plano: 'pago',
+    tag: { label: 'Pick IA', tone: 'yellow' },
   },
   {
     Icon: Gift,
@@ -54,57 +67,57 @@ export const MODULOS: Modulo[] = [
     Icon: Radio,
     titulo: 'Picks ao vivo',
     desc: 'Um motor separado lê a partida em andamento e publica quando o campo desmente o que o mercado precificou.',
-    plano: 'vip',
-    tag: { label: 'VIP', tone: 'indigo' },
+    plano: 'pro',
+    tag: { label: 'Pro', tone: 'indigo' },
   },
   {
     Icon: Layers,
     titulo: 'Múltiplas',
     desc: 'Combinações montadas pela IA só quando todas as seleções passam no critério estatístico.',
-    plano: 'vip',
-    tag: { label: 'VIP', tone: 'blue' },
+    plano: 'pago',
+    tag: { label: 'Pick IA', tone: 'blue' },
   },
   {
     Icon: Rocket,
     titulo: 'Alavancagem',
     desc: 'Sequência de odds curtas com reinvestimento do lucro, para crescimento de banca com risco controlado.',
-    plano: 'vip',
-    tag: { label: 'VIP', tone: 'orange' },
+    plano: 'pago',
+    tag: { label: 'Pick IA', tone: 'orange' },
   },
   {
     Icon: Zap,
     titulo: 'Pick Boost',
     desc: 'Varre os mercados alternativos do jogo atrás da linha que a casa deixou de corrigir.',
-    plano: 'vip',
-    tag: { label: 'VIP', tone: 'blue' },
+    plano: 'pago',
+    tag: { label: 'Pick IA', tone: 'blue' },
   },
   {
     Icon: UserSquare,
     titulo: 'Estatística de jogador',
     desc: 'Projeção individual por jogador, para os mercados que a maioria das casas precifica no olho.',
-    plano: 'vip',
-    tag: { label: 'VIP', tone: 'orange' },
+    plano: 'pago',
+    tag: { label: 'Pick IA', tone: 'orange' },
   },
   {
     Icon: Flag,
     titulo: 'Mercado de faltas',
     desc: 'Modelo próprio para linhas de faltas, um mercado que a maioria das casas precifica com folga.',
-    plano: 'vip',
-    tag: { label: 'VIP', tone: 'purple' },
+    plano: 'pago',
+    tag: { label: 'Pick IA', tone: 'purple' },
   },
   {
     Icon: ShieldHalf,
     titulo: 'Defesas de goleiro',
     desc: 'Projeção de defesas por goleiro a partir do volume de finalização esperado dos dois lados.',
-    plano: 'vip',
-    tag: { label: 'VIP', tone: 'sky' },
+    plano: 'pago',
+    tag: { label: 'Pick IA', tone: 'sky' },
   },
   {
     Icon: Bot,
     titulo: 'Agente de futebol',
     desc: 'Uma IA que responde sobre qualquer jogo, mercado ou estratégia usando os dados reais do sistema.',
-    plano: 'vip',
-    tag: { label: 'VIP', tone: 'green' },
+    plano: 'pro',
+    tag: { label: 'Pro', tone: 'green' },
   },
   {
     Icon: Wallet,
@@ -127,9 +140,13 @@ export const MODULOS: Modulo[] = [
 ]
 
 /** O que entra na coluna Free · o que o módulo entrega sem assinatura. */
-export const MODULOS_FREE = MODULOS.filter(m => m.plano !== 'vip')
-/** O que a assinatura abre. */
-export const MODULOS_VIP = MODULOS.filter(m => m.plano === 'vip')
+export const MODULOS_FREE = MODULOS.filter(m => m.plano === 'free' || m.plano === 'ambos')
+/** O que o Pick IA abre, e que o Pick IA Pro também tem. */
+export const MODULOS_PAGOS = MODULOS.filter(m => m.plano === 'pago')
+/** O que só o Pick IA Pro abre. */
+export const MODULOS_PRO = MODULOS.filter(m => m.plano === 'pro')
+/** Tudo que qualquer assinatura abre · a lista do checkout do plano de topo. */
+export const MODULOS_ASSINATURA = [...MODULOS_PAGOS, ...MODULOS_PRO]
 
 /*
  * Pagamento avulso, e não assinatura recorrente.

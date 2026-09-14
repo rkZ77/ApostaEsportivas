@@ -10,7 +10,7 @@ import alavancagem_caminho
 from data_br import data_br
 from database import get_connection
 from taxa_acerto import taxa_acerto
-from auth_utils import get_current_user, is_vip_active
+from auth_utils import get_current_user, is_vip_active, tem_tier_pro
 from feature_flags import bingo_visivel
 from routers.payments import PLANS
 
@@ -1419,6 +1419,13 @@ def _pode_seguir(cur, user: dict, pick_type: str, pick_id: int) -> bool:
     # pernas com mercado, linha e odd, que e' o produto inteiro.
     if pick_type == "bingo" and not bingo_visivel(user):
         return False
+    # AO VIVO E' DO PICK IA PRO (12/09/2026), e "seguir e' ler" vale igual:
+    # o teaser do Ao Vivo entrega o `id` do pick pro assinante Pick IA, e sem
+    # esta linha ele seguiria o pick por esse id e leria market, line e odd na
+    # propria Banca. E' o furo de 10/09 uma camada acima, com o gate de leitura
+    # ja' no lugar e o de escrita atras.
+    if pick_type == "live":
+        return tem_tier_pro(user)
     if pick_type not in _FOLLOW_SO_VIP:
         if pick_type == "boost" and not is_vip_active(user):
             return boost_liberado_do_dia(cur, pick_id)

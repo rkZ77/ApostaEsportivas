@@ -154,8 +154,8 @@ interface AlavSerie {
 const defaultAlavFilters: AlavFilters = { date_from: '', date_to: TODAY, resultado: 'all' }
 
 // Tab bar
-function TabBar({ tab, setTab, canSeeVip, verAoVivo, verBingo, temFaltasHoje, counts, liveCount, onPrefetch }: {
-  tab: Tab; setTab: (t: Tab) => void; canSeeVip: boolean
+function TabBar({ tab, setTab, canSeeVip, canSeePro, verAoVivo, verBingo, temFaltasHoje, counts, liveCount, onPrefetch }: {
+  tab: Tab; setTab: (t: Tab) => void; canSeeVip: boolean; canSeePro: boolean
   /** Ver `podeVerAoVivo` no Picks · admin enxerga antes do produto abrir. */
   verAoVivo: boolean
   /** O Bingo entra na barra? Liberado pra todos em 12/09, então hoje isto é
@@ -238,7 +238,7 @@ function TabBar({ tab, setTab, canSeeVip, verAoVivo, verBingo, temFaltasHoje, co
     barra.scrollBy({ left: dir * barra.clientWidth * 0.7, behavior: 'smooth' })
   }
 
-  const tabs: { key: Tab; label: string; badge?: string; badgeCls?: string; premiumOnly?: boolean; oculta?: boolean }[] = [
+  const tabs: { key: Tab; label: string; badge?: string; badgeCls?: string; premiumOnly?: boolean; proOnly?: boolean; oculta?: boolean }[] = [
     { key: 'hoje',         label: 'Hoje'            },
     { key: 'pick_seguro',  label: 'Picks Free',      badge: 'FREE', badgeCls: 'bg-green-500/10 text-green-400 border-green-500/20' },
     { key: 'vip',          label: 'Picks VIP',       premiumOnly: true },
@@ -267,8 +267,14 @@ function TabBar({ tab, setTab, canSeeVip, verAoVivo, verBingo, temFaltasHoje, co
          por dia era gratuito e cadeado seria mentira. O free do dia acabou: o
          Ao Vivo passa a ter o mesmo corte dos Picks VIP, então o cadeado voltou
          a ser a informação verdadeira. A aba continua ABRINDO para todos · o
-         que ela mostra ao free é o teaser, igual aos outros produtos VIP. */
-      premiumOnly: true,
+         que ela mostra ao free é o teaser, igual aos outros produtos VIP.
+
+         `proOnly` E NÃO `premiumOnly` DESDE 12/09: com dois planos, o Ao Vivo
+         é o que separa o Pick IA do Pick IA Pro. Pra quem assina o plano de
+         entrada o cadeado continua verdadeiro, e é ele que precisa aparecer ·
+         marcar a aba como premium mostraria o selo de "você tem" a quem não
+         tem. */
+      proOnly: true,
       /* NA BARRA por padrão desde 27/08 · o produto abriu. A variável de
          ambiente sumiu em 28/08 (o usuário removeu as do Live no Railway) e
          `LIVE_PICKS_ENABLED` virou constante em config.ts · uma linha que
@@ -390,12 +396,21 @@ function TabBar({ tab, setTab, canSeeVip, verAoVivo, verBingo, temFaltasHoje, co
                   {t.badge}
                 </span>
               )}
+              {/* DUAS TRANCAS DESDE 12/09. `premiumOnly` é qualquer plano
+                  pago, `proOnly` é só o Pick IA Pro · e quem assina a entrada
+                  passa na primeira e não na segunda. Um gate só mostraria o
+                  selo de "você tem" na aba Ao Vivo pra quem não tem. */}
               {t.premiumOnly && canSeeVip && (
                 <span className="ml-1.5 text-[10px] bg-yellow-400/10 text-yellow-400 border border-yellow-400/20 px-1.5 py-0.5 rounded font-bold">
                   VIP
                 </span>
               )}
-              {t.premiumOnly && !canSeeVip && (
+              {t.proOnly && canSeePro && (
+                <span className="ml-1.5 text-[10px] bg-indigo-400/10 text-indigo-300 border border-indigo-400/20 px-1.5 py-0.5 rounded font-bold">
+                  Pro
+                </span>
+              )}
+              {((t.premiumOnly && !canSeeVip) || (t.proOnly && !canSeePro)) && (
                 <svg className="ml-1 w-3 h-3 text-yellow-400 inline-block align-middle" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
@@ -2597,7 +2612,7 @@ function BarraDoDia({ offset, setOffset, diasComPick, isoDoOffset, rotuloLongo, 
 export default function Picks() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { user, isVip, isAdmin, daysUntilExpiry } = useAuth()
+  const { user, isVip, isPro, isAdmin, daysUntilExpiry } = useAuth()
 
   /*
    * Quem enxerga a aba "Picks Ao Vivo".
@@ -2628,6 +2643,8 @@ export default function Picks() {
    */
   const verBingo = bingoVisivel(isAdmin)
   const canSeeVip = isVip || isAdmin
+  /* Quem enxerga o Ao Vivo · o plano de cima. Ver AuthContext. */
+  const canSeePro = isPro || isAdmin
   const { hasNew, markSeen, liveCount, hasLive, clearLive } = useNotifications()
   // Só para não empilhar sobreposição: enquanto o tour de boas-vindas ainda
   // pode abrir, o convite de configurar banca espera a vez (ver abaixo).
@@ -3231,6 +3248,7 @@ export default function Picks() {
           }}
           onPrefetch={prefetchAba}
           canSeeVip={canSeeVip}
+          canSeePro={canSeePro}
           liveCount={liveCount}
           temFaltasHoje={(today?.faltas ?? []).length > 0}
           counts={{

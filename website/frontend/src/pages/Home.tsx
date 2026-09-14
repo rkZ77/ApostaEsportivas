@@ -146,11 +146,11 @@ export default function Home() {
    */
   const { user } = useAuth()
   const ctaFaixa = !user
-    ? { titulo: 'Testar o VIP por 2 dias', sub: 'Grátis', acao: 'Criar conta', destino: '/login?mode=register' }
+    ? { titulo: 'Testar o Pro por 2 dias', sub: 'Grátis', acao: 'Criar conta', destino: '/login?mode=register' }
     : user.plan === 'free' || user.plan === 'trial'
     ? { titulo: 'Desbloqueie os picks VIP', sub: 'Todos os produtos da IA', acao: 'Ver planos', destino: '/planos' }
     : null
-  const { plans, monthly } = usePlans()
+  const { plans, monthly, monthlyBase } = usePlans()
 
   /*
    * REVELAÇÃO COLETIVA DO TOPO.
@@ -335,7 +335,7 @@ export default function Home() {
           gente em vez de motor. Some sozinha quando não há ranking. */}
       <SecaoAdiada alturaMinima={360}><ProvaSocial /></SecaoAdiada>
 
-      <SecaoAdiada alturaMinima={1890}><Plans monthly={monthly} /></SecaoAdiada>
+      <SecaoAdiada alturaMinima={1890}><Plans monthly={monthly} monthlyBase={monthlyBase} /></SecaoAdiada>
 
       <SecaoAdiada alturaMinima={580}><FinalCTA /></SecaoAdiada>
 

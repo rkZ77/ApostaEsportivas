@@ -1509,7 +1509,14 @@ export default function LivePicksFeed({ isActive, banca }: {
   /* O que o free NÃO vê. Vem do servidor sem mercado, análise nem stake ·
      mesmo contrato de teaser dos outros produtos VIP. */
   const [bloqueados, setBloqueados] = useState<TeaserAoVivo[]>([])
+  /*
+   * DOIS ESTADOS, NAO UM (12/09/2026). `temAoVivo` decide se a pessoa ve' o
+   * pick; `eVip` decide qual cadeado ela recebe: quem nao paga nada precisa
+   * assinar, quem ja' assina o Pick IA precisa de upgrade. Dizer "assine" pra
+   * quem ja' assinou parece defeito do site.
+   */
   const [eVip, setEVip] = useState(true)
+  const [temAoVivo, setTemAoVivo] = useState(true)
   const [disponivel, setDisponivel] = useState(true)
   const [motivo, setMotivo] = useState<string | null>(null)
   /* Estado do motor · só o que o assinante precisa (ligado e última varredura).
@@ -1548,6 +1555,7 @@ export default function LivePicksFeed({ isActive, banca }: {
       setPicks(r.data.picks ?? [])
       setBloqueados(r.data.bloqueados ?? [])
       setEVip(r.data.e_vip !== false)
+      setTemAoVivo(r.data.tem_ao_vivo !== false)
       setErro(false)
     } catch {
       setErro(true)
@@ -1926,7 +1934,7 @@ export default function LivePicksFeed({ isActive, banca }: {
           mesmo contrato dos outros produtos VIP, e o teaser fica porque a
           alternativa que estava no ar antes dele era pior que um cadeado: a aba
           respondia erro e o produto inteiro parecia quebrado. */}
-      {!eVip && bloqueados.length > 0 && (
+      {!temAoVivo && bloqueados.length > 0 && (
         <div className="mt-6 space-y-3">
           <div className="grid gap-3 sm:grid-cols-2">
             {bloqueados.slice(0, 4).map(b => (
@@ -1959,10 +1967,14 @@ export default function LivePicksFeed({ isActive, banca }: {
                 {bloqueados.length} {bloqueados.length === 1 ? 'entrada' : 'entradas'} ao vivo hoje
               </p>
               <p className="text-ink-3 text-xs leading-relaxed">
-                O jogo e a odd você já vê. O mercado, a leitura da partida e a sugestão de stake abrem no VIP.
+                {eVip
+                  ? 'O jogo e a odd você já vê. O mercado, a leitura da partida e a sugestão de stake fazem parte do Pick IA Pro.'
+                  : 'O jogo e a odd você já vê. O mercado, a leitura da partida e a sugestão de stake abrem na assinatura.'}
               </p>
             </div>
-            <Button to="/checkout" size="sm" className="shrink-0">Assinar VIP</Button>
+            <Button to="/checkout" size="sm" className="shrink-0">
+              {eVip ? 'Fazer upgrade' : 'Assinar'}
+            </Button>
           </div>
         </div>
       )}

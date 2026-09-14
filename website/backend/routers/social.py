@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from typing import Optional
 import psycopg2.extras
 from database import get_connection
-from auth_utils import get_current_user, is_vip_active
+from auth_utils import get_current_user, is_vip_active, tem_tier_pro
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/social", tags=["social"])
@@ -20,6 +20,21 @@ VALID_PICK_TYPES = {
     "vip", "free", "multipla", "multiplas", "bingo", "alavancagem",
     "faltas", "goleiros", "player_stats", "boost", "live",
 }
+
+def _pode_ver_social(pick_type: str, user: dict) -> bool:
+    """Quem pode ler e escrever no mural de um pick.
+
+    O mural nao mostra o pick, mas mostra gente falando dele, e comentario de
+    pick trancado cita mercado e linha o tempo todo. Entao ele acompanha o
+    gate do produto: VIP exige assinatura, e o Ao Vivo exige o Pick IA Pro
+    desde 12/09/2026.
+    """
+    if pick_type == "live":
+        return tem_tier_pro(user)
+    if pick_type == "vip":
+        return is_vip_active(user)
+    return True
+
 
 # Rate limit: máx 5 comentários + 5 msgs de chat por usuário por 60s
 _comment_rate: dict[str, list[float]] = defaultdict(list)
@@ -174,7 +189,7 @@ def get_social(
 ):
     if pick_type not in VALID_PICK_TYPES:
         raise HTTPException(400, "Tipo inválido")
-    if pick_type == "vip" and not is_vip_active(current_user):
+    if not _pode_ver_social(pick_type, current_user):
         raise HTTPException(403, "Acesso VIP necessário")
     limit = min(max(limit, 1), 100)
 
@@ -229,7 +244,7 @@ def toggle_reaction(pick_type: str, pick_id: int, body: ReactBody,
         raise HTTPException(400, "Tipo inválido")
     if body.reaction not in VALID_REACTIONS:
         raise HTTPException(400, "Reação inválida")
-    if pick_type == "vip" and not is_vip_active(current_user):
+    if not _pode_ver_social(pick_type, current_user):
         raise HTTPException(403, "Acesso VIP necessário")
     _check_comment_rate(current_user["id"])
 
@@ -276,7 +291,7 @@ def add_comment(pick_type: str, pick_id: int, body: CommentBody,
                 current_user: dict = Depends(get_current_user)):
     if pick_type not in VALID_PICK_TYPES:
         raise HTTPException(400, "Tipo inválido")
-    if pick_type == "vip" and not is_vip_active(current_user):
+    if not _pode_ver_social(pick_type, current_user):
         raise HTTPException(403, "Acesso VIP necessário")
     _check_comment_rate(current_user["id"])
 

@@ -85,7 +85,7 @@ class TestLiberacao:
         """"Aberto pra todos" e' todo ASSINANTE · quem nao e' VIP nunca chega
         em require_live_reader, porque require_vip barra antes."""
         src = _ler(_BACKEND, "routers", "live_picks.py")
-        assert "Depends(require_vip)" in src
+        assert "Depends(require_pro)" in src
 
     def test_o_front_abre_sem_depender_de_variavel(self):
         """`LIVE_PICKS_ENABLED` virou CONSTANTE em 28/08.
@@ -105,7 +105,9 @@ class TestLiberacao:
         ABRINDO pra todos, com teaser no lugar dos cards."""
         src = _ler(_FRONT, "pages", "Picks.tsx")
         trecho = src[src.index("key: 'ao_vivo'"):][:900]
-        assert "premiumOnly: true" in trecho
+        # `proOnly` desde 12/09/2026: com dois planos, o cadeado da aba
+        # Ao Vivo tem que aparecer tambem pra quem assina o Pick IA.
+        assert "proOnly: true" in trecho
 
     def test_o_feed_atende_quem_nao_assina(self):
         """Ate 01/09 o endpoint exigia VIP e a aba respondia erro pro free: um
@@ -155,7 +157,7 @@ class TestNotificacaoDePickNovo:
         import routers.notifications as notif
 
         chamadas = []
-        monkeypatch.setattr(notif, "notify_vip_users",
+        monkeypatch.setattr(notif, "notify_pro_users",
                             lambda *a, **kw: chamadas.append(kw) or 1)
 
         notif.notificar_pick_live_novo([
@@ -173,7 +175,7 @@ class TestNotificacaoDePickNovo:
         import routers.notifications as notif
 
         chamadas = []
-        monkeypatch.setattr(notif, "notify_vip_users",
+        monkeypatch.setattr(notif, "notify_pro_users",
                             lambda *a, **kw: chamadas.append(kw) or 1)
 
         notif.notificar_pick_live_novo([
@@ -190,7 +192,7 @@ class TestNotificacaoDePickNovo:
     def test_pick_sem_id_nao_estoura(self, monkeypatch):
         import routers.notifications as notif
 
-        monkeypatch.setattr(notif, "notify_vip_users", lambda *a, **kw: 1)
+        monkeypatch.setattr(notif, "notify_pro_users", lambda *a, **kw: 1)
         assert notif.notificar_pick_live_novo([{"home_team_name": "A"}]) == 0
         assert notif.notificar_pick_live_novo([]) == 0
 
@@ -290,7 +292,7 @@ class TestOSinoNaoFuraOPaywall:
         src = _ler(_BACKEND, "routers", "notifications.py")
         trecho = src[src.index("def notificar_pick_live_novo"):]
         trecho = trecho[:trecho.index("LIVE_NOVO_JANELA_MIN")]
-        assert "notify_vip_users(" in trecho
+        assert "notify_pro_users(" in trecho
         assert "notify_all_users(" not in trecho
 
     def test_o_alcance_vip_e_a_mesma_regra_do_resto_do_site(self):

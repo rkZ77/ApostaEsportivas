@@ -37,7 +37,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
-from auth_utils import get_current_user, is_vip_active, require_admin, require_vip
+from auth_utils import get_current_user, is_vip_active, require_admin, require_vip, require_pro, tem_tier_pro
 from database import get_connection
 from taxa_acerto import taxa_acerto
 from settlement_bridge import settlement
@@ -73,8 +73,8 @@ STATUS_EXPIRADO = "EXPIRED"
 STATUS_LIQUIDADO = "SETTLED"
 
 
-def require_live_reader(user: dict = Depends(require_vip)) -> dict:
-    """Quem pode LER o feed/estatistica do Motor Live: todo assinante.
+def require_live_reader(user: dict = Depends(require_pro)) -> dict:
+    """Quem pode LER o feed/estatistica do Motor Live: o assinante Pick IA Pro.
 
     Este gate teve tres vidas curtas. Nasceu admin-only (motor em validacao),
     virou "aberto salvo LIVE_PICKS_PUBLIC=off" quando o produto abriu, e em
@@ -82,12 +82,18 @@ def require_live_reader(user: dict = Depends(require_vip)) -> dict:
     Railway, e um interruptor que ninguem configura e' so' um `if` a mais entre
     o assinante e o produto.
 
-    `require_vip` faz o trabalho todo -- e' o mesmo gate dos outros produtos
-    VIP, e "aberto pro assinante" nunca quis dizer aberto pra qualquer um.
+    A quarta vida e' a regra que este comentario previa: desde 12/09/2026 os
+    planos sao dois, e o Ao Vivo e' o que separa um do outro. Ele e' o unico
+    produto que gasta cota de API por assinante ativo, entao e' ele que paga a
+    diferenca de preco entre o Pick IA e o Pick IA Pro.
+
+    `require_pro` encadeia `require_vip`, entao quem nao assina nada continua
+    recebendo o 403 de sempre, na mensagem que o site ja sabe tratar. So' quem
+    ja passou por assinante chega a ser separado por tier.
 
     A funcao fica no lugar da dependencia direta porque o nome documenta a
-    intencao nas seis rotas que a usam, e porque e' aqui que uma regra futura
-    entraria sem tocar em todas elas.
+    intencao nas seis rotas que a usam, e porque foi aqui que essa regra
+    entrou sem tocar em nenhuma delas.
     """
     return user
 
@@ -757,9 +763,15 @@ def feed(
     # parecer defeito pro free (foi o motivo de o 403 ter saido em 28/08). O
     # corte do teaser e' o mesmo contrato do link publico de pick: times, liga,
     # horario e odd, nunca a analise.
+    # DOIS PLANOS (12/09/2026): quem libera o Ao Vivo e' o tier Pro, nao o
+    # "assina alguma coisa". O assinante Pick IA cai no MESMO teaser do free --
+    # o corte do conteudo e' identico, o que muda e' so' a mensagem do cadeado,
+    # e por isso as duas respostas vao no payload: `e_vip` diz se a pessoa ja'
+    # paga (entao a tela oferece o upgrade) e `tem_ao_vivo` diz se ela ve'.
     e_vip = is_vip_active(current_user)
+    tem_ao_vivo = tem_tier_pro(current_user)
     bloqueados = []
-    if not e_vip:
+    if not tem_ao_vivo:
         for p in saida:
             # O QUE O TEASER MOSTRA e' o mesmo contrato do link publico de pick
             # e do teaser dos outros produtos: times, liga, horario e odd.
@@ -786,7 +798,8 @@ def feed(
         "disponivel": True,
         "picks": saida,
         "e_vip": e_vip,
-        # So' preenchido pra quem nao assina · o VIP ve' tudo em `picks`.
+        "tem_ao_vivo": tem_ao_vivo,
+        # So' preenchido pra quem nao tem o Pro · ele ve' tudo em `picks`.
         "bloqueados": bloqueados,
         "expirados_agora": expirados,
         "liquidados_agora": liquidacao["liquidados"],

@@ -49,12 +49,16 @@ def test_desconto_calculado_bate_com_a_conta():
     """O save_pct nao pode ser digitado: era assim que o Checkout dizia 17%
     num plano que economiza 16%."""
     ns = _payments_ns()
-    mensal = ns["PLANS"]["mensal"]["price"]
 
     for chave in ns["PLANS"]:
         p = ns["_plan_payload"](chave)
+        # A regua e' o mensal DO MESMO produto (12/09/2026): comparar o anual
+        # do Pick IA com o mensal do Pick IA Pro anunciaria um desconto que
+        # nao existe, que e' a mesma classe de erro que criou este teste.
+        mensal_chave = ns["TIER_MENSAL"][p["tier"]]
+        mensal = ns["PLANS"][mensal_chave]["price"]
         cheio = mensal * p["months"]
-        esperado = 0 if chave == "mensal" else round((1 - p["price"] / cheio) * 100)
+        esperado = 0 if chave == mensal_chave else round((1 - p["price"] / cheio) * 100)
         assert p["save_pct"] == esperado, f"{chave}: {p['save_pct']}% != {esperado}%"
         # preco por mes tem que fechar com o total
         assert round(p["price_per_month"] * p["months"], 0) == pytest.approx(round(p["price"], 0), abs=1)

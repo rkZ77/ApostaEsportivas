@@ -11,7 +11,7 @@ import { Button } from '../components/ui'
  */
 
 const POINTS = [
-  '2 dias de acesso VIP completo',
+  '2 dias com o Pick IA Pro aberto',
   'Cancele quando quiser',
 ]
 

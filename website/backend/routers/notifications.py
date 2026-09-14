@@ -318,6 +318,48 @@ SQL_VIP_ATIVO = """
 """
 
 
+#: QUEM TEM O PICK IA PRO, em SQL.
+#:
+#: Traducao de `auth_utils.tem_tier_pro` pro INSERT em lote, pelo mesmo motivo
+#: que SQL_VIP_ATIVO existe. `plan_tier` so' e' lido de quem paga em `vip`:
+#: admin e trial veem o produto inteiro, e a coluna nasceu com DEFAULT 'pro'
+#: justamente pra base antiga nao perder nada.
+SQL_PRO_ATIVO = """
+    u.plan IN ('vip', 'trial', 'admin')
+    AND (u.plan = 'admin' OR u.expires_at IS NULL OR u.expires_at > NOW())
+    AND (u.plan <> 'vip' OR COALESCE(u.plan_tier, 'pro') = 'pro')
+"""
+
+
+def notify_pro_users(ntype: str, title: str, dedupe_key: str,
+                     body: Optional[str] = None, url: Optional[str] = None,
+                     payload: Optional[dict] = None) -> int:
+    """Igual a `notify_vip_users`, mas so' pra quem tem o Pick IA Pro.
+
+    Existe pelo motivo exato que criou a `notify_vip_users` em 10/09: o sino
+    entrega o CORPO da notificacao, e o corpo do aviso de pick ao vivo tem
+    mercado, linha e odd dentro. Com dois planos, mandar pelo gate de VIP faria
+    o assinante Pick IA -- que ve' teaser na aba -- ler a analise completa no
+    sino. Seria o mesmo furo de antes, so' que uma camada acima.
+    """
+    conn = get_connection()
+    cur  = conn.cursor()
+    try:
+        cur.execute(f"""
+            INSERT INTO notifications (user_id, type, title, body, url, payload, dedupe_key)
+            SELECT u.id, %s, %s, %s, %s, %s::jsonb, %s FROM users u
+            WHERE {SQL_PRO_ATIVO}
+            ON CONFLICT (user_id, dedupe_key) DO NOTHING
+        """, (ntype, title[:160], body, url,
+              json.dumps(payload) if payload is not None else None, dedupe_key))
+        count = cur.rowcount
+        conn.commit()
+        return count
+    finally:
+        cur.close()
+        conn.close()
+
+
 def notify_vip_users(ntype: str, title: str, dedupe_key: str,
                      body: Optional[str] = None, url: Optional[str] = None,
                      payload: Optional[dict] = None) -> int:
@@ -526,10 +568,12 @@ def notificar_pick_live_novo(picks: list) -> int:
         home, away = p.get("home_team_name"), p.get("away_team_name")
         jogo = f"{home} x {away}" if home and away else "Jogo ao vivo"
         minuto = p.get("minute_at_creation")
-        # SO' QUEM ASSINA (2026-09-10). O Ao Vivo virou VIP puro, e este corpo
-        # carrega mercado, linha e odd -- era o unico lugar do site que ainda
-        # entregava a analise do produto pra base inteira.
-        criadas += notify_vip_users(
+        # SO' QUEM TEM O PRO (2026-09-10, estreitado em 12/09). O Ao Vivo
+        # virou VIP puro, e este corpo carrega mercado, linha e odd -- era o
+        # unico lugar do site que ainda entregava a analise do produto pra base
+        # inteira. Com dois planos o gate subiu junto com o produto: o Ao Vivo
+        # e' do Pick IA Pro, entao o aviso dele tambem e'.
+        criadas += notify_pro_users(
             TYPE_LIVE_NOVO,
             title=f"Pick ao vivo: {jogo}",
             dedupe_key=f"live_novo:{pick_id}",

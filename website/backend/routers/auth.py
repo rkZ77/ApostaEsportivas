@@ -1537,7 +1537,7 @@ def me(current_user: dict = Depends(get_current_user)):
     cur = conn.cursor()
     try:
         cur.execute(
-            "SELECT id, name, email, phone, username, plan, active, expires_at, subscription_type, created_at, avatar_url, trial_used, email_verified, phone_verified, last_login_device, last_login_at, "
+            "SELECT id, name, email, phone, username, plan, plan_tier, active, expires_at, subscription_type, created_at, avatar_url, trial_used, email_verified, phone_verified, last_login_device, last_login_at, "
             # O HASH NAO SAI DAQUI -- so' a resposta de "existe?".
             #
             # A tela de senha do perfil pedia a senha ATUAL de uma conta que

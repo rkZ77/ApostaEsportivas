@@ -236,7 +236,7 @@ export default function RecentResults({ summary }: { summary: PublicSummary | nu
                 sem criar conta.
               </p>
               <Button to="/login?mode=register" size="lg" IconRight={ArrowRight}>
-                Testar o VIP grátis por 2 dias
+                Testar o Pro grátis por 2 dias
               </Button>
             </div>
           )}

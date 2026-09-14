@@ -1052,6 +1052,29 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         # deve responder "conta excluida" em vez de "conta desativada".
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;")
 
+        # DOIS PLANOS DE ASSINATURA (2026-09-12).
+        #
+        # Ate aqui "assinante" era uma resposta sim/nao: `users.plan = 'vip'`.
+        # Agora existem dois produtos pagos, Pick IA e Pick IA Pro, e o que
+        # separa os dois e' o Ao Vivo (mais o agente de chat), que sao os
+        # unicos que custam cota de API por assinante ativo.
+        #
+        # A coluna e' SEPARADA de `plan` de proposito. Se o tier virasse mais
+        # um valor de `plan`, os ~25 `is_vip_active` e os ~20 `require_vip`
+        # espalhados pelos routers passariam a responder False pra quem paga,
+        # e cada produto que alguem esquecesse de revisar viraria um paywall
+        # a mais no lugar errado. Com coluna propria o gate antigo nao muda de
+        # comportamento: quem assina qualquer um dos dois continua VIP, e so'
+        # o Ao Vivo e o chat perguntam o tier.
+        #
+        # DEFAULT 'pro' porque a base que ja pagava tinha tudo: ninguem pode
+        # perder acesso por causa desta migration. O tier so' quer dizer
+        # alguma coisa pra quem tem plano ativo -- num usuario free a coluna
+        # existe e e' ignorada, porque `is_vip_active` barra antes.
+        cur.execute(
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_tier "
+            "VARCHAR(10) NOT NULL DEFAULT 'pro';")
+
         conn.commit()
         return True
     except Exception as e:

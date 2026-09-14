@@ -164,7 +164,7 @@ def _linha_de_sessao(user_id) -> dict | None:
     cur = conn.cursor()
     try:
         cur.execute(
-            "SELECT id, active, session_token, last_login_device, last_login_at, plan, expires_at FROM users WHERE id = %s",
+            "SELECT id, active, session_token, last_login_device, last_login_at, plan, plan_tier, expires_at FROM users WHERE id = %s",
             (uid,),
         )
         row = cur.fetchone()
@@ -206,6 +206,10 @@ def get_current_user(request: Request, bearer: str | None = Depends(oauth2_schem
     payload = dict(payload)
     payload["plan"] = row["plan"]
     payload["plan_expires_at"] = row["expires_at"].isoformat() if row["expires_at"] else None
+    # Tier do assinante (Pick IA x Pick IA Pro). Sai do banco pelo mesmo motivo
+    # que o plano: o claim do JWT fica defasado por ate 12h, e um upgrade pago
+    # tem que valer no request seguinte, nao no login seguinte.
+    payload["plan_tier"] = row.get("plan_tier") or "pro"
 
     # Sessão única: session_token no JWT deve bater com o hash guardado no banco
     # Admin fica isento · pode acessar de múltiplos dispositivos simultaneamente
@@ -268,6 +272,39 @@ def require_vip(user: dict = Depends(get_current_user)) -> dict:
                     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Plano VIP expirado. Renove para continuar.")
             except ValueError:
                 pass
+    return user
+
+
+def tem_tier_pro(user: dict) -> bool:
+    """True se o assinante tem o Pick IA Pro (o plano que inclui o Ao Vivo).
+
+    NAO substitui `is_vip_active`, complementa: quem responde "e' assinante?"
+    continua sendo ela, e esta aqui so' responde "de qual dos dois?". Chamar
+    esta funcao sozinha libera um free, entao os dois gates andam juntos --
+    e' por isso que `require_pro` existe e deve ser preferido nas rotas.
+
+    Admin e trial caem no Pro: o trial serve pra mostrar o produto inteiro, e
+    um trial que esconde metade dele vende menos que nenhum trial.
+    """
+    if not is_vip_active(user):
+        return False
+    if user.get("plan") in ("admin", "trial"):
+        return True
+    return (user.get("plan_tier") or "pro") == "pro"
+
+
+def require_pro(user: dict = Depends(require_vip)) -> dict:
+    """Rotas exclusivas do Pick IA Pro (Ao Vivo e agente de chat).
+
+    Encadeia `require_vip` de proposito: o 403 de quem nao assina nada
+    continua vindo de la, com a mensagem que o site ja sabe tratar, e so'
+    quem ja passou por assinante chega aqui pra ser separado por tier.
+    """
+    if not tem_tier_pro(user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Disponível no Pick IA Pro",
+        )
     return user
 
 

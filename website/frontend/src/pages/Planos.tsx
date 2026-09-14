@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Lightbulb, Crown, User, Check } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import PageShell from '../components/PageShell'
@@ -8,18 +9,25 @@ import PublicNav from '../components/PublicNav'
 import api from '../services/api'
 import { WA_SUPPORT } from '../lib/support'
 import { usePlans, fmtPlanPrice } from '../hooks/usePlans'
+import type { Plan } from '../hooks/usePlans'
 import { viuOsPlanos } from '../lib/analytics'
 import NumberTicker from '../components/ui/NumberTicker'
 import { rotuloDoPlano } from '../components/ui'
 import ProvaPublica from '../components/ProvaPublica'
-import { MODULOS_FREE, MODULOS_VIP, SEM_RENOVACAO_AUTOMATICA } from '../lib/oferta'
+import { MODULOS_FREE, MODULOS_PAGOS, MODULOS_PRO, SEM_RENOVACAO_AUTOMATICA } from '../lib/oferta'
+import type { Modulo } from '../lib/oferta'
 
-const PLAN_DAYS: Record<string, number> = {
-  trial: 2, mensal: 30, trimestral: 90, semestral: 180, anual: 365,
-}
-const PLAN_LABEL: Record<string, string> = {
-  mensal: 'Mensal', trimestral: 'Trimestral', semestral: 'Semestral', anual: 'Anual',
-}
+/*
+ * O ciclo e o nome do plano contratado saem do CATÁLOGO (usePlans), não de
+ * tabelas escritas aqui.
+ *
+ * Elas conheciam só as quatro chaves antigas, e em 12/09/2026 nasceram mais
+ * quatro (`mensal_base` e companhia). Quem assinasse o Pick IA veria a barra
+ * de validade calculada sobre 30 dias mesmo num anual, e o card do plano diria
+ * "VIP undefined": os dois números da tela que respondem "o que eu tenho e até
+ * quando" errados, e errados em silêncio.
+ */
+const DIAS_DO_TRIAL = 2
 const METHOD_LABEL: Record<string, string> = {
   credit_card: 'Cartão de crédito', debit_card: 'Cartão de débito',
   pix: 'Pix', ticket: 'Boleto', account_money: 'Saldo MP',
@@ -30,10 +38,118 @@ interface ReferralData {
   total_indicated: number; total_converted: number; days_earned: number
 }
 
+/*
+ * UM CARD DE ASSINATURA · o mesmo desenho para os dois produtos.
+ *
+ * Os dois cards são o mesmo objeto de tela (nome, o que abre, grade de quatro
+ * ciclos, botão), e escrever isso duas vezes era garantir que uma cópia
+ * receberia um ajuste que a outra não. O que muda entre eles cabe em props.
+ */
+interface CardDeAssinaturaProps {
+  nome: string
+  Icone: LucideIcon
+  resumo: string
+  modulos: Modulo[]
+  planos: Plan[]
+  /** O de cima ganha a borda de destaque. Só um pode ter. */
+  destaque: boolean
+  cta: string
+  rodape: string
+}
+
+function CardDeAssinatura({
+  nome, Icone, resumo, modulos, planos, destaque, cta, rodape,
+}: CardDeAssinaturaProps) {
+  /*
+   * O selo de melhor preço compara dentro do PRÓPRIO produto. Uma régua só
+   * para os oito planos colocaria o selo no card errado no dia em que um
+   * reajuste mudasse a ordem, que é o mesmo motivo de ele nunca ter sido
+   * fixado no anual.
+   */
+  const maiorEconomia = planos.reduce((m, p) => Math.max(m, p.save_pct ?? 0), 0)
+
+  return (
+    <div className={`bg-surface-1 border rounded-lg p-6 ${destaque ? 'border-yellow-400/25' : 'border-line'}`}>
+      <div className="flex items-center gap-2 mb-1">
+        <Icone className={`w-4 h-4 ${destaque ? 'text-yellow-400' : 'text-ink-3'}`} aria-hidden="true" />
+        <p className="text-ink-1 font-bold text-base">{nome}</p>
+      </div>
+      <p className="text-ink-3 text-sm mb-4">{resumo}</p>
+
+      {/* Módulo a módulo, e não uma frase de marketing: o que a pessoa
+          precisa saber é O QUE cada um faz, senão "análise completa"
+          vira a mesma promessa de qualquer site do ramo. */}
+      {/* Duas colunas a partir de sm: com nove modulos, a coluna
+          unica virava uma rolagem longa no desktop e empurrava a grade
+          de preco pra fora da tela. No celular continua em uma. */}
+      <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-2.5 mb-5">
+        {modulos.map(({ Icon, titulo, desc }) => (
+          <li key={titulo} className="flex items-start gap-2.5">
+            <Icon className={`w-4 h-4 shrink-0 mt-0.5 ${destaque ? 'text-yellow-400' : 'text-ink-3'}`} aria-hidden="true" />
+            <span className="min-w-0">
+              <span className="text-ink-1 text-sm font-semibold">{titulo}</span>
+              <span className="block text-ink-4 text-xs leading-relaxed">{desc}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      <p className="text-ink-2 text-xs font-bold mb-2.5">Escolha o período</p>
+      {/* O preço POR MÊS é o número grande, e o total do período fica na
+          linha de apoio. Estava ao contrário: entre quatro totais de
+          períodos diferentes, o anual é o maior da grade justamente por
+          ser o mais barato por mês, e era assim que ele aparecia. */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4">
+        {planos.map(pl => {
+          const melhor = pl.save_pct > 0 && pl.save_pct === maiorEconomia
+          return (
+            <div
+              key={pl.id}
+              className={`relative bg-surface-0 border rounded-md p-3 text-center ${melhor ? 'border-accent/40' : 'border-line'}`}
+            >
+              {melhor && (
+                <span className="absolute -top-2 inset-x-0 mx-auto w-fit font-mono text-[9px] bg-accent text-black px-1.5 py-0.5 rounded-sm font-bold">
+                  melhor preço
+                </span>
+              )}
+              <p className="text-[11px] text-ink-3">{pl.label}</p>
+              <p className="font-mono text-lg font-black text-ink-1 tabular-nums mt-0.5">
+                {fmtPlanPrice(pl.price_per_month)}
+              </p>
+              <p className="text-[10px] text-ink-4">por mês</p>
+              {/* No mensal os dois valores são o mesmo número, e repetir
+                  "R$ 39,90 no total" logo abaixo de "R$ 39,90 por mês"
+                  faz o cartão parecer errado. */}
+              {pl.months > 1 && (
+                <p className="text-[10px] text-ink-4 mt-1 pt-1 border-t border-line">
+                  {fmtPlanPrice(pl.price)} no total
+                </p>
+              )}
+              {pl.save_pct > 0 && (
+                <p className="text-[10px] text-accent-ink font-semibold mt-0.5">
+                  economiza {pl.save_pct}%
+                </p>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      <Link
+        to="/login?mode=register"
+        className={`${destaque ? 'btn-primary' : 'btn-ghost'} inline-flex items-center justify-center w-full text-sm min-h-[44px]`}
+      >
+        {cta}
+      </Link>
+      <p className="text-ink-4 text-[11px] text-center mt-2">{rodape}</p>
+    </div>
+  )
+}
+
 export default function Planos() {
   const navigate = useNavigate()
   const { user, isVip, isAdmin, daysUntilExpiry, updateUser } = useAuth()
-  const { plans, monthly, loaded } = usePlans()
+  const { plans, monthly, byId, byTier, loaded } = usePlans()
 
   const [meData, setMeData]               = useState<any>(null)
   const [trialUsed, setTrialUsed]         = useState<boolean | null>(null)
@@ -45,10 +161,6 @@ export default function Planos() {
   const [referralCopied, setReferralCopied] = useState(false)
 
   const isTrial = user?.plan === 'trial'
-
-  /* Qual período rende mais desconto · lido da grade, nunca fixado no anual.
-     Um reajuste que mudasse a ordem deixaria o selo no plano errado. */
-  const maiorEconomia = plans.reduce((m, p) => Math.max(m, p.save_pct ?? 0), 0)
 
   /*
    * view_item_list só depois que /payments/plans respondeu. Disparar antes
@@ -113,7 +225,8 @@ export default function Planos() {
 
   // Cálculos do plano atual
   const subType      = meData?.subscription_type as string | null
-  const cicloDoPlano = isTrial ? 2 : (subType ? (PLAN_DAYS[subType] ?? 30) : 30)
+  const planoAtual   = subType ? byId(subType) : undefined
+  const cicloDoPlano = isTrial ? DIAS_DO_TRIAL : (planoAtual?.days ?? 30)
   const remaining    = daysUntilExpiry ?? 0
   /*
    * Dia de indicação soma no `expires_at` (+1 por cadastro, +2 por assinatura)
@@ -165,8 +278,8 @@ export default function Planos() {
 
   return (
     <PageShell
-      title="Planos VIP e Free para apostas esportivas | Pick IA"
-      description="Escolha seu plano Pick IA. Free com picks diários ou VIP com análise completa, múltiplas, alavancagem e gestão de banca para Brasileirão e as principais ligas europeias."
+      title="Planos Pick IA, Pro e Free para apostas esportivas | Pick IA"
+      description="Escolha seu plano Pick IA. Free com picks diários, Pick IA com todo o pré-jogo (múltiplas, alavancagem, faltas e jogador) e Pick IA Pro com picks ao vivo e agente, para Brasileirão e as principais ligas europeias."
       canonical="https://pickia.com.br/planos"
       width="wide"
       nav={user ? true : <PublicNav width="wide" />}
@@ -245,85 +358,29 @@ export default function Planos() {
               </Link>
             </div>
 
-            {/* VIP */}
-            <div className="bg-surface-1 border border-yellow-400/25 rounded-lg p-6">
-              <div className="flex items-center gap-2 mb-1">
-                <Crown className="w-4 h-4 text-yellow-400" aria-hidden="true" />
-                <p className="text-ink-1 font-bold text-base">VIP</p>
-              </div>
-              <p className="text-ink-3 text-sm mb-4">
-                Tudo do Free, mais os {MODULOS_VIP.length} módulos que a assinatura abre.
-              </p>
+            {/* Pick IA · o pré-jogo inteiro */}
+            <CardDeAssinatura
+              nome="Pick IA"
+              Icone={Crown}
+              resumo={`Tudo do Free, mais os ${MODULOS_PAGOS.length} módulos de pré-jogo.`}
+              modulos={MODULOS_PAGOS}
+              planos={byTier('base')}
+              destaque={false}
+              cta="Criar conta e assinar"
+              rodape="Todos os picks de pré-jogo, sem limite por dia."
+            />
 
-              {/* Módulo a módulo, e não uma frase de marketing: o que a pessoa
-                  precisa saber é O QUE cada um faz, senão "análise completa"
-                  vira a mesma promessa de qualquer site do ramo. */}
-              {/* Duas colunas a partir de sm: com nove modulos, a coluna
-                  unica virava uma rolagem longa no desktop e empurrava a grade
-                  de preco pra fora da tela. No celular continua em uma. */}
-              <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-2.5 mb-5">
-                {MODULOS_VIP.map(({ Icon, titulo, desc }) => (
-                  <li key={titulo} className="flex items-start gap-2.5">
-                    <Icon className="w-4 h-4 text-yellow-400 shrink-0 mt-0.5" aria-hidden="true" />
-                    <span className="min-w-0">
-                      <span className="text-ink-1 text-sm font-semibold">{titulo}</span>
-                      <span className="block text-ink-4 text-xs leading-relaxed">{desc}</span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-
-              <p className="text-ink-2 text-xs font-bold mb-2.5">Escolha o período</p>
-              {/* O preço POR MÊS é o número grande, e o total do período fica na
-                  linha de apoio. Estava ao contrário: entre quatro totais de
-                  períodos diferentes, o anual é o maior da grade justamente por
-                  ser o mais barato por mês, e era assim que ele aparecia. */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4">
-                {plans.map(pl => {
-                  const melhor = pl.save_pct > 0 && pl.save_pct === maiorEconomia
-                  return (
-                    <div
-                      key={pl.id}
-                      className={`relative bg-surface-0 border rounded-md p-3 text-center ${melhor ? 'border-accent/40' : 'border-line'}`}
-                    >
-                      {melhor && (
-                        <span className="absolute -top-2 inset-x-0 mx-auto w-fit font-mono text-[9px] bg-accent text-black px-1.5 py-0.5 rounded-sm font-bold">
-                          melhor preço
-                        </span>
-                      )}
-                      <p className="text-[11px] text-ink-3">{pl.label}</p>
-                      <p className="font-mono text-lg font-black text-ink-1 tabular-nums mt-0.5">
-                        {fmtPlanPrice(pl.price_per_month)}
-                      </p>
-                      <p className="text-[10px] text-ink-4">por mês</p>
-                      {/* No mensal os dois valores são o mesmo número, e repetir
-                          "R$ 39,90 no total" logo abaixo de "R$ 39,90 por mês"
-                          faz o cartão parecer errado. */}
-                      {pl.months > 1 && (
-                        <p className="text-[10px] text-ink-4 mt-1 pt-1 border-t border-line">
-                          {fmtPlanPrice(pl.price)} no total
-                        </p>
-                      )}
-                      {pl.save_pct > 0 && (
-                        <p className="text-[10px] text-accent-ink font-semibold mt-0.5">
-                          economiza {pl.save_pct}%
-                        </p>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-
-              <Link
-                to="/login?mode=register"
-                className="btn-primary inline-flex items-center justify-center w-full text-sm min-h-[44px]"
-              >
-                Testar o VIP grátis por 2 dias
-              </Link>
-              <p className="text-ink-4 text-[11px] text-center mt-2">
-                2 dias com tudo aberto. Não pedimos cartão para testar.
-              </p>
-            </div>
+            {/* Pick IA Pro · o que gasta cota por assinante */}
+            <CardDeAssinatura
+              nome="Pick IA Pro"
+              Icone={Crown}
+              resumo={`Tudo do Pick IA, mais ${MODULOS_PRO.map(m => m.titulo.toLowerCase()).join(' e ')}.`}
+              modulos={MODULOS_PRO}
+              planos={byTier('pro')}
+              destaque
+              cta="Testar o Pro grátis por 2 dias"
+              rodape="2 dias com tudo aberto. Não pedimos cartão para testar."
+            />
 
             {/* Como se paga. Estava só dentro do checkout, ou seja, depois de a
                 pessoa já ter criado conta · e "vai cobrar sozinho todo mês?" é
@@ -350,7 +407,7 @@ export default function Planos() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h2 className="text-ink-1 font-bold text-xl mb-1">Teste VIP ativado!</h2>
+            <h2 className="text-ink-1 font-bold text-xl mb-1">Teste do Pro ativado!</h2>
             <p className="text-ink-2 text-sm mb-4">Você tem 2 dias de acesso completo. Aproveite!</p>
             <button onClick={() => navigate('/picks')}
               className="bg-green-500 hover:bg-green-400 text-black font-black px-8 py-3 rounded-md text-sm transition-colors">
@@ -374,7 +431,7 @@ export default function Planos() {
                 <div className="flex items-center gap-2 flex-wrap mb-1">
                   <span className="text-ink-3 text-xs">Status atual:</span>
                   <span className={`text-xs font-black ${isTrial ? 'text-amber-400' : urgent ? 'text-red-400' : 'text-yellow-400'}`}>
-                    {isTrial ? rotuloDoPlano('trial') : subType ? `VIP ${PLAN_LABEL[subType]}` : 'VIP'}
+                    {isTrial ? rotuloDoPlano('trial') : planoAtual ? `${planoAtual.tier_label} ${planoAtual.label}` : 'Assinante'}
                   </span>
                   {urgent && (
                     <span className="font-mono text-[10px] bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-sm font-bold animate-pulse">
@@ -397,7 +454,7 @@ export default function Planos() {
               </div>
               <button onClick={() => navigate('/checkout')}
                 className="shrink-0 bg-yellow-400 hover:bg-yellow-300 text-on-fill font-black text-xs px-4 py-2.5 rounded-md transition-colors">
-                {isTrial ? 'Assinar VIP' : 'Renovar'}
+                {isTrial ? 'Assinar' : 'Renovar'}
               </button>
             </div>
 
@@ -471,7 +528,7 @@ export default function Planos() {
             </div>
             <button onClick={() => navigate('/checkout')}
               className="shrink-0 bg-yellow-400 hover:bg-yellow-300 text-on-fill font-black text-xs px-4 py-2 rounded-md transition-colors">
-              Upgrade VIP
+              Fazer upgrade
             </button>
           </div>
         )}
@@ -497,7 +554,7 @@ export default function Planos() {
               </div>
               <div className="flex-1">
                 <p className="text-sm text-accent-ink font-bold mb-1">Disponível para você</p>
-                <h2 className="text-xl font-bold text-ink-1 mb-1">2 dias de VIP grátis</h2>
+                <h2 className="text-xl font-bold text-ink-1 mb-1">2 dias do Pro grátis</h2>
                 <p className="text-ink-2 text-sm mb-4">Acesse todos os picks VIP, Múltiplas, Alavancagem e Agente IA por 2 dias.</p>
                 <ul className="space-y-1.5 mb-5">
                   {['Picks VIP completos (10 a 20/dia)', 'Múltiplas e Alavancagem', 'Agente IA de futebol', 'Histórico completo com ROI'].map(f => (
@@ -514,7 +571,7 @@ export default function Planos() {
                   className="bg-green-500 hover:bg-green-400 disabled:opacity-60 text-black font-black px-7 py-3 rounded-md text-sm transition-colors flex items-center gap-2">
                   {activating
                     ? <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Ativando...</>
-                    : 'Ativar 2 dias VIP gratuito'}
+                    : 'Ativar 2 dias grátis do Pro'}
                 </button>
               </div>
             </div>
@@ -546,7 +603,7 @@ export default function Planos() {
             <div>
               <h3 className="text-sm font-bold text-ink-1">Indicações</h3>
               <p className="text-ink-3 text-xs mt-0.5">
-                +1 dia VIP por cadastro, e +2 dias VIP se assinar o plano
+                +1 dia de acesso por cadastro, e +2 dias se o indicado assinar
               </p>
             </div>
 
@@ -563,7 +620,7 @@ export default function Planos() {
                 <Crown className="w-5 h-5 text-yellow-400 shrink-0" />
                 <div>
                   <p className="text-yellow-400 font-black">+2 dias</p>
-                  <p className="text-ink-3">se assinar VIP</p>
+                  <p className="text-ink-3">se o indicado assinar</p>
                 </div>
               </div>
             </div>
@@ -595,7 +652,7 @@ export default function Planos() {
                 </div>
                 <div className="flex justify-between border-t border-line-strong pt-1.5 mt-1">
                   <span className="text-ink-2 font-semibold">Total</span>
-                  <span className="text-yellow-400 font-black">{referral.days_earned} dias VIP</span>
+                  <span className="text-yellow-400 font-black">{referral.days_earned} dias</span>
                 </div>
               </div>
             )}
@@ -619,7 +676,7 @@ export default function Planos() {
 
             {referral.total_indicated === 0 && (
               <p className="text-ink-4 text-xs text-center">
-                Compartilhe seu link: cada amigo que se cadastrar te dá +1 dia, e +2 se assinar o VIP!
+                Compartilhe seu link: cada amigo que se cadastrar te dá +1 dia, e +2 se assinar!
               </p>
             )}
           </div>
@@ -636,8 +693,16 @@ export default function Planos() {
                 return (
                   <div key={p.id} className="flex items-center justify-between py-3 border-b border-line last:border-0">
                     <div>
+                      {/* O histórico guarda a chave do plano que foi cobrado,
+                          inclusive as antigas. Quando ela não estiver mais no
+                          catálogo, a própria chave aparece: é feio, mas é
+                          verdadeiro, e um recibo não pode inventar o nome do
+                          que a pessoa comprou. */}
                       <p className="text-ink-1 text-sm font-semibold">
-                        Plano Picks: {PLAN_LABEL[p.plan] ?? p.plan}
+                        {(() => {
+                          const pago = byId(p.plan)
+                          return pago ? `${pago.tier_label}: ${pago.label}` : p.plan
+                        })()}
                       </p>
                       <p className="text-ink-3 text-xs mt-0.5">
                         {date}, {METHOD_LABEL[p.payment_method] ?? p.payment_method}
@@ -714,12 +779,12 @@ export default function Planos() {
         {user && !isAdmin && !isVip && !isEligibleForTrial && !activated && (
           <div className="bg-surface-1 border border-yellow-400/20 rounded-lg p-6 flex items-center justify-between gap-4">
             <div>
-              <p className="text-ink-1 font-black text-sm">Quer acesso VIP completo?</p>
+              <p className="text-ink-1 font-black text-sm">Quer o acesso completo?</p>
               <p className="text-ink-3 text-xs mt-0.5">Picks VIP, Múltiplas, Alavancagem e Agente IA, a partir de {fmtPlanPrice(monthly.price)}/mês</p>
             </div>
             <button onClick={() => navigate('/checkout')}
               className="shrink-0 bg-yellow-400 hover:bg-yellow-300 text-on-fill font-black text-xs px-5 py-2.5 rounded-md transition-colors">
-              Assinar VIP
+              Assinar
             </button>
           </div>
         )}

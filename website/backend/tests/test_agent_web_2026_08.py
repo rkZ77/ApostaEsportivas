@@ -112,7 +112,9 @@ def test_planos_em_markdown_leem_a_tabela_de_cobranca(monkeypatch):
     import routers.payments as pagamentos
 
     monkeypatch.setitem(
-        pagamentos.PLANS, "mensal", {"price": 44.90, "title": "Plano Picks Mensal", "days": 30}
+        pagamentos.PLANS, "mensal",
+        {"price": 44.90, "title": "Pick IA Pro Mensal", "days": 30,
+         "tier": "pro", "cycle": "mensal"},
     )
     md = agent_web.md_planos()
     assert "R$ 44,90" in md, "o preço tem que sair de PLANS, não de texto fixo"

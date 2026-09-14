@@ -5,15 +5,24 @@ import { useNavigate, useLocation, Link } from 'react-router-dom'
 import PageShell from '../components/PageShell'
 import { useAuth } from '../context/AuthContext'
 import { usePlans, fmtPlanPrice } from '../hooks/usePlans'
+import type { PlanTier } from '../hooks/usePlans'
 import api from '../services/api'
 import { WA_SUPPORT } from '../lib/support'
 import { iniciouCheckout } from '../lib/analytics'
 import ProvaPublica from '../components/ProvaPublica'
-import { MODULOS_VIP, SEM_RENOVACAO_AUTOMATICA } from '../lib/oferta'
+import { MODULOS_PAGOS, MODULOS_PRO, SEM_RENOVACAO_AUTOMATICA } from '../lib/oferta'
 
-/* O plano em destaque é escolha de venda, não vem do backend: o resto (preço,
-   período, desconto) vem de usePlans. */
-const POPULAR_PLAN = 'trimestral'
+/* O CICLO em destaque é escolha de venda, não vem do backend: o resto (preço,
+   período, desconto) vem de usePlans.
+
+   É o ciclo, e não o plano, porque desde 12/09/2026 existem dois produtos e o
+   trimestral é o destaque nos dois. Guardar 'trimestral' como id de plano
+   deixaria o selo "Popular" só no Pro, que é onde essa string casa. */
+const POPULAR_CYCLE = 'trimestral'
+
+/* O produto que abre selecionado. O Pro é o que a Home anuncia como mais
+   popular, então é nele que o checkout abre. */
+const TIER_PADRAO: PlanTier = 'pro'
 
 function SuccessPage() {
   const navigate = useNavigate()
@@ -95,11 +104,11 @@ function SuccessPage() {
           <>
             <h1 className="text-2xl font-bold text-ink-1">Pagamento aprovado!</h1>
             <p className="text-ink-2">
-              {confirmado ? 'Seu plano VIP foi ativado. Bem-vindo!' : 'Estamos liberando seu acesso.'}
+              {confirmado ? 'Seu plano foi ativado. Bem-vindo!' : 'Estamos liberando seu acesso.'}
             </p>
             {confirmado
               ? <button onClick={() => navigate('/picks')} className="btn-primary px-8 py-3">Ver Picks VIP</button>
-              : <p className="text-ink-4 text-sm animate-pulse">Ativando seu acesso VIP…</p>
+              : <p className="text-ink-4 text-sm animate-pulse">Ativando seu acesso…</p>
             }
           </>
         )}
@@ -192,8 +201,9 @@ export default function Checkout() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const { plans } = usePlans()
-  const [selectedPlan, setSelectedPlan] = useState<string>(POPULAR_PLAN)
+  const { plans, byTierCycle } = usePlans()
+  const [selectedTier, setSelectedTier] = useState<PlanTier>(TIER_PADRAO)
+  const [selectedCycle, setSelectedCycle] = useState<string>(POPULAR_CYCLE)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -213,9 +223,8 @@ export default function Checkout() {
       const gaCookie = document.cookie.split('; ').find(c => c.startsWith('_ga='))?.slice(4) ?? ''
       // begin_checkout é o último passo que o navegador consegue medir: daqui
       // o usuário sai pro MercadoPago e só o servidor vê o resto.
-      const plano = plans.find(p => p.id === selectedPlan)
-      if (plano) iniciouCheckout(plano)
-      const { data } = await api.post('/payments/create', { plan: selectedPlan, ga_cookie: gaCookie })
+      if (selected) iniciouCheckout(selected)
+      const { data } = await api.post('/payments/create', { plan: selected.id, ga_cookie: gaCookie })
       window.location.href = data.init_point
     } catch (err: any) {
       setError(err.response?.data?.detail ?? 'Erro ao iniciar pagamento. Tente novamente.')
@@ -224,15 +233,20 @@ export default function Checkout() {
     }
   }
 
-  const selected = plans.find(p => p.id === selectedPlan) ?? plans[0]
+  /* Os planos do produto escolhido, e o plano que cruza os dois eixos. O
+     fallback cobre o instante entre o primeiro render (grade de reserva) e a
+     resposta de /payments/plans. */
+  const doTier = plans.filter(p => p.tier === selectedTier)
+  const selected = byTierCycle(selectedTier, selectedCycle) ?? doTier[0] ?? plans[0]
+  const modulos = selectedTier === 'pro' ? [...MODULOS_PAGOS, ...MODULOS_PRO] : MODULOS_PAGOS
 
   return (
     <PageShell
-      title="Assinar VIP"
+      title="Assinar"
       description="Acesso completo a todos os picks da IA, múltiplas, alavancagem e gestão de banca."
       noindex
       width="narrow"
-      bar={{ back: true, title: 'Assinar VIP', sub: 'Acesso completo a todos os picks' }}
+      bar={{ back: true, title: 'Assinar', sub: 'Escolha o plano e o período' }}
       mainClassName="space-y-6"
     >
         {/*
@@ -245,9 +259,48 @@ export default function Checkout() {
         */}
         <ProvaPublica compacta />
 
+        {/* Qual produto · o primeiro dos dois eixos da compra.
+
+            Vem ANTES da lista de benefícios e da grade de preço porque é ele
+            que muda as duas: trocar de produto aqui reescreve o que a tela
+            promete e o que ela cobra. */}
+        <div>
+          <h2 className="text-ink-1 font-bold mb-3">Escolha o plano</h2>
+          <div className="grid grid-cols-2 gap-3">
+            {(['base', 'pro'] as PlanTier[]).map(tier => {
+              const mensal = byTierCycle(tier, 'mensal')
+              const ativo = selectedTier === tier
+              return (
+                <button
+                  key={tier}
+                  onClick={() => setSelectedTier(tier)}
+                  className={`text-left p-4 rounded-md border-2 transition-colors
+                    ${ativo
+                      ? 'border-green-500 bg-green-500/5'
+                      : 'border-line bg-surface-1 hover:border-line-strong'}`}
+                >
+                  <div className="text-ink-1 font-bold text-sm">
+                    {mensal?.tier_label ?? (tier === 'pro' ? 'Pick IA Pro' : 'Pick IA')}
+                  </div>
+                  <div className="text-ink-3 text-xs mt-0.5">
+                    {tier === 'pro' ? 'Com picks ao vivo e agente' : 'Todo o pré-jogo'}
+                  </div>
+                  {mensal && (
+                    <div className="font-mono text-ink-2 text-xs mt-2">
+                      a partir de {fmtPlanPrice(mensal.price)}/mês
+                    </div>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
         {/* Benefícios */}
         <div className="card p-5">
-          <h2 className="text-ink-1 font-bold mb-4">O que você ganha no VIP</h2>
+          <h2 className="text-ink-1 font-bold mb-4">
+            O que você ganha no {selected.tier_label}
+          </h2>
           {/*
             A LISTA ERA ESCRITA À MÃO AQUI, e subvendia o produto na pior hora
             possível. Eram seis frases genéricas · "Análise de probabilidades",
@@ -256,11 +309,11 @@ export default function Checkout() {
             Sete módulos que a assinatura abre e que a tela de pagar não
             mencionava, enquanto a vitrine da Home listava todos.
 
-            Agora as duas leem de lib/oferta. `MODULOS_VIP` é o que a assinatura
-            destrava, então esta lista é exatamente o que está sendo comprado.
+            Agora as duas leem de lib/oferta, e a lista acompanha o produto
+            selecionado acima: é exatamente o que está sendo comprado.
           */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {MODULOS_VIP.map(({ Icon, titulo }) => (
+            {modulos.map(({ Icon, titulo }) => (
               <div key={titulo} className="flex items-center gap-2 text-sm text-ink-2">
                 <Icon className="w-4 h-4 text-accent-ink shrink-0" aria-hidden="true" />
                 {titulo}
@@ -277,15 +330,15 @@ export default function Checkout() {
         <div>
           <h2 className="text-ink-1 font-bold mb-3">Escolha o período</h2>
           <div className="grid grid-cols-2 gap-3">
-            {plans.map(plan => (
+            {doTier.map(plan => (
               <motion.button
                 key={plan.id}
                 whileTap={{ scale: 0.97 }}
-                animate={{ scale: selectedPlan === plan.id ? 1.02 : 1 }}
+                animate={{ scale: selected.id === plan.id ? 1.02 : 1 }}
                 transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-                onClick={() => setSelectedPlan(plan.id)}
+                onClick={() => setSelectedCycle(plan.cycle)}
                 className={`relative text-left p-4 rounded-md border-2 transition-colors
-                  ${selectedPlan === plan.id
+                  ${selected.id === plan.id
                     ? 'border-green-500 bg-green-500/5'
                     : 'border-line bg-surface-1 hover:border-line-strong'}`}
               >
@@ -303,9 +356,9 @@ export default function Checkout() {
                   em vez de disputá-la, e o `truncate` garante que o encontro,
                   se voltar a acontecer, corte o texto em vez de empilhar.
                 */}
-                {(plan.id === POPULAR_PLAN || plan.save_pct > 0) && (
+                {(plan.cycle === POPULAR_CYCLE || plan.save_pct > 0) && (
                   <span className="absolute -top-2.5 inset-x-2 flex items-center justify-between gap-1 pointer-events-none">
-                    {plan.id === POPULAR_PLAN ? (
+                    {plan.cycle === POPULAR_CYCLE ? (
                       <span className="font-mono text-[10px] bg-green-600 text-on-fill px-1.5 py-0.5 rounded-sm font-semibold truncate">
                         Popular
                       </span>
@@ -316,7 +369,7 @@ export default function Checkout() {
                             Dividindo a linha com o "Popular", num card de 168px,
                             não cabe · e "Economize" cortado no meio não vende
                             nada. O número é a informação; o verbo é enfeite. */}
-                        {plan.id === POPULAR_PLAN ? `−${plan.save_pct}%` : `Economize ${plan.save_pct}%`}
+                        {plan.cycle === POPULAR_CYCLE ? `−${plan.save_pct}%` : `Economize ${plan.save_pct}%`}
                       </span>
                     )}
                   </span>
@@ -340,7 +393,7 @@ export default function Checkout() {
         <div className="card p-5 space-y-3">
           <h2 className="text-ink-1 font-bold">Resumo do pedido</h2>
           <div className="flex justify-between text-sm">
-            <span className="text-ink-2">Plano Picks: {selected.label}</span>
+            <span className="text-ink-2">{selected.tier_label}: {selected.label}</span>
             <span className="font-mono text-ink-1 font-semibold">
               {fmtPlanPrice(selected.price)}
             </span>

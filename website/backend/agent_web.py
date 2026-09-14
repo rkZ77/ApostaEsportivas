@@ -87,15 +87,19 @@ def posts_do_blog() -> list[dict]:
 # Conteúdo das páginas
 # ──────────────────────────────────────────────────────────────────────────
 def _planos() -> list[dict]:
-    from routers.payments import PLANS, PLAN_PERIODS
+    from routers.payments import PLANS, CYCLE_PERIODS, TIER_LABELS
 
     return [
         {
             "chave": chave,
             "titulo": info["title"],
+            # O agente responde "quanto custa?" e agora a resposta depende de
+            # QUAL produto, então o tier vai junto: sem ele o agente citaria
+            # dois preços diferentes pro mesmo "plano mensal".
+            "produto": TIER_LABELS.get(info["tier"], ""),
             "preco": float(info["price"]),
             "dias": int(info["days"]),
-            "periodo": PLAN_PERIODS.get(chave, ""),
+            "periodo": CYCLE_PERIODS.get(info["cycle"], ""),
         }
         for chave, info in PLANS.items()
     ]

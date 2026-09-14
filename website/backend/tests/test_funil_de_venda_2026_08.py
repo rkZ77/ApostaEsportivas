@@ -31,9 +31,13 @@ def _front(caminho: str) -> str:
 def test_catalogo_de_modulos_existe_e_separa_free_de_vip():
     src = _front("lib/oferta.ts")
     assert "export const MODULOS" in src
-    assert "MODULOS_FREE" in src and "MODULOS_VIP" in src
-    # O `plano` e o que separa as duas colunas da pagina de planos.
-    assert "plano: 'vip'" in src and "plano: 'ambos'" in src
+    # Tres listas desde 12/09/2026: o que e' aberto, o que os dois planos
+    # pagos abrem, e o que so' o Pick IA Pro abre.
+    assert "MODULOS_FREE" in src
+    assert "MODULOS_PAGOS" in src and "MODULOS_PRO" in src
+    # O `plano` e o que separa as colunas da pagina de planos.
+    for valor in ("'pago'", "'pro'", "'ambos'"):
+        assert f"plano: {valor}" in src, valor
 
 
 @pytest.mark.parametrize("modulo", [
@@ -129,7 +133,7 @@ def test_o_numero_grande_da_grade_e_o_preco_por_mes():
     justamente por ser o mais barato por mes -- e era assim que ele aparecia. O
     que se compara entre periodos e o valor mensal."""
     src = _front("pages/Planos.tsx")
-    grade = src[src.index("Escolha o período"):src.index("Testar o VIP grátis")]
+    grade = src[src.index("Escolha o período"):src.index("{cta}")]
     assert "text-lg font-black" in grade
     posicao_mes = grade.index("fmtPlanPrice(pl.price_per_month)")
     posicao_total = grade.index("fmtPlanPrice(pl.price)")
