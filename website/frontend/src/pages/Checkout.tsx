@@ -24,6 +24,74 @@ const POPULAR_CYCLE = 'trimestral'
    popular, então é nele que o checkout abre. */
 const TIER_PADRAO: PlanTier = 'pro'
 
+/*
+ * O QUE ESTÁ SENDO COMPRADO, guardado antes de sair pro MercadoPago.
+ *
+ * A tela de sucesso é uma rota separada: o usuário volta do MercadoPago sem
+ * nenhuma memória do que escolheu. Ela declarava "plano ativado" assim que
+ * `plan` fosse `vip`, e isso passou a mentir em dois casos que hoje são
+ * comuns:
+ *
+ *   upgrade   quem já assina o Pick IA e compra o Pro JÁ é `vip` na primeira
+ *             volta do laço. A tela dizia "ativado" antes do webhook rodar, e
+ *             mandava pra /picks com o Ao Vivo ainda trancado.
+ *   renovação quem renova antes de vencer também já é `vip`, e a tela
+ *             confirmava sem ter visto a data nova.
+ *
+ * Guardando o que foi comprado e o vencimento de ANTES, a confirmação passa a
+ * ser sobre a compra que acabou de acontecer, e não sobre o estado em que a
+ * conta já estava. `sessionStorage` porque isso morre com a aba, e é exatamente
+ * o tempo de vida da ida ao MercadoPago.
+ */
+const CHAVE_COMPRA = 'pickia:compra_em_andamento'
+
+interface CompraEmAndamento {
+  tier: PlanTier
+  /** ISO do `expires_at` que a conta tinha antes de pagar, ou null. */
+  expiraAntes: string | null
+}
+
+function lerCompra(): CompraEmAndamento | null {
+  try {
+    const cru = sessionStorage.getItem(CHAVE_COMPRA)
+    return cru ? (JSON.parse(cru) as CompraEmAndamento) : null
+  } catch {
+    /* aba anônima, storage bloqueado: cai na regra antiga */
+    return null
+  }
+}
+
+function limparCompra() {
+  try { sessionStorage.removeItem(CHAVE_COMPRA) } catch { /* idem */ }
+}
+
+/**
+ * A compra que acabou de ser paga já está valendo nesta conta?
+ *
+ * Sem a memória da compra (aba anônima, link direto, storage bloqueado) cai na
+ * regra antiga: "virou vip". É menos precisa, mas nunca trava a tela de quem
+ * de fato pagou, e o pior caso continua sendo o estado honesto de
+ * "não conseguimos confirmar".
+ */
+function compraJaValendo(conta: { plan?: string; plan_tier?: string | null; expires_at?: string | null },
+                         compra: CompraEmAndamento | null): boolean {
+  const pagante = conta.plan === 'vip' || conta.plan === 'admin'
+  if (!pagante) return false
+  if (conta.plan === 'admin') return true
+  if (!compra) return true
+
+  // O Pro comprado tem que estar valendo, não só a assinatura.
+  if (compra.tier === 'pro' && (conta.plan_tier ?? 'pro') !== 'pro') return false
+
+  // E a validade tem que ter andado: é o que separa "já era assinante" de
+  // "acabou de pagar". Quem não tinha data nenhuma passa com qualquer uma.
+  if (compra.expiraAntes) {
+    if (!conta.expires_at) return false
+    if (new Date(conta.expires_at) <= new Date(compra.expiraAntes)) return false
+  }
+  return true
+}
+
 function SuccessPage() {
   const navigate = useNavigate()
   const { refreshUser } = useAuth()
@@ -39,7 +107,7 @@ function SuccessPage() {
     const MAX = 12
     let cancelado = false
 
-    const virouVip = (plano?: string) => plano === 'vip' || plano === 'admin'
+    const compra = lerCompra()
 
     const verificar = async () => {
       if (cancelado) return
@@ -52,7 +120,8 @@ function SuccessPage() {
         // Busca o plano direto da API para evitar stale closure
         const { data } = await api.get('/auth/me')
         await refreshUser()
-        if (virouVip(data.plan)) {
+        if (compraJaValendo(data, compra)) {
+          limparCompra()
           setEstado('ativo')
           return
         }
@@ -154,7 +223,7 @@ function PendingPage() {
       await api.post('/payments/confirm').catch(() => {})
       const { data } = await api.get('/auth/me')
       await refreshUser()
-      if (data.plan === 'vip' || data.plan === 'admin') setActivated(true)
+      if (compraJaValendo(data, lerCompra())) { limparCompra(); setActivated(true) }
     } catch { /* ignora */ } finally {
       setChecking(false)
     }
@@ -224,6 +293,12 @@ export default function Checkout() {
       // begin_checkout é o último passo que o navegador consegue medir: daqui
       // o usuário sai pro MercadoPago e só o servidor vê o resto.
       if (selected) iniciouCheckout(selected)
+      try {
+        sessionStorage.setItem(CHAVE_COMPRA, JSON.stringify({
+          tier: selected.tier,
+          expiraAntes: user?.expires_at ?? null,
+        }))
+      } catch { /* storage bloqueado: a volta cai na regra antiga */ }
       const { data } = await api.post('/payments/create', { plan: selected.id, ga_cookie: gaCookie })
       window.location.href = data.init_point
     } catch (err: any) {
