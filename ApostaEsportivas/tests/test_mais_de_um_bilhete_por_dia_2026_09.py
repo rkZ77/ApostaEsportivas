@@ -70,9 +70,14 @@ def test_multipla_nao_repete_perna_entre_bilhetes():
 
 def test_o_teto_conta_o_dia_e_nao_a_execucao():
     """Rodar o motor duas vezes nao pode dobrar a exposicao: as duas funcoes
-    de contagem leem `picks_*` por match_date."""
+    leem `picks_*` por match_date.
+
+    A da multipla deixou de ser um COUNT em 2026-09-14: ela devolve os
+    BILHETES do dia, porque o portfolio precisa ve-los pra nao republicar o
+    mesmo -- ver test_multipla_duplicada_entre_execucoes_2026_09. O que este
+    teste guarda e' o recorte por dia, nao a forma da contagem."""
     import inspect
     for fn in (mult._multiplas_de_hoje, alav._caminhos_de_hoje):
         corpo = inspect.getsource(fn)
         assert "match_date" in corpo
-        assert "COUNT(*)" in corpo
+        assert "HOJE_BR" in corpo

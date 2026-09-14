@@ -182,11 +182,37 @@ def _create_table_if_needed(cur):
     cur.execute("ALTER TABLE picks_multiplas ADD COLUMN IF NOT EXISTS ai_review JSONB;")
 
 
-def _multiplas_de_hoje(cur) -> int:
-    """Quantos bilhetes o dia ja' tem · o teto e' por DIA, nao por execucao,
-    senao rodar o motor duas vezes publicaria o dobro."""
-    cur.execute(f"SELECT COUNT(*) FROM picks_multiplas WHERE match_date = {HOJE_BR}")
-    return int(cur.fetchone()[0])
+def _multiplas_de_hoje(cur) -> list:
+    """Os bilhetes que o dia JA' tem, em forma de portfolio.
+
+    Nao basta contar (era so' o que esta funcao fazia ate' 2026-09-14): o
+    portfolio precisa VER os bilhetes de hoje, senao cada execucao comeca com
+    o dia vazio e reescolhe a mesma melhor combinacao do pool -- duas
+    multiplas identicas, mesmas pernas e mesmo mercado, em slots diferentes.
+    O teto por dia nao pegava isso porque os slots eram dois de verdade.
+
+    A forma devolvida e' a minima que portfolio.montar le: cada perna com
+    market_type, linha e o `_fixture` com os ids -- que e' o que alimenta a
+    chave da perna, a familia dominante e a exposicao por jogo.
+    """
+    cur.execute(f"SELECT games FROM picks_multiplas WHERE match_date = {HOJE_BR}")
+    bilhetes = []
+    for (games_raw,) in cur.fetchall():
+        if not games_raw:
+            continue
+        games = games_raw if isinstance(games_raw, list) else json.loads(games_raw)
+        pernas = [{
+            "market_type": g.get("market_type"),
+            "value_label": g.get("line"),
+            "_fixture": {
+                "fixture_id": g.get("fixture_id"),
+                "home_team_id": g.get("home_team_id"),
+                "away_team_id": g.get("away_team_id"),
+            },
+        } for g in games]
+        if pernas:
+            bilhetes.append({"pernas": pernas})
+    return bilhetes
 
 
 def _today_used_pairs(cur) -> set:
@@ -204,7 +230,12 @@ def _today_used_pairs(cur) -> set:
     pairs |= {(r[0], r[1]) for r in cur.fetchall() if r[0] and r[1]}
     cur.execute(f"SELECT fixture_id, market_type FROM picks_free WHERE match_date = {HOJE_BR}")
     pairs |= {(r[0], r[1]) for r in cur.fetchall() if r[0] and r[1]}
-    pairs |= bilhetes_do_dia.pares_em_bilhetes(cur, HOJE_BR, exceto=("picks_multiplas",))
+    # picks_multiplas ENTRA nesta consulta desde 2026-09-14. A isencao fazia
+    # sentido enquanto o dia tinha um bilhete so' (a propria execucao cuidava
+    # da exclusividade); com varios bilhetes por dia ela virou o caminho pelo
+    # qual a segunda execucao reencontrava, intacta, a perna que a primeira
+    # ja' tinha publicado.
+    pairs |= bilhetes_do_dia.pares_em_bilhetes(cur, HOJE_BR)
     return pairs
 
 
@@ -556,7 +587,8 @@ def run_multipla_engine():
 
     config = mcfg.padrao()
 
-    ja_publicadas = _multiplas_de_hoje(cur)
+    bilhetes_publicados = _multiplas_de_hoje(cur)
+    ja_publicadas = len(bilhetes_publicados)
     if ja_publicadas >= MAX_MULTIPLAS_POR_DIA:
         print(f"[MULTIPLA_ENGINE] Dia já tem {ja_publicadas} múltipla(s), "
               f"que é o teto absoluto ({MAX_MULTIPLAS_POR_DIA}).")
@@ -595,7 +627,8 @@ def run_multipla_engine():
     # bilhete que era bom SOZINHO e concentra exposicao DEPOIS do que ja' foi
     # publicado (mesmo jogo, mesma familia dominante, perna repetida).
     vagas = MAX_MULTIPLAS_POR_DIA - ja_publicadas
-    resultado = portfolio.montar(aprovadas, jogos_elegiveis, config, vagas=vagas)
+    resultado = portfolio.montar(aprovadas, jogos_elegiveis, config, vagas=vagas,
+                                 publicados_do_dia=bilhetes_publicados)
 
     if not resultado["multiples"]:
         # NO_MULTIPLA e' resposta valida, e e' a resposta certa em dia ruim.

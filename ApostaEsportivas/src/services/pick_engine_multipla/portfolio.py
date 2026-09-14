@@ -122,7 +122,8 @@ def exposicao_do_dia(publicados: list) -> dict:
 
 def montar(pool_aprovado: list, jogos_elegiveis: int,
            config: cfg.MultiplaConfig | None = None,
-           vagas: int | None = None) -> dict:
+           vagas: int | None = None,
+           publicados_do_dia: list | None = None) -> dict:
     """O portfolio do dia.
 
     `pool_aprovado` sao as pernas que passaram no gate individual
@@ -132,6 +133,13 @@ def montar(pool_aprovado: list, jogos_elegiveis: int,
 
     `vagas` limita a mais (o dia ja' publicou alguns bilhetes numa execucao
     anterior): o teto conta o DIA, nunca a execucao.
+
+    `publicados_do_dia` sao os bilhetes que JA' ESTAO no banco de hoje. Sem
+    eles o portfolio comeca vazio a cada execucao, e a segunda rodada do dia
+    reescolhe a mesma melhor combinacao: sobreposicao zero contra um dia que
+    ja' tinha bilhete. Era assim que saiam duas multiplas identicas, mesmas
+    pernas e mesmo mercado, em slots diferentes. Eles entram como CONTEXTO e
+    nunca na saida -- o retorno lista o que ESTA execucao publica.
     """
     config = config or cfg.padrao()
     teto = cfg.teto_de_multiplas(jogos_elegiveis, config)
@@ -150,8 +158,16 @@ def montar(pool_aprovado: list, jogos_elegiveis: int,
     if len(pool_aprovado) < 2 or teto <= 0:
         return saida
 
-    restantes = list(pool_aprovado)
+    ja_no_dia = list(publicados_do_dia or [])
     reuso = {}
+    for b in ja_no_dia:
+        for p in b["pernas"]:
+            chave = _chave_da_perna(p)
+            reuso[chave] = reuso.get(chave, 0) + 1
+    # Mesmo corte que o laco aplica depois de publicar: perna que o dia ja'
+    # gastou nao volta ao pool numa execucao seguinte.
+    restantes = [p for p in pool_aprovado
+                 if reuso.get(_chave_da_perna(p), 0) < config.max_reuso_da_perna]
     publicados = []
     motivos_vistos = []
 
@@ -162,12 +178,15 @@ def montar(pool_aprovado: list, jogos_elegiveis: int,
             break
 
         escolhida = None
+        # Sobreposicao e exposicao olham o DIA (o que ja' estava gravado mais
+        # o que esta execucao publicou), nunca so' a execucao.
+        contexto_do_dia = ja_no_dia + publicados
         for bilhete in candidatas:
-            ov = overlap(bilhete, publicados)
+            ov = overlap(bilhete, contexto_do_dia)
             if ov["pernas_repetidas"] and not _reuso_permitido(bilhete, reuso, config):
                 motivos_vistos.append(reasons.NO_MULTIPLA_HIGH_OVERLAP)
                 continue
-            if _viola_exposicao(bilhete, publicados, config):
+            if _viola_exposicao(bilhete, contexto_do_dia, config):
                 motivos_vistos.append(reasons.NO_MULTIPLA_HIGH_OVERLAP)
                 continue
 
@@ -186,7 +205,7 @@ def montar(pool_aprovado: list, jogos_elegiveis: int,
         if escolhida is None:
             break
 
-        escolhida["id"] = f"MULTIPLA_{len(publicados) + 1}"
+        escolhida["id"] = f"MULTIPLA_{len(ja_no_dia) + len(publicados) + 1}"
         escolhida["decision"] = "PICK"
         publicados.append(escolhida)
 
@@ -197,7 +216,7 @@ def montar(pool_aprovado: list, jogos_elegiveis: int,
                      if reuso.get(_chave_da_perna(p), 0) < config.max_reuso_da_perna]
 
     saida["multiples"] = publicados
-    saida["exposure"] = exposicao_do_dia(publicados)
+    saida["exposure"] = exposicao_do_dia(ja_no_dia + publicados)
     if publicados:
         saida["decision"] = "PICK"
         saida.pop("reason", None)
