@@ -903,8 +903,32 @@ def test_suporte_tem_um_link_so():
 
 
 def test_promessa_de_sem_cartao_saiu_do_site():
-    """Pedido explicito: essa frase nao volta."""
+    """Pedido explicito: essa frase nao volta.
+
+    A VERSAO ANTIGA SO' PEGAVA "sem cartao" LITERAL, e por isso a frase voltou
+    em 14/09/2026 por tres portas laterais que ela nao enxergava: "sem precisar
+    de cartao", "sem cadastro de cartao" e "Nao pedimos cartao para testar".
+    Passou no teste e foi pro ar assim mesmo.
+
+    Agora a regra e' sobre a PROMESSA, nao sobre uma string: qualquer jeito de
+    dizer que o site nao pede cartao cai aqui. O cartao como MEIO DE PAGAMENTO
+    continua livre ("Pix, cartao ou boleto"), que e' informacao util e nunca
+    foi o que ele reclamou.
+    """
     import os
+    import re
+
+    # Os VERBOS sao nomeados de proposito, em vez de um curinga de palavras.
+    # Com `\w+{0,3}` entre a negacao e "cartao", o teste reprovava duas frases
+    # legitimas: "nao armazenamos dados de cartao" (Privacidade, que e' bom
+    # dizer) e "nao cabia num cartao", que fala do cartao da INTERFACE.
+    PROIBIDO = re.compile(
+        r"(sem\s+(pedir\s+|precisar\s+de\s+|cadastro\s+de\s+|cadastrar\s+|informar\s+)?cart[ãa]o"
+        r"|n[ãa]o\s+(pedimos|pede|pedir|exige|exigimos|exigir|precisa|precisamos|"
+        r"precisar|solicita|solicitamos|solicitar)\s+(de\s+)?cart[ãa]o"
+        r"|cart[ãa]o\s+n[ãa]o\s+[ée]\s*(necess|preciso))",
+        re.IGNORECASE,
+    )
     raiz = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                         "..", "frontend", "src")
     achados = []
@@ -915,8 +939,8 @@ def test_promessa_de_sem_cartao_saiu_do_site():
             caminho = os.path.join(pasta, a)
             with open(caminho, encoding="utf-8") as f:
                 texto = f.read()
-            if "sem cartão" in texto.lower():
-                achados.append(os.path.relpath(caminho, raiz))
+            for m in PROIBIDO.finditer(texto):
+                achados.append(f"{os.path.relpath(caminho, raiz)}: {m.group(0)!r}")
     assert not achados, f"a frase do cartao voltou em: {achados}"
 
 

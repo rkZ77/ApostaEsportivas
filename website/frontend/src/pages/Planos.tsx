@@ -379,7 +379,7 @@ export default function Planos() {
               planos={byTier('pro')}
               destaque
               cta="Testar o Pro grátis por 2 dias"
-              rodape="2 dias com tudo aberto. Não pedimos cartão para testar."
+              rodape="2 dias com tudo aberto para você decidir."
             />
 
             {/* Como se paga. Estava só dentro do checkout, ou seja, depois de a

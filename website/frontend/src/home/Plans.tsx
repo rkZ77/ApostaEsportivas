@@ -55,7 +55,7 @@ export default function Plans({ monthly, monthlyBase }: { monthly: Plan; monthly
       <div className="shell">
         <SectionHead
           title="Comece de graça, assine se gostar"
-          sub="2 dias com o Pick IA Pro aberto, sem precisar de cartão."
+          sub="2 dias com o Pick IA Pro aberto para você decidir."
         />
 
         <motion.div
@@ -69,7 +69,7 @@ export default function Plans({ monthly, monthlyBase }: { monthly: Plan; monthly
           <motion.div variants={fadeInUp} className="bg-surface-0 border border-line rounded-lg p-6">
             <Badge tone="neutral">Free</Badge>
             <p className="font-mono text-3xl font-bold text-ink-1 mt-3 mb-0.5">R$ 0</p>
-            <p className="text-ink-3 text-xs mb-6">Para sempre, sem cadastro de cartão</p>
+            <p className="text-ink-3 text-xs mb-6">Para sempre</p>
             <ul className="space-y-2.5 mb-7">
               {FREE_ITEMS.map(([ok, t]) => (
                 <li key={t} className="flex items-start gap-2.5">
@@ -133,7 +133,7 @@ export default function Plans({ monthly, monthlyBase }: { monthly: Plan; monthly
             <div className="rounded-md bg-surface-1 border border-line px-4 py-3 mb-5">
               <p className="text-sm text-ink-2 leading-snug flex items-start gap-2">
                 <Check className="w-4 h-4 text-accent-ink shrink-0 mt-0.5" />
-                2 dias grátis com tudo isto aberto, sem pedir cartão.
+                2 dias grátis com tudo isto aberto.
               </p>
             </div>
             <Button to="/planos" variant="vip" block>Ver o Pick IA Pro</Button>
