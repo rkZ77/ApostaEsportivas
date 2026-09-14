@@ -113,7 +113,7 @@ export default function PickPublico() {
           <div className={`h-0.5 bg-gradient-to-r from-transparent via-green-500 to-transparent ${pick.result === 'RED' ? 'via-red-500' : ''}`} />
 
           {/* Header: tipo + resultado */}
-          <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-line/60">
+          <div className="pick-head">
             <div className="flex items-center gap-2">
               <Crown className="w-3.5 h-3.5 text-yellow-400" />
               <span className="text-xs font-black text-yellow-400">{typeLabel}</span>
@@ -160,7 +160,7 @@ export default function PickPublico() {
           </div>
 
           {/* Métricas: odd + lucro */}
-          <div className="flex divide-x divide-line/60 border-b border-line/60">
+          <div className="pick-hero">
             <div className="flex-1 px-4 py-3 text-center">
               <p className="text-[10px] text-ink-3 mb-0.5">Odd</p>
               <p className="font-mono text-2xl font-black text-green-400">{odd?.toFixed(2) ?? '-'}</p>
@@ -195,7 +195,7 @@ export default function PickPublico() {
             </div>
           ) : (
             <div className="px-5 py-4 border-b border-line/60">
-              <div className="flex items-center gap-3 px-4 py-3 bg-surface-1 border border-line rounded-md">
+              <div className="flex items-center gap-3 px-4 py-3 bg-surface-2 border border-line rounded-md">
                 <Lock className="w-4 h-4 text-yellow-400 shrink-0" />
                 <div>
                   <p className="text-xs font-bold text-ink-1">Mercado. Linha. Análise da IA</p>

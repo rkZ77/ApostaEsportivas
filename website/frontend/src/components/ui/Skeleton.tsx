@@ -55,7 +55,7 @@ export function SkeletonCard({ className }: { className?: string }) {
 export function SkeletonPickCard() {
   return (
     <div className="pick-card">
-      <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-3 border-b border-line/60">
+      <div className="pick-head">
         <div className="flex items-center gap-2">
           <Skeleton className="h-4 w-12" />
           <Skeleton className="h-3 w-16" />
@@ -63,7 +63,7 @@ export function SkeletonPickCard() {
         <Skeleton className="h-4 w-16" />
       </div>
 
-      <div className="flex items-stretch divide-x divide-line/60 border-b border-line/60">
+      <div className="pick-hero">
         {[0, 1, 2].map(i => (
           <div key={i} className="flex-1 px-4 py-3 flex flex-col items-center gap-1.5">
             <Skeleton className="h-2 w-8" />

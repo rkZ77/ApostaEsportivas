@@ -52,14 +52,18 @@ export const CASCA_GREEN =
  * com o jogo solto no fundo do card. Mesma ideia, dois desenhos.
  *
  * Aqui o pick simples passa a usar a caixa da perna, com os mesmos tres
- * estados. O RED existe para a caixa (ao contrario da CASCA, que so' destaca o
+ * estados.
+ *
+ * O neutro subiu pra surface-2 em 14/09, junto com o card ganhando superficie
+ * propria: a caixa era surface-1/60 e o card virou surface-1, entao no estado
+ * pendente (a maioria dos picks da tela) ela sumia dentro do card. O RED existe para a caixa (ao contrario da CASCA, que so' destaca o
  * GREEN): dentro do card ela e' leitura de conferencia, nao vitrine, e deixar
  * o RED cinza faria parecer pendente.
  */
 export function caixaDoPick(result?: string | null): string {
   if (result === 'GREEN' || result === 'HALF-WIN') return 'border-green-500/20 bg-green-500/5'
   if (result === 'RED' || result === 'HALF-LOSS')  return 'border-red-500/20 bg-red-500/5'
-  return 'border-line bg-surface-1/60'
+  return 'border-line bg-surface-2/60'
 }
 
 /** Borda do card: a do GREEN quando ele deu green, a do produto no resto. */

@@ -51,7 +51,7 @@ export function PickCardFooter({
     : 'Configurar banca'
 
   return (
-    <div className={cn('flex items-center gap-2 px-5 py-3 border-t border-line/60 mt-auto', className)}>
+    <div className={cn('pick-tray flex items-center gap-2 px-5 py-3 mt-auto', className)}>
       {onBet && (
         <button
           onClick={onBet}
@@ -131,7 +131,11 @@ export function PickExplainButton({
         onPointerDown={onIntencao}
         onFocus={onIntencao}
         onClick={e => { e.stopPropagation(); onClick(e) }}
-        className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold text-ink-2 hover:text-ink-1 border border-line hover:border-line-strong rounded-md py-2.5 min-h-[36px] transition-colors duration-1 ease-smooth"
+        /* Preenchido no hover, e nao no repouso: o rodape logo abaixo virou
+           bandeja escura (`.pick-tray`), e um botao escuro colado nela fazia
+           os dois lerem como um bloco so'. Em repouso ele fica no tom do corpo
+           do card e so' a borda o delimita. */
+        className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold text-ink-2 hover:text-ink-1 hover:bg-surface-2/60 border border-line hover:border-line-strong rounded-md py-2.5 min-h-[36px] transition-colors duration-1 ease-smooth"
       >
         <BrainCircuit className="w-3.5 h-3.5 shrink-0" />
         Entenda esta análise

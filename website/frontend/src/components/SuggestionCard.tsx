@@ -464,7 +464,7 @@ function SuggestionCard({
       data-tour="pick-card"
     >
       {/* Header */}
-      <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-3 border-b border-line/60">
+      <div className="pick-head">
         <div className="flex items-center gap-2 flex-wrap min-w-0">
           <PickTypeBadge type={pickType} />
           {(s.league_id || s.league_name) && (
@@ -492,7 +492,7 @@ function SuggestionCard({
       </div>
 
       {/* Hero: Odd | Stake | EV */}
-      <div className="font-mono flex items-stretch divide-x divide-line/60 border-b border-line/60">
+      <div className="pick-hero">
         <div className="flex-1 px-5 py-3 text-center">
           {/* "Odd combinada" quando o pick tem pernas · e' o vocabulario da
               multipla, e no Boost o numero e' exatamente isso: o produto das

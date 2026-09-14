@@ -268,7 +268,7 @@ export default function PicksPendingCard() {
                 <div className="space-y-1.5">
                   {group.games.map(g => (
                     <div key={g.fixture_id}
-                      className="flex items-center gap-2.5 bg-surface-1/70 border border-line rounded-md px-3 py-2.5 hover:border-line-strong transition-colors">
+                      className="flex items-center gap-2.5 bg-surface-2/70 border border-line rounded-md px-3 py-2.5 hover:border-line-strong transition-colors">
                       <span className="font-mono text-[11px] text-ink-3 font-semibold tabular-nums shrink-0 w-9">
                         {horaBR(g.match_datetime)}
                       </span>
@@ -333,7 +333,7 @@ export default function PicksPendingCard() {
   const linhaJogo = (g: Fixture, apagado = false) => (
     <div key={g.fixture_id}
       className={`flex items-center gap-2.5 border rounded-md px-3 py-2.5 ${
-        apagado ? 'bg-surface-1/30 border-line/60' : 'bg-surface-1/70 border-line'}`}>
+        apagado ? 'bg-surface-2/30 border-line/60' : 'bg-surface-2/70 border-line'}`}>
       <span className={`font-mono text-[11px] font-semibold tabular-nums shrink-0 w-9 ${
         apagado ? 'text-ink-4' : 'text-ink-3'}`}>
         {horaBR(g.match_datetime)}

@@ -512,10 +512,54 @@
      "Compartilhar" ficavam em quatro alturas diferentes -- o alinhamento
      dependia do tamanho do nome do time e da analise. Com a coluna, o rodape
      desce sozinho (ver mt-auto em PickCardParts). */
+  /* O CARD PRECISA PARECER UM CARD (2026-09-14, pedido do usuario).
+   *
+   * Ele nascia em `bg-surface-0`, o MESMO fundo da pagina: numa grade de
+   * quatro colunas, o que separava um pick do outro era so' um fio de borda a
+   * 20% de opacidade. A regra "delineado, nao preenchido" veio da pagina de
+   * Resultados, onde ela e' certa -- la' o bloco e' uma TABELA que ocupa a
+   * largura toda, e uma superficie propria so' criaria uma caixa em volta de
+   * outra. Aqui sao objetos soltos e repetidos numa grade, e objeto solto
+   * precisa de chao proprio pra existir.
+   *
+   * Entao o card sobe um degrau da pagina (surface-1, como todo `.card` do
+   * site) e ganha a sombra pequena do sistema. A borda colorida do produto
+   * continua sendo o que diz QUAL pick e'; a superficie diz que e' UM pick.
+   *
+   * `rounded-xl` e nao `lg`: com fundo proprio o canto passa a ser visivel de
+   * verdade, e 8px numa caixa de 400px de altura le' como canto mal cortado.
+   */
   .pick-card {
-    @apply relative overflow-hidden bg-surface-0 border rounded-lg
+    @apply relative overflow-hidden bg-surface-1 border rounded-xl
            flex flex-col h-full
            transition-colors duration-1 ease-smooth;
+    box-shadow: var(--shadow-elev-sm);
+  }
+
+  /* --- as tres faixas do card de pick ------------------------------------
+   *
+   * As tres existiam desenhadas a mao, com a mesma cadeia de classes repetida
+   * em oito arquivos (VIP, free, multipla, alavancagem, boost, ao vivo, pick
+   * publico e o esqueleto de carregamento). Eram identicas por disciplina, e
+   * era so' questao de tempo ate' uma delas mudar sozinha.
+   *
+   * Agora que o card tem superficie propria, elas tambem carregam TOM, e nao
+   * so' geometria: a faixa de numeros e o rodape descem pro fundo da pagina
+   * (surface-0) e ficam encaixados no card, o cabecalho fica no nivel do card.
+   * E' o que separa "leia isto" de "aja aqui" sem precisar de mais uma borda.
+   */
+  .pick-head {
+    @apply flex items-center justify-between gap-2 px-5 pt-4 pb-3 border-b border-line/60;
+  }
+  /* A faixa dos numeros (odd, stake, lucro). `font-mono` vive aqui porque
+     numero do site e' sempre mono e a faixa nunca tem outra coisa. */
+  .pick-hero {
+    @apply font-mono flex items-stretch divide-x divide-line/60
+           border-b border-line/60 bg-surface-0/60;
+  }
+  /* Bandeja de acao: rodape do card e qualquer barra de botao encaixada. */
+  .pick-tray {
+    @apply border-t border-line/60 bg-surface-0/40;
   }
 
   /*

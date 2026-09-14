@@ -1144,7 +1144,7 @@ const CardLive = forwardRef<HTMLDivElement, {
       {/* Cabeçalho · tipo, liga e minuto à esquerda; estado à direita. Mesma
           divisão do card VIP, e o minuto ocupa ali o lugar do horário do jogo:
           é o "quando" deste pick. */}
-      <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-3 border-b border-line/60">
+      <div className="pick-head">
         <div className="flex items-center gap-2 flex-wrap min-w-0">
           {/* Pick JA' LIQUIDADO nao carrega o selo "Ao Vivo" nem o minuto: os
               dois dizem "esta' acontecendo agora", e na secao de encerrados
@@ -1184,7 +1184,7 @@ const CardLive = forwardRef<HTMLDivElement, {
           do card VIP. Antes a odd morava numa linha própria e a unidade em
           outra faixa mais abaixo, então o mesmo dado aparecia em dois pesos
           tipográficos diferentes conforme a aba. */}
-      <div className="font-mono flex items-stretch divide-x divide-line/60 border-b border-line/60">
+      <div className="pick-hero">
         <div className="flex-1 px-5 py-3 text-center">
           <div className="text-[10px] text-ink-3 mb-0.5">
             {oddCorrente != null ? 'Odd agora' : 'Odd'}

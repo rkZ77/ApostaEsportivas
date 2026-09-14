@@ -669,7 +669,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
           horario do jogo, e ainda uma barrinha de gradiente no topo que o VIP
           nao tem. Cada diferenca dessas era invisivel isolada e obvia com os
           dois cards lado a lado. */}
-      <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-3 border-b border-line/60">
+      <div className="pick-head">
         <div className="flex items-center gap-2 flex-wrap min-w-0">
           <PickTypeBadge type="free" />
           {(dica.league_id || dica.league_name) && (
@@ -695,7 +695,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
       </div>
 
       {/* Hero: Odd | Stake | Retorno */}
-      <div className="font-mono flex items-stretch divide-x divide-line/60 border-b border-line/60">
+      <div className="pick-hero">
         <div className="flex-1 px-5 py-3 text-center">
           {/* A ODD DE AGORA OCUPA O LUGAR DA ODD (10/09/2026, pedido do
               usuário). Antes o preço corrente só aparecia dentro do modal de
@@ -1141,7 +1141,7 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
       <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent ${estilo.accent} to-transparent`} />
 
       {/* Header */}
-      <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-line/60">
+      <div className="pick-head">
         <div className="flex items-center gap-2">
           <span className={`text-xs font-black ${estilo.texto}`}>{estilo.rotulo}</span>
           <span className="badge-vip">VIP</span>
@@ -1169,7 +1169,7 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
       </div>
 
       {/* Odd hero + retorno */}
-      <div className="font-mono flex items-center gap-0 divide-x divide-line/60 border-b border-line/60">
+      <div className="pick-hero">
         <div className="flex-1 px-5 py-3 text-center">
           <div className="text-[10px] text-ink-3 mb-0.5">Odd combinada</div>
           <div className="text-3xl font-black text-green-400">
@@ -1297,7 +1297,7 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
             ? 'border-green-500/20 bg-green-500/5'
             : lr === 'RED'
             ? 'border-red-500/20 bg-red-500/5'
-            : 'border-line bg-surface-1/60'
+            : 'border-line bg-surface-2/60'
           const circleClass = lr === 'GREEN'
             ? 'bg-green-500/20 text-green-400'
             : lr === 'RED'
@@ -1548,7 +1548,7 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
       <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-orange-500 to-transparent" />
 
       {/* Header */}
-      <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-line/60">
+      <div className="pick-head">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs font-black text-orange-400">Alavancagem</span>
           <span className="badge-vip">VIP</span>
@@ -1620,7 +1620,7 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
           const lr: 'GREEN' | undefined = pick.result === 'GREEN' ? 'GREEN' : undefined
           const boxClass = lr === 'GREEN'
             ? 'border-green-500/20 bg-green-500/5'
-            : 'border-line bg-surface-1/60'
+            : 'border-line bg-surface-2/60'
           const circleClass = lr === 'GREEN'
             ? 'bg-green-500/20 text-green-400'
             : 'bg-orange-500/10 text-orange-400'
@@ -2336,7 +2336,7 @@ function CardResolvido({ p }: { p: PickResolvidoAberto }) {
 
   return (
     <div className="pick-card border-line">
-      <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-3 border-b border-line/60">
+      <div className="pick-head">
         <div className="flex items-center gap-2 flex-wrap min-w-0">
           <PickTypeBadge type={p.pick_type ?? 'vip'} />
           {(p.league_id || p.league_name) && (
@@ -2392,7 +2392,7 @@ function CardTrancado({ p, cls }: { p: TeaserBloqueado; cls: LockCls }) {
 
   return (
     <div className="pick-card border-line">
-      <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-3 border-b border-line/60">
+      <div className="pick-head">
         <div className="flex items-center gap-2 flex-wrap min-w-0">
           <PickTypeBadge type={p.pick_type ?? 'vip'} />
           {(p.league_id || p.league_name) && (
