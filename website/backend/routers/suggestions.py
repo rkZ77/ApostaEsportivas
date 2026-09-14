@@ -1061,8 +1061,50 @@ def get_today_suggestions(
                     """, _d)
                 ]
 
+            # O QUE JA' ACONTECEU, ABERTO (14/09/2026, pedido do usuario).
+            #
+            # Todo teaser acima filtra `result IS NULL`, entao o free via' os
+            # picks de HOJE trancados e os de ontem em lugar nenhum. Enquanto
+            # isso `/public/results` ja' entrega esses mesmos picks resolvidos
+            # COMPLETOS, com mercado, linha, odd e resultado, sem exigir login:
+            # a pagina de Resultados e' publica desde sempre.
+            #
+            # Ou seja, o GREEN de ontem ja' era publico e faltava justamente na
+            # tela em que a pessoa decide se assina. Nao ha' nada novo sendo
+            # aberto aqui: e' o MESMO corte de public.py, trazido pro lugar
+            # onde ele convence.
+            #
+            # O QUE CONTINUA FECHADO e' o `reasoning`. O pick resolvido mostra
+            # o QUE foi apostado e como terminou; POR QUE o motor escolheu
+            # aquilo segue sendo a analise, e a analise e' o que se paga.
+            # Repare que a coluna nao e' selecionada: nao ha' o que esquecer de
+            # remover depois.
+            resolvidos_vip = _safe_query(cur, f"""
+                SELECT s.id, s.match_date,
+                       s.home_team_name, s.away_team_name,
+                       s.home_team_id, s.away_team_id,
+                       s.market, s.line, s.odd,
+                       s.result, s.profit,
+                       f.league_id, f.match_datetime,
+                       l.name AS league_name
+                FROM picks_vip s
+                LEFT JOIN fixtures f ON f.fixture_id = s.fixture_id
+                LEFT JOIN leagues l ON l.league_id = f.league_id
+                WHERE ({_vip_where}) AND s.result IS NOT NULL
+                ORDER BY s.match_date DESC, s.id DESC
+                LIMIT 12
+            """, _d)
+
             result["bloqueados"] = {
                 "vip": [dict(r) for r in teaser_vip],
+                #: Os picks da janela que JA' terminaram, com mercado e
+                #: resultado. Chave propria porque nao sao "bloqueados": estao
+                #: abertos, e a tela precisa saber a diferenca pra nao desenhar
+                #: cadeado em cima do que ja' e' publico.
+                "resolvidos": [
+                    {**dict(r), "market": _tr(r["market"]) if r.get("market") else r.get("market")}
+                    for r in resolvidos_vip
+                ],
                 "multipla": _teaser_de_multipla(teaser_mult[0]) if teaser_mult else None,
                 # O teaser do bingo tem o MESMO corte do da multipla: quantas
                 # selecoes e quais jogos, sem os mercados. O que cada perna e'

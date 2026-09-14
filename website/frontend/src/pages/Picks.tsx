@@ -2257,6 +2257,22 @@ interface TeaserBloqueado {
   odd?: number | string | null
 }
 
+/*
+ * O pick que JA' TERMINOU, aberto para quem nao assina (14/09/2026).
+ *
+ * Nao e' um teaser: e' o pick inteiro, com mercado e resultado. O mesmo dado
+ * que `/public/results` ja' entrega sem login desde sempre, porque a pagina de
+ * Resultados e' publica. O que continua fora e' o `reasoning`: o resolvido diz
+ * O QUE foi apostado e como terminou, nunca POR QUE o motor escolheu aquilo.
+ */
+interface PickResolvidoAberto extends TeaserBloqueado {
+  market?: string | null
+  line?: string | null
+  result?: string | null
+  profit?: number | string | null
+  match_date?: string | null
+}
+
 interface ResumoBloqueado {
   odd?: number | string | null
   total_legs?: number | null
@@ -2339,13 +2355,15 @@ function CardTrancado({ p, cls }: { p: TeaserBloqueado; cls: LockCls }) {
   )
 }
 
-function VipLockOverlay({ color = 'yellow', picks, resumo, rotulo = 'picks' }: {
+function VipLockOverlay({ color = 'yellow', picks, resumo, rotulo = 'picks', resolvidos }: {
   color?: keyof typeof LOCK_CLS
   /** Teaser vindo do servidor, sem análise. Vazio = não há pick trancado hoje. */
   picks?: TeaserBloqueado[]
   /** Múltipla e alavancagem não têm grade: viram uma linha com os jogos. */
   resumo?: ResumoBloqueado | null
   rotulo?: string
+  /** Os picks da janela que já terminaram, abertos. Ver PickResolvidoAberto. */
+  resolvidos?: PickResolvidoAberto[]
 }) {
   const cls = LOCK_CLS[color] ?? LOCK_CLS.yellow
   const lista = picks ?? []
@@ -2394,6 +2412,46 @@ function VipLockOverlay({ color = 'yellow', picks, resumo, rotulo = 'picks' }: {
         </div>
       )}
 
+      {/* O QUE JA' ACONTECEU, ABERTO.
+
+          Vem entre o trancado e o convite de propósito: é a resposta à única
+          pergunta que a pessoa tem nesse ponto, que é "funciona?". Dizer
+          "assine" logo depois de mostrar quatro cards fechados é pedir fé; com
+          os resultados de ontem no meio, o convite vem depois da prova.
+
+          O dado não é novo nem vazado: é o mesmo que /resultados entrega
+          publicamente. O que nunca aparece aqui é a análise. */}
+      {!!resolvidos?.length && (
+        <div className="card p-5 space-y-3">
+          <div className="flex items-baseline justify-between gap-3 flex-wrap">
+            <p className="text-ink-2 text-xs font-bold">Os últimos que já fecharam</p>
+            <Link to="/resultados" className="text-xs text-ink-3 hover:text-ink-1 transition-colors">
+              Ver o histórico completo
+            </Link>
+          </div>
+          <ul className="space-y-2">
+            {resolvidos.slice(0, 5).map(p => (
+              <li key={p.id} className="flex items-center justify-between gap-3 py-1.5 border-b border-line last:border-0">
+                <div className="min-w-0">
+                  <p className="text-sm text-ink-1 truncate">
+                    {p.home_team_name} x {p.away_team_name}
+                  </p>
+                  <p className="text-[11px] text-ink-4 truncate">
+                    {p.market}{p.line ? ` ${p.line}` : ''}
+                    {p.odd != null && ` · ${Number(p.odd).toFixed(2)}`}
+                  </p>
+                </div>
+                <SeloDeResultado result={p.result} />
+              </li>
+            ))}
+          </ul>
+          <p className="text-ink-4 text-[11px]">
+            Estes são picks de assinante, abertos porque já terminaram. Os de hoje
+            ficam fechados enquanto a odd ainda vale.
+          </p>
+        </div>
+      )}
+
       {/* O convite. Em FLUXO, depois da grade: era isto que saía cortado quando
           ele vivia como `absolute inset-0` por cima dos esqueletos. */}
       <div className={`rounded-lg border ${cls.borda} bg-surface-1 p-5 flex flex-col sm:flex-row sm:items-center gap-4`}>
@@ -2404,7 +2462,7 @@ function VipLockOverlay({ color = 'yellow', picks, resumo, rotulo = 'picks' }: {
           <p className="font-display text-ink-1 font-bold text-sm mb-0.5">{chamada}</p>
           <p className="text-ink-3 text-xs leading-relaxed">
             {temTeaser
-              ? 'O jogo e a odd você já vê. O mercado, a análise da IA e a sugestão de stake abrem no VIP.'
+              ? 'O jogo e a odd você já vê. O mercado, a análise da IA e a sugestão de stake abrem na assinatura.'
               : '10 a 20 picks por dia com análise completa da IA e resultados em tempo real.'}
           </p>
         </div>
@@ -2412,7 +2470,7 @@ function VipLockOverlay({ color = 'yellow', picks, resumo, rotulo = 'picks' }: {
           to="/checkout"
           className={`inline-flex items-center justify-center font-black px-6 py-2.5 rounded-md transition-colors text-sm shrink-0 min-h-[44px] ${cls.btn}`}
         >
-          Assinar VIP
+          Assinar
         </Link>
       </div>
 
@@ -3415,7 +3473,7 @@ export default function Picks() {
                       label="Picks VIP do Dia"
                       badge={canSeeVip && pending.length ? `${pending.length} pendente${pending.length > 1 ? 's' : ''}` : undefined}
                     />
-                    {!canSeeVip ? <VipLockOverlay color="yellow" picks={today?.bloqueados?.vip} /> : (
+                    {!canSeeVip ? <VipLockOverlay color="yellow" picks={today?.bloqueados?.vip} resolvidos={today?.bloqueados?.resolvidos} /> : (
                       <>
                         <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                           {vips.slice(0, 4).map((s: any) => (
@@ -3736,7 +3794,7 @@ export default function Picks() {
                 pra longe do "Como funciona". As abas com mais de um pick por
                 dia (VIP, Pick Falta, Pick Jogador, Boost) ficam todas assim. */}
             <div>
-              {!canSeeVip ? <VipLockOverlay color="yellow" picks={today?.bloqueados?.vip} /> : todayLoading ? <PickLoading /> : (() => {
+              {!canSeeVip ? <VipLockOverlay color="yellow" picks={today?.bloqueados?.vip} resolvidos={today?.bloqueados?.resolvidos} /> : todayLoading ? <PickLoading /> : (() => {
                 const vips = today?.vip ?? []
                 const leagues = Array.from(new Set(vips.map((s: any) => s.league_name).filter(Boolean))) as string[]
                 const byLeague = leagueFilter ? vips.filter((s: any) => s.league_name === leagueFilter) : vips

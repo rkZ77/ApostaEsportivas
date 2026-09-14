@@ -197,7 +197,7 @@ function PassoConfirmarEmail() {
       <Etiqueta>O que você ganha</Etiqueta>
       <Linhas itens={[['Teste do VIP', '2 dias'], ['Custo', 'R$ 0,00']]} />
       <p className="text-xs text-ink-2 leading-relaxed">
-        O VIP abre todos os picks do dia, as múltiplas e a alavancagem. Sem confirmar,
+        A assinatura abre todos os picks do dia, as múltiplas e a alavancagem. Sem confirmar,
         a conta segue no plano gratuito, com 1 pick por dia.
       </p>
       {user?.email && (

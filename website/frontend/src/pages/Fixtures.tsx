@@ -675,7 +675,7 @@ export default function Fixtures() {
             </p>
             <Link to="/checkout"
               className="block bg-yellow-400 hover:bg-yellow-300 text-on-fill font-black px-6 py-3 rounded-md transition-colors text-sm mb-3">
-              Assinar VIP
+              Assinar
             </Link>
             <button onClick={() => setLockPrompt(false)}
               className="text-ink-4 hover:text-ink-2 text-xs transition-colors">

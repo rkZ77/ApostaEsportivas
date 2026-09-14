@@ -101,7 +101,7 @@ export default function AgentePanel({ onClose }: { onClose: () => void }) {
                   Disponível apenas para assinantes VIP. Analisa picks, banca, alavancagem e jogos ao vivo em tempo real.
                 </p>
                 <Link to="/checkout" onClick={onClose} className="inline-block bg-yellow-400 hover:bg-yellow-300 text-on-fill font-black px-5 py-2.5 rounded-md text-xs transition-colors">
-                  Assinar VIP
+                  Assinar
                 </Link>
               </>
             )}

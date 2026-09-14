@@ -63,7 +63,7 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
       ? [{ to: '/planos', label: 'Meu Plano', Icon: Crown, highlight: 'yellow' as const }]
       : []),
     ...(!isAdmin && user?.plan !== 'vip' && user?.plan !== 'trial'
-      ? [{ to: '/checkout', label: 'Assinar VIP', Icon: Crown, highlight: 'yellow' as const }]
+      ? [{ to: '/checkout', label: 'Assinar', Icon: Crown, highlight: 'yellow' as const }]
       : []),
     ...(isAdmin
       ? [{ to: '/admin', label: 'Admin', Icon: ShieldCheck }]

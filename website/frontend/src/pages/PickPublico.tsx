@@ -231,7 +231,7 @@ export default function PickPublico() {
                 className="flex items-center justify-center gap-2 w-full py-3.5 rounded-md bg-green-600 hover:bg-green-500 text-on-fill font-black text-sm transition-colors"
               >
                 <TrendingUp className="w-4 h-4" />
-                {user ? 'Assinar VIP' : 'Criar conta gratuita e assinar VIP'}
+                {user ? 'Assinar' : 'Criar conta gratuita e assinar'}
               </Link>
               {!user && (
                 <p className="text-center text-[10px] text-ink-4">
