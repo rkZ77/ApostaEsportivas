@@ -107,7 +107,8 @@ def _create_table_if_needed(cur):
     cur.execute("""
         CREATE TABLE IF NOT EXISTS picks_alavancagem (
             id              SERIAL PRIMARY KEY,
-            match_date      DATE UNIQUE,
+            -- SEM UNIQUE: ver o DROP CONSTRAINT logo abaixo.
+            match_date      DATE,
             tipo            TEXT NOT NULL DEFAULT 'simples',
             fixture_id_1    INTEGER, home_team_1 TEXT, away_team_1 TEXT,
             home_team_id_1  INTEGER, away_team_id_1 INTEGER,
@@ -149,6 +150,17 @@ def _create_table_if_needed(cur):
     for _n in (1, 2, 3):
         cur.execute(f"ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS home_team_id_{_n} INTEGER;")
         cur.execute(f"ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS away_team_id_{_n} INTEGER;")
+    # UM CAMINHO POR DIA ERA REGRA DO BANCO (2026-09-15). `match_date DATE
+    # UNIQUE` nasceu na epoca em que a alavancagem era uma aposta so' por dia,
+    # e sobreviveu a MAX_CAMINHOS_POR_DIA=5: o motor abria o segundo caminho,
+    # o INSERT batia na constraint, a excecao abortava a transacao e derrubava
+    # o RESTO da rodada -- os erros de 08 e 09/09 em `engine_errors` sao esses,
+    # com a execucao marcada FAILED. Em PROD nunca houve um dia com dois
+    # caminhos: o teto de cinco nunca teve como valer.
+    #
+    # Mesmo defeito, e mesma correcao, do indice unico da multipla (V2).
+    cur.execute("ALTER TABLE picks_alavancagem "
+                "DROP CONSTRAINT IF EXISTS picks_alavancagem_match_date_key;")
 
 
 def _has_today_pick(cur) -> bool:

@@ -225,10 +225,16 @@ class FixturesService:
         match_datetime ja esta em horario de Brasilia; HOJE_BR existe porque
         CURRENT_DATE e' a data UTC do servidor.
         """
+        # O join com `leagues` existe porque `SELECT f.*` nao traz o NOME da
+        # liga, e _format_fixture_row le `league_name` -- sem ele o pick VIP
+        # nascia com a liga vazia e a tela caia no fallback que so' resolve
+        # depois que o jogo entra em match_statistics (ou seja, depois do
+        # jogo). Mesmo COALESCE que get_fixture_by_id ja usava.
         rows = self._query(f"""
-            SELECT f.*
+            SELECT f.*, COALESCE(l.name, 'Unknown') AS league_name
             FROM fixtures f
             LEFT JOIN picks_vip s ON s.fixture_id = f.fixture_id
+            LEFT JOIN leagues l ON l.league_id = f.league_id
             WHERE f.status = 'NS'
               AND s.fixture_id IS NULL
               AND f.match_datetime::date = {HOJE_BR}

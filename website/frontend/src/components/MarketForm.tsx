@@ -60,6 +60,11 @@ interface Serie {
   matches: FormMatch[]
   games: number
   resolved: number
+  /** Jogos que DECIDIRAM: `resolved` menos os que empataram a linha (push).
+      É o denominador da taxa, o mesmo que o motor usa. */
+  decided: number
+  /** Quantos empataram a linha exata · só existe em linha redonda (x.0). */
+  pushes: number
   greens: number
   hit_rate: number | null
   average: number | null
@@ -159,7 +164,14 @@ function Grafico({
       <p className="text-[11px] text-ink-4 mb-2">
         {serie.label}, últimos {jogos.length} jogos {contexto}
         {serie.average != null && <>, média {serie.average}</>}
-        {taxa != null && <>, {serie.greens} GREEN em {serie.resolved}</>}
+        {/* O denominador é `decided`, e não `resolved`: em linha redonda o
+            empate exato devolve a aposta, então ele sai da conta (é o que o
+            motor sempre fez). O número de push aparece ao lado para a soma
+            fechar com as barras, que continuam desenhando os dez jogos. */}
+        {taxa != null && <>, {serie.greens} GREEN em {serie.decided}</>}
+        {serie.pushes > 0 && (
+          <> ({serie.pushes} {serie.pushes === 1 ? 'devolveu' : 'devolveram'} a aposta)</>
+        )}
       </p>
 
       {/* O fato em uma frase, do jeito que o apostador lê nas casas. Fica ACIMA

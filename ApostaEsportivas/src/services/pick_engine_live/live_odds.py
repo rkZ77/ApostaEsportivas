@@ -234,6 +234,40 @@ def extrair_linhas_de_jogador(odds_brutas: list) -> list[dict]:
     return saida
 
 
+def _no_vig_do_mesmo_bloco(por_bloco: dict):
+    """No-vig do par Over/Under de UM bloco de mercado, ou (None, None).
+
+    Duas exigencias, e as duas vem do mesmo lugar: o par tem que descrever um
+    mercado que existe.
+
+    1. OS DOIS LADOS DO MESMO BLOCO. Ver o comentario em `extrair_linhas`.
+    2. SOMA DAS IMPLICITAS >= 1. Mesmo dentro de um bloco, as duas pontas
+       podem ter sido lidas em segundos diferentes -- odd ao vivo se mexe o
+       tempo todo --, e um par que soma menos que 1 e' uma arbitragem que
+       nenhuma casa oferece. Quando aparece, o certo e' desconfiar do par, nao
+       acreditar nele: o motor cai na implicita crua, que carrega a margem mas
+       e' um numero que a casa de fato publicou.
+
+    Entre os blocos validos vence o de MENOR soma, isto e', o de menor margem:
+    e' o que chega mais perto do preco justo."""
+    melhor = None
+    for lados in por_bloco.values():
+        over, under = lados.get("over"), lados.get("under")
+        if not over or not under:
+            continue
+        soma = 1 / over + 1 / under
+        if soma < 1.0:
+            continue
+        if melhor is None or soma < melhor[0]:
+            melhor = (soma, over, under)
+    if melhor is None:
+        return None, None, {}
+    prob_over, prob_under = market_model.no_vig_pair_prob(melhor[1], melhor[2])
+    # As odds DO BLOCO que ancorou: e' com elas que o valor tem que ser
+    # julgado, ver `odd_avaliacao` em `extrair_linhas`.
+    return prob_over, prob_under, {"over": melhor[1], "under": melhor[2]}
+
+
 def extrair_linhas(odds_brutas: list, familias: tuple = FAMILIAS_V1) -> list[dict]:
     """Devolve uma entrada por (familia, linha, direcao) cotada e ativa.
 
@@ -241,12 +275,35 @@ def extrair_linhas(odds_brutas: list, familias: tuple = FAMILIAS_V1) -> list[dic
     dela, porque e' esse numero que vira a ancora da estimativa e o baseline
     do edge -- guardar so' a odd obrigaria a recalcular isso em dois lugares.
     """
-    # (familia, linha) -> {"over": odd, "under": odd}
+    # (familia, linha) -> {"over": odd, "under": odd}  · a melhor de cada lado
     pares: dict[tuple, dict] = {}
+    # (familia, linha) -> {nome do bloco: {"over": odd, "under": odd}}
+    #
+    # O SEGUNDO INDICE EXISTE POR CAUSA DO NO-VIG (2026-09-15). A melhor odd
+    # de cada lado continua sendo a que o produto publica, mas ela NAO pode
+    # formar o par que ancora a probabilidade de mercado: `corners` casa com
+    # cinco nomes ("total corners", "asian corners", "match corners"...), e o
+    # melhor Over de um bloco com o melhor Under de outro nao e' um mercado --
+    # sao dois, com preco e ate regra diferentes (o asiatico devolve no empate
+    # exato, o europeu nao).
+    #
+    # O efeito era visivel: a soma das implicitas do par caia ABAIXO de 1 e o
+    # no-vig, em vez de tirar a margem da casa, inventava probabilidade. Em
+    # 133 dos 190 picks ao vivo ja' gravados em PROD a ancora ficou ACIMA da
+    # implicita da odd publicada -- +3,05 pontos em media, +17,1 no pior caso,
+    # e em 100% dos picks de escanteios. Como `encolher_contra_mercado` puxa a
+    # estimativa PARA essa ancora, a probabilidade publicada subia junto.
+    #
+    # E' o MESMO defeito que o pre-jogo mediu e corrigiu em 14/08 (ver
+    # pick_engine/market_model.resolve_prob_baseline, que passou a exigir os
+    # dois lados pela mesma regra de preco). A correcao nunca tinha chegado
+    # aqui.
+    blocos: dict[tuple, dict] = {}
     for mercado in odds_brutas or []:
         familia = _familia_do_mercado(mercado.get("name"))
         if familia is None or familia not in familias:
             continue
+        nome_bloco = (mercado.get("name") or "").strip().lower()
         for valor in mercado.get("values", []) or []:
             if valor.get("suspended"):
                 continue
@@ -260,19 +317,21 @@ def extrair_linhas(odds_brutas: list, familias: tuple = FAMILIAS_V1) -> list[dic
             alvo = pares.setdefault((familia, linha), {})
             # Melhor odd vence quando a API repete a linha em mais de um
             # bloco de mercado (acontece com "Over/Under Line" e "Match
-            # Goals" cotando o mesmo 2.5).
+            # Goals" cotando o mesmo 2.5). Isto e' o que o usuario aposta.
             if direcao not in alvo or odd > alvo[direcao]:
                 alvo[direcao] = odd
+            # E o mesmo par, guardado POR BLOCO, pra o no-vig ter de onde sair
+            # sem misturar mercados.
+            do_bloco = blocos.setdefault((familia, linha), {}).setdefault(nome_bloco, {})
+            if direcao not in do_bloco or odd > do_bloco[direcao]:
+                do_bloco[direcao] = odd
 
     saida: list[dict] = []
     for (familia, linha), lados in pares.items():
         over, under = lados.get("over"), lados.get("under")
-        prob_over = prob_under = None
-        origem = "implied"
-        if over and under:
-            prob_over, prob_under = market_model.no_vig_pair_prob(over, under)
-            if prob_over is not None:
-                origem = "no_vig"
+        prob_over, prob_under, odds_do_bloco = _no_vig_do_mesmo_bloco(
+            blocos.get((familia, linha)) or {})
+        origem = "no_vig" if prob_over is not None else "implied"
         for direcao, odd in (("over", over), ("under", under)):
             if not odd:
                 continue
@@ -288,6 +347,20 @@ def extrair_linhas(odds_brutas: list, familias: tuple = FAMILIAS_V1) -> list[dic
                 "direcao": direcao,
                 "line": f"{direcao.capitalize()} {linha}",
                 "odd": round(odd, 2),
+                # A ODD QUE JULGA, SEPARADA DA QUE SE APOSTA (2026-09-15).
+                #
+                # `odd` e' a melhor que alguma casa cotou e e' o que o usuario
+                # leva. `odd_avaliacao` e' a do MESMO bloco que produziu
+                # `prob_mercado`, e e' com ela que edge e EV tem que ser
+                # calculados: medir valor com uma odd e ancorar com outra
+                # produz um EV que nao existe em mercado nenhum -- a odd mais
+                # generosa de um bloco contra o preco justo de outro.
+                #
+                # E' a mesma separacao que o pre-jogo faz desde 14/08 com
+                # `odd_evaluation="consensus"`: julga pelo consenso, publica a
+                # melhor. Sem par coerente as duas sao a mesma odd, e nada
+                # muda em relacao ao comportamento anterior.
+                "odd_avaliacao": round(odds_do_bloco.get(direcao) or odd, 2),
                 "prob_mercado": prob,
                 "origem_prob_mercado": origem,
                 "tem_par": bool(over and under),

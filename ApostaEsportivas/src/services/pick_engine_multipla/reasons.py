@@ -50,6 +50,10 @@ PERNA_PROB_CALIBRADA = "PERNA_PROB_CALIBRADA_BAIXA"
 PERNA_PROJECAO = "PERNA_PROJECAO_SEM_MARGEM"
 PERNA_SCORE = "PERNA_SCORE_ABAIXO_DO_MINIMO"
 
+#: Familia medida como perdedora DENTRO da multipla. Ver
+#: `config.FAMILIAS_BLOQUEADAS`.
+PERNA_FAMILIA_BLOQUEADA = "PERNA_FAMILIA_BLOQUEADA"
+
 #: Ordem de gravidade, pra quando o dia acumula varios motivos e so' um vai
 #: virar a resposta: o primeiro da lista que aparecer manda. Vale o motivo
 #: mais ESTRUTURAL (faltou candidato) sobre o mais circunstancial (a odd nao

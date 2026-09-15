@@ -211,6 +211,12 @@ def avaliar(perna: dict, config: cfg.MultiplaConfig | None = None) -> dict:
     if detalhe["score"] < config.min_leg_score:
         motivos.append(reasons.PERNA_SCORE)
 
+    # Familia medida como perdedora DENTRO do bilhete -- ver
+    # `config.FAMILIAS_BLOQUEADAS` pros numeros. O gate e' da COMBINACAO, nao
+    # do mercado: a mesma familia segue elegivel no VIP e no ao vivo.
+    if (perna.get("market_type") or "").lower() in config.familias_bloqueadas:
+        motivos.append(reasons.PERNA_FAMILIA_BLOQUEADA)
+
     return {
         **perna,
         "probabilidade_calibrada": detalhe["probabilidade_calibrada"],

@@ -4156,6 +4156,9 @@ def _serie_do_arbitro(cur, perna: dict, escopo: str, limit: int) -> dict | None:
             m["result"] = None
         serie["hit_rate"] = None
         serie["greens"] = 0
+        # Sem regua nao ha empate na linha pra contar: zerar `pushes` junto
+        # evita a tela dizer "2 devolveu a aposta" ao lado de barras sem cor.
+        serie["pushes"] = 0
     # ID do arbitro, so' pra tela ter o que pedir de foto ao provedor (o proxy
     # /api/proxy/referee/<id>.png). Casamento normalizado pelo mesmo motivo da
     # consulta acima: o nome vem com e sem o sufixo de pais. Sem id, a tela
