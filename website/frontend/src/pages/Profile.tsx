@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import PageShell from '../components/PageShell'
 import { Button, Spinner, planoMeta, rotuloDoPlano } from '../components/ui'
 import AlertsAndAchievements from '../components/AlertsAndAchievements'
+import AvisosWhatsApp from '../components/AvisosWhatsApp'
 import Avatar from '../components/Avatar'
 import { usePushNotification } from '../hooks/usePushNotification'
 import { maskPhone } from '../utils/format'
@@ -908,6 +909,12 @@ export default function Profile() {
           {/* Alertas e conquistas. Vêm de /api/personal, tela própria dentro do
               perfil pra não criar mais uma rota pra dois blocos curtos. */}
           <AlertsAndAchievements push={push} />
+
+          {/* Logo depois dos alertas de propósito: os dois respondem "o que o
+              site me avisa", e o WhatsApp é o mesmo aviso saindo por outra
+              porta. O card se esconde sozinho quando o ambiente não tem
+              provedor configurado. */}
+          <AvisosWhatsApp />
 
           {/* Exclusao de conta (LGPD art. 18). Ultimo bloco da pagina de
               proposito: e' o unico destrutivo, e nao deve dividir espaco com

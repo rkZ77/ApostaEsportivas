@@ -552,10 +552,20 @@
     @apply flex items-center justify-between gap-2 px-5 pt-4 pb-3 border-b border-line/60;
   }
   /* A faixa dos numeros (odd, stake, lucro). `font-mono` vive aqui porque
-     numero do site e' sempre mono e a faixa nunca tem outra coisa. */
+     numero do site e' sempre mono e a faixa nunca tem outra coisa.
+   *
+   * CAIXA, E NAO FAIXA (2026-09-14, pedido do usuario). Ela sangrava de ponta
+   * a ponta enquanto TODO o resto do card ja' era retangulo recuado: a caixa
+   * do jogo, as pernas do bilhete, o botao de analise. Era a unica peca com
+   * outra regra, e num bilhete de quatro selecoes isso ficava obvio -- o
+   * "Apostado" flutuava colado na borda e as pernas logo abaixo comecavam
+   * recuadas.
+   *
+   * Mesmo desenho da caixa do jogo (`caixaDoPick`): borda, canto e surface-2.
+   * O olho passa a ler o card como uma pilha de blocos do mesmo tipo. */
   .pick-hero {
-    @apply font-mono flex items-stretch divide-x divide-line/60
-           border-b border-line/60 bg-surface-0/60;
+    @apply font-mono flex items-stretch divide-x divide-line
+           mx-5 mt-3 rounded-md border border-line bg-surface-2/60 overflow-hidden;
   }
   /* Bandeja de acao: rodape do card e qualquer barra de botao encaixada. */
   .pick-tray {
