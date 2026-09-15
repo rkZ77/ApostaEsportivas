@@ -20,8 +20,10 @@ bilhete ja' usa dentro de si mesmo, e o mesmo que a alavancagem usa contra o
 VIP: familia repetida em OUTRA partida continua liberada, senao nenhum bilhete
 fecharia.
 
-A ordem de execucao (main.py) e' VIP -> Dica -> Multipla -> Bingo ->
+A ordem de execucao (main.py) e' Dica -> VIP -> Multipla -> Bingo ->
 Alavancagem, entao cada produto ja' encontra gravado o que veio antes dele.
+(A Dica passou na frente do VIP em 2026-09-15; para os bilhetes nada muda,
+eles continuam rodando depois dos dois.)
 """
 
 from __future__ import annotations

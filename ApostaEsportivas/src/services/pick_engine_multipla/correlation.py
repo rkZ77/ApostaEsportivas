@@ -25,10 +25,17 @@ de fora e' a do MESMO jogo, e ela nao e' simetrica:
   * uma perna de Over com uma de Under no mesmo jogo e' o caso contrario, e
     o produto passa a ANUNCIAR MAIS chance do que existe.
 
-Como o segundo caso existe e nao ha' medicao propria pra ele, a V2 escolhe o
-caminho conservador: MESMO JOGO e' HIGH e nao combina por padrao (o teto
-`MAX_PERNAS_MESMO_JOGO` diz a mesma coisa do outro lado). Isso APERTA o que a
-V1 permitia desde 28/08 -- e aperta de proposito, a pedido de 11/09.
+Entre 11/09 e 15/09 a V2 respondeu a isso bloqueando o MESMO JOGO inteiro: os
+dois casos viravam HIGH, porque so' um deles e' perigoso e nao havia medicao
+pra separar os dois.
+
+DESDE 2026-09-15 A SEPARACAO E' FEITA PELA DIRECAO (decisao do usuario). O caso
+perigoso e' nomeavel sem medicao nenhuma -- e' o das direcoes OPOSTAS, e so'
+ele continua HIGH. Mesma direcao em familias diferentes passa a combinar como
+MEDIUM: a dependencia existe, paga penalidade, e o erro que sobra e' o
+conservador (anuncia menos chance do que o bilhete tem). Mesma familia no mesmo
+jogo segue fora, que e' outro problema: "Over 2.5" e "Over 3.5" da mesma
+partida sao a mesma aposta escrita duas vezes.
 
 UNKNOWN NAO E' LOW
 ------------------
@@ -71,11 +78,25 @@ def classificar_par(a: dict, b: dict) -> tuple[str, str]:
         return UNKNOWN, "perna sem jogo identificado"
 
     if jogo_a == jogo_b:
+        # MESMA FAMILIA, MESMO JOGO: continua fora. "Over 2.5" e "Over 3.5" do
+        # mesmo jogo nao sao duas apostas, sao a mesma aposta duas vezes -- uma
+        # contem a outra, e multiplicar as odds anuncia um bonus que nao existe.
         if fam_a == fam_b:
             return HIGH, "mesma partida e mesma familia de mercado"
+        # DIRECOES OPOSTAS: o unico caso anti-conservador, e o motivo de o mesmo
+        # jogo ter sido bloqueado inteiro em 11/09. Over numa ponta e Under na
+        # outra ganham juntas MENOS vezes do que o produto das odds diz, entao o
+        # bilhete anunciaria mais chance do que tem. Fica fora.
         if _direcao(a) != _direcao(b) and "outra" not in (_direcao(a), _direcao(b)):
             return HIGH, "mesma partida em direcoes opostas (Over contra Under)"
-        return HIGH, "mesma partida: as duas pernas dependem do mesmo jogo"
+        # MESMA DIRECAO, FAMILIAS DIFERENTES: liberado em 2026-09-15, decisao do
+        # usuario, e o erro aqui cai pro lado certo. Duas pernas que pedem a
+        # mesma coisa do jogo ("o jogo abriu") sao positivamente correlacionadas:
+        # ganham juntas MAIS vezes do que o produto das odds diz, entao a
+        # probabilidade publicada e' CONSERVADORA. MEDIUM e nao LOW porque a
+        # dependencia existe e continua sem medicao propria -- ela paga a
+        # penalidade de correlacao em vez de passar por sorteio independente.
+        return MEDIUM, "mesma partida, mesma direcao (dependencia conservadora)"
 
     if component.times(a) & component.times(b):
         return HIGH, "a mesma equipe sustenta as duas pernas"

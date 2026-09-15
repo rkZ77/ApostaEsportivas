@@ -80,7 +80,7 @@ def test_tudo_roda_as_etapas_do_pipeline_diario():
     que ja saiu em VIP ou Free, entao ele precisa rodar depois dos dois.
     """
     assert [c.etapa for c in main.COMANDOS if c.etapa] == [
-        "DADOS", "ESTATISTICA DE JOGADOR", "ODDS", "PICKS VIP", "DICA DO DIA",
+        "DADOS", "ESTATISTICA DE JOGADOR", "ODDS", "DICA DO DIA", "PICKS VIP",
         "MÚLTIPLA", "BINGO DO DIA", "ALAVANCAGEM", "FALTAS",
         "PICKS DE JOGADOR", "PICK BOOST", "RESULTADOS",
         # ESTATISTICA DE JOGADOR entrou em 28/08 e, no mesmo dia, foi movida
@@ -95,6 +95,10 @@ def test_tudo_roda_as_etapas_do_pipeline_diario():
         # quando defesas era um motor inteiro. Virou o Player Stats com os
         # metodos marcados `diario` no catalogo (defesas, chutes no alvo,
         # chutes), e a etapa passou a chamar `playerstats-diario`.
+        #
+        # DICA DO DIA ANTES DE PICKS VIP desde 15/09: a Free e' um pick so' por
+        # dia e e' a isca de aquisicao, entao ela escolhe primeiro. O VIP nao
+        # perde jogo nenhum -- so' nao repete a aposta identica.
     ]
 
 

@@ -2803,13 +2803,22 @@ function PlacarDoProduto({ source, tom }: { source: string; tom: string }) {
           </div>
         ))}
       </div>
-      {/* A LINHA DA SEQUÊNCIA SAIU (01/09/2026, pedido do usuário).
-        * Ela dizia "3 reds seguidos" no cabeçalho de cada produto. Sequência
-        * curta é ruído: três resultados não dizem nada sobre um motor medido
-        * em centenas, e a mesma linha que anima numa maré boa assusta numa
-        * ruim, sem que nenhuma das duas signifique o que aparenta. O placar
-        * logo acima continua ali, com a amostra inteira, que é o número que
-        * responde de verdade. */}
+      {/* A SEQUÊNCIA VOLTOU EM 15/09/2026, e só metade dela.
+        *
+        * Ela tinha saído em 01/09 porque dizia "3 reds seguidos" no cabeçalho
+        * de cada produto: sequência curta é ruído, e a mesma linha que anima
+        * numa maré boa assusta numa ruim. O pedido de agora é outro, e a
+        * palavra do usuário foi essa: "quanto tempo estamos no green".
+        *
+        * Então só a sequência VERDE aparece, e só a partir de dois: o red
+        * seguido continua sem linha nenhuma, que era o problema de 01/09. O
+        * placar inteiro fica logo acima, com a amostra toda, pra quem quiser o
+        * número que responde de verdade. */}
+      {dados.streak_type === 'green' && Number(dados.streak ?? 0) >= 2 && (
+        <p className="text-[10px] mt-1.5 text-accent-ink font-semibold">
+          {dados.streak} picks seguidos no green
+        </p>
+      )}
       <p className={`text-[10px] mt-1.5 ${tom}`}>
         Todos os picks já liquidados deste produto, com o mesmo plano de stake do placar público.
       </p>

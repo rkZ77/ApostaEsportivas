@@ -24,7 +24,6 @@ from services.pick_engine import data_validation as dv
 from services.pick_engine import competition_profile as cp
 from services.pick_engine import context_gate
 from services.pick_engine import stats_model
-from services.pick_engine import ranking
 from services.referee_stats_service import RefereeStatsService
 from services.standings_service import StandingsService
 from services.pick_engine import competition_rules_store
@@ -54,121 +53,36 @@ def _has_today_dica(cur) -> bool:
     return cur.fetchone()[0] >= 1
 
 
-def _today_vip_used_market_groups(cur) -> set:
-    """Grupos de correlacao (ranking.correlation_group) de todo market_type
-    ja usado em QUALQUER picks_vip hoje -- bloqueio GLOBAL, nao so no mesmo
-    fixture: a Free (Dica do Dia) roda DEPOIS do VIP em cmd_tudo() (ver
-    main.py), entao nao pode repetir pro assinante gratuito o mesmo mercado
-    que ja saiu como VIP no dia, em jogo nenhum (decisao explicita do
-    usuario -- antes so bloqueava (fixture_id, market_type) igual, deixando
-    o mesmo mercado repetir livremente em outro jogo). correlation_group()
-    agrupa "cards"/"handicap_cards" etc. como a mesma familia, pra nao
-    driblar o bloqueio so trocando a estrutura da aposta sobre o mesmo dado
-    bruto. Multipla/Alavancagem rodam DEPOIS da Free e mantem a regra
-    propria (fixture+mercado, contra VIP e Free) -- fora de escopo aqui."""
-    cur.execute(f"SELECT market_type FROM picks_vip WHERE match_date = {HOJE_BR}")
-    return {ranking.correlation_group(r[0]) for r in cur.fetchall() if r[0]}
+def _picks_vip_de_hoje(cur) -> set:
+    """{(fixture_id, market_type, linha)} do VIP de hoje -- o UNICO veto que
+    sobrou da exclusividade.
 
+    ATE 2026-09-15 AQUI HAVIA UMA ESCADA. O VIP rodava primeiro, reservava a
+    partida, e a Free escolhia entre tres degraus de sobra (jogo livre com
+    mercado novo, jogo livre com mercado repetido, jogo do VIP com outro
+    mercado). A escada fazia exatamente o que prometia, e era esse o problema:
+    a Free e' UM pick por dia e e' a isca de aquisicao, entao ela precisava ser
+    o melhor pick do dia -- e por construcao ela era o melhor pick RESTANTE.
 
-def _vip_ja_rodou_hoje(cur) -> bool:
-    """O VIP ja passou hoje? A exclusividade INTEIRA da Free depende disso.
-
-    Toda a escada de _nivel_repeticao le `picks_vip` pra saber o que ja esta
-    reservado. Se a Free rodar ANTES do VIP, ela le uma tabela vazia, conclui
-    que todo jogo esta livre e pode publicar exatamente o pick que o VIP vai
-    publicar em seguida.
-
-    Foi o que aconteceu em producao em 17/08/2026: Internacional x Remo,
-    "Ambas as Equipes Marcam Yes @1.90", IDENTICO nos dois -- mesma odd, mesma
-    probabilidade (60.19%), mesma confianca. O pick free foi gravado 19:26:44 e
-    o VIP 19:27:21. Os dois pipelines rodaram concorrentes (o /admin dispara
-    cada um como subprocesso separado), entao a ordem de cmd_tudo() -- que roda
-    VIP primeiro e em que todo o desenho se apoia -- nao valeu.
-
-    "VIP nao rodou" e' diferente de "VIP rodou e nao achou nada": o segundo e'
-    um dia legitimo em que a Free pode publicar a vontade. Quem separa os dois
-    e' `engine_decisions`, que o VIP grava por fixture avaliado mesmo quando nao
-    aprova pick nenhum (ver decision_log.log_decision).
-
-    Falha aberto de proposito: se a tabela nao existir (banco antigo), devolve
-    True e a Free roda como antes. O gate atomico do INSERT continua protegendo
-    o caso mais comum, que e' o VIP ter commitado primeiro.
-    """
-    try:
-        cur.execute(
-            f"""SELECT 1 FROM engine_decisions
-                 WHERE pipeline = 'VIP_ENGINE' AND created_at::date = {HOJE_BR}
-                 LIMIT 1"""
-        )
-        return cur.fetchone() is not None
-    except Exception as e:
-        print(f"[DICA_ENGINE] Aviso: nao deu pra confirmar se o VIP ja rodou ({e}).")
-        return True
-
-
-def _today_vip_por_fixture(cur) -> dict:
-    """{fixture_id: {"grupos": {...}, "picks": {(market_type, line), ...}}} do
-    VIP de hoje.
-
-    O VIP tem prioridade sobre o jogo (decisao do usuario, 2026-08-05): ele
-    roda primeiro em cmd_tudo() e o jogo que usar fica reservado. Este mapa e
-    o que permite a Free saber DE QUE forma cada jogo ja foi usado, e nao so
-    que foi -- os dois graus de repeticao pesam diferente (ver _nivel_repeticao).
+    Invertida a ordem (ver COMANDOS em main.py), a Free escolhe primeiro e nao
+    tem nada pra evitar. Este conjunto existe so' pelo caso em que o VIP rodou
+    antes assim mesmo: o /admin dispara cada pipeline como subprocesso separado,
+    entao a ordem de cmd_tudo() nao e' garantia. Num dia desses a Free ainda
+    recusa o pick IDENTICO (mesmo jogo, mesmo market_type, mesma linha) -- ela
+    pode repetir o jogo do VIP e pode repetir o mercado, so' nao pode repetir a
+    aposta inteira.
     """
     cur.execute(
         f"SELECT fixture_id, market_type, line FROM picks_vip WHERE match_date = {HOJE_BR}"
     )
-    por_fixture: dict = {}
-    for fixture_id, market_type, line in cur.fetchall():
-        alvo = por_fixture.setdefault(fixture_id, {"grupos": set(), "picks": set()})
-        if market_type:
-            alvo["grupos"].add(ranking.correlation_group(market_type))
-        alvo["picks"].add((market_type, (line or "").strip().lower()))
-    return por_fixture
+    return {(fid, mt, (line or "").strip().lower())
+            for fid, mt, line in cur.fetchall()}
 
 
-# Escada de preferencia da Free sobre o jogo/mercado, do melhor pro pior.
-# Numero menor vence; empate desempata por final_score.
-NIVEL_JOGO_LIVRE_MERCADO_NOVO = 0
-NIVEL_JOGO_LIVRE_MERCADO_USADO = 1
-NIVEL_JOGO_DO_VIP_MERCADO_NOVO = 2
-# Nao existe nivel 3: repetir o pick IDENTICO do VIP e proibido, nao e ultimo
-# recurso (ver _nivel_repeticao).
-
-
-def _nivel_repeticao(pick: dict, fixture_id: int, vip_por_fixture: dict,
-                     grupos_do_vip_no_dia: set) -> int | None:
-    """Quao repetido esse candidato seria, ou None se for proibido.
-
-    Regra do usuario (2026-08-05), em ordem:
-      1. jogo que o VIP nao usou vence sempre;
-      2. sem jogo livre, pode reaproveitar um jogo do VIP com OUTRO mercado
-         ou com outra linha do MESMO mercado (ex: VIP foi goals/No, Free pode
-         ser goals/Over 1.5 no mesmo jogo);
-      3. o mesmo pick IDENTICO do VIP (mesmo market_type E mesma linha, no
-         mesmo jogo) nunca sai -- "so nao repete o mesmo pick". Sem jogo livre
-         e sem outra opcao, a Free do dia nao publica.
-
-    CORRECAO 2026-08-11: a versao anterior bloqueava toda a familia de
-    correlacao no jogo do VIP (ex: qualquer pick de 'goals' num jogo onde VIP
-    escolheu 'goals/No'). Isso contraria a intencao declarada de "so nao repete
-    o mesmo pick" -- num dia com poucos jogos e o VIP ocupando todos, a DICA
-    ficava sem candidato por um veto mais amplo do que o necessario. O unico
-    veto correto e' o pick IDENTICO (mesmo market_type + mesma linha).
-    """
-    grupo = ranking.correlation_group(pick["market_type"])
-    usado = vip_por_fixture.get(fixture_id)
-
-    if not usado:
-        return (NIVEL_JOGO_LIVRE_MERCADO_NOVO if grupo not in grupos_do_vip_no_dia
-                else NIVEL_JOGO_LIVRE_MERCADO_USADO)
-
+def _repete_pick_do_vip(pick: dict, fixture_id: int, picks_vip: set) -> bool:
+    """O candidato e' a mesma aposta que o VIP ja publicou neste jogo?"""
     linha = (pick.get("value_label") or "").strip().lower()
-    if (pick["market_type"], linha) in usado["picks"]:
-        return None  # pick identico ao do VIP: mesmo market_type E mesma linha
-    # Mesmo jogo do VIP, mas outro pick (outro mercado ou outra linha):
-    # nivel 2 (ultimo recurso), nao bloqueio.
-    return NIVEL_JOGO_DO_VIP_MERCADO_NOVO
+    return (fixture_id, pick["market_type"], linha) in picks_vip
 
 
 def _fixtures_with_odds_in_range(cur) -> list:
@@ -235,8 +149,8 @@ def _load_history(match_stats: MatchStatsService, team_id: int, season: int, lea
     return match_stats.get_all_matches_full(team_id, season, league_id, since_date=since_date)
 
 
-def _best_candidate_across_fixtures(fixtures: list, used_groups: set,
-                                    vip_por_fixture: dict | None = None) -> tuple | None:
+def _best_candidate_across_fixtures(fixtures: list,
+                                    picks_vip: set | None = None) -> tuple | None:
     """Roda o motor pra cada fixture candidato e devolve (fixture, pick,
     data_quality_score) do maior Score Final entre os que passam DICA_CONFIG,
     ou None se nenhum passar.
@@ -245,32 +159,20 @@ def _best_candidate_across_fixtures(fixtures: list, used_groups: set,
     ter limiar proprio (o `min_confidence` de 0.72 saiu) e passa a buscar o
     MELHOR pick do dia, nao o melhor pick acima de um corte extra.
 
-    Nao repetir o que o VIP ja usou hoje e' PREFERENCIA em escada, nao veto --
-    mudanca de 2026-08-05, decisao do usuario. Antes era filtro duro sobre o
-    grupo de mercado e podia zerar a Dica do dia inteiro: em 05/08 os 4 unicos
-    jogos tinham pick aprovada no DICA_CONFIG (uma delas com EV +32%) e todas
-    caiam em goals/corners/cards, os tres grupos que o VIP ja tinha consumido.
-
-    A escada (ver _nivel_repeticao), do melhor pro pior:
-      0. jogo que o VIP nao usou, mercado que nao saiu no VIP hoje;
-      1. jogo que o VIP nao usou, mercado repetido de outro jogo;
-      2. jogo do VIP, mercado de outra familia.
-    O pick identico ao do VIP nunca sai, em nenhum nivel: sem jogo livre e sem
-    outro mercado, a Free do dia simplesmente nao publica.
-
-    O VIP tem prioridade sobre o jogo porque roda primeiro em cmd_tudo() e e o
-    produto pago -- a Free e que se acomoda no que sobrou, nao o contrario.
-
-    O candidato escolhido carrega `_nivel_repeticao` pra _save_pick registrar
-    no engine_debug quando a Dica precisou descer a escada."""
-    vip_por_fixture = vip_por_fixture or {}
+    Desde 2026-09-15 esse "melhor pick do dia" e' literal: a Free roda ANTES do
+    VIP e escolhe o maior final_score de todos os jogos, sem escada e sem
+    reserva de partida. O unico candidato recusado e' o que repetiria uma
+    aposta identica ja publicada no VIP -- situacao que so' acontece quando o
+    VIP rodou antes por fora do cmd_tudo (ver _picks_vip_de_hoje)."""
+    picks_vip = picks_vip or set()
     match_stats = MatchStatsService()
     odds_service = OddsService()
     team_stats_service = TeamStatsService()
     referee_service = RefereeStatsService()
     standings_service = StandingsService()
 
-    # (nivel, -final_score) do melhor ate agora: menor tupla vence.
+    # Maior final_score ate agora. Era uma tupla (nivel, -final_score) enquanto
+    # existia a escada da exclusividade; hoje o criterio e' um so.
     melhor = None
 
     for fixture in fixtures:
@@ -366,21 +268,17 @@ def _best_candidate_across_fixtures(fixtures: list, used_groups: set,
         if not picks:
             continue
 
-        # Escada: cada candidato aprovado recebe seu nivel de repeticao e
-        # disputa por (nivel, -score). Avaliar TODOS em vez de so' o
-        # is_best_pick do fixture importa: o melhor do jogo pode ser
-        # justamente o que repete o VIP, e o segundo colocado do mesmo jogo
-        # resolver num nivel melhor.
+        # Avaliar TODOS os aprovados do jogo, e nao so' o is_best_pick dele:
+        # se o melhor do jogo for justamente o que o VIP ja publicou identico,
+        # o segundo colocado do mesmo jogo continua valendo.
         aceitos = 0
         for p in picks:
-            nivel = _nivel_repeticao(p, fixture["fixture_id"], vip_por_fixture, used_groups)
-            if nivel is None:
+            if _repete_pick_do_vip(p, fixture["fixture_id"], picks_vip):
                 continue
             aceitos += 1
-            chave = (nivel, -p["final_score"])
-            if melhor is None or chave < melhor[0]:
-                melhor = (chave, fixture, {**p, "data_quality_score": quality["score"],
-                                           "_nivel_repeticao": nivel,
+            if melhor is None or p["final_score"] > melhor[0]:
+                melhor = (p["final_score"], fixture,
+                          {**p, "data_quality_score": quality["score"],
                                            "amostra": amostra.build(
                                                home_team_id=fixture["home_team_id"],
                                                away_team_id=fixture["away_team_id"],
@@ -399,12 +297,6 @@ def _best_candidate_across_fixtures(fixtures: list, used_groups: set,
         return None
 
     _, fixture, pick, quality_score = melhor
-    if pick["_nivel_repeticao"] == NIVEL_JOGO_DO_VIP_MERCADO_NOVO:
-        print(f"[DICA_ENGINE] Nenhum jogo livre do VIP hoje · reaproveitando o jogo "
-              f"{fixture['fixture_id']} com outro mercado ({pick['market_type']}).")
-    elif pick["_nivel_repeticao"] == NIVEL_JOGO_LIVRE_MERCADO_USADO:
-        print(f"[DICA_ENGINE] Jogo livre, mas o mercado ({pick['market_type']}) ja saiu "
-              f"no VIP de hoje em outro jogo.")
     return fixture, pick, quality_score
 
 
@@ -427,13 +319,9 @@ def _save_pick(cur, fixture: dict, pick: dict, data_quality_score: float | None)
     # liga). Ver services/engine_audit/amostra.py.
     if pick.get("amostra"):
         engine_debug_data["amostra"] = pick["amostra"]
-    # Em que degrau da escada esta pick nasceu (ver _nivel_repeticao). Sem
-    # isso nao da' pra medir depois se o reaproveitamento de jogo do VIP virou
-    # regra em vez de excecao -- que e' o sinal de que o dia esta curto demais
-    # de jogos, nao de que a Free ficou pior.
-    nivel = pick.get("_nivel_repeticao")
-    if nivel is not None:
-        engine_debug_data["nivel_repeticao_vip"] = nivel
+    # `nivel_repeticao_vip` sai daqui em 2026-09-15, junto com a escada que ele
+    # media. Os picks antigos continuam com a chave gravada -- quem le
+    # engine_debug le por .get(), entao o historico nao quebra.
     engine_debug = json.dumps(
         engine_debug_data,
         default=str, ensure_ascii=False,
@@ -442,7 +330,7 @@ def _save_pick(cur, fixture: dict, pick: dict, data_quality_score: float | None)
     # INSERT ... SELECT ... WHERE NOT EXISTS, e nao VALUES: a checagem contra
     # `picks_vip` acontece DENTRO da mesma instrucao, no momento do commit.
     #
-    # A escada de _nivel_repeticao ja recusa o pick identico ao do VIP, mas ela
+    # `_repete_pick_do_vip` ja recusa o pick identico ao do VIP, mas ele
     # le picks_vip no COMECO da rodada -- e' select-then-insert, e nao enxerga um
     # VIP que commitou no meio do caminho. O /admin dispara cada pipeline como
     # subprocesso separado, entao os dois correm juntos de verdade.
@@ -457,8 +345,9 @@ def _save_pick(cur, fixture: dict, pick: dict, data_quality_score: float | None)
     # 2026-07-25") e que este pipeline nunca recebeu.
     #
     # Fecha o caso do VIP commitar PRIMEIRO. O caso oposto (Free antes do VIP)
-    # nao tem resposta em SQL -- ninguem pode checar contra uma linha que ainda
-    # nao existe -- e por isso _vip_ja_rodou_hoje() barra a rodada la em cima.
+    # e' o normal desde 2026-09-15 e quem o resolve e' o gate espelhado no
+    # vip_pipeline.py -- ninguem pode checar contra uma linha que ainda nao
+    # existe, entao a checagem tem que existir dos DOIS lados.
     cur.execute(f"""
         INSERT INTO picks_free
             (fixture_id, match_date, home_team, away_team,
@@ -538,19 +427,10 @@ def run_dica_engine():
         conn.close()
         return
 
-    # O VIP reserva a partida (decisao do usuario, 2026-08-05) e a Free le
-    # `picks_vip` pra saber o que sobrou. Rodar antes dele nao produz uma Free
-    # pior -- produz uma Free cuja exclusividade nao foi verificada contra nada.
-    # Nao publicar e' melhor que publicar o mesmo pick que o VIP vai vender.
-    if not _vip_ja_rodou_hoje(cur):
-        motivo = ("VIP ainda nao rodou hoje: sem ele nao da pra saber que jogo/mercado "
-                  "esta reservado, e a Free nao pode publicar sem essa checagem")
-        print(f"[DICA_ENGINE] {motivo}.")
-        log_run("DICA_ENGINE", motivo)
-        cur.close()
-        conn.close()
-        return
-
+    # AQUI HAVIA UM GATE QUE BARRAVA A FREE ENQUANTO O VIP NAO TIVESSE RODADO.
+    # Ele existia porque a escada lia `picks_vip` pra saber o que estava
+    # reservado, e ler uma tabela vazia era concluir que o dia inteiro estava
+    # livre. Sem escada, nao ha' o que esperar: a Free e' a primeira a escolher.
     fixtures = _fixtures_with_odds_in_range(cur)
     if not fixtures:
         print("[DICA_ENGINE] Nenhum fixture com odd na faixa hoje.")
@@ -560,18 +440,15 @@ def run_dica_engine():
 
     print(f"[DICA_ENGINE] Avaliando {len(fixtures)} fixtures (motor deterministico)...")
 
-    used_groups = _today_vip_used_market_groups(cur)
-    vip_por_fixture = _today_vip_por_fixture(cur)
-    if vip_por_fixture:
-        livres = [f for f in fixtures if f["fixture_id"] not in vip_por_fixture]
-        print(f"[DICA_ENGINE] VIP ja usou {len(vip_por_fixture)} jogo(s) hoje · "
-              f"{len(livres)} de {len(fixtures)} continuam livres "
-              f"({len(used_groups)} grupo(s) de mercado ja usados)")
+    picks_vip = _picks_vip_de_hoje(cur)
+    if picks_vip:
+        print(f"[DICA_ENGINE] O VIP rodou antes da Free hoje ({len(picks_vip)} pick(s)) · "
+              f"o jogo e o mercado dele continuam liberados, so' a aposta identica nao sai")
 
-    result = _best_candidate_across_fixtures(fixtures, used_groups, vip_por_fixture)
+    result = _best_candidate_across_fixtures(fixtures, picks_vip)
     if not result:
         motivo = ("nenhum candidato passou no DICA_CONFIG, ou o que sobrou repetiria "
-                  "um pick que o VIP ja publicou hoje")
+                  "uma aposta identica a que o VIP ja publicou hoje")
         print(f"[DICA_ENGINE] {motivo}.")
         log_run("DICA_ENGINE", motivo)
         cur.close()

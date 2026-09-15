@@ -8,6 +8,7 @@ import textwrap
 import traceback
 
 from utils.db_utils import get_connection
+from utils.data_br import HOJE_BR
 from services.fixtures_service import FixturesService
 from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
@@ -45,6 +46,44 @@ def _load_history(match_stats: MatchStatsService, team_id: int, season: int, lea
     if cp.uses_all_competitions_history(league_id):
         return match_stats.get_last_n_all_competitions(team_id, since_date=since_date)
     return match_stats.get_all_matches_full(team_id, season, league_id, since_date=since_date)
+
+
+def _picks_free_de_hoje(cur) -> set:
+    """{(fixture_id, market_type, linha)} da Free de hoje.
+
+    A EXCLUSIVIDADE INVERTEU EM 2026-09-15. Ate' entao o VIP rodava primeiro e
+    reservava a partida; hoje quem escolhe primeiro e' a Free, porque ela e' um
+    pick so' por dia e e' a isca de aquisicao -- ela tem que ser o melhor pick
+    do dia, nao o melhor pick restante (ver COMANDOS em main.py).
+
+    O VIP nao perde jogo nenhum com isso: ele continua avaliando todas as
+    fixtures, INCLUSIVE a que a Free pegou, e continua publicando um pick por
+    partida. O unico candidato que ele recusa e' a aposta IDENTICA -- mesmo
+    jogo, mesmo market_type, mesma linha. Mercado repetido em outro jogo, ou
+    outra linha no mesmo jogo, sai normalmente.
+    """
+    cur.execute(
+        f"SELECT fixture_id, market_type, line FROM picks_free WHERE match_date = {HOJE_BR}"
+    )
+    return {(fid, mt, (line or "").strip().lower())
+            for fid, mt, line in cur.fetchall()}
+
+
+def _escolher_pick(picks: list, fixture_id: int, picks_free: set) -> dict | None:
+    """O melhor pick do jogo que nao repita a aposta publicada na Free.
+
+    Percorre os aprovados na ordem do ranking em vez de olhar so' o
+    `is_best_pick`: quando o melhor do jogo e' justamente o da Free, o segundo
+    colocado do mesmo jogo continua sendo um pick VIP legitimo.
+    """
+    ordenados = ([p for p in picks if p.get("is_best_pick")]
+                 + [p for p in picks if not p.get("is_best_pick")])
+    for p in ordenados:
+        linha = (p.get("value_label") or "").strip().lower()
+        if (fixture_id, p["market_type"], linha) in picks_free:
+            continue
+        return p
+    return None
 
 
 def _build_signals(last10_home, last10_away, home_team_id, away_team_id, league_id,
@@ -113,7 +152,15 @@ def _save_pick(cur, fixture: dict, pick: dict, data_quality_score: float | None)
             confidence, ev, probability, reasoning,
             stake_pct, stake_units, engine_debug,
             created_at
-        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+        )
+        SELECT %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW()
+         WHERE NOT EXISTS (
+             SELECT 1 FROM picks_free f
+              WHERE f.match_date  = %s
+                AND f.fixture_id  = %s
+                AND f.market_type = %s
+                AND LOWER(TRIM(COALESCE(f.line, ''))) = LOWER(TRIM(COALESCE(%s, '')))
+         )
         ON CONFLICT (fixture_id) DO NOTHING
     """, (
         fixture["fixture_id"], fixture["match_datetime"].date(),
@@ -123,6 +170,14 @@ def _save_pick(cur, fixture: dict, pick: dict, data_quality_score: float | None)
         pick["market_type"], pick["market_id"],
         pick["confidence"], pick["ev"], pick["taxa_real"], reasoning,
         stake_pct, stake_units, engine_debug,
+        # Os quatro do WHERE NOT EXISTS acima. A checagem contra `picks_free`
+        # roda DENTRO da mesma instrucao, no momento do commit: `picks_free`
+        # e' lido uma vez no comeco da rodada (select-then-insert), e o /admin
+        # dispara cada pipeline como subprocesso separado, entao a Free pode
+        # commitar no meio do laco do VIP. E' o espelho exato do gate que a
+        # Free ja tinha contra o VIP desde o pick duplicado de 17/08/2026.
+        fixture["match_datetime"].date(), fixture["fixture_id"],
+        pick["market_type"], pick["value_label"],
     ))
     return cur.rowcount > 0
 
@@ -154,6 +209,8 @@ def run_vip_engine():
     # DESCONHECIDO pro formato dessas competicoes, que e' o comportamento
     # de antes -- nada quebra, so' se sabe menos.
     competition_rules_store.carregar(cur)
+    # A aposta que a Free ja publicou hoje -- lida UMA vez, antes do laco.
+    picks_free = _picks_free_de_hoje(cur)
     saved = 0
     fixtures_salvos: list = []
 
@@ -249,7 +306,12 @@ def run_vip_engine():
             if not picks:
                 continue
 
-            best = next((p for p in picks if p.get("is_best_pick")), picks[0])
+            best = _escolher_pick(picks, fixture["fixture_id"], picks_free)
+            if best is None:
+                print(f"[VIP_ENGINE] Fixture {fixture['fixture_id']}: os "
+                      f"{len(picks)} candidato(s) aprovados repetiriam a aposta "
+                      f"que a Free ja publicou neste jogo.")
+                continue
             best = {**best, "data_quality_score": quality["score"],
                     "amostra": amostra.build(
                         home_team_id=fixture["home_team_id"],

@@ -178,15 +178,57 @@ def test_perna_sem_edge_nao_entra():
 
 
 # ------------------------------------------------------------------ CORRELACAO
-def test_mesmo_jogo_e_correlacao_alta_e_nao_combina():
+# O MESMO JOGO DEIXOU DE SER UM BLOCO SO' (2026-09-15, decisao do usuario).
+#
+# Entre 11/09 e 15/09 qualquer par da mesma partida era HIGH. O bloqueio existia
+# por um caso so' -- Over contra Under, o unico em que o produto das odds
+# anuncia MAIS chance do que o bilhete tem -- e levava junto o caso oposto, em
+# que a dependencia e' favoravel e o produto erra pro lado conservador.
+#
+# Agora quem separa e' a direcao, e o teto de equipe deixou de duplicar a regra
+# (ver o comentario em combination._excludente).
+
+def test_mesmo_jogo_na_mesma_direcao_combina():
+    """Duas pernas que pedem a mesma coisa do jogo: a dependencia e' favoravel,
+    entao a probabilidade publicada sai conservadora, nunca inflada."""
     nivel, _ = correlation.classificar_par(
         perna(1, market_type="goals"), perna(1, market_type="corners"))
-    assert nivel == correlation.HIGH
+    assert nivel == correlation.MEDIUM
 
     avaliada = combination.avaliar([perna(1, market_type="goals"),
                                     perna(1, market_type="corners")])
+    assert avaliada["aprovada"], avaliada["motivos"]
+
+
+def test_mesmo_jogo_em_direcoes_opostas_nao_combina():
+    """O caso que motivou o bloqueio de 11/09, e o unico que continua fora."""
+    a = perna(1, market_type="goals")
+    b = perna(1, market_type="corners")
+    b["_direction"] = "under"
+    nivel, _ = correlation.classificar_par(a, b)
+    assert nivel == correlation.HIGH
+
+    avaliada = combination.avaliar([a, b])
     assert not avaliada["aprovada"]
     assert reasons.NO_MULTIPLA_HIGH_CORRELATION in avaliada["motivos"]
+
+
+def test_mesmo_jogo_e_mesma_familia_nao_combina():
+    """"Over 2.5" e "Over 3.5" da mesma partida sao a mesma aposta escrita duas
+    vezes -- uma contem a outra, e multiplicar as odds anuncia um bonus que nao
+    existe. Continua fora, e por motivo proprio."""
+    nivel, _ = correlation.classificar_par(
+        perna(1, market_type="goals", linha="Over 1.5"),
+        perna(1, market_type="goals", linha="Over 2.5"))
+    assert nivel == correlation.HIGH
+
+
+def test_o_teto_de_equipe_ainda_pega_partidas_diferentes():
+    """Ele conta PARTIDAS distintas desde 15/09, nao pernas · a mesma equipe
+    sustentando duas partidas do dia continua bloqueada."""
+    avaliada = combination.avaliar([perna(1, home=100, away=101),
+                                    perna(2, market_type="corners", home=100, away=202)])
+    assert not avaliada["aprovada"]
 
 
 def test_a_mesma_equipe_nos_dois_lados_e_correlacao_alta():
