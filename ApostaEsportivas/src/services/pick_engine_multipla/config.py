@@ -269,11 +269,22 @@ LIMITE_DE_EXPOSICAO_POR_FAMILIA = 2
 #: que la' o erro custa uma aposta; aqui ele multiplica com o da outra perna,
 #: e o bilhete inteiro morre junto.
 #:
-#: O QUE ISTO NAO E': nao e' um veredito sobre escanteios como produto -- eles
-#: continuam saindo no VIP e no ao vivo, onde a medicao e' outra. O gate diz
-#: que uma familia descalibrada nao pode entrar em aposta que exige TODAS as
-#: pernas certas. Quando a calibragem de escanteios for corrigida, isto aqui e'
-#: uma tupla vazia de novo.
+#: O QUE ISTO NAO E': nao e' um veredito sobre escanteios como produto, e a
+#: medicao por DIRECAO deixa isso explicito (ledger, pre-jogo inteiro):
+#:
+#:     escanteios OVER    61 pernas   65,0% previsto   63,9% real   +4,80u
+#:     escanteios UNDER   53 pernas   68,3% previsto   50,9% real  -10,69u
+#:
+#: Ou seja: fora do bilhete, o Over de escanteios e' bem calibrado e ganha
+#: dinheiro -- quem erra e' o Under, e erra +17,4 pontos. Escanteios seguem
+#: saindo no VIP e no ao vivo (onde, aliada, a familia e' a que mais lucra).
+#:
+#: O bloqueio aqui e' da FAMILIA e nao da direcao porque dentro da multipla as
+#: duas pontas perderam (Over 12 pernas -1,88u, Under 14 pernas -6,24u) e
+#: nenhuma das duas, sozinha, tem amostra pra decidir. Se a proxima medicao
+#: mostrar o Over se sustentando aqui tambem, o certo e' trocar esta tupla por
+#: um bloqueio direcional -- e quando a calibragem do Under for corrigida, por
+#: uma tupla vazia.
 FAMILIAS_BLOQUEADAS = ("corners",)
 
 
