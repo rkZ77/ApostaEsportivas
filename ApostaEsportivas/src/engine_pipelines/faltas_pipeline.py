@@ -609,7 +609,20 @@ def _avaliar_fixture(fixture: dict, match_stats: MatchStatsService,
             {"media_faltas": media_arbitro, "jogos": n_arbitro}
             if analise.get("usou_arbitro") else None),
         "context_gate": analise.get("tie_effect"),
-    }
+    # `, None` E' O SEGUNDO ITEM DA TUPLA, E FALTAVA (2026-09-15). Em 11/09 a
+    # funcao passou a devolver (candidato, motivo) pra o log poder nomear o
+    # descarte, e todos os `return None, motivo` foram escritos -- menos este,
+    # o do SUCESSO, que continuou devolvendo o dicionario sozinho. O chamador
+    # faz `c, motivo = _avaliar_fixture(...)`, entao desempacotar um dict de
+    # vinte chaves em duas variaveis levantava "too many values to unpack
+    # (expected 2)", o except registrava "erro ao avaliar o fixture" e o jogo
+    # era descartado.
+    #
+    # Efeito: o motor de faltas so' conseguia REJEITAR. O ultimo pick de
+    # faltas em PROD e' de 09/09, dois dias antes da mudanca, e em 12/09 o
+    # log tem quatro fixtures morrendo com essa excecao -- as quatro que
+    # teriam virado pick.
+    }, None
 
 
 def _explicar(c: dict) -> str:
