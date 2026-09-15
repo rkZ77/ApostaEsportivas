@@ -15,8 +15,12 @@ from market_form import frase_da_serie
 
 
 def _serie(op="over", line=26.5, greens=4, resolved=5, average=30.6,
-           label="Chutes"):
+           label="Chutes", decided=None):
+    # `decided` = jogos que DECIDIRAM (sem o empate exato na linha). Quando o
+    # teste nao fala de push os dois numeros sao iguais, que e' o caso de toda
+    # linha de meio ponto.
     return {"op": op, "line": line, "greens": greens, "resolved": resolved,
+            "decided": resolved if decided is None else decided,
             "average": average, "label": label}
 
 
@@ -104,3 +108,18 @@ def test_rotulo_desconhecido_nao_quebra_a_frase():
     """Contador novo sem unidade mapeada sai sem a palavra, nunca com lixo."""
     f = frase_da_serie("Time", _serie(label="Contador Novo"), "home")
     assert f is not None and "passou de 26.5 em 4" in f
+
+
+def test_o_empate_na_linha_sai_do_denominador_da_frase():
+    """Linha redonda (2026-09-15). Em "Menos de 3.0" o jogo de exatamente 3
+    gols devolve a aposta: nao e' acerto nem fracasso.
+
+    O caso real: CRB x Sport, 10 jogos em casa com 3 GREEN, 3 PUSH e 4 RED. A
+    frase dizia "em 3 dos ultimos 10" e a porcentagem ao lado dizia 30%,
+    enquanto o motor tinha decidido com 3 de 7 -- o mesmo modal contando duas
+    historias sobre a mesma serie."""
+    f = frase_da_serie("CRB", _serie(op="under", line=3.0, greens=3,
+                                      resolved=10, decided=7, average=3.2,
+                                      label="Gols"), "home")
+    assert "em 3 dos últimos 7 jogos em casa" in f
+    assert "dos últimos 10" not in f

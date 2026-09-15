@@ -193,15 +193,33 @@ def resumo(itens: list) -> dict:
 
     Funcao propria, e nao um trecho no fim de `serie_do_mercado`, porque a regra
     que sustenta os dois numeros e' a mesma e nao pode divergir: jogo sem dado
-    nao entra na conta em nenhuma das duas pontas (taxa e media)."""
+    nao entra na conta em nenhuma das duas pontas (taxa e media).
+
+    O PUSH SAI DO DENOMINADOR (2026-09-15). Ele estava dentro, e o motor sempre
+    o tirou (`stats_model.weighted_rate`: `hit_fn` devolve None no empate exato
+    e o jogo nao conta nem a favor nem contra). Duas contas diferentes da mesma
+    serie, lado a lado no mesmo modal: no pick Free de 15/09 (CRB x Sport, Gols
+    Menos de 3.0) o card dizia "3 GREEN em 10" -- 30% -- enquanto os 10 jogos
+    eram 3 GREEN, 3 PUSH e 4 RED, ou seja 3 de 7.
+
+    E' a leitura certa porque descreve o que teria acontecido com o dinheiro:
+    num Under 3.0 o jogo de exatamente 3 gols devolve a aposta. Conta-lo como
+    fracasso e' tao errado quanto conta-lo como acerto -- foi por isso que ele
+    saiu da conta do motor em 2026-07-25.
+
+    `resolved` continua sendo todo jogo com resultado (e' o tamanho da serie
+    desenhada, PUSH incluso, cinza); `decided` e' o denominador da taxa."""
     resolvidos = [i for i in itens if i["result"] is not None]
-    verdes = sum(1 for i in resolvidos if i["result"] == settlement.GREEN)
+    decididos = [i for i in resolvidos if i["result"] != settlement.PUSH]
+    verdes = sum(1 for i in decididos if i["result"] == settlement.GREEN)
     com_valor = [i["value"] for i in itens if i["value"] is not None]
     return {
         "games": len(itens),
         "resolved": len(resolvidos),
+        "decided": len(decididos),
+        "pushes": len(resolvidos) - len(decididos),
         "greens": verdes,
-        "hit_rate": round(verdes / len(resolvidos), 4) if resolvidos else None,
+        "hit_rate": round(verdes / len(decididos), 4) if decididos else None,
         "average": round(sum(com_valor) / len(com_valor), 2) if com_valor else None,
     }
 
@@ -329,7 +347,10 @@ def frase_da_serie(time: str, serie: dict, mando: str | None = None) -> str | No
     favoravel seria a mesma coisa que o motor faz de errado quando publica a
     taxa otimista e esconde as estimativas que discordam.
     """
-    resolvidos = serie.get("resolved") or 0
+    # `decided`, e nao `resolved`: o empate exato na linha devolve a aposta e
+    # ficou fora da taxa em resumo() -- a frase tem que contar a mesma coisa
+    # que a porcentagem ao lado dela, senao o modal se contradiz de novo.
+    resolvidos = serie.get("decided") or 0
     if not resolvidos:
         return None
     verdes = serie.get("greens") or 0
