@@ -427,9 +427,10 @@ VIP_CONFIG = PickEngineConfig(
 # corte de confianca mais alto que o do VIP e' incompativel com isso: ele nao
 # torna a Free mais segura, so' a impede de ver o melhor candidato disponivel.
 #
-# O que separa Free de VIP agora nao e' mais um limiar, e' a EXCLUSIVIDADE: o
-# VIP roda primeiro e reserva a partida, e a Free escolhe o melhor do que
-# sobrou (ver dica_pipeline._nivel_repeticao). `max_odd` fica em 2.00 so' pra
+# O que separa Free de VIP agora nao e' mais um limiar nem a exclusividade: em
+# 2026-09-15 a ordem inverteu e a Free passou a escolher PRIMEIRO, sem escada
+# (ver dica_pipeline._picks_vip_de_hoje). O que sobra separando os dois e' a
+# faixa de odd e os tetos de cauda daqui. `max_odd` fica em 2.00 so' pra
 # casar com o teto da faixa -- no VIP ele e' 15.0 porque la' o teto de sanidade
 # e o da faixa sao coisas separadas por historico, mas a faixa corta antes nos
 # dois, entao os dois pipelines rejeitam exatamente as mesmas odds.

@@ -549,8 +549,11 @@ _PASSO_DO_COMANDO = {
 _TUDO_STEPS_FALLBACK = [
     # `player_stats` ANTES de `capturar_odds` desde 28/08, por pedido do
     # usuario · a razao esta' no registro do motor, que e' a fonte.
+    # `gerar_free` ANTES de `gerar_vip` desde 15/09: a Free e' um pick so' por
+    # dia e e' a isca de aquisicao, entao ela escolhe primeiro. Mesma coisa:
+    # a razao esta' no registro do motor, que e' a fonte.
     "atualizar_jogos", "player_stats", "capturar_odds",
-    "gerar_vip", "gerar_free", "gerar_multipla", "gerar_bingo", "gerar_alavancagem",
+    "gerar_free", "gerar_vip", "gerar_multipla", "gerar_bingo", "gerar_alavancagem",
     "gerar_faltas", "gerar_playerstats", "gerar_pickboost",
     "atualizar_resultados",
 ]

@@ -1018,12 +1018,24 @@ COMANDOS: tuple = (
     Comando("odds", "Capturar odds",
             "Coleta odds pré-jogo",
             lambda *a: cmd_odds(), etapa="ODDS"),
-    Comando("vip", "Gerar picks VIP (motor)",
-            "Gera picks VIP do dia",
-            lambda *a: cmd_vip(), etapa="PICKS VIP"),
+    # A FREE RODA ANTES DO VIP (2026-09-15, decisao do usuario).
+    #
+    # De 2026-08-05 ate aqui era o contrario, e a razao era a exclusividade: o
+    # VIP reservava a partida e a Free descia uma escada no que sobrasse. O
+    # custo dessa ordem e' que a Free -- que e' UM pick por dia, e e' a isca de
+    # aquisicao -- nunca era o melhor pick do dia por construcao, e sim o melhor
+    # entre os restos.
+    #
+    # A inversao devolve pra Free a primeira escolha. O VIP nao perde jogo: ele
+    # publica um pick por fixture e continua avaliando TODAS, inclusive a que a
+    # Free pegou -- so' nao repete o pick IDENTICO (mesmo market_type e mesma
+    # linha no mesmo jogo). Ver a escada removida em dica_pipeline.py.
     Comando("dica", "Gerar pick Free (motor)",
             "Gera pick free (Dica do Dia)",
             lambda *a: cmd_dica(), etapa="DICA DO DIA"),
+    Comando("vip", "Gerar picks VIP (motor)",
+            "Gera picks VIP do dia",
+            lambda *a: cmd_vip(), etapa="PICKS VIP"),
     Comando("multiplas", "Gerar múltipla (motor)",
             "Gera múltipla do dia",
             lambda *a: cmd_multiplas(), etapa="MÚLTIPLA"),

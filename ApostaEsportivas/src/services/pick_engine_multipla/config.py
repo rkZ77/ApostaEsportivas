@@ -64,12 +64,19 @@ TETO_ABSOLUTO_POR_DIA = 5
 
 
 # ------------------------------------------------------------ PERNAS POR BILHETE
-TAMANHOS_PERMITIDOS = (2, 3)      # 4+ so' em modo especial, ver TAMANHO_MAXIMO_ESPECIAL
-TAMANHO_MAXIMO_ESPECIAL = 4
+#: DUAS PERNAS, PONTO (2026-09-15, decisao do usuario). A multipla junta duas
+#: pernas -- do mesmo jogo ou de jogos diferentes, mas duas.
+#:
+#: O 3 saiu porque cada perna a mais e' um fator multiplicativo de risco sobre
+#: um produto que so' paga se TODAS baterem: com pernas de ~70%, duas dao ~49%
+#: e tres dao ~34%. O MIN_LEG_SCORE_PARA_TRIPLA existia justamente pra segurar
+#: isso, e segurar um formato e' mais fragil do que nao ter o formato.
+TAMANHOS_PERMITIDOS = (2,)
+TAMANHO_MAXIMO_ESPECIAL = 4       # so' com permitir_quatro_pernas, que ninguem liga
 
-#: Bilhete de 3 pernas so' concorre quando TODAS as pernas sao fortes. Duas
-#: pernas boas e uma mediana e' o desenho classico de bilhete que perde: a
-#: multipla so' paga se todas baterem, entao a perna fraca e' que manda.
+#: Sobrou como limiar do bilhete de 3 pernas, que hoje nao e' gerado no padrao.
+#: Fica porque `permitir_quatro_pernas` ainda existe e porque um `tamanhos`
+#: customizado (homologacao, backtest) volta a produzir triplas.
 MIN_LEG_SCORE_PARA_TRIPLA = 0.70
 
 
@@ -214,10 +221,15 @@ PENALIDADE_CORRELACAO = {
 
 NOTA_CORRELACAO = {"LOW": 1.0, "MEDIUM": 0.6, "UNKNOWN": 0.35, "HIGH": 0.0}
 
-#: Duas pernas do mesmo jogo continuam tecnicamente possiveis (familias
-#: diferentes), mas UMA por jogo e' o padrao pedido em 11/09: o bilhete de
-#: mesmo jogo multiplica duas odds que nao sao independentes.
-MAX_PERNAS_MESMO_JOGO = 1
+#: DUAS PERNAS DO MESMO JOGO PASSARAM A SER PERMITIDAS (2026-09-15, decisao do
+#: usuario). O teto era 1 desde 11/09 e dizia, do lado do bilhete, a mesma coisa
+#: que `correlation.classificar_par` dizia do lado do par.
+#:
+#: Quem separa o caso bom do ruim agora e' a DIRECAO, e nao o teto: duas pernas
+#: do mesmo jogo apontando pro mesmo lado combinam (o erro do produto e'
+#: conservador), direcoes opostas continuam HIGH e nao combinam, e mesma familia
+#: no mesmo jogo tambem nao. Ver a docstring de correlation.py.
+MAX_PERNAS_MESMO_JOGO = 2
 MAX_PERNAS_MESMO_TIME = 1
 
 

@@ -76,9 +76,22 @@ def _excludente(pernas, config: cfg.MultiplaConfig) -> bool:
         familias_por_jogo[chave] = familias_por_jogo.get(chave, 0) + 1
         if familias_por_jogo[chave] > 1:
             return True
+        # O TETO DE EQUIPE CONTA PARTIDAS DISTINTAS, NAO PERNAS (2026-09-15).
+        #
+        # Contando pernas, ele proibia sozinho o bilhete de mesmo jogo -- duas
+        # pernas da mesma partida compartilham as DUAS equipes por definicao,
+        # entao o teto de 1 disparava antes de qualquer outra regra e o
+        # `max_pernas_mesmo_jogo = 2` nunca teria efeito. Seriam duas regras
+        # dizendo a mesma coisa, e a que valeria nao e' a que se le.
+        #
+        # O que este teto existe pra pegar continua pego: a mesma equipe
+        # sustentando pernas de PARTIDAS diferentes (jogo adiado e remarcado no
+        # mesmo dia, torneio de tabela dupla). Quem responde pelo mesmo jogo e' o
+        # teto acima, junto com a direcao em correlation.classificar_par.
         for t in component.times(p):
-            times_vistos[t] = times_vistos.get(t, 0) + 1
-            if times_vistos[t] > config.max_pernas_mesmo_time:
+            partidas = times_vistos.setdefault(t, set())
+            partidas.add(j)
+            if len(partidas) > config.max_pernas_mesmo_time:
                 return True
     return False
 
