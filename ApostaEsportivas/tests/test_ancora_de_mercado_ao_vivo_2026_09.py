@@ -84,3 +84,32 @@ def test_entre_blocos_validos_vence_o_de_menor_margem():
             bloco("Match Corners", 9.5, 1.70, 1.90)]    # soma 1.114
     over = por_direcao(live_odds.extrair_linhas(odds, ("corners",)))["over"]
     assert abs(over["prob_mercado"] - 0.5263) < 0.001
+
+
+def test_a_odd_que_julga_sai_do_bloco_que_ancorou():
+    """`odd` e' o que se aposta; `odd_avaliacao` e' com o que se mede valor.
+
+    Sem essa separacao o EV comparava a odd mais generosa de um bloco (3.41,
+    asiatico) com o preco justo de outro (o europeu), e dava valor de dois
+    digitos numa linha que o proprio motor considerava justa."""
+    odds = [bloco("Total Corners", 11.0, 1.67, 2.15),
+            bloco("Asian Corners", 11.0, 1.55, 3.41)]
+    linhas = por_direcao(live_odds.extrair_linhas(odds, ("corners",)))
+    under = linhas["under"]
+    assert under["odd"] == 3.41            # o que o usuario leva
+    assert under["odd_avaliacao"] == 2.15  # o que julga o valor
+    # O tamanho do estrago: medido pela odd publicada, esta linha aparentava
+    # +49% de valor; pela odd que ancorou, sobram os ~6% que sao apenas a
+    # margem que o no-vig tirou -- e o gate de EV do motor corta ai'.
+    ev_publicada = under["prob_mercado"] * under["odd"] - 1
+    ev_avaliacao = under["prob_mercado"] * under["odd_avaliacao"] - 1
+    assert ev_publicada > 0.45
+    assert ev_avaliacao < 0.10
+
+
+def test_sem_par_coerente_as_duas_odds_sao_a_mesma():
+    """A separacao nao pode mudar o caso em que nao ha' o que separar."""
+    linhas = por_direcao(live_odds.extrair_linhas(
+        [bloco("Total Corners", 11.0, 1.67, 3.41)], ("corners",)))
+    for e in linhas.values():
+        assert e["odd_avaliacao"] == e["odd"]

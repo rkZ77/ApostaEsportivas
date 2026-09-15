@@ -311,7 +311,15 @@ def avaliar(analise: dict, cotacoes: list, config: LiveEngineConfig = DEFAULT_LI
         baseline_mercado = entrada["prob_mercado"]
         if baseline_mercado is None:
             baseline_mercado = market_model.implied_prob(odd)
-        valor = market_model.edge_and_ev(prob, odd, baseline_mercado)
+        # O VALOR SE MEDE COM A ODD QUE ANCOROU (2026-09-15). `odd` e' a
+        # melhor que alguma casa cotou -- e' ela que o usuario aposta e e' ela
+        # que fica gravada no pick. Ja' edge e EV tem que sair do MESMO bloco
+        # de mercado que produziu `prob_mercado`: comparar a odd mais generosa
+        # de um bloco com o preco justo de outro dava EV de dois digitos em
+        # linha que o proprio motor achava justa. Ver `odd_avaliacao` em
+        # live_odds.extrair_linhas. Sem par coerente as duas sao iguais.
+        odd_para_valor = entrada.get("odd_avaliacao") or odd
+        valor = market_model.edge_and_ev(prob, odd_para_valor, baseline_mercado)
 
         # ── Camada V2 (2026-09-11) ───────────────────────────────────────
         # O historico so' vira ALINHAMENTO aqui, e nao em `analisar`, porque

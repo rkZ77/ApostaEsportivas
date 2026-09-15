@@ -251,6 +251,31 @@ LIMITE_DE_EXPOSICAO_POR_JOGO = 2
 #: (bilhete "so' de gols" tres vezes). Nao proibe: limita.
 LIMITE_DE_EXPOSICAO_POR_FAMILIA = 2
 
+#: Familias que NAO entram em bilhete combinado, por medicao (2026-09-15).
+#:
+#: ESCANTEIOS. Medido no `picks_ledger`, que liquida cada perna por conta
+#: propria, nas pernas de multipla ja' encerradas:
+#:
+#:     escanteios   26 pernas   71,4% previsto   42,3% real   -8,12u
+#:     gols         14 pernas   75,4% previsto   71,4% real   +0,44u
+#:     cartoes      13 pernas   68,9% previsto   53,8% real   -1,25u
+#:
+#: Sozinha, a familia responde por mais prejuizo do que a multipla inteira
+#: perdeu. Nao e' ruido: com 26 pernas, 11 acertos onde a previsao dizia 18,6
+#: fica a 3,3 desvios do esperado.
+#:
+#: E NAO E' PROBLEMA NOVO, e' o problema conhecido elevado ao quadrado. No VIP
+#: escanteios tambem erra (67 pernas, 61,5% previsto contra 56,7% real), so'
+#: que la' o erro custa uma aposta; aqui ele multiplica com o da outra perna,
+#: e o bilhete inteiro morre junto.
+#:
+#: O QUE ISTO NAO E': nao e' um veredito sobre escanteios como produto -- eles
+#: continuam saindo no VIP e no ao vivo, onde a medicao e' outra. O gate diz
+#: que uma familia descalibrada nao pode entrar em aposta que exige TODAS as
+#: pernas certas. Quando a calibragem de escanteios for corrigida, isto aqui e'
+#: uma tupla vazia de novo.
+FAMILIAS_BLOQUEADAS = ("corners",)
+
 
 @dataclass(frozen=True)
 class MultiplaConfig:
@@ -282,6 +307,7 @@ class MultiplaConfig:
     max_pernas_mesmo_time: int = MAX_PERNAS_MESMO_TIME
     limite_exposicao_por_jogo: int = LIMITE_DE_EXPOSICAO_POR_JOGO
     limite_exposicao_por_familia: int = LIMITE_DE_EXPOSICAO_POR_FAMILIA
+    familias_bloqueadas: tuple = FAMILIAS_BLOQUEADAS
 
     pesos_componente: dict = field(default_factory=lambda: dict(PESOS_COMPONENTE))
     pesos_combinacao: dict = field(default_factory=lambda: dict(PESOS_COMBINACAO))

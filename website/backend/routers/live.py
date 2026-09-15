@@ -1386,6 +1386,15 @@ def _anulacao_sem_estatistica(leg: dict) -> str | None:
     if not leg.get("precisa_stats"):
         return None
 
+    # CARTAO AGUARDANDO VALIDACAO NAO E' FALTA DE ESTATISTICA (2026-09-15). A
+    # folha existe e o numero esta' la'; o que falta e' saber QUEM levou cada
+    # cartao, e isso chega depois. Anular aqui transformaria a regra do cartao
+    # elegivel numa fabrica de PUSH -- exatamente o "bug virando PUSH
+    # silencioso" que esta funcao diz no comentario acima que nao quer ser.
+    # O pick fica pendente e visivel, que e' o que a regra de 10/09 pede.
+    if leg.get("cartoes_pendentes"):
+        return None
+
     if leg.get("current_val") is None:
         # AS DUAS FRASES VAO PRA TELA, nao pro log: elas saem em `void_reason` e
         # o card as imprime ("Pick anulado. O provedor nao publicou..."). Por
@@ -1807,6 +1816,69 @@ def _save_alavancagem_result(pick_id: int, legs_results: list[str | None],
     logger.info("[AUTO-RESULT] alavancagem #%s → %s (%+.2fu)", pick_id, result, profit)
 
 
+#: Contagem de cartões ELEGÍVEIS, a única que pode liquidar cartão.
+#:
+#: A regra é de 10/09/2026: cartão de banco e de comissão técnica não conta pro
+#: mercado, e sem a validação o pick fica PENDENTE de propósito. Ela foi
+#: implementada no motor (services/ai_result_checker_service.get_fixture_result)
+#: e nunca chegou aqui -- e é aqui que os picks são de fato liquidados, porque a
+#: varredura é puxada por visita ao site desde 09/08.
+#:
+#: O resultado media-se em PROD: o pick VIP #1743 (Cartões Menos de 6.5, odd
+#: 1.83) foi gravado RED com 9 pontos crus, quando a contagem válida da mesma
+#: partida dava 6 -- três cartões que a folha atribuiu a quem não estava em
+#: campo. Era um GREEN.
+#:
+#: Vermelho vale 2, mesma convenção do motor (stats_model._cards_points e
+#: ai_result_checker_service): prever com uma régua e liquidar com outra deixa a
+#: probabilidade do pick sem relação com o que decide o resultado.
+def _cartoes_elegiveis(fixture_id: int, escopo: str):
+    """(pontos, validado) da partida, ou (None, False) se não dá pra liquidar.
+
+    `validado=False` significa "ainda não sei", e o chamador deixa pendente --
+    nunca cai no número cru, que é justamente o que esta função existe pra
+    impedir.
+    """
+    if not fixture_id:
+        return None, False
+    try:
+        conn = get_connection()
+        try:
+            c = conn.cursor()
+            c.execute("""
+                SELECT cards_validation,
+                       valid_yellow_home, valid_yellow_away,
+                       valid_red_home, valid_red_away
+                  FROM match_statistics WHERE fixture_id = %s LIMIT 1
+            """, (fixture_id,))
+            row = c.fetchone()
+            c.close()
+        finally:
+            conn.close()
+    except Exception:
+        logger.warning("[AUTO-RESULT] cartões: leitura da validação falhou "
+                       "no fixture %s", fixture_id, exc_info=True)
+        return None, False
+
+    if not row:
+        return None, False
+    validacao = row[0] if not isinstance(row, dict) else row["cards_validation"]
+    if validacao != "VALIDADO":
+        return None, False
+    if isinstance(row, dict):
+        hy, ay = row["valid_yellow_home"], row["valid_yellow_away"]
+        hr, ar = row["valid_red_home"], row["valid_red_away"]
+    else:
+        hy, ay, hr, ar = row[1], row[2], row[3], row[4]
+    if any(v is None for v in (hy, ay, hr, ar)):
+        return None, False
+    if escopo == "home":
+        return hy + 2 * hr, True
+    if escopo == "away":
+        return ay + 2 * ar, True
+    return hy + 2 * hr + ay + 2 * ar, True
+
+
 def _enrich_leg(fid: int, market: str, line: str,
                 home_team: str, away_team: str,
                 home_team_id: int | None, away_team_id: int | None,
@@ -1849,6 +1921,25 @@ def _enrich_leg(fid: int, market: str, line: str,
     cur_val, stat_label, direction = _stat_for_market(
         market, line, home_stats, away_stats, home_goals, away_goals, market_type
     )
+
+    # CARTÃO SÓ LIQUIDA PELA CONTAGEM ELEGÍVEL (2026-09-15). A folha da API que
+    # `_stat_for_market` acabou de ler traz todo cartão da súmula, banco e
+    # comissão técnica inclusos; a regra de 10/09 diz que esses não contam. Com
+    # o jogo ENCERRADO o número certo já está em match_statistics, e sem a
+    # validação o pick fica pendente -- que é a regra, não um efeito colateral.
+    #
+    # Só no fim do jogo: com a bola rolando a validação ainda não existe, e o
+    # ticker continua mostrando o contador cru, que é o que o usuário vê na TV.
+    cartoes_pendentes = False
+    if status in FT_STATUSES and market_form.e_mercado_de_cartoes(market, market_type):
+        pontos, validado = _cartoes_elegiveis(
+            fid, market_form.escopo_do_mercado(market))
+        if validado:
+            cur_val = pontos
+        else:
+            cur_val = None
+            cartoes_pendentes = True
+
     _, line_val = _extract_line(line)
     pst = _pick_status(cur_val, line, home_goals, away_goals, home_team, away_team) if cur_val is not None \
           else _result_pick_status(line, home_goals, away_goals, home_team, away_team) if direction == "result" \
@@ -1901,6 +1992,9 @@ def _enrich_leg(fid: int, market: str, line: str,
         "away_stats":   away_stats,
         "went_to_extra_time": went_to_extra_time,
         "precisa_stats": precisa_stats,
+        # Cartao encerrado sem validacao: nao liquida e NAO anula. Ver
+        # `_cartoes_elegiveis` e a guarda em `_anulacao_sem_estatistica`.
+        "cartoes_pendentes": cartoes_pendentes,
         "kickoff_ts":    kickoff_ts,
     }
 

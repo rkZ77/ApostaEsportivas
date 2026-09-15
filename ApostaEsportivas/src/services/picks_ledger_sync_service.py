@@ -23,6 +23,14 @@ from utils.db_utils import get_connection
 from services.pick_legs_extractor import fetch_all_legs, fixture_context
 from services.ai_result_checker_service import AIResultCheckerService
 from services.pick_engine import attribution, competition_profile, match_context_model
+from services import settlement
+
+#: result -> fator de liquidacao. Mesma tabela de services/settlement.py e do
+#: painel do usuario (routers/banca.py::_compute_follow_pnl).
+_FATOR_POR_RESULTADO = {
+    settlement.GREEN: 1, settlement.HALF_WIN: 0.5, settlement.PUSH: 0,
+    settlement.HALF_LOSS: -0.5, settlement.RED: -1,
+}
 
 _PICK_TYPE_BY_TABLE = {
     "picks_vip": "vip",
@@ -151,11 +159,46 @@ def _detect_source_system(reasoning: str | None) -> str:
     return "ai"
 
 
+#: Tabelas cujo pick é sobre UMA PESSOA, não sobre a partida.
+#:
+#: O contador delas (chutes do Neymar, defesas do Hugo Souza) vive em
+#: `player_match_stats`, e o checker desta sincronização só sabe ler a folha da
+#: PARTIDA (`match_statistics`). Recalcular "Neymar, 1 ou mais chutes no alvo"
+#: contra os chutes no alvo do JOGO não é uma aproximação: é sempre GREEN,
+#: porque quase todo jogo tem pelo menos um chute no alvo.
+#:
+#: Medido em PROD: das 22 pernas de player_stats que o ledger tinha liquidado,
+#: 22 estavam GREEN -- o painel do /admin mostrava 100% de acerto num produto
+#: que, na tabela de origem, fazia 10 GREEN contra 7 RED. Três das divergências
+#: eram picks ANULADOS por escalação (o jogador nem entrou em campo) que o
+#: ledger contava como acerto.
+_TABELAS_DE_JOGADOR = ("picks_player_stats", "picks_goleiros")
+
+
 def _resolve_leg_result(checker: AIResultCheckerService, cur, leg: dict):
     """Resultado INDEPENDENTE da perna, direto de match_statistics -- nunca
     usa o `result` combinado que multiplas/alavancagem guardam pra aposta
     inteira. Retorna (result, profit) ou (None, None) se o jogo ainda nao
-    tem stats (pendente) ou o mercado nao e suportado pelo checker."""
+    tem stats (pendente) ou o mercado nao e suportado pelo checker.
+
+    A EXCECAO SAO OS PICKS DE PESSOA (ver `_TABELAS_DE_JOGADOR`). Recalcular
+    por conta propria existe porque em multipla e alavancagem o `result` da
+    origem e' da APOSTA INTEIRA e nao da perna -- em pick individual esse
+    motivo nao existe, e no de jogador a origem sabe duas coisas que esta
+    funcao nao tem como saber: a folha do JOGADOR e se ele foi confirmado na
+    escalacao. Aqui, copiar e' o certo; recalcular e' o que inventava GREEN.
+    """
+    if leg.get("source_table") in _TABELAS_DE_JOGADOR:
+        resultado = leg.get("result")
+        if not resultado:
+            return None, None
+        odd = leg.get("odd") or 0
+        fator = _FATOR_POR_RESULTADO.get(resultado)
+        if fator is None or not odd:
+            return resultado, None
+        lucro = settlement.profit_units(fator, odd)
+        return resultado, (float(lucro) if lucro is not None else None)
+
     if not leg.get("fixture_id") or not leg.get("market"):
         return None, None
     stats = checker.get_fixture_result(leg["fixture_id"], cur, leg.get("market"))

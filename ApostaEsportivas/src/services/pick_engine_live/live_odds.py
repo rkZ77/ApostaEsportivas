@@ -261,8 +261,11 @@ def _no_vig_do_mesmo_bloco(por_bloco: dict):
         if melhor is None or soma < melhor[0]:
             melhor = (soma, over, under)
     if melhor is None:
-        return None, None
-    return market_model.no_vig_pair_prob(melhor[1], melhor[2])
+        return None, None, {}
+    prob_over, prob_under = market_model.no_vig_pair_prob(melhor[1], melhor[2])
+    # As odds DO BLOCO que ancorou: e' com elas que o valor tem que ser
+    # julgado, ver `odd_avaliacao` em `extrair_linhas`.
+    return prob_over, prob_under, {"over": melhor[1], "under": melhor[2]}
 
 
 def extrair_linhas(odds_brutas: list, familias: tuple = FAMILIAS_V1) -> list[dict]:
@@ -326,7 +329,7 @@ def extrair_linhas(odds_brutas: list, familias: tuple = FAMILIAS_V1) -> list[dic
     saida: list[dict] = []
     for (familia, linha), lados in pares.items():
         over, under = lados.get("over"), lados.get("under")
-        prob_over, prob_under = _no_vig_do_mesmo_bloco(
+        prob_over, prob_under, odds_do_bloco = _no_vig_do_mesmo_bloco(
             blocos.get((familia, linha)) or {})
         origem = "no_vig" if prob_over is not None else "implied"
         for direcao, odd in (("over", over), ("under", under)):
@@ -344,6 +347,20 @@ def extrair_linhas(odds_brutas: list, familias: tuple = FAMILIAS_V1) -> list[dic
                 "direcao": direcao,
                 "line": f"{direcao.capitalize()} {linha}",
                 "odd": round(odd, 2),
+                # A ODD QUE JULGA, SEPARADA DA QUE SE APOSTA (2026-09-15).
+                #
+                # `odd` e' a melhor que alguma casa cotou e e' o que o usuario
+                # leva. `odd_avaliacao` e' a do MESMO bloco que produziu
+                # `prob_mercado`, e e' com ela que edge e EV tem que ser
+                # calculados: medir valor com uma odd e ancorar com outra
+                # produz um EV que nao existe em mercado nenhum -- a odd mais
+                # generosa de um bloco contra o preco justo de outro.
+                #
+                # E' a mesma separacao que o pre-jogo faz desde 14/08 com
+                # `odd_evaluation="consensus"`: julga pelo consenso, publica a
+                # melhor. Sem par coerente as duas sao a mesma odd, e nada
+                # muda em relacao ao comportamento anterior.
+                "odd_avaliacao": round(odds_do_bloco.get(direcao) or odd, 2),
                 "prob_mercado": prob,
                 "origem_prob_mercado": origem,
                 "tem_par": bool(over and under),
