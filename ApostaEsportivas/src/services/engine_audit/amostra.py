@@ -40,6 +40,8 @@ pode dizer "10 de 34" e nao fingir que a amostra era dez.
 """
 from __future__ import annotations
 
+from services.pick_engine.stats_model import _somente_no_mando
+
 #: Teto de jogos GRAVADOS por time. Ver a docstring: e' limite de exibicao,
 #: nao de analise.
 MAX_JOGOS = 10
@@ -105,8 +107,21 @@ def do_time(historico: list, team_id: int, nome: str | None = None,
     leitores de MatchStatsService ordenam por match_date DESC), entao o corte
     e' um fatiamento -- nao ha ordenacao nova aqui, que poderia divergir da do
     motor.
+
+    MANDO (2026-09-15). O corte era feito sobre a lista CRUA, e a lista crua
+    mistura casa e fora -- mas `stats_model.pool_and_field` filtra pelo mando
+    do jogo desde 2026-08-10 em toda familia de over/under e btts. O modulo
+    existe pra a tela mostrar a amostra que DECIDIU e estava mostrando outra:
+    no pick Free de 15/09 (CRB x Sport, Gols Under 3.0) a tabela "os jogos que
+    o motor olhou" listava o CRB em casa E fora, enquanto a barra logo acima,
+    que a rota monta por mando, dizia 3 GREEN em 10 -- duas amostras da mesma
+    decisao, contando historias diferentes, no mesmo modal.
+
+    O filtro e' importado de stats_model de proposito: uma copia local da
+    regra e' como o bug de mando de 2026-08-08 nasceu.
     """
-    historico = historico or []
+    historico = _somente_no_mando(historico or [], team_id,
+                                   "away" if mando_do_jogo == "fora" else "home")
     jogos = [_linha_do_jogo(j, team_id) for j in historico[:max_jogos]]
     ligas = {j.get("league_id") for j in historico if j.get("league_id")}
     return {

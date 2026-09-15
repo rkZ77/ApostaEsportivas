@@ -147,13 +147,14 @@ def _save_pick(cur, fixture: dict, pick: dict, data_quality_score: float | None)
             fixture_id, match_date,
             home_team_id, away_team_id,
             home_team_name, away_team_name,
+            league_id, league_name,
             market, line, odd, bet_house,
             market_type, market_id,
             confidence, ev, probability, reasoning,
             stake_pct, stake_units, engine_debug,
             created_at
         )
-        SELECT %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW()
+        SELECT %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW()
          WHERE NOT EXISTS (
              SELECT 1 FROM picks_free f
               WHERE f.match_date  = %s
@@ -166,6 +167,13 @@ def _save_pick(cur, fixture: dict, pick: dict, data_quality_score: float | None)
         fixture["fixture_id"], fixture["match_datetime"].date(),
         fixture["home_team_id"], fixture["away_team_id"],
         fixture["home_team"], fixture["away_team"],
+        # A LIGA (2026-09-15). As duas colunas existem na tabela desde sempre e
+        # o INSERT nunca as preencheu: a tela caia no fallback de
+        # routers/suggestions.py, que le a liga de `match_statistics` -- linha
+        # que so' existe DEPOIS do jogo. Efeito: todo pick VIP do dia aparecia
+        # sem liga justamente enquanto ele ainda podia ser apostado. A Free ja
+        # gravava as duas desde 2026-07-17, pelo mesmo motivo.
+        fixture["league_id"], fixture.get("league_name"),
         pick["market_name"], pick["value_label"], pick["odd"], pick["best_bookmaker"],
         pick["market_type"], pick["market_id"],
         pick["confidence"], pick["ev"], pick["taxa_real"], reasoning,

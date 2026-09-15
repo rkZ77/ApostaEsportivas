@@ -172,12 +172,47 @@ class PickEngineConfig:
     temporal_tiers: tuple = ((14, 1.0), (30, 0.85), (60, 0.70))
     temporal_default: float = 0.50
 
-    # Peso por forca do adversario (rank -> peso)
+    # PESO POR FORCA DO ADVERSARIO -- APOSENTADO POR MEDICAO (2026-09-15).
+    #
+    # Era 2.0 pro top-6, 1.0 pro miolo e 0.5 do rank 13 pra baixo: um jogo
+    # contra o lider pesava QUATRO vezes um contra o lanterna. A ideia era
+    # corrigir forca de adversario, e ela funciona pra medir o TIME. Em mercado
+    # de VOLUME (gols, escanteios, cartoes, chutes) ela faz outra coisa: jogo
+    # contra time forte e' mais travado, entao o peso 4:1 superpondera
+    # sistematicamente os jogos de placar baixo e a taxa sai otimista pro lado
+    # Under -- e sem olhar quem e' o adversario de HOJE, que quase nunca e' o
+    # lider.
+    #
+    # Medido por backtest sobre os 268 picks VIP+Free liquidados dos ultimos 90
+    # dias, recalculando a taxa de cada um com o historico que existia na
+    # vespera (sem vazar resultado futuro):
+    #
+    #                   erro de calibragem     Brier
+    #   peso 2.0/1.0/0.5      +8.7pp           0.2603
+    #   peso neutro (1.0)     +6.4pp           0.2515
+    #
+    # O peso neutro ganha nas duas metricas, e ganha em CINCO das seis familias
+    # (btts, cards, corners, goals, shots_on_target; shots empata). Nos 99
+    # picks que o peso empurrava pra cima em 3pp ou mais, ele previa 75.6% pra
+    # 60.6% real -- 15 pontos de erro, contra 7 do neutro.
+    #
+    # Custo: 19 picks dos 268 (7%) perdem o EV positivo. Valiam ROI +1.6%, ou
+    # seja quase nada; os 222 que sobram valem ROI +10.7% contra +8.8% da
+    # carteira inteira. O volume que sai nao leva lucro junto.
+    #
+    # O caso que motivou a medicao foi o pick Free de 15/09 (CRB x Sport, Gols
+    # Under 3.0): taxa bruta 66.7%, publicada 74.5%. Todo jogo em que o Under
+    # bateu tinha sido contra adversario de top-6 (peso 2.0) e todo jogo de 4+
+    # gols contra adversario fraco (peso 0.5). Com peso neutro a taxa cai pra
+    # 66.5% e o EV de +25.9% pra +1.8% -- o pick nao passa no min_edge.
+    #
+    # Os campos ficam (em vez de sumir do weighted_rate) pra que remedir seja
+    # trocar um numero, e nao reescrever a funcao.
     opponent_top_rank: int = 6
-    opponent_top_weight: float = 2.0
+    opponent_top_weight: float = 1.0
     opponent_mid_rank: int = 12
     opponent_mid_weight: float = 1.0
-    opponent_weak_weight: float = 0.5
+    opponent_weak_weight: float = 1.0
     opponent_unknown_weight: float = 1.0
 
     # Desacordo entre a taxa empirica e a estimativa de modelo (orchestrator).
