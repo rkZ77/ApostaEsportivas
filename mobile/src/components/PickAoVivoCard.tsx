@@ -10,7 +10,7 @@
 import { useEffect, useState } from 'react'
 import { Image, Text, View } from 'react-native'
 import { Card, Selo, Txt } from './ui'
-import { cores, espaco, fonte, peso, raio } from '../theme/tokens'
+import { cores, espaco, familia, fonte, peso, raio } from '../theme/tokens'
 import { confianca, escudo, estiloDoResultado, mercadoCompleto, odd, timeCasa, timeFora } from '../lib/formato'
 import type { PickAoVivo } from '../api/types'
 
@@ -83,7 +83,7 @@ export function PickAoVivoCard({ pick, onPress }: { pick: PickAoVivo; onPress?: 
           <Txt variante="corpo" numberOfLines={1} style={{ flex: 1, color: cores.ink1 }}>
             {timeCasa(pick)}
           </Txt>
-          <Text style={{ fontSize: fonte.lg, fontWeight: peso.bold, color: cores.ink1, fontVariant: ['tabular-nums'] }}>
+          <Text style={{ fontSize: fonte.lg, fontFamily: familia(peso.bold), color: cores.ink1, fontVariant: ['tabular-nums'] }}>
             {pick.home_goals ?? pick.home_goals_at_creation ?? 0}
           </Text>
         </View>
@@ -92,7 +92,7 @@ export function PickAoVivoCard({ pick, onPress }: { pick: PickAoVivo; onPress?: 
           <Txt variante="corpo" numberOfLines={1} style={{ flex: 1, color: cores.ink1 }}>
             {timeFora(pick)}
           </Txt>
-          <Text style={{ fontSize: fonte.lg, fontWeight: peso.bold, color: cores.ink1, fontVariant: ['tabular-nums'] }}>
+          <Text style={{ fontSize: fonte.lg, fontFamily: familia(peso.bold), color: cores.ink1, fontVariant: ['tabular-nums'] }}>
             {pick.away_goals ?? pick.away_goals_at_creation ?? 0}
           </Text>
         </View>

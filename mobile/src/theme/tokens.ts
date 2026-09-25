@@ -75,3 +75,25 @@ export const duracao = {
   rapida: 150,
   media: 240,
 } as const
+
+/*
+ * FONTE · Nunito, a mesma do site (index.css / tailwind `fontFamily.sans`).
+ *
+ * No React Native cada peso é um arquivo, com nome próprio: `fontWeight`
+ * sozinho não troca de arquivo, e no Android ainda derruba a fonte custom de
+ * volta para a do sistema. Por isso o peso vira FAMÍLIA aqui, e quem desenha
+ * texto passa por `familia()` em vez de setar `fontWeight`. Os arquivos são
+ * carregados em app/_layout.tsx.
+ */
+const FAMILIAS: Record<string, string> = {
+  '400': 'Nunito_400Regular',
+  '500': 'Nunito_500Medium',
+  '600': 'Nunito_600SemiBold',
+  '700': 'Nunito_700Bold',
+  '800': 'Nunito_800ExtraBold',
+}
+
+export function familia(p?: string | number | null): string {
+  if (p === 'bold') return FAMILIAS['700']
+  return FAMILIAS[String(p ?? '400')] ?? FAMILIAS['400']
+}

@@ -5,9 +5,22 @@ import { useEffect } from 'react'
 import { ActivityIndicator, View } from 'react-native'
 import { Stack, useRouter, useSegments } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
+import * as SplashScreen from 'expo-splash-screen'
+import {
+  useFonts,
+  Nunito_400Regular,
+  Nunito_500Medium,
+  Nunito_600SemiBold,
+  Nunito_700Bold,
+  Nunito_800ExtraBold,
+} from '@expo-google-fonts/nunito'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { AuthProvider, useAuth } from '../src/auth/AuthContext'
-import { cores } from '../src/theme/tokens'
+import { cores, familia, peso } from '../src/theme/tokens'
+
+/* A splash fica até a fonte carregar · sem isso a primeira tela aparece na
+   fonte do sistema e troca para a Nunito um instante depois. */
+SplashScreen.preventAutoHideAsync().catch(() => {})
 
 /**
  * Guarda de navegação.
@@ -46,7 +59,7 @@ function Guarda() {
       screenOptions={{
         headerStyle: { backgroundColor: cores.surface0 },
         headerTintColor: cores.ink1,
-        headerTitleStyle: { fontWeight: '600' },
+        headerTitleStyle: { fontFamily: familia(peso.bold) },
         headerShadowVisible: false,
         contentStyle: { backgroundColor: cores.surface0 },
       }}
@@ -60,6 +73,22 @@ function Guarda() {
 }
 
 export default function RootLayout() {
+  const [fontesProntas, erroDeFonte] = useFonts({
+    Nunito_400Regular,
+    Nunito_500Medium,
+    Nunito_600SemiBold,
+    Nunito_700Bold,
+    Nunito_800ExtraBold,
+  })
+  // Fonte que falhou não trava o app: segue com a do sistema.
+  const pronto = fontesProntas || Boolean(erroDeFonte)
+
+  useEffect(() => {
+    if (pronto) SplashScreen.hideAsync().catch(() => {})
+  }, [pronto])
+
+  if (!pronto) return null
+
   return (
     <SafeAreaProvider>
       <AuthProvider>

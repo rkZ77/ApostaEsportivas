@@ -1,5 +1,5 @@
 import { Stack } from 'expo-router'
-import { cores } from '../../src/theme/tokens'
+import { cores, familia, peso } from '../../src/theme/tokens'
 
 export default function AuthLayout() {
   return (
@@ -8,6 +8,7 @@ export default function AuthLayout() {
         headerStyle: { backgroundColor: cores.surface0 },
         headerTintColor: cores.ink1,
         headerShadowVisible: false,
+        headerTitleStyle: { fontFamily: familia(peso.bold) },
         contentStyle: { backgroundColor: cores.surface0 },
       }}
     >
