@@ -196,7 +196,7 @@ export default function Home() {
       { '@type': 'Offer', name: 'Plano Free', price: '0', priceCurrency: 'BRL' },
       ...plans.map(p => ({
         '@type': 'Offer',
-        name: `Plano VIP ${p.label}`,
+        name: `${p.tier === 'pro' ? 'Pick IA Pro' : 'Pick IA'} ${p.label}`,
         price: p.price.toFixed(2),
         priceCurrency: 'BRL',
         billingIncrement: p.iso_period,

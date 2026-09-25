@@ -44,7 +44,7 @@ const AVISO_ATRASO = (
 export const TOUR_STEPS_VIP: TourStep[] = [
   {
     id: 'vip-bem-vindo',
-    titulo: 'Seu acesso VIP está liberado',
+    titulo: 'Seu acesso está liberado',
     Icon: Crown,
     resumo: 'A partir de agora todos os picks do dia aparecem abertos para você, com a análise completa da IA.',
     avancar: 'Ver o que abriu',

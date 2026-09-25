@@ -240,7 +240,7 @@ export default function PickPublico() {
                       pages/ConfirmarEmail). Prometer o que não sai no clique
                       seguinte é o jeito mais barato de perder a confiança de
                       quem chegou por um link compartilhado. */}
-                  2 dias de VIP grátis ao confirmar o e-mail
+                  2 dias de Pro grátis ao confirmar o e-mail
                 </p>
               )}
             </div>

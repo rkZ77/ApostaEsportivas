@@ -102,7 +102,7 @@ export default function VerifyEmailBanner() {
               <Mail className="w-4 h-4 text-green-400" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-black text-ink-1 leading-snug">2 dias de VIP esperando</p>
+              <p className="text-sm font-black text-ink-1 leading-snug">2 dias de Pro esperando</p>
               <p className="text-xs text-ink-3 leading-snug">
                 {sent ? 'E-mail reenviado. Confira sua caixa.' : 'Confirme seu e-mail para liberar'}
               </p>

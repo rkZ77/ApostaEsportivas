@@ -55,13 +55,13 @@ const COPY: Record<FimDeAcesso, {
     rotulo: 'Teste grátis',
     titulo: 'Seus 2 dias acabaram',
     intro: 'Sua conta voltou pro plano free. O que estava liberado até agora:',
-    cta: 'Assinar o VIP',
+    cta: 'Assinar um plano',
   },
   vip: {
-    rotulo: 'Assinatura VIP',
-    titulo: 'Seu VIP acabou',
+    rotulo: 'Assinatura',
+    titulo: 'Sua assinatura acabou',
     intro: 'Sua assinatura venceu e a conta voltou pro plano free. O que sai do ar:',
-    cta: 'Renovar o VIP',
+    cta: 'Renovar a assinatura',
   },
 }
 

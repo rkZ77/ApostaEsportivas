@@ -235,9 +235,9 @@ export function EstatisticasContent() {
         <div className="w-14 h-14 rounded-full bg-surface-1 flex items-center justify-center">
           <Lock className="w-6 h-6 text-ink-3" />
         </div>
-        <h2 className="text-ink-1 font-bold text-lg">Recurso VIP</h2>
+        <h2 className="text-ink-1 font-bold text-lg">Recurso para assinantes</h2>
         <p className="text-ink-3 text-sm text-center max-w-xs">
-          As estatísticas detalhadas são exclusivas para membros VIP.
+          As estatísticas detalhadas são exclusivas para assinantes.
         </p>
         <a href="/planos" className="btn-primary px-6 py-2 text-sm">Ver planos</a>
       </div>

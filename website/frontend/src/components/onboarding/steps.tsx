@@ -195,7 +195,7 @@ function PassoConfirmarEmail() {
   return (
     <div className="space-y-3">
       <Etiqueta>O que você ganha</Etiqueta>
-      <Linhas itens={[['Teste do VIP', '2 dias'], ['Custo', 'R$ 0,00']]} />
+      <Linhas itens={[['Teste do Pro', '2 dias'], ['Custo', 'R$ 0,00']]} />
       <p className="text-xs text-ink-2 leading-relaxed">
         A assinatura abre todos os picks do dia, as múltiplas e a alavancagem. Sem confirmar,
         a conta segue no plano gratuito, com 1 pick por dia.
@@ -389,10 +389,10 @@ const TOUR_STEPS: TourStep[] = [
   },
   {
     id: 'confirmar-email',
-    titulo: 'Confirme seu e-mail e ganhe 2 dias de VIP',
+    titulo: 'Confirme seu e-mail e ganhe 2 dias de Pro',
     Icon: Mail,
     mostrar: passoDoEmailEntra,
-    resumo: 'A conta já está criada. Falta confirmar o e-mail, e é isso que libera os 2 dias de teste do VIP, sem custo nenhum.',
+    resumo: 'A conta já está criada. Falta confirmar o e-mail, e é isso que libera os 2 dias de teste do Pro, sem custo nenhum.',
     corpo: <PassoConfirmarEmail />,
   },
   {

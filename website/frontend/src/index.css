@@ -693,3 +693,10 @@
     @apply bg-red-500/5 text-red-400 border-red-500/30;
   }
 }
+
+/* Com a gaveta do menu aberta, a pilha de avisos sai de cena: ela vive em
+   z-9990 e cobria os itens de baixo do menu (o "Sair", no app). Os avisos
+   não se perdem, só voltam quando a gaveta fecha. Ver GavetaLateral. */
+html[data-gaveta] [data-pilha-avisos] {
+  display: none;
+}

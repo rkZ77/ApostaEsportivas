@@ -522,7 +522,8 @@ def test_modal_troca_o_verbo_conforme_o_plano_que_acabou():
     from tests.test_home_2026_08 import _front
 
     modal = _front("components/AccessEndedModal.tsx")
-    assert "Assinar o VIP" in modal and "Renovar o VIP" in modal
+    # Texto do botão sem "VIP" desde 25/09/2026 (o plano se chama Pick IA / Pro).
+    assert "Assinar um plano" in modal and "Renovar a assinatura" in modal
     assert "vip_ended" in _front("components/GlobalModals.tsx")
 
 

@@ -96,9 +96,9 @@ export default function AgentePanel({ onClose }: { onClose: () => void }) {
               </>
             ) : (
               <>
-                <p className="text-ink-1 font-bold text-sm mb-1.5">Agente exclusivo VIP</p>
+                <p className="text-ink-1 font-bold text-sm mb-1.5">Agente exclusivo do Pro</p>
                 <p className="text-ink-2 text-xs leading-relaxed mb-5">
-                  Disponível apenas para assinantes VIP. Analisa picks, banca, alavancagem e jogos ao vivo em tempo real.
+                  Disponível no plano Pick IA Pro. Analisa picks, banca, alavancagem e jogos ao vivo em tempo real.
                 </p>
                 <Link to="/checkout" onClick={onClose} className="inline-block bg-yellow-400 hover:bg-yellow-300 text-on-fill font-black px-5 py-2.5 rounded-md text-xs transition-colors">
                   Assinar

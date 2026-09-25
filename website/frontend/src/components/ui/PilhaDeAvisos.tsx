@@ -37,6 +37,7 @@ export default function PilhaDeAvisos({ children }: { children: ReactNode }) {
       /* `pointer-events-none` no contêiner e `auto` em cada cartão: a pilha
          ocupa a largura toda pra centralizar, e sem isso essa faixa invisível
          comeria os cliques da página atrás dela. */
+      data-pilha-avisos
       className="fixed inset-x-0 bottom-0 z-[9990] flex flex-col items-center gap-2 px-4
                  pointer-events-none"
       style={{

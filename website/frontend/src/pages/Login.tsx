@@ -145,6 +145,19 @@ function SeloDeConfianca({ className = 'mt-7' }: { className?: string }) {
   )
 }
 
+/** "Henrique da Silva" -> "henrique_silva": primeiro e último nome, sem acento, até 20. */
+function sugerirUsuario(nome: string): string {
+  const partes = nome
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/).filter(Boolean)
+  if (!partes.length) return ''
+  const escolhidas = partes.length > 1 ? [partes[0], partes[partes.length - 1]] : partes
+  const sugestao = escolhidas.join('_').slice(0, 20)
+  // Abaixo do mínimo de 3 o backend recusaria: melhor o campo vazio que um erro.
+  return sugestao.length >= 3 ? sugestao : ''
+}
+
 type LoginMethod = 'username' | 'email' | 'phone'
 
 export default function Login() {
@@ -167,6 +180,12 @@ export default function Login() {
   // Register fields
   const [name, setName]         = useState('')
   const [username, setUsername] = useState('')
+  /* Usuário sugerido a partir do nome (2026-09-25). Era um campo em branco a
+     mais no passo 1, e a maioria das pessoas não tem um "usuário" pensado ·
+     trava ali. Enquanto a pessoa não mexer no campo, ele acompanha o nome;
+     mexeu, é dela. Colisão com usuário existente volta do backend como erro
+     do passo 1, que já é tratado. */
+  const [usernameEditado, setUsernameEditado] = useState(false)
   const [phone, setPhone]       = useState('')
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
@@ -402,7 +421,7 @@ export default function Login() {
               mobile): so uma renderiza, mas as duas existiam no DOM, entao
               leitor de tela e robo de busca viam duas. */}
           <h1 className="text-2xl font-bold text-ink-1 mb-1">
-            {mode === 'login' ? 'Bem-vindo de volta' : '2 dias de VIP, de graça'}
+            {mode === 'login' ? 'Bem-vindo de volta' : '2 dias de Pro, de graça'}
           </h1>
           <p className="text-ink-3 mb-6 text-sm">
             {mode === 'login'
@@ -444,6 +463,30 @@ export default function Login() {
               >
                 Redefinir senha
               </Link>
+            </div>
+          )}
+
+          {/* NO CADASTRO O GOOGLE VEM PRIMEIRO (2026-09-25). O motivo de ele
+              ficar embaixo (ver o comentário depois do formulário) é o login:
+              lá, em cima, ele cria a conta duplicada de quem já tem senha. No
+              cadastro a pessoa ainda não tem conta, e um toque no Google pula
+              os quatro campos · no celular é a diferença entre cadastrar e
+              desistir. */}
+          {mode === 'register' && regStep === 1 && (
+            <div className="mb-5">
+              <GoogleSignInButton
+                modo={mode}
+                onCode={entrarComGoogle}
+                onDisponivel={setGoogleDisponivel}
+                desabilitado={loading}
+              />
+              {googleDisponivel && (
+                <div className="flex items-center gap-3 mt-5">
+                  <div className="h-px flex-1 bg-line" />
+                  <span className="text-[11px] text-ink-4 font-semibold uppercase tracking-wide">ou cadastre-se com e-mail</span>
+                  <div className="h-px flex-1 bg-line" />
+                </div>
+              )}
             </div>
           )}
 
@@ -522,17 +565,24 @@ export default function Login() {
                 <div>
                   <label htmlFor="reg-name" className="block text-sm text-ink-2 mb-1.5 font-medium">Nome completo</label>
                   <input id="reg-name" type="text" value={name}
-                    onChange={e => setName(e.target.value)}
+                    onChange={e => {
+                      setName(e.target.value)
+                      if (!usernameEditado) setUsername(sugerirUsuario(e.target.value))
+                    }}
                     required className="input" placeholder="Nome e sobrenome"
                     autoComplete="name" autoFocus />
                 </div>
                 <div>
                   <label htmlFor="reg-username" className="block text-sm text-ink-2 mb-1.5 font-medium">Usuário</label>
                   <input id="reg-username" type="text" value={username}
-                    onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                    onChange={e => { setUsernameEditado(true); setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '')) }}
                     required className="input" placeholder="seu_usuario"
                     autoComplete="username" maxLength={20} />
-                  <p className="text-xs text-ink-4 mt-1">3 a 20 caracteres. Letras minúsculas, números e _.</p>
+                  <p className="text-xs text-ink-4 mt-1">
+                    {usernameEditado || !username
+                      ? '3 a 20 caracteres. Letras minúsculas, números e _.'
+                      : 'Sugerido a partir do seu nome. Pode trocar se quiser.'}
+                  </p>
                 </div>
                 <div>
                   <label htmlFor="reg-email" className="block text-sm text-ink-2 mb-1.5 font-medium">Email</label>
@@ -555,7 +605,7 @@ export default function Login() {
                   <p className="text-xs text-ink-4 mt-1">1 conta por número. Só enviamos mensagem se você autorizar.</p>
                 </div>
                 <p className="text-xs text-ink-3 bg-surface-1 border border-line rounded-lg px-3 py-2.5 leading-relaxed">
-                  Confirme seu e-mail depois do cadastro para liberar <span className="text-ink-2 font-semibold">2 dias de VIP grátis</span>.
+                  Confirme seu e-mail depois do cadastro para liberar <span className="text-ink-2 font-semibold">2 dias de Pro grátis</span>.
                 </p>
               </>
             )}
@@ -667,7 +717,7 @@ export default function Login() {
             </AnimatePresence>
 
             <button type="submit" disabled={loading} className="btn-primary w-full text-center mt-2">
-              {loading ? 'Aguarde...' : mode === 'login' ? 'Entrar' : regStep === 1 ? 'Continuar' : 'Ativar 2 dias VIP grátis'}
+              {loading ? 'Aguarde...' : mode === 'login' ? 'Entrar' : regStep === 1 ? 'Continuar' : 'Ativar 2 dias de Pro grátis'}
             </button>
           </form>
 
@@ -679,7 +729,7 @@ export default function Login() {
               Embaixo, com o rótulo "ou entre com", ele é a alternativa que
               anuncia ser. Mesma ordem que casa de aposta usa, pelo mesmo
               motivo. */}
-          {googleDisponivel && (
+          {mode === 'login' && googleDisponivel && (
             <div className="mt-6">
               <div className="flex items-center gap-3 mb-4">
                 <div className="h-px flex-1 bg-line" />
@@ -690,12 +740,14 @@ export default function Login() {
               </div>
             </div>
           )}
-          <GoogleSignInButton
-            modo={mode}
-            onCode={entrarComGoogle}
-            onDisponivel={setGoogleDisponivel}
-            desabilitado={loading}
-          />
+          {mode === 'login' && (
+            <GoogleSignInButton
+              modo={mode}
+              onCode={entrarComGoogle}
+              onDisponivel={setGoogleDisponivel}
+              desabilitado={loading}
+            />
+          )}
 
           {/* AS DUAS SAÍDAS, EM FRASE (01/09/2026, pedido do usuário).
               Elas já foram frase, viraram botão de largura cheia e voltam a ser

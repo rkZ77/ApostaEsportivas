@@ -117,10 +117,13 @@ export function GavetaLateral({ open, onClose, logoTo = '/', topo, rodape, child
   useEffect(() => {
     if (!open) return
     document.body.style.overflow = 'hidden'
+    // Os avisos (z-9990) ficavam por cima da gaveta aberta · ver index.css.
+    document.documentElement.dataset.gaveta = 'aberta'
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
     return () => {
       document.body.style.overflow = ''
+      delete document.documentElement.dataset.gaveta
       window.removeEventListener('keydown', onKey)
     }
   }, [open, onClose])
