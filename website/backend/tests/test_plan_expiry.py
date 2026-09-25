@@ -310,7 +310,7 @@ def test_os_dois_finais_falam_verbos_diferentes():
     titulo_t, corpo_t, cta_t = ENCERRAMENTO["trial"]
     titulo_v, corpo_v, cta_v = ENCERRAMENTO["vip"]
 
-    assert "teste" in titulo_t.lower() and "vip" in titulo_v.lower()
+    assert "teste" in titulo_t.lower() and "assinatura" in titulo_v.lower()
     assert "Assine" in corpo_t and "Assinar" in cta_t
     assert "Renove" in corpo_v and "Renovar" in cta_v
 
@@ -402,7 +402,7 @@ def test_email_do_teste_encerrado_pede_assinatura():
     assert destino == "fulano@exemplo.com"
     assert "teste" in assunto.lower()
     assert "https://x/checkout" in corpo
-    assert "Assinar o VIP" in html
+    assert "Assinar um plano" in html
 
 
 def test_email_do_vip_encerrado_pede_renovacao():
@@ -410,8 +410,9 @@ def test_email_do_vip_encerrado_pede_renovacao():
 
     assert len(enviados) == 1
     assunto, html = enviados[0][1], enviados[0][3]
-    assert "VIP" in assunto
-    assert "Renovar o VIP" in html
+    # Sem "VIP" desde 25/09/2026: o produto se chama Pick IA / Pick IA Pro.
+    assert "assinatura" in assunto.lower()
+    assert "Renovar a assinatura" in html
 
 
 def test_rodape_do_email_nao_diz_que_o_plano_esta_ativo():
@@ -522,7 +523,8 @@ def test_modal_troca_o_verbo_conforme_o_plano_que_acabou():
     from tests.test_home_2026_08 import _front
 
     modal = _front("components/AccessEndedModal.tsx")
-    assert "Assinar o VIP" in modal and "Renovar o VIP" in modal
+    # Texto do botão sem "VIP" desde 25/09/2026 (o plano se chama Pick IA / Pro).
+    assert "Assinar um plano" in modal and "Renovar a assinatura" in modal
     assert "vip_ended" in _front("components/GlobalModals.tsx")
 
 

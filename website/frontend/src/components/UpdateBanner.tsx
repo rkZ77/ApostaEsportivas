@@ -63,7 +63,7 @@ export default function UpdateBanner() {
           initial="hidden"
           animate="visible"
           exit="exit"
-          style={{ bottom: 'calc(5rem + env(safe-area-inset-bottom))' }}
+          style={{ bottom: 'calc(5rem + var(--barra-inferior, 0px) + env(safe-area-inset-bottom))' }}
           className="fixed right-2 sm:right-4 z-50 w-56 sm:w-64 bg-surface-1 border border-line-strong rounded-lg shadow-xl shadow-black/50 p-4"
         >
           <div className="flex items-start justify-between gap-2 mb-3">

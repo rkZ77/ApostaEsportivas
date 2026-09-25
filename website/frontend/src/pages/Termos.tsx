@@ -64,7 +64,7 @@ export default function Termos() {
           <section>
             <h2 className="text-ink-1 font-bold text-base mb-3">5. Planos e pagamentos</h2>
             <ul className="list-disc list-inside space-y-2 text-ink-2">
-              <li>Os planos VIP dão acesso a picks completos pelo período contratado (mensal, trimestral, semestral ou anual)</li>
+              <li>Os planos pagos (Pick IA e Pick IA Pro) dão acesso a picks completos pelo período contratado (mensal, trimestral, semestral ou anual)</li>
               <li>O pagamento é processado pelo MercadoPago e cobrado no ato da contratação</li>
               <li>Após ativação, o plano não é reembolsável, exceto nos casos previstos pelo Código de Defesa do Consumidor (CDC)</li>
               <li>O trial gratuito de 2 dias é disponibilizado uma única vez por conta, liberado após a confirmação do e-mail</li>

@@ -176,7 +176,7 @@ function SuccessPage() {
               {confirmado ? 'Seu plano foi ativado. Bem-vindo!' : 'Estamos liberando seu acesso.'}
             </p>
             {confirmado
-              ? <button onClick={() => navigate('/picks')} className="btn-primary px-8 py-3">Ver Picks VIP</button>
+              ? <button onClick={() => navigate('/picks')} className="btn-primary px-8 py-3">Ver Picks Premium</button>
               : <p className="text-ink-4 text-sm animate-pulse">Ativando seu acesso…</p>
             }
           </>
@@ -248,7 +248,7 @@ function PendingPage() {
           <p className="text-ink-3 text-xs">Boleto: até 3 dias úteis após compensação</p>
         </div>
         {activated
-          ? <button onClick={() => navigate('/picks')} className="btn-primary px-8 py-3">Ver Picks VIP</button>
+          ? <button onClick={() => navigate('/picks')} className="btn-primary px-8 py-3">Ver Picks Premium</button>
           : (
             <div className="flex flex-col gap-2">
               <button onClick={checkPayment} disabled={checking}

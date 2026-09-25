@@ -653,7 +653,7 @@ def _paywall_analise(pick_type: str, pick_id: int, user: dict) -> None:
         finally:
             cur.close()
             conn.close()
-    raise HTTPException(403, "Acesso VIP necessário para ver a análise completa")
+    raise HTTPException(403, "A análise completa é para assinantes")
 
 
 def _marcar_boost_free(picks: list) -> None:
@@ -1592,7 +1592,7 @@ def get_suggestion_detail(
                 raise HTTPException(404, f"{_rotulo_cartela} não encontrada")
             d = dict(row)
             if not is_vip:
-                raise HTTPException(403, "Acesso VIP necessário para ver a análise completa")
+                raise HTTPException(403, "A análise completa é para assinantes")
             try:
                 legs = _json.loads(d["legs"]) if isinstance(d["legs"], str) else (d["legs"] or [])
             except Exception:
@@ -1677,7 +1677,7 @@ def get_suggestion_detail(
                 raise HTTPException(404, "Alavancagem não encontrada")
             d = dict(row)
             if not is_vip:
-                raise HTTPException(403, "Acesso VIP necessário para ver a análise completa")
+                raise HTTPException(403, "A análise completa é para assinantes")
             legs = []
             if d.get("home_team_1"):
                 legs.append({
@@ -1821,7 +1821,7 @@ def get_suggestion_detail(
                 from routers.banca import boost_liberado_do_dia
                 if not (pick_type == "boost"
                         and boost_liberado_do_dia(cur, suggestion_id)):
-                    raise HTTPException(403, "Acesso VIP necessario para ver a analise completa")
+                    raise HTTPException(403, "A análise completa é para assinantes")
 
             cur.execute(
                 "SELECT stake_units, actual_odd, bet_house FROM user_followed_picks "
@@ -1886,7 +1886,7 @@ def get_suggestion_detail(
                 raise HTTPException(404, "Sugestão não encontrada")
             suggestion = dict(row)
             if not is_vip:
-                raise HTTPException(403, "Acesso VIP necessário para ver a análise completa")
+                raise HTTPException(403, "A análise completa é para assinantes")
 
         home_id = suggestion.get("home_team_id")
         away_id = suggestion.get("away_team_id")

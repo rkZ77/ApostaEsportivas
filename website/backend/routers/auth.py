@@ -606,7 +606,7 @@ def _send_verification_email(to: str, name: str, token: str, site_url: str) -> N
         subject="Seu cadastro no Pick IA está quase pronto",
         body=(
             f"Olá {first_name},\n\n"
-            f"Confirme seu e-mail para ativar seu acesso VIP gratuito de 2 dias:\n\n"
+            f"Confirme seu e-mail para ativar seus 2 dias grátis do Pick IA Pro:\n\n"
             f"{verify_url}\n\n"
             f"O link expira em 24 horas.\n\n"
             f"Equipe Pick IA"
@@ -1633,7 +1633,7 @@ def activate_trial(response: Response, current_user: dict = Depends(get_current_
         return {
             "plan": "trial",
             "expires_at": trial_expires.isoformat(),
-            "message": "Trial VIP ativado com sucesso! Você tem 2 dias de acesso completo.",
+            "message": "Teste do Pick IA Pro ativado! Você tem 2 dias de acesso completo.",
         }
     finally:
         cur.close(); conn.close()

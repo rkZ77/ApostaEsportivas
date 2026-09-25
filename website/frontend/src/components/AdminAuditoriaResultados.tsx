@@ -56,7 +56,7 @@ interface Dados {
 }
 
 const ROTULO: Record<string, string> = {
-  vip: 'VIP', free: 'Free', multipla: 'Múltipla', bingo: 'Bingo do Dia',
+  vip: 'Premium', free: 'Free', multipla: 'Múltipla', bingo: 'Bingo do Dia',
   alavancagem: 'Alavancagem', faltas: 'Faltas', goleiros: 'Defesas',
   player_stats: 'Jogador', boost: 'Pick Boost', live: 'Ao Vivo',
 }

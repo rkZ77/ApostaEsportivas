@@ -135,7 +135,7 @@ export default function ComoAvaliarPalpitesDeFutebol() {
         conferir os{' '}
         <Link to="/palpites-de-futebol-hoje">palpites de futebol de hoje</Link> e o{' '}
         <Link to="/resultados">histórico completo</Link> sem ter conta, e{' '}
-        <Link to="/login?mode=register">criar uma conta</Link> libera dois dias de VIP para
+        <Link to="/login?mode=register">criar uma conta</Link> libera dois dias do Pro para
         testar a análise por dentro.
       </P>
       <Callout>

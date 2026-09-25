@@ -141,7 +141,7 @@ def verificacao_html(primeiro_nome: str, site_url: str, token: str, logo_url: st
           <p style="margin:0 0 8px;color:{TEXTO_3};font-size:13px;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Bem-vindo,</p>
           <h2 style="margin:0 0 16px;color:{TEXTO};font-size:22px;font-weight:800;">{primeiro_nome}!</h2>
           <p style="margin:0 0 8px;color:{TEXTO_2};font-size:15px;line-height:1.6;">
-            Sua conta foi criada. Para ativar seu <strong style="color:{VERDE_CLARO};">acesso VIP gratuito de 2 dias</strong>,<br>confirme seu e-mail no botão abaixo.
+            Sua conta foi criada. Para ativar seu <strong style="color:{VERDE_CLARO};">teste grátis de 2 dias do Pick IA Pro</strong>,<br>confirme seu e-mail no botão abaixo.
           </p>
           <p style="margin:0 0 28px;color:{TEXTO_4};font-size:12px;">O link expira em 24 horas.</p>
           {_botao(verify_url, "Confirmar e-mail")}
@@ -165,12 +165,12 @@ def boas_vindas_html(primeiro_nome: str, site_url: str, logo_url: str = "") -> s
           <p style="margin:0 0 8px;color:{TEXTO_3};font-size:13px;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Bem-vindo,</p>
           <h2 style="margin:0 0 20px;color:{TEXTO};font-size:22px;font-weight:800;">{primeiro_nome}!</h2>
           <p style="margin:0 0 28px;color:{TEXTO_2};font-size:15px;line-height:1.6;">
-            Sua conta foi confirmada. Você tem <strong style="color:{VERDE_CLARO};">2 dias de acesso VIP gratuito</strong> para explorar tudo que o Pick IA faz.
+            Sua conta foi confirmada. Você tem <strong style="color:{VERDE_CLARO};">2 dias de Pick IA Pro grátis</strong> para explorar tudo que o Pick IA faz.
           </p>
 
           <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
             <tr>
-              {_card(VERDE_CLARO, "Picks VIP", "Análises diárias com valor esperado positivo, odd e mercado definidos.")}
+              {_card(VERDE_CLARO, "Picks Premium", "Análises diárias com valor esperado positivo, odd e mercado definidos.")}
               <td width="4%"></td>
               {_card("#3b82f6", "Múltiplas e Alavancagem", "Combinações montadas pelo motor, com o caminho todo acompanhado.")}
             </tr>

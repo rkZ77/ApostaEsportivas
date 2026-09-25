@@ -51,7 +51,7 @@ export default function AgentePanel({ onClose }: { onClose: () => void }) {
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95, y: 10, transition: { duration: 0.15 } }}
       transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-      style={{ bottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }}
+      style={{ bottom: 'calc(1.25rem + var(--barra-inferior, 0px) + env(safe-area-inset-bottom))' }}
       className="fixed right-4 z-50 w-[calc(100vw-2rem)] max-w-sm h-[min(72vh,560px)] bg-surface-0 border border-line rounded-lg shadow-2xl shadow-black/60 flex flex-col overflow-hidden origin-bottom-right"
     >
       {/* Header */}
@@ -96,9 +96,9 @@ export default function AgentePanel({ onClose }: { onClose: () => void }) {
               </>
             ) : (
               <>
-                <p className="text-ink-1 font-bold text-sm mb-1.5">Agente exclusivo VIP</p>
+                <p className="text-ink-1 font-bold text-sm mb-1.5">Agente exclusivo do Pro</p>
                 <p className="text-ink-2 text-xs leading-relaxed mb-5">
-                  Disponível apenas para assinantes VIP. Analisa picks, banca, alavancagem e jogos ao vivo em tempo real.
+                  Disponível no plano Pick IA Pro. Analisa picks, banca, alavancagem e jogos ao vivo em tempo real.
                 </p>
                 <Link to="/checkout" onClick={onClose} className="inline-block bg-yellow-400 hover:bg-yellow-300 text-on-fill font-black px-5 py-2.5 rounded-md text-xs transition-colors">
                   Assinar

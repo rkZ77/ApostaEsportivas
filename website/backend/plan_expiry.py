@@ -67,7 +67,7 @@ logger = logging.getLogger(__name__)
 # Rótulo do plano na mensagem. O nome importa: "seu VIP vence" e "seu teste
 # grátis acaba" pedem ações diferentes de quem lê, e o mesmo texto genérico
 # ("seu plano") faria o trial parecer cobrança.
-LABEL_PLANO = {"vip": "Plano VIP", "trial": "Teste grátis"}
+LABEL_PLANO = {"vip": "plano", "trial": "Teste grátis"}
 
 #: O nome do plano PAGO depende do tier desde 12/09/2026. "Plano VIP" virou
 #: rótulo de nenhum dos dois produtos: quem assina lê "Pick IA" ou "Pick IA
@@ -146,16 +146,16 @@ def _mensagem(plan: str, dias: int, tier: str | None = None) -> tuple[str, str]:
         label = LABEL_PLANO.get(plan, "Plano")
     titulo = f"Seu {label} {_texto_prazo(dias)}"
     if plan == "trial":
-        corpo = ("Quando o teste acabar você volta pro plano free e perde os picks VIP, "
+        corpo = ("Quando o teste acabar você volta pro plano free e perde os Picks Premium, "
                  "múltiplas, alavancagem e o agente de futebol. Assine para continuar.")
     elif (tier or "pro") == "base":
         # O corpo nomeia o que a pessoa REALMENTE perde. Citar o ao vivo e o
         # agente pra quem nunca teve os dois é prometer o que o plano dela não
         # entrega, e é o tipo de erro que faz o aviso virar reclamação.
-        corpo = ("Renove para não perder os picks VIP, múltiplas, alavancagem, "
+        corpo = ("Renove para não perder os Picks Premium, múltiplas, alavancagem, "
                  "Pick Boost, Pick Jogador e os mercados de faltas e defesas.")
     else:
-        corpo = ("Renove para não perder os picks VIP, os picks ao vivo, múltiplas, "
+        corpo = ("Renove para não perder os Picks Premium, os picks ao vivo, múltiplas, "
                  "alavancagem, mercados de faltas e defesas e o agente de futebol.")
     return titulo, corpo
 
@@ -269,7 +269,7 @@ def dedupe_vip_encerrado(data_exp) -> str:
 # (título, corpo, rótulo do botão) de cada encerramento. A lista de perdas é a
 # mesma nos dois porque o acesso perdido é o mesmo · o que muda é o verbo:
 # quem testou ASSINA, quem assinou RENOVA.
-_PERDAS = ("os picks VIP, as múltiplas, a alavancagem, os mercados de faltas "
+_PERDAS = ("os Picks Premium, as múltiplas, a alavancagem, os mercados de faltas "
            "e defesas e o agente de futebol")
 
 ENCERRAMENTO = {
@@ -277,13 +277,13 @@ ENCERRAMENTO = {
         "Seu teste grátis acabou",
         f"Você voltou pro plano free e {_PERDAS} ficaram para trás. "
         "Assine para destravar tudo de novo.",
-        "Assinar o VIP",
+        "Assinar um plano",
     ),
     "vip": (
-        "Seu VIP acabou",
+        "Sua assinatura acabou",
         f"Sua assinatura venceu e a conta voltou pro plano free: {_PERDAS} "
         "ficaram para trás. Renove para destravar tudo de novo.",
-        "Renovar o VIP",
+        "Renovar a assinatura",
     ),
 }
 

@@ -88,8 +88,8 @@ export default function Agente() {
       >
         <EmptyState
           Icon={Lock}
-          title="Agente exclusivo VIP"
-          description="O Agente IA analisa picks, banca, jogos ao vivo e responde qualquer dúvida em tempo real. Disponível apenas para assinantes VIP."
+          title="Agente exclusivo do Pro"
+          description="O Agente IA analisa picks, banca, jogos ao vivo e responde qualquer dúvida em tempo real. Disponível no plano Pick IA Pro."
           action={{ children: 'Assinar', to: '/checkout', variant: 'vip' }}
           className="w-full"
         />

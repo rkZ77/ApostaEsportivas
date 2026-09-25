@@ -243,7 +243,7 @@ function TabBar({ tab, setTab, canSeeVip, canSeePro, verAoVivo, verBingo, temFal
     /* Sem selo "FREE": o nome da aba já diz. Ver o comentário da marcação
        lá embaixo, no render. */
     { key: 'pick_seguro',  label: 'Picks Free' },
-    { key: 'vip',          label: 'Picks VIP',       premiumOnly: true },
+    { key: 'vip',          label: 'Picks Premium',       premiumOnly: true },
     {
       /* Pick Boost · combinação fixa (Over 1.5 FT + Under 2.5 HT) em que o
          motor escolhe os JOGOS, não o mercado.
@@ -1178,7 +1178,6 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
       <div className="pick-head">
         <div className="flex items-center gap-2">
           <span className={`text-xs font-black ${estilo.texto}`}>{estilo.rotulo}</span>
-          <span className="badge-vip">VIP</span>
           <span className="text-[10px] text-ink-4">
             {new Date(m.match_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
             {', '}{legs.length} seleções
@@ -1585,7 +1584,6 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
       <div className="pick-head">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs font-black text-orange-400">Alavancagem</span>
-          <span className="badge-vip">VIP</span>
           {isCombo && <span className="text-[10px] text-blue-400 border border-blue-400/20 bg-blue-400/10 px-2 py-0.5 rounded-md font-bold">{comboLabel}</span>}
         </div>
         {resultStyle ? (
@@ -2037,7 +2035,7 @@ function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando, banca,
 
   return (
     <div>
-      <SectionHeader color={cor} label={titulo} badge="VIP" />
+      <SectionHeader color={cor} label={titulo} />
       {/* Explicacao so' quando ha o que explicar. Secao vazia nao precisa de
           paragrafo sobre um mercado que nao esta ali. */}
       {!vazio && <p className="text-xs text-ink-3 leading-relaxed mb-4">{explicacao}</p>}
@@ -2589,7 +2587,7 @@ function VipLockOverlay({ color = 'yellow', picks, resumo, rotulo = 'picks', res
     ? `${lista.length} ${lista.length === 1 ? 'pick' : rotulo} de hoje, ${lista.length === 1 ? 'trancado' : 'trancados'}`
     : resumo
     ? 'Publicado hoje, trancado'
-    : 'Exclusivo para assinantes VIP'
+    : 'Exclusivo para assinantes'
 
   return (
     <div className="space-y-3">
@@ -3437,7 +3435,7 @@ export default function Picks() {
   return (
     <PageShell
       title="Picks"
-      description="Os picks da IA de hoje: VIP, free, múltiplas, alavancagem e mercados de faltas e defesas."
+      description="Os picks da IA de hoje: Premium, free, múltiplas, alavancagem e mercados de faltas e defesas."
       noindex
       width="full"
     >
@@ -3699,7 +3697,7 @@ export default function Picks() {
                   <section>
                     <SectionHeader
                       color="bg-yellow-400"
-                      label="Picks VIP do Dia"
+                      label="Picks Premium do Dia"
                       badge={canSeeVip && pending.length ? `${pending.length} pendente${pending.length > 1 ? 's' : ''}` : undefined}
                     />
                     {!canSeeVip ? <VipLockOverlay color="yellow" picks={today?.bloqueados?.vip} resolvidos={today?.bloqueados?.resolvidos} /> : (
@@ -3864,7 +3862,7 @@ export default function Picks() {
                   corte de 4 do VIP e um atalho pra aba do produto. */}
               {canSeeVip && faltasCards.length > 0 && (
                 <section>
-                  <SectionHeader color="bg-purple-400" label="Pick Falta do Dia" badge="VIP"
+                  <SectionHeader color="bg-purple-400" label="Pick Falta do Dia"
                     contagem={faltasCards.length} />
                   <div className="lista-longa grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                     {faltasCards.slice(0, 4).map(c => (
@@ -3883,7 +3881,7 @@ export default function Picks() {
 
               {canSeeVip && playerStatsCards.length > 0 && (
                 <section>
-                  <SectionHeader color="bg-amber-400" label="Pick Jogador do Dia" badge="VIP"
+                  <SectionHeader color="bg-amber-400" label="Pick Jogador do Dia"
                     contagem={playerStatsCards.length} />
                   <div className="lista-longa grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                     {playerStatsCards.slice(0, 4).map(c => (
@@ -3904,7 +3902,7 @@ export default function Picks() {
                   Player Stats). Fica sem atalho de aba: ela nao tem uma. */}
               {canSeeVip && goleirosCards.length > 0 && (
                 <section>
-                  <SectionHeader color="bg-sky-400" label="Defesas do Dia" badge="VIP"
+                  <SectionHeader color="bg-sky-400" label="Defesas do Dia"
                     contagem={goleirosCards.length} />
                   <div className="lista-longa grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                     {goleirosCards.slice(0, 4).map(c => (
@@ -3929,7 +3927,6 @@ export default function Picks() {
               {canSeeVip && liveDoDia.length > 0 && (
                 <section>
                   <SectionHeader color="bg-accent" label="Ao Vivo" contagem={liveDoDia.length}
-                    badge="VIP"
                     action={livePendentes.length > 0 ? (
                       <button onClick={() => setTab('ao_vivo')}
                         className="text-[11px] font-semibold text-accent-ink hover:text-accent-hover transition-colors">
@@ -4000,7 +3997,7 @@ export default function Picks() {
 
         {tab === 'vip' && (
           <motion.div key="vip" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6">
-            <ComoFunciona titulo="O que são os Picks VIP?" cor="text-yellow-400"
+            <ComoFunciona titulo="O que são os Picks Premium?" cor="text-yellow-400"
                           borda="border-yellow-400/20" fundo="bg-yellow-400/5">
               <>
                 <p>
@@ -4089,8 +4086,8 @@ export default function Picks() {
                     ) : (
                       <SecaoVazia texto={
                         leagueFilter || vipResultFilter
-                          ? 'Nenhum pick VIP com esses filtros. Limpe o filtro para ver o dia inteiro.'
-                          : 'Sem pick VIP hoje. Não há horário fixo de publicação: eles saem quando o motor encontra jogo que passa nos cortes.'
+                          ? 'Nenhum Pick Premium com esses filtros. Limpe o filtro para ver o dia inteiro.'
+                          : 'Sem Pick Premium hoje. Não há horário fixo de publicação: eles saem quando o motor encontra jogo que passa nos cortes.'
                       } />
                     )}
                   </>
@@ -4117,7 +4114,7 @@ export default function Picks() {
              mostra quatro picks VIP lado a lado mostra as pernas do bilhete
              com mais ar. */
           <motion.div key="multiplas" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6">
-            <ComoFunciona titulo="O que são as Múltiplas VIP?" cor="text-blue-400"
+            <ComoFunciona titulo="O que são as Múltiplas?" cor="text-blue-400"
                           borda="border-blue-400/20" fundo="bg-blue-400/5">
               <>
                 <p>
@@ -4775,13 +4772,13 @@ export default function Picks() {
             {!canSeeVip ? (
               (boostVipF.length > 0 || (today?.bloqueados?.mercados?.length ?? 0) > 0) && (
                 <div>
-                  <SectionHeader color="bg-cyan-400" label="Os outros do dia" badge="VIP" />
+                  <SectionHeader color="bg-cyan-400" label="Os outros do dia" />
                   <VipLockOverlay color="blue" picks={today?.bloqueados?.mercados} rotulo="Pick Boost" resolvidos={soDoTipo(today?.bloqueados?.resolvidos_mercados, 'boost')} />
                 </div>
               )
             ) : boostVipF.length > 0 && (
               <div>
-                <SectionHeader color="bg-cyan-400" label="Os outros do dia" contagem={boostVipF.length} badge="VIP" />
+                <SectionHeader color="bg-cyan-400" label="Os outros do dia" contagem={boostVipF.length} />
                 <div className="lista-longa grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                   {boostVipF.map(p => (
                     <SuggestionCard

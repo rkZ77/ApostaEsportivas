@@ -119,7 +119,7 @@ export default function VerifyEmail() {
             <h1 className="text-2xl font-bold text-ink-1 mb-2">E-mail confirmado!</h1>
             {trialAtivado ? (
               <>
-                <p className="text-ink-1 text-sm font-semibold mb-1">2 dias de VIP liberados.</p>
+                <p className="text-ink-1 text-sm font-semibold mb-1">2 dias de Pro liberados.</p>
                 <p className="text-ink-3 text-sm mb-6">
                   Você tem acesso completo às análises, à múltipla e à alavancagem. Aproveite.
                 </p>
@@ -131,7 +131,7 @@ export default function VerifyEmail() {
               onClick={() => navigate('/picks')}
               className="w-full py-3 rounded-md bg-green-600 hover:bg-green-500 text-on-fill font-bold text-sm transition-colors"
             >
-              {trialAtivado ? 'Ver os picks do VIP' : 'Acessar picks'}
+              {trialAtivado ? 'Ver os Picks Premium' : 'Acessar picks'}
             </button>
           </>
         )}

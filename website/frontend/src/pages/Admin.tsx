@@ -143,7 +143,7 @@ interface Liga {
 }
 
 const PICK_LABEL: Record<string, string> = {
-  vip: 'VIP', free: 'Dica do Dia', multiplas: 'Múltiplas', bingo: 'Bingo do Dia',
+  vip: 'Premium', free: 'Dica do Dia', multiplas: 'Múltiplas', bingo: 'Bingo do Dia',
   alavancagem: 'Alavancagem', faltas: 'Faltas', goleiros: 'Defesas',
   player_stats: 'Jogadores', boost: 'Pick Boost', live: 'Ao Vivo',
 }
@@ -315,7 +315,7 @@ export default function Admin() {
     { command: 'atualizar_jogos',      label: 'Atualizar Jogos'      },
     { command: 'player_stats',         label: 'Estatística de Jogador' },
     { command: 'capturar_odds',        label: 'Capturar Odds'        },
-    { command: 'gerar_vip',            label: 'Gerar VIP'            },
+    { command: 'gerar_vip',            label: 'Gerar Premium'            },
     { command: 'gerar_free',           label: 'Gerar Free'           },
     { command: 'gerar_multipla',       label: 'Gerar Múltipla'       },
     { command: 'gerar_bingo',          label: 'Gerar Bingo do Dia'   },

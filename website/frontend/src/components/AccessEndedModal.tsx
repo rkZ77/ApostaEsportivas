@@ -42,7 +42,7 @@ export type FimDeAcesso = 'trial' | 'vip'
 /** O que a pessoa tinha até ontem · a lista é o argumento, e é a mesma nos
     dois casos porque o acesso perdido é o mesmo. */
 const PERDIDOS = [
-  'Picks VIP do dia',
+  'Picks Premium do dia',
   'Múltiplas e alavancagem',
   'Mercados de faltas e defesas',
   'Agente de futebol com IA',
@@ -55,13 +55,13 @@ const COPY: Record<FimDeAcesso, {
     rotulo: 'Teste grátis',
     titulo: 'Seus 2 dias acabaram',
     intro: 'Sua conta voltou pro plano free. O que estava liberado até agora:',
-    cta: 'Assinar o VIP',
+    cta: 'Assinar um plano',
   },
   vip: {
-    rotulo: 'Assinatura VIP',
-    titulo: 'Seu VIP acabou',
+    rotulo: 'Assinatura',
+    titulo: 'Sua assinatura acabou',
     intro: 'Sua assinatura venceu e a conta voltou pro plano free. O que sai do ar:',
-    cta: 'Renovar o VIP',
+    cta: 'Renovar a assinatura',
   },
 }
 

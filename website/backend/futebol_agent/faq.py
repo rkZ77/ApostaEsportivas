@@ -47,12 +47,13 @@ _FAQ: list[dict] = [
         "id": "pick_vip",
         "perguntas": [
             "o que é o pick vip", "como funciona o pick vip", "o que vem no vip",
+            "o que é o pick premium", "como funciona o pick premium", "o que são os picks premium",
             "quantos picks por dia", "quantas picks o vip tem",
         ],
         "resposta": (
-            "O **Pick VIP** é o pick principal da plataforma: 1 pick por dia com confiança média acima "
-            "de 70%, incluindo time, mercado, linha, odd e casa de apostas sugerida. É exclusivo de "
-            "assinantes VIP/trial."
+            "Os **Picks Premium** (antigo Pick VIP) são os picks principais da plataforma: os de maior "
+            "confiança do dia, com time, mercado, linha, odd e casa de apostas sugerida. São exclusivos "
+            "de assinantes (Pick IA e Pick IA Pro) e de quem está no teste grátis."
         ),
     },
     {
@@ -62,7 +63,7 @@ _FAQ: list[dict] = [
         ],
         "resposta": (
             "A **Múltipla** combina 2 picks do dia com alta correlação estatística, buscando "
-            "multiplicar o retorno com os 2 greens. Também é exclusiva de assinantes VIP/trial."
+            "multiplicar o retorno com os 2 greens. Também é exclusiva de assinantes e de quem está no teste grátis."
         ),
     },
     {
@@ -87,10 +88,10 @@ _FAQ: list[dict] = [
             "o que o plano free tem", "como funciona o pick seguro",
         ],
         "resposta": (
-            "O **Pick Seguro** é gratuito e liberado pra todo mundo, inclusive plano free. É publicado "
+            "A **Dica do Dia** é gratuita e liberada pra todo mundo, inclusive plano free. É publicada "
             "diariamente e geralmente cobre um mercado mais defensivo (over/under baixo).\n\n"
-            "Pick VIP, Múltipla e Alavancagem, além do chat com análise ao vivo, são exclusivos de "
-            "assinantes VIP ou trial."
+            "Picks Premium, Múltipla e Alavancagem são dos dois planos pagos (Pick IA e Pick IA Pro). "
+            "Os picks ao vivo e este agente são do Pick IA Pro."
         ),
     },
     {
@@ -101,7 +102,7 @@ _FAQ: list[dict] = [
         ],
         "resposta": (
             "Você define sua banca inicial e o valor da unidade (ex: banca R$1000, unidade R$20 = 2% "
-            "por unidade). Cada Pick VIP tem um stake recomendado em unidades (ex: 1u, 2u, 3u), pra "
+            "por unidade). Cada Pick Premium tem um stake recomendado em unidades (ex: 1u, 2u, 3u), pra "
             "você dimensionar a aposta com base na confiança da IA.\n\n"
             "A banca de alavancagem é separada da banca principal e segue regras próprias."
         ),
@@ -109,12 +110,12 @@ _FAQ: list[dict] = [
     {
         "id": "trial",
         "perguntas": [
-            "tem teste gratis", "como funciona o trial", "posso testar o vip", "trial gratuito",
+            "tem teste gratis", "como funciona o trial", "posso testar o vip", "posso testar o pro", "trial gratuito",
             "como ativo o trial", "tenho direito a trial", "preciso de cpf", "por que pedem cpf",
         ],
         "resposta": (
             "Sim: todo cadastro tem direito a um **trial gratuito de 2 dias** com acesso completo "
-            "ao VIP, uma única vez por conta. Ele é liberado assim que você confirma o e-mail · "
+            "ao Pick IA Pro, uma única vez por conta. Ele é liberado assim que você confirma o e-mail · "
             "é só clicar no link que enviamos no cadastro. Se não chegou, dá pra reenviar em "
             "Perfil (confira também o spam)."
         ),
@@ -127,7 +128,7 @@ _FAQ: list[dict] = [
         ],
         "resposta": (
             "O pagamento é processado via Mercado Pago, com Pix, cartão de crédito e demais opções "
-            "disponíveis no checkout. A confirmação do VIP é automática assim que o pagamento é aprovado."
+            "disponíveis no checkout. O acesso é liberado automaticamente assim que o pagamento é aprovado."
         ),
     },
     {
@@ -139,7 +140,7 @@ _FAQ: list[dict] = [
         "resposta": (
             "Não há cobrança recorrente automática: cada plano é um pagamento único com validade "
             "própria (30, 90, 180 ou 365 dias) que expira sozinho ao final do período. Não precisa "
-            "cancelar nada: se quiser continuar VIP depois, é só renovar."
+            "cancelar nada: se quiser continuar depois, é só renovar."
         ),
     },
     {
@@ -148,7 +149,7 @@ _FAQ: list[dict] = [
             "que horas saem os picks", "quando saem as picks do dia", "que horas publicam os picks",
             "horário dos picks", "que horas sai o pick do dia", "que horas sai o pick",
         ],
-        "resposta": "Os picks do dia (VIP, Múltipla, Alavancagem e Pick Seguro) são publicados diariamente por volta das 07h na aba Hoje.",
+        "resposta": "Os picks do dia (Picks Premium, Múltipla, Alavancagem e Dica do Dia) não têm horário fixo: saem quando o motor encontra jogo que passa nos cortes, e você recebe um aviso quando forem publicados.",
     },
     {
         "id": "sobre_a_ia",
@@ -173,8 +174,9 @@ for _entry in _FAQ:
         _entry["resposta"] = (
             "Planos disponíveis:\n\n"
             f"{_plans_text()}\n\n"
-            "Todos dão acesso completo ao VIP (Pick VIP, Múltipla, Alavancagem e chat com análise ao "
-            "vivo) durante o período. Pagamento único via Mercado Pago, sem cobrança recorrente."
+            "O Pick IA abre todo o pré-jogo (Picks Premium, Múltipla, Alavancagem, faltas, defesas e "
+            "jogador). O Pick IA Pro soma os picks ao vivo e o agente de futebol. Pagamento único via "
+            "Mercado Pago, sem cobrança recorrente."
         )
         break
 

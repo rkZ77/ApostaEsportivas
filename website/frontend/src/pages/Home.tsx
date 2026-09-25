@@ -1,16 +1,11 @@
 import { lazy, useCallback, useEffect, useLayoutEffect, useState } from 'react'
 import { Helmet } from 'react-helmet-async'
-import { X as XIcon } from 'lucide-react'
 
 import api from '../services/api'
 import SiteHeader from '../components/SiteHeader'
 import Footer from '../components/Footer'
 import SecaoAdiada from '../components/SecaoAdiada'
-// Só o Button: o resto dos primitivos foi junto com as seções que saíram
-// daqui (home/RecentResults.tsx e home/Plans.tsx).
-import { Button } from '../components/ui'
 import { usePlans, type Plan } from '../hooks/usePlans'
-import { useAuth } from '../context/AuthContext'
 import { encerrarBarraInicial } from '../lib/barraInicial'
 
 import FreePickHero from '../home/FreePickHero'
@@ -77,29 +72,6 @@ interface PublicData {
   by_league?: Array<{ league_id: number | null; league_name: string }>
 }
 
-/* ── CTA fixo no rodapé, só mobile ──────────────────────────────────────── */
-
-function StickyMobileCTA({ onDismiss, titulo, sub, acao, destino }: {
-  onDismiss: () => void; titulo: string; sub: string; acao: string; destino: string
-}) {
-  return (
-    <div className="fixed bottom-0 inset-x-0 z-40 sm:hidden bg-surface-0/95 backdrop-blur-md border-t border-line px-4 py-3 flex items-center gap-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-      <div className="flex-1 min-w-0">
-        <p className="text-ink-1 text-xs font-bold leading-none">{titulo}</p>
-        <p className="text-accent-ink text-[10px] font-semibold mt-1">{sub}</p>
-      </div>
-      <Button to={destino} size="sm">{acao}</Button>
-      <button
-        onClick={onDismiss}
-        className="text-ink-4 hover:text-ink-2 p-2 shrink-0"
-        aria-label="Fechar chamada"
-      >
-        <XIcon className="w-4 h-4" />
-      </button>
-    </div>
-  )
-}
-
 /* ── Página ─────────────────────────────────────────────────────────────── */
 
 /*
@@ -133,23 +105,7 @@ const HERO_JA_PINTADO =
 export default function Home() {
   const [data, setData] = useState<PublicData | null>(null)
   const [loaded, setLoaded] = useState(false)
-  const [ctaDismissed, setCtaDismissed] = useState(false)
 
-  /*
-   * A faixa fixa do rodapé mobile vendia "Criar conta" pra todo mundo, VIP
-   * pagante incluído · a Home nem lia o contexto de autenticação. Quem já
-   * assina não tem conta pra criar nem trial pra testar, e a faixa só ocupava
-   * a barra inferior do celular dele.
-   *
-   * Free e trial continuam vendo uma chamada, mas a que faz sentido pra eles:
-   * o caminho é o plano, não o cadastro que já existe.
-   */
-  const { user } = useAuth()
-  const ctaFaixa = !user
-    ? { titulo: 'Testar o Pro por 2 dias', sub: 'Grátis', acao: 'Criar conta', destino: '/login?mode=register' }
-    : user.plan === 'free' || user.plan === 'trial'
-    ? { titulo: 'Desbloqueie os picks VIP', sub: 'Todos os produtos da IA', acao: 'Ver planos', destino: '/planos' }
-    : null
   const { plans, monthly, monthlyBase } = usePlans()
 
   /*
@@ -240,7 +196,7 @@ export default function Home() {
       { '@type': 'Offer', name: 'Plano Free', price: '0', priceCurrency: 'BRL' },
       ...plans.map(p => ({
         '@type': 'Offer',
-        name: `Plano VIP ${p.label}`,
+        name: `${p.tier === 'pro' ? 'Pick IA Pro' : 'Pick IA'} ${p.label}`,
         price: p.price.toFixed(2),
         priceCurrency: 'BRL',
         billingIncrement: p.iso_period,
@@ -249,7 +205,7 @@ export default function Home() {
   }
 
   return (
-    <div className={`min-h-screen bg-surface-0 text-ink-1 overflow-x-hidden flex flex-col ${ctaDismissed || !ctaFaixa ? '' : 'pb-20 sm:pb-0'}`}>
+    <div className="min-h-screen bg-surface-0 text-ink-1 overflow-x-hidden flex flex-col">
       <Helmet>
         <title>Palpites de Futebol Hoje com IA | Pick IA</title>
         <meta
@@ -284,7 +240,10 @@ export default function Home() {
 
             <HeroTexto animar={!HERO_JA_PINTADO} />
 
-            <div className="lg:pl-4">
+            {/* max-w-md abaixo de lg: sozinho numa coluna, o card esticava até
+                a largura da tela (910px num notebook pequeno) pra mostrar um
+                jogo e uma odd. */}
+            <div className="w-full max-w-md lg:max-w-none lg:pl-4">
               <FreePickHero revelar={topoPronto} onCarregou={marcarPronto} />
             </div>
           </div>
@@ -341,7 +300,6 @@ export default function Home() {
 
       <SecaoAdiada alturaMinima={420}><Footer /></SecaoAdiada>
 
-      {!ctaDismissed && ctaFaixa && <StickyMobileCTA onDismiss={() => setCtaDismissed(true)} {...ctaFaixa} />}
     </div>
   )
 }

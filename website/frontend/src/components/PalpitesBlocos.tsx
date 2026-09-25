@@ -230,7 +230,7 @@ export function ChamadaFinal() {
       </h2>
       <p className="text-sm text-ink-2 max-w-xl mx-auto mb-5">
         O histórico acima é público e fica registrado, acerto e erro. O mercado e a
-        linha de cada jogo do dia ficam na área de picks, e o teste do VIP dura 2 dias
+        linha de cada jogo do dia ficam na área de picks, e o teste do Pro dura 2 dias
         sem cobrança.
       </p>
       <div className="flex flex-col sm:flex-row gap-3 justify-center">

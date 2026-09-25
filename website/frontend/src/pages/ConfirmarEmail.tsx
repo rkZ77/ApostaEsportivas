@@ -86,17 +86,17 @@ export default function ConfirmarEmail() {
           </div>
 
           <h1 className="text-2xl font-bold text-ink-1 mb-2">
-            Falta um clique para os 2 dias de VIP
+            Falta um clique para os 2 dias de Pro
           </h1>
           <p className="text-ink-3 text-sm leading-relaxed mb-6">
             Sua conta está criada. Mandamos um link para{' '}
-            <strong className="text-ink-1 break-all">{email}</strong>: ao abrir, o acesso VIP
+            <strong className="text-ink-1 break-all">{email}</strong>: ao abrir, o acesso ao Pro
             completo liga na hora e vale por 2 dias.
           </p>
 
           <ul className="space-y-2.5 mb-6">
             {[
-              'Picks VIP, múltiplas, alavancagem e ao vivo, tudo aberto',
+              'Picks Premium, múltiplas, alavancagem e ao vivo, tudo aberto',
               'Não pedimos dados de pagamento para testar',
               'O acesso vence sozinho, não cobramos nada no fim',
             ].map(t => (

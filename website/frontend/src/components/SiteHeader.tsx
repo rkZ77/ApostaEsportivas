@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
-import { AnimatePresence, motion } from 'framer-motion'
-import { Menu, X } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { Menu } from 'lucide-react'
+import MenuLateral from './MenuLateral'
+import BarraInferior from './BarraInferior'
 import { useAuth } from '../context/AuthContext'
 import { Button } from './ui'
 import { cn } from '../lib/cn'
@@ -33,7 +34,7 @@ export default function SiteHeader() {
   const [scrolled, setScrolled] = useState(false)
   const [open, setOpen] = useState(false)
   const { user } = useAuth()
-  const { pathname } = useLocation()
+  const fechar = useCallback(() => setOpen(false), [])
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8)
@@ -42,24 +43,31 @@ export default function SiteHeader() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  // Fecha o menu ao navegar e trava o scroll do fundo enquanto ele está aberto.
-  useEffect(() => { setOpen(false) }, [pathname])
-  useEffect(() => {
-    document.body.style.overflow = open ? 'hidden' : ''
-    return () => { document.body.style.overflow = '' }
-  }, [open])
 
   return (
+    <>
     <header
       className={cn(
-        'fixed inset-x-0 top-0 z-50 transition-all duration-2 ease-smooth',
+        /* No celular o cabeçalho é uma cápsula flutuando com margem (molde da
+           KaySto), sempre com fundo · o fundo só aparecer depois de rolar
+           fica pro desktop, onde a barra ocupa a largura toda. */
+        'fixed inset-x-0 top-0 z-50 px-3 pt-3 md:px-0 md:pt-0 transition-all duration-2 ease-smooth',
         scrolled
-          ? 'bg-surface-0/80 backdrop-blur-xl border-b border-line shadow-elev-sm'
-          : 'bg-transparent border-b border-transparent',
+          ? 'md:bg-surface-0/80 md:backdrop-blur-xl md:border-b md:border-line md:shadow-elev-sm'
+          : 'md:bg-transparent md:border-b md:border-transparent',
       )}
     >
-      <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
+      <div className="max-w-6xl mx-auto px-3 md:px-4 h-14 md:h-16 flex items-center justify-between gap-4 rounded-2xl border border-line bg-surface-0/80 backdrop-blur-xl shadow-elev-sm md:rounded-none md:border-0 md:bg-transparent md:backdrop-blur-none md:shadow-none">
 
+        <div className="flex items-center gap-1 shrink-0">
+        <button
+          onClick={() => setOpen(true)}
+          aria-label="Abrir menu"
+          aria-expanded={open}
+          className="p-2 -ml-2 text-ink-2 hover:text-ink-1 transition-colors"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
         <Link to="/" className="flex items-center gap-2.5 shrink-0" aria-label="Pick IA, início">
           {/* logo-64.webp, e nao logo.png: o PNG tem 320 px e 9,3 KB para
               aparecer em 32 · e' a "entrega de imagens" que o PageSpeed
@@ -71,13 +79,17 @@ export default function SiteHeader() {
             Pick<span className="text-accent-ink">IA</span>
           </span>
         </Link>
+        </div>
 
-        <nav className="hidden md:flex items-center gap-1" aria-label="Navegação principal">
+        {/* Só a partir de lg: entre 768 e 1024 os seis links mais o botão do
+            menu lateral não cabiam, quebravam em duas linhas e empurravam o
+            "Entrar" pra fora da tela. Abaixo disso, a gaveta tem tudo. */}
+        <nav className="hidden lg:flex items-center gap-1" aria-label="Navegação principal">
           {LINKS.map(({ href, label }) => (
             <a
               key={href}
               href={href}
-              className="text-ink-2 hover:text-ink-1 text-sm font-medium px-3 py-2 rounded-md hover:bg-surface-2/60 transition-colors duration-1 ease-smooth"
+              className="whitespace-nowrap text-ink-2 hover:text-ink-1 text-sm font-medium px-3 py-2 rounded-md hover:bg-surface-2/60 transition-colors duration-1 ease-smooth"
             >
               {label}
             </a>
@@ -103,49 +115,12 @@ export default function SiteHeader() {
             </>
           )}
 
-          <button
-            onClick={() => setOpen(o => !o)}
-            aria-label={open ? 'Fechar menu' : 'Abrir menu'}
-            aria-expanded={open}
-            className="md:hidden p-2 -mr-2 text-ink-2 hover:text-ink-1 transition-colors"
-          >
-            {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </button>
         </div>
       </div>
 
-      <AnimatePresence>
-        {open && (
-          <motion.nav
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}
-            className="md:hidden overflow-hidden bg-surface-0/95 backdrop-blur-xl border-t border-line"
-            aria-label="Navegação principal"
-          >
-            <div className="px-4 py-3 space-y-0.5">
-              {LINKS.map(({ href, label }) => (
-                <a
-                  key={href}
-                  href={href}
-                  onClick={() => setOpen(false)}
-                  className="block px-3 py-3 rounded-md text-sm font-medium text-ink-2 hover:text-ink-1 hover:bg-surface-1 transition-colors"
-                >
-                  {label}
-                </a>
-              ))}
-              {!user && (
-                <div className="pt-2 mt-1 border-t border-line">
-                  <Button to="/login" variant="ghost" size="md" block onClick={() => setOpen(false)}>
-                    Entrar na conta
-                  </Button>
-                </div>
-              )}
-            </div>
-          </motion.nav>
-        )}
-      </AnimatePresence>
     </header>
+    <MenuLateral open={open} onClose={fechar} />
+    <BarraInferior />
+    </>
   )
 }

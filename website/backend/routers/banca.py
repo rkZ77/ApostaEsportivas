@@ -537,7 +537,7 @@ def _curva_diaria(entries: list, bankroll_start: float) -> list[dict]:
 #: usuário lê os dois como uma coisa só ("mercados"). Manter separados daria
 #: duas linhas de volume baixo onde uma já responde.
 PIPELINES_DA_QUEBRA: tuple = (
-    ("vip",       "VIP",       ("vip",)),
+    ("vip",       "Premium",   ("vip",)),
     ("free",      "Free",      ("free",)),
     ("multipla",  "Múltipla",  ("multipla", "multiplas")),
     ("bingo",     "Bingo do Dia", ("bingo",)),
@@ -1364,7 +1364,7 @@ STAKE_LIMITS = {
 }
 
 STAKE_LABELS = {
-    "vip": "VIP", "free": "Free", "multipla": "Múltipla", "bingo": "Bingo do Dia",
+    "vip": "Premium", "free": "Free", "multipla": "Múltipla", "bingo": "Bingo do Dia",
     "alavancagem": "Alavancagem", "faltas": "de Faltas", "goleiros": "de Defesas",
     "player_stats": "de Jogador", "boost": "Pick Boost",
     "live": "Ao Vivo",
@@ -1450,7 +1450,7 @@ def follow_pick(body: FollowPick, current_user: dict = Depends(get_current_user)
     cur = conn.cursor()
     try:
         if not _pode_seguir(cur, current_user, body.pick_type, body.pick_id):
-            raise HTTPException(403, "Acesso VIP necessário para seguir este pick.")
+            raise HTTPException(403, "Seguir este pick é recurso para assinantes.")
         pick = _resolve_pick(cur, body.pick_id, body.pick_type)
         if not pick:
             raise HTTPException(404, "Pick não encontrado.")

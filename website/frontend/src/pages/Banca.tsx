@@ -21,7 +21,7 @@ import SelectMenu from '../components/ui/SelectMenu'
 import MonthlyCloseSection from '../components/MonthlyCloseSection'
 
 const SOURCE_LBL: Record<string, string> = {
-  vip: 'VIP', free: 'Free', multipla: 'Múlt.', bingo: 'Bingo', alavancagem: 'Alav.',
+  vip: 'Premium', free: 'Free', multipla: 'Múlt.', bingo: 'Bingo', alavancagem: 'Alav.',
 }
 
 // lock overlay para free
@@ -216,7 +216,7 @@ function SetupModal({ current, locked, onSave, onClose, onWithdraw, onAjustar }:
    (backend/routers/banca.py::_quebra_por_pipeline). */
 const PRODUTOS_DA_BANCA: Array<[string, string]> = [
   ['all', 'Todos os produtos'],
-  ['vip', 'VIP'],
+  ['vip', 'Premium'],
   ['live', 'Ao Vivo'],
   ['boost', 'Pick Boost'],
   ['multipla', 'Múltiplas'],
@@ -661,7 +661,7 @@ export default function Banca() {
                       {data.ia_roi >= 0 ? '+' : ''}{data.ia_roi}%
                     </div>
                     <div className="text-xs text-ink-3 mt-1 font-semibold">Yield da IA</div>
-                    <div className="text-[10px] text-ink-4 mt-0.5">todos os picks VIP</div>
+                    <div className="text-[10px] text-ink-4 mt-0.5">todos os Picks Premium</div>
                   </div>
                 </div>
                 {data.yield_roi != null && data.ia_roi != null && (

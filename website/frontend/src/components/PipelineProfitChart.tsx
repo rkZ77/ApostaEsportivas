@@ -59,7 +59,7 @@ const COR: Record<string, string> = {
   live:        'rgb(var(--c-lime-400))',
 }
 const NOME: Record<string, string> = {
-  vip: 'VIP', free: 'Free', multiplas: 'Múltiplas',
+  vip: 'Premium', free: 'Free', multiplas: 'Múltiplas',
   alavancagem: 'Alavancagem', faltas: 'Faltas', goleiros: 'Defesas',
   player_stats: 'Jogadores', boost: 'Pick Boost', live: 'Ao Vivo',
 }

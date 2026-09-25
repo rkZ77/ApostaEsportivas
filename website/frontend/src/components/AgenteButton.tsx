@@ -17,7 +17,7 @@ interface Pos { x: number; y: number }
 function PanelFallback() {
   return (
     <div
-      style={{ bottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }}
+      style={{ bottom: 'calc(1.25rem + var(--barra-inferior, 0px) + env(safe-area-inset-bottom))' }}
       className="fixed right-4 z-50 w-[calc(100vw-2rem)] max-w-sm h-[min(72vh,560px)] bg-surface-0 border border-line rounded-lg shadow-2xl shadow-black/60 flex items-center justify-center"
     >
       <Spinner />
@@ -105,7 +105,7 @@ export default function AgenteButton() {
 
   const style: React.CSSProperties = pos
     ? { left: pos.x, top: pos.y }
-    : { bottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }
+    : { bottom: 'calc(1.25rem + var(--barra-inferior, 0px) + env(safe-area-inset-bottom))' }
 
   return (
     <>

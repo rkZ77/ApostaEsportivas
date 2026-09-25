@@ -630,7 +630,7 @@ _STEP_LABELS = {
     "capturar_odds":        "Capturando odds",
     "dev_atualizar_jogos":  "Atualizando jogos DEV",
     "dev_capturar_odds":    "Capturando odds DEV",
-    "gerar_vip":            "Gerando picks VIP",
+    "gerar_vip":            "Gerando Picks Premium",
     "gerar_free":           "Gerando pick gratuito",
     "gerar_multipla":       "Gerando múltipla",
     "gerar_bingo":          "Gerando o Bingo do Dia",
@@ -1046,7 +1046,7 @@ _PASSO_LABEL_CURTO = {
     "atualizar_jogos":      "Atualizar Jogos",
     "player_stats":         "Estatística de Jogador",
     "capturar_odds":        "Capturar Odds",
-    "gerar_vip":            "Gerar VIP",
+    "gerar_vip":            "Gerar Premium",
     "gerar_free":           "Gerar Free",
     "gerar_multipla":       "Gerar Múltipla",
     "gerar_bingo":          "Gerar Bingo do Dia",
@@ -3215,7 +3215,7 @@ def admin_funil(days: int = 30, current_user: dict = Depends(require_admin)):
                  "usuarios": int(c["testaram"] or 0),
                  "pct_do_topo": pct(int(c["testaram"] or 0), cadastros),
                  "pct_da_anterior": pct(int(c["testaram"] or 0), int(c["verificados"] or 0))},
-                {"chave": "pagou",     "rotulo": "Assinaram o VIP",
+                {"chave": "pagou",     "rotulo": "Assinaram",
                  "usuarios": int(c["pagantes"] or 0),
                  "pct_do_topo": pct(int(c["pagantes"] or 0), cadastros),
                  "pct_da_anterior": pct(int(c["pagantes"] or 0), int(c["testaram"] or 0))},
@@ -6421,7 +6421,7 @@ async def recalcular_arbitros(
 #: Os pipelines que gravam em `engine_decisions`, na ordem em que o painel
 #: pergunta por eles. O nome é o mesmo que o motor escreve na coluna.
 _PIPELINES_DO_MOTOR = [
-    ("VIP_ENGINE",         "VIP"),
+    ("VIP_ENGINE",         "Premium"),
     ("DICA_ENGINE",        "Free"),
     ("MULTIPLA_ENGINE",    "Múltipla"),
     ("ALAVANCAGEM_ENGINE", "Alavancagem"),
@@ -6916,7 +6916,7 @@ def motor_execucao(
 #: query string e entra em SQL por f-string · aceitar qualquer nome seria
 #: injeção. Mesma trava que `_PICK_FONTE` usa em suggestions.py.
 _TABELAS_EXPLICAVEIS = {
-    "picks_vip":          "VIP",
+    "picks_vip":          "Premium",
     "picks_free":         "Free",
     "picks_faltas":       "Faltas",
     "picks_goleiros":     "Defesas (histórico)",
@@ -6960,7 +6960,7 @@ _COLUNAS_PADRAO = """
 #: bilhetes combinados (múltipla e alavancagem), que são justamente os que mais
 #: dão RED e os que a tela de decisão não sabia abrir.
 _TABELAS_COM_RESULTADO = {
-    "picks_vip":          ("VIP",          "home_team_name", "away_team_name"),
+    "picks_vip":          ("Premium",      "home_team_name", "away_team_name"),
     "picks_free":         ("Free",         "home_team",      "away_team"),
     "picks_multiplas":    ("Múltipla",     None,             None),
     "picks_bingo":        ("Bingo do Dia", None,             None),

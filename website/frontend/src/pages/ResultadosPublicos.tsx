@@ -88,12 +88,12 @@ interface PublicData {
    entrou em 27/08 pelo mesmo caminho, e `goleiros` fica: o motor parou de
    escrever nela, mas o passado dela continua no placar publico. */
 const SRC_LBL: Record<string, string> = {
-  vip: 'VIP', free: 'Free', multiplas: 'Múlt.', alavancagem: 'Alav.',
+  vip: 'Premium', free: 'Free', multiplas: 'Múlt.', alavancagem: 'Alav.',
   faltas: 'Faltas', goleiros: 'Defesas', player_stats: 'Jogador',
   boost: 'Boost', live: 'Ao Vivo',
 }
 const SOURCE_LABELS: Record<string, string> = {
-  all: 'Todos', vip: 'VIP', free: 'Free', multiplas: 'Múltiplas',
+  all: 'Todos', vip: 'Premium', free: 'Free', multiplas: 'Múltiplas',
   bingo: 'Bingo do Dia',
   alavancagem: 'Alavancagem', faltas: 'Faltas', goleiros: 'Defesas',
   player_stats: 'Jogadores', boost: 'Pick Boost', live: 'Ao Vivo',
@@ -998,19 +998,29 @@ export default function ResultadosPublicos() {
                         <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shrink-0 ${PICK_TYPE_CLS[tip.source] ?? ''}`}>
                           {SRC_LBL[tip.source] ?? tip.source}
                         </span>
-                        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                        {/* No celular os times empilham (2026-09-25): numa linha
+                            só, com data, selo, odd e resultado do lado, sobravam
+                            ~40px pra cada nome e a lista virava "Cri... x Oper...".
+                            O mercado, que some no celular à direita, desce pra
+                            baixo dos times. */}
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-1.5 flex-1 min-w-0">
                           <div className="flex items-center gap-1 min-w-0 shrink">
                             <TeamLogo id={tip.home_team_id} name={tip.home_team_name} size={16} />
                             <span className="text-xs text-ink-2 truncate">{tip.home_team_name}</span>
                           </div>
                           {tip.away_team_name && (
                             <>
-                              <span className="text-[10px] text-ink-4 shrink-0">x</span>
+                              <span className="hidden sm:inline text-[10px] text-ink-4 shrink-0">x</span>
                               <div className="flex items-center gap-1 min-w-0 shrink">
                                 <TeamLogo id={tip.away_team_id} name={tip.away_team_name} size={16} />
                                 <span className="text-xs text-ink-2 truncate">{tip.away_team_name}</span>
                               </div>
                             </>
+                          )}
+                          {tip.market && (
+                            <span className="sm:hidden text-[10px] text-ink-4 leading-snug line-clamp-2">
+                              {rotuloDoMercado(tip.market, tip.line ?? undefined)}
+                            </span>
                           )}
                         </div>
                         <span className="text-[11px] text-ink-3 shrink-0 hidden sm:block truncate max-w-[100px]">

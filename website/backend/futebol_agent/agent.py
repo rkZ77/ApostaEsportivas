@@ -55,7 +55,7 @@ TOOLS: list[dict] = [
     {
         "name": "get_picks_publicados",
         "description": (
-            "Picks do Pick IA publicados num dia, VIP e gratuitos, com o "
+            "Picks do Pick IA publicados num dia, Premium e gratuitos, com o "
             "resultado quando ja' resolvido. Use para 'que picks sairam hoje', "
             "'teve pick ontem', 'qual foi o pick de sexta'. Nao confunda com "
             "jogos: isto e' o que a IA ESCOLHEU, nao a agenda."

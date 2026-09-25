@@ -37,13 +37,14 @@ export default function PilhaDeAvisos({ children }: { children: ReactNode }) {
       /* `pointer-events-none` no contêiner e `auto` em cada cartão: a pilha
          ocupa a largura toda pra centralizar, e sem isso essa faixa invisível
          comeria os cliques da página atrás dela. */
+      data-pilha-avisos
       className="fixed inset-x-0 bottom-0 z-[9990] flex flex-col items-center gap-2 px-4
                  pointer-events-none"
       style={{
         /* 5.5rem no celular é a altura do botão do Agente mais respiro · era
            essa a conta por trás do `bottom-24` que cada aviso repetia. */
         paddingBottom:
-          'calc(var(--aviso-offset, 0px) + 5.5rem + env(safe-area-inset-bottom))',
+          'calc(var(--aviso-offset, 0px) + var(--barra-inferior, 0px) + 5.5rem + env(safe-area-inset-bottom))',
       }}
     >
       {children}
