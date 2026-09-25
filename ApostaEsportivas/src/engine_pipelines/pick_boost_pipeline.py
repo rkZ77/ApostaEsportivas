@@ -210,7 +210,10 @@ def _avaliar_fixture(fixture: dict, cur, match_stats: MatchStatsService,
     match_context = context_gate.build_for_fixture(
         match_stats, fixture, league_table=league_table)
 
-    resultado["amostra"] = amostra.build(
+    # O BLOCO da amostra mora em `amostra_exibida` desde 2026-09-24: `amostra`
+    # e' nome de CONTADOR no resto do motor, e `decision_log._candidate_summary`
+    # le' essa chave esperando numero.
+    resultado["amostra_exibida"] = amostra.build(
         home_team_id=fixture["home_team_id"], away_team_id=fixture["away_team_id"],
         historico_home=hist_home, historico_away=hist_away,
         home_team=fixture.get("home_team"), away_team=fixture.get("away_team"),
@@ -461,7 +464,8 @@ def _engine_debug(c: dict) -> str:
         # contexto do confronto. E' o que a tela "Entenda esta analise" exibe,
         # e a razao de ela nao poder divergir do que decidiu -- e' o mesmo
         # objeto (ver services/engine_audit/amostra.py).
-        "amostra": c.get("amostra"),
+        # A tela le' `engine_debug.amostra`: a CHAVE GRAVADA nao muda.
+        "amostra": c.get("amostra_exibida"),
         "fair_odd": c.get("fair_odd"), "ev": c.get("ev"), "edge": c.get("edge"),
         "pernas": c.get("pernas"),
     }, default=str, ensure_ascii=False)
@@ -544,7 +548,7 @@ def _dados_da_auditoria(c: dict) -> dict:
                       if c.get("aprovado") and confronto else c.get("motivo")),
         "parcelas": ind.get("parcelas"),
         "pontos_fracos": ind.get("pontos_fracos"),
-        "amostra": c.get("amostra"),
+        "amostra": c.get("amostra_exibida"),
         # O suficiente pra responder "por que este jogo nao virou pick?" sem
         # abrir o engine_debug -- que so' existe pro pick SALVO. O codigo e' o
         # que vira GROUP BY no painel; o resto e' o numero que o produziu.
