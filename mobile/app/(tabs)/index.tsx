@@ -18,7 +18,7 @@ import { aoVivo, minhasApostas, picks as apiPicks, publico } from '../../src/api
 import { Botao, Card, Carregando, Dado, Selo, Txt, Vazio } from '../../src/components/ui'
 import { PickCard } from '../../src/components/PickCard'
 import { cores, espaco, raio } from '../../src/theme/tokens'
-import { reais } from '../../src/lib/formato'
+import { pct, reaisComSinal } from '../../src/lib/formato'
 import { OFERECE_PLANO_NO_APP } from '../../src/config/env'
 
 export default function Inicio() {
@@ -121,10 +121,10 @@ export default function Inicio() {
           >
             <Dado
               rotulo="Resultado"
-              valor={reais(banca.dados.total_pnl)}
+              valor={reaisComSinal(banca.dados.total_pnl)}
               cor={banca.dados.total_pnl > 0 ? cores.green : banca.dados.total_pnl < 0 ? cores.red : cores.ink1}
             />
-            <Dado rotulo="Acerto" valor={`${banca.dados.win_rate}%`} />
+            <Dado rotulo="Acerto" valor={pct(banca.dados.win_rate)} />
             <Dado rotulo="Apostas" valor={String(banca.dados.total_resolved)} />
             <ChevronRight size={18} color={cores.ink3} />
           </Card>

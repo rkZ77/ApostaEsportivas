@@ -60,16 +60,53 @@ export function ev(valor?: number | null): string {
   return `${sinal}${pct.toFixed(1)}%`
 }
 
-export function reais(valor?: number | null): string {
-  if (valor == null) return '—'
-  const sinal = valor > 0 ? '+' : valor < 0 ? '−' : ''
-  return `${sinal}R$ ${Math.abs(valor).toFixed(2).replace('.', ',')}`
+/*
+ * NÚMEROS · as mesmas regras de website/frontend/src/utils/format.ts.
+ *
+ * Valor (banca, stake) sai sem sinal; resultado (lucro/prejuízo) sai sempre
+ * com sinal. Era uma função só para os dois, e a banca aparecia "+R$ 1184,50"
+ * como se fosse lucro, e o lucro potencial "++R$ 21,60". Separado, não tem
+ * como errar. Milhar com ponto e decimal com vírgula; odd continua com ponto,
+ * como nas casas e no site.
+ *
+ * Feito à mão em vez de `toLocaleString('pt-BR')` porque o suporte a Intl
+ * varia entre motores JS e a tela não pode depender disso.
+ */
+function numeroBR(valor: number, casas: number): string {
+  const [inteiro, decimal] = Math.abs(valor).toFixed(casas).split('.')
+  const comMilhar = inteiro.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+  return decimal ? `${comMilhar},${decimal}` : comMilhar
 }
 
+/** Valor em reais, sem sinal · `R$ 1.184,50`. Espelho de `fmtBRL`. */
+export function reais(valor?: number | null): string {
+  if (valor == null) return '—'
+  return `R$ ${numeroBR(valor, 2)}`
+}
+
+/** Resultado em reais, sempre com sinal · `+R$ 21,60` / `−R$ 30,00`. Espelho de `fmtSigned`. */
+export function reaisComSinal(valor?: number | null): string {
+  if (valor == null) return '—'
+  return `${valor >= 0 ? '+' : '−'}${reais(valor)}`
+}
+
+/** Porcentagem que o backend já calculou · `63,9%`. */
+export function pct(valor?: number | null, casas = 1): string {
+  if (valor == null) return '—'
+  return `${valor < 0 ? '−' : ''}${numeroBR(valor, casas)}%`
+}
+
+/** Quantidade de unidades · `1,5u`, `2u`. */
 export function unidades(valor?: number | null): string {
   if (valor == null) return '—'
   const n = Number(valor)
-  return `${n % 1 === 0 ? n.toFixed(0) : n.toFixed(1)}u`
+  return `${numeroBR(n, n % 1 === 0 ? 0 : 1)}u`
+}
+
+/** Unidades de resultado, sempre com sinal · `+1,08u`. Espelho de `fmtUnits`. */
+export function unidadesComSinal(valor?: number | null, casas = 2): string {
+  if (valor == null) return '—'
+  return `${valor < 0 ? '−' : '+'}${numeroBR(valor, casas)}u`
 }
 
 /** Nome do time · picks_vip usa *_name, picks_free usa home_team/away_team. */

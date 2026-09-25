@@ -13,7 +13,7 @@ import { useDados } from '../../src/hooks/useDados'
 import { minhasApostas } from '../../src/api/endpoints'
 import { Card, Carregando, Dado, Selo, Separador, Txt, Vazio } from '../../src/components/ui'
 import { cores, espaco, raio } from '../../src/theme/tokens'
-import { escudo, estiloDoResultado, mercadoCompleto, odd, reais, unidades } from '../../src/lib/formato'
+import { escudo, estiloDoResultado, mercadoCompleto, odd, pct, reais, reaisComSinal, unidades } from '../../src/lib/formato'
 import type { Aposta } from '../../src/api/types'
 
 type Aba = 'abertas' | 'ganhas' | 'perdidas' | 'todas'
@@ -52,7 +52,7 @@ function LinhaAposta({ aposta }: { aposta: Aposta }) {
         <Dado rotulo="Odd" valor={odd(aposta.actual_odd ?? aposta.odd)} />
         <Dado
           rotulo="Resultado"
-          valor={aposta.pnl == null ? '—' : reais(aposta.pnl)}
+          valor={aposta.pnl == null ? '—' : reaisComSinal(aposta.pnl)}
           cor={aposta.pnl == null ? cores.ink3 : aposta.pnl > 0 ? cores.green : aposta.pnl < 0 ? cores.red : cores.ink1}
         />
       </View>
@@ -98,11 +98,11 @@ export default function MinhasApostas() {
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Dado
                   rotulo="Resultado"
-                  valor={reais(dados.total_pnl)}
+                  valor={reaisComSinal(dados.total_pnl)}
                   cor={dados.total_pnl > 0 ? cores.green : dados.total_pnl < 0 ? cores.red : cores.ink1}
                 />
-                <Dado rotulo="Acerto" valor={`${dados.win_rate}%`} />
-                <Dado rotulo="Yield" valor={`${dados.yield_roi}%`} />
+                <Dado rotulo="Acerto" valor={pct(dados.win_rate)} />
+                <Dado rotulo="Yield" valor={pct(dados.yield_roi)} />
               </View>
               <Separador />
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
