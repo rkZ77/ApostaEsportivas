@@ -118,7 +118,7 @@ export default function MinhasApostas() {
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ gap: espaco.sm }}
-            style={{ flexGrow: 0 }}
+            style={{ flexGrow: 0, flexShrink: 0 }}
           >
             {ABAS.map(({ chave, rotulo }) => {
               const ativo = aba === chave

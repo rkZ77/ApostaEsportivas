@@ -8,9 +8,16 @@
 import { Tabs } from 'expo-router'
 import { Activity, Home, ListChecks, Target, User } from 'lucide-react-native'
 import { StyleSheet } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { cores, familia, fonte, peso } from '../../src/theme/tokens'
 
 export default function TabsLayout() {
+  /* A altura soma a área segura de baixo (indicador de início do iPhone,
+     barra de gestos do Android). Com a altura fixa que havia aqui, o nome da
+     aba ficava espremido pelo indicador e saía cortado. */
+  const insets = useSafeAreaInsets()
+  const baixo = Math.max(insets.bottom, 8)
+
   return (
     <Tabs
       screenOptions={{
@@ -23,9 +30,9 @@ export default function TabsLayout() {
           backgroundColor: cores.surface1,
           borderTopColor: cores.line,
           borderTopWidth: StyleSheet.hairlineWidth * 2,
-          height: 62,
-          paddingBottom: 8,
-          paddingTop: 8,
+          height: 58 + baixo,
+          paddingBottom: baixo,
+          paddingTop: 6,
         },
         tabBarActiveTintColor: cores.accent,
         tabBarInactiveTintColor: cores.ink4,
