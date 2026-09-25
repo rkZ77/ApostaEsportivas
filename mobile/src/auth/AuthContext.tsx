@@ -17,7 +17,7 @@ interface Contexto {
   carregando: boolean
   /** Motivo pelo qual a sessão caiu, para a tela de login explicar o que houve. */
   sessaoDerrubadaEm: string | null
-  entrar: (identificador: string, senha: string) => Promise<Usuario>
+  entrar: (identificador: string, senha: string, captcha?: string) => Promise<Usuario>
   cadastrar: (dados: Parameters<typeof autenticacao.cadastrar>[0]) => Promise<Usuario>
   sair: () => Promise<void>
   recarregarUsuario: () => Promise<void>
@@ -70,8 +70,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => registrarPerdaDeSessao(null)
   }, [])
 
-  const entrar = useCallback(async (identificador: string, senha: string) => {
-    const dados = await autenticacao.entrar(identificador, senha)
+  const entrar = useCallback(async (identificador: string, senha: string, captcha?: string) => {
+    const dados = await autenticacao.entrar(identificador, senha, captcha)
     if (dados.access_token) await salvarSessao(dados.access_token, dados.refresh_token)
     setUsuario(dados.user)
     setSessaoDerrubadaEm(null)

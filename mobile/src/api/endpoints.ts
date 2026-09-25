@@ -18,8 +18,11 @@ export interface RespostaLogin {
 }
 
 export const autenticacao = {
-  entrar: (identifier: string, password: string) =>
-    api.post<RespostaLogin>('/auth/login', { identifier, password }).then((r) => r.data),
+  /* `captcha_token` vazio vira null: sem a chave no backend (DEV) ele é
+     ignorado; em produção o backend exige (ver src/components/Captcha.tsx). */
+  entrar: (identifier: string, password: string, captcha_token?: string) =>
+    api.post<RespostaLogin>('/auth/login', { identifier, password, captcha_token: captcha_token || null })
+      .then((r) => r.data),
 
   cadastrar: (dados: {
     name: string
@@ -28,7 +31,9 @@ export const autenticacao = {
     phone: string
     username: string
     accepted_terms: boolean
-  }) => api.post<RespostaLogin>('/auth/register', dados).then((r) => r.data),
+    captcha_token?: string | null
+  }) => api.post<RespostaLogin>('/auth/register', { ...dados, captcha_token: dados.captcha_token || null })
+    .then((r) => r.data),
 
   eu: () => api.get<Usuario>('/auth/me').then((r) => r.data),
 

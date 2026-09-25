@@ -67,6 +67,13 @@ export const NOME_APP = 'Pick IA'
 export const SITE_URL = 'https://pickia.com.br'
 
 /*
+ * Chave PÚBLICA do Cloudflare Turnstile · a mesma VITE_TURNSTILE_SITE_KEY do
+ * site. Não é segredo (vai no HTML de qualquer página do site); a secreta
+ * continua só no backend. Obrigatória nos builds que falam com produção.
+ */
+export const TURNSTILE_SITE_KEY = process.env.EXPO_PUBLIC_TURNSTILE_SITE_KEY?.trim() || ''
+
+/*
  * O app oferece plano pago?
  *
  * Desligado nos dois sistemas enquanto não existir compra pela loja. Apple
