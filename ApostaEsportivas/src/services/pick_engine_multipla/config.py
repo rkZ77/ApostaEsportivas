@@ -89,13 +89,28 @@ MIN_LEG_SCORE_PARA_TRIPLA = 0.70
 MIN_EV_PERNA = 0.0                # estritamente positivo
 MIN_EDGE_PERNA = 0.05
 MIN_DATA_QUALITY = 0.50
-MIN_SAMPLE_QUALITY = 0.30         # na pratica isto e' AMOSTRA >= 5, um jogo
-                                  # a mais que o piso do motor (min_amostra=4).
-                                  # E' proposital e e' a regra que separa a
-                                  # perna de bilhete da pick simples: uma pick
-                                  # de 4 jogos que erra custa uma unidade, uma
+MIN_SAMPLE_QUALITY = 0.30         # na pratica isto e' AMOSTRA >= 5 (classe
+                                  # LIMITADA, fator 0.40).
+                                  #
+                                  # NAO MORDE MAIS (2026-09-24). O numero foi
+                                  # escolhido pra ficar um jogo acima do piso do
+                                  # motor, que era 4 -- a regra que separava a
+                                  # perna de bilhete da pick simples, porque uma
                                   # perna de 4 jogos que erra derruba o bilhete
-                                  # inteiro junto com pernas que acertaram.
+                                  # inteiro junto com pernas que acertaram. O
+                                  # piso do motor virou 8 por medicao (ver a
+                                  # nota no topo de pick_engine/config.py),
+                                  # entao nenhuma perna com menos de 8 chega
+                                  # aqui e este gate nunca reprova.
+                                  #
+                                  # Deliberadamente NAO subiu junto: a multipla
+                                  # foi medida em 2.677 bilhetes e o produto
+                                  # esta' certo; apertar a perna pra classe
+                                  # seguinte (>=10) cortaria bilhete com base na
+                                  # medicao do pick SIMPLES, que e' o erro que o
+                                  # min_confidence 0.72 da Free cometeu. Medir
+                                  # antes: taxa e lucro do bilhete por classe de
+                                  # amostra da perna mais fraca.
 MIN_PROB_CALIBRADA = 0.58         # abaixo do piso cru (0.60) de proposito: a
                                   # calibracao so' DESCE, e cobrar 0.60 depois
                                   # dela seria cobrar 0.60 duas vezes.

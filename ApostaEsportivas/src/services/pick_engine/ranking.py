@@ -358,6 +358,26 @@ def _valores_de_aprovacao(c: dict) -> tuple:
     return c["taxa_real"], c["ev"]
 
 
+def _lado_vetado(c: dict, config: PickEngineConfig) -> bool:
+    """O candidato e' um Over de uma familia que so' calibra no Under?
+
+    Ver `familias_somente_under` em config.py pros numeros: cartao Over fez
+    36,7% e -13,57u contra 79,7% e +21,98u do Under, nos cinco produtos e nos
+    quatro meses. E' gate, nao peso: nao entra no line_score nem no
+    final_score, igual aos tetos de cauda.
+
+    `value` e' 'over' | 'under' | 'yes' | 'no' (orchestrator le' m['value']).
+    Familia sem direcao (resultado, dupla chance) nunca casa com 'over', entao
+    passa batido sem caso especial.
+    """
+    familias = config.familias_somente_under or ()
+    if not familias:
+        return False
+    if (c.get("market_type") or "") not in familias:
+        return False
+    return (c.get("value") or "").strip().lower() == "over"
+
+
 def rank_all_candidates(candidates: list, config: PickEngineConfig = DEFAULT_CONFIG, top_n: int = 10) -> list:
     """Descarta taxa<min_taxa / amostra<min_amostra / confidence<min_confidence
     / EV<=min_ev, ordena pelo Score Final e devolve os top_n melhores --
@@ -384,7 +404,8 @@ def rank_all_candidates(candidates: list, config: PickEngineConfig = DEFAULT_CON
     eligible = []
     for c in candidates:
         taxa_aprov, ev_aprov = _valores_de_aprovacao(c)
-        if (taxa_aprov >= config.min_taxa
+        if (not _lado_vetado(c, config)
+                and taxa_aprov >= config.min_taxa
                 and (config.max_taxa is None or taxa_aprov <= config.max_taxa)
                 and c["amostra"] >= config.min_amostra
                 and c["confidence"] >= config.min_confidence
@@ -415,6 +436,11 @@ def rank_all_candidates_debug(candidates: list, config: PickEngineConfig = DEFAU
         if config.max_taxa is not None and taxa_aprov > config.max_taxa:
             # Ver max_taxa em config.py: a cauda alta da Free acertou 40%.
             reasons.append(f"taxa acima do teto ({taxa_aprov*100:.1f}% > {config.max_taxa*100:.0f}%)")
+        if _lado_vetado(c, config):
+            # Ver familias_somente_under em config.py: cartao Over fez 36,7% e
+            # -13,57u contra 79,7% e +21,98u do Under.
+            reasons.append(f"{c.get('market_type')} so' entra em UNDER "
+                           f"(Over da familia mede negativo em todo recorte)")
         if c["amostra"] < config.min_amostra:
             reasons.append(f"amostra insuficiente ({c['amostra']} < {config.min_amostra})")
         if c["confidence"] < config.min_confidence:
