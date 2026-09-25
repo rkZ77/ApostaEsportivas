@@ -14,6 +14,7 @@ import { viuOsPlanos } from '../lib/analytics'
 import NumberTicker from '../components/ui/NumberTicker'
 import { rotuloDoPlano } from '../components/ui'
 import ProvaPublica from '../components/ProvaPublica'
+import { PassosDaAssinatura, FaqDaAssinatura } from '../components/ComoAssinar'
 import { MODULOS_FREE, MODULOS_PAGOS, MODULOS_PRO, SEM_RENOVACAO_AUTOMATICA } from '../lib/oferta'
 import type { Modulo } from '../lib/oferta'
 
@@ -413,21 +414,10 @@ export default function Planos() {
               rodape="2 dias com tudo aberto para você decidir."
             />
 
-            {/* Como se paga. Estava só dentro do checkout, ou seja, depois de a
-                pessoa já ter criado conta · e "vai cobrar sozinho todo mês?" é
-                uma objeção que decide a compra bem antes disso. A resposta aqui
-                é favorável ao produto: a cobrança é avulsa. */}
-            <div className="bg-surface-1 border border-line rounded-lg p-5 space-y-2.5">
-              <p className="text-ink-2 text-xs font-bold">Como funciona o pagamento</p>
-              <p className="flex items-start gap-2 text-xs text-ink-3">
-                <Check className="w-3.5 h-3.5 text-accent-ink shrink-0 mt-0.5" aria-hidden="true" />
-                <span>{SEM_RENOVACAO_AUTOMATICA}</span>
-              </p>
-              <p className="flex items-start gap-2 text-xs text-ink-3">
-                <Check className="w-3.5 h-3.5 text-accent-ink shrink-0 mt-0.5" aria-hidden="true" />
-                <span>Pix, cartão ou boleto pelo MercadoPago. No Pix o acesso abre em até 5 minutos.</span>
-              </p>
-            </div>
+            {/* Como se paga, em passos. Substitui o card "Como funciona o
+                pagamento" · "vai cobrar sozinho todo mês?" agora é a primeira
+                pergunta do FAQ logo abaixo. */}
+            <PassosDaAssinatura />
           </div>
         )}
 
@@ -870,6 +860,8 @@ export default function Planos() {
             </a>
           </div>
         )}
+
+        <FaqDaAssinatura />
 
         <div className="bg-surface-1 border border-line rounded-lg p-5 flex items-center gap-4">
           <div className="w-10 h-10 bg-[#25D366]/10 border border-[#25D366]/20 rounded-full flex items-center justify-center shrink-0">

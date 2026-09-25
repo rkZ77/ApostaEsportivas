@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { WA_SUPPORT } from '../lib/support'
 /* O Lucide tirou os ícones de marca (Instagram, X, etc.) por questão de
    trademark, então o do Instagram continua vindo do asset em /public. */
-import { MessageCircle } from 'lucide-react'
+import { MessageCircle, Headphones, ShieldCheck, Lock } from 'lucide-react'
 
 /* Ícone do Instagram como SVG inline.
    Era um PNG de 164KB desenhado a 16x16 · sozinho pesava quase o mesmo que
@@ -59,85 +59,118 @@ const LINKS: Array<{ label: string; to?: string; href?: string }> = [
   { label: 'Privacidade',       to: '/privacidade' },
 ]
 
+/* Estilo do ícone social · os dois (Instagram e WhatsApp) são iguais. */
+const SOCIAL = 'w-10 h-10 rounded-lg border border-line bg-surface-1 flex items-center justify-center text-ink-3 hover:text-ink-1 hover:border-line-strong transition-colors duration-1 ease-smooth'
+
+/*
+ * TRÊS COLUNAS (2026-09-25), no molde do rodapé da KaySto: marca com o selo
+ * de confiança, a navegação, e um "Conecte-se" com o botão de suporte bem à
+ * vista. Os mesmos links de antes · o que mudou foi a leitura: em coluna o
+ * olho acha o link, numa fita corrida ele precisava ler um por um.
+ */
 export default function Footer() {
   return (
     <footer className="border-t border-line bg-surface-0 mt-auto">
 
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
+      <div className="max-w-6xl mx-auto px-4 pt-10 pb-6">
+        <div className="grid gap-8 md:grid-cols-[1.4fr_1fr_1fr]">
 
           {/* Marca */}
           <div className="min-w-0">
-            <Link to="/" className="inline-flex items-center gap-2.5 mb-2 py-1" aria-label="Pick IA, início">
-              <img src="/logo-64.webp" alt="" width={28} height={28} className="w-7 h-7 rounded-full object-cover" />
-              <span className="font-display text-base font-semibold text-ink-1">
+            <Link to="/" className="inline-flex items-center gap-3 mb-3" aria-label="Pick IA, início">
+              <span className="w-10 h-10 rounded-lg border border-line bg-surface-1 flex items-center justify-center">
+                <img src="/logo-64.webp" alt="" width={28} height={28} className="w-7 h-7 rounded-full object-cover" />
+              </span>
+              <span className="font-display text-lg font-semibold text-ink-1">
                 Pick<span className="text-accent-ink">IA</span>
               </span>
             </Link>
-            <p className="text-xs text-ink-3 leading-relaxed max-w-[38ch]">
-              Inteligência artificial que analisa estatística real de futebol e publica
-              apenas os picks com valor esperado positivo.
+            <p className="text-sm text-ink-3 leading-relaxed max-w-[44ch]">
+              Com o <span className="text-accent-ink font-medium">Pick IA</span> você recebe só os
+              picks que passaram no corte: inteligência artificial em cima de estatística real
+              de futebol, publicando apenas o que tem valor esperado positivo.
             </p>
-            <div className="flex items-center gap-2 mt-3">
+
+            <p className="mt-5 mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-4">
+              Selos de confiança
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Link
+                to="/resultados"
+                className="inline-flex items-center gap-2 rounded-md border border-line bg-surface-1 px-3 py-2 text-xs font-semibold text-ink-2 hover:text-ink-1 hover:border-line-strong transition-colors duration-1 ease-smooth"
+              >
+                <ShieldCheck className="w-4 h-4 text-accent-ink" aria-hidden="true" />
+                Histórico 100% público
+              </Link>
+              <span className="inline-flex items-center gap-2 rounded-md border border-line bg-surface-1 px-3 py-2 text-xs font-semibold text-ink-2">
+                <Lock className="w-4 h-4 text-accent-ink" aria-hidden="true" />
+                Pagamento via MercadoPago
+              </span>
+            </div>
+          </div>
+
+          {/* Navegação. `py-2` mantém o alvo de toque acima dos 24px da
+              WCAG 2.2 · o público é de celular. */}
+          <nav aria-label="Rodapé">
+            <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-4">Navegação</p>
+            <ul className="grid grid-cols-2 md:grid-cols-1 gap-x-4">
+              {LINKS.map(l => (
+                <li key={l.label}>
+                  {l.to ? (
+                    <Link to={l.to} className="block py-2 text-sm text-ink-3 hover:text-ink-1 transition-colors duration-1 ease-smooth">
+                      {l.label}
+                    </Link>
+                  ) : (
+                    <a href={l.href} target="_blank" rel="noopener noreferrer" className="block py-2 text-sm text-ink-3 hover:text-ink-1 transition-colors duration-1 ease-smooth">
+                      {l.label}
+                    </a>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </nav>
+
+          {/* Conecte-se */}
+          <div>
+            <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-4">Conecte-se</p>
+            <div className="flex items-center gap-2.5">
               <a
                 href="https://www.instagram.com/pickia.app/"
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="Instagram do Pick IA"
-                className="w-9 h-9 rounded-md border border-line flex items-center justify-center text-ink-3 hover:text-ink-1 hover:border-line-strong transition-colors duration-1 ease-smooth"
+                className={SOCIAL}
               >
-                <InstagramIcon className="w-4 h-4" />
+                <InstagramIcon className="w-[18px] h-[18px]" />
               </a>
               <a
                 href={WA_SUPPORT}
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label="Suporte por WhatsApp"
-                className="w-9 h-9 rounded-md border border-line flex items-center justify-center text-ink-3 hover:text-ink-1 hover:border-line-strong transition-colors duration-1 ease-smooth"
+                aria-label="WhatsApp do Pick IA"
+                className={SOCIAL}
               >
-                <MessageCircle className="w-4 h-4" />
+                <MessageCircle className="w-[18px] h-[18px]" />
               </a>
             </div>
+            <a
+              href={WA_SUPPORT}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-4 inline-flex items-center gap-2 rounded-lg border border-accent/40 bg-accent/10 px-4 min-h-[44px] text-sm font-semibold text-accent-ink hover:bg-accent/15 transition-colors duration-1 ease-smooth"
+            >
+              <Headphones className="w-4 h-4" aria-hidden="true" />
+              Falar com o suporte
+            </a>
           </div>
-
-          {/* Links numa fita só · ver o comentário de LINKS.
-
-              `py-2.5` (e não o `py-1.5` de antes) porque o público é de
-              celular: medidos em 390px, estes nove links tinham 28px de
-              altura, empilhados um sobre o outro. Passa no mínimo de 24px da
-              WCAG 2.2 e fica longe dos 44px que o dedo pede -- e num rodapé
-              de links vizinhos, errar o alvo leva pra outra página. */}
-          <nav className="flex flex-wrap gap-x-5 md:justify-end md:max-w-md">
-            {LINKS.map(l => (
-              l.to ? (
-                <Link
-                  key={l.label}
-                  to={l.to}
-                  className="py-2.5 text-xs text-ink-3 hover:text-ink-1 transition-colors duration-1 ease-smooth"
-                >
-                  {l.label}
-                </Link>
-              ) : (
-                <a
-                  key={l.label}
-                  href={l.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="py-2.5 text-xs text-ink-3 hover:text-ink-1 transition-colors duration-1 ease-smooth"
-                >
-                  {l.label}
-                </a>
-              )
-            ))}
-          </nav>
         </div>
 
-        <div className="mt-6 pt-5 border-t border-line flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="mt-8 pt-5 border-t border-line flex flex-col sm:flex-row items-center justify-between gap-2">
           <p className="text-[11px] text-ink-4 text-center sm:text-left">
-            {new Date().getFullYear()} © Pick IA. Picks gerados por inteligência artificial.
+            © {new Date().getFullYear()} Pick IA. Todos os direitos reservados. Conteúdo para maiores de 18 anos · aposte com responsabilidade.
           </p>
           <p className="text-[11px] text-ink-4 text-center sm:text-right">
-            Conteúdo para maiores de 18 anos. Aposte com responsabilidade.
+            Pix · Cartão · Boleto
           </p>
         </div>
       </div>

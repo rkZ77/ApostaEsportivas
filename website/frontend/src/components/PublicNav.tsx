@@ -1,4 +1,7 @@
+import { useCallback, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { Menu } from 'lucide-react'
+import MenuLateral from './MenuLateral'
 import { Button } from './ui'
 import { PAGE_WIDTH, type PageWidth } from '../lib/pageWidth'
 import ThemeToggle from './ThemeToggle'
@@ -26,15 +29,28 @@ export default function PublicNav({
   width?: PageWidth
   acoes?: React.ReactNode
 }) {
+  const [open, setOpen] = useState(false)
+  const fechar = useCallback(() => setOpen(false), [])
   return (
+    <>
     <nav className="border-b border-line/60 bg-surface-0/80 backdrop-blur-sm sticky top-0 z-40">
       <div className={`mx-auto h-14 flex items-center justify-between gap-3 ${PAGE_WIDTH[width]}`}>
+        <div className="flex items-center gap-1 min-w-0">
+        <button
+          onClick={() => setOpen(true)}
+          aria-label="Abrir menu"
+          aria-expanded={open}
+          className="p-2 -ml-2 text-ink-2 hover:text-ink-1 transition-colors shrink-0"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
         <Link to="/" className="flex items-center gap-2 min-w-0" aria-label="Ir para a página inicial">
           <img src="/logo-64.webp" alt="" width={32} height={32} className="w-8 h-8 shrink-0" />
           <span className="font-display text-ink-1 font-semibold text-lg tracking-tight">
             Pick<span className="text-accent-ink">IA</span>
           </span>
         </Link>
+        </div>
 
         <div className="flex items-center gap-2 shrink-0">
           <ThemeToggle className="-ml-1" />
@@ -49,5 +65,7 @@ export default function PublicNav({
         </div>
       </div>
     </nav>
+    <MenuLateral open={open} onClose={fechar} />
+    </>
   )
 }
