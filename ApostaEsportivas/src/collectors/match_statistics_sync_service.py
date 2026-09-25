@@ -92,6 +92,32 @@ def _br_naive(dt):
     return dt.astimezone(_TZ_BR).replace(tzinfo=None)
 
 
+def _ultimas_rodadas(response: list, quantas: int) -> list:
+    """So' os jogos das N rodadas mais recentes da resposta.
+
+    Agrupa por `league.round` (texto cru da API) e ordena as rodadas pela data
+    do jogo mais recente de cada uma -- e nao pelo numero no rotulo, que muda de
+    formato entre competicoes ("Regular Season - 12", "Group Stage - 2"). Jogo
+    sem rodada no rotulo fica de fora do recorte, porque sem rodada nao ha' como
+    dizer se ele e' recente.
+    """
+    por_rodada: dict = {}
+    for fx in response:
+        rodada = ((fx.get("league") or {}).get("round") or "").strip()
+        if not rodada:
+            continue
+        data = ((fx.get("fixture") or {}).get("date") or "")
+        atual = por_rodada.setdefault(rodada, {"data": data, "jogos": []})
+        atual["jogos"].append(fx)
+        if data > atual["data"]:
+            atual["data"] = data
+    recentes = sorted(por_rodada.values(), key=lambda r: r["data"], reverse=True)
+    escolhidos = []
+    for bloco in recentes[:quantas]:
+        escolhidos.extend(bloco["jogos"])
+    return escolhidos
+
+
 class MatchStatisticsSyncService:
 
     def __init__(self):
@@ -153,7 +179,29 @@ class MatchStatisticsSyncService:
     # ---------------------------------------------------------
     # LOAD FIXTURES (COM GOLS)
     # ---------------------------------------------------------
-    def _load_fixtures(self, use_date_filter=True, days=3, apenas_liga=None):
+    def _load_fixtures(self, use_date_filter=True, days=3, apenas_liga=None,
+                       temporada=None, exigir_os_dois_times=True,
+                       ultimas_rodadas=None):
+        """`temporada` (2026-09-24): sobrescreve o `season` que vem de
+        `leagues`. Serve pro backfill da temporada ANTERIOR, que e' o que
+        devolve amostra pra liga que reiniciou -- ver
+        scripts/coletar_temporada_anterior.py e a nota do piso em
+        pick_engine/config.py. None mantem o comportamento diario.
+
+        `exigir_os_dois_times=False` aceita a partida em que so' UM dos lados
+        e' time da liga hoje. E' obrigatorio no backfill: na temporada passada
+        metade dos adversarios era time rebaixado, que nao esta mais em `teams`
+        com este league_id -- exigir os dois descartaria justamente os jogos que
+        o time atual disputou. Nao ha FK pra `teams`, e o nome do adversario sai
+        do join com `league_standings`; ausente, ele fica neutro, que e' a regra
+        do motor pra dado que falta.
+
+        `ultimas_rodadas` (int): so' as N rodadas mais recentes da temporada,
+        agrupando por `league.round` da propria resposta. E' controle de COTA:
+        a temporada inteira de uma liga custa ~380 requisicoes de folha, e o
+        motor nao precisa dela inteira -- precisa de ~16 jogos por time, que
+        sao as ultimas 10 a 16 rodadas.
+        """
         leagues = load_leagues_from_db()
         league_ids = tuple([l["league_id"] for l in leagues])
         if apenas_liga is not None:
@@ -216,9 +264,10 @@ class MatchStatisticsSyncService:
             limit_date = datetime.now(timezone.utc) - timedelta(days=days)
 
         for lg in leagues:
+            season_da_liga = temporada if temporada is not None else lg["season"]
             params = {
                 "league": lg["league_id"],
-                "season": lg["season"]
+                "season": season_da_liga
             }
 
             # PAGINA. Uma temporada de liga passa de 100 jogos com
@@ -227,6 +276,8 @@ class MatchStatisticsSyncService:
             # erro nenhum. Tambem nao tinha timeout -- era a unica chamada do
             # projeto que podia pendurar a coleta indefinidamente.
             response = buscar(FIXTURES_URL, params, origem="coletor_stats")
+            if ultimas_rodadas:
+                response = _ultimas_rodadas(response, ultimas_rodadas)
 
             for fx in response:
                 fixture = fx["fixture"]
@@ -248,7 +299,12 @@ class MatchStatisticsSyncService:
                 home_id = teams["home"]["id"]
                 away_id = teams["away"]["id"]
 
-                if home_id not in valid_team_ids or away_id not in valid_team_ids:
+                if exigir_os_dois_times:
+                    if home_id not in valid_team_ids or away_id not in valid_team_ids:
+                        continue
+                elif home_id not in valid_team_ids and away_id not in valid_team_ids:
+                    # Backfill: basta um lado ser time da liga hoje. Ver a
+                    # docstring -- o outro lado costuma ser time rebaixado.
                     continue
 
                 # A RODADA E' GRAVADA MESMO NO JOGO JA ESTABILIZADO.
@@ -279,7 +335,11 @@ class MatchStatisticsSyncService:
                 fixtures.append({
                     "fixture_id": fixture["id"],
                     "league_id": lg["league_id"],
-                    "season": lg["season"],
+                    # A temporada COLETADA, nunca a de `leagues`. Gravar o
+                    # backfill com o season corrente faria o jogo de 2025
+                    # contar como jogo de 2026 -- o oposto do que ele existe
+                    # pra fazer, e invisivel em qualquer contagem.
+                    "season": season_da_liga,
                     "home_id": home_id,
                     "away_id": away_id,
                     "match_date": match_date,
@@ -845,15 +905,33 @@ class MatchStatisticsSyncService:
     # ---------------------------------------------------------
     # MAIN
     # ---------------------------------------------------------
-    def sync_all_finished_fixtures(self, use_date_filter=True, days=3, apenas_liga=None):
+    def sync_all_finished_fixtures(self, use_date_filter=True, days=3, apenas_liga=None,
+                                   temporada=None, exigir_os_dois_times=True,
+                                   ultimas_rodadas=None, teto_requisicoes=None):
+        """`teto_requisicoes` (2026-09-24): para a rodada depois de N folhas
+        buscadas. E' o freio de COTA do backfill de temporada anterior -- a
+        varredura e' idempotente (o jogo com folha completa entra em
+        `settled_fixture_ids` e nao volta), entao parar no meio e' seguro e
+        continuar e' so' rodar de novo. Os outros parametros novos estao
+        documentados em `_load_fixtures`.
+        """
         print("[MATCH_STATS] START")
 
         self._open()
 
-        fixtures = self._load_fixtures(use_date_filter, days, apenas_liga=apenas_liga)
+        fixtures = self._load_fixtures(
+            use_date_filter, days, apenas_liga=apenas_liga, temporada=temporada,
+            exigir_os_dois_times=exigir_os_dois_times,
+            ultimas_rodadas=ultimas_rodadas)
         referee_batch = set()
+        buscadas = 0
 
         for fx in fixtures:
+            if teto_requisicoes is not None and buscadas >= teto_requisicoes:
+                print(f"[MATCH_STATS] Teto de {teto_requisicoes} requisicoes atingido · "
+                      f"{len(fixtures) - buscadas} jogo(s) ficaram pra proxima rodada.")
+                break
+            buscadas += 1
             stats = self._fetch_match_stats(fx["fixture_id"])
 
             if not stats or len(stats) < 2:

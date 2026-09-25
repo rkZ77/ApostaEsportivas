@@ -3,6 +3,7 @@ import psycopg2.extras
 from datetime import datetime, date
 from decimal import Decimal
 from services.pick_engine.competition_profile import national_team_league_ids
+from services.pick_engine.config import AMOSTRA_RICA
 
 # Competições de seleções nacionais (API-Football IDs).
 # Para esses torneios, o histórico deve cruzar TODAS as competições
@@ -16,6 +17,30 @@ NATIONAL_TEAM_LEAGUE_IDS: frozenset = national_team_league_ids()
 # para a família de mercado em questão é stats_model.pool_and_field, porque a
 # folha de um AET cobre 120 minutos e só gols têm placar de 90 separado.
 FIM_DE_JOGO = "('FT', 'AET', 'PEN')"
+
+# A partir de quantos jogos NA TEMPORADA CORRENTE a temporada anterior deixa de
+# ser lida (ver get_all_matches_full).
+#
+# É o dobro de `AMOSTRA_RICA` porque `pool_and_field` fica só com os jogos do
+# mando que o mercado descreve e corta o pool a aproximadamente metade -- 8 no
+# pool pede ~16 no histórico. É a mesma aritmética que fez DEFAULT_LIMIT_MULTI
+# ser 30 e não 15, e o número sai importado pra não haver um 8 escrito à mão
+# aqui e outro no config do motor.
+LIMIAR_TEMPORADA_ANTERIOR = AMOSTRA_RICA * 2
+
+
+def _somente_temporada_corrente_se_bastar(jogos: list, season) -> list:
+    """Descarta os jogos da temporada anterior quando a corrente já basta.
+
+    Fica em função separada, e não numa condição dentro do SQL, porque a
+    pergunta "a corrente basta?" só tem resposta depois de contar o que voltou
+    -- e contar em SQL exigiria uma segunda consulta ou uma window function
+    sobre a mesma varredura. É leitura de banco já feita: não custa nada.
+    """
+    da_corrente = [j for j in jogos if j.get("season") == season]
+    if len(da_corrente) >= LIMIAR_TEMPORADA_ANTERIOR:
+        return da_corrente
+    return jogos
 
 # Quantos jogos ler no histórico multi-competição.
 #
@@ -185,18 +210,58 @@ class MatchStatsService:
         deixar jogos de ANTES da mudança contaminar a taxa histórica. Os
         dois filtros são independentes e podem coexistir. None (padrão)
         lê a temporada inteira daquela liga · ver DEFAULT_LIMIT_LEAGUE, e o
-        porquê de não serem mais os 15 de antes."""
+        porquê de não serem mais os 15 de antes.
+
+        A TEMPORADA ANTERIOR ENTRA QUANDO A CORRENTE AINDA É CURTA (2026-09-24)
+        ----------------------------------------------------------------------
+        Esta consulta lia `ms.season = %s` e ponto. Em começo de temporada isso
+        é um teto que nenhum limiar contorna: na semana de 14/09 as seis ligas
+        europeias que reiniciaram em agosto tinham 6 ou 7 jogos por time, e foi
+        de lá que saiu o bloco de amostra curta que mediu 53,7% e -11,57u (ver a
+        nota do piso em pick_engine/config.py). Subir o piso pra 8 protege a
+        banca e cala a liga por três rodadas; ler a temporada passada devolve a
+        amostra sem devolver o prejuízo.
+
+        `LIMIAR_TEMPORADA_ANTERIOR` é o dobro de `AMOSTRA_RICA` pela mesma razão
+        que DEFAULT_LIMIT_MULTI é 30 e não 15: `pool_and_field` fica só com os
+        jogos do mando que o mercado descreve e corta o pool a aproximadamente
+        metade, então 8 no pool pede ~16 no histórico. Não é número novo.
+
+        ALARGAR NÃO AFROUXA, pelo mesmo argumento que justificou o LIMIT 60:
+        `temporal_decay_weight` já pesa 0,50 o jogo com mais de 60 dias, e a
+        temporada passada é inteira mais velha que isso. O corte por temporada
+        era duro, de tudo ou nada, em cima de um sistema que já amortece.
+
+        O CORTE É CONDICIONAL de propósito. Time com temporada cheia (o
+        Brasileirão está na 28ª rodada) continua lendo só a dela: misturar 32
+        jogos de 2025 na conta de quem já tem 28 de 2026 mudaria a taxa de TODO
+        pick por um motivo que ninguém mediu. Quem muda é só o caso que hoje
+        está quebrado.
+
+        O QUE ISSO NÃO RESOLVE: time PROMOVIDO. A temporada passada dele está
+        sob outro `league_id` (a divisão de baixo), então esta consulta não a
+        alcança e ele continua curto até acumular. É o resultado certo -- 38
+        jogos da segunda divisão não descrevem o time na primeira -- e é por isso
+        que não há fallback pra outra liga aqui."""
         date_filter = "AND ms.match_date < %s" if before_date else ""
         since_filter = "AND ms.match_date >= %s" if since_date else ""
+        temporada_anterior = (season - 1) if isinstance(season, int) else None
+        temporadas = ((season,) if temporada_anterior is None
+                      else (season, temporada_anterior))
+        season_filter = ("AND ms.season = %s" if temporada_anterior is None
+                         else "AND ms.season IN (%s, %s)")
         params = (
-            (team_id, team_id, team_id, season, league_id)
+            (team_id, team_id, team_id) + temporadas + (league_id,)
             + ((before_date,) if before_date else ())
             + ((since_date,) if since_date else ())
         )
-        return self._query(f"""
+        jogos = self._query(f"""
             SELECT
                 ms.match_date,
                 ms.league_id,
+                -- A temporada vem na linha porque o filtro condicional abaixo
+                -- precisa saber de qual ela é. Ninguém mais lê este campo.
+                ms.season,
                 ms.status,
                 ms.home_team_id, ms.away_team_id,
                 ms.home_goals, ms.away_goals, ms.total_goals,
@@ -223,7 +288,7 @@ class MatchStatsService:
                AND ls.league_id = ms.league_id
                AND ls.season = ms.season
             WHERE (ms.home_team_id = %s OR ms.away_team_id = %s)
-              AND ms.season = %s
+              {season_filter}
               AND ms.league_id = %s
               -- Status entra em 2026-08-27. O caminho multi-competição sempre
               -- filtrou (FIM_DE_JOGO); este não, e jogo adiado ou interrompido
@@ -236,6 +301,9 @@ class MatchStatsService:
             ORDER BY ms.match_date DESC
             LIMIT {DEFAULT_LIMIT_LEAGUE};
         """, params)
+        if temporada_anterior is None:
+            return jogos
+        return _somente_temporada_corrente_se_bastar(jogos, season)
 
     ##########################################################################
     # Interface unificada padrão (já existente)
