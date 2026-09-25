@@ -55,9 +55,8 @@ export function confianca(valor?: number | null): string {
 /** EV chega como fração (0.0734) · vira "+7.3%". */
 export function ev(valor?: number | null): string {
   if (valor == null) return '—'
-  const pct = Math.abs(valor) <= 1 ? valor * 100 : valor
-  const sinal = pct > 0 ? '+' : ''
-  return `${sinal}${pct.toFixed(1)}%`
+  const p = Math.abs(valor) <= 1 ? valor * 100 : valor
+  return `${p > 0 ? '+' : p < 0 ? '−' : ''}${numeroBR(p, 1)}%`
 }
 
 /*

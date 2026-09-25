@@ -12,7 +12,7 @@
 import { useLocalSearchParams } from 'expo-router'
 import { Image, ScrollView, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Brain, Store } from 'lucide-react-native'
+import { Brain, Cpu, Store } from 'lucide-react-native'
 import { useDados } from '../../src/hooks/useDados'
 import { aoVivo, picks as apiPicks } from '../../src/api/endpoints'
 import { Card, Carregando, Dado, Selo, Separador, Txt, Vazio } from '../../src/components/ui'
@@ -25,6 +25,7 @@ import {
   horaDoJogo,
   mercadoCompleto,
   odd,
+  pct,
   timeCasa,
   timeFora,
   unidades,
@@ -61,6 +62,12 @@ export default function DetalheDoPick() {
   const uriCasa = escudo(dados.home_team_id)
   const uriFora = escudo(dados.away_team_id)
   const hora = horaDoJogo(dados.match_datetime)
+
+  /* A mesma prioridade do card da lista: o que o usuário APOSTOU, senão o
+     que o backend sugere para a banca dele (`suggested_stake_units`), senão a
+     stake gravada pelo motor. Nada é recalculado aqui. */
+  const jaApostou = dados.user_stake_units != null
+  const stake = dados.user_stake_units ?? dados.suggested_stake_units ?? dados.stake_units ?? null
 
   return (
     <ScrollView
@@ -109,12 +116,12 @@ export default function DetalheDoPick() {
           <Dado rotulo="Situação" valor={resultado.rotulo} cor={resultado.cor} />
         </View>
 
-        {dados.stake_units != null || dados.stake_pct != null ? (
+        {stake != null || dados.stake_pct != null ? (
           <>
             <Separador />
             <Dado
-              rotulo="Stake sugerido"
-              valor={dados.stake_units != null ? unidades(dados.stake_units) : `${dados.stake_pct}% da banca`}
+              rotulo={jaApostou ? 'Stake apostada' : 'Stake sugerida'}
+              valor={stake != null ? unidades(stake) : `${pct(dados.stake_pct)} da banca`}
             />
           </>
         ) : null}
@@ -160,6 +167,16 @@ export default function DetalheDoPick() {
           </View>
         </Card>
       ) : null}
+
+      {/* Quem lê precisa saber de onde veio a análise. Mesmo sentido do aviso
+          do rodapé do site, dito no lugar em que a decisão é tomada. */}
+      <View style={{ flexDirection: 'row', gap: espaco.sm, alignItems: 'flex-start', paddingHorizontal: espaco.xs }}>
+        <Cpu size={14} color={cores.ink4} style={{ marginTop: 2 }} />
+        <Txt variante="apoio" cor={cores.ink4} style={{ flex: 1 }}>
+          Análise gerada automaticamente pelo motor do Pick IA a partir de dados estatísticos. É um palpite, não
+          garantia de resultado. Conteúdo para maiores de 18 anos.
+        </Txt>
+      </View>
     </ScrollView>
   )
 }

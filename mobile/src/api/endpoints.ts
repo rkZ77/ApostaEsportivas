@@ -55,6 +55,18 @@ export const autenticacao = {
 
 /* ── picks pré-jogo ───────────────────────────────────────────────────── */
 
+/*
+ * `/suggestions/{id}/detail` tem DOIS formatos, conforme o tipo:
+ *   premium, dica, múltipla, alavancagem → { suggestion, home_recent, away_recent, odds }
+ *   faltas, jogadores, boost, defesas     → o pick direto
+ * O app lia sempre como pick direto, e o detalhe de um pick Premium abria
+ * vazio (sem times, números nem análise). Mesma leitura que o site faz em
+ * SuggestionDetail.tsx (`data.suggestion`).
+ */
+function desembrulharDetalhe(dados: Pick | { suggestion: Pick }): Pick {
+  return 'suggestion' in dados && dados.suggestion ? dados.suggestion : (dados as Pick)
+}
+
 export const picks = {
   /** Picks do dia · o backend já filtra por plano (VIP recebe tudo, free recebe a dica). */
   hoje: (data?: string) =>
@@ -63,7 +75,8 @@ export const picks = {
 
   /** `pick_type` decide de qual tabela o backend lê · default "vip", como no site. */
   detalhe: (id: number, tipo = 'vip') =>
-    api.get<Pick>(`/suggestions/${id}/detail`, { params: { pick_type: tipo } }).then((r) => r.data),
+    api.get<Pick | { suggestion: Pick }>(`/suggestions/${id}/detail`, { params: { pick_type: tipo } })
+      .then((r) => desembrulharDetalhe(r.data)),
 
   /** Picks gratuitos · visível também para quem não é VIP. */
   gratuitos: () => api.get<Pick[]>('/suggestions/picks-free').then((r) => r.data),
