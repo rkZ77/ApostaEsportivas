@@ -284,7 +284,10 @@ export default function Home() {
 
             <HeroTexto animar={!HERO_JA_PINTADO} />
 
-            <div className="lg:pl-4">
+            {/* max-w-md abaixo de lg: sozinho numa coluna, o card esticava até
+                a largura da tela (910px num notebook pequeno) pra mostrar um
+                jogo e uma odd. */}
+            <div className="w-full max-w-md lg:max-w-none lg:pl-4">
               <FreePickHero revelar={topoPronto} onCarregou={marcarPronto} />
             </div>
           </div>

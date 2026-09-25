@@ -79,10 +79,10 @@ export default function FreePickHero({ revelar = true, onCarregou }: {
 
   if (loading || !revelar) {
     return (
-      <div className="panel p-6 space-y-4">
+      <div className="panel p-5 space-y-3">
         <Skeleton className="h-4 w-40" />
-        <Skeleton className="h-8 w-full" />
-        <Skeleton className="h-16 w-full" />
+        <Skeleton className="h-7 w-full" />
+        <Skeleton className="h-14 w-full" />
       </div>
     )
   }
@@ -133,9 +133,9 @@ export default function FreePickHero({ revelar = true, onCarregou }: {
         </div>
 
         {/* Jogo */}
-        <div className="px-5 py-5 text-center">
+        <div className="px-4 py-4 text-center">
           {(pick.league_name || quando) && (
-            <p className="text-[11px] text-ink-4 mb-3">
+            <p className="text-[11px] text-ink-4 mb-2">
               {pick.league_name}
               {pick.league_name && quando ? '-' : ''}
               {quando}
@@ -144,9 +144,9 @@ export default function FreePickHero({ revelar = true, onCarregou }: {
 
           <div className="flex items-center justify-center gap-2 flex-wrap mb-1">
             <TeamLogo id={pick.home_team_id ?? undefined} name={pick.home_team_name} size={22} />
-            <span className="font-display text-lg font-semibold text-ink-1">{pick.home_team_name}</span>
+            <span className="font-display text-base sm:text-lg font-semibold text-ink-1">{pick.home_team_name}</span>
             <span className="text-ink-4">x</span>
-            <span className="font-display text-lg font-semibold text-ink-1">{pick.away_team_name}</span>
+            <span className="font-display text-base sm:text-lg font-semibold text-ink-1">{pick.away_team_name}</span>
             <TeamLogo id={pick.away_team_id ?? undefined} name={pick.away_team_name} size={22} />
           </div>
 
@@ -155,18 +155,18 @@ export default function FreePickHero({ revelar = true, onCarregou }: {
 
         {/* Odd e mercado */}
         <div className="grid grid-cols-2 divide-x divide-line border-y border-line">
-          <div className="px-4 py-4 text-center">
+          <div className="px-4 py-3 text-center">
             <div className="stat-label !mt-0 mb-1">Odd</div>
-            <div className="font-mono text-2xl font-bold text-accent-ink tabular-nums">
+            <div className="font-mono text-xl font-bold text-accent-ink tabular-nums">
               {Number(pick.odd).toFixed(2)}
             </div>
           </div>
 
-          <div className="px-4 py-4 text-center min-w-0">
+          <div className="px-4 py-3 text-center min-w-0">
             <div className="stat-label !mt-0 mb-1">Mercado</div>
             {!revelado ? (
               <div className="relative">
-                <span className="font-mono text-base font-bold text-ink-2 blur-[6px] select-none" aria-hidden="true">
+                <span className="font-mono text-sm font-bold text-ink-2 blur-[6px] select-none" aria-hidden="true">
                   {ISCA}
                 </span>
                 <span className="absolute inset-0 flex items-center justify-center gap-1.5">
@@ -175,7 +175,7 @@ export default function FreePickHero({ revelar = true, onCarregou }: {
                 </span>
               </div>
             ) : (
-              <div className="font-mono text-base font-bold text-ink-1 truncate">
+              <div className="font-mono text-sm font-bold text-ink-1 leading-snug break-words">
                 {rotuloDoMercado(pick.market, pick.line)}
               </div>
             )}
@@ -183,7 +183,7 @@ export default function FreePickHero({ revelar = true, onCarregou }: {
         </div>
 
         {/* Ação */}
-        <div className="px-5 py-4">
+        <div className="px-4 py-3">
           {!revelado ? (
             <>
               <Button to="/login?mode=register" block IconRight={ArrowRight}>

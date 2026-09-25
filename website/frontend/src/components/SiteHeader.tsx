@@ -77,12 +77,15 @@ export default function SiteHeader() {
         </Link>
         </div>
 
-        <nav className="hidden md:flex items-center gap-1" aria-label="Navegação principal">
+        {/* Só a partir de lg: entre 768 e 1024 os seis links mais o botão do
+            menu lateral não cabiam, quebravam em duas linhas e empurravam o
+            "Entrar" pra fora da tela. Abaixo disso, a gaveta tem tudo. */}
+        <nav className="hidden lg:flex items-center gap-1" aria-label="Navegação principal">
           {LINKS.map(({ href, label }) => (
             <a
               key={href}
               href={href}
-              className="text-ink-2 hover:text-ink-1 text-sm font-medium px-3 py-2 rounded-md hover:bg-surface-2/60 transition-colors duration-1 ease-smooth"
+              className="whitespace-nowrap text-ink-2 hover:text-ink-1 text-sm font-medium px-3 py-2 rounded-md hover:bg-surface-2/60 transition-colors duration-1 ease-smooth"
             >
               {label}
             </a>
