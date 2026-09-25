@@ -211,6 +211,19 @@ class MatchStatisticsSyncService:
             # uma vez -- ver o comentario da coleta de amistosos em
             # atualizar_jogos.py.
             league_ids = tuple(lid for lid in league_ids if lid == apenas_liga)
+            # E O LACO DE JOGOS TAMBEM (2026-09-24). `apenas_liga` estreitava
+            # so' a consulta de `teams` acima; o laco la' embaixo seguia varrendo
+            # TODAS as ligas cadastradas, uma requisicao de listagem cada, e
+            # aplicando a `temporada` pedida a todas elas.
+            #
+            # Ficou invisivel enquanto o filtro de time exigia os DOIS lados: o
+            # jogo de outra liga caia porque os times dela nao estavam em
+            # valid_team_ids. Com `exigir_os_dois_times=False` ele passa a
+            # entrar -- um jogo de Champions tem os dois times cadastrados pelas
+            # ligas nacionais deles -- e o backfill de UMA liga comecou a gravar
+            # a temporada passada de OUTRAS. As linhas gravadas estavam corretas
+            # (cada uma com o seu proprio league_id), mas nenhuma foi pedida.
+            leagues = [l for l in leagues if l["league_id"] == apenas_liga]
             if not league_ids:
                 print(f"[MATCH_STATS] Liga {apenas_liga} nao esta cadastrada em `leagues`.")
                 return []

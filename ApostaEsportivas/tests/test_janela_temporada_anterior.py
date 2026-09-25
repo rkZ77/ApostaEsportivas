@@ -109,3 +109,43 @@ def test_jogo_sem_rodada_fica_fora_do_recorte():
 
     assert len(escolhidos) == 1
     assert escolhidos[0]["league"]["round"] == "Regular Season - 3"
+
+
+# ── `apenas_liga` tem de estreitar o LAÇO, não só a consulta de times ─────
+def test_apenas_liga_estreita_o_laco_de_ligas(monkeypatch):
+    """Bug pré-existente que a flag do backfill tornou visível (24/09): o
+    recorte valia só pra `teams`, e o laço seguia varrendo todas as ligas
+    cadastradas -- uma listagem cada, e a `temporada` pedida aplicada a todas.
+    Ficou invisível enquanto o filtro exigia os dois times; com
+    `exigir_os_dois_times=False`, o backfill de uma liga passou a gravar a
+    temporada passada de outras."""
+    from collectors import match_statistics_sync_service as mod
+
+    consultadas = []
+
+    def falso_buscar(url, params, origem=None, **kw):
+        consultadas.append(params["league"])
+        return []
+
+    monkeypatch.setattr(mod, "load_leagues_from_db",
+                        lambda: [{"league_id": 140, "season": 2026},
+                                 {"league_id": 2, "season": 2026}])
+    monkeypatch.setattr(mod, "buscar", falso_buscar)
+
+    servico = mod.MatchStatisticsSyncService()
+
+    class CursorFalso:
+        description = None
+
+        def execute(self, *a, **kw):
+            pass
+
+        def fetchall(self):
+            return []
+
+    servico.cur = CursorFalso()
+    servico._gravar_rodadas = lambda pares: None
+    servico._load_fixtures(use_date_filter=False, apenas_liga=140,
+                           temporada=2025, exigir_os_dois_times=False)
+
+    assert consultadas == [140]
