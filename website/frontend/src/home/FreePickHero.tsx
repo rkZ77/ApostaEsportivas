@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowRight, Gift, History, Lock } from 'lucide-react'
+import { ArrowRight, Check, Gift, History, Lock } from 'lucide-react'
 import api from '../services/api'
 import { rotuloDoMercado } from '../utils/marketTranslate'
 import { useAuth } from '../context/AuthContext'
 import { Badge, Button, LiveDot, ResultBadge, Skeleton } from '../components/ui'
-import { TeamLogo } from '../components/TeamLogo'
+import { escudoDoTime } from '../lib/aoVivo'
 
 /*
  * Dica do Dia no hero, com o mercado atrás de cadastro.
@@ -49,6 +49,31 @@ interface FreePick {
 
 /** Texto de enfeite sob o borrão. Nunca é o mercado real. */
 const ISCA = 'Mercado escondido'
+
+/*
+ * Escudo grande do placar, com as iniciais como reserva.
+ *
+ * O TeamLogo compartilhado simplesmente some quando o escudo falha · numa
+ * linha de texto isso passa, mas aqui o escudo É o layout: sem ele o placar
+ * ficaria com um buraco de um lado só.
+ */
+function Escudo({ id, nome }: { id?: number | null; nome: string }) {
+  const src = escudoDoTime(id ?? undefined)
+  const [falhou, setFalhou] = useState(false)
+  const iniciais = nome.split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase()
+  return (
+    <span className="w-14 h-14 rounded-full bg-surface-2 border border-line flex items-center justify-center shrink-0">
+      {src && !falhou ? (
+        <img src={src} alt="" width={36} height={36} loading="lazy" className="w-9 h-9 object-contain" onError={() => setFalhou(true)} />
+      ) : (
+        <span className="font-display text-sm font-bold text-ink-2" aria-hidden="true">{iniciais}</span>
+      )}
+    </span>
+  )
+}
+
+/** O que o visitante leva ao criar a conta · só o que é verdade hoje. */
+const CONFIANCA = ['Jogo e odd reais', 'Conta grátis', 'Resultado no histórico público']
 
 /*
  * `revelar` e `onCarregou` sincronizam este bloco com os vizinhos do topo.
@@ -132,66 +157,87 @@ export default function FreePickHero({ revelar = true, onCarregou }: {
           <Badge tone="green" Icon={Gift}>Grátis</Badge>
         </div>
 
-        {/* Jogo */}
-        <div className="px-4 py-4 text-center">
-          {(pick.league_name || quando) && (
-            <p className="text-[11px] text-ink-4 mb-2">
+        {/* Jogo, em formato de placar: escudo, horário, escudo. */}
+        <div className="px-4 pt-4 pb-5">
+          {pick.league_name && (
+            <p className="text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-4 mb-4 truncate">
               {pick.league_name}
-              {pick.league_name && quando ? '-' : ''}
-              {quando}
             </p>
           )}
 
-          <div className="flex items-center justify-center gap-2 flex-wrap mb-1">
-            <TeamLogo id={pick.home_team_id ?? undefined} name={pick.home_team_name} size={22} />
-            <span className="font-display text-base sm:text-lg font-semibold text-ink-1">{pick.home_team_name}</span>
-            <span className="text-ink-4">x</span>
-            <span className="font-display text-base sm:text-lg font-semibold text-ink-1">{pick.away_team_name}</span>
-            <TeamLogo id={pick.away_team_id ?? undefined} name={pick.away_team_name} size={22} />
+          <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-2">
+            <div className="flex flex-col items-center gap-2 min-w-0">
+              <Escudo id={pick.home_team_id} nome={pick.home_team_name} />
+              <span className="font-display text-sm font-semibold text-ink-1 text-center leading-tight line-clamp-2">{pick.home_team_name}</span>
+            </div>
+
+            <div className="pt-3.5 flex flex-col items-center min-w-[64px]">
+              {quando
+                ? <span className="font-mono text-lg font-bold text-ink-1 tabular-nums leading-none">{quando}</span>
+                : <span className="font-display text-sm font-bold text-ink-4">x</span>}
+              <span className="mt-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink-4">
+                {anterior ? 'data' : 'hoje'}
+              </span>
+            </div>
+
+            <div className="flex flex-col items-center gap-2 min-w-0">
+              <Escudo id={pick.away_team_id} nome={pick.away_team_name} />
+              <span className="font-display text-sm font-semibold text-ink-1 text-center leading-tight line-clamp-2">{pick.away_team_name}</span>
+            </div>
           </div>
 
-          {pick.result && <div className="mt-2"><ResultBadge result={pick.result} emDestaque /></div>}
+          {pick.result && <div className="mt-4 flex justify-center"><ResultBadge result={pick.result} emDestaque /></div>}
         </div>
 
-        {/* Odd e mercado */}
-        <div className="grid grid-cols-2 divide-x divide-line border-y border-line">
-          <div className="px-4 py-3 text-center">
+        {/* Odd e mercado, em dois blocos. */}
+        <div className="grid grid-cols-[auto_1fr] gap-2 px-4">
+          <div className="rounded-lg bg-surface-2/60 border border-line px-4 py-3 text-center">
             <div className="stat-label !mt-0 mb-1">Odd</div>
-            <div className="font-mono text-xl font-bold text-accent-ink tabular-nums">
+            <div className="font-mono text-xl font-bold text-accent-ink tabular-nums leading-none">
               {Number(pick.odd).toFixed(2)}
             </div>
           </div>
 
-          <div className="px-4 py-3 text-center min-w-0">
-            <div className="stat-label !mt-0 mb-1">Mercado</div>
-            {!revelado ? (
-              <div className="relative">
-                <span className="font-mono text-sm font-bold text-ink-2 blur-[6px] select-none" aria-hidden="true">
-                  {ISCA}
+          {!revelado ? (
+            /* O borrão cobre um texto de enfeite (ISCA), nunca o mercado:
+               o servidor nem manda o mercado pra quem não tem conta. */
+            <div className="relative rounded-lg border border-dashed border-accent/40 bg-accent/5 px-3 py-3 overflow-hidden min-w-0">
+              <span className="block stat-label !mt-0 mb-1 text-center">Mercado</span>
+              <span className="block text-center font-mono text-sm font-bold text-ink-2 blur-[6px] select-none" aria-hidden="true">
+                {ISCA}
+              </span>
+              <span className="absolute inset-x-0 bottom-2.5 flex items-center justify-center gap-1.5">
+                <span className="w-5 h-5 rounded-full bg-accent/20 flex items-center justify-center">
+                  <Lock className="w-3 h-3 text-accent-ink" />
                 </span>
-                <span className="absolute inset-0 flex items-center justify-center gap-1.5">
-                  <Lock className="w-3.5 h-3.5 text-ink-3" />
-                  <span className="text-[11px] font-semibold text-ink-3">Criar conta</span>
-                </span>
-              </div>
-            ) : (
+                <span className="text-[11px] font-bold text-accent-ink">Libera com conta grátis</span>
+              </span>
+            </div>
+          ) : (
+            <div className="rounded-lg bg-surface-2/60 border border-line px-3 py-3 text-center min-w-0">
+              <div className="stat-label !mt-0 mb-1">Mercado</div>
               <div className="font-mono text-sm font-bold text-ink-1 leading-snug break-words">
                 {rotuloDoMercado(pick.market, pick.line)}
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         {/* Ação */}
-        <div className="px-4 py-3">
+        <div className="px-4 pt-4 pb-4">
           {!revelado ? (
             <>
               <Button to="/login?mode=register" block IconRight={ArrowRight}>
                 Ver o mercado desta dica
               </Button>
-              <p className="text-[11px] text-ink-4 text-center mt-2.5">
-                Conta grátis. O jogo e a odd acima são reais.
-              </p>
+              <ul className="mt-3 flex flex-wrap justify-center gap-x-3 gap-y-1">
+                {CONFIANCA.map(t => (
+                  <li key={t} className="flex items-center gap-1 text-[11px] text-ink-3">
+                    <Check className="w-3 h-3 text-accent-ink shrink-0" aria-hidden="true" />
+                    {t}
+                  </li>
+                ))}
+              </ul>
             </>
           ) : (
             <Button to={`/p/free/${pick.id}`} block variant="ghost" IconRight={ArrowRight}>

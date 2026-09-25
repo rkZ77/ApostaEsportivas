@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Menu } from 'lucide-react'
 import MenuLateral from './MenuLateral'
+import BarraInferior from './BarraInferior'
 import { useAuth } from '../context/AuthContext'
 import { Button } from './ui'
 import { cn } from '../lib/cn'
@@ -47,13 +48,16 @@ export default function SiteHeader() {
     <>
     <header
       className={cn(
-        'fixed inset-x-0 top-0 z-50 transition-all duration-2 ease-smooth',
+        /* No celular o cabeçalho é uma cápsula flutuando com margem (molde da
+           KaySto), sempre com fundo · o fundo só aparecer depois de rolar
+           fica pro desktop, onde a barra ocupa a largura toda. */
+        'fixed inset-x-0 top-0 z-50 px-3 pt-3 md:px-0 md:pt-0 transition-all duration-2 ease-smooth',
         scrolled
-          ? 'bg-surface-0/80 backdrop-blur-xl border-b border-line shadow-elev-sm'
-          : 'bg-transparent border-b border-transparent',
+          ? 'md:bg-surface-0/80 md:backdrop-blur-xl md:border-b md:border-line md:shadow-elev-sm'
+          : 'md:bg-transparent md:border-b md:border-transparent',
       )}
     >
-      <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
+      <div className="max-w-6xl mx-auto px-3 md:px-4 h-14 md:h-16 flex items-center justify-between gap-4 rounded-2xl border border-line bg-surface-0/80 backdrop-blur-xl shadow-elev-sm md:rounded-none md:border-0 md:bg-transparent md:backdrop-blur-none md:shadow-none">
 
         <div className="flex items-center gap-1 shrink-0">
         <button
@@ -116,6 +120,7 @@ export default function SiteHeader() {
 
     </header>
     <MenuLateral open={open} onClose={fechar} />
+    <BarraInferior />
     </>
   )
 }

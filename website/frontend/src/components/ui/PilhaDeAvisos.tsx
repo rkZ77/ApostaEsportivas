@@ -43,7 +43,7 @@ export default function PilhaDeAvisos({ children }: { children: ReactNode }) {
         /* 5.5rem no celular é a altura do botão do Agente mais respiro · era
            essa a conta por trás do `bottom-24` que cada aviso repetia. */
         paddingBottom:
-          'calc(var(--aviso-offset, 0px) + 5.5rem + env(safe-area-inset-bottom))',
+          'calc(var(--aviso-offset, 0px) + var(--barra-inferior, 0px) + 5.5rem + env(safe-area-inset-bottom))',
       }}
     >
       {children}

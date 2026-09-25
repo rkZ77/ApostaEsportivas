@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Menu } from 'lucide-react'
 import MenuLateral from './MenuLateral'
+import BarraInferior from './BarraInferior'
 import { Button } from './ui'
 import { PAGE_WIDTH, type PageWidth } from '../lib/pageWidth'
 import ThemeToggle from './ThemeToggle'
@@ -33,8 +34,9 @@ export default function PublicNav({
   const fechar = useCallback(() => setOpen(false), [])
   return (
     <>
-    <nav className="border-b border-line/60 bg-surface-0/80 backdrop-blur-sm sticky top-0 z-40">
-      <div className={`mx-auto h-14 flex items-center justify-between gap-3 ${PAGE_WIDTH[width]}`}>
+    {/* Cápsula flutuante no celular, barra de largura inteira a partir de md. */}
+    <nav className="sticky top-0 z-40 px-3 pt-3 md:p-0 md:border-b md:border-line/60 md:bg-surface-0/80 md:backdrop-blur-sm">
+      <div className={`mx-auto h-14 flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface-0/80 backdrop-blur-xl shadow-elev-sm md:rounded-none md:border-0 md:bg-transparent md:backdrop-blur-none md:shadow-none ${PAGE_WIDTH[width]}`}>
         <div className="flex items-center gap-1 min-w-0">
         <button
           onClick={() => setOpen(true)}
@@ -66,6 +68,8 @@ export default function PublicNav({
       </div>
     </nav>
     <MenuLateral open={open} onClose={fechar} />
+    {/* Na tela de login (que passa `acoes`) a barra só repetiria o cadastro. */}
+    {!acoes && <BarraInferior />}
     </>
   )
 }
