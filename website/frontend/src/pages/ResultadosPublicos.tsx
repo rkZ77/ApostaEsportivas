@@ -704,7 +704,7 @@ export default function ResultadosPublicos() {
 
   const lucroPorLiga = [...byLeague]
     .map(l => ({
-      label: l.league_name,
+      label: nomeDaLiga(l.league_id, l.league_name),
       value: Math.round(Number(l.profit ?? 0) * 100) / 100,
       meta: `${l.total} picks, ${l.greens}G ${l.reds}R`,
       icon: l.league_id != null

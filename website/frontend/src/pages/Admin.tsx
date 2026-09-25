@@ -259,6 +259,10 @@ export default function Admin() {
   const [acaoResultado, setAcaoResultado] = useState<'resolve' | 'reverify' | null>(null)
   const [overview, setOverview] = useState<Overview | null>(null)
   const [ligas, setLigas] = useState<Liga[] | null>(null)
+  /* Falha ao carregar NÃO é lista vazia (2026-09-25). O catch devolvia [] e a
+     tela dizia "Nenhuma liga cadastrada" · foi assim que um 403 no noprod (conta
+     sem plano admin naquele banco) pareceu um banco sem ligas. */
+  const [ligasErro, setLigasErro] = useState<string | null>(null)
   const [bookmakers, setBookmakers] = useState<{
     bookmaker_id: number; bookmaker_name: string; ativo: boolean
     created_at: string | null; n_odds: number; n_fixtures: number
@@ -556,7 +560,15 @@ export default function Admin() {
     api.get('/admin/overview').then(r => setOverview(r.data)).catch(() => {})
   }
   const carregarLigas = () => {
-    api.get('/admin/leagues').then(r => setLigas(r.data)).catch(() => setLigas([]))
+    setLigasErro(null)
+    api.get('/admin/leagues')
+      .then(r => setLigas(r.data))
+      .catch(e => {
+        setLigas(null)
+        setLigasErro(e?.response?.status === 403
+          ? 'Sua conta não é admin neste ambiente, então a lista de ligas não carrega. As ligas continuam no banco.'
+          : 'Não foi possível carregar as ligas agora. As ligas continuam no banco.')
+      })
   }
   const carregarBookmakers = () => {
     setBkLoading(true)
@@ -2019,7 +2031,14 @@ export default function Admin() {
             <h2 className="text-xs font-semibold text-ink-3 mb-3">
               Ligas na coleta {ligas ? `(${ligas.length})` : ''}
             </h2>
-            {!ligas ? (
+            {ligasErro ? (
+              <div className="flex flex-wrap items-center gap-3 rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2.5">
+                <p className="text-sm text-red-300 flex-1 min-w-[200px]">{ligasErro}</p>
+                <button onClick={carregarLigas} className="text-xs font-semibold px-3 py-1.5 rounded-md border border-line text-ink-2 hover:text-ink-1 hover:border-line-strong transition-colors">
+                  Tentar de novo
+                </button>
+              </div>
+            ) : !ligas ? (
               <p className="text-sm text-ink-4">Carregando...</p>
             ) : ligas.length === 0 ? (
               <p className="text-sm text-ink-4">Nenhuma liga cadastrada, o motor não tem o que coletar.</p>
