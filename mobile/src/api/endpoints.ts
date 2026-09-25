@@ -36,6 +36,16 @@ export const autenticacao = {
 
   esqueciSenha: (email: string) =>
     api.post('/auth/forgot-password', { email }).then((r) => r.data),
+
+  /** Segundo passo · o código de 6 dígitos que chegou por e-mail. Troca a
+      senha e derruba as sessões abertas (backend), então não loga ninguém. */
+  redefinirSenha: (email: string, code: string, new_password: string) =>
+    api.post<{ ok: boolean }>('/auth/reset-password', { email, code, new_password }).then((r) => r.data),
+
+  /** Exclusão definitiva. `confirmacao` precisa ser "EXCLUIR"; senha só é
+      exigida de conta que tem senha (conta só-Google não tem). */
+  excluirConta: (current_password: string | null, confirmacao: string) =>
+    api.post('/auth/delete-account', { current_password, confirmacao }).then((r) => r.data),
 }
 
 /* ── picks pré-jogo ───────────────────────────────────────────────────── */
