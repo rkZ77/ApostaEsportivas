@@ -38,6 +38,34 @@ from services.pick_engine import red_analysis
 # aprender com esses gap"s ensinaria o motor a compensar um bug que ja nao
 # existe mais (penalidade duplicada). Cai fora do calculo ate o proprio
 # historico pos-fix acumular amostra suficiente organicamente.
+#
+# CONSIDERADO MOVER PRA 15/09 E MEDIDO QUE NAO (2026-09-24).
+#
+# O peso por forca do adversario foi aposentado em 15/09 (ver
+# config.py::opponent_*), e ele mudava `taxa_real` -- logo, mudava o confidence
+# declarado. Pela regra escrita acima, isso e' exatamente o tipo de mudanca que
+# justificaria mover o corte: o gap de um pick de agosto compara uma confianca
+# que o motor de hoje nao produziria. E na mesma semana o agregado de cartoes me
+# fez ligar um veto que a separacao por data derrubou, o que reforcava a suspeita.
+#
+# A medicao diz o contrario. Nas 421 linhas resolvidas dos ultimos 90 dias:
+#
+#   familia            corte 25/07 (hoje)        corte 15/09
+#   btts               n=34  gap +0.209          n=17  gap +0.353
+#   corners            n=104 gap +0.145          n=15  gap +0.164
+#   goals              n=101 gap -0.011          n=22  gap +0.021
+#   cards              n=53  gap -0.096          n=10  gap -0.134
+#   shots              n=30  gap +0.119          n=6   gap +0.261
+#
+# Os gaps nao encolhem, AUMENTAM -- ou seja, o historico antigo nao estava
+# distorcendo a direcao da correcao. E a base cairia de 421 pra ~70 linhas,
+# concentradas na pior semana da serie (14/09, a do bloco de amostra curta).
+# Mover o corte faria a calibracao aprender de uma semana ruim em vez de de um
+# trimestre -- o oposto do que ela existe pra fazer, com o agravante de que
+# `_EVIDENCE_STRENGTH` ja' desconta amostra pequena sozinho.
+#
+# Fica em 25/07. Se algum dia mover, o teste e' este: comparar gap E n nas duas
+# datas antes de trocar, nunca so' assumir que o historico velho contamina.
 _CALIBRATION_CUTOFF = datetime(2026, 7, 25, tzinfo=timezone.utc)
 
 # Amostra minima pra o hit-rate virar PRIOR do encolhimento bayesiano
