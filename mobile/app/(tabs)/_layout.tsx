@@ -41,7 +41,7 @@ export default function TabsLayout() {
     >
       <Tabs.Screen
         name="index"
-        options={{ title: 'Início', tabBarIcon: ({ color, size }) => <Home size={size} color={color} /> }}
+        options={{ title: 'Início', headerShown: false, tabBarIcon: ({ color, size }) => <Home size={size} color={color} /> }}
       />
       <Tabs.Screen
         name="picks"

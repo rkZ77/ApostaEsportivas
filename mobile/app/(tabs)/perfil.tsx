@@ -13,7 +13,7 @@ import { useState, type ReactNode } from 'react'
 import { Alert, Linking, Pressable, ScrollView, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
-import { ChevronRight, Crown, ExternalLink, FileText, ServerCog, ShieldCheck } from 'lucide-react-native'
+import { ChevronRight, ExternalLink, FileText, ServerCog, ShieldCheck } from 'lucide-react-native'
 import { useAuth } from '../../src/auth/AuthContext'
 import { rotuloDoPlano } from '../../src/auth/plano'
 import { Botao, Card, Dado, Selo, Separador, Txt } from '../../src/components/ui'
@@ -55,7 +55,6 @@ export default function Perfil() {
             <Txt variante="titulo" numberOfLines={1}>{usuario?.name ?? '—'}</Txt>
             <Txt variante="apoio" numberOfLines={1}>{usuario?.email ?? ''}</Txt>
           </View>
-          {isVip ? <Crown size={20} color={cores.accent} /> : null}
         </View>
 
         <Separador />
@@ -114,7 +113,16 @@ export default function Perfil() {
         Aposte com responsabilidade.
       </Txt>
 
-      <Botao titulo="Excluir minha conta" variante="fantasma" onPress={() => router.push('/conta/excluir')} />
+      {/* Destrutivo e raro: fica acessível, como as lojas exigem, mas sem o
+          peso visual de "Sair da conta". */}
+      <Pressable
+        onPress={() => router.push('/conta/excluir')}
+        hitSlop={8}
+        accessibilityRole="button"
+        style={{ alignSelf: 'center', minHeight: 44, justifyContent: 'center' }}
+      >
+        <Txt variante="apoio" cor={cores.red}>Excluir minha conta</Txt>
+      </Pressable>
 
       {/* Ambiente à vista · a forma mais barata de nunca confundir DEV com produção. */}
       <Card style={{ gap: espaco.sm }}>

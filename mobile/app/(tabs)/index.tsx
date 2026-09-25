@@ -10,7 +10,7 @@ import { useCallback } from 'react'
 import { RefreshControl, ScrollView, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Activity, ChevronRight, Crown, Target } from 'lucide-react-native'
+import { Activity, ChevronRight, Target } from 'lucide-react-native'
 import { useAuth } from '../../src/auth/AuthContext'
 import { rotuloDoPlano } from '../../src/auth/plano'
 import { useDados } from '../../src/hooks/useDados'
@@ -46,7 +46,13 @@ export default function Inicio() {
 
   return (
     <ScrollView
-      contentContainerStyle={{ padding: espaco.lg, paddingBottom: insets.bottom + espaco.xxl, gap: espaco.lg }}
+      contentContainerStyle={{
+        padding: espaco.lg,
+        // Sem cabeçalho nesta aba: a saudação faz o papel de título.
+        paddingTop: insets.top + espaco.lg,
+        paddingBottom: espaco.xxl,
+        gap: espaco.lg,
+      }}
       refreshControl={
         <RefreshControl refreshing={hoje.atualizando} onRefresh={atualizarTudo} tintColor={cores.ink3} />
       }
@@ -57,23 +63,26 @@ export default function Inicio() {
           <Txt variante="apoio">Olá{primeiroNome ? `, ${primeiroNome}` : ''}</Txt>
           <Txt variante="titulo">Seu dia no Pick IA</Txt>
         </View>
-        {isVip ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: espaco.xs }}>
-            <Crown size={14} color={cores.accent} />
-            <Selo texto={rotuloDoPlano(usuario)} cor={cores.accent} />
-          </View>
-        ) : (
-          <Selo texto="Free" cor={cores.ink3} />
-        )}
+        {/* Sem coroa: o selo diz o plano, e ornamento de "VIP" é linguagem
+            de casa de aposta, não de ferramenta de análise. */}
+        <Selo texto={rotuloDoPlano(usuario)} cor={isVip ? cores.accent : cores.ink3} />
       </View>
 
       {/* números do dia · vêm do mesmo agregado que a home do site usa */}
       {resumo.dados ? (
-        <Card elevado style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-          <Dado rotulo="Picks hoje" valor={String(resumo.dados.total ?? 0)} />
-          <Dado rotulo="Premium" valor={String(resumo.dados.vip ?? 0)} />
-          <Dado rotulo="Múltiplas" valor={String(resumo.dados.multiplas ?? 0)} />
-          <Dado rotulo="Alavancagem" valor={String(resumo.dados.alavancagem ?? 0)} />
+        /* Grade 2×2: em linha única, "ALAVANCAGEM" encostava na borda do card
+           num Android de 360pt. */
+        <Card elevado style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: espaco.lg }}>
+          {[
+            ['Picks hoje', resumo.dados.total],
+            ['Premium', resumo.dados.vip],
+            ['Múltiplas', resumo.dados.multiplas],
+            ['Alavancagem', resumo.dados.alavancagem],
+          ].map(([rotulo, valor]) => (
+            <View key={String(rotulo)} style={{ width: '50%' }}>
+              <Dado rotulo={String(rotulo)} valor={String(valor ?? 0)} />
+            </View>
+          ))}
         </Card>
       ) : null}
 
