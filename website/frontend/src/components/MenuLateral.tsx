@@ -42,36 +42,56 @@ const AJUDA: Item[] = [
   { label: 'Privacidade',      Icon: ShieldCheck,  to: '/privacidade' },
 ]
 
-const ITEM = 'flex items-center gap-3 px-3 min-h-[44px] rounded-md text-sm font-medium text-ink-2 hover:text-ink-1 hover:bg-surface-2/60 transition-colors duration-1 ease-smooth'
+/*
+ * PEÇAS COMPARTILHADAS COM A GAVETA DO APP (Navbar, logado).
+ *
+ * As duas gavetas eram de famílias diferentes: a do site público abria pela
+ * esquerda, com seções e ícone em cada item; a do app abria pela direita, sem
+ * seções, com outro tamanho de ícone e outro X. O usuário pediu o mesmo menu
+ * no site inteiro (2026-09-25), então a casca e os itens moram aqui e as duas
+ * montam só o conteúdo.
+ */
+const ITEM = 'relative w-full flex items-center gap-3 px-3 min-h-[44px] rounded-md text-sm font-medium text-left transition-colors duration-1 ease-smooth'
 
-function Linha({ item, ativo, onClick }: { item: Item; ativo: boolean; onClick: () => void }) {
-  const { Icon, label } = item
+export function ItemDaGaveta({ label, Icon, to, href, onClick, ativo = false, tom, badge }: {
+  label: string
+  Icon: LucideIcon
+  to?: string
+  href?: string
+  onClick?: () => void
+  ativo?: boolean
+  /** 'plano' pinta de amarelo (Meu Plano / Assinar); 'perigo' é o Sair. */
+  tom?: 'plano' | 'perigo'
+  badge?: boolean
+}) {
+  const cls = cn(
+    ITEM,
+    tom === 'plano' ? 'text-yellow-400 hover:bg-yellow-400/5'
+      : tom === 'perigo' ? 'text-ink-2 hover:text-red-400 hover:bg-surface-2/60'
+      : ativo ? 'text-ink-1 bg-surface-2/60' : 'text-ink-2 hover:text-ink-1 hover:bg-surface-2/60',
+    tom === 'plano' && ativo && 'bg-yellow-400/10',
+  )
   const conteudo = (
     <>
-      <Icon className={cn('w-[18px] h-[18px] shrink-0', ativo ? 'text-accent-ink' : 'text-ink-3')} aria-hidden="true" />
+      <Icon
+        className={cn('w-[18px] h-[18px] shrink-0',
+          tom === 'plano' ? 'text-yellow-400' : ativo ? 'text-accent-ink' : 'text-ink-3')}
+        aria-hidden="true"
+      />
       <span>{label}</span>
+      {badge && <span className="ml-auto w-2 h-2 bg-accent rounded-full animate-pulse" aria-label="novidade" />}
     </>
   )
-  if (item.href) {
-    return (
-      <a href={item.href} target="_blank" rel="noopener noreferrer" onClick={onClick} className={ITEM}>
-        {conteudo}
-      </a>
-    )
+  if (href) {
+    return <a href={href} target="_blank" rel="noopener noreferrer" onClick={onClick} className={cls}>{conteudo}</a>
   }
-  return (
-    <Link
-      to={item.to!}
-      onClick={onClick}
-      aria-current={ativo ? 'page' : undefined}
-      className={cn(ITEM, ativo && 'text-ink-1 bg-surface-2/60')}
-    >
-      {conteudo}
-    </Link>
-  )
+  if (to) {
+    return <Link to={to} onClick={onClick} aria-current={ativo ? 'page' : undefined} className={cls}>{conteudo}</Link>
+  }
+  return <button type="button" onClick={onClick} className={cls}>{conteudo}</button>
 }
 
-function Secao({ titulo, children }: { titulo: string; children: React.ReactNode }) {
+export function Secao({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
     <div className="px-3 pt-4">
       <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-4">{titulo}</p>
@@ -80,11 +100,19 @@ function Secao({ titulo, children }: { titulo: string; children: React.ReactNode
   )
 }
 
-export default function MenuLateral({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { user } = useAuth()
+/** A casca: fundo desfocado, gaveta pela esquerda, logo e X. Fecha ao navegar e no Esc. */
+export function GavetaLateral({ open, onClose, logoTo = '/', topo, rodape, children }: {
+  open: boolean
+  onClose: () => void
+  logoTo?: string
+  /** Faixa logo abaixo do cabeçalho (o cartão do usuário, no app). */
+  topo?: React.ReactNode
+  /** Fixo no pé da gaveta, fora da rolagem. */
+  rodape?: React.ReactNode
+  children: React.ReactNode
+}) {
   const { pathname } = useLocation()
 
-  // Fecha ao navegar, trava o scroll do fundo e responde ao Esc.
   useEffect(() => { onClose() }, [pathname]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!open) return
@@ -122,7 +150,7 @@ export default function MenuLateral({ open, onClose }: { open: boolean; onClose:
             className="absolute inset-y-0 left-0 w-[min(300px,85vw)] flex flex-col bg-surface-0 border-r border-line shadow-elev"
           >
             <div className="h-16 shrink-0 flex items-center justify-between px-5 border-b border-line">
-              <Link to="/" onClick={onClose} className="flex items-center gap-2.5" aria-label="Pick IA, início">
+              <Link to={logoTo} onClick={onClose} className="flex items-center gap-2.5" aria-label="Pick IA, início">
                 <img src="/logo-64.webp" alt="" width={28} height={28} className="w-7 h-7 rounded-full object-cover" />
                 <span className="font-display font-semibold text-base text-ink-1">
                   Pick<span className="text-accent-ink">IA</span>
@@ -138,42 +166,57 @@ export default function MenuLateral({ open, onClose }: { open: boolean; onClose:
               </button>
             </div>
 
-            <nav className="flex-1 overflow-y-auto pb-6" aria-label="Navegação principal">
-              <Secao titulo="Menu">
-                {MENU.map(item => (
-                  <Linha key={item.label} item={item} ativo={pathname === item.to} onClick={onClose} />
-                ))}
-                <Link
-                  to={user ? '/profile' : '/login'}
-                  onClick={onClose}
-                  className="mt-2 flex items-center gap-3 px-3 min-h-[44px] rounded-md border border-line-strong bg-surface-1 text-sm font-semibold text-ink-1 hover:bg-surface-2 transition-colors duration-1 ease-smooth"
-                >
-                  <User className="w-[18px] h-[18px] shrink-0 text-ink-2" aria-hidden="true" />
-                  <span>{user ? 'Minha conta' : 'Entrar'}</span>
-                </Link>
-              </Secao>
+            {topo}
 
-              <Secao titulo="Ajuda">
-                {AJUDA.map(item => (
-                  <Linha key={item.label} item={item} ativo={pathname === item.to} onClick={onClose} />
-                ))}
-              </Secao>
+            <nav className="flex-1 overflow-y-auto pb-6" aria-label="Navegação principal">
+              {children}
             </nav>
 
-            {!user && (
-              <div className="shrink-0 p-4 border-t border-line">
-                <Link
-                  to="/login?mode=register"
-                  onClick={onClose}
-                  className="flex items-center justify-center min-h-[44px] rounded-md bg-accent hover:bg-accent-hover text-on-fill text-sm font-bold transition-colors duration-1 ease-smooth"
-                >
-                  Testar o Pro grátis por 2 dias
-                </Link>
-              </div>
-            )}
+            {rodape && <div className="shrink-0 p-4 border-t border-line">{rodape}</div>}
           </motion.aside>
         </div>
       )}
     </AnimatePresence>
+  )
+}
+
+export default function MenuLateral({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { user } = useAuth()
+  const { pathname } = useLocation()
+
+  return (
+    <GavetaLateral
+      open={open}
+      onClose={onClose}
+      rodape={!user && (
+        <Link
+          to="/login?mode=register"
+          onClick={onClose}
+          className="flex items-center justify-center min-h-[44px] rounded-md bg-accent hover:bg-accent-hover text-on-fill text-sm font-bold transition-colors duration-1 ease-smooth"
+        >
+          Testar o Pro grátis por 2 dias
+        </Link>
+      )}
+    >
+      <Secao titulo="Menu">
+        {MENU.map(item => (
+          <ItemDaGaveta key={item.label} {...item} ativo={pathname === item.to} onClick={onClose} />
+        ))}
+        <Link
+          to={user ? '/profile' : '/login'}
+          onClick={onClose}
+          className="mt-2 flex items-center gap-3 px-3 min-h-[44px] rounded-md border border-line-strong bg-surface-1 text-sm font-semibold text-ink-1 hover:bg-surface-2 transition-colors duration-1 ease-smooth"
+        >
+          <User className="w-[18px] h-[18px] shrink-0 text-ink-2" aria-hidden="true" />
+          <span>{user ? 'Minha conta' : 'Entrar'}</span>
+        </Link>
+      </Secao>
+
+      <Secao titulo="Ajuda">
+        {AJUDA.map(item => (
+          <ItemDaGaveta key={item.label} {...item} ativo={pathname === item.to} onClick={onClose} />
+        ))}
+      </Secao>
+    </GavetaLateral>
   )
 }

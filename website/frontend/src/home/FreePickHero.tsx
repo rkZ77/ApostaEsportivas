@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { ArrowRight, Check, Gift, History, Lock } from 'lucide-react'
 import api from '../services/api'
-import { rotuloDoMercado } from '../utils/marketTranslate'
+import { translateMarket, translateLine } from '../utils/marketTranslate'
 import { useAuth } from '../context/AuthContext'
 import { Badge, Button, LiveDot, ResultBadge, Skeleton } from '../components/ui'
 import { escudoDoTime } from '../lib/aoVivo'
@@ -125,6 +125,11 @@ export default function FreePickHero({ revelar = true, onCarregou }: {
 
   const anterior = pick.is_previous === true
 
+  // "--" é o que o backend manda quando a linha não existe pro mercado.
+  const mercado = revelado ? translateMarket(pick.market) : ''
+  const linhaBruta = revelado ? translateLine(pick.line) : ''
+  const linha = linhaBruta && linhaBruta !== '--' ? linhaBruta : ''
+
   /*
    * Horário do jogo se a dica é de hoje; data se é a anterior.
    *
@@ -189,20 +194,16 @@ export default function FreePickHero({ revelar = true, onCarregou }: {
           {pick.result && <div className="mt-4 flex justify-center"><ResultBadge result={pick.result} emDestaque /></div>}
         </div>
 
-        {/* Odd e mercado, em dois blocos. */}
-        <div className="grid grid-cols-[auto_1fr] gap-2 px-4">
-          <div className="rounded-lg bg-surface-2/60 border border-line px-4 py-3 text-center">
-            <div className="stat-label !mt-0 mb-1">Odd</div>
-            <div className="font-mono text-xl font-bold text-accent-ink tabular-nums leading-none">
-              {Number(pick.odd).toFixed(2)}
-            </div>
-          </div>
-
+        {/* Mercado, linha e odd, cada um no seu bloco (2026-09-25, pedido do
+            usuário). Antes os dois primeiros saíam juntos numa frase só, "Gols
+            Mais/Menos, Mais de 2.0", e no celular a linha, que é o que a
+            pessoa vai procurar na casa, era justamente o pedaço que quebrava. */}
+        <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1.1fr)_auto] gap-2 px-4">
           {!revelado ? (
             /* O borrão cobre um texto de enfeite (ISCA), nunca o mercado:
-               o servidor nem manda o mercado pra quem não tem conta. */
-            <div className="relative rounded-lg border border-dashed border-accent/40 bg-accent/5 px-3 py-3 overflow-hidden min-w-0">
-              <span className="block stat-label !mt-0 mb-1 text-center">Mercado</span>
+               o servidor nem manda mercado e linha pra quem não tem conta. */
+            <div className="col-span-2 relative rounded-lg border border-dashed border-accent/40 bg-accent/5 px-3 py-3 overflow-hidden min-w-0">
+              <span className="block stat-label !mt-0 mb-1 text-center">Mercado e linha</span>
               <span className="block text-center font-mono text-sm font-bold text-ink-2 blur-[6px] select-none" aria-hidden="true">
                 {ISCA}
               </span>
@@ -214,13 +215,28 @@ export default function FreePickHero({ revelar = true, onCarregou }: {
               </span>
             </div>
           ) : (
-            <div className="rounded-lg bg-surface-2/60 border border-line px-3 py-3 text-center min-w-0">
-              <div className="stat-label !mt-0 mb-1">Mercado</div>
-              <div className="font-mono text-sm font-bold text-ink-1 leading-snug break-words">
-                {rotuloDoMercado(pick.market, pick.line)}
+            <>
+              <div className={`rounded-lg bg-surface-2/60 border border-line px-3 py-3 text-center min-w-0 flex flex-col justify-center ${linha ? '' : 'col-span-2'}`}>
+                <div className="stat-label !mt-0 mb-1">Mercado</div>
+                <div className="font-display text-sm font-bold text-ink-1 leading-snug break-words">{mercado}</div>
               </div>
-            </div>
+              {linha && (
+                <div className="rounded-lg bg-surface-2/60 border border-line px-2 py-3 text-center min-w-0 flex flex-col justify-center">
+                  {/* "Linha" só quando tem número (Mais de 2.5); "Linha: Sim"
+                      em Ambas Marcam não quer dizer nada. */}
+                  <div className="stat-label !mt-0 mb-1">{/\d/.test(linha) ? 'Linha' : 'Palpite'}</div>
+                  <div className="font-mono text-[13px] font-bold text-accent-ink leading-snug break-words">{linha}</div>
+                </div>
+              )}
+            </>
           )}
+
+          <div className="rounded-lg bg-surface-2/60 border border-line px-4 py-3 text-center flex flex-col justify-center">
+            <div className="stat-label !mt-0 mb-1">Odd</div>
+            <div className="font-mono text-xl font-bold text-accent-ink tabular-nums leading-none">
+              {Number(pick.odd).toFixed(2)}
+            </div>
+          </div>
         </div>
 
         {/* Ação */}

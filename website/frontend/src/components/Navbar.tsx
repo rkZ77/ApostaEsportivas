@@ -5,12 +5,13 @@ import { cn } from '../lib/cn'
 import { PAGE_WIDTH, type PageWidth } from '../lib/pageWidth'
 import { useNotifications } from '../context/NotificationContext'
 import { useOnboarding } from '../context/OnboardingContext'
-import { useState, useEffect } from 'react'
+import { useCallback, useState, useEffect } from 'react'
 import {
   Zap, Trophy, BarChart2, Bot, Wallet, ListChecks, ShieldCheck, Crown,
-  LogOut, Menu, X, BookOpen, MessageCircle, History, Compass,
+  LogOut, Menu, BookOpen, MessageCircle, History, Compass,
 } from 'lucide-react'
 import Avatar from './Avatar'
+import { GavetaLateral, ItemDaGaveta, Secao } from './MenuLateral'
 import { rotuloDoPlano } from './ui'
 import NotificationBell from './NotificationBell'
 import ThemeToggle from './ThemeToggle'
@@ -40,14 +41,8 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
 
   useEffect(() => { setProfileOpen(false) }, [pathname])
 
-  // Fecha sidebar ao navegar
-  useEffect(() => { setSidebarOpen(false) }, [pathname])
-
-  // Bloqueia scroll do body quando sidebar aberta
-  useEffect(() => {
-    document.body.style.overflow = sidebarOpen ? 'hidden' : ''
-    return () => { document.body.style.overflow = '' }
-  }, [sidebarOpen])
+  // Fechar ao navegar, Esc e trava de rolagem ficam com a GavetaLateral.
+  const fecharGaveta = useCallback(() => setSidebarOpen(false), [])
 
   const isActive = (path: string) =>
     pathname === path ? 'text-accent-ink font-semibold' : 'text-ink-2 hover:text-ink-1'
@@ -88,6 +83,21 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
               e nesse tamanho o texto do anel dele já era ilegível de qualquer
               forma) e o nome aparecendo também no celular · uma palavra
               legível identifica melhor que um selo borrado. */}
+          <div className="flex items-center gap-1 shrink-0">
+          {/* Hamburger à esquerda do logo, como no site público (2026-09-25):
+              a gaveta abre pela esquerda nos dois. O avatar com o ponto some
+              abaixo de `sm`, então no celular o sinal do e-mail vive aqui. */}
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="xl:hidden relative -ml-2 p-2 text-ink-2 hover:text-ink-1 transition-colors"
+            aria-label={emailPendente ? 'Menu, e-mail não confirmado' : 'Menu'}
+            aria-expanded={sidebarOpen}
+          >
+            <Menu className="w-5 h-5" />
+            {emailPendente && (
+              <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-yellow-400 ring-2 ring-surface-0" />
+            )}
+          </button>
           <Link to="/picks" className="flex items-center gap-2.5 shrink-0">
             <img src="/logo-64.webp" alt="" width={32} height={32} className="w-8 h-8 rounded-full object-cover" />
             <span className="font-display font-semibold text-lg tracking-tight leading-none">
@@ -95,6 +105,7 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
               <span className="text-accent-ink">IA</span>
             </span>
           </Link>
+          </div>
 
           {/* Nav links · desktop only
               O PONTO DE VIRADA E' `xl:`, E NAO `lg:` (12/09/2026).
@@ -255,19 +266,6 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
               )}
             </div>
 
-            {/* Hamburger · mobile. O avatar com o ponto fica escondido abaixo
-                de `sm`, então no celular o sinal precisa viver aqui: é por este
-                botão que se chega ao Perfil. */}
-            <button
-              onClick={() => setSidebarOpen(v => !v)}
-              className="xl:hidden relative text-ink-2 hover:text-ink-1 transition-colors p-2"
-              aria-label={emailPendente ? 'Menu, e-mail não confirmado' : 'Menu'}
-            >
-              {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-              {emailPendente && !sidebarOpen && (
-                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-yellow-400 ring-2 ring-surface-0" />
-              )}
-            </button>
           </div>
         </div>
 
@@ -287,116 +285,56 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
         <div className="h-px bg-gradient-to-r from-transparent via-green-500/40 to-transparent" />
       </nav>
 
-      {/* Overlay */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/60 z-40 xl:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      {/* Sidebar · mobile */}
-      <aside
-        className={`fixed top-0 right-0 h-full w-72 bg-surface-0 border-l border-line z-50 flex flex-col transition-transform duration-300 ease-in-out xl:hidden ${
-          sidebarOpen ? 'translate-x-0' : 'translate-x-full'
-        }`}
+      {/* Gaveta · abaixo de xl. Mesma casca e mesmos itens do menu do site
+          público (components/MenuLateral), com o conteúdo de quem está logado. */}
+      <GavetaLateral
+        open={sidebarOpen}
+        onClose={fecharGaveta}
+        logoTo="/picks"
+        topo={
+          <Link to="/profile" onClick={fecharGaveta} className="mx-3 mt-3 flex items-center gap-3 rounded-lg border border-line bg-surface-1 px-3 py-3 hover:bg-surface-2 transition-colors duration-1 ease-smooth">
+            {user?.name && <Avatar name={user.name} imageUrl={user.avatar_url} size="sm" />}
+            <div className="min-w-0">
+              <div className="text-ink-1 text-sm font-semibold truncate">{user?.name}</div>
+              <span className={`mt-1 ${planBadge[user?.plan ?? 'free']}`}>
+                {rotuloDoPlano(user?.plan, user?.plan_tier)}
+              </span>
+            </div>
+            {emailPendente && (
+              <span className="ml-auto text-[10px] font-bold text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 px-1.5 py-0.5 rounded">
+                E-mail
+              </span>
+            )}
+          </Link>
+        }
+        rodape={
+          <ItemDaGaveta label="Sair" Icon={LogOut} tom="perigo" onClick={async () => { await logout(); navigate('/login') }} />
+        }
       >
-        {/* Sidebar header */}
-        <div className="flex items-center justify-between px-5 h-16 border-b border-line">
-          <div className="flex items-center gap-2">
-            <span className="font-display text-ink-1 font-semibold text-lg tracking-tight">Pick</span>
-            <span className="font-display text-accent-ink font-semibold text-lg">IA</span>
-          </div>
-          <button onClick={() => setSidebarOpen(false)} aria-label="Fechar menu" className="text-ink-2 hover:text-ink-1 p-1">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* User info */}
-        <Link to="/profile" onClick={() => setSidebarOpen(false)} className="flex items-center gap-3 px-5 py-4 border-b border-line hover:bg-surface-1 transition-colors">
-          {user?.name && <Avatar name={user.name} imageUrl={user.avatar_url} size="sm" />}
-          <div>
-            <div className="text-ink-1 text-sm font-semibold">{user?.name}</div>
-            <span className={`mt-1 ${planBadge[user?.plan ?? 'free']}`}>
-              {rotuloDoPlano(user?.plan, user?.plan_tier)}
-            </span>
-          </div>
-          {emailPendente && (
-            <span className="ml-auto text-[10px] font-bold text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 px-1.5 py-0.5 rounded">
-              E-mail
-            </span>
-          )}
-        </Link>
-
-        {/* Links */}
-        <nav className="flex-1 overflow-y-auto py-2">
+        <Secao titulo="Menu">
           {navLinks.map(({ to, label, Icon, badge, onClick, highlight }) => (
-            <Link
+            <ItemDaGaveta
               key={to}
               to={to}
-              onClick={() => { onClick?.(); setSidebarOpen(false) }}
-              className={`relative flex items-center gap-3 px-5 py-3.5 text-sm font-medium transition-colors ${
-                highlight === 'yellow'
-                  ? pathname === to ? 'text-yellow-400 bg-yellow-400/5' : 'text-yellow-400 hover:bg-surface-1'
-                  : pathname === to
-                    ? 'text-accent-ink bg-green-500/5'
-                    : 'text-ink-2 hover:text-ink-1 hover:bg-surface-1'
-              }`}
-            >
-              <Icon className="w-4 h-4 flex-shrink-0" />
-              {label}
-              {badge && (
-                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse ml-auto" />
-              )}
-            </Link>
+              label={label}
+              Icon={Icon}
+              badge={!!badge}
+              ativo={pathname === to}
+              tom={highlight === 'yellow' ? 'plano' : undefined}
+              onClick={() => { onClick?.(); fecharGaveta() }}
+            />
           ))}
-        </nav>
+        </Secao>
 
-        {/* Como funciona + Logout */}
-        <div className="border-t border-line p-4 space-y-1">
+        <Secao titulo="Ajuda">
           {user && (
-            <button
-              onClick={() => { setSidebarOpen(false); abrirTutorial() }}
-              className="flex items-center gap-3 w-full px-3 py-3 rounded-lg text-sm text-ink-2 hover:text-ink-1 hover:bg-surface-1 transition-colors text-left"
-            >
-              <Compass className="w-4 h-4 text-green-400" />
-              Ver tutorial
-            </button>
+            <ItemDaGaveta label="Ver tutorial" Icon={Compass} onClick={() => { fecharGaveta(); abrirTutorial() }} />
           )}
-          <Link
-            to="/como-funciona"
-            onClick={() => setSidebarOpen(false)}
-            className="flex items-center gap-3 w-full px-3 py-3 rounded-lg text-sm text-ink-2 hover:text-ink-1 hover:bg-surface-1 transition-colors"
-          >
-            <BookOpen className="w-4 h-4 text-green-400" />
-            Como funciona
-          </Link>
-          <Link
-            to="/banca/fechamentos"
-            onClick={() => setSidebarOpen(false)}
-            className="flex items-center gap-3 w-full px-3 py-3 rounded-lg text-sm text-ink-2 hover:text-ink-1 hover:bg-surface-1 transition-colors"
-          >
-            <History className="w-4 h-4 text-green-400" />
-            Fechamentos mensais
-          </Link>
-          <a
-            href={WA_SUPPORT}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-3 w-full px-3 py-3 rounded-lg text-sm text-ink-2 hover:text-ink-1 hover:bg-surface-1 transition-colors"
-          >
-            <MessageCircle className="w-4 h-4 text-green-400" />
-            Suporte
-          </a>
-          <button
-            onClick={async () => { await logout(); navigate('/login') }}
-            className="flex items-center gap-3 w-full px-3 py-3 rounded-lg text-sm text-ink-2 hover:text-red-400 hover:bg-surface-1 transition-colors"
-          >
-            <LogOut className="w-4 h-4" />
-            Sair
-          </button>
-        </div>
-      </aside>
+          <ItemDaGaveta label="Como funciona" Icon={BookOpen} to="/como-funciona" ativo={pathname === '/como-funciona'} onClick={fecharGaveta} />
+          <ItemDaGaveta label="Fechamentos mensais" Icon={History} to="/banca/fechamentos" ativo={pathname === '/banca/fechamentos'} onClick={fecharGaveta} />
+          <ItemDaGaveta label="Suporte" Icon={MessageCircle} href={WA_SUPPORT} onClick={fecharGaveta} />
+        </Secao>
+      </GavetaLateral>
     </>
   )
 }
