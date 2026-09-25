@@ -159,6 +159,32 @@ hoje entrega as notificações do site.
 Falta, quando essa fase chegar: coluna/rota para token nativo e envio via FCM
 ao lado do webpush atual, em `routers/notifications.py`.
 
+## Builds (EAS)
+
+Perfis em `eas.json`. Precisa de `npx eas-cli login` e, na primeira vez,
+`npx eas-cli init` (grava o `projectId` em `app.json`).
+
+| Perfil | Android | iOS | API |
+|---|---|---|---|
+| `development` | APK com dev client | aparelho (ad hoc) | a do Metro (DEV) |
+| `development-simulator` | APK com dev client | simulador | a do Metro (DEV) |
+| `preview` | APK para testadores | ad hoc | produção |
+| `production` | AAB para a Play Store | App Store | produção |
+
+```bash
+npx eas-cli build --profile preview --platform android      # APK de teste
+npx eas-cli build --profile production --platform android   # AAB
+npx eas-cli build --profile production --platform ios
+```
+
+`preview` fala com **produção**: é o app que um testador usaria de verdade,
+com a conta real dele. Para testar contra o banco DEV, use o `development`.
+Versão e número de build ficam no servidor do EAS (`appVersionSource:
+remote`) e sobem sozinhos no perfil `production`.
+
+`supportsTablet` está desligado: com ele ligado a App Store exige screenshots
+de iPad e revisa o layout no iPad, e o app foi desenhado para telefone.
+
 ## Lojas
 
 Nada é publicado nesta fase. O que já está preparado em `app.json`:
