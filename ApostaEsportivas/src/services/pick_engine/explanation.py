@@ -114,6 +114,13 @@ def build_explanation(candidate: dict) -> dict:
     # Os cortes são IMPORTADOS de confidence, não repetidos: dois números que
     # têm de ser iguais e ficam escritos em dois arquivos é como o desacordo de
     # model_fit nasceu.
+    #
+    # HOJE ESTAS DUAS RESSALVAS NÃO APARECEM EM PICK PUBLICADO, e isso está
+    # certo: no mesmo dia em que elas entraram, `config.min_amostra` foi medido
+    # e subiu pra 8, então todo pick aprovado já tem amostra suficiente. Elas
+    # continuam valendo pra quem explica CANDIDATO (homologação e o rastro do
+    # motor) e voltam a valer na tela no minuto em que o piso baixar. Apagá-las
+    # seria apagar a guarda junto com o motivo dela.
     elif n_jogos is not None and n_jogos < _AMOSTRA_INSUFICIENTE:
         risks.append(
             f"Apenas {n_jogos} jogos no recorte deste mercado · abaixo "
