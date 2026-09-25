@@ -71,7 +71,7 @@ export default function Inicio() {
       {resumo.dados ? (
         <Card elevado style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
           <Dado rotulo="Picks hoje" valor={String(resumo.dados.total ?? 0)} />
-          <Dado rotulo="VIP" valor={String(resumo.dados.vip ?? 0)} />
+          <Dado rotulo="Premium" valor={String(resumo.dados.vip ?? 0)} />
           <Dado rotulo="Múltiplas" valor={String(resumo.dados.multiplas ?? 0)} />
           <Dado rotulo="Alavancagem" valor={String(resumo.dados.alavancagem ?? 0)} />
         </Card>
