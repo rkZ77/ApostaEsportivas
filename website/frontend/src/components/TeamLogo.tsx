@@ -6,6 +6,9 @@
  * então a versão duplicada era pior que a original.
  */
 import { useState } from 'react'
+import { Globe } from 'lucide-react'
+import { cn } from '../lib/cn'
+import { paisDaLiga } from '../lib/paisDaLiga'
 import { escudoDoTime } from '../lib/aoVivo'
 
 /* Sem exceção local para a liga 1 (Copa do Mundo). Ela existia porque o escudo
@@ -50,6 +53,48 @@ export function LeagueLogo({ id, name, size = 16 }: { id?: number; name?: string
       <img src={src} alt={name ?? ''} width={size} height={size} loading="lazy"
         className="object-contain" style={{ width: size, height: size }}
         onError={e => (e.currentTarget.style.display = 'none')} />
+    </span>
+  )
+}
+
+/*
+ * BANDEIRA E PAÍS DA LIGA (2026-09-25), no molde da tabela de ligas da
+ * API-Football: bandeira pequena e o nome do país ao lado.
+ *
+ * A imagem vem da flagcdn em PNG de 40px (100 a 500 bytes cada) · o SVG da
+ * Espanha sozinho tinha 153KB. Competição de vários países mostra um globo.
+ * Liga fora do mapa (lib/paisDaLiga) não mostra nada, em vez de chutar.
+ */
+export function Bandeira({ codigo, pais, className }: { codigo: string | null; pais: string; className?: string }) {
+  if (!codigo) {
+    return <Globe className={cn('w-3.5 h-3.5 shrink-0 text-ink-4', className)} aria-label={pais} />
+  }
+  return (
+    <img
+      src={`https://flagcdn.com/w40/${codigo}.png`}
+      alt={pais}
+      width={16}
+      height={12}
+      loading="lazy"
+      className={cn('w-4 h-3 shrink-0 rounded-[2px] object-cover ring-1 ring-black/10', className)}
+      onError={e => (e.currentTarget.style.display = 'none')}
+    />
+  )
+}
+
+export function PaisDaLigaTag({ id, className, soBandeira = false }: {
+  id?: number | null
+  className?: string
+  /** Só a bandeira, pra linhas apertadas (chips, celular). */
+  soBandeira?: boolean
+}) {
+  const p = paisDaLiga(id)
+  if (!p) return null
+  if (soBandeira) return <Bandeira codigo={p.bandeira} pais={p.pais} className={className} />
+  return (
+    <span className={cn('inline-flex items-center gap-1.5 text-[11px] text-ink-4 min-w-0', className)}>
+      <Bandeira codigo={p.bandeira} pais={p.pais} />
+      <span className="truncate">{p.pais}</span>
     </span>
   )
 }

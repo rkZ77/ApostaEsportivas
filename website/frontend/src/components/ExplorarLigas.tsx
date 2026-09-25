@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import { PaisDaLigaTag } from './TeamLogo'
+import { paisDaLiga } from '../lib/paisDaLiga'
 import {
   Globe, Home, Plane, Search, Database, Radio, X, ChevronRight, Lock,
 } from 'lucide-react'
@@ -351,7 +353,9 @@ export default function ExplorarLigas() {
                       onError={ev => (ev.currentTarget.style.display = 'none')} />
                     <span className="flex-1 min-w-0">
                       <span className="block text-sm text-ink-1 font-semibold truncate">{l.nome}</span>
-                      {l.pais && <span className="block text-[11px] text-ink-4">{l.pais}</span>}
+                      {paisDaLiga(l.league_id)
+                        ? <PaisDaLigaTag id={l.league_id} className="mt-0.5" />
+                        : l.pais && <span className="block text-[11px] text-ink-4">{l.pais}</span>}
                     </span>
                     {l.no_banco && (
                       <Badge tone="green" className="shrink-0">

@@ -5,6 +5,8 @@ import {
   Table, type Column,
 } from './ui'
 import { rotuloDoMercado } from '../utils/marketTranslate'
+import { PaisDaLigaTag } from './TeamLogo'
+import { nomeDaLiga } from '../lib/paisDaLiga'
 import { fmtUnits, STAKE_LABEL_PADRAO } from '../utils/format'
 
 /*
@@ -250,7 +252,7 @@ export function LinksDeLigas({
      mesmo texto duas vezes na mesma tela lê como erro de montagem. */
   titulo = 'Palpites por campeonato',
 }: {
-  ligas: Array<{ slug: string; name: string }>
+  ligas: Array<{ slug: string; name: string; league_id?: number }>
   atual?: string
   titulo?: string
 }) {
@@ -266,13 +268,14 @@ export function LinksDeLigas({
             key={l.slug}
             to={`/palpites/${l.slug}`}
             aria-current={l.slug === atual ? 'page' : undefined}
-            className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+            className={`inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition-colors ${
               l.slug === atual
                 ? 'border-accent text-accent-ink'
                 : 'border-line text-ink-2 hover:border-line-strong'
             }`}
           >
-            {l.name}
+            <PaisDaLigaTag id={l.league_id} soBandeira />
+            {nomeDaLiga(l.league_id, l.name)}
           </Link>
         ))}
       </div>

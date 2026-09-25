@@ -12,6 +12,8 @@ import {
 import DailyGreensChart from '../components/DailyGreensChart'
 import ActivityHeatmap from '../components/ActivityHeatmap'
 import { taxaAcerto, fmtUnits, STAKE_LABEL_PADRAO } from '../utils/format'
+import { PaisDaLigaTag } from '../components/TeamLogo'
+import { nomeDaLiga, paisDaLiga } from '../lib/paisDaLiga'
 
 /*
  * Performance da IA.
@@ -278,7 +280,10 @@ export default function PerformanceIA() {
                     .sort((a, b) => b.wr - a.wr)
                     .map(lg => (
                       <div key={lg.league_id ?? lg.league_name} className="flex items-center gap-3">
-                        <span className="text-[11px] text-ink-3 w-28 shrink-0 truncate">{lg.league_name}</span>
+                        <span className="w-32 sm:w-44 shrink-0 min-w-0 flex items-center gap-1.5" title={paisDaLiga(lg.league_id)?.pais}>
+                          <PaisDaLigaTag id={lg.league_id} soBandeira />
+                          <span className="text-[11px] text-ink-3 truncate">{nomeDaLiga(lg.league_id, lg.league_name)}</span>
+                        </span>
                         <div className="flex-1 h-1.5 bg-surface-2 rounded-full overflow-hidden">
                           <div
                             className={`h-full rounded-full ${lg.wr >= 55 ? 'bg-accent' : 'bg-ink-4'}`}
