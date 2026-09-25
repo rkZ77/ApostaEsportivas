@@ -18,7 +18,63 @@ em vez de depender de numeros magicos espalhados pelo codigo."""
 # Efeito esperado: MAIS pick no comeco de temporada (que era o buraco -- com
 # piso 5/6 uma liga so' comecava a produzir na 6a ou 7a rodada) e confidence
 # media MENOR no conjunto. As duas coisas juntas, nao uma sem a outra.
+#
+# PISO DE AMOSTRA MEDIDO: VOLTA PRA 8 JOGOS (2026-09-24)
+# ------------------------------------------------------
+# O efeito esperado aconteceu, e a metade boa nao veio. As ligas europeias
+# reiniciaram entre 07 e 15/08 e, na semana de 14/09, 58 das 90 pernas de VIP
+# publicadas sairam de seis delas na 4a-6a rodada (La Liga 15, Championship 12,
+# Eredivisie 9, Portugal 8, 2.Bundesliga 6, Super Lig 3). Foi a unica semana
+# negativa da janela inteira: 52,3% e -13,96u no VIP.
+#
+# Medido em 358 pernas liquidadas com a amostra que DECIDIU gravada
+# (engine_decisions, candidato is_best_pick), de 10/06 a 22/09:
+#
+#   amostra < 8     85 pernas   53,7%   -11,57u
+#   amostra >= 8   273 pernas   63,4%    +4,96u
+#
+# O bloco inteiro cabe em tres valores de n: n=5 (15 pernas, 28,6%, -7,94u),
+# n=6 (30, 48,3%, -6,50u) e n=7 (3, 33,3%, -1,38u).
+#
+# POR QUE NAO FOI RESOLVIDO COM DESCONTO DE CONFIDENCE
+#
+# Dentro do bloco curto o confidence e' ANTI-PREDITIVO -- quanto mais alto,
+# pior o resultado: 0.60-0.65 da' 66,7% e +1,51u, enquanto 0.70-0.75 da' 44,0%
+# e -6,63u e 0.75-0.80 da' 46,2% e -3,55u. Simulando na serie real o desconto
+# que tornaria verdadeiro o comentario acima (Q de MODERADO pra ESCASSO,
+# -0.075 de confidence), o gate de 0.55 corta 8 pernas que tinham dado +1,48u e
+# mantem as -13,05u. E' a mesma leitura da cauda alta de 09/09: com 6 jogos, uma
+# taxa de 85% quer dizer "5 de 6", e cobrar confidence por isso nao muda o fato.
+# Nao existe peso que salve o bloco; ele tem que nao ser publicado.
+#
+# E POR QUE O CORTE E' 8, E NAO 5
+#
+# n=4 mediu +4,25u em 37 pernas, contra -15,82u em 48 nas faixas 5 a 7 -- e
+# nenhum mecanismo explica a inversao: as duas faixas tem as mesmas familias, o
+# mesmo produto e o mesmo mes, e o motor as trata IDENTICAMENTE (Q=0.75 nas
+# duas, e `confirmation_k` entrega 0.70 nas duas quando ha' 3+ casas). Uma regra
+# que mantivesse 4 e cortasse 5-7 estaria ajustando ruido. Oito nao e' numero
+# novo: e' `sample_rich_n`, o ponto onde o proprio motor ja' diz que a amostra
+# virou rica. Cortar em 9, 10 ou 11 recupera mais 2u e come faixas de 2-3
+# pernas -- ganho dentro do ruido, corte maior de volume.
+#
+# O QUE ISSO CUSTA, DE NOVO SEM SURPRESA
+#
+# 85 das 358 pernas medidas (24%) deixam de existir, e elas ficam concentradas
+# nas primeiras cinco ou seis rodadas de cada liga. Isto REVERTE a intencao de
+# volume da decisao de 28/08: liga que reiniciou volta a so' produzir por volta
+# da 9a rodada. O caminho pra ter as duas coisas nao e' o piso, e' o HISTORICO:
+# `match_stats_service.get_all_matches_full` le com `AND ms.season = %s`, e em
+# PROD as seis ligas acima nao tem uma unica linha de temporada anterior em
+# `match_statistics` -- alargar a janela hoje nao leria nada. Coletar a
+# temporada passada das ligas ativas e' o que devolve o volume sem devolver o
+# prejuizo, e custa cota de API (nao esta feito).
 from dataclasses import dataclass
+
+#: O ponto em que a amostra passa a estimar. Vale como piso de aprovacao
+#: (`min_amostra`) e como corte de qualidade Q (`sample_rich_n`) porque sao a
+#: MESMA afirmacao; deixa-los como dois literais 8 e' o comeco da divergencia.
+AMOSTRA_RICA = 8
 
 
 @dataclass(frozen=True)
@@ -30,8 +86,11 @@ class PickEngineConfig:
     # foi calibrado para o pool antigo -- com o pool honesto, candidatos legitimos
     # de 0.60-0.64 ficavam fora mesmo com ev>0, edge>=0.05 e conf>=0.55.
     min_taxa: float = 0.60
-    # Ver a nota sobre o piso de amostra no topo deste arquivo.
-    min_amostra: int = 4
+    # Ver as duas notas sobre o piso de amostra no topo deste arquivo: 4 por
+    # decisao de 28/08, 8 por medicao de 24/09. Derivado de `sample_rich_n` de
+    # proposito -- sao o mesmo conceito ("daqui pra cima a amostra estima"), e
+    # escrever 8 duas vezes e' como o desacordo de model_fit nasceu.
+    min_amostra: int = AMOSTRA_RICA
     min_confidence: float = 0.55
     min_ev: float = 0.0  # EV deve ser estritamente positivo para aprovar a aposta
     # Mercado com 1 so bookmaker nao tem consenso pra checar contra erro de
@@ -295,7 +354,7 @@ class PickEngineConfig:
     disagreement_on_raw_rate: bool = False
 
     # Amostra (Q)
-    sample_rich_n: int = 8
+    sample_rich_n: int = AMOSTRA_RICA
     sample_rich_q: float = 1.00
     sample_moderate_n: int = 4
     sample_moderate_q: float = 0.75

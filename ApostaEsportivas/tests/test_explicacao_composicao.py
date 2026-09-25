@@ -108,3 +108,35 @@ def test_prorrogacao_descartada_nao_conta_na_composicao():
         home_team_id=1, away_team_id=2)
 
     assert taxa_de(pool)["composicao"]["total"] == 4
+
+
+# ── A ressalva de amostra cobre o PISO, não só o rótulo ───────────────────
+#
+# `sample_scarce_n` é 1, então ESCASSO só aparece com 1 a 3 jogos, e a faixa de
+# 4 a 7 saía MODERADO e sem ressalva nenhuma de amostra -- enquanto
+# `confidence.classify_risk` rebaixa esse mesmo pick por ter menos de 5 (ou de
+# 8) jogos. O piso de aprovação subiu pra 8 em 24/09 e o texto continua valendo:
+# quem explica candidato não é só o pick publicado (homologação e o rastro do
+# motor passam pelo mesmo módulo), e os dois lados têm de ler o mesmo n.
+def test_pick_no_piso_de_amostra_avisa_que_a_taxa_e_estimativa_fraca():
+    hist = [jogo(71) for _ in range(4)]
+
+    t = texto(hist)
+    assert "Apenas 4 jogos" in t
+    assert "estimativa fraca" in t
+
+
+def test_amostra_entre_cinco_e_sete_avisa_que_e_curta_para_afirmar():
+    hist = [jogo(71) for _ in range(6)]
+
+    t = texto(hist)
+    assert "Amostra de 6 jogos" in t
+    assert "curta para afirmar" in t
+
+
+def test_amostra_rica_nao_ganha_ressalva_de_amostra():
+    hist = [jogo(71) for _ in range(12)]
+
+    t = texto(hist)
+    assert "estimativa fraca" not in t
+    assert "curta para afirmar" not in t

@@ -6,6 +6,10 @@ direto do candidato ja calculado -- nenhum numero e inventado nesta
 camada."""
 from services.pick_engine.market_model import implied_prob
 from services.pick_engine import match_context_model, tie_effect
+from services.pick_engine.confidence import (
+    _AMOSTRA_INSUFICIENTE,
+    _AMOSTRA_LIMITADA,
+)
 
 
 def build_explanation(candidate: dict) -> dict:
@@ -71,6 +75,26 @@ def build_explanation(candidate: dict) -> dict:
 
     if candidate.get("amostra_label") in ("ESCASSO", "VAZIO"):
         risks.append(f"Amostra {candidate['amostra_label'].lower()} · confiança limitada")
+    # O RÓTULO NÃO COBRE O PISO (2026-09-24). `sample_scarce_n` é 1, então
+    # ESCASSO só aparece com 1 a 3 jogos -- e `config.min_amostra` é 4. Um pick
+    # nascido exatamente no piso sai como MODERADO e, pela linha acima, sem
+    # ressalva nenhuma de amostra, enquanto `confidence.classify_risk` rebaixa
+    # esse mesmo pick dois degraus por ter menos de 5 jogos. Os dois lugares
+    # leem o mesmo n e discordavam na frente do assinante.
+    #
+    # Os cortes são IMPORTADOS de confidence, não repetidos: dois números que
+    # têm de ser iguais e ficam escritos em dois arquivos é como o desacordo de
+    # model_fit nasceu.
+    elif (candidate.get("amostra") or 0) < _AMOSTRA_INSUFICIENTE:
+        risks.append(
+            f"Apenas {candidate['amostra']} jogos no recorte deste mercado · abaixo "
+            f"de {_AMOSTRA_INSUFICIENTE} a taxa é estimativa fraca, não tendência"
+        )
+    elif (candidate.get("amostra") or 0) < _AMOSTRA_LIMITADA:
+        risks.append(
+            f"Amostra de {candidate['amostra']} jogos no recorte deste mercado · "
+            f"suficiente para estimar, curta para afirmar"
+        )
 
     wilson = candidate.get("wilson")
     if wilson and wilson["width"] > 0.25:

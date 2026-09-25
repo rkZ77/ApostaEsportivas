@@ -87,6 +87,15 @@ def build_score_breakdown_section(candidate: dict, data_quality_score: float | N
             "taxa_real_ajustada": taxa_real,
             "taxa_bruta_pre_bayes": taxa_bruta,
         },
+        # QUANTOS JOGOS sustentavam a taxa acima (2026-09-24). O retrato
+        # guardava a probabilidade e o risco derivado dela, mas nunca o n --
+        # entao auditar um RED e' perguntar "71% apoiado em quantos jogos?" e
+        # nao ter resposta sem casar a linha com engine_decisions, que so'
+        # existe quando o elo pick_table/pick_id foi preenchido. E' o mesmo n
+        # que `ranking.rank_all_candidates` compara com `config.min_amostra`:
+        # pos-filtro de mando e pos-remocao de push, nunca o historico bruto.
+        "amostra": candidate.get("amostra"),
+        "amostra_label": candidate.get("amostra_label"),
         "edge": candidate.get("edge"),
         "ev": candidate.get("ev"),
         "odd": candidate.get("odd"),
