@@ -279,7 +279,9 @@ def _best_candidate_across_fixtures(fixtures: list,
             if melhor is None or p["final_score"] > melhor[0]:
                 melhor = (p["final_score"], fixture,
                           {**p, "data_quality_score": quality["score"],
-                                           "amostra": amostra.build(
+                                           # Ver a nota em vip_pipeline: o BLOCO
+                                           # nunca ocupa a chave do CONTADOR.
+                                           "amostra_exibida": amostra.build(
                                                home_team_id=fixture["home_team_id"],
                                                away_team_id=fixture["away_team_id"],
                                                historico_home=last10_home,
@@ -317,8 +319,8 @@ def _save_pick(cur, fixture: dict, pick: dict, data_quality_score: float | None)
     # banco e arriscar exibir um recorte diferente (que e' o que acontecia em
     # jogo de copa, onde o motor le todas as competicoes e a tela lia so' a
     # liga). Ver services/engine_audit/amostra.py.
-    if pick.get("amostra"):
-        engine_debug_data["amostra"] = pick["amostra"]
+    if pick.get("amostra_exibida"):
+        engine_debug_data["amostra"] = pick["amostra_exibida"]
     # `nivel_repeticao_vip` sai daqui em 2026-09-15, junto com a escada que ele
     # media. Os picks antigos continuam com a chave gravada -- quem le
     # engine_debug le por .get(), entao o historico nao quebra.

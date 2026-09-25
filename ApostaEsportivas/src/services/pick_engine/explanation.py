@@ -12,6 +12,28 @@ from services.pick_engine.confidence import (
 )
 
 
+def _n_de_jogos(candidate: dict):
+    """O tamanho da amostra como NÚMERO, ou None quando não há número.
+
+    ISTO NÃO É PARANOIA, É UM BUG DE PRODUÇÃO (2026-09-24). Três pipelines
+    montavam o pick como `{**candidato, "amostra": amostra.build(...)}` --
+    trocando o CONTADOR de jogos pelo BLOCO da amostra, que é um dicionário
+    grande (ver services/engine_audit/amostra.py). A raiz foi corrigida (o
+    bloco agora mora em `amostra_exibida`), mas a guarda fica: esta função
+    escreve o texto que o assinante lê, e ela não pode publicar um dicionário
+    dentro de uma frase. Foi o que aconteceu, em silêncio, em 239 picks desde
+    27/08: "Taxa real ponderada de 60.1% em {'max_exibidos': 10, ...} jogos",
+    com 8 mil caracteres de JSON no lugar de um número.
+
+    Retornar None e omitir a contagem é o certo: a frase fica mais pobre e
+    continua verdadeira. Inventar um número seria pior que não ter.
+    """
+    valor = candidate.get("amostra")
+    if isinstance(valor, bool) or not isinstance(valor, (int, float)):
+        return None
+    return int(valor)
+
+
 def build_explanation(candidate: dict) -> dict:
     """Retorna a explicacao estruturada como dict -- quem chama decide
     como serializar (texto pro campo reasoning hoje; JSON no futuro sem
@@ -21,10 +43,17 @@ def build_explanation(candidate: dict) -> dict:
     negative_factors = []
     risks = []
 
-    positive_factors.append(
-        f"Taxa real ponderada de {candidate['taxa_real']*100:.1f}% "
-        f"em {candidate['amostra']} jogos ({candidate.get('amostra_label', '?')})"
-    )
+    n_jogos = _n_de_jogos(candidate)
+    if n_jogos is None:
+        positive_factors.append(
+            f"Taxa real ponderada de {candidate['taxa_real']*100:.1f}% "
+            f"({candidate.get('amostra_label', '?')})"
+        )
+    else:
+        positive_factors.append(
+            f"Taxa real ponderada de {candidate['taxa_real']*100:.1f}% "
+            f"em {n_jogos} jogos ({candidate.get('amostra_label', '?')})"
+        )
 
     # DE ONDE VIERAM ESSES JOGOS (2026-08-13).
     #
@@ -85,14 +114,14 @@ def build_explanation(candidate: dict) -> dict:
     # Os cortes são IMPORTADOS de confidence, não repetidos: dois números que
     # têm de ser iguais e ficam escritos em dois arquivos é como o desacordo de
     # model_fit nasceu.
-    elif (candidate.get("amostra") or 0) < _AMOSTRA_INSUFICIENTE:
+    elif n_jogos is not None and n_jogos < _AMOSTRA_INSUFICIENTE:
         risks.append(
-            f"Apenas {candidate['amostra']} jogos no recorte deste mercado · abaixo "
+            f"Apenas {n_jogos} jogos no recorte deste mercado · abaixo "
             f"de {_AMOSTRA_INSUFICIENTE} a taxa é estimativa fraca, não tendência"
         )
-    elif (candidate.get("amostra") or 0) < _AMOSTRA_LIMITADA:
+    elif n_jogos is not None and n_jogos < _AMOSTRA_LIMITADA:
         risks.append(
-            f"Amostra de {candidate['amostra']} jogos no recorte deste mercado · "
+            f"Amostra de {n_jogos} jogos no recorte deste mercado · "
             f"suficiente para estimar, curta para afirmar"
         )
 

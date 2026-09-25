@@ -583,7 +583,12 @@ def _avaliar_fixture(fixture: dict, match_stats: MatchStatsService,
         # mais o contexto do confronto que ele ja' montou logo acima. Nao
         # entra em nenhum calculo -- e' o que a tela "Entenda esta analise"
         # exibe, lendo o MESMO objeto que decidiu.
-        "amostra": amostra.build(
+        # O BLOCO da amostra mora em `amostra_exibida` desde 2026-09-24. Aqui
+        # ele nao colidia com contador nenhum (este motor conta em
+        # `n_casa`/`n_fora`/`faixa_amostra`), mas `decision_log._candidate_summary`
+        # le' `c.get("amostra")` esperando numero e gravava este dicionario
+        # no lugar -- foi o que estourou a auditoria de amostra por pick.
+        "amostra_exibida": amostra.build(
             home_team_id=fixture["home_team_id"],
             away_team_id=fixture["away_team_id"],
             historico_home=hist_casa, historico_away=hist_fora,
@@ -709,7 +714,8 @@ def _salvar(cur, c: dict) -> None:
         # resumo que identifica a versao da tabela.
         "calibragem": {k: v for k, v in (c.get("calibragem") or {}).items()
                        if k != "mudancas"},
-        "amostra": c.get("amostra"),
+        # A tela le' `engine_debug.amostra`, entao a CHAVE GRAVADA nao muda.
+        "amostra": c.get("amostra_exibida"),
         "ai_review": c.get("ai_review"),
     }, default=str, ensure_ascii=False)
 

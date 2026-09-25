@@ -325,7 +325,9 @@ def _gather_leg_candidates(fixtures: list, used_pairs: set) -> list:
                     continue
                 legs.append({**p, "_fixture": fixture,
                              "data_quality_score": quality["score"],
-                             "amostra": amostra_fixture})
+                             # Ver a nota em vip_pipeline: o BLOCO nunca ocupa a
+                             # chave do CONTADOR de jogos.
+                             "amostra_exibida": amostra_fixture})
 
         except Exception as e:
             # Stack trace completo: sem ele, "pulou 8 fixtures" nao diz ONDE
@@ -466,7 +468,12 @@ def _save_bingo(cur, legs: tuple, score_combo: float, odd_total: float) -> int |
             {
                 "fixture_id": p["_fixture"]["fixture_id"],
                 **homologation.build_score_breakdown_section(p, p.get("data_quality_score")),
-                "amostra": p.get("amostra"),
+                # `amostra` do engine_debug e' o BLOCO (a tela le' esta chave);
+                # dentro do candidato ele vive em `amostra_exibida` desde
+                # 2026-09-24, pra nao sobrescrever o contador. O breakdown acima
+                # ja' gravou o numero, com a mesma chave -- por isso esta linha
+                # vem DEPOIS dele: a ordem e' que decide qual valor fica.
+                "amostra": p.get("amostra_exibida"),
                 "ai_review": p.get("ai_review"),
             }
             for p in legs

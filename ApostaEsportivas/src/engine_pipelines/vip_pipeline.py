@@ -135,8 +135,8 @@ def _save_pick(cur, fixture: dict, pick: dict, data_quality_score: float | None)
     # banco e arriscar exibir um recorte diferente (que e' o que acontecia em
     # jogo de copa, onde o motor le todas as competicoes e a tela lia so' a
     # liga). Ver services/engine_audit/amostra.py.
-    if pick.get("amostra"):
-        engine_debug_data["amostra"] = pick["amostra"]
+    if pick.get("amostra_exibida"):
+        engine_debug_data["amostra"] = pick["amostra_exibida"]
     engine_debug = json.dumps(
         engine_debug_data,
         default=str, ensure_ascii=False,
@@ -321,7 +321,13 @@ def run_vip_engine():
                       f"que a Free ja publicou neste jogo.")
                 continue
             best = {**best, "data_quality_score": quality["score"],
-                    "amostra": amostra.build(
+                    # O BLOCO da amostra mora em `amostra_exibida`, NUNCA em `amostra`
+                    # (2026-09-24). `amostra` e' o CONTADOR de jogos que saiu de
+                    # stats_model e passou no gate de `min_amostra`; sobrescrever ele
+                    # com o dicionario da amostra levou o dicionario inteiro pro texto
+                    # que o assinante le' (239 picks, desde 27/08) e derrubou o pipeline
+                    # da Free quando a comparacao numerica entrou.
+                    "amostra_exibida": amostra.build(
                         home_team_id=fixture["home_team_id"],
                         away_team_id=fixture["away_team_id"],
                         historico_home=last10_home, historico_away=last10_away,
