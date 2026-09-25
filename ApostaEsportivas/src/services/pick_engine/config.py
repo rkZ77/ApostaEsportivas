@@ -130,6 +130,39 @@ class PickEngineConfig:
     # no final_score.
     max_taxa: float | None = None
     max_edge: float | None = None
+    # FAMILIA QUE SO' ENTRA POR UM LADO (2026-09-24).
+    #
+    # CARTOES, medido em 89 pernas liquidadas de 10/06 a 22/09:
+    #
+    #   cards Over    30 pernas   36,7%   -13,57u
+    #   cards Under   59 pernas   79,7%   +21,98u
+    #
+    # A assimetria e' o diagnostico inteiro, e ela nao e' de um recorte:
+    # negativa nos CINCO produtos (vip -3,78u, multipla -4,00u, alavancagem
+    # -3,00u, free -1,79u, bingo -1,00u), nos QUATRO meses (junho -1,85u, julho
+    # -3,00u, agosto -5,78u, setembro -2,94u) e nos TRES escopos (total -10,39u,
+    # casa -1,68u, visitante -1,50u). O Under e' positivo em todos eles.
+    #
+    # PARTE do vies tem causa nomeada: desde 10/09 a liquidacao conta so' o
+    # cartao de quem estava em campo (`match_statistics.valid_yellow_*`, ver
+    # routers/live.py::_cartoes_elegiveis), enquanto a media historica do motor
+    # le' `total_yellow_cards`, que inclui banco e comissao tecnica. Medido nos
+    # 90 jogos que ja' tem validacao: 4,03 cru contra 3,88 valido, 0,16 por jogo
+    # a mais, em 13 dos 90. Isso infla o Over e deprime o Under, na direcao
+    # exata do erro -- mas 0,16 carta por jogo nao produz 36,7% contra 79,7%, e
+    # so' 90 dos 1.712 jogos da temporada tem a coluna preenchida. Ou seja: a
+    # regua dupla existe e nao explica o tamanho.
+    #
+    # Entao o veto e' o que a medicao sustenta, e nao a correcao do modelo, que
+    # exigiria a folha de eventos de todo o historico. E' o mesmo desenho que o
+    # motor ao vivo ja' usa (pick_engine_live/config.py::familias_somente_under,
+    # onde a familia vetada e' `goals`) e a mesma licao: quando um lado calibra e
+    # o outro nao, o erro e' DIRECIONAL e vetar a familia inteira jogaria fora
+    # os +21,98u do Under.
+    #
+    # O que medir pra religar: preencher `valid_yellow_*` no historico e remedir
+    # o Over com a media corrigida. Ate' la', Over de cartao nao sai.
+    familias_somente_under: tuple = ("cards",)
     # Teto de sanidade: odds muito extremas (>15) geralmente refletem
     # mercado ilíquido/raramente cotado, não valor real -- visto na pratica
     # com um handicap a odd 51.0 gerando EV de +3839% (taxa historica
