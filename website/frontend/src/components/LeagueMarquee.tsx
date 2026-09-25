@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import api from '../services/api'
 import Marquee from './ui/Marquee'
 import { cn } from '../lib/cn'
+import { PaisDaLigaTag } from './TeamLogo'
+import { nomeDaLiga } from '../lib/paisDaLiga'
 
 /*
  * Fita de ligas cobertas rolando sem fim.
@@ -104,7 +106,10 @@ export default function LeagueMarquee({
             className="w-8 h-8 object-contain shrink-0"
             onError={e => (e.currentTarget.style.display = 'none')}
           />
-          <span className="text-sm font-medium text-ink-2 whitespace-nowrap">{lg.name}</span>
+          <span className="flex flex-col">
+            <span className="text-sm font-medium text-ink-2 whitespace-nowrap">{nomeDaLiga(lg.league_id, lg.name)}</span>
+            <PaisDaLigaTag id={lg.league_id} />
+          </span>
         </div>
       ))}
     />

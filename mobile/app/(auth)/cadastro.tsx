@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 import { useAuth } from '../../src/auth/AuthContext'
 import { mensagemDeErro } from '../../src/api/client'
 import { Botao, Txt } from '../../src/components/ui'
 import { Campo } from '../../src/components/Campo'
+import { Captcha, CAPTCHA_ATIVO, type CaptchaHandle } from '../../src/components/Captcha'
 import { cores, espaco, raio } from '../../src/theme/tokens'
 
 /* Máscara só de apresentação · o backend valida e normaliza
@@ -29,6 +30,8 @@ export default function Cadastro() {
   const [aceitou, setAceitou] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
+  const [captcha, setCaptcha] = useState('')
+  const captchaRef = useRef<CaptchaHandle>(null)
 
   const submeter = async () => {
     if (!aceitou) {
@@ -45,9 +48,11 @@ export default function Cadastro() {
         phone: soDigitos(telefone),
         username: usuario.trim().toLowerCase(),
         accepted_terms: true,
+        captcha_token: captcha,
       })
     } catch (e) {
       setErro(mensagemDeErro(e, 'Não foi possível criar a conta.'))
+      captchaRef.current?.reiniciar()
     } finally {
       setEnviando(false)
     }
@@ -111,7 +116,14 @@ export default function Cadastro() {
           </Txt>
         </Pressable>
 
-        <Botao titulo="Criar conta" onPress={submeter} carregando={enviando} desabilitado={!aceitou} />
+        <Captcha ref={captchaRef} aoVerificar={setCaptcha} />
+
+        <Botao
+          titulo="Criar conta"
+          onPress={submeter}
+          carregando={enviando}
+          desabilitado={!aceitou || (CAPTCHA_ATIVO && !captcha)}
+        />
       </ScrollView>
     </KeyboardAvoidingView>
   )

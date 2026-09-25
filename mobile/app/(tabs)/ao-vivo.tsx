@@ -53,7 +53,7 @@ export default function AoVivo() {
           titulo="Ao vivo é do Pick IA Pro"
           descricao={
             isVip
-              ? 'O motor Live acompanha as partidas em andamento e publica oportunidades com a odd ainda válida. Seu plano atual é o Pick IA: faça o upgrade no site para liberar.'
+              ? 'O motor Live acompanha as partidas em andamento e publica oportunidades com a odd ainda válida. Seu plano atual é o Pick IA; o Ao vivo faz parte do Pick IA Pro.'
               : 'O motor Live acompanha as partidas em andamento e publica oportunidades com a odd ainda válida. Disponível no plano Pick IA Pro.'
           }
         />

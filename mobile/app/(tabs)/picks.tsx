@@ -1,7 +1,7 @@
 /**
  * Picks pré-jogo do dia, com filtro por tipo.
  *
- * Os tipos (VIP, dica gratuita, faltas, jogadores, defesas) já vêm separados
+ * Os tipos (Premium, Dica do Dia, faltas, jogadores, defesas) já vêm separados
  * por `/suggestions/today` -- aqui eles só viram abas de filtro, porque no
  * celular não cabe mostrar as listas empilhadas de uma vez. Quem decide o que
  * cada plano enxerga continua sendo o backend.
@@ -44,8 +44,8 @@ export default function Picks() {
   const filtros = useMemo(() => {
     const base: { chave: Filtro; rotulo: string }[] = [
       { chave: 'todos', rotulo: 'Todos' },
-      { chave: 'vip', rotulo: 'VIP' },
-      { chave: 'gratuito', rotulo: 'Gratuito' },
+      { chave: 'vip', rotulo: 'Premium' },
+      { chave: 'gratuito', rotulo: 'Dica do Dia' },
       { chave: 'faltas', rotulo: 'Faltas' },
       { chave: 'player_stats', rotulo: 'Jogadores' },
       { chave: 'boost', rotulo: 'Boost' },

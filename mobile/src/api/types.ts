@@ -26,6 +26,8 @@ export interface Usuario {
   avatar_url?: string | null
   trial_used?: boolean
   email_verified?: boolean
+  /** Só `/auth/me` devolve · false em conta que entra apenas pelo Google. */
+  tem_senha?: boolean
 }
 
 /** GREEN/RED/PUSH/HALF-* saem do motor; `null` é pick ainda em aberto. */

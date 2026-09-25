@@ -9,12 +9,15 @@
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0a0a0c",
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "br.com.pickia.app",
-      "associatedDomains": ["applinks:pickia.com.br"],
+      "associatedDomains": [
+        "applinks:pickia.com.br"
+      ],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "buildNumber": "1"
     },
     "android": {
       "package": "br.com.pickia.app",
@@ -28,10 +31,19 @@
         {
           "action": "VIEW",
           "autoVerify": true,
-          "data": [{ "scheme": "https", "host": "pickia.com.br" }],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "data": [
+            {
+              "scheme": "https",
+              "host": "pickia.com.br"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
-      ]
+      ],
+      "permissions": []
     },
     "web": {
       "favicon": "./assets/favicon.png"

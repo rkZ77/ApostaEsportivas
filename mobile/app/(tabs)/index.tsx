@@ -19,6 +19,7 @@ import { Botao, Card, Carregando, Dado, Selo, Txt, Vazio } from '../../src/compo
 import { PickCard } from '../../src/components/PickCard'
 import { cores, espaco, raio } from '../../src/theme/tokens'
 import { reais } from '../../src/lib/formato'
+import { OFERECE_PLANO_NO_APP } from '../../src/config/env'
 
 export default function Inicio() {
   const { usuario, isVip, isPro } = useAuth()
@@ -70,7 +71,7 @@ export default function Inicio() {
       {resumo.dados ? (
         <Card elevado style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
           <Dado rotulo="Picks hoje" valor={String(resumo.dados.total ?? 0)} />
-          <Dado rotulo="VIP" valor={String(resumo.dados.vip ?? 0)} />
+          <Dado rotulo="Premium" valor={String(resumo.dados.vip ?? 0)} />
           <Dado rotulo="Múltiplas" valor={String(resumo.dados.multiplas ?? 0)} />
           <Dado rotulo="Alavancagem" valor={String(resumo.dados.alavancagem ?? 0)} />
         </Card>
@@ -133,7 +134,7 @@ export default function Inicio() {
       {/* convite · o de assinar pra quem não tem nada, o de upgrade pra quem
           já assina o Pick IA. São ofertas diferentes, e o cartão único falava
           de "liberar o feed ao vivo" pra quem já pagava e não o tinha. */}
-      {!isPro ? (
+      {OFERECE_PLANO_NO_APP && !isPro ? (
         <Card elevado style={{ gap: espaco.md }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: espaco.sm }}>
             <Activity size={18} color={cores.accent} />

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native'
 import { Link } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -7,6 +7,7 @@ import { useAuth } from '../../src/auth/AuthContext'
 import { mensagemDeErro } from '../../src/api/client'
 import { Botao, Card, Txt } from '../../src/components/ui'
 import { Campo } from '../../src/components/Campo'
+import { Captcha, CAPTCHA_ATIVO, type CaptchaHandle } from '../../src/components/Captcha'
 import { cores, espaco, fonte, peso } from '../../src/theme/tokens'
 import { AMBIENTE, API_BASE_URL } from '../../src/config/env'
 
@@ -18,6 +19,8 @@ export default function Login() {
   const [senha, setSenha] = useState('')
   const [erro, setErro] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
+  const [captcha, setCaptcha] = useState('')
+  const captchaRef = useRef<CaptchaHandle>(null)
 
   const submeter = async () => {
     if (!identificador.trim() || !senha) {
@@ -27,10 +30,12 @@ export default function Login() {
     setEnviando(true)
     setErro(null)
     try {
-      await entrar(identificador.trim(), senha)
+      await entrar(identificador.trim(), senha, captcha)
       // A guarda de rota no _layout leva para as abas assim que o usuário muda.
     } catch (e) {
       setErro(mensagemDeErro(e, 'Não foi possível entrar. Confira seus dados.'))
+      // O token já foi gasto nesta tentativa · a próxima precisa de outro.
+      captchaRef.current?.reiniciar()
     } finally {
       setEnviando(false)
     }
@@ -86,7 +91,14 @@ export default function Login() {
             erro={erro}
           />
 
-          <Botao titulo="Entrar" onPress={submeter} carregando={enviando} />
+          <Captcha ref={captchaRef} aoVerificar={setCaptcha} />
+
+          <Botao
+            titulo="Entrar"
+            onPress={submeter}
+            carregando={enviando}
+            desabilitado={CAPTCHA_ATIVO && !captcha}
+          />
 
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <Link href="/(auth)/esqueci-senha" asChild>
@@ -106,6 +118,15 @@ export default function Login() {
 
         {/* Faixa de ambiente · deixa explícito de onde o app está lendo,
             para nunca haver dúvida se um teste tocou produção. */}
+        {/* Build de produção sem a chave pública do Turnstile não consegue
+            entrar (o backend devolve 400). Melhor dizer isso na tela do que
+            deixar o testador achando que a senha está errada. */}
+        {AMBIENTE === 'producao' && !CAPTCHA_ATIVO ? (
+          <Txt variante="apoio" cor={cores.amber} style={{ textAlign: 'center' }}>
+            Build sem EXPO_PUBLIC_TURNSTILE_SITE_KEY: o login vai falhar. Ver mobile/README.md.
+          </Txt>
+        ) : null}
+
         {AMBIENTE === 'dev' ? (
           <View style={{ alignItems: 'center', gap: 2 }}>
             <Txt variante="rotulo" cor={cores.amber}>Ambiente de desenvolvimento</Txt>

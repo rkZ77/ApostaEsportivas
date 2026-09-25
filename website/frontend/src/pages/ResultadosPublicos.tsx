@@ -7,7 +7,8 @@ import { rotuloDoMercado } from '../utils/marketTranslate'
 import { Helmet } from 'react-helmet-async'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { taxaAcerto, fmtUnits, STAKE_LABEL_PADRAO } from '../utils/format'
-import { TeamLogo, LeagueLogo } from '../components/TeamLogo'
+import { TeamLogo, LeagueLogo, PaisDaLigaTag } from '../components/TeamLogo'
+import { nomeDaLiga } from '../lib/paisDaLiga'
 import { useAuth } from '../context/AuthContext'
 import PageShell from '../components/PageShell'
 import { PERIODOS, PERIODO_PADRAO, janelaDoPeriodo, nomeDoMes, type PeriodoKey } from '../lib/periodo'
@@ -703,7 +704,7 @@ export default function ResultadosPublicos() {
 
   const lucroPorLiga = [...byLeague]
     .map(l => ({
-      label: l.league_name,
+      label: nomeDaLiga(l.league_id, l.league_name),
       value: Math.round(Number(l.profit ?? 0) * 100) / 100,
       meta: `${l.total} picks, ${l.greens}G ${l.reds}R`,
       icon: l.league_id != null
@@ -1095,7 +1096,10 @@ export default function ResultadosPublicos() {
                       {lg.league_id != null
                         ? <LeagueLogo id={lg.league_id} name={lg.league_name} />
                         : <div className="w-4.5 h-4.5 rounded-full bg-surface-2 shrink-0" />}
-                      <span className="text-sm font-semibold text-ink-1 flex-1 min-w-0 truncate">{lg.league_name}</span>
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-sm font-semibold text-ink-1 truncate">{nomeDaLiga(lg.league_id, lg.league_name)}</span>
+                        <PaisDaLigaTag id={lg.league_id} className="mt-0.5" />
+                      </span>
                       <span className="text-[11px] text-ink-4 shrink-0 hidden sm:block">{lg.total} picks</span>
                       <span className="font-mono text-[11px] text-ink-4 w-16 text-right shrink-0 hidden sm:block">
                         {lg.greens}G, {lg.reds}R
