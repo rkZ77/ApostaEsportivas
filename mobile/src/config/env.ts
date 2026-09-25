@@ -63,5 +63,20 @@ export const AMBIENTE: 'dev' | 'producao' = ehProducao(API_BASE_URL) ? 'producao
 
 export const NOME_APP = 'Pick IA'
 
+/** Site público · Termos, Privacidade e o gerenciamento da conta moram lá. */
+export const SITE_URL = 'https://pickia.com.br'
+
+/*
+ * O app oferece plano pago?
+ *
+ * Desligado nos dois sistemas enquanto não existir compra pela loja. Apple
+ * (diretriz 3.1.1/3.1.3) e Google Play (política de Pagamentos) exigem a
+ * cobrança da própria loja para liberar conteúdo digital, e proíbem o app de
+ * mandar o usuário pagar em outro lugar. Um botão "assine no site" é motivo
+ * direto de rejeição. Quem já assinou no site entra e usa normalmente: isso as
+ * duas lojas permitem. Ver mobile/docs/AUDITORIA.md §14 e §15.
+ */
+export const OFERECE_PLANO_NO_APP = false
+
 /** Timeout de rede. Curto o bastante para a tela não ficar pendurada em túnel ruim. */
 export const TIMEOUT_MS = 15000

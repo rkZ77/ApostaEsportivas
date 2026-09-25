@@ -19,6 +19,7 @@ import { Botao, Card, Carregando, Dado, Selo, Txt, Vazio } from '../../src/compo
 import { PickCard } from '../../src/components/PickCard'
 import { cores, espaco, raio } from '../../src/theme/tokens'
 import { reais } from '../../src/lib/formato'
+import { OFERECE_PLANO_NO_APP } from '../../src/config/env'
 
 export default function Inicio() {
   const { usuario, isVip, isPro } = useAuth()
@@ -133,7 +134,7 @@ export default function Inicio() {
       {/* convite · o de assinar pra quem não tem nada, o de upgrade pra quem
           já assina o Pick IA. São ofertas diferentes, e o cartão único falava
           de "liberar o feed ao vivo" pra quem já pagava e não o tinha. */}
-      {!isPro ? (
+      {OFERECE_PLANO_NO_APP && !isPro ? (
         <Card elevado style={{ gap: espaco.md }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: espaco.sm }}>
             <Activity size={18} color={cores.accent} />
