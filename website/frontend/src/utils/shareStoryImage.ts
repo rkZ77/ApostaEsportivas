@@ -373,7 +373,7 @@ export async function buildStoryImage(input: StoryImageInput): Promise<Blob> {
 
   // Badge do tipo de pick
   ctx.textAlign = 'center'
-  const typeLabel = PICK_TYPE_LABEL[input.pickType] ?? 'VIP'
+  const typeLabel = PICK_TYPE_LABEL[input.pickType] ?? 'Premium'
   const typeHex = PICK_TYPE_HEX[input.pickType] ?? '#facc15'
   ctx.font = fontDisplay(800, 30)
   const badgeTextW = ctx.measureText(typeLabel.toUpperCase()).width
@@ -620,7 +620,7 @@ function drawBrandHeader(ctx: CanvasRenderingContext2D, logoImg: HTMLImageElemen
 }
 
 function drawCtaFooter(ctx: CanvasRenderingContext2D, cursorY: number, shareUrl: string): void {
-  const pillLabel = '2 DIAS DE VIP GRÁTIS'
+  const pillLabel = '2 DIAS DE PRO GRÁTIS'
   ctx.font = fontDisplay(800, 28)
   const pillW = ctx.measureText(pillLabel).width + 64
   drawRoundedRect(ctx, W / 2 - pillW / 2, cursorY, pillW, 58, 29)

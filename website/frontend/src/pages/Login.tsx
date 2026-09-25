@@ -435,7 +435,7 @@ export default function Login() {
           {mode === 'register' && (
             <ul className="mb-6 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
               {[
-                { dot: 'bg-green-500',  text: 'Picks VIP diários' },
+                { dot: 'bg-green-500',  text: 'Picks Premium diários' },
                 { dot: 'bg-blue-400',   text: 'Múltiplas da IA' },
                 { dot: 'bg-orange-400', text: 'Alavancagem' },
                 { dot: 'bg-purple-400', text: 'Agente IA 24/7' },

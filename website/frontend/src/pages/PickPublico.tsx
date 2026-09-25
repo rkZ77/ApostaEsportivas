@@ -83,7 +83,7 @@ export default function PickPublico() {
   const rs = getResultStyle(pick.result)
   const profit = pick.profit != null ? Number(pick.profit) : null
   const odd    = pick.odd != null ? Number(pick.odd) : null
-  const typeLabel = PICK_TYPE_LABEL[pick.pick_type ?? pick_type ?? 'vip'] ?? 'VIP'
+  const typeLabel = PICK_TYPE_LABEL[pick.pick_type ?? pick_type ?? 'vip'] ?? 'Premium'
   const resultLabel = pick.result ? `, ${pick.result}` : ''
   const pageTitle = `${pick.home_team_name ?? pick.teams_preview?.[0] ?? 'Múltipla'}${pick.away_team_name ? ` x ${pick.away_team_name}` : ''}${resultLabel}. Pick IA`
 
@@ -199,7 +199,7 @@ export default function PickPublico() {
                 <Lock className="w-4 h-4 text-yellow-400 shrink-0" />
                 <div>
                   <p className="text-xs font-bold text-ink-1">Mercado. Linha. Análise da IA</p>
-                  <p className="text-[11px] text-ink-3 mt-0.5">Disponível apenas para assinantes VIP</p>
+                  <p className="text-[11px] text-ink-3 mt-0.5">Disponível apenas para assinantes</p>
                 </div>
               </div>
               {/* RÉGUAS, E NÃO TEXTO FALSO BORRADO.

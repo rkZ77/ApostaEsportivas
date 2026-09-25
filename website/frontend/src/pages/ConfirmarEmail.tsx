@@ -96,7 +96,7 @@ export default function ConfirmarEmail() {
 
           <ul className="space-y-2.5 mb-6">
             {[
-              'Picks VIP, múltiplas, alavancagem e ao vivo, tudo aberto',
+              'Picks Premium, múltiplas, alavancagem e ao vivo, tudo aberto',
               'Não pedimos dados de pagamento para testar',
               'O acesso vence sozinho, não cobramos nada no fim',
             ].map(t => (

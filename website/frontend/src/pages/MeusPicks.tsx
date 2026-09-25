@@ -21,7 +21,7 @@ import { PAGE_WIDTH } from '../lib/pageWidth'
 import { sinalizarNavegacao } from '../services/progressBus'
 
 const SOURCE_LBL: Record<string, string> = {
-  vip: 'VIP', free: 'Free', multipla: 'Múlt.', bingo: 'Bingo', alavancagem: 'Alav.',
+  vip: 'Premium', free: 'Free', multipla: 'Múlt.', bingo: 'Bingo', alavancagem: 'Alav.',
   faltas: 'Faltas', goleiros: 'Defesas', player_stats: 'Jogador', boost: 'Boost',
   live: 'Ao Vivo',
 }

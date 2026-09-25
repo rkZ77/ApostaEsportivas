@@ -190,7 +190,7 @@ def get_social(
     if pick_type not in VALID_PICK_TYPES:
         raise HTTPException(400, "Tipo inválido")
     if not _pode_ver_social(pick_type, current_user):
-        raise HTTPException(403, "Acesso VIP necessário")
+        raise HTTPException(403, "Recurso para assinantes")
     limit = min(max(limit, 1), 100)
 
     conn = _conn(); cur = _cur(conn)
@@ -245,7 +245,7 @@ def toggle_reaction(pick_type: str, pick_id: int, body: ReactBody,
     if body.reaction not in VALID_REACTIONS:
         raise HTTPException(400, "Reação inválida")
     if not _pode_ver_social(pick_type, current_user):
-        raise HTTPException(403, "Acesso VIP necessário")
+        raise HTTPException(403, "Recurso para assinantes")
     _check_comment_rate(current_user["id"])
 
     conn = _conn(); cur = _cur(conn)
@@ -292,7 +292,7 @@ def add_comment(pick_type: str, pick_id: int, body: CommentBody,
     if pick_type not in VALID_PICK_TYPES:
         raise HTTPException(400, "Tipo inválido")
     if not _pode_ver_social(pick_type, current_user):
-        raise HTTPException(403, "Acesso VIP necessário")
+        raise HTTPException(403, "Recurso para assinantes")
     _check_comment_rate(current_user["id"])
 
     content = body.content.strip()

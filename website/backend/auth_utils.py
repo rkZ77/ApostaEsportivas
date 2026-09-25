@@ -259,7 +259,7 @@ def is_vip_active(user: dict) -> bool:
 
 def require_vip(user: dict = Depends(get_current_user)) -> dict:
     if user.get("plan") not in ("vip", "trial", "admin"):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso VIP necessário")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Recurso para assinantes")
     # Verifica expiração do plano (admin nunca expira)
     if user.get("plan") in ("vip", "trial"):
         expires_at = user.get("plan_expires_at")
@@ -269,7 +269,7 @@ def require_vip(user: dict = Depends(get_current_user)) -> dict:
                 if exp_dt.tzinfo is None:
                     exp_dt = exp_dt.replace(tzinfo=timezone.utc)
                 if datetime.now(timezone.utc) > exp_dt:
-                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Plano VIP expirado. Renove para continuar.")
+                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sua assinatura venceu. Renove para continuar.")
             except ValueError:
                 pass
     return user

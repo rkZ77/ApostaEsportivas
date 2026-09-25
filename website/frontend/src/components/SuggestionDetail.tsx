@@ -205,7 +205,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                 {/* PICK_TYPE_LABEL cobre os seis pipelines. A cadeia de
                     ternarios que estava aqui terminava em 'VIP', entao um
                     pick de faltas abria rotulado como VIP. */}
-                {pickType === 'free' ? 'Dica do Dia' : PICK_TYPE_LABEL[pickType] ?? 'VIP'}
+                {pickType === 'free' ? 'Dica do Dia' : PICK_TYPE_LABEL[pickType] ?? 'Premium'}
               </span>
               <button
                 onClick={onClose}
@@ -433,7 +433,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                         homeTeamId: s.home_team_id,
                         awayTeamId: s.away_team_id,
                         leagueName: s.league_name,
-                        pickType: pickType === 'free' ? 'Dica do Dia' : (PICK_TYPE_LABEL[pickType] ?? 'VIP'),
+                        pickType: pickType === 'free' ? 'Dica do Dia' : (PICK_TYPE_LABEL[pickType] ?? 'Premium'),
                         market: translateMarket(s.market),
                         /* Mesma imagem do card: no pick de jogador a linha vai
                            sem o nome, que aparece embaixo da foto. */

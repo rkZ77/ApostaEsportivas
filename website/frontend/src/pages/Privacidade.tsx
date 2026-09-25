@@ -43,7 +43,7 @@ export default function Privacidade() {
             <ul className="list-disc list-inside space-y-1 text-ink-2">
               <li>Criar e gerenciar sua conta</li>
               <li>Processar pagamentos e ativar seu plano</li>
-              <li>Enviar e-mails transacionais (confirmação de cadastro, reset de senha, confirmação de VIP)</li>
+              <li>Enviar e-mails transacionais (confirmação de cadastro, reset de senha, confirmação de assinatura)</li>
               <li>Prevenir fraudes e abusos no sistema</li>
               <li>Cumprir obrigações legais</li>
             </ul>

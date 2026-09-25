@@ -44,7 +44,7 @@ export function taxaAcerto(r: {
  * A resposta traz `stake_label` montado em backend/stake_plan.py, que é a
  * fonte da verdade · isto aqui é só o texto de partida.
  */
-export const STAKE_LABEL_PADRAO = 'VIP 4u, free e mercados 3u, múltipla 1u'
+export const STAKE_LABEL_PADRAO = 'Premium e ao vivo 4u, free e mercados 3u, múltipla 1u'
 
 /**
  * Lucro em unidades, sempre com sinal. `+42,7u` · `−1,00u`.

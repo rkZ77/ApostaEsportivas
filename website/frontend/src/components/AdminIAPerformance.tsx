@@ -74,7 +74,7 @@ const PERIODOS: Array<{ value: string; label: string }> = [
 ]
 
 const PICK_LABEL: Record<string, string> = {
-  vip: 'VIP', free: 'Dica do Dia', multipla: 'Múltiplas',
+  vip: 'Premium', free: 'Dica do Dia', multipla: 'Múltiplas',
   alavancagem: 'Alavancagem', faltas: 'Faltas', goleiros: 'Defesas',
   player_stats: 'Jogadores', boost: 'Pick Boost', live: 'Ao Vivo',
 }

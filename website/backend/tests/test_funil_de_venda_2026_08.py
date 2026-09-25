@@ -41,7 +41,7 @@ def test_catalogo_de_modulos_existe_e_separa_free_de_vip():
 
 
 @pytest.mark.parametrize("modulo", [
-    "Picks VIP", "Picks ao vivo", "Múltiplas", "Bingo do Dia", "Alavancagem",
+    "Picks Premium", "Picks ao vivo", "Múltiplas", "Bingo do Dia", "Alavancagem",
     "Pick Boost", "Estatística de jogador", "Mercado de faltas",
     "Defesas de goleiro", "Agente de futebol",
 ])

@@ -53,7 +53,7 @@ export const TOUR_STEPS_VIP: TourStep[] = [
         <Etiqueta>O que deixou de ter cadeado</Etiqueta>
         <Lista
           itens={[
-            [Zap, 'Picks VIP do dia'],
+            [Zap, 'Picks Premium do dia'],
             [Layers, 'Múltiplas'],
             [TrendingUp, 'Alavancagem'],
             [ShieldQuestion, 'Faltas e picks de jogador'],
@@ -72,7 +72,7 @@ export const TOUR_STEPS_VIP: TourStep[] = [
   },
   {
     id: 'vip-picks',
-    titulo: 'Picks VIP do dia',
+    titulo: 'Picks Premium do dia',
     Icon: Zap,
     rota: '/picks',
     alvos: ['[data-aba="vip"]', '[data-tour="picks-area"]'],

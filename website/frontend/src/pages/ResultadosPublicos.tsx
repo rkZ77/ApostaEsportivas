@@ -88,12 +88,12 @@ interface PublicData {
    entrou em 27/08 pelo mesmo caminho, e `goleiros` fica: o motor parou de
    escrever nela, mas o passado dela continua no placar publico. */
 const SRC_LBL: Record<string, string> = {
-  vip: 'VIP', free: 'Free', multiplas: 'Múlt.', alavancagem: 'Alav.',
+  vip: 'Premium', free: 'Free', multiplas: 'Múlt.', alavancagem: 'Alav.',
   faltas: 'Faltas', goleiros: 'Defesas', player_stats: 'Jogador',
   boost: 'Boost', live: 'Ao Vivo',
 }
 const SOURCE_LABELS: Record<string, string> = {
-  all: 'Todos', vip: 'VIP', free: 'Free', multiplas: 'Múltiplas',
+  all: 'Todos', vip: 'Premium', free: 'Free', multiplas: 'Múltiplas',
   bingo: 'Bingo do Dia',
   alavancagem: 'Alavancagem', faltas: 'Faltas', goleiros: 'Defesas',
   player_stats: 'Jogadores', boost: 'Pick Boost', live: 'Ao Vivo',

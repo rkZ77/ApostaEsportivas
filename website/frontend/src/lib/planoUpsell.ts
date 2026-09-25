@@ -99,7 +99,7 @@ export function convitePlano(
 
   if (user.plan === 'vip' && dias != null && dias <= 5) {
     return {
-      titulo: `Seu VIP expira ${prazo}`,
+      titulo: `Sua assinatura expira ${prazo}`,
       texto: 'Renove para continuar com todos os picks.',
       cta: 'Renovar',
       to: '/planos',

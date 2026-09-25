@@ -108,7 +108,7 @@ export default function KellyCriterionApostasEsportivas() {
         Se você já entende o que é EV positivo mas ainda decide o valor da aposta "no olho", o
         Kelly fracionário é o próximo passo mais simples para proteger a banca no longo prazo. Para
         ver como isso funciona com picks reais, o plano{' '}
-        <Link to="/planos" className="text-green-400 hover:underline">VIP do Pick IA</Link> inclui
+        <Link to="/planos" className="text-green-400 hover:underline">plano Pick IA</Link> inclui
         stake sugerido em todo pick, ou você pode{' '}
         <Link to="/login?mode=register" className="text-green-400 hover:underline">
           criar uma conta gratuita

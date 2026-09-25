@@ -77,7 +77,7 @@ export function getResultStyle(result?: string | null): ResultStyle | null {
 }
 
 export const PICK_TYPE_LABEL: Record<string, string> = {
-  vip: 'VIP',
+  vip: 'Premium',
   free: 'Free',
   multipla: 'Múltipla',
   multiplas: 'Múltipla',

@@ -126,7 +126,7 @@ export default function StatsBand({
   // entre o free e o VIP, mas não vale um tile · média por pick é o ROI em
   // outra escala, e ficaria ao lado dele.
   const medias = [
-    mediaVip !== null ? `VIP ${fmtUnits(mediaVip, 2)}` : null,
+    mediaVip !== null ? `Premium ${fmtUnits(mediaVip, 2)}` : null,
     mediaFree !== null ? `free ${fmtUnits(mediaFree, 2)}` : null,
   ].filter(Boolean).join(', ')
 

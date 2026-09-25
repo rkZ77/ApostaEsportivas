@@ -171,6 +171,6 @@ def rotulo_curto() -> str:
     Separador por VIRGULA, e nao pelo ponto do meio que estava aqui. Ele foi
     varrido do texto do site em 01/09 e esta linha tinha passado batido.
     """
-    return (f"VIP e ao vivo {STAKE_PADRAO['vip']}u, free e mercados "
+    return (f"Premium e ao vivo {STAKE_PADRAO['vip']}u, free e mercados "
             f"{STAKE_PADRAO['free']}u, múltipla {STAKE_PADRAO['multiplas']}u, "
             f"alavancagem 1u por caminho")

@@ -669,9 +669,9 @@ export default function Fixtures() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
             </div>
-            <h3 className="text-ink-1 font-bold text-lg mb-2">Análise exclusiva VIP</h3>
+            <h3 className="text-ink-1 font-bold text-lg mb-2">Análise exclusiva para assinantes</h3>
             <p className="text-ink-2 text-sm mb-6 leading-relaxed">
-              Médias de gols, escanteios, cartões, histórico H2H e estatísticas completas por time. Disponível para assinantes VIP.
+              Médias de gols, escanteios, cartões, histórico H2H e estatísticas completas por time. Disponível para assinantes.
             </p>
             <Link to="/checkout"
               className="block bg-yellow-400 hover:bg-yellow-300 text-on-fill font-black px-6 py-3 rounded-md transition-colors text-sm mb-3">

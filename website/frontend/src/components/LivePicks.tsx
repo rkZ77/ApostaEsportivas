@@ -25,7 +25,7 @@ const TYPE_CLS: Record<string, string> = {
   live: 'text-accent-ink bg-accent/10',
 }
 const TYPE_LABEL: Record<string, string> = {
-  vip: 'VIP', free: 'FREE', multipla: 'MÚLT.', alavancagem: 'ALAV.',
+  vip: 'PREMIUM', free: 'FREE', multipla: 'MÚLT.', alavancagem: 'ALAV.',
   live: 'AO VIVO',
 }
 

@@ -51,7 +51,7 @@ export interface Modulo {
 export const MODULOS: Modulo[] = [
   {
     Icon: Crown,
-    titulo: 'Picks VIP',
+    titulo: 'Picks Premium',
     desc: 'Os picks de maior confiança do dia, com mercado, odd, stake sugerida e a análise que sustenta cada um.',
     plano: 'pago',
     tag: { label: 'Pick IA', tone: 'yellow' },

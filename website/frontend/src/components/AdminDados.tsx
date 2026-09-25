@@ -1178,7 +1178,7 @@ export default function AdminDados() {
           hint="partidas com estatística" />
         <StatTile label="Última partida lida" value={diaMes(dados.frescor?.ultima_partida)}
           hint={`médias recalculadas em ${diaMes(dados.frescor?.medias_atualizadas_em)}`} />
-        <StatTile label="Picks VIP"        value={numero(dados.contagem?.picks_vip)} />
+        <StatTile label="Picks Premium"        value={numero(dados.contagem?.picks_vip)} />
         <StatTile label="Picks free"       value={numero(dados.contagem?.picks_free)} />
       </div>
 

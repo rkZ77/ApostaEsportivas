@@ -403,7 +403,7 @@ export default function Profile() {
                   </p>
                 )}
                 {user?.plan === 'free' && (
-                  <p className="text-ink-3 text-xs">Faça upgrade para acessar picks VIP</p>
+                  <p className="text-ink-3 text-xs">Assine para acessar os Picks Premium</p>
                 )}
               </div>
               {(user?.plan === 'free' || user?.plan === 'trial') && (
@@ -762,7 +762,7 @@ export default function Profile() {
                 {!smsEnviado && (
                   <p className="text-xs text-ink-3 leading-relaxed">
                     Enviamos um código de 6 dígitos por SMS.
-                    {user?.plan === 'free' && !meData?.trial_used && ' Confirmar libera 2 dias de VIP.'}
+                    {user?.plan === 'free' && !meData?.trial_used && ' Confirmar libera 2 dias de Pro.'}
                   </p>
                 )}
 
@@ -850,7 +850,7 @@ export default function Profile() {
           <div className="card p-6 space-y-4">
             <div>
               <h2 className="text-sm font-bold text-ink-1">Programa de Indicações</h2>
-              <p className="text-ink-3 text-xs mt-0.5">Indique amigos e ganhe 1 dia VIP por cada conversão</p>
+              <p className="text-ink-3 text-xs mt-0.5">Indique amigos e ganhe 1 dia de assinatura por cada conversão</p>
             </div>
 
             {referral ? (

@@ -42,7 +42,7 @@ export type FimDeAcesso = 'trial' | 'vip'
 /** O que a pessoa tinha até ontem · a lista é o argumento, e é a mesma nos
     dois casos porque o acesso perdido é o mesmo. */
 const PERDIDOS = [
-  'Picks VIP do dia',
+  'Picks Premium do dia',
   'Múltiplas e alavancagem',
   'Mercados de faltas e defesas',
   'Agente de futebol com IA',

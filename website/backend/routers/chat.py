@@ -124,7 +124,7 @@ def _get_site_context(user_id: int) -> str:
             total_7, greens_7 = s7.get("total", 0) or 0, s7.get("greens", 0) or 0
             wr_7 = round(greens_7 / total_7 * 100, 1) if total_7 > 0 else 0.0
 
-            lines.append(f"\n--- DESEMPENHO VIP ---")
+            lines.append(f"\n--- DESEMPENHO PICKS PREMIUM ---")
             lines.append(f"Mês atual: {greens_m}/{total_m} greens ({wr_m}% win rate) | Lucro: {float(m.get('profit', 0)):.2f}u")
             lines.append(f"Últimos 7 dias: {greens_7}/{total_7} greens ({wr_7}% win rate) | Lucro: {float(s7.get('profit', 0)):.2f}u")
 
@@ -152,7 +152,7 @@ def _get_site_context(user_id: int) -> str:
                 """)
                 vip_picks = cur.fetchall()
                 if vip_picks:
-                    lines.append(f"Picks VIP ({len(vip_picks)}):")
+                    lines.append(f"Picks Premium ({len(vip_picks)}):")
                     for p in [dict(r) for r in vip_picks]:
                         conf = f"{round(p['confidence']*100)}%" if p.get('confidence') else "?"
                         line_s = f" {p['line']}" if p.get('line') else ""
@@ -163,7 +163,7 @@ def _get_site_context(user_id: int) -> str:
                             f"{stake_s} | Conf: {conf} | {p.get('result') or 'pendente'}"
                         )
                 else:
-                    lines.append("Picks VIP: nenhum publicado hoje ainda.")
+                    lines.append("Picks Premium: nenhum publicado hoje ainda.")
 
                 # Múltipla
                 cur.execute("""
@@ -216,7 +216,7 @@ def _get_site_context(user_id: int) -> str:
                 """)
                 preview = [dict(r) for r in cur.fetchall()]
                 if preview:
-                    lines.append("Prévia VIP de hoje (assine para ver odds e detalhes):")
+                    lines.append("Prévia dos Picks Premium de hoje (assine para ver odds e detalhes):")
                     for p in preview:
                         lines.append(f"  • {p['home_team_name']} x {p['away_team_name']}: {p['market']} | {p.get('result') or 'pendente'}")
 
@@ -229,7 +229,7 @@ def _get_site_context(user_id: int) -> str:
             if free_pick:
                 fp = dict(free_pick)
                 line_s = f" {fp['line']}" if fp.get('line') else ""
-                lines.append(f"\nPick Seguro (gratis): {fp['home_team']} x {fp['away_team']} · {fp['market']}{line_s} @ {fp['odd']} | {fp.get('result') or 'pendente'}")
+                lines.append(f"\nDica do Dia (gratis): {fp['home_team']} x {fp['away_team']} · {fp['market']}{line_s} @ {fp['odd']} | {fp.get('result') or 'pendente'}")
 
             return "\n".join(lines)
         finally:
