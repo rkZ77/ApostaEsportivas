@@ -130,39 +130,48 @@ class PickEngineConfig:
     # no final_score.
     max_taxa: float | None = None
     max_edge: float | None = None
-    # FAMILIA QUE SO' ENTRA POR UM LADO (2026-09-24).
+    # FAMILIA QUE SO' ENTRA POR UM LADO. VAZIA, E A MEDICAO DE 24/09 E' O MOTIVO.
     #
-    # CARTOES, medido em 89 pernas liquidadas de 10/06 a 22/09:
+    # O mecanismo existe porque o motor ao vivo precisou dele em 09/09 (ver
+    # pick_engine_live/config.py::familias_somente_under, onde `goals` esta'
+    # vetado): quando um lado da familia calibra e o outro nao, vetar a familia
+    # inteira joga fora o lado que paga.
+    #
+    # NO PRE-JOGO ELE FICA DESLIGADO, e vale registrar a tentativa inteira --
+    # cartao Over chegou a ser vetado aqui e o veto foi revertido no mesmo dia.
+    #
+    # O numero agregado pedia o veto. Em 89 pernas liquidadas de 10/06 a 22/09:
     #
     #   cards Over    30 pernas   36,7%   -13,57u
     #   cards Under   59 pernas   79,7%   +21,98u
     #
-    # A assimetria e' o diagnostico inteiro, e ela nao e' de um recorte:
-    # negativa nos CINCO produtos (vip -3,78u, multipla -4,00u, alavancagem
-    # -3,00u, free -1,79u, bingo -1,00u), nos QUATRO meses (junho -1,85u, julho
-    # -3,00u, agosto -5,78u, setembro -2,94u) e nos TRES escopos (total -10,39u,
-    # casa -1,68u, visitante -1,50u). O Under e' positivo em todos eles.
+    # E era consistente: Over negativo nos cinco produtos, nos quatro meses e
+    # nos tres escopos. O que desfaz a leitura e' QUANDO cada pick nasceu. O peso
+    # por forca do adversario foi aposentado em 15/09 (ver o bloco
+    # opponent_* mais abaixo: ele superponderava sistematicamente o jogo contra
+    # time forte, que e' justamente o jogo de mais cartao). Separando na data:
     #
-    # PARTE do vies tem causa nomeada: desde 10/09 a liquidacao conta so' o
-    # cartao de quem estava em campo (`match_statistics.valid_yellow_*`, ver
-    # routers/live.py::_cartoes_elegiveis), enquanto a media historica do motor
-    # le' `total_yellow_cards`, que inclui banco e comissao tecnica. Medido nos
-    # 90 jogos que ja' tem validacao: 4,03 cru contra 3,88 valido, 0,16 por jogo
-    # a mais, em 13 dos 90. Isso infla o Over e deprime o Under, na direcao
-    # exata do erro -- mas 0,16 carta por jogo nao produz 36,7% contra 79,7%, e
-    # so' 90 dos 1.712 jogos da temporada tem a coluna preenchida. Ou seja: a
-    # regua dupla existe e nao explica o tamanho.
+    #   antes de 15/09    Over  25 pernas  24,0%  -15,30u | Under  45  88,9%  +22,67u
+    #   depois de 15/09   Over   5 pernas  80,0%   +1,73u | Under  14  57,1%   -0,69u
     #
-    # Entao o veto e' o que a medicao sustenta, e nao a correcao do modelo, que
-    # exigiria a folha de eventos de todo o historico. E' o mesmo desenho que o
-    # motor ao vivo ja' usa (pick_engine_live/config.py::familias_somente_under,
-    # onde a familia vetada e' `goals`) e a mesma licao: quando um lado calibra e
-    # o outro nao, o erro e' DIRECIONAL e vetar a familia inteira jogaria fora
-    # os +21,98u do Under.
+    # A assimetria INVERTEU de lado. Os "quatro meses consistentes" eram quatro
+    # meses do mesmo peso defeituoso, e usa-los pra vetar o Over de hoje e'
+    # circular. Cinco pernas tambem nao provam que o Over ficou bom -- elas so'
+    # removem a base do veto, e amostra curta nao vira decisao em nenhuma das
+    # duas direcoes (e' a mesma regra do piso de amostra).
     #
-    # O que medir pra religar: preencher `valid_yellow_*` no historico e remedir
-    # o Over com a media corrigida. Ate' la', Over de cartao nao sai.
-    familias_somente_under: tuple = ("cards",)
+    # Ha' um segundo suspeito ja' medido e pequeno: desde 10/09 a liquidacao
+    # conta so' o cartao de quem estava em campo (`valid_yellow_*`, ver
+    # routers/live.py::_cartoes_elegiveis) e a media historica le'
+    # `total_yellow_cards`, que inclui banco e comissao tecnica. Nos 90 jogos com
+    # validacao: 4,03 cru contra 3,88 valido, 0,16 por jogo, em 13 dos 90. Infla
+    # o Over, mas nao no tamanho medido -- e so' 90 dos 1.712 jogos da temporada
+    # tem a coluna, entao corrigir a media hoje nao e' possivel.
+    #
+    # O QUE MEDIR ANTES DE LIGAR: cartao Over com 25+ pernas nascidas DEPOIS de
+    # 15/09. Se voltar a medir negativo, o veto entra com uma linha -- e o teste
+    # que trava o mecanismo desligado diz onde.
+    familias_somente_under: tuple = ()
     # Teto de sanidade: odds muito extremas (>15) geralmente refletem
     # mercado ilíquido/raramente cotado, não valor real -- visto na pratica
     # com um handicap a odd 51.0 gerando EV de +3839% (taxa historica
