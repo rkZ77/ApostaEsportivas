@@ -20,6 +20,7 @@ import AdminFunil from '../components/AdminFunil'
 import AdminDisparos from '../components/AdminDisparos'
 import AdminAlertaIA from '../components/AdminAlertaIA'
 import AdminReds from '../components/AdminReds'
+import AdminMudancas from '../components/AdminMudancas'
 import { fmtBRL } from '../utils/format'
 import { sinalizarNavegacao } from '../services/progressBus'
 
@@ -979,6 +980,7 @@ export default function Admin() {
                 dia); esta responde como o motor chega num pick, que é a
                 pergunta anterior às duas. */}
             <AdminFluxoDosMotores />
+            <AdminMudancas />
             <AdminReds />
             <AdminAuditoriaMotores />
             <AdminMotorDecisoes />

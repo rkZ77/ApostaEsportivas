@@ -153,6 +153,10 @@ class MatchStatsService:
                 ms.home_red_cards_1h, ms.away_red_cards_1h,
                 ms.home_shots_on_1h, ms.away_shots_on_1h,
                 ms.home_total_shots_1h, ms.away_total_shots_1h,
+                -- Finalizacao por zona e xG (2026-09-27); NULL fora da cobertura.
+                ms.home_shots_insidebox, ms.away_shots_insidebox,
+                ms.home_shots_outsidebox, ms.away_shots_outsidebox,
+                ms.home_xg, ms.away_xg,
                 ls.team_name AS opponent_name,
                 ls.rank AS opponent_rank
             FROM match_statistics ms
@@ -199,6 +203,10 @@ class MatchStatsService:
                 ms.home_red_cards_1h, ms.away_red_cards_1h,
                 ms.home_shots_on_1h, ms.away_shots_on_1h,
                 ms.home_total_shots_1h, ms.away_total_shots_1h,
+                -- Finalizacao por zona e xG (2026-09-27); NULL fora da cobertura.
+                ms.home_shots_insidebox, ms.away_shots_insidebox,
+                ms.home_shots_outsidebox, ms.away_shots_outsidebox,
+                ms.home_xg, ms.away_xg,
                 ls.team_name AS opponent_name,
                 ls.rank AS opponent_rank
             FROM match_statistics ms
@@ -304,6 +312,10 @@ class MatchStatsService:
                 ms.home_red_cards_1h, ms.away_red_cards_1h,
                 ms.home_shots_on_1h, ms.away_shots_on_1h,
                 ms.home_total_shots_1h, ms.away_total_shots_1h,
+                -- Finalizacao por zona e xG (2026-09-27); NULL fora da cobertura.
+                ms.home_shots_insidebox, ms.away_shots_insidebox,
+                ms.home_shots_outsidebox, ms.away_shots_outsidebox,
+                ms.home_xg, ms.away_xg,
                 ls.team_name AS opponent_name,
                 ls.rank AS opponent_rank
             FROM match_statistics ms
@@ -422,6 +434,10 @@ class MatchStatsService:
                 ms.home_red_cards_1h, ms.away_red_cards_1h,
                 ms.home_shots_on_1h, ms.away_shots_on_1h,
                 ms.home_total_shots_1h, ms.away_total_shots_1h,
+                -- Finalizacao por zona e xG (2026-09-27); NULL fora da cobertura.
+                ms.home_shots_insidebox, ms.away_shots_insidebox,
+                ms.home_shots_outsidebox, ms.away_shots_outsidebox,
+                ms.home_xg, ms.away_xg,
                 ls.team_name AS opponent_name,
                 ls.rank      AS opponent_rank
             FROM match_statistics ms

@@ -15,6 +15,22 @@ from datetime import date
 from services.pick_engine import bayesian_model, confidence, orchestrator, stats_model
 from services.pick_engine.config import DEFAULT_CONFIG
 
+# CONFIGURACAO ANTERIOR A 27/09/2026 (so' o mando, sem modelo na taxa, sem piso
+# por lado). Estes testes fixam numeros de OUTRA mecanica (filtro de mando,
+# prior de mercado, desacordo, arbitro), escritos antes das fontes novas da
+# taxa; rodam com ela pra continuar isolando o que isolavam. As fontes novas
+# tem teste proprio em test_fontes_da_taxa_2026_09.py.
+from dataclasses import replace as _replace
+from services.pick_engine.config import DEFAULT_CONFIG as _DEFAULT
+CFG_ANTERIOR = _replace(_DEFAULT, peso_outro_mando=0.0, peso_modelo_na_taxa=0.0,
+                        min_jogos_mando_por_lado=0)
+
+
+def _sem_fontes_novas(cfg):
+    return _replace(cfg, peso_outro_mando=0.0, peso_modelo_na_taxa=0.0,
+                    min_jogos_mando_por_lado=0)
+
+
 
 def _jogo(match_date, home_team_id, away_team_id, home_corners, away_corners):
     return {
@@ -88,7 +104,7 @@ def test_taxa_do_visitante_deixa_de_herdar_o_desempenho_em_casa():
     assert sem_filtro["taxa_bruta"] == 0.5
 
     com_filtro = stats_model.market_taxa(
-        "corners", "away", "Over", "4.5", [], _HISTORICO_VISITANTE, team_id=10)
+        "corners", "away", "Over", "4.5", [], _HISTORICO_VISITANTE, team_id=10, config=CFG_ANTERIOR)
     assert com_filtro["amostra"] == 2
     assert com_filtro["taxa_ponderada"] == 0.0
 
@@ -144,7 +160,7 @@ def test_prior_do_motor_e_o_mercado_mesmo_com_calibracao_otimista():
     candidatos = orchestrator.analyze_fixture_markets(
         _odds_over_under(linha="4.5"), hist, hist,
         calibration_data=calibracao_otimista,
-        home_team_id=1, away_team_id=2,
+        home_team_id=1, away_team_id=2, config=CFG_ANTERIOR
     )
     over = next(c for c in candidatos if c["value"] == "Over")
     # taxa empirica e' 1.0 (9 > 4.5 em todos), amostra 20, prior de mercado 0.5
@@ -206,7 +222,7 @@ def test_orchestrator_fica_com_a_estimativa_menor_quando_os_modelos_discordam():
     candidatos = orchestrator.analyze_fixture_markets(
         _odds_over_under(linha="4.5"), hist, hist,
         calibration_data={"by_market": {}, "by_market_league": {}},
-        home_team_id=1, away_team_id=2,
+        home_team_id=1, away_team_id=2, config=CFG_ANTERIOR
     )
     c = next(x for x in candidatos if x["market_type"] == "corners")
     assert c["value"] == "Over"
@@ -228,7 +244,7 @@ def test_confidence_acompanha_a_probabilidade_rebaixada():
     candidatos = orchestrator.analyze_fixture_markets(
         _odds_over_under(linha="4.5"), hist, hist,
         calibration_data={"by_market": {}, "by_market_league": {}},
-        home_team_id=1, away_team_id=2,
+        home_team_id=1, away_team_id=2, config=CFG_ANTERIOR
     )
     c = next(x for x in candidatos if x["market_type"] == "corners")
     conf_da_taxa_rebaixada = confidence.confidence_score(
@@ -261,7 +277,7 @@ def test_desacordo_nunca_sobe_a_probabilidade():
         _odds_over_under(linha="4.5"), hist, hist,
         calibration_data={"by_market": {}, "by_market_league": {}},
         home_team_id=1, away_team_id=2,
-        reference_date=date(2026, 7, 13),
+        reference_date=date(2026, 7, 13), config=CFG_ANTERIOR
     )
     over = next(c for c in candidatos if c["value"] == "Over")
     assert over["poisson_probability"] > over["taxa_real"]
@@ -296,13 +312,13 @@ def test_taxa_de_total_nao_herda_mais_o_mando_errado():
     ]
 
     misto = stats_model.market_taxa(
-        "corners", "total", "Under", "11.5", mandante, visitante)
+        "corners", "total", "Under", "11.5", mandante, visitante, config=CFG_ANTERIOR)
     assert misto["amostra"] == 4
     assert misto["taxa_bruta"] == 0.5, "os jogos do mando errado seguravam a taxa"
 
     no_mando = stats_model.market_taxa(
         "corners", "total", "Under", "11.5", mandante, visitante,
-        home_team_id=1, away_team_id=2)
+        home_team_id=1, away_team_id=2, config=CFG_ANTERIOR)
     assert no_mando["amostra"] == 2       # mandante em casa + visitante fora
     assert no_mando["taxa_ponderada"] == 0.0
 
@@ -320,5 +336,5 @@ def test_variancia_e_taxa_medem_o_MESMO_pool():
         "corners", "total", mandante, visitante, home_team_id=1, away_team_id=2)
     taxa = stats_model.market_taxa(
         "corners", "total", "Under", "11.5", mandante, visitante,
-        home_team_id=1, away_team_id=2)
+        home_team_id=1, away_team_id=2, config=CFG_ANTERIOR)
     assert var["amostra"] == taxa["amostra"] == 2

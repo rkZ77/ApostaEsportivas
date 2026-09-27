@@ -112,6 +112,9 @@ def weighted_rate(matches: list, hit_fn, reference_date=None, config: PickEngine
         opponent_weight(m.get("opponent_rank"), config)
         * temporal_decay_weight(m["match_date"], reference_date, config)
         * cross_competition_weight(m.get("league_id"))
+        # Jogo do outro mando pesa menos (config.peso_outro_mando). Marcado por
+        # pool_and_field numa COPIA do jogo; ausente = jogo do mando, peso 1.
+        * m.get("_peso_mando", 1.0)
         for m, _ in counted
     ]
     total_weight = sum(weights)
@@ -134,10 +137,15 @@ def weighted_rate(matches: list, hit_fn, reference_date=None, config: PickEngine
         if lid is not None:
             competicoes[lid] = competicoes.get(lid, 0) + 1
 
+    # AMOSTRA EFETIVA: o jogo do outro mando conta pelo peso dele. Sem isso o
+    # piso de 8 passaria a ser alcancado com jogo que vale meio.
+    n_efetivo = int(round(sum(m.get("_peso_mando", 1.0) for m, _ in counted)))
+    if n_efetivo != n:
+        quality = sample_quality(n_efetivo, config)
     return {
         "taxa_bruta": round(taxa_bruta, 4),
         "taxa_ponderada": round(taxa_ponderada, 4),
-        "amostra": n,
+        "amostra": n_efetivo,
         "amostra_label": quality["label"],
         "Q": quality["Q"],
         "wilson": wilson_interval(round(sum(values)), n),
@@ -820,9 +828,40 @@ def _somente_no_mando(pool: list, team_id: int | None, mando: str) -> list:
     return [m for m in pool if m.get(chave) == team_id]
 
 
+def _outro_mando(lista: list, team_id: int | None, mando: str, peso: float) -> list:
+    """Jogos do time no mando OPOSTO, marcados com o peso (copias: a lista do
+    chamador nao muda). Sem team_id nao ha' como separar mando: nada entra."""
+    if not peso or team_id is None:
+        return []
+    chave = "away_team_id" if mando == "home" else "home_team_id"
+    return [{**m, "_peso_mando": peso} for m in lista if m.get(chave) == team_id]
+
+
+def jogos_no_mando_por_lado(family: str, scope: str, last10_home: list, last10_away: list,
+                            home_team_id=None, away_team_id=None) -> int | None:
+    """Menor numero de jogos NO MANDO entre os lados que o mercado le.
+
+    E' a regra do usuario de 27/09: minimo de 5 jogos em casa (mandante) e 5
+    fora (visitante). Mercado de um time so' olha o lado dele. None quando nao
+    da' pra separar (sem ids)."""
+    if scope == "home":
+        if home_team_id is None:
+            return None
+        return len(comparavel_em_90(_somente_no_mando(last10_home, home_team_id, "home"), family))
+    if scope == "away":
+        if away_team_id is None:
+            return None
+        return len(comparavel_em_90(_somente_no_mando(last10_away, away_team_id, "away"), family))
+    if home_team_id is None or away_team_id is None:
+        return None
+    return min(len(comparavel_em_90(_somente_no_mando(last10_home, home_team_id, "home"), family)),
+               len(comparavel_em_90(_somente_no_mando(last10_away, away_team_id, "away"), family)))
+
+
 def pool_and_field(family: str, scope: str, last10_home: list, last10_away: list,
                     team_id: int | None = None,
-                    home_team_id: int | None = None, away_team_id: int | None = None):
+                    home_team_id: int | None = None, away_team_id: int | None = None,
+                    peso_outro_mando: float = 0.0):
     """Pool de jogos que sustenta a taxa de um mercado, e o campo bruto (hoje
     sempre None -- _extract_stat resolve o campo por familia).
 
@@ -876,16 +915,26 @@ def pool_and_field(family: str, scope: str, last10_home: list, last10_away: list
 
     BTTS entra pelo mesmo argumento: "as duas marcam" e' propriedade da partida,
     e a partida que interessa e' esta, com estes mandos."""
+    # O OUTRO MANDO COM PESO MENOR (2026-09-27): ver config.peso_outro_mando.
+    # O jogo do mando continua pesando 1; o do outro mando entra marcado com
+    # `_peso_mando`, que weighted_rate multiplica. peso 0 = comportamento
+    # anterior (so' o mando).
     if scope == "home":
-        return comparavel_em_90(_somente_no_mando(last10_home, team_id, "home"), family), None
+        return comparavel_em_90(
+            _somente_no_mando(last10_home, team_id, "home")
+            + _outro_mando(last10_home, team_id, "home", peso_outro_mando), family), None
     if scope == "away":
-        return comparavel_em_90(_somente_no_mando(last10_away, team_id, "away"), family), None
+        return comparavel_em_90(
+            _somente_no_mando(last10_away, team_id, "away")
+            + _outro_mando(last10_away, team_id, "away", peso_outro_mando), family), None
     # total e btts: o mandante nos jogos EM CASA dele, o visitante nos de FORA.
     # Sem os ids o filtro nao acontece (mesma regra de _somente_no_mando) e o
     # pool volta ao comportamento antigo, em vez de sair vazio.
     return comparavel_em_90(
         _somente_no_mando(last10_home, home_team_id, "home")
-        + _somente_no_mando(last10_away, away_team_id, "away"), family), None
+        + _somente_no_mando(last10_away, away_team_id, "away")
+        + _outro_mando(last10_home, home_team_id, "home", peso_outro_mando)
+        + _outro_mando(last10_away, away_team_id, "away", peso_outro_mando), family), None
 
 
 def _build_market_hit_fn(family: str, scope: str, value: str, line_str: str,
@@ -966,7 +1015,8 @@ def market_taxa(family: str, scope: str, value: str, line_str: str,
     abaixo (outcome_taxa, handicap_taxa, ...), despachadas pelo
     orchestrator via classify_market()."""
     pool, _ = pool_and_field(family, scope, last10_home, last10_away, team_id,
-                             home_team_id, away_team_id)
+                             home_team_id, away_team_id,
+                             peso_outro_mando=config.peso_outro_mando)
     if not pool:
         return None
 
@@ -974,7 +1024,14 @@ def market_taxa(family: str, scope: str, value: str, line_str: str,
     if hit_fn is None:
         return None
 
-    return weighted_rate(pool, hit_fn, reference_date=reference_date, config=config)
+    taxa = weighted_rate(pool, hit_fn, reference_date=reference_date, config=config)
+    taxa["amostra_mando_min_lado"] = jogos_no_mando_por_lado(
+        family, scope, last10_home, last10_away,
+        home_team_id if scope != "away" else None,
+        away_team_id if scope != "home" else None) if scope in ("home", "away") else \
+        jogos_no_mando_por_lado(family, scope, last10_home, last10_away,
+                                home_team_id, away_team_id)
+    return taxa
 
 
 _MIN_MATCHES_PER_HALF_STABILITY = 2
@@ -1580,6 +1637,56 @@ def scored_conceded_from_team_stats(team_stats: dict | None, family: str):
         return None, None, 0
 
 
+#: Familia -> (coluna de volume, chave da conversao em league_baseline, peso da
+#: causa no lambda). Medido em 27/09 (scripts/medir_fontes_de_taxa.py): gols
+#: pelos chutes no alvo sozinho foi o melhor (Brier 0.2441 contra 0.2522 do
+#: contador); escanteios, meio chute meio contador (0.2522).
+_CAUSA = {
+    "goals":   ("shots_on", "conv_gols_por_chute_no_alvo", 1.0),
+    "corners": ("total_shots", "conv_escanteios_por_chute", 0.5),
+}
+
+#: Jogos minimos no mando de cada lado pra media de volume valer.
+_MIN_JOGOS_CAUSA = 3
+
+
+def lambda_por_causa(last10_home: list, last10_away: list, family: str, scope: str,
+                     home_team_id=None, away_team_id=None,
+                     league_baseline: dict | None = None) -> float | None:
+    """Gols (ou escanteios) esperados a partir do VOLUME de finalizacao.
+
+    Gol e' evento raro: um time faz 0 num jogo e 3 no outro com a mesma
+    atuacao. Chute no alvo acontece 4 a 6 vezes por jogo e mede a chance
+    criada, que e' o que se repete. A conta e' a mesma do contador (feitos do
+    mandante em casa x cedidos do visitante fora, e vice-versa), so' que no
+    volume, convertido pela taxa da liga. None sem conversao ou sem jogo."""
+    causa = _CAUSA.get(family)
+    if not causa or not league_baseline or home_team_id is None or away_team_id is None:
+        return None
+    campo, chave_conv, _ = causa
+    conv = league_baseline.get(chave_conv)
+    if not conv:
+        return None
+    h_casa = _somente_no_mando(last10_home, home_team_id, "home")
+    a_fora = _somente_no_mando(last10_away, away_team_id, "away")
+    if len(h_casa) < _MIN_JOGOS_CAUSA or len(a_fora) < _MIN_JOGOS_CAUSA:
+        return None
+
+    def media(jogos, lado):
+        vals = [m.get(f"{lado}_{campo}") for m in jogos]
+        vals = [float(v) for v in vals if v is not None]
+        return sum(vals) / len(vals) if vals else None
+
+    feitos_casa, cedidos_casa = media(h_casa, "home"), media(h_casa, "away")
+    feitos_fora, cedidos_fora = media(a_fora, "away"), media(a_fora, "home")
+    if None in (feitos_casa, cedidos_casa, feitos_fora, cedidos_fora):
+        return None
+    lado_casa = (feitos_casa + cedidos_fora) / 2
+    lado_fora = (feitos_fora + cedidos_casa) / 2
+    volume = lado_casa if scope == "home" else lado_fora if scope == "away" else lado_casa + lado_fora
+    return round(float(conv) * volume, 3)
+
+
 def expected_value_convergence(last10_home: list, last10_away: list, family: str, scope: str,
                                 home_team_id: int | None = None, away_team_id: int | None = None,
                                 team_stats_home: dict | None = None,
@@ -1660,10 +1767,20 @@ def expected_value_convergence(last10_home: list, last10_away: list, family: str
     base = max(abs(estimate_feitos), abs(estimate_cedidos), 0.01)
     diff_pct = abs(estimate_feitos - estimate_cedidos) / base
 
+    # CAUSA NO LAMBDA (2026-09-27): ver lambda_por_causa e _CAUSA. Sem
+    # conversao da liga ou sem volume, o lambda e' so' o contador, como antes.
+    esperado = (estimate_feitos + estimate_cedidos) / 2
+    causa = lambda_por_causa(last10_home, last10_away, family, scope,
+                             home_team_id, away_team_id, league_baseline)
+    if causa is not None:
+        peso = _CAUSA[family][2]
+        esperado = peso * causa + (1 - peso) * esperado
+
     return {
         "estimate_feitos":   round(estimate_feitos, 2),
         "estimate_cedidos":  round(estimate_cedidos, 2),
-        "expected_value":    round((estimate_feitos + estimate_cedidos) / 2, 2),
+        "expected_value":    round(esperado, 2),
+        **({"lambda_por_causa": causa} if causa is not None else {}),
         "converged":         diff_pct <= 0.15,
         "diff_pct":          round(diff_pct, 3),
         "source":            source,

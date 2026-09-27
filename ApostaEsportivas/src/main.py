@@ -107,6 +107,12 @@ def run_migrations():
                     "shots_on_1h", "total_shots_1h")
           for lado in ("home", "away")),
         "ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS stats_1h_checked_at TIMESTAMP;",
+        # FINALIZACAO POR ZONA E xG (2026-09-27) -- ver CONTADORES_FINALIZACAO.
+        *(f"ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS {lado}_{c} {t};"
+          for c, t in (("shots_insidebox", "INTEGER"), ("shots_outsidebox", "INTEGER"),
+                       ("xg", "NUMERIC(5,2)"))
+          for lado in ("home", "away")),
+        "ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS finalizacao_checked_at TIMESTAMP;",
         # ESCALACAO POR TIME (2026-09-27) -- ver lineups_collector_service.
         *DDL_ESCALACAO,
         "ALTER TABLE picks_vip   ADD COLUMN IF NOT EXISTS market_id INTEGER;",

@@ -91,6 +91,26 @@ class PickEngineConfig:
     # proposito -- sao o mesmo conceito ("daqui pra cima a amostra estima"), e
     # escrever 8 duas vezes e' como o desacordo de model_fit nasceu.
     min_amostra: int = AMOSTRA_RICA
+    # FONTES DA TAXA (2026-09-27), medidas em ~1.700 partidas de PROD numa
+    # caminhada pra frente (scripts/medir_fontes_de_taxa.py), pedido do usuario.
+    #
+    # peso_outro_mando: o jogo do OUTRO mando entra na taxa com este peso. So'
+    # o mando era o pior dos metodos nas tres familias (Brier gols 0.2622 ->
+    # 0.2510 com 0.5; escanteios 0.2654 -> 0.2580; cartoes 0.2445 -> 0.2372),
+    # e no mercado de um time tambem (gols 0.2650 -> 0.2491). O "so' mando" de
+    # 08/08 nasceu de mistura SEM peso lendo a coluna do adversario, ja'
+    # corrigida por resolve_side. 0 volta ao comportamento anterior.
+    peso_outro_mando: float = 0.5
+    # Minimo de jogos NO MANDO de cada lado (o mandante em casa, o visitante
+    # fora). O piso de 8 soma os dois e deixava passar 7+1; com algum lado
+    # abaixo de 5 o Brier piora (gols 0.2520 -> 0.2672).
+    min_jogos_mando_por_lado: int = 5
+    # Peso do MODELO POR CAUSA (lambda da familia na Binomial Negativa: gols
+    # pelos chutes no alvo, escanteios meio chute meio contador, cartoes pelo
+    # contador) dentro da probabilidade, antes do encolhimento pro mercado.
+    # Metade-metade ficou entre os melhores nas tres familias (gols 0.2448,
+    # escanteios 0.2533, cartoes 0.2334 -- o melhor). 0 desliga.
+    peso_modelo_na_taxa: float = 0.5
     min_confidence: float = 0.55
     min_ev: float = 0.0  # EV deve ser estritamente positivo para aprovar a aposta
     # Mercado com 1 so bookmaker nao tem consenso pra checar contra erro de

@@ -7107,6 +7107,124 @@ def _leitura_da_perna(conn, fixture_id, market, line, market_type, nomes) -> dic
         cur.close()
 
 
+class MudancaBody(BaseModel):
+    dia: str
+    titulo: str
+    descricao: str | None = None
+    produtos: list[str] | None = None
+
+
+#: Dias de cada lado da mudanca na comparacao antes x depois.
+_JANELA_MUDANCA_PADRAO = 14
+
+
+def _resumo_janela(linhas: list, inicio, fim) -> dict | None:
+    """Apostas, acerto e lucro das linhas [inicio, fim). A regra de acerto e' a
+    do site (greens + meio green, sem push no denominador)."""
+    sel = [l for l in linhas if inicio <= l["match_date"] < fim]
+    decididas = [l for l in sel if l["result"] in ("GREEN", "RED", "HALF-WIN", "HALF-LOSS")]
+    if not sel:
+        return None
+    acertos = sum(1 if l["result"] == "GREEN" else 0.5 if l["result"] == "HALF-WIN" else 0
+                  for l in decididas)
+    lucro = sum(float(l["profit"] or 0) for l in sel)
+    return {"apostas": len(sel),
+            "acerto": round(acertos / len(decididas), 4) if decididas else None,
+            "lucro": round(lucro, 2),
+            "lucro_por_aposta": round(lucro / len(sel), 3)}
+
+
+@router.get("/motor/mudancas")
+def motor_mudancas(janela: int = _JANELA_MUDANCA_PADRAO,
+                   current_user: dict = Depends(require_admin)):
+    """Cada mudanca do motor com o resultado de cada produto ANTES e DEPOIS.
+
+    Pedido do usuario em 27/09/2026: registrar toda mudanca e saber como ficou
+    depois dela. A comparacao e' de `janela` dias de cada lado (o depois vai
+    ate' hoje se a mudanca e' recente). Mudancas no mesmo dia dividem a mesma
+    janela: o numero mede o dia, nao o commit -- e' a mesma limitacao do
+    script medir_mudancas_por_fase.py, e fica dita na tela.
+    """
+    from datetime import date, timedelta
+    janela = max(3, min(janela, 60))
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        try:
+            cur.execute("SELECT id, dia, titulo, descricao, produtos FROM motor_mudancas "
+                        "ORDER BY dia DESC, id DESC")
+            mudancas = [dict(r) for r in cur.fetchall()]
+        except Exception as e:
+            conn.rollback()
+            if _sem_tabela(e):
+                return {"mudancas": [], "janela": janela}
+            raise
+        if not mudancas:
+            return {"mudancas": [], "janela": janela}
+        inicio_geral = min(m["dia"] for m in mudancas) - timedelta(days=janela)
+        por_tabela: dict = {}
+        for tabela in _TABELAS_COM_RESULTADO:
+            try:
+                cur.execute(f"""SELECT match_date, result, profit FROM {tabela}
+                                 WHERE match_date >= %s AND result IS NOT NULL""", (inicio_geral,))
+                por_tabela[tabela] = [dict(r) for r in cur.fetchall()]
+            except Exception:
+                conn.rollback()
+                por_tabela[tabela] = []
+        hoje = date.today()
+        saida = []
+        for m in mudancas:
+            alvo = m["produtos"] or list(_TABELAS_COM_RESULTADO)
+            produtos = []
+            for tabela in alvo:
+                if tabela not in _TABELAS_COM_RESULTADO:
+                    continue
+                linhas = por_tabela.get(tabela, [])
+                antes = _resumo_janela(linhas, m["dia"] - timedelta(days=janela), m["dia"])
+                depois = _resumo_janela(linhas, m["dia"], min(m["dia"] + timedelta(days=janela),
+                                                              hoje + timedelta(days=1)))
+                if antes or depois:
+                    produtos.append({"tabela": tabela,
+                                     "produto": _TABELAS_COM_RESULTADO[tabela][0],
+                                     "antes": antes, "depois": depois})
+            saida.append({**m, "dia": m["dia"].isoformat(),
+                          "dias_depois": (min(hoje, m["dia"] + timedelta(days=janela)) - m["dia"]).days,
+                          "produtos_resultado": produtos})
+        return {"mudancas": saida, "janela": janela}
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.post("/motor/mudancas")
+def registrar_mudanca(body: MudancaBody, current_user: dict = Depends(require_admin)):
+    """Registra uma mudanca do motor. Toda mudanca que sobe pra producao entra
+    aqui, pra o antes x depois existir desde o primeiro dia."""
+    from datetime import date
+    try:
+        dia = date.fromisoformat(body.dia[:10])
+    except ValueError:
+        raise HTTPException(400, "Data inválida. Use o formato AAAA-MM-DD.")
+    titulo = (body.titulo or "").strip()
+    if not titulo:
+        raise HTTPException(400, "Escreva o que mudou.")
+    produtos = [p for p in (body.produtos or []) if p in _TABELAS_COM_RESULTADO] or None
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""INSERT INTO motor_mudancas (dia, titulo, descricao, produtos)
+                       VALUES (%s, %s, %s, %s)
+                       ON CONFLICT (dia, titulo) DO UPDATE
+                          SET descricao = EXCLUDED.descricao, produtos = EXCLUDED.produtos
+                       RETURNING id""", (dia, titulo[:300], (body.descricao or None), produtos))
+        novo = cur.fetchone()["id"]
+        conn.commit()
+        return {"id": novo}
+    finally:
+        cur.close()
+        conn.close()
+
+
 #: Texto de acao por tipo de falha, quando o motor nao esta' no path. A fonte e'
 #: services/pick_engine/ai_review.ACAO_POR_FALHA; isto so' evita o painel sem
 #: frase nenhuma num ambiente sem o motor.

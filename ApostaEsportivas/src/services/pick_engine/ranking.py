@@ -52,6 +52,15 @@ _CORRELATION_GROUP_OVERRIDES = {
 }
 
 
+def _mando_suficiente(c: dict, config: PickEngineConfig) -> bool:
+    """Minimo de jogos NO MANDO por lado (config.min_jogos_mando_por_lado).
+    Candidato sem o campo (familia sem taxa de pool, chamador antigo) passa:
+    a regra so' existe onde ha' como medir."""
+    minimo = getattr(config, "min_jogos_mando_por_lado", 0) or 0
+    n = c.get("amostra_mando_min_lado")
+    return n is None or n >= minimo
+
+
 def correlation_group(market_type: str) -> str:
     """Familia raiz de um market_type, pra agrupar mercados correlacionados
     (mesma fonte de dado bruto) mesmo quando o market_type e' tecnicamente
@@ -416,6 +425,7 @@ def rank_all_candidates(candidates: list, config: PickEngineConfig = DEFAULT_CON
                 and taxa_aprov >= config.min_taxa
                 and (config.max_taxa is None or taxa_aprov <= config.max_taxa)
                 and c["amostra"] >= config.min_amostra
+                and _mando_suficiente(c, config)
                 and c["confidence"] >= config.min_confidence
                 and ev_aprov > config.min_ev
                 and c["odd"] >= config.min_odd
@@ -451,6 +461,9 @@ def rank_all_candidates_debug(candidates: list, config: PickEngineConfig = DEFAU
                            f"(Over da familia mede negativo em todo recorte)")
         if c["amostra"] < config.min_amostra:
             reasons.append(f"amostra insuficiente ({c['amostra']} < {config.min_amostra})")
+        if not _mando_suficiente(c, config):
+            reasons.append(f"menos de {config.min_jogos_mando_por_lado} jogos no mando de algum "
+                           f"lado ({c.get('amostra_mando_min_lado')})")
         if c["confidence"] < config.min_confidence:
             reasons.append(f"confidence abaixo do minimo ({c['confidence']*100:.1f}% < {config.min_confidence*100:.0f}%)")
         if ev_aprov <= config.min_ev:

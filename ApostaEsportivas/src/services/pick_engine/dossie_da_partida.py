@@ -60,6 +60,10 @@ _METRICAS = (
     ("chutes",          "home_total_shots",     "away_total_shots"),
     ("chutes_no_alvo",  "home_shots_on",        "away_shots_on"),
     ("chutes_no_alvo_1t", "home_shots_on_1h",   "away_shots_on_1h"),
+    # Chance criada: mais estavel que o gol, e o que a IA precisa pra
+    # separar time que marca pouco de time que cria pouco.
+    ("chutes_dentro_da_area", "home_shots_insidebox", "away_shots_insidebox"),
+    ("xg",              "home_xg",              "away_xg"),
     ("faltas",          "home_fouls",           "away_fouls"),
     ("impedimentos",    "home_offsides",        "away_offsides"),
 )
