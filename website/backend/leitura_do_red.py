@@ -29,7 +29,12 @@ ROTULOS = {
     "por_pouco": "Perdeu por pouco",
     "leitura_errada": "Leitura errada do jogo",
     "sem_folha": "Sem estatística do jogo",
+    "saiu_cedo": "Jogador saiu cedo",
+    "veio_do_banco": "Jogador começou no banco",
 }
+
+#: Abaixo disto um titular "saiu cedo": a linha de prop assume jogo inteiro.
+MINUTOS_SAIU_CEDO = 60
 
 #: Titulares trocados em relacao ao jogo anterior pra contar como time poupado.
 TROCAS_POUPADO = 5
@@ -86,4 +91,59 @@ def ler(market: str, line: str, market_type: str | None, ms: dict | None,
 
     if categoria is None:
         categoria = "por_pouco" if (margem is not None and margem <= 1) else "leitura_errada"
+    venceu = None
+    if valor is not None and linha is not None and op in ("over", "under"):
+        venceu = float(valor) > linha if op == "over" else float(valor) < linha
+    return {"categoria": categoria, "rotulo": ROTULOS[categoria], "fatos": fatos,
+            "venceu": venceu}
+
+
+def ler_bilhete(pernas: list) -> dict:
+    """Leitura de um bilhete a partir da leitura de cada perna.
+
+    `pernas`: [{"rotulo": "Flamengo x Vasco, Gols Under 2.5", "leitura": {...},
+    "result": "RED" | None}]. Quem derrubou o bilhete e' a perna com result RED
+    ou, sem result por perna (alavancagem), a que a folha diz que perdeu."""
+    perdidas = [p for p in pernas
+                if p.get("result") == "RED"
+                or (p.get("result") is None and (p.get("leitura") or {}).get("venceu") is False)]
+    if not perdidas:
+        return {"categoria": "sem_folha", "rotulo": ROTULOS["sem_folha"], "fatos": []}
+    primeira = perdidas[0]["leitura"] or {}
+    fatos = [f"{len(perdidas)} de {len(pernas)} pernas perderam."]
+    for p in perdidas:
+        lp = p.get("leitura") or {}
+        fatos.append(f"{p['rotulo']}: {lp.get('rotulo', 'sem leitura')}."
+                     + (f" {' '.join(lp['fatos'])}" if lp.get("fatos") else ""))
+    categoria = primeira.get("categoria") or "sem_folha"
+    return {"categoria": categoria, "rotulo": ROTULOS.get(categoria, ROTULOS["sem_folha"]),
+            "fatos": fatos}
+
+
+def ler_jogador(linha_str: str | None, valor, minutos, reserva, nome: str | None) -> dict:
+    """Leitura de um RED de prop de jogador: quanto ele fez e quanto jogou.
+
+    Minuto e' o que mais explica RED de jogador: "2 ou mais chutes no alvo"
+    pede o jogo inteiro, e quem sai aos 55' joga meia linha."""
+    parsed = settlement.parse_line(linha_str or "")
+    linha = float(parsed["value"]) if parsed["value"] is not None else None
+    quem = nome or "O jogador"
+    fatos, categoria = [], None
+    if minutos is not None:
+        if reserva:
+            fatos.append(f"{quem} começou no banco e jogou {int(minutos)} minutos.")
+            categoria = "veio_do_banco"
+        elif minutos < MINUTOS_SAIU_CEDO:
+            fatos.append(f"{quem} saiu aos {int(minutos)} minutos.")
+            categoria = "saiu_cedo"
+    margem = None
+    if valor is not None and linha is not None:
+        margem = abs(float(valor) - linha)
+        fatos.insert(0, f"Terminou em {_num(valor)} contra a linha {_num(linha)}, "
+                        f"diferença de {_num(margem)}.")
+    if categoria is None:
+        if valor is None:
+            categoria = "sem_folha"
+        else:
+            categoria = "por_pouco" if (margem is not None and margem <= 1) else "leitura_errada"
     return {"categoria": categoria, "rotulo": ROTULOS[categoria], "fatos": fatos}

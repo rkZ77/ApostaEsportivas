@@ -58,3 +58,39 @@ def test_mercado_do_1o_tempo_le_o_1o_tempo():
 def test_sem_folha_nao_afirma_nada():
     r = leitura_do_red.ler("Gols Mais/Menos", "Under 2.5", None, None, _stat_for_market)
     assert r == {"categoria": "sem_folha", "rotulo": "Sem estatística do jogo", "fatos": []}
+
+
+def test_bilhete_aponta_a_perna_que_derrubou():
+    boa = {"rotulo": "A x B, Gols Over 0.5", "result": "GREEN",
+           "leitura": ler("Gols Mais/Menos", "Over 0.5")}
+    ruim = {"rotulo": "C x D, Gols Under 2.5", "result": "RED",
+            "leitura": ler("Gols Mais/Menos", "Under 2.5")}
+    r = leitura_do_red.ler_bilhete([boa, ruim])
+    assert r["categoria"] == "estourou_cedo"
+    assert r["fatos"][0] == "1 de 2 pernas perderam."
+    assert r["fatos"][1].startswith("C x D, Gols Under 2.5: Estourou já no 1º tempo.")
+
+
+def test_alavancagem_sem_result_por_perna_usa_a_folha():
+    """4 gols no jogo: o Over 1.5 venceu e o Under 2.5 perdeu."""
+    over = {"rotulo": "Over", "result": None, "leitura": ler("Gols Mais/Menos", "Over 1.5")}
+    under = {"rotulo": "Under", "result": None, "leitura": ler("Gols Mais/Menos", "Under 2.5")}
+    r = leitura_do_red.ler_bilhete([over, under])
+    assert r["fatos"][0] == "1 de 2 pernas perderam."
+    assert "Under:" in r["fatos"][1]
+
+
+def test_jogador_que_saiu_cedo():
+    r = leitura_do_red.ler_jogador("Over 1.5", 1, 52, False, "Pedro")
+    assert r["categoria"] == "saiu_cedo"
+    assert "Pedro saiu aos 52 minutos." in r["fatos"]
+
+
+def test_jogador_que_veio_do_banco():
+    r = leitura_do_red.ler_jogador("Over 0.5", 0, 20, True, "Pedro")
+    assert r["categoria"] == "veio_do_banco"
+
+
+def test_jogador_que_jogou_tudo_e_perdeu_por_um():
+    r = leitura_do_red.ler_jogador("Over 2.5", 2, 90, False, "Pedro")
+    assert r["categoria"] == "por_pouco"

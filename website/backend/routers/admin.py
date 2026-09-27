@@ -6986,24 +6986,100 @@ _TABELAS_COM_RESULTADO = {
 
 
 #: Produtos de UMA perna por linha, com fixture_id/market/line na propria
-#: tabela. Bilhete (multipla, bingo, alavancagem) tem as pernas em JSON, e o
-#: pick de jogador liquida por outra folha -- ficam sem leitura por ora.
+#: tabela. Os outros tem leitura propria em _leitura_do_red: bilhete (pernas
+#: em JSON ou em colunas _1.._3), Pick Boost (duas pernas fixas) e Pick
+#: Jogador (minutos jogados e valor da folha do jogador).
 _TABELAS_DE_PERNA_UNICA = {"picks_vip", "picks_free", "picks_faltas",
                            "picks_goleiros", "picks_live"}
 
 
 def _leitura_do_red(conn, tabela: str, pick_id: int) -> dict | None:
-    """Leitura do RED pelo que aconteceu no jogo. Nunca derruba a lista:
-    qualquer falha aqui vira `None` e a linha segue sem leitura."""
+    """Leitura do RED pelo que aconteceu no jogo, em todo produto. Nunca
+    derruba a lista: qualquer falha aqui vira `None` e a linha segue sem
+    leitura."""
     import leitura_do_red
-    from routers.live import _stat_for_market
     cur = conn.cursor()
     try:
         cur.execute(f"SELECT * FROM {tabela} WHERE id = %s", (pick_id,))
         pick = cur.fetchone()
-        if not pick or not pick.get("fixture_id"):
+        if not pick:
             return None
-        cur.execute("SELECT * FROM match_statistics WHERE fixture_id = %s", (pick["fixture_id"],))
+        if tabela in _TABELAS_DE_PERNA_UNICA:
+            if not pick.get("fixture_id"):
+                return None
+            nomes = (pick.get("home_team_name") or pick.get("home_team"),
+                     pick.get("away_team_name") or pick.get("away_team"))
+            leitura = _leitura_da_perna(conn, pick["fixture_id"], pick.get("market") or "",
+                                        pick.get("line") or "", pick.get("market_type"), nomes)
+            return {**leitura, "mercado": pick.get("market"), "linha": pick.get("line")}
+        if tabela in ("picks_multiplas", "picks_bingo"):
+            pernas = pick.get("games") or []
+            if isinstance(pernas, str):
+                pernas = json.loads(pernas)
+            return _leitura_de_bilhete(conn, [
+                {"fixture_id": p.get("fixture_id"), "market": p.get("market") or "",
+                 "line": p.get("line") or "", "market_type": p.get("market_type"),
+                 "result": p.get("result"),
+                 "nomes": (p.get("home_team") or p.get("home_team_name"),
+                           p.get("away_team") or p.get("away_team_name"))}
+                for p in pernas if isinstance(p, dict)])
+        if tabela == "picks_alavancagem":
+            return _leitura_de_bilhete(conn, [
+                {"fixture_id": pick.get(f"fixture_id_{i}"), "market": pick.get(f"market_{i}") or "",
+                 "line": pick.get(f"line_{i}") or "", "market_type": pick.get(f"market_type_{i}"),
+                 "result": None,
+                 "nomes": (pick.get(f"home_team_{i}"), pick.get(f"away_team_{i}"))}
+                for i in (1, 2, 3) if pick.get(f"fixture_id_{i}")])
+        if tabela == "picks_boost":
+            # Duas pernas fixas na mesma partida: Over 1.5 no jogo inteiro e
+            # Under 2.5 no 1o tempo. A leitura diz qual das duas derrubou.
+            nomes = (pick.get("home_team"), pick.get("away_team"))
+            return _leitura_de_bilhete(conn, [
+                {"fixture_id": pick.get("fixture_id"), "market": mercado, "line": linha,
+                 "market_type": tipo, "result": None, "nomes": nomes}
+                for mercado, linha, tipo in (("Gols Mais/Menos", "Over 1.5", "goals"),
+                                             ("Gols Mais/Menos - 1º Tempo", "Under 2.5", "goals_1h"))])
+        if tabela == "picks_player_stats":
+            cur.execute("""SELECT minutes, is_substitute FROM player_match_stats
+                            WHERE fixture_id = %s AND player_id = %s LIMIT 1""",
+                        (pick.get("fixture_id"), pick.get("player_id")))
+            folha = cur.fetchone() or {}
+            leitura = leitura_do_red.ler_jogador(
+                pick.get("line"), pick.get("settled_value"), folha.get("minutes"),
+                folha.get("is_substitute"), pick.get("player_name"))
+            return {**leitura, "mercado": f"{pick.get('player_name') or ''}, {pick.get('market') or ''}".strip(", "),
+                    "linha": pick.get("line")}
+        return None
+    except Exception as e:
+        conn.rollback()
+        logging.getLogger(__name__).info("[ADMIN/MOTOR] leitura do red %s #%s: %s", tabela, pick_id, e)
+        return None
+    finally:
+        cur.close()
+
+
+def _leitura_de_bilhete(conn, pernas: list) -> dict:
+    import leitura_do_red
+    lidas = []
+    for p in pernas:
+        casa, fora = p["nomes"]
+        rotulo = f"{casa} x {fora}, {p['market']} {p['line']}".strip() if casa and fora \
+            else f"{p['market']} {p['line']}".strip()
+        leitura = (_leitura_da_perna(conn, p["fixture_id"], p["market"], p["line"],
+                                     p["market_type"], (casa, fora))
+                   if p.get("fixture_id") else None)
+        lidas.append({"rotulo": rotulo, "leitura": leitura, "result": p.get("result")})
+    return {**leitura_do_red.ler_bilhete(lidas), "mercado": f"Bilhete de {len(pernas)} pernas",
+            "linha": None}
+
+
+def _leitura_da_perna(conn, fixture_id, market, line, market_type, nomes) -> dict:
+    """Leitura de UMA perna: folha da partida + rodizio de titulares."""
+    import leitura_do_red
+    from routers.live import _stat_for_market
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT * FROM match_statistics WHERE fixture_id = %s", (fixture_id,))
         ms = cur.fetchone()
         trocas: dict = {}
         if ms:
@@ -7020,20 +7096,13 @@ def _leitura_do_red(conn, tabela: str, pick_id: int) -> dict | None:
                       ) b ON TRUE
                      WHERE a.fixture_id = %s
                 """, (pick["fixture_id"],))
-                nomes = {ms.get("home_team_id"): pick.get("home_team_name") or pick.get("home_team") or "Mandante",
-                         ms.get("away_team_id"): pick.get("away_team_name") or pick.get("away_team") or "Visitante"}
-                trocas = {nomes.get(t["team_id"], "Time"): t["trocas"] for t in cur.fetchall()}
+                por_id = {ms.get("home_team_id"): nomes[0] or "Mandante",
+                          ms.get("away_team_id"): nomes[1] or "Visitante"}
+                trocas = {por_id.get(t["team_id"], "Time"): t["trocas"] for t in cur.fetchall()}
             except Exception:
                 conn.rollback()
                 trocas = {}
-        leitura = leitura_do_red.ler(pick.get("market") or "", pick.get("line") or "",
-                                     pick.get("market_type"), ms, _stat_for_market, trocas)
-        # O candidato gravado na decisao nao tem o nome do mercado; o pick tem.
-        return {**leitura, "mercado": pick.get("market"), "linha": pick.get("line")}
-    except Exception as e:
-        conn.rollback()
-        logging.getLogger(__name__).info("[ADMIN/MOTOR] leitura do red %s #%s: %s", tabela, pick_id, e)
-        return None
+        return leitura_do_red.ler(market, line, market_type, ms, _stat_for_market, trocas)
     finally:
         cur.close()
 
@@ -7188,8 +7257,7 @@ def motor_reds(
                 # combinação, não jogo a jogo. Por isso o campo se chama
                 # `melhor_do_jogo` e não "o que você apostou".
                 melhor = next((c for c in candidatos if c.get("is_best_pick")), None)
-                leitura = (_leitura_do_red(conn, nome, r["id"])
-                           if nome in _TABELAS_DE_PERNA_UNICA else None)
+                leitura = _leitura_do_red(conn, nome, r["id"])
                 linhas.append({
                     "tabela": nome,
                     "produto": rotulo,

@@ -664,6 +664,77 @@ TOTAL_DA_FAMILIA = {
 DIAS_DE_HISTORICO = 400
 
 
+#: (familia, SQL do 1o tempo, SQL do jogo inteiro) -- as duas pontas somando
+#: os dois lados. Cartao em pontos (amarelo 1, vermelho 2), a unidade do
+#: mercado. Falta fica de fora: a API nao publica falta por tempo.
+_PARTES_DO_1T = (
+    ("goals",   "home_goals_ht + away_goals_ht",
+                "COALESCE(home_goals_90, home_goals) + COALESCE(away_goals_90, away_goals)"),
+    ("corners", "home_corners_1h + away_corners_1h", "total_corners"),
+    ("cards",   "home_yellow_cards_1h + away_yellow_cards_1h"
+                " + 2 * (home_red_cards_1h + away_red_cards_1h)",
+                "total_yellow_cards + 2 * total_red_cards"),
+    ("shots_on_target", "home_shots_on_1h + away_shots_on_1h", "home_shots_on + away_shots_on"),
+    ("shots",   "home_total_shots_1h + away_total_shots_1h", "home_total_shots + away_total_shots"),
+)
+
+#: Jogos minimos com a folha do 1o tempo pra a fracao valer. Abaixo disto o
+#: motor segue com ritmo uniforme, que e' o comportamento de antes.
+MIN_JOGOS_FRACAO_1T = 8
+
+#: Encolhimento da fracao pra 0.5 (ritmo uniforme), em jogos de peso.
+FORCA_FRACAO_1T = 10
+
+
+def fracoes_do_primeiro_tempo(cur, estado: dict) -> dict:
+    """Fracao dos eventos de cada familia que acontece no 1o TEMPO, nos jogos
+    recentes dos dois times. E' o que deixa o motor ao vivo distribuir o que
+    falta pelo ritmo real de cada tempo, em vez de tratar o jogo como uniforme.
+
+    So' jogos FT (prorrogacao estica o 2o tempo), so' onde a folha do 1o tempo
+    existe, encolhida pra 0.5 por FORCA_FRACAO_1T jogos e limitada a
+    [0.30, 0.70]. Familia sem amostra fica fora do dicionario -- ai' o motor
+    continua exatamente como era. UMA consulta, zero requisicao.
+    """
+    home_id, away_id = estado.get("home_team_id"), estado.get("away_team_id")
+    if not (home_id and away_id):
+        return {}
+    colunas = ", ".join(
+        f"SUM(CASE WHEN ({p1}) IS NOT NULL AND ({pt}) IS NOT NULL THEN ({p1}) END), "
+        f"SUM(CASE WHEN ({p1}) IS NOT NULL AND ({pt}) IS NOT NULL THEN ({pt}) END), "
+        f"COUNT(*) FILTER (WHERE ({p1}) IS NOT NULL AND ({pt}) IS NOT NULL)"
+        for _, p1, pt in _PARTES_DO_1T)
+    try:
+        cur.execute(f"""
+            SELECT {colunas}
+              FROM (
+                SELECT * FROM match_statistics
+                 WHERE (home_team_id IN (%s, %s) OR away_team_id IN (%s, %s))
+                   AND status = 'FT'
+                   AND match_date >= NOW() - INTERVAL '{DIAS_DE_HISTORICO} days'
+                 ORDER BY match_date DESC
+                 LIMIT 60
+              ) recentes
+        """, (home_id, away_id, home_id, away_id))
+        linha = cur.fetchone()
+    except Exception as e:
+        print(f"[LIVE] fracao do 1o tempo indisponivel: {e}")
+        cur.connection.rollback()
+        return {}
+    saida: dict = {}
+    for i, (familia, _, _) in enumerate(_PARTES_DO_1T):
+        soma_1t, soma_total, n = linha[3 * i], linha[3 * i + 1], linha[3 * i + 2]
+        if not n or n < MIN_JOGOS_FRACAO_1T or not soma_total:
+            continue
+        media_total = float(soma_total) / n
+        bruta = float(soma_1t) / float(soma_total)
+        # Encolhe em unidades de JOGO: cada jogo vale a sua media de eventos.
+        encolhida = (bruta * n + 0.5 * FORCA_FRACAO_1T) / (n + FORCA_FRACAO_1T)
+        if media_total > 0:
+            saida[familia] = round(max(0.30, min(0.70, encolhida)), 3)
+    return saida
+
+
 def serie_historica(cur, estado: dict, config: LiveEngineConfig) -> dict | None:
     """As partidas recentes dos dois times, separadas por MANDO.
 
@@ -1845,10 +1916,15 @@ def _processar_partida(indice: int, bruto: dict, cur, conn, feed: LiveFeed,
     if len(analisadas) < len(familias_iniciais):
         print(f"Analisando so' {', '.join(analisadas)}")
     pre_jogo = contexto_pre_jogo(cur, estado)
+    fracoes_1t = fracoes_do_primeiro_tempo(cur, estado)
+    if fracoes_1t:
+        print("Ritmo por tempo (fracao no 1o tempo): "
+              + ", ".join(f"{f} {v:.0%}" for f, v in fracoes_1t.items()))
     analise = orchestrator.analisar(estado, observacoes, config, baselines, eventos, fresh,
                                     baseline_origens=origens,
                                     contexto_pre_jogo=pre_jogo,
-                                    historico=hist["detalhe"])
+                                    historico=hist["detalhe"],
+                                    fracoes_1t=fracoes_1t)
     _observar(cur, conn, estado)
 
     pressao = analise.get("pressao") or {}

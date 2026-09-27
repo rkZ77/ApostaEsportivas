@@ -183,9 +183,29 @@ def forca_do_prior(familia: str | None) -> float:
     return max(FORCA_MINIMA_DO_PRIOR, min(FORCA_MAXIMA_DO_PRIOR, beta))
 
 
+def _minutos_por_tempo(minuto: int, restantes: int, status: str = "") -> tuple:
+    """(minutos que faltam no 1o tempo, minutos que faltam no 2o tempo)."""
+    if status == "HT" or minuto >= 45:
+        return 0, restantes
+    no_1t = 45 - minuto
+    return no_1t, max(0, restantes - no_1t)
+
+
+def parcela_ate(minuto: int, fracao_1t: float) -> float:
+    """Fracao do total da partida que se espera ter acontecido ate' `minuto`,
+    com o 1o tempo concentrando `fracao_1t` dos eventos."""
+    m = max(0, min(90, minuto))
+    if m <= 45:
+        return fracao_1t * m / 45
+    return fracao_1t + (1 - fracao_1t) * (m - 45) / 45
+
+
 def taxa_por_minuto(observado: int | None, minuto: int | None,
                     baseline_por_partida: float,
-                    familia: str | None = None) -> dict | None:
+                    familia: str | None = None,
+                    fracao_1t: float | None = None,
+                    restantes: int | None = None,
+                    status: str = "") -> dict | None:
     """Taxa estimada de eventos por minuto, encolhida contra o baseline.
 
     `familia` decide o quanto o proprio jogo pesa contra o historico, pela
@@ -207,6 +227,27 @@ def taxa_por_minuto(observado: int | None, minuto: int | None,
     beta = forca_do_prior(familia)
     peso = fracao_jogada / (fracao_jogada + beta)
     final = peso * taxa_observada + (1 - peso) * taxa_baseline
+
+    # RITMO POR TEMPO (2026-09-27). Sem `fracao_1t` o jogo e' tratado como
+    # uniforme -- 45 minutos valem metade da media em qualquer ponto. Com
+    # ela, o que se compara e' o observado contra o ESPERADO ATE AGORA (um time
+    # que faz 40% dos escanteios no 1o tempo nao esta' "acima do ritmo" com 5
+    # no intervalo e media 12), e o que falta e' distribuido pelo ritmo de cada
+    # tempo. Com fracao 0.5 a conta abaixo e' algebricamente a de cima: a
+    # generalizacao so' muda algo quando o historico diz que os tempos diferem.
+    periodo = None
+    if fracao_1t is not None and restantes and restantes > 0:
+        esperado = baseline_por_partida * parcela_ate(minuto, fracao_1t)
+        if esperado > 0:
+            intensidade_obs = observado / esperado
+            intensidade = peso * intensidade_obs + (1 - peso)
+            falta_1t, falta_2t = _minutos_por_tempo(minuto, restantes, status)
+            base_restante = baseline_por_partida * (
+                fracao_1t * falta_1t + (1 - fracao_1t) * falta_2t) / 45
+            final = intensidade * base_restante / restantes
+            periodo = {"fracao_1t": round(fracao_1t, 3),
+                       "intensidade_observada": round(intensidade_obs, 3),
+                       "minutos_restantes_1t": falta_1t, "minutos_restantes_2t": falta_2t}
     return {
         "taxa_observada_min": round(taxa_observada, 5),
         "taxa_baseline_min": round(taxa_baseline, 5),
@@ -214,6 +255,7 @@ def taxa_por_minuto(observado: int | None, minuto: int | None,
         "dispersao_phi": round(pm.dispersao(familia, "total"), 3),
         "forca_do_prior_jogos": round(beta, 3),
         "taxa_estimada_min": round(final, 5),
+        **({"ritmo_por_tempo": periodo} if periodo else {}),
     }
 
 
@@ -301,7 +343,8 @@ def ajuste_estado(familia: str, estado: dict, pressao: dict | None = None,
 def lambda_residual(familia: str, observado: int | None, minuto: int | None,
                     status: str, baseline_por_partida: float,
                     fator_ritmo: dict | None = None,
-                    ajuste: dict | None = None) -> dict | None:
+                    ajuste: dict | None = None,
+                    fracao_1t: float | None = None) -> dict | None:
     """O lambda do que ainda falta, com o rastro inteiro de como chegou nele.
 
     `fator_ritmo` vem de rhythm_model.fator_de_ritmo e `ajuste` de
@@ -311,7 +354,8 @@ def lambda_residual(familia: str, observado: int | None, minuto: int | None,
     restantes = minutos_restantes(minuto, status)
     if restantes is None or restantes <= 0:
         return None
-    taxa = taxa_por_minuto(observado, minuto, baseline_por_partida, familia)
+    taxa = taxa_por_minuto(observado, minuto, baseline_por_partida, familia,
+                           fracao_1t=fracao_1t, restantes=restantes, status=status)
     if taxa is None:
         return None
 
