@@ -390,6 +390,8 @@ _PIPELINE_SCRIPTS = {
     "coleta_medias":        "atualizar_jogos.py",
     # Folha do 1o tempo do historico (2026-09-27). Estagio "1t" do mesmo script.
     "coleta_folha_1t":      "atualizar_jogos.py",
+    # Escalacao por time do historico (2026-09-27). Estagio "escalacao".
+    "coleta_escalacoes":    "atualizar_jogos.py",
     "gerar_playerstats_todos": os.path.join("engine_pipelines", "player_stats_pipeline.py"),
     "perfis_de_liga":       "atualizar_ligas.py",
     # Fase de homologacao/validacao (compara motor vs IA em uma base DEV
@@ -453,6 +455,7 @@ _PIPELINE_ARGS["coleta_classificacao"] = ["3"]
 _PIPELINE_ARGS["coleta_folha"] = ["4"]
 _PIPELINE_ARGS["coleta_medias"] = ["5"]
 _PIPELINE_ARGS["coleta_folha_1t"] = ["1t"]
+_PIPELINE_ARGS["coleta_escalacoes"] = ["escalacao"]
 
 #: SEM argumento de metodo, e e' o que distingue este passo de
 #: `gerar_playerstats`: aquele roda os tres diarios, este roda os seis.
@@ -531,6 +534,7 @@ _PASSO_DO_COMANDO = {
     "classificacao":      "coleta_classificacao",
     "folha":              "coleta_folha",
     "folha1t":            "coleta_folha_1t",
+    "escalacoes":         "coleta_escalacoes",
     "medias":             "coleta_medias",
 }
 
@@ -655,6 +659,7 @@ _STEP_LABELS = {
     "coleta_classificacao":    "Atualizando a classificação",
     "coleta_folha":            "Coletando folha de estatística",
     "coleta_folha_1t":         "Coletando o 1º tempo das partidas antigas",
+    "coleta_escalacoes":       "Coletando escalações das partidas antigas",
     "coleta_medias":           "Recalculando médias dos times",
 }
 
@@ -1076,6 +1081,7 @@ _PASSO_LABEL_CURTO = {
     "coleta_classificacao":    "Classificação",
     "coleta_folha":            "Folha de Estatística",
     "coleta_folha_1t":         "Folha do 1º Tempo",
+    "coleta_escalacoes":       "Escalações",
     "coleta_medias":           "Médias dos Times",
 }
 
@@ -1104,7 +1110,7 @@ _PASSO_LABEL_CURTO = {
 _AVULSOS_FALLBACK = [
     "gerar_playerstats_todos", "historico_times", "gerar_live",
     "coleta_status", "coleta_times", "coleta_fixtures", "coleta_classificacao",
-    "coleta_folha", "coleta_folha_1t", "coleta_medias",
+    "coleta_folha", "coleta_folha_1t", "coleta_escalacoes", "coleta_medias",
     "perfis_de_liga",
 ]
 
@@ -6979,6 +6985,131 @@ _TABELAS_COM_RESULTADO = {
 }
 
 
+#: Produtos de UMA perna por linha, com fixture_id/market/line na propria
+#: tabela. Bilhete (multipla, bingo, alavancagem) tem as pernas em JSON, e o
+#: pick de jogador liquida por outra folha -- ficam sem leitura por ora.
+_TABELAS_DE_PERNA_UNICA = {"picks_vip", "picks_free", "picks_faltas",
+                           "picks_goleiros", "picks_live"}
+
+
+def _leitura_do_red(conn, tabela: str, pick_id: int) -> dict | None:
+    """Leitura do RED pelo que aconteceu no jogo. Nunca derruba a lista:
+    qualquer falha aqui vira `None` e a linha segue sem leitura."""
+    import leitura_do_red
+    from routers.live import _stat_for_market
+    cur = conn.cursor()
+    try:
+        cur.execute(f"SELECT * FROM {tabela} WHERE id = %s", (pick_id,))
+        pick = cur.fetchone()
+        if not pick or not pick.get("fixture_id"):
+            return None
+        cur.execute("SELECT * FROM match_statistics WHERE fixture_id = %s", (pick["fixture_id"],))
+        ms = cur.fetchone()
+        trocas: dict = {}
+        if ms:
+            try:
+                cur.execute("""
+                    SELECT a.team_id, CARDINALITY(ARRAY(
+                               SELECT UNNEST(a.titulares) EXCEPT SELECT UNNEST(b.titulares)
+                           )) AS trocas
+                      FROM team_lineups a
+                      JOIN LATERAL (
+                           SELECT titulares FROM team_lineups b
+                            WHERE b.team_id = a.team_id AND b.match_date < a.match_date
+                            ORDER BY b.match_date DESC LIMIT 1
+                      ) b ON TRUE
+                     WHERE a.fixture_id = %s
+                """, (pick["fixture_id"],))
+                nomes = {ms.get("home_team_id"): pick.get("home_team_name") or pick.get("home_team") or "Mandante",
+                         ms.get("away_team_id"): pick.get("away_team_name") or pick.get("away_team") or "Visitante"}
+                trocas = {nomes.get(t["team_id"], "Time"): t["trocas"] for t in cur.fetchall()}
+            except Exception:
+                conn.rollback()
+                trocas = {}
+        leitura = leitura_do_red.ler(pick.get("market") or "", pick.get("line") or "",
+                                     pick.get("market_type"), ms, _stat_for_market, trocas)
+        # O candidato gravado na decisao nao tem o nome do mercado; o pick tem.
+        return {**leitura, "mercado": pick.get("market"), "linha": pick.get("line")}
+    except Exception as e:
+        conn.rollback()
+        logging.getLogger(__name__).info("[ADMIN/MOTOR] leitura do red %s #%s: %s", tabela, pick_id, e)
+        return None
+    finally:
+        cur.close()
+
+
+#: Texto de acao por tipo de falha, quando o motor nao esta' no path. A fonte e'
+#: services/pick_engine/ai_review.ACAO_POR_FALHA; isto so' evita o painel sem
+#: frase nenhuma num ambiente sem o motor.
+_ACAO_IA_PADRAO = "A revisão por IA falhou. Veja o erro gravado."
+
+
+@router.get("/ia/alertas")
+def ia_alertas(current_user: dict = Depends(require_admin)):
+    """Gates de IA cuja ULTIMA chamada falhou, nas ultimas 48h.
+
+    Pedido do usuario em 27/09/2026: a IA tem papel central na decisao, e
+    quando ela cai (sem credito, chave recusada, provedor fora) o painel tem
+    que avisar. Naquele dia o Claude falhou em Free, Alavancagem e Boost e o
+    unico rastro era a palavra "unavailable" no evento -- o erro ficava no
+    terminal de quem rodou o motor.
+
+    Olha a ultima chamada por (pipeline, provedor): se ela foi ok, a falha
+    anterior ja' passou e nao ha alerta. Cache hit nao conta como chamada.
+    """
+    acoes: dict = {}
+    try:
+        with _motor_no_path():
+            from services.pick_engine.ai_review import ACAO_POR_FALHA
+        acoes = dict(ACAO_POR_FALHA)
+    except Exception:
+        acoes = {}
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        try:
+            cur.execute("""
+                SELECT DISTINCT ON (pipeline, provider)
+                       pipeline, provider, model, mode, status,
+                       review->>'erro_tipo' AS erro_tipo,
+                       review->>'erro' AS erro,
+                       created_at
+                  FROM ai_pick_review_events
+                 WHERE created_at >= NOW() - INTERVAL '48 hours'
+                   AND NOT cached
+                 ORDER BY pipeline, provider, created_at DESC
+            """)
+            ultimas = cur.fetchall()
+        except Exception as e:
+            conn.rollback()
+            if "ai_pick_review_events" in str(e):
+                return {"alertas": []}
+            raise
+        alertas = []
+        for r in ultimas:
+            if r["status"] in ("ok", "disabled"):
+                continue
+            cur.execute("""
+                SELECT COUNT(*) AS n FROM ai_pick_review_events
+                 WHERE pipeline = %s AND provider = %s AND NOT cached
+                   AND status NOT IN ('ok', 'disabled')
+                   AND created_at >= NOW() - INTERVAL '24 hours'
+            """, (r["pipeline"], r["provider"]))
+            tipo = r["erro_tipo"] or ("teto_diario" if r["status"] == "daily_limit_reached" else "erro")
+            alertas.append({
+                "pipeline": r["pipeline"], "provider": r["provider"], "model": r["model"],
+                "mode": r["mode"], "status": r["status"], "erro_tipo": tipo,
+                "erro": r["erro"], "acao": acoes.get(tipo, _ACAO_IA_PADRAO),
+                "falhas_24h": int(cur.fetchone()["n"]),
+                "quando": r["created_at"].isoformat() if r["created_at"] else None,
+            })
+        return {"alertas": alertas}
+    finally:
+        cur.close()
+        conn.close()
+
+
 @router.get("/motor/reds")
 def motor_reds(
     dias: int = 7,
@@ -7057,6 +7188,8 @@ def motor_reds(
                 # combinação, não jogo a jogo. Por isso o campo se chama
                 # `melhor_do_jogo` e não "o que você apostou".
                 melhor = next((c for c in candidatos if c.get("is_best_pick")), None)
+                leitura = (_leitura_do_red(conn, nome, r["id"])
+                           if nome in _TABELAS_DE_PERNA_UNICA else None)
                 linhas.append({
                     "tabela": nome,
                     "produto": rotulo,
@@ -7085,6 +7218,9 @@ def motor_reds(
                         c for c in candidatos
                         if c is not melhor and c.get("eligible")
                     ][:8],
+                    # O lado do CAMPO: por quanto perdeu, se estourou no 1o
+                    # tempo, expulsao, time poupado. Ver leitura_do_red.
+                    "leitura": leitura,
                 })
     except HTTPException:
         raise

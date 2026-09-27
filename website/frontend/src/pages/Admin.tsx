@@ -18,6 +18,8 @@ import AdminPendencias from '../components/AdminPendencias'
 import AdminPlanosVencidos from '../components/AdminPlanosVencidos'
 import AdminFunil from '../components/AdminFunil'
 import AdminDisparos from '../components/AdminDisparos'
+import AdminAlertaIA from '../components/AdminAlertaIA'
+import AdminReds from '../components/AdminReds'
 import { fmtBRL } from '../utils/format'
 import { sinalizarNavegacao } from '../services/progressBus'
 
@@ -741,6 +743,9 @@ export default function Admin() {
         </div>
       )}
 
+        {/* Falha da IA fica acima das abas: vale pra qualquer uma delas. */}
+        <AdminAlertaIA />
+
         {/* Sub-paginas. A pagina inteira era uma coluna so' com 7 blocos
             empilhados -- no celular dava varias telas de rolagem ate chegar
             em usuarios, que e' o bloco mais usado. Hash na URL (#usuarios)
@@ -974,6 +979,7 @@ export default function Admin() {
                 dia); esta responde como o motor chega num pick, que é a
                 pergunta anterior às duas. */}
             <AdminFluxoDosMotores />
+            <AdminReds />
             <AdminAuditoriaMotores />
             <AdminMotorDecisoes />
           </div>

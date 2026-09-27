@@ -81,6 +81,7 @@ from utils.db_utils import get_connection
 # ─────────────────────────────────────────────────────────────
 def run_migrations():
     """Aplica ALTER TABLE seguros (IF NOT EXISTS) para colunas novas."""
+    from collectors.lineups_collector_service import DDL as DDL_ESCALACAO
     migrations = [
         # HORA DO JOGO NA TABELA QUE NAO SOME (2026-08-30, pedido do usuario).
         #
@@ -106,6 +107,8 @@ def run_migrations():
                     "shots_on_1h", "total_shots_1h")
           for lado in ("home", "away")),
         "ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS stats_1h_checked_at TIMESTAMP;",
+        # ESCALACAO POR TIME (2026-09-27) -- ver lineups_collector_service.
+        *DDL_ESCALACAO,
         "ALTER TABLE picks_vip   ADD COLUMN IF NOT EXISTS market_id INTEGER;",
         "ALTER TABLE picks_free  ADD COLUMN IF NOT EXISTS market_id INTEGER;",
         "ALTER TABLE picks_vip   ADD COLUMN IF NOT EXISTS stake_units INTEGER;",
@@ -739,6 +742,14 @@ def cmd_folha_1t(*args):
     MatchStatisticsSyncService().backfill_primeiro_tempo(teto_requisicoes=teto)
 
 
+def cmd_escalacoes(*args):
+    """Escalacao por time do historico (1 requisicao por partida). A coleta
+    diaria ja' pega a rodada; isto completa o passado. Continua de onde parou."""
+    from collectors.lineups_collector_service import LineupsCollectorService
+    teto = int(args[0]) if args and args[0] else 100
+    LineupsCollectorService().backfill(teto_requisicoes=teto)
+
+
 def cmd_medias(*args):
     """Stage 5: refaz `team_statistics`, que e' a media que o motor de fato le.
 
@@ -1198,6 +1209,12 @@ COMANDOS: tuple = (
             uso="folha1t [teto]",
             detalhe="folha1t                 ate 100 partidas, da mais recente pra tras\n"
                     "folha1t 500             libera 500 requisicoes"),
+    Comando("escalacoes", "Coleta · escalacoes (historico)",
+            "Escalacao por time das partidas antigas (1 requisicao por jogo)",
+            lambda *a: cmd_escalacoes(*a),
+            uso="escalacoes [teto]",
+            detalhe="escalacoes              ate 100 partidas, da mais recente pra tras\n"
+                    "escalacoes 500          libera 500 requisicoes"),
     Comando("medias", "Coleta · medias do time",
             "Stage 5 · refaz team_statistics, a media que o motor le",
             lambda *a: cmd_medias(*a),

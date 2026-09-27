@@ -99,6 +99,12 @@ class AIReviewSettings:
     max_tokens: int = 2000
     daily_limit: int = 15
     effort: str = "low"
+    # O QUE ACONTECE QUANDO A IA NAO RESPONDE (2026-09-27, pedido do usuario:
+    # "a IA tem papel importante; quando der erro, os motores nao geram pick").
+    # "block" = em modo enforce, pick sem parecer nao sai. "approve" = o
+    # comportamento antigo, falha aberta. So' vale em enforce: em shadow a IA
+    # nao decide nada, entao nao ha o que bloquear -- mas o alerta sai igual.
+    on_failure: str = "block"
 
     @classmethod
     def from_env(cls, pipeline: str = "") -> "AIReviewSettings":
@@ -158,11 +164,14 @@ class AIReviewSettings:
             max_tokens=max(500, int(value("AI_REVIEW_MAX_TOKENS", "2000"))),
             daily_limit=max(0, int(value("AI_REVIEW_DAILY_LIMIT", "15"))),
             effort=value("AI_REVIEW_EFFORT", "low").lower(),
+            on_failure=("approve" if value("AI_REVIEW_ON_FAILURE", "block").lower() == "approve"
+                        else "block"),
         )
 
 
 def build_review_payload(picks: list[dict], pipeline: str, fixture: dict | None = None,
-                         league_profile: str | None = None) -> dict:
+                         league_profile: str | None = None,
+                         dossies: dict | None = None) -> dict:
     """`league_profile` e' o parecer da liga (services/pick_engine/
     league_profile_store), e ele entra AQUI e em nenhum outro lugar.
 
@@ -237,6 +246,11 @@ def build_review_payload(picks: list[dict], pipeline: str, fixture: dict | None 
         # `league_profile`.
         **({"bilhete": picks[0]["bilhete"]}
            if picks and picks[0].get("bilhete") else {}),
+        # DOSSIE DA PARTIDA (2026-09-27): medias feitas/cedidas por mando e
+        # por tempo, forma, H2H, tabela, rodizio e desfalques -- uma entrada
+        # por fixture (bilhete tem varias). Ver dossie_da_partida. So' quando
+        # existe, pela mesma razao das chaves acima.
+        **({"dossie": dossies} if dossies else {}),
     }
 
 
@@ -268,8 +282,49 @@ def normalize_review(raw: object) -> dict:
     }
 
 
+#: Tipos de falha do provedor, na ordem em que sao testados. O texto da
+#: excecao e' a unica fonte (Anthropic e OpenAI levantam classes diferentes),
+#: e a ordem importa: "insufficient_quota" da OpenAI chega como HTTP 429 e
+#: nao pode cair em "limite de taxa" -- quem resolve e' recarga, nao espera.
+_FALHAS = (
+    ("sem_credito", ("credit balance", "insufficient_quota", "billing",
+                     "exceeded your current quota", "payment")),
+    ("chave_invalida", ("401", "authentication", "invalid x-api-key",
+                        "incorrect api key", "invalid api key", "permission")),
+    ("modelo_invalido", ("model_not_found", "does not exist", "not_found_error",
+                         "unknown model")),
+    ("limite_de_taxa", ("429", "rate limit", "rate_limit")),
+    ("provedor_fora", ("529", "overloaded", "503", "502", "500", "timeout",
+                       "timed out", "connection", "service unavailable")),
+    ("recusa", ("recusou",)),
+)
+
+#: Frase curta, em PT, do que fazer em cada caso. Vai pro alerta do /admin.
+ACAO_POR_FALHA = {
+    "sem_credito": "Sem créditos no provedor de IA. Recarregue a conta.",
+    "chave_invalida": "Chave da API de IA recusada. Confira a variável da chave.",
+    "modelo_invalido": "O modelo configurado não existe no provedor. Confira AI_REVIEW_MODEL.",
+    "limite_de_taxa": "O provedor de IA limitou as chamadas. Tente de novo em alguns minutos.",
+    "provedor_fora": "O provedor de IA está fora do ar ou sobrecarregado.",
+    "recusa": "O provedor recusou a revisão por política de conteúdo.",
+    "erro": "A revisão por IA falhou por um erro não identificado.",
+    "teto_diario": "O teto diário de revisões foi atingido (AI_REVIEW_DAILY_LIMIT).",
+    "resposta_invalida": "A IA respondeu fora do formato esperado.",
+}
+
+
+def classificar_falha(error: BaseException | str) -> str:
+    """Tipo da falha do provedor, a partir do texto da excecao."""
+    texto = str(error).lower()
+    for tipo, marcas in _FALHAS:
+        if any(m in texto for m in marcas):
+            return tipo
+    return "erro"
+
+
 class AIReviewGate:
-    """Cacheia pareceres e falha aberta para nunca travar o motor."""
+    """Cacheia pareceres. Na falha, `settings.on_failure` decide: por padrao o
+    pick sem parecer NAO sai em modo enforce (ver AIReviewSettings)."""
 
     def __init__(self, settings: AIReviewSettings | None = None,
                  call_model: Callable[[str, str], object] | None = None,
@@ -309,7 +364,8 @@ class AIReviewGate:
             perfil = league_profile_store.perfil_da_liga((fixture or {}).get("league_id"))
         except Exception:
             perfil = None
-        payload = build_review_payload(picks, pipeline, fixture, perfil)
+        payload = build_review_payload(picks, pipeline, fixture, perfil,
+                                       self._dossies(picks, fixture))
         key = cache_key_for_payload(payload, self.settings)
         cached = self._load_cache(key)
         if cached:
@@ -317,17 +373,60 @@ class AIReviewGate:
             self._record_event(key, pipeline, review)
             return review
         if self._daily_limit_reached():
-            print(f"[AI_REVIEW] Limite diario de {self.settings.daily_limit} chamadas atingido.")
-            return {"status": "daily_limit_reached", "decision": "approve", "mode": self.settings.mode, "cached": False}
+            review = self._falha("daily_limit_reached", "teto_diario",
+                                 f"limite diario de {self.settings.daily_limit} chamadas")
+            self._record_event(key, pipeline, review)
+            return review
         try:
             review = normalize_review(self._call_model(json.dumps(payload, ensure_ascii=False, default=str)))
         except Exception as error:
-            print(f"[AI_REVIEW] Falha no provedor; mantendo pick do motor: {error}")
-            review = {"status": "unavailable", "decision": "approve", "risk_level": "unknown", "reasons": []}
+            review = self._falha("unavailable", classificar_falha(error), str(error))
+        if review.get("status") == "invalid_response":
+            review = self._falha("invalid_response", "resposta_invalida",
+                                 "resposta fora do schema")
         review = self._stamp(review, cached=False)
-        self._store_cache(key, pipeline, review)
+        # FALHA NAO ENTRA NO CACHE (2026-09-27). Entrava, por 24h: um erro de
+        # credito as 9h virava "aprovado sem revisao" pra mesma partida ate' o
+        # dia seguinte, mesmo depois da recarga. So' parecer de verdade e'
+        # reaproveitavel.
+        if review.get("status") == "ok":
+            self._store_cache(key, pipeline, review)
         self._record_event(key, pipeline, review)
         return review
+
+    @staticmethod
+    def _dossies(picks: list[dict], fixture: dict | None) -> dict | None:
+        """{fixture_id: dossie} das partidas envolvidas. Bilhete nao passa
+        fixture ao gate, entao os ids tambem saem das proprias pernas."""
+        ids = []
+        for fonte in [fixture or {}] + list(picks or []):
+            fid = fonte.get("fixture_id")
+            if fid and fid not in ids:
+                ids.append(fid)
+        if not ids:
+            return None
+        try:
+            from services.pick_engine import dossie_da_partida
+        except Exception:
+            return None
+        saida = {str(fid): d for fid in ids[:6] if (d := dossie_da_partida.montar(fid))}
+        return saida or None
+
+    def _falha(self, status: str, tipo: str, detalhe: str) -> dict:
+        """Parecer de quando a IA nao opinou. O ERRO VAI GRAVADO.
+
+        Antes ficava so' "unavailable" no evento e o texto do erro morria no
+        terminal de quem rodou o motor -- em 27/09/2026 o Claude falhou em
+        Free, Alavancagem e Boost e nao havia como saber se era credito, chave
+        ou queda. `erro_tipo` e' o que o alerta do /admin le.
+        """
+        bloqueia = self.settings.mode == "enforce" and self.settings.on_failure == "block"
+        print(f"[AI_REVIEW] {self.pipeline or 'global'}: {ACAO_POR_FALHA.get(tipo, tipo)} "
+              f"({detalhe[:200]}) -> {'pick BLOQUEADO' if bloqueia else 'pick mantido'}")
+        return {"status": status, "decision": "reject" if bloqueia else "approve",
+                "risk_level": "unknown", "reasons": [],
+                "erro_tipo": tipo, "erro": detalhe[:300],
+                "mode": self.settings.mode, "cached": False}
 
     def apply(self, picks: list[dict], pipeline: str, fixture: dict | None = None) -> list[dict]:
         if not picks:
@@ -358,7 +457,7 @@ class AIReviewGate:
                 messages=[{"role": "user", "content": payload}],
             )
             if response.stop_reason == "refusal":
-                raise RuntimeError("provedor recusou a revisao por politica de conteudo")
+                raise RuntimeError("provedor recusou a revisao por politica de conteudo (recusou)")
             # Com thinking ligado, content[0] pode ser um bloco de thinking --
             # nunca indexar direto, procurar o bloco de texto.
             return next((b.text for b in response.content if b.type == "text"), "")
@@ -382,6 +481,11 @@ class AIReviewGate:
             "Voce nao tem acesso a noticias, internet ou dados fora do JSON recebido. "
             "Vete somente com contradicao ou risco objetivo nos dados. Sem evidencia objetiva, aprove. "
             "Considere qualidade da amostra, variancia, ajuste do modelo e sinais de arbitragem quando existirem. "
+            "Quando houver `dossie`, use-o como a leitura da partida: medias feitas e cedidas no mando deste jogo "
+            "(jogo inteiro e 1o tempo, com o coeficiente de variacao `cv`), forma dos ultimos 5, confronto direto, "
+            "tabela e pressao de pontos corridos, rodizio de titulares e desfalques. Vete quando o dossie contradiz "
+            "o pick de forma objetiva (ex.: desfalque de titular que sustenta o mercado, rodizio forte, forma recente "
+            "oposta a media, time que precisa do resultado num Under que depende de jogo travado). "
             "Responda somente JSON com decision (approve|reject), risk_level (low|medium|high), reasons e evidence_gaps."
         )
 

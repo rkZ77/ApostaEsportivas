@@ -197,6 +197,28 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
                 cur.execute(f"ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS "
                             f"{_lado}_{_contador} INTEGER;")
         cur.execute("ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS stats_1h_checked_at TIMESTAMP;")
+        # ESCALACAO POR TIME (2026-09-27). Mesma DDL de
+        # collectors/lineups_collector_service.DDL, no motor: o dossie da IA le
+        # esta tabela e precisa dela existindo antes da primeira coleta.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS team_lineups (
+                fixture_id   INTEGER NOT NULL,
+                team_id      INTEGER NOT NULL,
+                league_id    INTEGER,
+                season       INTEGER,
+                match_date   TIMESTAMP,
+                formation    TEXT,
+                coach_id     INTEGER,
+                coach_name   TEXT,
+                titulares    INTEGER[] NOT NULL DEFAULT '{}',
+                reservas     INTEGER[] NOT NULL DEFAULT '{}',
+                coletado_em  TIMESTAMP DEFAULT NOW(),
+                PRIMARY KEY (fixture_id, team_id)
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_team_lineups_time_data "
+                    "ON team_lineups (team_id, match_date DESC)")
+        cur.execute("ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS lineups_checked_at TIMESTAMP;")
         # PROCEDENCIA do numero digitado a mao no /admin (aba Dados).
         #
         # Numero preenchido a mao fica indistinguivel do coletado assim que

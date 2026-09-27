@@ -7,6 +7,19 @@ from services import cards_validation_store, cartoes_validos, settlement
 _ALLOWED_CHECKER_TABLES = frozenset({"picks_vip", "picks_free", "picks_alavancagem"})
 
 
+def _gols_2t(g, lado: str):
+    """Gols do lado no 2o tempo: placar dos 90 menos o do intervalo. None
+    quando falta qualquer um -- e num AET sem placar de 90 o placar cheio
+    incluiria a prorrogacao, entao tambem fica None."""
+    ht = g(f"{lado}_goals_ht")
+    noventa = g(f"{lado}_goals_90")
+    if noventa is None and g("status") not in ("AET", "PEN"):
+        noventa = g(f"{lado}_goals")
+    if ht is None or noventa is None:
+        return None
+    return noventa - ht
+
+
 class AIResultCheckerService:
 
     def __init__(self, table_name="picks_vip"):
@@ -172,6 +185,12 @@ class AIResultCheckerService:
             "home_shots_on_ht":  g("home_shots_on_1h"),
             "away_shots_on_ht":  g("away_shots_on_1h"),
             "total_shots_on_ht": _sum(g("home_shots_on_1h"), g("away_shots_on_1h")),
+            # 2o TEMPO, so' gol: placar dos 90 menos o do intervalo. Os
+            # contadores do 2o tempo nao sao gravados, e o mercado deles fica
+            # pendente (ver _stat_family) em vez de cair no jogo inteiro.
+            "home_goals_2t": _gols_2t(g, "home"),
+            "away_goals_2t": _gols_2t(g, "away"),
+            "total_goals_2t": _sum(_gols_2t(g, "home"), _gols_2t(g, "away")),
             "home_shots_ht":  g("home_total_shots_1h"),
             "away_shots_ht":  g("away_total_shots_1h"),
             "total_shots_ht": _sum(g("home_total_shots_1h"), g("away_total_shots_1h")),
@@ -189,6 +208,12 @@ class AIResultCheckerService:
     ##########################################################################
     # DETECTA SE É MERCADO DE 1° TEMPO
     ##########################################################################
+    @staticmethod
+    def _is_second_half(market_name: str) -> bool:
+        n = (market_name or "").lower()
+        return any(k in n for k in ("2° tempo", "2º tempo", "2o tempo", "segundo tempo",
+                                    "2nd half", "second half"))
+
     @staticmethod
     def _is_first_half(market_name: str, market_type: str | None = None) -> bool:
         # O market_type do motor (goals_1h, corners_1h...) decide sozinho:
@@ -442,6 +467,7 @@ class AIResultCheckerService:
     _STAT_KEYS = {
         "goals":           ("home_goals", "away_goals", "total_goals"),
         "goals_ht":        ("home_goals_ht", "away_goals_ht", "total_goals_ht"),
+        "goals_2t":        ("home_goals_2t", "away_goals_2t", "total_goals_2t"),
         "goals_90":        ("home_goals_90", "away_goals_90", "total_goals_90"),
         "corners":         ("home_corners", "away_corners", "total_corners"),
         "cards":           ("home_cards", "away_cards", "total_cards"),
@@ -460,6 +486,9 @@ class AIResultCheckerService:
         """Familia de estatistica efetiva do mercado: resolve 1° tempo, o
         recorte so'-amarelo dos mercados de cartao, e os 90 minutos quando o
         jogo foi pra prorrogacao."""
+        if self._is_second_half(market):
+            # Chave inexistente em _STAT_KEYS pra tudo que nao e' gol: pendente.
+            return f"{mt}_2t"
         if mt == "goals":
             if is_ht:
                 return "goals_ht"
@@ -569,7 +598,12 @@ class AIResultCheckerService:
         # prorrogacao).
         prorrogacao = stats.get("status") in ("AET", "PEN")
 
-        if is_ht:
+        if self._is_second_half(market):
+            hg = stats.get("home_goals_2t")
+            ag = stats.get("away_goals_2t")
+            if hg is None or ag is None:
+                return self._pendente("placar do 2o tempo nao calculavel (falta intervalo ou 90min)")
+        elif is_ht:
             hg = stats.get("home_goals_ht")
             ag = stats.get("away_goals_ht")
             if hg is None or ag is None:

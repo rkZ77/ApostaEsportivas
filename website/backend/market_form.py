@@ -171,6 +171,15 @@ def e_mercado_de_primeiro_tempo(market: str | None, market_type: str | None) -> 
     return mtype.endswith(("_ht", "_1h")) or any(k in m for k in _MARCAS_1T)
 
 
+def e_mercado_de_segundo_tempo(market: str | None) -> bool:
+    """Mercado medido so' no 2o tempo. O motor nao gera estes picks, mas o
+    pipeline antigo de IA gerou (Free #16, junho/2026), e sem a pergunta o
+    site os liquidava contra o jogo inteiro."""
+    m = (market or "").lower()
+    return any(k in m for k in ("2o tempo", "2º tempo", "2° tempo", "segundo tempo",
+                                "2nd half", "second half"))
+
+
 def perspectiva_do_time(ms: dict, team_id: int | None, escopo: str,
                         primeiro_tempo: bool = False) -> tuple:
     """(casa, fora, gols_casa, gols_fora, jogou_em_casa) do ponto de vista do time.

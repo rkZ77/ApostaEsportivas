@@ -1,0 +1,311 @@
+"""Dossie da partida: o que a IA le' antes de dar o parecer (2026-09-27).
+
+POR QUE EXISTE
+--------------
+O gate de IA recebia so' o PICK -- probabilidade, odd, edge, uma amostra -- e
+decidia sobre um jogo que nao via. Pedido do usuario: a IA tem papel central,
+e pra decidir ela precisa do que um analista olharia antes de apostar:
+
+  medias feitas e cedidas   por mando, em todas as familias, jogo inteiro e
+                            1o tempo, com a dispersao (CV) de cada uma
+  forma recente             ultimos 5 contra a temporada: o time esta' igual,
+                            melhor ou pior do que a media diz?
+  confronto direto          os ultimos encontros, com placar e contadores
+  tabela                    posicao, pontos e a pressao de pontos corridos
+                            (competitive_pressure: a que distancia da fronteira
+                            que importa, com quantas rodadas restando)
+  escalacao                 quanto o time mudou de titulares entre os ultimos
+                            jogos (rodizio), de player_match_stats
+  desfalques                lesionados e suspensos da partida (/injuries)
+
+UM LUGAR SO', CHAMADO PELO GATE
+-------------------------------
+Nenhum pipeline monta isto. O gate (ai_review.review) pede o dossie pelo
+fixture_id, e assim os nove motores recebem o mesmo material -- inclusive os
+de bilhete (multipla, bingo, alavancagem), que chamam o gate sem fixture.
+
+NUMERO, NAO OPINIAO
+-------------------
+Tudo aqui e' contagem do banco ou da API. Nada vira termo de probabilidade: o
+dossie informa o veto, nao a conta. Campo que nao existe fica de fora, nunca
+vira zero -- a mesma invariante do resto do motor.
+
+CUSTO
+-----
+Memo por fixture dentro do processo: a multipla avalia centenas de bilhetes
+por rodada com as mesmas partidas, e sem o memo cada um refaria as consultas
+e a chamada de /injuries. Por partida: ~6 consultas e 1 requisicao da API.
+`AI_DOSSIE=off` desliga tudo; `AI_DOSSIE_DESFALQUES=off` so' a requisicao.
+"""
+from __future__ import annotations
+
+import os
+import statistics
+
+_MEMO: dict = {}
+
+#: (rotulo, coluna do mandante, coluna do visitante). Cartao e' tratado a parte
+#: (amarelo + 2x vermelho, a convencao de liquidacao).
+_METRICAS = (
+    ("gols",            "home_goals",           "away_goals"),
+    ("gols_1t",         "home_goals_ht",        "away_goals_ht"),
+    ("escanteios",      "home_corners",         "away_corners"),
+    ("escanteios_1t",   "home_corners_1h",      "away_corners_1h"),
+    ("chutes",          "home_total_shots",     "away_total_shots"),
+    ("chutes_no_alvo",  "home_shots_on",        "away_shots_on"),
+    ("chutes_no_alvo_1t", "home_shots_on_1h",   "away_shots_on_1h"),
+    ("faltas",          "home_fouls",           "away_fouls"),
+    ("impedimentos",    "home_offsides",        "away_offsides"),
+)
+
+
+def habilitado() -> bool:
+    return os.getenv("AI_DOSSIE", "on").strip().lower() != "off"
+
+
+def _cartoes(m: dict, lado: str):
+    amarelo, vermelho = m.get(f"{lado}_yellow_cards"), m.get(f"{lado}_red_cards")
+    if amarelo is None or vermelho is None:
+        return None
+    return amarelo + 2 * vermelho
+
+
+def _lados(m: dict, team_id: int):
+    """('home','away') quando o time foi mandante NAQUELE jogo."""
+    return ("home", "away") if m.get("home_team_id") == team_id else ("away", "home")
+
+
+#: Abaixo disto a media nao entra: dois jogos nao descrevem time nenhum, e a
+#: IA leria o numero com o mesmo peso dos outros.
+_MIN_JOGOS = 3
+
+
+def _resumo(valores: list) -> dict | None:
+    """Media, n e coeficiente de variacao. None sem amostra minima."""
+    vals = [float(v) for v in valores if v is not None]
+    if len(vals) < _MIN_JOGOS:
+        return None
+    media = sum(vals) / len(vals)
+    cv = (statistics.pstdev(vals) / media) if (len(vals) > 1 and media > 0) else None
+    return {"media": round(media, 2), "n": len(vals),
+            **({"cv": round(cv, 2)} if cv is not None else {})}
+
+
+def medias_do_time(jogos: list, team_id: int, mando: str | None = None) -> dict:
+    """Feitos e cedidos por metrica, no mando pedido (None = todos os jogos).
+
+    Mando e' filtrado aqui porque o mercado e' sobre ESTE jogo: o mandante em
+    casa, o visitante fora (mesma regra de stats_model.pool_and_field)."""
+    if mando == "home":
+        jogos = [m for m in jogos if m.get("home_team_id") == team_id]
+    elif mando == "away":
+        jogos = [m for m in jogos if m.get("away_team_id") == team_id]
+    saida: dict = {}
+    for rotulo, col_casa, col_fora in _METRICAS:
+        feitos, cedidos = [], []
+        for m in jogos:
+            eu, ele = _lados(m, team_id)
+            feitos.append(m.get(col_casa if eu == "home" else col_fora))
+            cedidos.append(m.get(col_casa if ele == "home" else col_fora))
+        f, c = _resumo(feitos), _resumo(cedidos)
+        if f or c:
+            saida[rotulo] = {"feitos": f, "cedidos": c}
+    feitos = [_cartoes(m, _lados(m, team_id)[0]) for m in jogos]
+    cedidos = [_cartoes(m, _lados(m, team_id)[1]) for m in jogos]
+    f, c = _resumo(feitos), _resumo(cedidos)
+    if f or c:
+        saida["cartoes"] = {"feitos": f, "cedidos": c}
+    return saida
+
+
+def forma(jogos: list, team_id: int, ultimos: int = 5) -> dict | None:
+    """Resultados dos ultimos jogos (V/E/D) e gols, contra a temporada."""
+    recentes = jogos[:ultimos]
+    if not recentes:
+        return None
+    letras, marcados, sofridos = [], [], []
+    for m in recentes:
+        eu, ele = _lados(m, team_id)
+        gm, gs = m.get(f"{eu}_goals"), m.get(f"{ele}_goals")
+        if gm is None or gs is None:
+            continue
+        letras.append("V" if gm > gs else "E" if gm == gs else "D")
+        marcados.append(gm)
+        sofridos.append(gs)
+    if not letras:
+        return None
+    return {"sequencia": "".join(letras),
+            "gols_marcados_media": round(sum(marcados) / len(marcados), 2),
+            "gols_sofridos_media": round(sum(sofridos) / len(sofridos), 2),
+            "medias_ultimos_5": medias_do_time(recentes, team_id)}
+
+
+def confronto_direto(h2h: list, home_team_id: int) -> list:
+    saida = []
+    for m in h2h[:5]:
+        casa_e_o_mandante_de_hoje = m.get("home_team_id") == home_team_id
+        saida.append({
+            "data": str(m.get("match_date") or "")[:10],
+            "mandante_de_hoje_em_casa": casa_e_o_mandante_de_hoje,
+            "placar": f"{m.get('home_goals')}x{m.get('away_goals')}",
+            **({"escanteios": m["total_corners"]} if m.get("total_corners") is not None else {}),
+            **({"cartoes_amarelos": m["total_yellow_cards"]}
+               if m.get("total_yellow_cards") is not None else {}),
+        })
+    return saida
+
+
+def rodizio(escalacoes: list, extras: list | None = None) -> dict | None:
+    """Quanto o time trocou de titulares entre jogos consecutivos.
+
+    `escalacoes`: [(data, [player_id, ...])] do mais recente pro mais antigo.
+    `extras`: [(formacao, tecnico)] na mesma ordem, quando vieram de
+    team_lineups -- dali sai a troca de tecnico e de esquema.
+    Devolve as trocas jogo a jogo e o NUCLEO (quem foi titular em todos): um
+    time que troca 6 titulares por rodada e' outro time a cada jogo, e a media
+    da temporada descreve uma formacao que nao entra em campo."""
+    validas = [(d, set(t)) for d, t in escalacoes if t and len(t) >= 9]
+    if len(validas) < 2:
+        return None
+    trocas = [len(validas[i][1] - validas[i + 1][1]) for i in range(len(validas) - 1)]
+    nucleo = set.intersection(*(t for _, t in validas))
+    saida = {"jogos": len(validas), "trocas_por_jogo": trocas,
+             "media_de_trocas": round(sum(trocas) / len(trocas), 1),
+             "titulares_em_todos": len(nucleo)}
+    if extras:
+        formacoes = [f for f, _ in extras if f]
+        tecnicos = [t for _, t in extras if t]
+        if formacoes:
+            saida["formacoes_recentes"] = formacoes
+        if len(set(tecnicos)) > 1:
+            # Tecnico novo e' o caso em que a media inteira descreve outro time
+            # (ver teams.structural_change_date, que e' marcado a mao).
+            saida["tecnico_mudou"] = {"atual": tecnicos[0], "anterior": tecnicos[-1]}
+    return saida
+
+
+def _escalacoes_recentes(cur, team_id: int, antes_de, limite: int = 5) -> tuple:
+    """([(data, titulares)], [(formacao, tecnico)] ou None). team_lineups
+    primeiro, que tem formacao e tecnico; player_match_stats quando a coleta
+    de escalacao ainda nao chegou naquele time."""
+    try:
+        cur.execute("""
+            SELECT match_date, titulares, formation, coach_name
+              FROM team_lineups
+             WHERE team_id = %s AND match_date < %s
+             ORDER BY match_date DESC
+             LIMIT %s
+        """, (team_id, antes_de, limite))
+        linhas = cur.fetchall()
+    except Exception:
+        cur.connection.rollback()
+        linhas = []
+    if len(linhas) >= 2:
+        return ([(r[0], r[1] or []) for r in linhas], [(r[2], r[3]) for r in linhas])
+    cur.execute("""
+        SELECT fixture_id, MAX(match_date) AS dia,
+               ARRAY_AGG(player_id) FILTER (
+                   WHERE NOT COALESCE(is_substitute, FALSE) AND COALESCE(minutes, 0) > 0
+               ) AS titulares
+          FROM player_match_stats
+         WHERE team_id = %s AND match_date < %s
+         GROUP BY fixture_id
+         ORDER BY dia DESC
+         LIMIT %s
+    """, (team_id, antes_de, limite))
+    return ([(r[1], r[2] or []) for r in cur.fetchall()], None)
+
+
+def _desfalques(team_id: int, fixture_id: int) -> list | None:
+    if os.getenv("AI_DOSSIE_DESFALQUES", "on").strip().lower() == "off":
+        return None
+    try:
+        from services.pick_engine.news_model import fetch_injuries
+        lista = fetch_injuries(team_id, fixture_id=fixture_id)
+    except Exception:
+        return None
+    vistos, saida = set(), []
+    for item in lista or []:
+        nome = item.get("name")
+        if not nome or nome in vistos:
+            continue
+        vistos.add(nome)
+        saida.append({"jogador": nome, "tipo": item.get("type"), "motivo": item.get("reason")})
+    return saida[:10]
+
+
+def montar(fixture_id: int) -> dict | None:
+    """Dossie de uma partida do dia, ou None quando nao da' pra montar."""
+    if not fixture_id or not habilitado():
+        return None
+    if fixture_id in _MEMO:
+        return _MEMO[fixture_id]
+    dossie = None
+    try:
+        dossie = _montar(fixture_id)
+    except Exception as e:
+        print(f"[DOSSIE] fixture {fixture_id}: {e}")
+        dossie = None
+    _MEMO[fixture_id] = dossie
+    return dossie
+
+
+def _montar(fixture_id: int) -> dict | None:
+    from utils.db_utils import get_connection
+    from services.match_stats_service import MatchStatsService
+    from services.standings_service import StandingsService
+    from services.pick_engine import competitive_pressure
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT fixture_id, home_team_id, away_team_id, home_team, away_team,
+                   league_id, season, match_datetime, round
+              FROM fixtures WHERE fixture_id = %s
+        """, (fixture_id,))
+        linha = cur.fetchone()
+        if not linha:
+            return None
+        (_, casa, fora, nome_casa, nome_fora, liga, temporada, quando, rodada) = linha
+
+        stats = MatchStatsService()
+        hist_casa = stats.get_all_matches_full(casa, temporada, liga, before_date=quando)
+        hist_fora = stats.get_all_matches_full(fora, temporada, liga, before_date=quando)
+        h2h = stats.get_h2h_matches(casa, fora, limit=5, before_date=quando)
+
+        tabela = StandingsService().get_league_table(liga, temporada)
+        pressao = competitive_pressure.pressao_da_partida(tabela, casa, fora, league_id=liga)
+
+        def linha_da_tabela(team_id):
+            t = next((l for l in (tabela or []) if l.get("team_id") == team_id), None)
+            if not t:
+                return None
+            return {k: t.get(k) for k in ("rank", "points", "played", "goal_diff", "form", "description")
+                    if t.get(k) is not None}
+
+        escal_casa = _escalacoes_recentes(cur, casa, quando)
+        escal_fora = _escalacoes_recentes(cur, fora, quando)
+    finally:
+        cur.close()
+        conn.close()
+
+    def time(team_id, nome, hist, mando, escal):
+        bloco = {
+            "nome": nome,
+            "medias_no_mando_deste_jogo": medias_do_time(hist, team_id, mando),
+            "forma": forma(hist, team_id),
+            "tabela": linha_da_tabela(team_id),
+            "rodizio_de_titulares": rodizio(*escal),
+            "desfalques": _desfalques(team_id, fixture_id),
+        }
+        return {k: v for k, v in bloco.items() if v not in (None, {}, [])}
+
+    dossie = {
+        "rodada": rodada,
+        "mandante": time(casa, nome_casa, hist_casa, "home", escal_casa),
+        "visitante": time(fora, nome_fora, hist_fora, "away", escal_fora),
+        "confronto_direto": confronto_direto(h2h, casa),
+        "pressao_de_tabela": competitive_pressure.descrever(pressao) or None,
+    }
+    return {k: v for k, v in dossie.items() if v not in (None, {}, [])}

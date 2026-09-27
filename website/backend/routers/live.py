@@ -1925,14 +1925,23 @@ def _enrich_leg(fid: int, market: str, line: str,
     # de agora E' o do 1o tempo (e cresce); do intervalo em diante vale o
     # placar do intervalo e a folha `statistics_1h`.
     primeiro_tempo = market_form.e_mercado_de_primeiro_tempo(market, market_type)
-    depois_do_1t = primeiro_tempo and status not in ("TBD", "NS", "1H")
+    # 2o TEMPO: gol = placar de agora (ou dos 90) menos o do intervalo, e a
+    # folha e' `statistics_2h`. Antes do intervalo o 2o tempo nao comecou.
+    segundo_tempo = not primeiro_tempo and market_form.e_mercado_de_segundo_tempo(market)
+    depois_do_1t = (primeiro_tempo or segundo_tempo) and status not in ("TBD", "NS", "1H")
     sem_dado_1t = False
     if depois_do_1t:
         ht = (fix_data.get("score") or {}).get("halftime") or {}
         if ht.get("home") is not None and ht.get("away") is not None:
-            home_goals, away_goals = int(ht["home"]), int(ht["away"])
+            if primeiro_tempo:
+                home_goals, away_goals = int(ht["home"]), int(ht["away"])
+            else:
+                home_goals = home_goals - int(ht["home"])
+                away_goals = away_goals - int(ht["away"])
         else:
             sem_dado_1t = True
+    elif segundo_tempo:
+        home_goals = away_goals = 0
 
     precisa_stats = _leg_needs_stats(market, market_type)
     home_stats, away_stats = {}, {}
@@ -1940,7 +1949,8 @@ def _enrich_leg(fid: int, market: str, line: str,
         folha_crua = _fetch_stats(fid, status)
         if depois_do_1t:
             home_stats, away_stats = _parse_stats(
-                folha_crua, stats_home_id, stats_away_id, chave="statistics_1h")
+                folha_crua, stats_home_id, stats_away_id,
+                chave="statistics_1h" if primeiro_tempo else "statistics_2h")
         else:
             home_stats, away_stats = _parse_stats(folha_crua, stats_home_id, stats_away_id)
 
@@ -2028,7 +2038,9 @@ def _enrich_leg(fid: int, market: str, line: str,
         "away_stats":   away_stats,
         # O 1o tempo e' tempo regulamentar em qualquer jogo: prorrogacao nao
         # o contamina, e marcar a perna aqui a deixaria pendente sem motivo.
-        "went_to_extra_time": went_to_extra_time and not primeiro_tempo,
+        # Vale pro 2o tempo tambem: gol sai de score.fulltime (90min) menos o
+        # intervalo, e statistics_2h cobre so' o 2o tempo regulamentar.
+        "went_to_extra_time": went_to_extra_time and not (primeiro_tempo or segundo_tempo),
         "precisa_stats": precisa_stats,
         # Cartao encerrado sem validacao: nao liquida e NAO anula. Ver
         # `_cartoes_elegiveis` e a guarda em `_anulacao_sem_estatistica`.

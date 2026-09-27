@@ -246,3 +246,13 @@ def test_cartao_do_1o_tempo_nunca_usa_o_jogo_inteiro(checker):
 def test_gol_e_ambas_marcam_do_1o_tempo_usam_o_intervalo(checker):
     assert checker.evaluate_pick("Gols Mais/Menos - 1º Tempo", "Over 1.5", 1.8, folha())[0] == "RED"
     assert checker.evaluate_pick("Ambas Marcam - 1º Tempo", "Sim", 1.8, folha())[0] == "RED"
+
+
+def test_gol_do_2o_tempo_e_o_placar_dos_90_menos_o_intervalo(checker):
+    """3x2 no fim, 0x1 no intervalo: 4 gols no 2o tempo."""
+    f = folha(home_goals_2t=3, away_goals_2t=1, total_goals_2t=4)
+    assert checker.evaluate_pick("Gols Mais/Menos - 2º Tempo", "Over 3.5", 1.8, f)[0] == "GREEN"
+
+
+def test_escanteio_do_2o_tempo_fica_pendente(checker):
+    assert checker.evaluate_pick("Total de Escanteios (2º Tempo)", "Over 4.5", 1.8, folha())[0] is None
