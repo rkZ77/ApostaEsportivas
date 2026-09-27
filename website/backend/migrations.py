@@ -257,6 +257,56 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         cur.execute("CREATE INDEX IF NOT EXISTS idx_team_lineups_time_data "
                     "ON team_lineups (team_id, match_date DESC)")
         cur.execute("ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS lineups_checked_at TIMESTAMP;")
+        # CALENDARIO DAS LIGAS (2026-09-27): mesma DDL de
+        # collectors/calendario_service.DDL. O dossie da IA le esta tabela.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS calendario_jogos (
+                fixture_id      INTEGER PRIMARY KEY,
+                league_id       INTEGER NOT NULL,
+                season          INTEGER,
+                round           TEXT,
+                match_datetime  TIMESTAMP,
+                home_team_id    INTEGER,
+                away_team_id    INTEGER,
+                status          TEXT,
+                venue_city      TEXT,
+                atualizado_em   TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_calendario_casa "
+                    "ON calendario_jogos (home_team_id, match_datetime)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_calendario_fora "
+                    "ON calendario_jogos (away_team_id, match_datetime)")
+        cur.execute("ALTER TABLE calendario_jogos ADD COLUMN IF NOT EXISTS pais TEXT;")
+        # EVENTOS POR MINUTO E CLIMA (2026-09-27): mesma DDL dos coletores
+        # (eventos_collector_service, clima_service). O dossie le as duas.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS match_events (
+                fixture_id  INTEGER NOT NULL,
+                seq         INTEGER NOT NULL,
+                minuto      INTEGER,
+                acrescimo   INTEGER,
+                team_id     INTEGER,
+                player_id   INTEGER,
+                tipo        TEXT,
+                detalhe     TEXT,
+                PRIMARY KEY (fixture_id, seq)
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_match_events_time ON match_events (team_id, tipo)")
+        cur.execute("ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS events_checked_at TIMESTAMP;")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS clima_partida (
+                fixture_id      INTEGER PRIMARY KEY,
+                venue_city      TEXT,
+                altitude_m      DOUBLE PRECISION,
+                temperatura_c   DOUBLE PRECISION,
+                chuva_mm        DOUBLE PRECISION,
+                vento_kmh       DOUBLE PRECISION,
+                fonte           TEXT,
+                coletado_em     TIMESTAMP DEFAULT NOW()
+            )
+        """)
         # PROCEDENCIA do numero digitado a mao no /admin (aba Dados).
         #
         # Numero preenchido a mao fica indistinguivel do coletado assim que

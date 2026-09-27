@@ -365,6 +365,22 @@ class MatchStatisticsSyncService:
             # erro nenhum. Tambem nao tinha timeout -- era a unica chamada do
             # projeto que podia pendurar a coleta indefinidamente.
             response = buscar(FIXTURES_URL, params, origem="coletor_stats")
+            # CALENDARIO (2026-09-27): a mesma resposta traz a temporada inteira,
+            # passado e futuro -- ver collectors/calendario_service. Gravado
+            # ANTES do recorte de `ultimas_rodadas`, que e' so' pra folha.
+            # SAVEPOINT: falha no calendario desfaz so' o calendario, e a
+            # coleta da folha segue na mesma transacao sem ser abortada.
+            try:
+                from collectors.calendario_service import gravar_temporada
+                self.cur.execute("SAVEPOINT calendario")
+                gravar_temporada(self.cur, response, lg["league_id"], season_da_liga)
+                self.cur.execute("RELEASE SAVEPOINT calendario")
+            except Exception as e:
+                try:
+                    self.cur.execute("ROLLBACK TO SAVEPOINT calendario")
+                except Exception:
+                    pass
+                print(f"[CALENDARIO] liga {lg['league_id']}: {e}")
             if ultimas_rodadas:
                 response = _ultimas_rodadas(response, ultimas_rodadas)
 

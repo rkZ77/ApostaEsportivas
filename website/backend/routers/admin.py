@@ -392,6 +392,10 @@ _PIPELINE_SCRIPTS = {
     "coleta_folha_1t":      "atualizar_jogos.py",
     # Escalacao por time do historico (2026-09-27). Estagio "escalacao".
     "coleta_escalacoes":    "atualizar_jogos.py",
+    # Calendario das ligas (2026-09-27). Estagio "calendario".
+    "coleta_calendario":    "atualizar_jogos.py",
+    "coleta_eventos":       "atualizar_jogos.py",
+    "coleta_clima":         "atualizar_jogos.py",
     "gerar_playerstats_todos": os.path.join("engine_pipelines", "player_stats_pipeline.py"),
     "perfis_de_liga":       "atualizar_ligas.py",
     # Fase de homologacao/validacao (compara motor vs IA em uma base DEV
@@ -456,6 +460,9 @@ _PIPELINE_ARGS["coleta_folha"] = ["4"]
 _PIPELINE_ARGS["coleta_medias"] = ["5"]
 _PIPELINE_ARGS["coleta_folha_1t"] = ["1t"]
 _PIPELINE_ARGS["coleta_escalacoes"] = ["escalacao"]
+_PIPELINE_ARGS["coleta_calendario"] = ["calendario"]
+_PIPELINE_ARGS["coleta_eventos"] = ["eventos", "300"]
+_PIPELINE_ARGS["coleta_clima"] = ["clima", "1000"]
 
 #: SEM argumento de metodo, e e' o que distingue este passo de
 #: `gerar_playerstats`: aquele roda os tres diarios, este roda os seis.
@@ -535,6 +542,9 @@ _PASSO_DO_COMANDO = {
     "folha":              "coleta_folha",
     "folha1t":            "coleta_folha_1t",
     "escalacoes":         "coleta_escalacoes",
+    "calendario":         "coleta_calendario",
+    "eventos":            "coleta_eventos",
+    "clima":              "coleta_clima",
     "medias":             "coleta_medias",
 }
 
@@ -660,6 +670,9 @@ _STEP_LABELS = {
     "coleta_folha":            "Coletando folha de estatística",
     "coleta_folha_1t":         "Coletando o 1º tempo das partidas antigas",
     "coleta_escalacoes":       "Coletando escalações das partidas antigas",
+    "coleta_calendario":       "Coletando o calendário das ligas",
+    "coleta_eventos":          "Coletando eventos por minuto",
+    "coleta_clima":            "Coletando clima e altitude",
     "coleta_medias":           "Recalculando médias dos times",
 }
 
@@ -1082,6 +1095,9 @@ _PASSO_LABEL_CURTO = {
     "coleta_folha":            "Folha de Estatística",
     "coleta_folha_1t":         "Folha do 1º Tempo",
     "coleta_escalacoes":       "Escalações",
+    "coleta_calendario":       "Calendário das Ligas",
+    "coleta_eventos":          "Eventos por Minuto",
+    "coleta_clima":            "Clima e Altitude",
     "coleta_medias":           "Médias dos Times",
 }
 
@@ -1110,7 +1126,7 @@ _PASSO_LABEL_CURTO = {
 _AVULSOS_FALLBACK = [
     "gerar_playerstats_todos", "historico_times", "gerar_live",
     "coleta_status", "coleta_times", "coleta_fixtures", "coleta_classificacao",
-    "coleta_folha", "coleta_folha_1t", "coleta_escalacoes", "coleta_medias",
+    "coleta_folha", "coleta_folha_1t", "coleta_eventos", "coleta_clima", "coleta_calendario", "coleta_escalacoes", "coleta_medias",
     "perfis_de_liga",
 ]
 
