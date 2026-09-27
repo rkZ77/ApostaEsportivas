@@ -273,6 +273,44 @@ def _sinal_do_lado(desfalques, rod) -> dict:
             "tecnico_mudou": bool((rod or {}).get("tecnico_mudou"))}
 
 
+def _contexto_extra(cur, fixture_id, casa, fora, quando) -> dict:
+    """Calendario, gols por faixa de minuto e clima. Cada um e' opcional: tabela
+    que ainda nao existe no ambiente (coleta nova) simplesmente nao entra."""
+    saida: dict = {}
+    for chave, funcao in (("calendario", _calendario), ("gols_por_faixa", _gols_por_faixa)):
+        for team in (casa, fora):
+            try:
+                valor = funcao(cur, team, quando)
+            except Exception:
+                cur.connection.rollback()
+                valor = None
+            if valor:
+                saida[(chave, team)] = valor
+    try:
+        cur.execute("""SELECT altitude_m, temperatura_c, chuva_mm, vento_kmh, fonte
+                         FROM clima_partida WHERE fixture_id = %s""", (fixture_id,))
+        linha = cur.fetchone()
+        if linha:
+            alt, temp, chuva, vento, fonte = linha
+            saida["clima"] = {k: v for k, v in {
+                "altitude_m": round(alt) if alt is not None else None,
+                "temperatura_c": temp, "chuva_mm": chuva, "vento_kmh": vento,
+                "fonte": "previsao" if fonte == "forecast" else "medido"}.items() if v is not None}
+    except Exception:
+        cur.connection.rollback()
+    return saida
+
+
+def _calendario(cur, team_id, quando):
+    from collectors.calendario_service import carga_do_time
+    return carga_do_time(cur, team_id, quando)
+
+
+def _gols_por_faixa(cur, team_id, quando):
+    from collectors.eventos_collector_service import gols_por_faixa
+    return gols_por_faixa(cur, team_id, quando)
+
+
 def sinal_de_desfalques(fixture_id: int) -> dict | None:
     """Sinal de desfalques e troca de tecnico pro Score Final do motor
     (news_data de orchestrator.analyze_fixture_markets). None sem dado.
@@ -343,6 +381,7 @@ def _montar(fixture_id: int) -> dict | None:
 
         escal_casa = _escalacoes_recentes(cur, casa, quando)
         escal_fora = _escalacoes_recentes(cur, fora, quando)
+        extras = _contexto_extra(cur, fixture_id, casa, fora, quando)
     finally:
         cur.close()
         conn.close()
@@ -363,6 +402,8 @@ def _montar(fixture_id: int) -> dict | None:
             "tabela": linha_da_tabela(team_id),
             "rodizio_de_titulares": rod,
             "desfalques": desf_ia,
+            "calendario": extras.get(("calendario", team_id)),
+            "gols_por_faixa_de_minuto": extras.get(("gols_por_faixa", team_id)),
         }
         return {k: v for k, v in bloco.items() if v not in (None, {}, [])}
 
@@ -372,6 +413,7 @@ def _montar(fixture_id: int) -> dict | None:
         "visitante": time(fora, nome_fora, hist_fora, "away", escal_fora),
         "confronto_direto": confronto_direto(h2h, casa),
         "pressao_de_tabela": competitive_pressure.descrever(pressao) or None,
+        "clima_e_altitude": extras.get("clima"),
     }
     _SINAL[fixture_id] = sinal
     return {k: v for k, v in dossie.items() if v not in (None, {}, [])}

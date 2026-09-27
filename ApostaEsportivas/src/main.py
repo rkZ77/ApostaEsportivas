@@ -82,6 +82,9 @@ from utils.db_utils import get_connection
 def run_migrations():
     """Aplica ALTER TABLE seguros (IF NOT EXISTS) para colunas novas."""
     from collectors.lineups_collector_service import DDL as DDL_ESCALACAO
+    from collectors.calendario_service import DDL as DDL_CALENDARIO
+    from collectors.eventos_collector_service import DDL as DDL_EVENTOS
+    from collectors.clima_service import DDL as DDL_CLIMA
     migrations = [
         # HORA DO JOGO NA TABELA QUE NAO SOME (2026-08-30, pedido do usuario).
         #
@@ -115,6 +118,11 @@ def run_migrations():
         "ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS finalizacao_checked_at TIMESTAMP;",
         # ESCALACAO POR TIME (2026-09-27) -- ver lineups_collector_service.
         *DDL_ESCALACAO,
+        # CALENDARIO DAS LIGAS (2026-09-27) -- ver calendario_service.
+        *DDL_CALENDARIO,
+        # EVENTOS POR MINUTO E CLIMA (2026-09-27).
+        *DDL_EVENTOS,
+        *DDL_CLIMA,
         "ALTER TABLE picks_vip   ADD COLUMN IF NOT EXISTS market_id INTEGER;",
         "ALTER TABLE picks_free  ADD COLUMN IF NOT EXISTS market_id INTEGER;",
         "ALTER TABLE picks_vip   ADD COLUMN IF NOT EXISTS stake_units INTEGER;",
@@ -748,6 +756,25 @@ def cmd_folha_1t(*args):
     MatchStatisticsSyncService().backfill_primeiro_tempo(teto_requisicoes=teto)
 
 
+def cmd_eventos(*args):
+    """Eventos por minuto das partidas encerradas (1 requisicao por jogo)."""
+    from collectors.eventos_collector_service import backfill
+    backfill(teto_requisicoes=int(args[0]) if args and args[0] else 100)
+
+
+def cmd_clima(*args):
+    """Clima e altitude das partidas do calendario (Open-Meteo, sem cota)."""
+    from collectors.clima_service import coletar
+    coletar(teto=int(args[0]) if args and args[0] else 500)
+
+
+def cmd_calendario(*args):
+    """Temporada inteira de cada liga ativa, passado e futuro (1 requisicao
+    por liga). A coleta diaria ja' atualiza de graca; isto enche na hora."""
+    from collectors.calendario_service import coletar_todas_as_ligas
+    coletar_todas_as_ligas()
+
+
 def cmd_escalacoes(*args):
     """Escalacao por time do historico (1 requisicao por partida). A coleta
     diaria ja' pega a rodada; isto completa o passado. Continua de onde parou."""
@@ -1215,6 +1242,15 @@ COMANDOS: tuple = (
             uso="folha1t [teto]",
             detalhe="folha1t                 ate 100 partidas, da mais recente pra tras\n"
                     "folha1t 500             libera 500 requisicoes"),
+    Comando("eventos", "Coleta · eventos por minuto",
+            "Gols, cartoes e substituicoes com o minuto (1 requisicao por jogo)",
+            lambda *a: cmd_eventos(*a), uso="eventos [teto]"),
+    Comando("clima", "Coleta · clima e altitude",
+            "Clima na hora do jogo e altitude da cidade (Open-Meteo, sem cota)",
+            lambda *a: cmd_clima(*a), uso="clima [teto]"),
+    Comando("calendario", "Coleta · calendario das ligas",
+            "Temporada inteira de cada liga, passado e futuro (1 requisicao por liga)",
+            lambda *a: cmd_calendario(*a)),
     Comando("escalacoes", "Coleta · escalacoes (historico)",
             "Escalacao por time das partidas antigas (1 requisicao por jogo)",
             lambda *a: cmd_escalacoes(*a),

@@ -221,6 +221,20 @@ class DataCollectorMain:
         except Exception as e:
             print(f"[STAGE ESCALACAO] falhou: {e}")
 
+    def run_stage_extra(self, qual: str, teto: int = 100):
+        """Coletas de contexto: eventos por minuto e clima. Falha aqui nao
+        derruba a coleta -- e' contexto do dossie e medicao, nao insumo da conta."""
+        print(f"[STAGE {qual.upper()}] ate {teto}...")
+        try:
+            if qual == "eventos":
+                from collectors.eventos_collector_service import backfill
+                backfill(teto_requisicoes=teto)
+            elif qual == "clima":
+                from collectors.clima_service import coletar
+                coletar(teto=teto)
+        except Exception as e:
+            print(f"[STAGE {qual.upper()}] falhou: {e}")
+
     def run_stage_6(self):
         print("[STAGE 6] Historico por time (quem esta abaixo do minimo)...")
         self._get_history_backfill().run()
@@ -306,6 +320,10 @@ class DataCollectorMain:
         # fila sai de match_statistics. O teto cobre a rodada do dia com folga;
         # o historico antigo e' o comando `escalacoes`, sob demanda.
         self.run_stage_escalacao(teto=int(os.getenv("ESCALACAO_TETO_DIARIO", "60")))
+        # EVENTOS POR MINUTO e CLIMA (2026-09-27). Eventos custa 1 requisicao
+        # por partida (teto); clima e' Open-Meteo, sem cota da API-Football.
+        self.run_stage_extra("eventos", teto=int(os.getenv("EVENTOS_TETO_DIARIO", "60")))
+        self.run_stage_extra("clima", teto=int(os.getenv("CLIMA_TETO_DIARIO", "300")))
         # ANTES do 5 de proposito: o agregador le match_statistics, entao o
         # jogo que o backfill acabou de gravar so' entra em team_statistics
         # (e no modelo Poisson que le dali) se ja estiver no banco quando ele
@@ -372,6 +390,16 @@ if __name__ == "__main__":
             min_jogos = int(sys.argv[2]) if len(sys.argv) > 2 else MIN_JOGOS_PADRAO
             teto = int(sys.argv[3]) if len(sys.argv) > 3 else TETO_REQUISICOES_PADRAO
             TeamHistoryBackfillService(min_jogos=min_jogos, teto_requisicoes=teto).run()
+
+        elif stage in ("eventos", "clima"):
+            # Ex: python atualizar_jogos.py eventos 500
+            #     python atualizar_jogos.py clima 2000
+            collector.run_stage_extra(stage, teto=int(sys.argv[2]) if len(sys.argv) > 2 else 100)
+
+        elif stage == "calendario":
+            # Ex: python atualizar_jogos.py calendario   (1 requisicao por liga)
+            from collectors.calendario_service import coletar_todas_as_ligas
+            coletar_todas_as_ligas()
 
         elif stage == "escalacao":
             # Ex: python atualizar_jogos.py escalacao
