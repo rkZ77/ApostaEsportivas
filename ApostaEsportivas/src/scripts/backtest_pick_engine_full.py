@@ -113,6 +113,54 @@ MAX_CANDIDATES_FOR_COMBO = 12
 
 
 ###############################################################################
+# CONFIGURACAO MEDIDA (2026-09-27)
+#
+# `--config anterior` roda o motor como ele era ANTES das fontes novas da taxa
+# (so' o mando, sem modelo por causa, sem piso de 5 por lado); sem o flag, roda
+# a configuracao de producao. Rodar os dois e comparar lucro e' como uma
+# mudanca prova que da' dinheiro, e nao so' acerto -- regra do usuario.
+#
+# VIP usa VIP_CONFIG (o que producao usa) e nao DEFAULT_CONFIG, como ate' aqui.
+###############################################################################
+from dataclasses import replace as _replace
+from services.pick_engine.config import VIP_CONFIG as _VIP_CONFIG
+
+CONFIG_ANTERIOR = "--config" in sys.argv and "anterior" in sys.argv
+
+
+def _cfg(c):
+    if not CONFIG_ANTERIOR:
+        return c
+    return _replace(c, peso_outro_mando=0.0, peso_modelo_na_taxa=0.0, min_jogos_mando_por_lado=0)
+
+
+CFG_VIP = _cfg(_VIP_CONFIG)
+CFG_DICA = _cfg(DICA_CONFIG)
+CFG_PERNAS = _cfg(DEFAULT_CONFIG)
+
+
+def _conversao_ate(cur, league_id, antes_de) -> dict | None:
+    """Gols por chute no alvo e escanteios por chute da liga, SO' com jogos
+    anteriores ao fixture -- a mesma conta de TeamStatsService._conversao_da_liga
+    sem vazar o futuro."""
+    cur.execute("""
+        SELECT SUM(COALESCE(home_goals_90, home_goals) + COALESCE(away_goals_90, away_goals))
+                   FILTER (WHERE home_shots_on IS NOT NULL AND away_shots_on IS NOT NULL),
+               SUM(home_shots_on + away_shots_on),
+               SUM(total_corners) FILTER (WHERE home_total_shots IS NOT NULL AND away_total_shots IS NOT NULL),
+               SUM(home_total_shots + away_total_shots) FILTER (WHERE total_corners IS NOT NULL)
+          FROM match_statistics
+         WHERE status = 'FT' AND league_id = %s AND match_date < %s
+           AND match_date >= %s::timestamp - INTERVAL '365 days'
+    """, (league_id, antes_de, antes_de))
+    gols, alvo, esc, chutes = cur.fetchone()
+    if not alvo or float(alvo) < 200 or not chutes:
+        return None
+    return {"conv_gols_por_chute_no_alvo": float(gols) / float(alvo),
+            "conv_escanteios_por_chute": float(esc) / float(chutes)}
+
+
+###############################################################################
 # Carga de dados (DEV) e execucao do motor por fixture
 ###############################################################################
 def _load_history(match_stats, team_id, season, league_id, before_date):
@@ -205,27 +253,30 @@ def _process_fixture(fx, match_stats, odds_service, checker, calibration_snapsho
     if not stats:
         return None
 
-    # VIP/Multipla/Alavancagem usam DEFAULT_CONFIG; Free/Dica usa DICA_CONFIG
-    # (confidence minimo mais alto) -- roda os dois porque config afeta o
-    # calculo do candidato (nao so o filtro final), mesma logica de producao.
+    # VIP usa VIP_CONFIG e Free/Dica usa DICA_CONFIG, como em producao. OS IDS
+    # DOS TIMES entram desde 27/09: sem eles pool_and_field nao filtra mando e
+    # o backtest media outro motor (o de antes de 08/08). A conversao da liga
+    # vem so' do passado do fixture.
+    ids = {"home_team_id": fx["home_team_id"], "away_team_id": fx["away_team_id"],
+           "league_baseline": _conversao_ate(dev_cur, fx["league_id"], fx["match_date"])}
     default_candidates = analyze_fixture_markets(
         structured_odds, last10_home, last10_away, reference_date=fx["match_date"],
-        config=DEFAULT_CONFIG, calibration_data=calibration_snapshot,
+        config=CFG_VIP, calibration_data=calibration_snapshot,
         context_data=context_data, matchup_data=matchup, team_strength_data=team_strength_data,
-        data_quality_score=quality["score"],
+        data_quality_score=quality["score"], **ids,
     )
-    default_picks = rank_market_candidates(default_candidates, config=DEFAULT_CONFIG)
+    default_picks = rank_market_candidates(default_candidates, config=CFG_VIP)
     for p in default_picks:
         p["_grade"] = _grade(checker, stats, p)
         p["_fixture"] = fx
 
     dica_candidates = analyze_fixture_markets(
         structured_odds, last10_home, last10_away, reference_date=fx["match_date"],
-        config=DICA_CONFIG, calibration_data=calibration_snapshot,
+        config=CFG_DICA, calibration_data=calibration_snapshot,
         context_data=context_data, matchup_data=matchup, team_strength_data=team_strength_data,
-        data_quality_score=quality["score"],
+        data_quality_score=quality["score"], **ids,
     )
-    dica_picks = rank_market_candidates(dica_candidates, config=DICA_CONFIG)
+    dica_picks = rank_market_candidates(dica_candidates, config=CFG_DICA)
     for p in dica_picks:
         p["_grade"] = _grade(checker, stats, p)
 
@@ -358,6 +409,23 @@ def _fmt_pct(value, signed=False):
     if value is None:
         return "·"
     return f"{value*100:+.1f}%" if signed else f"{value*100:.1f}%"
+
+
+def _resumo_em_dinheiro(results):
+    """Uma linha por produto: picks, acerto e lucro em unidades (stake 1).
+    E' a linha que se compara entre `--config anterior` e a atual."""
+    print(f"=== RESUMO ({'config ANTERIOR' if CONFIG_ANTERIOR else 'config ATUAL'}) ===")
+    for tipo, chave in (("Premium", "vip_pick"), ("Dica", "dica_pick")):
+        grades = [r[chave]["_grade"] for r in results
+                  if r.get(chave) and r[chave].get("_grade")]
+        decididos = [g for g in grades if g["result"] in ("GREEN", "RED", "HALF-WIN", "HALF-LOSS")]
+        lucro = sum(g["profit"] for g in grades)
+        acertos = sum(1 if g["result"] == "GREEN" else 0.5 if g["result"] == "HALF-WIN" else 0
+                      for g in decididos)
+        acerto = acertos / len(decididos) if decididos else 0
+        print(f"{tipo:8} picks={len(grades):4d} acerto={acerto:6.1%} lucro={lucro:+7.2f}u "
+              f"ROI={(lucro / len(grades) if grades else 0):+.1%}")
+    print()
 
 
 def _report_vip_free(results):
@@ -522,6 +590,7 @@ def run(limit=None, gravar=True, snapshots=False, minutos_antes=0):
           f"({skipped} pulado(s) por falta de odds/historico/dado suficiente).\n")
 
     _report_vip_free(results)
+    _resumo_em_dinheiro(results)
     if gravar:
         _store_backtest_run(results, run_label=f"full_backtest_{_AMBIENTE}", config_snapshot={"DEFAULT_CONFIG": DEFAULT_CONFIG.__dict__, "DICA_CONFIG": DICA_CONFIG.__dict__})
     else:
@@ -562,6 +631,8 @@ if __name__ == "__main__":
                               "de odds_values, que so' guarda a odd de agora. E' o unico "
                               "jeito de haver jogo encerrado COM odd -- ver "
                               "services/odds_snapshot_service.py")
+    parser.add_argument("--config", choices=("atual", "anterior"), default="atual",
+                        help="anterior = motor antes das fontes novas da taxa (27/09)")
     parser.add_argument("--minutos-antes", type=int, default=0,
                          help="usa a ultima cotacao pelo menos N minutos antes do apito "
                               "(0 = a mais proxima do jogo, que e' o preco real de quem "

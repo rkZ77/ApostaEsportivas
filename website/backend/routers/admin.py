@@ -7241,6 +7241,21 @@ def registrar_mudanca(body: MudancaBody, current_user: dict = Depends(require_ad
         conn.close()
 
 
+@router.delete("/motor/mudancas/{mudanca_id}")
+def remover_mudanca(mudanca_id: int, current_user: dict = Depends(require_admin)):
+    """Remove um registro -- o deploy registra sozinho, inclusive o que nao
+    mexeu em motor, e a lista tem que poder ser limpa."""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("DELETE FROM motor_mudancas WHERE id = %s", (mudanca_id,))
+        conn.commit()
+        return {"removida": cur.rowcount > 0}
+    finally:
+        cur.close()
+        conn.close()
+
+
 #: Texto de acao por tipo de falha, quando o motor nao esta' no path. A fonte e'
 #: services/pick_engine/ai_review.ACAO_POR_FALHA; isto so' evita o painel sem
 #: frase nenhuma num ambiente sem o motor.
