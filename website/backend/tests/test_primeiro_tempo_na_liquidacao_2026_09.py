@@ -126,6 +126,7 @@ def test_gol_do_2o_tempo_no_site(api):
 
 
 def test_escanteio_do_2o_tempo_le_a_folha_do_2o_tempo(api, monkeypatch):
+    api()  # sem o duble, `_fetch_fixture` iria a API de verdade
     resposta = [dict(t, statistics_2h=[{"type": "Corner Kicks", "value": v}])
                 for t, v in zip(RESPOSTA_DA_API, (3, 4))]
     monkeypatch.setattr(live, "_fetch_stats", lambda fid, status: resposta)
