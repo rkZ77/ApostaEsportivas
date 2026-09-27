@@ -144,6 +144,15 @@ class MatchStatsService:
                 ms.home_possession, ms.away_possession,
                 ms.home_passes, ms.away_passes,
                 ms.home_passes_accuracy, ms.away_passes_accuracy,
+                -- 1o TEMPO (2026-09-27): placar do intervalo e a folha por
+                -- tempo. Sao o que o motor le pros mercados de 1o tempo
+                -- (stats_model, familias *_1h); NULL = partida sem a folha.
+                ms.home_goals_ht, ms.away_goals_ht,
+                ms.home_corners_1h, ms.away_corners_1h,
+                ms.home_yellow_cards_1h, ms.away_yellow_cards_1h,
+                ms.home_red_cards_1h, ms.away_red_cards_1h,
+                ms.home_shots_on_1h, ms.away_shots_on_1h,
+                ms.home_total_shots_1h, ms.away_total_shots_1h,
                 ls.team_name AS opponent_name,
                 ls.rank AS opponent_rank
             FROM match_statistics ms
@@ -181,6 +190,15 @@ class MatchStatsService:
                 ms.home_possession, ms.away_possession,
                 ms.home_passes, ms.away_passes,
                 ms.home_passes_accuracy, ms.away_passes_accuracy,
+                -- 1o TEMPO (2026-09-27): placar do intervalo e a folha por
+                -- tempo. Sao o que o motor le pros mercados de 1o tempo
+                -- (stats_model, familias *_1h); NULL = partida sem a folha.
+                ms.home_goals_ht, ms.away_goals_ht,
+                ms.home_corners_1h, ms.away_corners_1h,
+                ms.home_yellow_cards_1h, ms.away_yellow_cards_1h,
+                ms.home_red_cards_1h, ms.away_red_cards_1h,
+                ms.home_shots_on_1h, ms.away_shots_on_1h,
+                ms.home_total_shots_1h, ms.away_total_shots_1h,
                 ls.team_name AS opponent_name,
                 ls.rank AS opponent_rank
             FROM match_statistics ms
@@ -277,6 +295,15 @@ class MatchStatsService:
                 ms.home_possession, ms.away_possession,
                 ms.home_passes, ms.away_passes,
                 ms.home_passes_accuracy, ms.away_passes_accuracy,
+                -- 1o TEMPO (2026-09-27): placar do intervalo e a folha por
+                -- tempo. Sao o que o motor le pros mercados de 1o tempo
+                -- (stats_model, familias *_1h); NULL = partida sem a folha.
+                ms.home_goals_ht, ms.away_goals_ht,
+                ms.home_corners_1h, ms.away_corners_1h,
+                ms.home_yellow_cards_1h, ms.away_yellow_cards_1h,
+                ms.home_red_cards_1h, ms.away_red_cards_1h,
+                ms.home_shots_on_1h, ms.away_shots_on_1h,
+                ms.home_total_shots_1h, ms.away_total_shots_1h,
                 ls.team_name AS opponent_name,
                 ls.rank AS opponent_rank
             FROM match_statistics ms
@@ -386,6 +413,15 @@ class MatchStatsService:
                 ms.home_possession, ms.away_possession,
                 ms.home_passes, ms.away_passes,
                 ms.home_passes_accuracy, ms.away_passes_accuracy,
+                -- 1o TEMPO (2026-09-27): placar do intervalo e a folha por
+                -- tempo. Sao o que o motor le pros mercados de 1o tempo
+                -- (stats_model, familias *_1h); NULL = partida sem a folha.
+                ms.home_goals_ht, ms.away_goals_ht,
+                ms.home_corners_1h, ms.away_corners_1h,
+                ms.home_yellow_cards_1h, ms.away_yellow_cards_1h,
+                ms.home_red_cards_1h, ms.away_red_cards_1h,
+                ms.home_shots_on_1h, ms.away_shots_on_1h,
+                ms.home_total_shots_1h, ms.away_total_shots_1h,
                 ls.team_name AS opponent_name,
                 ls.rank      AS opponent_rank
             FROM match_statistics ms

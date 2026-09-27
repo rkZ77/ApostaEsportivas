@@ -187,6 +187,16 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP;")
         cur.execute("ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS home_goals_ht INTEGER;")
         cur.execute("ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS away_goals_ht INTEGER;")
+        # FOLHA DO 1o TEMPO (2026-09-27). Quem grava e' o coletor do motor
+        # (CONTADORES_1T em match_statistics_sync_service), mas a consulta de
+        # historico do motor ja' le as colunas: criadas aqui, existem em PROD no
+        # primeiro deploy, sem depender de `python main.py setup` na mao.
+        for _contador in ("corners_1h", "yellow_cards_1h", "red_cards_1h",
+                          "shots_on_1h", "total_shots_1h"):
+            for _lado in ("home", "away"):
+                cur.execute(f"ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS "
+                            f"{_lado}_{_contador} INTEGER;")
+        cur.execute("ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS stats_1h_checked_at TIMESTAMP;")
         # PROCEDENCIA do numero digitado a mao no /admin (aba Dados).
         #
         # Numero preenchido a mao fica indistinguivel do coletado assim que

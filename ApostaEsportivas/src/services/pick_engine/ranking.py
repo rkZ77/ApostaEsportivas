@@ -41,6 +41,14 @@ _CORRELATION_GROUP_OVERRIDES = {
     "double_chance": "result",
     "draw_no_bet": "result",
     "shots_on_target": "shots",  # chutes no alvo e chutes totais sao o mesmo sinal de volume ofensivo
+    # 1o TEMPO E' UM RECORTE DO MESMO JOGO (2026-09-27). "Over 0.5 gols no 1o
+    # tempo" e "Over 1.5 gols" ganham juntos com frequencia, e multiplicar as
+    # duas probabilidades como independentes superestima o bilhete -- o mesmo
+    # erro que motivou btts -> goals acima. Na fixture, disputam o mesmo slot.
+    "goals_1h": "goals",
+    "btts_1h": "goals",
+    "corners_1h": "corners",
+    "cards_1h": "cards",
 }
 
 

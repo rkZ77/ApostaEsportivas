@@ -228,7 +228,10 @@ def _fetch_stats(fid: int, status: str) -> list:
             return cached
     try:
         r = requests.get(f"{API_BASE}/fixtures/statistics", headers=_headers(),
-                         params={"fixture": fid}, timeout=10)
+                         # `half=true` traz `statistics_1h` junto, sem custo a
+                         # mais: e' de la' que o mercado de 1o tempo liquida
+                         # depois do intervalo. A folha cheia nao muda.
+                         params={"fixture": fid, "half": "true"}, timeout=10)
         api_quota.registrar(getattr(r, "headers", None), "live")
         corpo = r.json() or {}
         if motivo := _recusa_da_api(corpo):
@@ -737,7 +740,8 @@ def odd_atual(fixture_id: int, market_type: str | None,
 
 
 def _parse_stats(raw: list, home_id: int | None = None,
-                 away_id: int | None = None) -> tuple[dict, dict]:
+                 away_id: int | None = None,
+                 chave: str = "statistics") -> tuple[dict, dict]:
     """(stats casa, stats fora) da resposta de /fixtures/statistics.
 
     Duas correcoes em relacao a versao anterior, ambas de dado errado e nao
@@ -761,12 +765,15 @@ def _parse_stats(raw: list, home_id: int | None = None,
        expulso" como `"Red Cards": null`, e trata-lo como desconhecido deixava
        TODO mercado de cartao sem liquidar ao vivo: _stat_value soma
        ("Yellow Cards", "Red Cards") e devolve None se qualquer um faltar.
+
+    `chave="statistics_1h"` le a folha do 1o tempo (ver _enrich_leg). Mesma
+    regra de leitura; resposta sem a chave vira folha vazia, nunca a cheia.
     """
     parsed: list[dict] = []
     ids: list = []
     for team in raw:
-        d = {chave: int(valor) for chave, valor in stat_sheet.ler_folha(
-            team.get("statistics") or []).items()}
+        d = {tipo: int(valor) for tipo, valor in stat_sheet.ler_folha(
+            team.get(chave) or []).items()}
         parsed.append(d)
         ids.append((team.get("team") or {}).get("id"))
 
@@ -1912,11 +1919,30 @@ def _enrich_leg(fid: int, market: str, line: str,
     stats_home_id = home_team_id or (fix_teams.get("home") or {}).get("id")
     stats_away_id = away_team_id or (fix_teams.get("away") or {}).get("id")
 
+    # MERCADO DE 1o TEMPO (2026-09-27). Ate' aqui ele era lido com o placar e
+    # a folha do JOGO INTEIRO: "Escanteios 1o Tempo Under 4.5" com 3 no
+    # intervalo e 9 no fim saia RED. Com a bola rolando no 1o tempo o numero
+    # de agora E' o do 1o tempo (e cresce); do intervalo em diante vale o
+    # placar do intervalo e a folha `statistics_1h`.
+    primeiro_tempo = market_form.e_mercado_de_primeiro_tempo(market, market_type)
+    depois_do_1t = primeiro_tempo and status not in ("TBD", "NS", "1H")
+    sem_dado_1t = False
+    if depois_do_1t:
+        ht = (fix_data.get("score") or {}).get("halftime") or {}
+        if ht.get("home") is not None and ht.get("away") is not None:
+            home_goals, away_goals = int(ht["home"]), int(ht["away"])
+        else:
+            sem_dado_1t = True
+
     precisa_stats = _leg_needs_stats(market, market_type)
     home_stats, away_stats = {}, {}
     if (status in LIVE_STATUSES or status in FT_STATUSES) and precisa_stats:
-        home_stats, away_stats = _parse_stats(
-            _fetch_stats(fid, status), stats_home_id, stats_away_id)
+        folha_crua = _fetch_stats(fid, status)
+        if depois_do_1t:
+            home_stats, away_stats = _parse_stats(
+                folha_crua, stats_home_id, stats_away_id, chave="statistics_1h")
+        else:
+            home_stats, away_stats = _parse_stats(folha_crua, stats_home_id, stats_away_id)
 
     cur_val, stat_label, direction = _stat_for_market(
         market, line, home_stats, away_stats, home_goals, away_goals, market_type
@@ -1931,7 +1957,12 @@ def _enrich_leg(fid: int, market: str, line: str,
     # Só no fim do jogo: com a bola rolando a validação ainda não existe, e o
     # ticker continua mostrando o contador cru, que é o que o usuário vê na TV.
     cartoes_pendentes = False
-    if status in FT_STATUSES and market_form.e_mercado_de_cartoes(market, market_type):
+    if primeiro_tempo and status in FT_STATUSES and             market_form.e_mercado_de_cartoes(market, market_type):
+        # A validacao de cartao (banco e comissao fora) so' existe pro jogo
+        # inteiro. Sem ela, a regra de 10/09 manda esperar -- nao anular.
+        cur_val = None
+        cartoes_pendentes = True
+    elif status in FT_STATUSES and market_form.e_mercado_de_cartoes(market, market_type):
         pontos, validado = _cartoes_elegiveis(
             fid, market_form.escopo_do_mercado(market))
         if validado:
@@ -1948,6 +1979,11 @@ def _enrich_leg(fid: int, market: str, line: str,
 
     # Locked: resultado já determinado e irreversível
     is_ft     = status in FT_STATUSES
+    if sem_dado_1t:
+        # Placar do intervalo ainda nao publicado: o pick de 1o tempo nao tem
+        # numero pra ser julgado, e o do jogo inteiro nao serve. Fica como
+        # partida em andamento ate' o provedor publicar.
+        is_ft, cur_val, pst = False, None, "neutral"
     is_locked = is_ft
     if not is_ft and cur_val is not None:
         # BTTS: uma vez que ambas marcaram (cur_val=1) não tem como voltar
@@ -1990,7 +2026,9 @@ def _enrich_leg(fid: int, market: str, line: str,
         "is_locked":    is_locked,
         "home_stats":   home_stats,
         "away_stats":   away_stats,
-        "went_to_extra_time": went_to_extra_time,
+        # O 1o tempo e' tempo regulamentar em qualquer jogo: prorrogacao nao
+        # o contamina, e marcar a perna aqui a deixaria pendente sem motivo.
+        "went_to_extra_time": went_to_extra_time and not primeiro_tempo,
         "precisa_stats": precisa_stats,
         # Cartao encerrado sem validacao: nao liquida e NAO anula. Ver
         # `_cartoes_elegiveis` e a guarda em `_anulacao_sem_estatistica`.

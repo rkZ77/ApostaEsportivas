@@ -87,6 +87,22 @@ _ADAPTADOR = (
     ("Goalkeeper Saves",    "home_goalkeeper_saves", "away_goalkeeper_saves"),
 )
 
+#: A mesma folha, recortada no 1o TEMPO (2026-09-27). So' os contadores que a
+#: API publica por tempo e o coletor grava -- falta, impedimento e defesa nao
+#: estao aqui, e por isso o mercado de 1o tempo dessas familias sai sem serie
+#: em vez de sair com a do jogo inteiro.
+_ADAPTADOR_1T = (
+    ("Corner Kicks",        "home_corners_1h",       "away_corners_1h"),
+    ("Yellow Cards",        "home_yellow_cards_1h",  "away_yellow_cards_1h"),
+    ("Red Cards",           "home_red_cards_1h",     "away_red_cards_1h"),
+    ("Shots on Goal",       "home_shots_on_1h",      "away_shots_on_1h"),
+    ("Total Shots",         "home_total_shots_1h",   "away_total_shots_1h"),
+)
+
+#: Como o 1o tempo aparece no nome ou no market_type de um mercado.
+_MARCAS_1T = (" ht", "1o tempo", "1º tempo", "1° tempo", "primeiro tempo",
+              "1st half", "first half")
+
 
 def escopo_do_mercado(market: str) -> str:
     """'home', 'away' ou 'total' -- de qual lado o mercado fala.
@@ -122,7 +138,7 @@ def e_mercado_de_cartoes(market: str | None, market_type: str | None) -> bool:
     return mtype in ("cards", "handicap_cards") or any(k in m for k in ("cart", "card"))
 
 
-def folha_do_jogo(ms: dict) -> tuple[dict, dict]:
+def folha_do_jogo(ms: dict, primeiro_tempo: bool = False) -> tuple[dict, dict]:
     """Converte uma linha de match_statistics nas duas folhas (casa, fora).
 
     Coluna ausente vira chave ausente, nunca 0: `_stat_side` devolve None
@@ -131,7 +147,7 @@ def folha_do_jogo(ms: dict) -> tuple[dict, dict]:
     """
     casa: dict = {}
     fora: dict = {}
-    for chave, col_casa, col_fora in _ADAPTADOR:
+    for chave, col_casa, col_fora in (_ADAPTADOR_1T if primeiro_tempo else _ADAPTADOR):
         if ms.get(col_casa) is not None:
             casa[chave] = ms[col_casa]
         if ms.get(col_fora) is not None:
@@ -150,7 +166,9 @@ def e_mercado_de_primeiro_tempo(market: str | None, market_type: str | None) -> 
     ter perdido em jogo que terminou 3x1 no segundo tempo."""
     m = (market or "").lower()
     mtype = (market_type or "").lower()
-    return mtype.endswith("_ht") or " ht" in m or "1o tempo" in m or "1º tempo" in m
+    # `_1h` e' o sufixo das familias de 1o tempo do motor (goals_1h,
+    # corners_1h...), `_ht` o do Pick Boost.
+    return mtype.endswith(("_ht", "_1h")) or any(k in m for k in _MARCAS_1T)
 
 
 def perspectiva_do_time(ms: dict, team_id: int | None, escopo: str,
@@ -171,7 +189,7 @@ def perspectiva_do_time(ms: dict, team_id: int | None, escopo: str,
 
     Mercado de total nao gira nada: ele soma os dois lados de qualquer jeito.
     """
-    casa, fora = folha_do_jogo(ms)
+    casa, fora = folha_do_jogo(ms, primeiro_tempo)
     if primeiro_tempo:
         gols_casa, gols_fora = ms.get("home_goals_ht"), ms.get("away_goals_ht")
     else:
@@ -265,8 +283,10 @@ def serie_do_mercado(jogos: list, market: str, market_type: str | None, line: st
             # pick de verdade. A regua de 0.5 existe pro grafico (ver abaixo),
             # nao pra decisao -- se um dia a definicao de BTTS mudar, ela muda
             # em settlement e esta serie acompanha sozinha.
-            resultado, _factor = settlement.settle_btts(
-                ms.get("home_goals"), ms.get("away_goals"), op)
+            # O placar que `perspectiva_do_time` escolheu, e nao o final:
+            # "Ambas Marcam no 1o tempo" se decide no intervalo. Girar os lados
+            # nao muda nada aqui -- ambas marcam e' simetrico.
+            resultado, _factor = settlement.settle_btts(gols_casa, gols_fora, op)
 
         itens.append({
             "fixture_id": ms.get("fixture_id"),

@@ -160,6 +160,21 @@ class AIResultCheckerService:
             "home_saves":     g("home_goalkeeper_saves"),
             "away_saves":     g("away_goalkeeper_saves"),
             "total_saves":    _sum(g("home_goalkeeper_saves"), g("away_goalkeeper_saves")),
+            # FOLHA DO 1o TEMPO (2026-09-27), de `statistics_1h`. Sem ela o
+            # mercado de escanteio do 1o tempo era liquidado contra o jogo
+            # INTEIRO (_stat_family so' separava gol). None = partida coletada
+            # antes da coluna existir, ou liga sem folha por tempo: o pick fica
+            # pendente, nunca cai no numero do jogo inteiro. Cartao do 1o tempo
+            # nao tem contagem validada e por isso nem entra aqui.
+            "home_corners_ht":  g("home_corners_1h"),
+            "away_corners_ht":  g("away_corners_1h"),
+            "total_corners_ht": _sum(g("home_corners_1h"), g("away_corners_1h")),
+            "home_shots_on_ht":  g("home_shots_on_1h"),
+            "away_shots_on_ht":  g("away_shots_on_1h"),
+            "total_shots_on_ht": _sum(g("home_shots_on_1h"), g("away_shots_on_1h")),
+            "home_shots_ht":  g("home_total_shots_1h"),
+            "away_shots_ht":  g("away_total_shots_1h"),
+            "total_shots_ht": _sum(g("home_total_shots_1h"), g("away_total_shots_1h")),
         }
 
     ##########################################################################
@@ -175,8 +190,12 @@ class AIResultCheckerService:
     # DETECTA SE É MERCADO DE 1° TEMPO
     ##########################################################################
     @staticmethod
-    def _is_first_half(market_name: str) -> bool:
-        n = market_name.lower()
+    def _is_first_half(market_name: str, market_type: str | None = None) -> bool:
+        # O market_type do motor (goals_1h, corners_1h...) decide sozinho:
+        # nome de mercado em PT pode chegar sem o sufixo de periodo.
+        if (market_type or "").lower().endswith("_1h"):
+            return True
+        n = (market_name or "").lower()
         return any(k in n for k in [
             "1° tempo", "1º tempo", "primeiro tempo",
             "1st half", "first half", "halftime", "half time",
@@ -206,6 +225,10 @@ class AIResultCheckerService:
         "result": "result_1x2", "outcome": "result_1x2", "result_1x2": "result_1x2",
         "double_chance": "double_chance",
         "to_qualify": "to_qualify",
+        # Familias de 1o tempo do motor: a base e' a mesma, o periodo sai de
+        # _is_first_half.
+        "goals_1h": "goals", "btts_1h": "btts",
+        "corners_1h": "corners", "cards_1h": "cards",
     }
 
     _HANDICAP_KEYWORDS = ("handicap", "handi", "h.a.", " ha ")
@@ -428,6 +451,9 @@ class AIResultCheckerService:
         "saves":           ("home_saves", "away_saves", "total_saves"),
         "shots":           ("home_shots", "away_shots", "total_shots"),
         "shots_on_target": ("home_shots_on", "away_shots_on", "total_shots_on"),
+        "corners_ht":      ("home_corners_ht", "away_corners_ht", "total_corners_ht"),
+        "shots_ht":        ("home_shots_ht", "away_shots_ht", "total_shots_ht"),
+        "shots_on_target_ht": ("home_shots_on_ht", "away_shots_on_ht", "total_shots_on_ht"),
     }
 
     def _stat_family(self, mt, market="", is_ht=False, prorrogacao=False):
@@ -440,6 +466,12 @@ class AIResultCheckerService:
             if prorrogacao:
                 return "goals_90"
             return "goals"
+        if is_ht:
+            # Familia sem coluna de 1o tempo (cartao, falta, impedimento,
+            # defesa) devolve uma chave que nao existe em _STAT_KEYS, e o pick
+            # fica pendente. O erro que isto corrige era o contrario: cair na
+            # familia do jogo inteiro e liquidar com o numero errado.
+            return f"{mt}_ht"
         if mt == "cards" and any(k in (market or "").lower() for k in ("amarelo", "yellow")):
             return "yellow"
         return mt
@@ -512,7 +544,7 @@ class AIResultCheckerService:
     def evaluate_pick(self, market, line, odd, stats, home_team=None, away_team=None,
                       market_type=None):
         mt     = self.detect_market_type(market, market_type)
-        is_ht  = self._is_first_half(market)
+        is_ht  = self._is_first_half(market, market_type)
         side   = self.detect_side(market, home_team, away_team)
         parsed = settlement.parse_line(line, home_team, away_team)
         op, val = parsed["op"], parsed["value"]

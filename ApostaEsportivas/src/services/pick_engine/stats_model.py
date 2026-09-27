@@ -178,7 +178,52 @@ _FAMILY_STAT_FIELDS = {
     # mandante e' o volume ofensivo do adversario, nao o do proprio time.
     # Ver services/pick_engine/goalkeeper_model.py.
     "saves":            {"total": None, "home": "home_goalkeeper_saves", "away": "away_goalkeeper_saves"},
+    # 1o TEMPO (2026-09-27). Gol le' o placar do intervalo, que existe desde
+    # sempre; escanteio e cartao leem a folha `statistics_1h`, gravada desde
+    # esta data (ver collectors/match_statistics_sync_service.CONTADORES_1T).
+    # Sem coluna "total_X": o total e' a soma dos lados, como shots.
+    "goals_1h":         {"total": None, "home": "home_goals_ht",      "away": "away_goals_ht"},
+    "corners_1h":       {"total": None, "home": "home_corners_1h",    "away": "away_corners_1h"},
+    "cards_1h":         {"total": None, "home": "home_yellow_cards_1h", "away": "away_yellow_cards_1h"},
 }
+
+#: Familias de 1o tempo. Todas exigem a coluna preenchida nos DOIS lados pra o
+#: jogo entrar no pool -- ver `_tem_folha_da_familia`.
+FAMILIAS_1T = ("goals_1h", "btts_1h", "corners_1h", "cards_1h")
+
+#: Palavras que marcam o periodo no nome ingles do mercado (API-Football).
+_MARCA_1T = ("first half", "1st half")
+_MARCA_2T = ("second half", "2nd half")
+
+
+def _classificar_primeiro_tempo(name: str):
+    """(familia, escopo) de um mercado de 1o tempo, ou None.
+
+    Separado de classify_market porque o 1o tempo e' outro produto: o mesmo
+    "Total Corners" com "(1st Half)" no nome e' liquidado por metade do jogo,
+    e cair no ramo generico de escanteios compararia uma linha de ~4.5 contra
+    o historico do jogo inteiro (~10) -- Under batendo quase sempre por
+    incompatibilidade de escala, a mesma classe de bug de "Multicorners".
+
+    So' os formatos over/under e ambas marcam entram. Resultado, dupla chance,
+    handicap, placar e numero exato de gols do 1o tempo ficam fora pelas
+    mesmas decisoes que ja' valem pro jogo inteiro (ver o topo de
+    classify_market e as exclusoes do orchestrator).
+    """
+    if any(kw in name for kw in ("handicap", "1x2", "correct score", "exact",
+                                 "odd/even", "double chance", "winner",
+                                 "result", "highest", "either")):
+        return None
+    if "both teams" in name and "score" in name:
+        return ("btts_1h", "total")
+    escopo = "home" if "home" in name else "away" if "away" in name else "total"
+    if "corner" in name:
+        return ("corners_1h", escopo)
+    if "card" in name or "yellow" in name:
+        return ("cards_1h", escopo)
+    if "goal" in name:
+        return ("goals_1h", escopo)
+    return None
 
 
 def classify_market(market_name: str):
@@ -194,8 +239,9 @@ def classify_market(market_name: str):
       (existe via API /players, mas exige coletor+tabela novos -- Fase 6).
     - Placar exato/numero de gols exato -- amostra de ~15 jogos nao
       sustenta uma distribuicao de placar confiavel.
-    - Mercados de 1o/2o tempo -- o dado (home_goals_ht) existe em
-      match_statistics mas a query de historico agregado nao traz isso.
+    - Mercados de 2o tempo. Os de 1o TEMPO entraram em 2026-09-27 (gols,
+      ambas marcam, escanteios e cartoes), classificados a parte em
+      _classificar_primeiro_tempo -- ver FAMILIAS_1T.
     - Mercados exoticos ainda nao modelados (Corners/Shots 1x2 -- e um
       3-way sobre a contagem, nao sobre o resultado da partida --,
       Winning Margin, Method of Victory, Race To, Highest Scoring Half,
@@ -240,6 +286,13 @@ def classify_market(market_name: str):
     # inventar amanha ja nasce excluido, sem precisar de outra linha aqui.
     if "both teams" in name and "/" in name:
         return None
+
+    # PERIODO ANTES DE FAMILIA. Mercado de 2o tempo sai; o de 1o tempo tem
+    # familia propria, e nunca pode cair nos ramos de jogo inteiro abaixo.
+    if any(kw in name for kw in _MARCA_2T):
+        return None
+    if any(kw in name for kw in _MARCA_1T):
+        return _classificar_primeiro_tempo(name)
 
     # COMBINADO COM O RESULTADO (1X2 + outra coisa). "Result/Total Goals" manda
     # valores "Home/Over 2.5", "Draw/Under 2.5" -- contem "goal" e caia em
@@ -597,6 +650,10 @@ def comparavel_em_90(pool: list, family: str) -> list:
     if family in ("goals", "btts"):
         return [m for m in pool
                 if (m.get("status") or "FT") not in PRORROGACAO or _tem_placar_de_90(m)]
+    if family in FAMILIAS_1T:
+        # O 1o tempo e' tempo regulamentar em qualquer jogo, entao prorrogacao
+        # nao o contamina: o jogo de mata-mata fica. O que decide e' a folha.
+        return [m for m in pool if _tem_folha_da_familia(m, family)]
     pool = [m for m in pool if (m.get("status") or "FT") not in PRORROGACAO]
     return [m for m in pool if _tem_folha_da_familia(m, family)]
 
@@ -629,6 +686,14 @@ def _tem_folha_da_familia(m: dict, family: str) -> bool:
     a checagem existe pra pegar folha PARCIAL, e ausencia total de campo nunca
     pode encolher o pool -- mesma regra do `status` acima.
     """
+    if family in FAMILIAS_1T:
+        # SEM A EXCECAO DO "CHAMADOR ANTIGO". Nas familias de jogo inteiro, o
+        # jogo sem nenhum campo passa porque isso so' acontecia em fixture de
+        # teste. No 1o tempo e' o caso NORMAL: toda partida gravada antes de
+        # 27/09/2026 esta' sem a folha por tempo, e deixa-la passar faria o
+        # `or 0` de _extract_stat contar "nao sei" como "zero escanteio no 1o
+        # tempo" -- centenas de Under ganhos que nao aconteceram.
+        return all(m.get(c) is not None for c in _campos_1t(family))
     if family == "cards":
         return _tem_folha_de_cartao_completa(m)
     if family in ("goals", "btts"):
@@ -641,6 +706,19 @@ def _tem_folha_da_familia(m: dict, family: str) -> bool:
     if not presentes or not any(presentes):
         return True          # a folha inteira nao veio: nao e' folha parcial
     return all(presentes)
+
+
+def _campos_1t(family: str) -> tuple:
+    """Colunas que precisam estar preenchidas pra o jogo servir a esta familia
+    de 1o tempo. Cartao pede amarelo E vermelho, pelo mesmo motivo da familia
+    de jogo inteiro (_tem_folha_de_cartao_completa)."""
+    if family == "btts_1h":
+        family = "goals_1h"
+    campos = _FAMILY_STAT_FIELDS[family]
+    base = (campos["home"], campos["away"])
+    if family == "cards_1h":
+        return base + ("home_red_cards_1h", "away_red_cards_1h")
+    return base
 
 
 def _tem_folha_de_cartao_completa(m: dict) -> bool:
@@ -708,6 +786,12 @@ def _extract_stat(m: dict, family: str, scope: str, team_id: int | None = None):
     adversario. Ver resolve_side()."""
     if family == "cards":
         return _cards_points(m, scope, team_id)
+    if family == "cards_1h":
+        # Mesma pontuacao do jogo inteiro (amarelo 1, vermelho 2).
+        lado = resolve_side(m, scope, team_id)
+        pontos = {s: (m.get(f"{s}_yellow_cards_1h") or 0)
+                  + 2 * (m.get(f"{s}_red_cards_1h") or 0) for s in ("home", "away")}
+        return pontos[lado] if lado in pontos else pontos["home"] + pontos["away"]
     if family == "goals":
         # Sempre pelos 90 minutos -- ver gols_90. `total_goals` do banco e' a
         # soma do placar CHEIO e nao serve num jogo de prorrogacao.
@@ -823,6 +907,19 @@ def _build_market_hit_fn(family: str, scope: str, value: str, line_str: str,
             # BTTS pra casa de aposta.
             occurred = gols_90(m, "home") > 0 and gols_90(m, "away") > 0
             return 1 if occurred == want_btts else 0
+
+        return hit_fn
+
+    if family == "btts_1h":
+        if direction not in ("yes", "sim", "no", "não", "nao"):
+            return None
+        want_btts_1t = direction in ("yes", "sim")
+
+        def hit_fn(m):
+            # O pool ja' chega filtrado por _tem_folha_da_familia: os dois
+            # placares do intervalo existem em todo jogo aqui.
+            occurred = (m.get("home_goals_ht") or 0) > 0 and (m.get("away_goals_ht") or 0) > 0
+            return 1 if occurred == want_btts_1t else 0
 
         return hit_fn
 
@@ -1205,7 +1302,8 @@ def compute_taxa(family: str, scope: str, value: str, line_str: str,
     eles que pool_and_field pega o mandante em casa e o visitante fora."""
     direction = (value or "").strip().lower()
 
-    if family in ("goals", "corners", "cards", "btts", "shots", "shots_on_target", "offsides", "fouls", "saves"):
+    if family in ("goals", "corners", "cards", "btts", "shots", "shots_on_target", "offsides", "fouls", "saves",
+                  *FAMILIAS_1T):
         return market_taxa(family, scope, value, line_str, last10_home, last10_away,
                             reference_date, config, team_id=team_id,
                             home_team_id=home_team_id, away_team_id=away_team_id)
@@ -1271,6 +1369,10 @@ _SCORED_CONCEDED_FIELDS = {
     # goleiro adversario defende -- a validacao cruzada feitos-vs-cedidos
     # vale igual, so o significado muda.
     "saves":   ("home_goalkeeper_saves", "away_goalkeeper_saves"),
+    # 1o tempo: so' pelo historico cru (team_statistics nao tem media por
+    # tempo), e o pool ja' sai de comparavel_em_90 sem jogo sem a folha.
+    "goals_1h":   ("home_goals_ht", "away_goals_ht"),
+    "corners_1h": ("home_corners_1h", "away_corners_1h"),
 }
 
 

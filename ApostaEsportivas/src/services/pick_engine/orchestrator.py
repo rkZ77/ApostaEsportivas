@@ -62,6 +62,14 @@ _HANDICAP_FAMILIES = ("handicap_goals", "handicap_corners", "handicap_cards")
 # igual _RESULT_FAMILIES acima.
 _NEAR_COINFLIP_FAMILIES = ("odd_even_goals", "odd_even_corners")
 
+# Cartao do 1o tempo -- classificado (o historico ja' tem a folha por tempo e a
+# taxa sai no rastro), mas fora do pool porque o pick NUNCA liquidaria: desde
+# 10/09 cartao so' liquida pela contagem VALIDADA (banco e comissao tecnica
+# fora, ver services/cartoes_validos), e essa validacao so' existe pro jogo
+# inteiro. Publicar seria criar pick que fica pendente ate' a anulacao por
+# falta de estatistica.
+_SEM_LIQUIDACAO_FAMILIES = ("cards_1h",)
+
 _OPPOSITE_VALUE = {
     "over": "under", "under": "over",
     "yes": "no", "no": "yes", "sim": "não", "não": "sim", "nao": "sim",
@@ -296,6 +304,17 @@ def analyze_fixture_markets(
                               "pequena passa como se fosse edge real",
                 })
             continue
+        if family in _SEM_LIQUIDACAO_FAMILIES:
+            motivo = ("cartao do 1o tempo sem contagem validada: o pick nao "
+                      "teria como ser liquidado")
+            _rastrear(rastro, nivel="familia", market_type=family, scope=scope,
+                      status="eliminada", motivo=motivo)
+            if debug:
+                eliminated_markets.append({
+                    "family": family, "scope": scope, "market_type": family,
+                    "reason": motivo,
+                })
+            continue
         if family in _CARDS_FAMILIES:
             eligible, reason = referee_model.cards_market_eligible(referee_sig, game_intensity, config)
             if not eligible:
@@ -357,15 +376,18 @@ def analyze_fixture_markets(
         # is_poisson_family, tratado a parte, mas conta igual pra decidir se K
         # cede lugar a M.
         btts_sim = None
-        if family == "btts":
+        if family in ("btts", "btts_1h"):
+            # Ambas marcam no 1o tempo e' a mesma conta, com o lambda de gol do
+            # 1o tempo de cada lado no lugar do de jogo inteiro.
+            fam_gols = "goals" if family == "btts" else "goals_1h"
             home_conv = stats_model.expected_value_convergence(
-                last10_home, last10_away, "goals", "home",
+                last10_home, last10_away, fam_gols, "home",
                 home_team_id=home_team_id, away_team_id=away_team_id,
                 team_stats_home=team_stats_home, team_stats_away=team_stats_away,
                 league_baseline=league_baseline,
             )
             away_conv = stats_model.expected_value_convergence(
-                last10_home, last10_away, "goals", "away",
+                last10_home, last10_away, fam_gols, "away",
                 home_team_id=home_team_id, away_team_id=away_team_id,
                 team_stats_home=team_stats_home, team_stats_away=team_stats_away,
                 league_baseline=league_baseline,
@@ -373,7 +395,7 @@ def analyze_fixture_markets(
             if home_conv and away_conv:
                 btts_sim = probability_model.btts_probability(
                     home_conv["expected_value"], away_conv["expected_value"])
-        has_poisson_signal = is_poisson_fam or family == "btts"
+        has_poisson_signal = is_poisson_fam or family in ("btts", "btts_1h")
         # Lambda do arbitro: so' cartoes, e so' quando ha sinal proprio dele
         # (ver referee_model.cards_lambda).
         referee_lambda = (referee_model.cards_lambda(referee_sig)
@@ -517,7 +539,7 @@ def analyze_fixture_markets(
                 taxa_bruta_raw, taxa["amostra"], prob_baseline["prob"]
             )
             try:
-                line_val = float(m.get("line")) if family != "btts" else None
+                line_val = float(m.get("line")) if family not in ("btts", "btts_1h") else None
             except (TypeError, ValueError):
                 line_val = None
 

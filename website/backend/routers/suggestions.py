@@ -3750,7 +3750,14 @@ _COLUNAS_DA_SERIE = """
         ms.home_shots_on, ms.away_shots_on,
         ms.home_total_shots, ms.away_total_shots,
         ms.home_offsides, ms.away_offsides,
-        ms.home_goalkeeper_saves, ms.away_goalkeeper_saves
+        ms.home_goalkeeper_saves, ms.away_goalkeeper_saves,
+        -- Folha do 1o tempo (2026-09-27): a serie de um mercado de escanteio
+        -- ou chute do 1o tempo sai daqui, nunca do contador do jogo inteiro.
+        ms.home_corners_1h, ms.away_corners_1h,
+        ms.home_yellow_cards_1h, ms.away_yellow_cards_1h,
+        ms.home_red_cards_1h, ms.away_red_cards_1h,
+        ms.home_shots_on_1h, ms.away_shots_on_1h,
+        ms.home_total_shots_1h, ms.away_total_shots_1h
 """
 
 
