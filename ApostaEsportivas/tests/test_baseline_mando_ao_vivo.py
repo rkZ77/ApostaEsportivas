@@ -58,12 +58,25 @@ class TestOLadoCerto:
     def test_a_consulta_pede_home_do_mandante_e_away_do_visitante(self):
         """O recorte inteiro mora nesta clausula · trocar os lados devolveria
         numero plausivel e errado, que e' o pior tipo de defeito aqui."""
+        # Desde 27/09 a consulta traz os DOIS contextos de cada time (o outro
+        # mando entra com peso menor); o lado certo e' escolhido no codigo, e o
+        # teste abaixo (mandante HOME + visitante AWAY) e' o que trava isso.
         cur = _Cursor([])
         lp.baseline_do_mando(cur, ESTADO)
-        assert "context_type = 'HOME'" in cur.sql
-        assert "context_type = 'AWAY'" in cur.sql
+        assert "context_type IN ('HOME', 'AWAY')" in cur.sql
         # (league_id, mandante, visitante) e nessa ordem.
         assert cur.params == (71, 10, 20)
+
+    def test_o_outro_mando_entra_com_peso_menor(self):
+        """Mandante: 10 jogos em casa com 11 escanteios, 10 fora com 7. Com o
+        fora a 0.5: (11x10 + 7x5) / 15 = 9.667."""
+        cur = _Cursor([
+            linha(10, "HOME", 10, corners=11.0, goals=3.0),
+            linha(10, "AWAY", 10, corners=7.0, goals=3.0),
+            linha(20, "AWAY", 9, corners=9.0, goals=2.0),
+        ])
+        saida = lp.baseline_do_mando(cur, ESTADO)
+        assert saida["corners"] == pytest.approx((9.6667 + 9.0) / 2, abs=1e-3)
 
 
 class TestAmostra:

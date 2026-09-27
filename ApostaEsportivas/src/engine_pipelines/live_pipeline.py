@@ -477,6 +477,32 @@ def baseline_do_arbitro(cur, estado: dict, config: LiveEngineConfig) -> dict:
         pontos, jogos, referee_model._REFEREE_CARD_POINTS_BASELINE)}
 
 
+#: Peso do jogo do OUTRO mando na media-base (2026-09-27). Medido em ~1.200
+#: partidas de PROD (scripts/medir_baseline_ao_vivo.py), prevendo o total do
+#: jogo pela Binomial Negativa: so' o mando perdia nas tres familias (Brier gols
+#: 0.2477 -> 0.2446, escanteios 0.2516 -> 0.2498, cartoes 0.2326 -> 0.2301).
+#: Mesmo peso do pre-jogo (config.peso_outro_mando). 0 = so' o mando.
+PESO_OUTRO_MANDO = 0.5
+
+
+def _mistura_de_mando(principal: dict, outro: dict | None) -> dict:
+    """Media de cada contador com o outro mando pesando PESO_OUTRO_MANDO, pela
+    quantidade de jogos de cada contexto."""
+    if not outro or not outro.get("jogos") or not PESO_OUTRO_MANDO:
+        return principal
+    n1, n2 = principal["jogos"], outro["jogos"] * PESO_OUTRO_MANDO
+    saida = {"jogos": principal["jogos"]}
+    for chave in ("corners", "goals", "yellow", "red"):
+        a, b = principal.get(chave), outro.get(chave)
+        if a is None:
+            saida[chave] = None
+        elif b is None:
+            saida[chave] = a
+        else:
+            saida[chave] = (float(a) * n1 + float(b) * n2) / (n1 + n2)
+    return saida
+
+
 def baseline_do_mando(cur, estado: dict) -> dict:
     """A media do MANDANTE EM CASA e a do VISITANTE FORA.
 
@@ -517,34 +543,39 @@ def baseline_do_mando(cur, estado: dict) -> dict:
         # nao o calendario), entao a linha mais recente de cada lado manda ·
         # DISTINCT ON garante uma por time mesmo com varias temporadas na
         # tabela.
+        # Os DOIS contextos de cada time (2026-09-27): o do mando decide, o
+        # outro entra com PESO_OUTRO_MANDO. Ver _mistura_de_mando.
         cur.execute("""
-            SELECT DISTINCT ON (team_id)
+            SELECT DISTINCT ON (team_id, context_type)
                    team_id, context_type, games_count,
                    avg_total_corners, avg_total_goals,
                    avg_total_yellow, avg_total_red
               FROM team_statistics
-             WHERE league_id = %s
-               AND ((team_id = %s AND context_type = 'HOME')
-                 OR (team_id = %s AND context_type = 'AWAY'))
-             ORDER BY team_id, season DESC, last_updated DESC
+             WHERE league_id = %s AND team_id IN (%s, %s)
+               AND context_type IN ('HOME', 'AWAY')
+             ORDER BY team_id, context_type, season DESC, last_updated DESC
         """, (league_id, home_id, away_id))
         linhas = cur.fetchall()
     except Exception:
         return {}
 
-    lados = {}
+    por_time: dict = {}
     for linha in linhas:
-        team_id, contexto, jogos = linha[0], linha[1], linha[2] or 0
-        if int(jogos) < MIN_JOGOS_MANDO:
-            continue
-        lados[contexto] = {
+        por_time[(linha[0], linha[1])] = {
+            "jogos": int(linha[2] or 0),
             "corners": linha[3], "goals": linha[4],
             "yellow": linha[5], "red": linha[6],
         }
-
-    casa, fora = lados.get("HOME"), lados.get("AWAY")
-    if not (casa and fora):
+    # O mando do jogo continua sendo a exigencia: sem MIN_JOGOS_MANDO no mando
+    # certo, a familia cai pra media sem mando (baseline_do_confronto).
+    principal_casa, outro_casa = por_time.get((home_id, "HOME")), por_time.get((home_id, "AWAY"))
+    principal_fora, outro_fora = por_time.get((away_id, "AWAY")), por_time.get((away_id, "HOME"))
+    if not principal_casa or not principal_fora:
         return {}
+    if principal_casa["jogos"] < MIN_JOGOS_MANDO or principal_fora["jogos"] < MIN_JOGOS_MANDO:
+        return {}
+    casa = _mistura_de_mando(principal_casa, outro_casa)
+    fora = _mistura_de_mando(principal_fora, outro_fora)
 
     saida = {}
     for familia, chave in (("corners", "corners"), ("goals", "goals")):

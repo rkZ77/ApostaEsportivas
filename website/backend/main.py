@@ -651,6 +651,15 @@ async def start_rate_store_cleanup():
 def run_startup_migrations_hook():
     logger.info("[STARTUP] %s", side_effects_note())
     run_startup_migrations(logger)
+    # Registro automatico da mudanca que subiu (so' em producao) -- ver
+    # registro_de_deploy. Depois das migrations: a tabela pode ter acabado de
+    # nascer. Falha aqui so' vira log.
+    try:
+        from registro_de_deploy import registrar
+        from database import get_connection as _conexao
+        registrar(_conexao, logger)
+    except Exception as e:
+        logger.warning("[DEPLOY] %s", e)
 
 
 @app.on_event("startup")

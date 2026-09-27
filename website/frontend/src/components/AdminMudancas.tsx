@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { History, Plus, TrendingDown, TrendingUp, Minus } from 'lucide-react'
+import { History, Plus, TrendingDown, TrendingUp, Minus, Trash2 } from 'lucide-react'
 import api from '../services/api'
 import { Button, Spinner } from './ui'
 
@@ -117,6 +117,16 @@ export default function AdminMudancas() {
     }
   }
 
+  const remover = async (id: number) => {
+    if (!window.confirm('Remover esta mudança do registro?')) return
+    try {
+      await api.delete(`/admin/motor/mudancas/${id}`)
+      setDados(d => d.filter(m => m.id !== id))
+    } catch {
+      setErro('Não foi possível remover agora.')
+    }
+  }
+
   const alternarProduto = (tabela: string) => setForm(f => ({
     ...f,
     produtos: f.produtos.includes(tabela)
@@ -191,7 +201,13 @@ export default function AdminMudancas() {
               <div className="text-xs text-ink-3">
                 {dataBr(m.dia)}{m.dias_depois < janela ? `, ${m.dias_depois} dia${m.dias_depois === 1 ? '' : 's'} depois até hoje` : ''}
               </div>
-              <div className="text-sm font-semibold text-ink-1">{m.titulo}</div>
+              <div className="flex items-start justify-between gap-2">
+                <div className="text-sm font-semibold text-ink-1">{m.titulo}</div>
+                <button onClick={() => remover(m.id)} className="p-1 text-ink-3 hover:text-red-400"
+                  aria-label="Remover registro">
+                  <Trash2 size={14} />
+                </button>
+              </div>
               {m.descricao && <div className="text-xs text-ink-2">{m.descricao}</div>}
               {m.produtos_resultado.length === 0 ? (
                 <p className="mt-1 text-xs text-ink-3">Sem apostas liquidadas nas janelas.</p>
