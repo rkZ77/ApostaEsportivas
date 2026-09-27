@@ -115,3 +115,19 @@ def test_reconhece_o_1o_tempo(market, market_type):
 
 def test_jogo_inteiro_nao_e_1o_tempo():
     assert not market_form.e_mercado_de_primeiro_tempo("Escanteios Mais/Menos", "corners")
+
+
+def test_gol_do_2o_tempo_no_site(api):
+    """3x2 no fim, 0x1 no intervalo: 4 gols no 2o tempo."""
+    api()
+    perna = _perna("Gols Mais/Menos - 2º Tempo", "Over 3.5")
+    assert perna["current_val"] == 4
+    assert live._locked_leg_result(perna) == "GREEN"
+
+
+def test_escanteio_do_2o_tempo_le_a_folha_do_2o_tempo(api, monkeypatch):
+    resposta = [dict(t, statistics_2h=[{"type": "Corner Kicks", "value": v}])
+                for t, v in zip(RESPOSTA_DA_API, (3, 4))]
+    monkeypatch.setattr(live, "_fetch_stats", lambda fid, status: resposta)
+    perna = _perna("Total de Escanteios (2º Tempo)", "Under 7.5")
+    assert perna["current_val"] == 7

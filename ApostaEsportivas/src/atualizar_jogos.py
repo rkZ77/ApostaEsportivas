@@ -210,6 +210,17 @@ class DataCollectorMain:
     # pelo mesmo filtro do Stage 4. Dia sem time carente custa ZERO requisicao
     # (nem a listagem e' pedida), e o teto corta a rodada antes de a coleta de
     # odds ficar sem cota.
+    def run_stage_escalacao(self, teto: int = 100):
+        """Escalacao por time das partidas encerradas -- ver
+        collectors/lineups_collector_service. Falha aqui nao derruba a coleta:
+        escalacao e' contexto do dossie, nao insumo da conta."""
+        print(f"[STAGE ESCALACAO] ate {teto} partida(s)...")
+        try:
+            from collectors.lineups_collector_service import LineupsCollectorService
+            LineupsCollectorService().backfill(teto_requisicoes=teto)
+        except Exception as e:
+            print(f"[STAGE ESCALACAO] falhou: {e}")
+
     def run_stage_6(self):
         print("[STAGE 6] Historico por time (quem esta abaixo do minimo)...")
         self._get_history_backfill().run()
@@ -291,6 +302,10 @@ class DataCollectorMain:
         days = days if days is not None else int(os.getenv("ATUALIZAR_JOGOS_DAYS", "7"))
 
         self.run_stage_4(mode=mode, days=days)
+        # ESCALACAO das partidas encerradas (2026-09-27). Depois do 4 porque a
+        # fila sai de match_statistics. O teto cobre a rodada do dia com folga;
+        # o historico antigo e' o comando `escalacoes`, sob demanda.
+        self.run_stage_escalacao(teto=int(os.getenv("ESCALACAO_TETO_DIARIO", "60")))
         # ANTES do 5 de proposito: o agregador le match_statistics, entao o
         # jogo que o backfill acabou de gravar so' entra em team_statistics
         # (e no modelo Poisson que le dali) se ja estiver no banco quando ele
@@ -357,6 +372,11 @@ if __name__ == "__main__":
             min_jogos = int(sys.argv[2]) if len(sys.argv) > 2 else MIN_JOGOS_PADRAO
             teto = int(sys.argv[3]) if len(sys.argv) > 3 else TETO_REQUISICOES_PADRAO
             TeamHistoryBackfillService(min_jogos=min_jogos, teto_requisicoes=teto).run()
+
+        elif stage == "escalacao":
+            # Ex: python atualizar_jogos.py escalacao
+            #     python atualizar_jogos.py escalacao 500   (teto de requisicoes)
+            collector.run_stage_escalacao(teto=int(sys.argv[2]) if len(sys.argv) > 2 else 100)
 
         elif stage == "1t":
             # Ex: python atualizar_jogos.py 1t

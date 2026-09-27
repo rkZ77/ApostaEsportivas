@@ -41,10 +41,14 @@ def fetch_injuries(team_id: int, fixture_id: int = None, season: int = None,
             name = player.get("name", "")
             if not name:
                 continue
+            # `type` e `reason` moram DENTRO de `player` na resposta da API
+            # ("Missing Fixture" / "Questionable", "Knee Injury" / "Red Card").
+            # Lidos no nivel de cima, vinham sempre vazios -- achado em
+            # 27/09/2026 montando o dossie da partida.
             result.append({
                 "name": name,
-                "type": item.get("type", ""),
-                "reason": item.get("reason", "") or "",
+                "type": player.get("type") or item.get("type") or "",
+                "reason": player.get("reason") or item.get("reason") or "",
             })
         return result
 

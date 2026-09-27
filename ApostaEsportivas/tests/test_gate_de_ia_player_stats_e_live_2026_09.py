@@ -129,17 +129,30 @@ def test_live_vetado_nao_grava_pick():
     assert _gate("reject").apply([live_para_ia(candidato, estado)], "live") == []
 
 
-def test_live_falha_do_provedor_aprova_o_pick_do_motor():
-    """Falha aberto, como nos outros seis: provedor fora do ar nao pode
-    derrubar o pick que o motor ja decidiu."""
+def test_live_falha_do_provedor_bloqueia_o_pick_em_enforce():
+    """Desde 27/09/2026 a falha FECHA em modo enforce (pedido do usuario: a IA
+    tem papel central, e pick sem parecer nao sai). O erro fica gravado no
+    parecer pra o alerta do /admin."""
     def explode(*_):
-        raise RuntimeError("provedor fora do ar")
+        raise RuntimeError("Error code: 400 - Your credit balance is too low")
     gate = AIReviewGate(AIReviewSettings(mode="enforce"), call_model=explode)
+    candidato = {"familia": "fouls", "line": "Over 21.5", "linha": 21.5, "odd": 1.85,
+                 "probability": 0.66, "confidence": 0.6, "edge": 0.05, "ev": 0.07}
+    assert gate.apply([live_para_ia(candidato, {"minuto": 50, "fouls_total": 12})], "live") == []
+    review = gate.review([live_para_ia(candidato, {"minuto": 50})], "live")
+    assert review["status"] == "unavailable"
+    assert review["erro_tipo"] == "sem_credito"
+
+
+def test_live_falha_aberta_continua_disponivel_por_configuracao():
+    def explode(*_):
+        raise RuntimeError("overloaded_error 529")
+    gate = AIReviewGate(AIReviewSettings(mode="enforce", on_failure="approve"), call_model=explode)
     candidato = {"familia": "fouls", "line": "Over 21.5", "linha": 21.5, "odd": 1.85,
                  "probability": 0.66, "confidence": 0.6, "edge": 0.05, "ev": 0.07}
     saida = gate.apply([live_para_ia(candidato, {"minuto": 50, "fouls_total": 12})], "live")
     assert len(saida) == 1
-    assert saida[0]["ai_review"]["status"] == "unavailable"
+    assert saida[0]["ai_review"]["erro_tipo"] == "provedor_fora"
 
 
 # --- A flag que ja existia -------------------------------------------------
