@@ -358,6 +358,14 @@ if __name__ == "__main__":
             teto = int(sys.argv[3]) if len(sys.argv) > 3 else TETO_REQUISICOES_PADRAO
             TeamHistoryBackfillService(min_jogos=min_jogos, teto_requisicoes=teto).run()
 
+        elif stage == "1t":
+            # Ex: python atualizar_jogos.py 1t
+            #     python atualizar_jogos.py 1t 500   (teto de requisicoes)
+            # Folha do 1o tempo das partidas antigas. A coleta diaria (stage 4)
+            # ja' traz o 1o tempo desde 27/09/2026; isto so' completa o passado.
+            teto = int(sys.argv[2]) if len(sys.argv) > 2 else 100
+            collector._get_match_stats().backfill_primeiro_tempo(teto_requisicoes=teto)
+
         elif stage == "liga":
             # Ex: python atualizar_jogos.py liga 11
             # Coleta completa de UMA liga, sem TRUNCATE. E' o que o botao

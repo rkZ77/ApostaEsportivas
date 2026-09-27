@@ -60,7 +60,12 @@ por partida raramente passam de ~20, entao isso e trivial sem precisar de
 scipy/numpy (nenhuma das duas e dependencia hoje do projeto)."""
 import math
 
-_POISSON_FAMILIES = {"goals", "corners", "cards", "fouls"}
+#: goals_1h entra (2026-09-27) sem dispersao medida, e isso e' Poisson puro:
+#: e' a mesma contagem de gol, so' em metade do tempo, e gol e' a unica familia
+#: medida com phi ~ 1. corners_1h fica FORA de proposito -- escanteio e'
+#: superdispersado (1.82) e o phi do 1o tempo nao foi medido; Poisson ali
+#: inflaria os dois lados da linha, que e' o erro do cabecalho.
+_POISSON_FAMILIES = {"goals", "corners", "cards", "fouls", "goals_1h"}
 
 #: Dispersao residual medida por (familia, escopo) -- ver o cabecalho.
 #: phi = variancia / media depois de remover o efeito de time dos dois lados.

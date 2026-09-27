@@ -10,7 +10,7 @@
 import { Image, View } from 'react-native'
 import { Card, Selo, Txt } from './ui'
 import { cores, espaco } from '../theme/tokens'
-import { confianca, escudo, estiloDoResultado, horaDoJogo, mercadoCompleto, odd, reais, timeCasa, timeFora } from '../lib/formato'
+import { confianca, escudo, estiloDoResultado, horaDoJogo, mercadoCompleto, odd, reais, reaisComSinal, timeCasa, timeFora, unidades as fmtUnidades, unidadesComSinal } from '../lib/formato'
 import type { Banca, Pick } from '../api/types'
 
 function Escudo({ id }: { id?: number | null }) {
@@ -119,7 +119,7 @@ export function PickCard({ pick, onPress, banca }: {
         >
           <View style={{ gap: 2 }}>
             <Txt variante="rotulo">{jaApostou ? 'Apostado' : 'Apostar'}</Txt>
-            <Txt variante="numero" cor={cores.green}>{unidades}u</Txt>
+            <Txt variante="numero" cor={cores.green}>{fmtUnidades(unidades)}</Txt>
             {valorDaUnidade ? (
               <Txt variante="apoio">{reais(unidades * valorDaUnidade)}</Txt>
             ) : null}
@@ -127,11 +127,11 @@ export function PickCard({ pick, onPress, banca }: {
           <View style={{ alignItems: 'flex-end', gap: 2 }}>
             <Txt variante="rotulo">Lucro pot.</Txt>
             <Txt variante="numero" cor={cores.ink1}>
-              +{((Number(pick.odd) - 1) * unidades).toFixed(2)}u
+              {unidadesComSinal((Number(pick.odd) - 1) * unidades)}
             </Txt>
             {valorDaUnidade ? (
               <Txt variante="apoio">
-                +{reais((Number(pick.odd) - 1) * unidades * valorDaUnidade)}
+                {reaisComSinal((Number(pick.odd) - 1) * unidades * valorDaUnidade)}
               </Txt>
             ) : null}
           </View>

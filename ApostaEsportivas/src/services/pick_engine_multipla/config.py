@@ -300,7 +300,11 @@ LIMITE_DE_EXPOSICAO_POR_FAMILIA = 2
 #: mostrar o Over se sustentando aqui tambem, o certo e' trocar esta tupla por
 #: um bloqueio direcional -- e quando a calibragem do Under for corrigida, por
 #: uma tupla vazia.
-FAMILIAS_BLOQUEADAS = ("corners",)
+#:
+#: `corners_1h` (2026-09-27) entra pelo mesmo motivo, sem medicao propria: e' a
+#: mesma contagem, e o 1o tempo ainda nao tem historico de pick pra dizer se
+#: herdou ou nao o erro do Under. Sai daqui quando houver medida.
+FAMILIAS_BLOQUEADAS = ("corners", "corners_1h")
 
 
 @dataclass(frozen=True)

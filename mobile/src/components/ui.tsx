@@ -16,7 +16,7 @@ import {
   type TextStyle,
   type ViewStyle,
 } from 'react-native'
-import { cores, espaco, fonte, peso, raio } from '../theme/tokens'
+import { cores, espaco, familia, fonte, peso, raio } from '../theme/tokens'
 
 /* ── texto ────────────────────────────────────────────────────────────── */
 
@@ -44,8 +44,12 @@ export function Txt({
   children: ReactNode
   numberOfLines?: number
 }) {
+  // O peso vira família (ver `familia` em tokens.ts) · vale também para o
+  // `fontWeight` que a tela passar em `style`.
+  const plano = StyleSheet.flatten([ESTILO_TEXTO[variante], cor ? { color: cor } : null, style]) ?? {}
+  const { fontWeight, ...resto } = plano
   return (
-    <Text numberOfLines={numberOfLines} style={[ESTILO_TEXTO[variante], cor ? { color: cor } : null, style]}>
+    <Text numberOfLines={numberOfLines} style={[resto, { fontFamily: familia(fontWeight) }]}>
       {children}
     </Text>
   )
@@ -100,7 +104,7 @@ export function Selo({ texto, cor = cores.ink3, preenchido }: { texto: string; c
       <Text
         style={{
           fontSize: fonte.xs,
-          fontWeight: peso.semi,
+          fontFamily: familia(peso.semi),
           color: preenchido ? cores.surface0 : cor,
           letterSpacing: 0.3,
         }}
@@ -155,7 +159,7 @@ export function Botao({
       {carregando ? (
         <ActivityIndicator color={corTexto} />
       ) : (
-        <Text style={{ fontSize: fonte.base, fontWeight: peso.semi, color: corTexto }}>{titulo}</Text>
+        <Text style={{ fontSize: fonte.base, fontFamily: familia(peso.semi), color: corTexto }}>{titulo}</Text>
       )}
     </Pressable>
   )

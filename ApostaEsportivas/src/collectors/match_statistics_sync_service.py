@@ -62,6 +62,47 @@ def _sum_stats(*parts):
     return somar(*parts)
 
 
+#: Contadores do 1o TEMPO gravados por lado: (tipo na folha, sufixo da coluna).
+#:
+#: Saem de `statistics_1h`, que a API devolve na MESMA requisicao quando se
+#: pede `half=true` -- custo zero de cota. Sem eles o motor so' conhecia o
+#: placar do intervalo, e todo mercado de 1o tempo que nao fosse gol (escanteio,
+#: cartao, chute) era invisivel pro historico e liquidado contra o jogo inteiro.
+#:
+#: FALTA FICA DE FORA DE PROPOSITO. Na folha do 1o tempo a API nao publica
+#: "Fouls" (medido em 27/09/2026, Athletico x ? fixture 1492380: o tipo existe
+#: na folha cheia e some da 1h, que traz "Free Kicks" no lugar). Gravar a
+#: coluna so' serviria pra ela ficar NULL -- ou, pior, pra alguem aplicar a
+#: regra da folha robusta e transformar essa ausencia sistematica em zero.
+CONTADORES_1T = (
+    ("Corner Kicks",  "corners_1h"),
+    ("Yellow Cards",  "yellow_cards_1h"),
+    ("Red Cards",     "red_cards_1h"),
+    ("Shots on Goal", "shots_on_1h"),
+    ("Total Shots",   "total_shots_1h"),
+)
+
+#: Todas as colunas de 1o tempo, na ordem casa/fora de cada contador.
+COLUNAS_1T = tuple(f"{lado}_{sufixo}" for _, sufixo in CONTADORES_1T
+                   for lado in ("home", "away"))
+
+
+def ler_primeiro_tempo(folha_1h) -> dict:
+    """{sufixo: valor} de uma folha `statistics_1h`, sem a regra da folha robusta.
+
+    `robusta=False` e' a diferenca que importa. A folha do 1o tempo e' outro
+    produto da API, com outro conjunto de tipos (sem "Fouls", por exemplo), e a
+    regra que transforma "contador ausente numa folha cheia" em zero foi medida
+    na folha do jogo inteiro. Aplicada aqui, ela fabricaria zeros sempre que a
+    API omitisse um tipo no 1o tempo -- e zero fabricado vira Under ganho no
+    historico. O vermelho em `null` continua zero, porque essa regra e' da API
+    e nao da folha (ver utils/stat_sheet._VAZIO_E_ZERO).
+    """
+    publicada = folha_publicada(folha_1h)
+    return {sufixo: ler_valor(folha_1h, tipo, publicada, robusta=False)
+            for tipo, sufixo in CONTADORES_1T}
+
+
 #: Fuso de Brasilia · o mesmo de collectors/fixture_collector_service.py.
 _TZ_BR = ZoneInfo("America/Sao_Paulo")
 
@@ -168,6 +209,18 @@ class MatchStatisticsSyncService:
         # arbitro estreante de arbitro com folha faltando.
         self.cur.execute(
             "ALTER TABLE referee_stats ADD COLUMN IF NOT EXISTS games_total INTEGER;")
+
+        # FOLHA DO 1o TEMPO (2026-09-27). Ver CONTADORES_1T.
+        #
+        # `stats_1h_checked_at` marca que a folha por tempo JA foi pedida pra
+        # esta partida, tenha vindo ou nao. Sem ela o backfill nao distingue
+        # "ainda nao busquei" de "a API nao cobre o 1o tempo desta liga", e
+        # pagaria de novo, todo dia, pelas partidas que nunca vao ter o dado.
+        for coluna in COLUNAS_1T:
+            self.cur.execute(
+                f"ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS {coluna} INTEGER;")
+        self.cur.execute(
+            "ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS stats_1h_checked_at TIMESTAMP;")
         self.conn.commit()
 
     def _close(self):
@@ -402,12 +455,28 @@ class MatchStatisticsSyncService:
         self.conn.commit()
 
     def _fetch_match_stats(self, fixture_id):
-        return buscar(STATS_URL, {"fixture": fixture_id}, origem="coletor_stats")
+        # `half=true` devolve `statistics_1h`/`statistics_2h` ao lado da folha
+        # cheia, na mesma requisicao. A folha cheia (`statistics`) nao muda.
+        return buscar(STATS_URL, {"fixture": fixture_id, "half": "true"},
+                      origem="coletor_stats")
+
+    @staticmethod
+    def _separar_lados(stats, home_id):
+        """(folha casa, folha fora, 1o tempo casa, 1o tempo fora) pelo team.id.
+
+        Um lugar so' pra os tres caminhos de coleta (lote, pendentes, avulsa)
+        nao repetirem a comparacao de id -- a API nao garante que o indice 0
+        seja o mandante."""
+        casa, fora = (stats[0], stats[1]) if stats[0]["team"]["id"] == home_id \
+            else (stats[1], stats[0])
+        return (casa.get("statistics") or [], fora.get("statistics") or [],
+                casa.get("statistics_1h"), fora.get("statistics_1h"))
 
     # ---------------------------------------------------------
     # SAVE COMPLETO
     # ---------------------------------------------------------
-    def _save_stats(self, fx, home_stats, away_stats) -> bool:
+    def _save_stats(self, fx, home_stats, away_stats,
+                    home_1h=None, away_1h=None) -> bool:
         """Grava a linha da partida. False = nao gravou (placar ausente).
 
         O PLACAR E' PRE-REQUISITO, NAO UM CAMPO A MAIS (2026-08-27).
@@ -610,9 +679,38 @@ class MatchStatisticsSyncService:
             fx.get("referee"),
         ))
 
+        self._gravar_primeiro_tempo(fx["fixture_id"], home_1h, away_1h)
         self.conn.commit()
         print(f"[OK] {fx['fixture_id']}")
         return True
+
+    def _gravar_primeiro_tempo(self, fixture_id, home_1h, away_1h):
+        """Grava os contadores do 1o tempo e marca que a folha foi pedida.
+
+        UPDATE separado do INSERT principal de proposito: o backfill das
+        partidas antigas passa so' por aqui, sem reescrever a folha cheia que
+        ja' esta' estabilizada no banco.
+
+        `None` nos dois lados = a resposta nem trouxe a chave `statistics_1h`
+        (chamada sem `half=true`); nada e' marcado, pra a partida continuar
+        elegivel ao backfill. Lista vazia = a API respondeu e nao cobre o 1o
+        tempo desta partida; ai' a marca entra e os contadores ficam NULL.
+        COALESCE pelo mesmo motivo da folha cheia: recoleta incompleta nao
+        apaga numero certo ja' gravado.
+        """
+        if home_1h is None and away_1h is None:
+            return
+        casa = ler_primeiro_tempo(home_1h or [])
+        fora = ler_primeiro_tempo(away_1h or [])
+        valores = {}
+        for _, sufixo in CONTADORES_1T:
+            valores[f"home_{sufixo}"] = casa[sufixo]
+            valores[f"away_{sufixo}"] = fora[sufixo]
+        sets = ", ".join(f"{col} = COALESCE(%s, {col})" for col in COLUNAS_1T)
+        self.cur.execute(
+            f"UPDATE match_statistics SET {sets}, stats_1h_checked_at = NOW() "
+            f"WHERE fixture_id = %s;",
+            tuple(valores[col] for col in COLUNAS_1T) + (fixture_id,))
 
     # ---------------------------------------------------------
     # UPSERT ÁRBITRO → retorna referee_id (ou None se sem nome)
@@ -892,12 +990,9 @@ class MatchStatisticsSyncService:
                 referee_batch.add((fx["referee"], fx["season"]))
             return "linha_sem_folha"
 
-        if stats[0]["team"]["id"] == home_id:
-            home_stats, away_stats = stats[0]["statistics"], stats[1]["statistics"]
-        else:
-            home_stats, away_stats = stats[1]["statistics"], stats[0]["statistics"]
+        home_stats, away_stats, home_1h, away_1h = self._separar_lados(stats, home_id)
 
-        if not self._save_stats(fx, home_stats, away_stats):
+        if not self._save_stats(fx, home_stats, away_stats, home_1h, away_1h):
             return "sem_placar"
 
         if fx.get("referee"):
@@ -950,14 +1045,10 @@ class MatchStatisticsSyncService:
             if not stats or len(stats) < 2:
                 continue
 
-            if stats[0]["team"]["id"] == fx["home_id"]:
-                home_stats = stats[0]["statistics"]
-                away_stats = stats[1]["statistics"]
-            else:
-                home_stats = stats[1]["statistics"]
-                away_stats = stats[0]["statistics"]
+            home_stats, away_stats, home_1h, away_1h = self._separar_lados(
+                stats, fx["home_id"])
 
-            if not self._save_stats(fx, home_stats, away_stats):
+            if not self._save_stats(fx, home_stats, away_stats, home_1h, away_1h):
                 continue
 
             if fx.get("referee"):
@@ -966,3 +1057,131 @@ class MatchStatisticsSyncService:
         self._sync_referee_stats(referee_batch)
         self._close()
         print("[MATCH_STATS] DONE")
+
+    # ---------------------------------------------------------
+    # BACKFILL DO 1o TEMPO
+    # ---------------------------------------------------------
+    def backfill_primeiro_tempo(self, teto_requisicoes: int = 100,
+                                temporada_minima: int = 2024) -> dict:
+        """Busca a folha por tempo das partidas JA gravadas que nunca a tiveram.
+
+        A coleta diaria passou a pedir `half=true` em 27/09/2026, entao so' o
+        historico anterior precisa disto. Cada partida custa 1 requisicao, e o
+        historico inteiro passa de mil -- por isso o teto, e por isso a ordem:
+        da mais recente pra mais antiga, que e' a que o motor le primeiro
+        (`temporal_decay_weight` pesa menos o jogo velho).
+
+        `temporada_minima`: a API so' publica estatistica por tempo a partir da
+        temporada 2024; pedir antes disso e' gastar cota pra receber vazio.
+
+        Idempotente: `stats_1h_checked_at` tira a partida da fila tenha a folha
+        vindo ou nao, entao rodar de novo continua de onde parou.
+        """
+        gastas_no_placar = self.backfill_placar_intervalo(teto_requisicoes)
+        teto_requisicoes -= gastas_no_placar
+        if teto_requisicoes <= 0:
+            return {"buscadas": 0, "com_folha": 0, "sem_folha": 0, "restantes": None}
+
+        self._open()
+        try:
+            self.cur.execute("""
+                SELECT fixture_id, home_team_id
+                  FROM match_statistics
+                 WHERE stats_1h_checked_at IS NULL
+                   AND status IN %s
+                   AND season >= %s
+                 ORDER BY match_date DESC
+                 LIMIT %s;
+            """, (tuple(self.FINISHED), temporada_minima, teto_requisicoes))
+            fila = self.cur.fetchall()
+            com_folha = sem_folha = 0
+            for fixture_id, home_id in fila:
+                try:
+                    stats = self._fetch_match_stats(fixture_id)
+                except Exception as e:
+                    # Falha de rede nao marca a partida: ela volta na proxima.
+                    print(f"[MATCH_STATS_1T] fixture_id={fixture_id}: {e}")
+                    continue
+                if not stats or len(stats) < 2:
+                    self._gravar_primeiro_tempo(fixture_id, [], [])
+                    sem_folha += 1
+                else:
+                    _, _, home_1h, away_1h = self._separar_lados(stats, home_id)
+                    self._gravar_primeiro_tempo(fixture_id, home_1h or [], away_1h or [])
+                    if folha_publicada(home_1h) and folha_publicada(away_1h):
+                        com_folha += 1
+                    else:
+                        sem_folha += 1
+                self.conn.commit()
+            self.cur.execute("""
+                SELECT COUNT(*) FROM match_statistics
+                 WHERE stats_1h_checked_at IS NULL AND status IN %s AND season >= %s;
+            """, (tuple(self.FINISHED), temporada_minima))
+            restantes = self.cur.fetchone()[0]
+        finally:
+            self._close()
+        resumo = {"buscadas": com_folha + sem_folha, "com_folha": com_folha,
+                  "sem_folha": sem_folha, "restantes": restantes}
+        print(f"[MATCH_STATS_1T] {resumo}")
+        return resumo
+
+    #: Quantas partidas `/fixtures?ids=` aceita numa requisicao (limite da API).
+    _IDS_POR_REQUISICAO = 20
+
+    def backfill_placar_intervalo(self, teto_requisicoes: int = 100) -> int:
+        """Completa `home_goals_ht`/`away_goals_ht` onde estao NULL. Devolve
+        quantas requisicoes gastou.
+
+        Medido em DEV em 27/09/2026: 403 de 926 partidas encerradas sem placar
+        do intervalo. E' a familia mais valiosa do 1o tempo (gol) com quase
+        metade da amostra faltando, e a folha por tempo nao resolve -- o placar
+        vem de /fixtures, nao de /fixtures/statistics.
+
+        Barato: `/fixtures?ids=` devolve 20 partidas por requisicao, entao o
+        buraco inteiro de DEV custa ~21. Placar ausente na resposta continua
+        NULL (nunca 0x0, ver o comentario em _load_fixtures), e a partida volta
+        na proxima passada.
+        """
+        self._open()
+        gastas = 0
+        preenchidas = 0
+        try:
+            self.cur.execute("""
+                SELECT fixture_id FROM match_statistics
+                 WHERE (home_goals_ht IS NULL OR away_goals_ht IS NULL)
+                   AND status IN %s
+                 ORDER BY match_date DESC
+                 LIMIT %s;
+            """, (tuple(self.FINISHED), teto_requisicoes * self._IDS_POR_REQUISICAO))
+            ids = [r[0] for r in self.cur.fetchall()]
+            for i in range(0, len(ids), self._IDS_POR_REQUISICAO):
+                lote = ids[i:i + self._IDS_POR_REQUISICAO]
+                try:
+                    resposta = buscar(FIXTURES_URL, {"ids": "-".join(map(str, lote))},
+                                      origem="coletor_stats")
+                except Exception as e:
+                    print(f"[MATCH_STATS_1T] placar do intervalo, lote {lote[0]}..: {e}")
+                    continue
+                finally:
+                    gastas += 1
+                pares = []
+                for item in resposta or []:
+                    ht = (item.get("score") or {}).get("halftime") or {}
+                    if ht.get("home") is None or ht.get("away") is None:
+                        continue
+                    pares.append((ht["home"], ht["away"], item["fixture"]["id"]))
+                if pares:
+                    from psycopg2.extras import execute_values
+                    execute_values(self.cur, """
+                        UPDATE match_statistics ms
+                           SET home_goals_ht = d.h, away_goals_ht = d.a
+                          FROM (VALUES %s) AS d(h, a, fixture_id)
+                         WHERE ms.fixture_id = d.fixture_id
+                    """, pares)
+                    preenchidas += len(pares)
+                self.conn.commit()
+        finally:
+            self._close()
+        print(f"[MATCH_STATS_1T] placar do intervalo: {preenchidas} partida(s) "
+              f"em {gastas} requisicao(oes).")
+        return gastas

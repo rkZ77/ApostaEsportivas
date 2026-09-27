@@ -58,10 +58,12 @@ def test_a_regra_e_a_barra_e_nao_uma_lista_de_nomes():
     assert classify_market("Both Teams Score/Anything") is None
 
 
-def test_primeiro_tempo_continua_fora():
-    """Regra anterior, nao pode ter sido quebrada pelo guard novo."""
-    assert classify_market("Both Teams Score - First Half") is None
-    assert classify_market("Both Teams To Score - First Half") is None
+def test_primeiro_tempo_tem_familia_propria_e_segundo_continua_fora():
+    """Desde 27/09/2026 o 1o tempo tem familia propria (btts_1h) e nunca cai
+    no btts do jogo inteiro. O 2o tempo continua fora do motor."""
+    assert classify_market("Both Teams Score - First Half") == ("btts_1h", "total")
+    assert classify_market("Both Teams To Score - First Half") == ("btts_1h", "total")
+    assert classify_market("Both Teams To Score - Second Half") is None
 
 
 def test_o_composto_nao_vira_mercado_de_resultado_por_acidente():

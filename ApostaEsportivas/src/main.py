@@ -98,6 +98,14 @@ def run_migrations():
         # A escolha e' pela coluna com que ela vai ser comparada e exibida, nao
         # pela vizinha de tabela.
         "ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS match_datetime TIMESTAMP;",
+        # FOLHA DO 1o TEMPO (2026-09-27). O coletor tambem cria, mas a consulta
+        # de historico do motor ja' le estas colunas -- e o motor pode rodar num
+        # ambiente onde o coletor ainda nao passou. Ver CONTADORES_1T.
+        *(f"ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS {lado}_{c} INTEGER;"
+          for c in ("corners_1h", "yellow_cards_1h", "red_cards_1h",
+                    "shots_on_1h", "total_shots_1h")
+          for lado in ("home", "away")),
+        "ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS stats_1h_checked_at TIMESTAMP;",
         "ALTER TABLE picks_vip   ADD COLUMN IF NOT EXISTS market_id INTEGER;",
         "ALTER TABLE picks_free  ADD COLUMN IF NOT EXISTS market_id INTEGER;",
         "ALTER TABLE picks_vip   ADD COLUMN IF NOT EXISTS stake_units INTEGER;",
@@ -719,6 +727,18 @@ def cmd_folha(*args):
     _estagio(4, mode, dias)
 
 
+def cmd_folha_1t(*args):
+    """Folha do 1o tempo das partidas antigas (1 requisicao por partida).
+
+    A coleta diaria ja' traz o 1o tempo junto desde 27/09/2026; isto so'
+    completa o historico gravado antes. Para no teto e continua de onde parou
+    na proxima vez -- ver MatchStatisticsSyncService.backfill_primeiro_tempo.
+    """
+    from collectors.match_statistics_sync_service import MatchStatisticsSyncService
+    teto = int(args[0]) if args and args[0] else 100
+    MatchStatisticsSyncService().backfill_primeiro_tempo(teto_requisicoes=teto)
+
+
 def cmd_medias(*args):
     """Stage 5: refaz `team_statistics`, que e' a media que o motor de fato le.
 
@@ -1172,6 +1192,12 @@ COMANDOS: tuple = (
             detalhe="folha                   ultimos 3 dias\n"
                     "folha custom 7          ultimos 7 dias\n"
                     "folha full              temporada inteira"),
+    Comando("folha1t", "Coleta · folha do 1o tempo (historico)",
+            "Completa o 1o tempo das partidas antigas (1 requisicao por jogo)",
+            lambda *a: cmd_folha_1t(*a),
+            uso="folha1t [teto]",
+            detalhe="folha1t                 ate 100 partidas, da mais recente pra tras\n"
+                    "folha1t 500             libera 500 requisicoes"),
     Comando("medias", "Coleta · medias do time",
             "Stage 5 · refaz team_statistics, a media que o motor le",
             lambda *a: cmd_medias(*a),

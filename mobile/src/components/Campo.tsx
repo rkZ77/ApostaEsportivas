@@ -8,7 +8,7 @@ import { useState } from 'react'
 import { Pressable, StyleSheet, TextInput, View, type KeyboardTypeOptions } from 'react-native'
 import { Eye, EyeOff } from 'lucide-react-native'
 import { Txt } from './ui'
-import { cores, espaco, fonte, raio } from '../theme/tokens'
+import { cores, espaco, familia, fonte, raio } from '../theme/tokens'
 
 export function Campo({
   rotulo,
@@ -68,6 +68,7 @@ export function Campo({
             minHeight: 48,
             color: cores.ink1,
             fontSize: fonte.base,
+            fontFamily: familia(),
           }}
         />
         {senha ? (

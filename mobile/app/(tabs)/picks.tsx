@@ -84,7 +84,9 @@ export default function Picks() {
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: espaco.lg, paddingVertical: espaco.md, gap: espaco.sm }}
-        style={{ flexGrow: 0 }}
+        /* flexShrink 0: sem ele a lista abaixo (flex 1) espreme a faixa de
+           filtros e as pílulas saem cortadas por cima. */
+        style={{ flexGrow: 0, flexShrink: 0 }}
       >
         {filtros.map(({ chave, rotulo }) => {
           const ativo = filtro === chave

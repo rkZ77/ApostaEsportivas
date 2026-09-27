@@ -50,4 +50,6 @@ def test_o_bloqueio_e_configuravel_e_nao_uma_regra_escrita_na_pedra():
 
 
 def test_a_familia_bloqueada_hoje_e_escanteios():
-    assert cfg.FAMILIAS_BLOQUEADAS == ("corners",)
+    # O escanteio do 1o tempo herda o bloqueio desde 27/09/2026: mesma
+    # contagem, ainda sem medicao propria na multipla.
+    assert cfg.FAMILIAS_BLOQUEADAS == ("corners", "corners_1h")

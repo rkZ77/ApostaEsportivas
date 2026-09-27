@@ -388,6 +388,8 @@ _PIPELINE_SCRIPTS = {
     "coleta_classificacao": "atualizar_jogos.py",
     "coleta_folha":         "atualizar_jogos.py",
     "coleta_medias":        "atualizar_jogos.py",
+    # Folha do 1o tempo do historico (2026-09-27). Estagio "1t" do mesmo script.
+    "coleta_folha_1t":      "atualizar_jogos.py",
     "gerar_playerstats_todos": os.path.join("engine_pipelines", "player_stats_pipeline.py"),
     "perfis_de_liga":       "atualizar_ligas.py",
     # Fase de homologacao/validacao (compara motor vs IA em uma base DEV
@@ -450,6 +452,7 @@ _PIPELINE_ARGS["coleta_fixtures"] = ["2"]
 _PIPELINE_ARGS["coleta_classificacao"] = ["3"]
 _PIPELINE_ARGS["coleta_folha"] = ["4"]
 _PIPELINE_ARGS["coleta_medias"] = ["5"]
+_PIPELINE_ARGS["coleta_folha_1t"] = ["1t"]
 
 #: SEM argumento de metodo, e e' o que distingue este passo de
 #: `gerar_playerstats`: aquele roda os tres diarios, este roda os seis.
@@ -527,6 +530,7 @@ _PASSO_DO_COMANDO = {
     "fixtures":           "coleta_fixtures",
     "classificacao":      "coleta_classificacao",
     "folha":              "coleta_folha",
+    "folha1t":            "coleta_folha_1t",
     "medias":             "coleta_medias",
 }
 
@@ -650,6 +654,7 @@ _STEP_LABELS = {
     "coleta_fixtures":         "Coletando os jogos de hoje",
     "coleta_classificacao":    "Atualizando a classificação",
     "coleta_folha":            "Coletando folha de estatística",
+    "coleta_folha_1t":         "Coletando o 1º tempo das partidas antigas",
     "coleta_medias":           "Recalculando médias dos times",
 }
 
@@ -1070,6 +1075,7 @@ _PASSO_LABEL_CURTO = {
     "coleta_fixtures":         "Jogos de Hoje",
     "coleta_classificacao":    "Classificação",
     "coleta_folha":            "Folha de Estatística",
+    "coleta_folha_1t":         "Folha do 1º Tempo",
     "coleta_medias":           "Médias dos Times",
 }
 
@@ -1098,7 +1104,7 @@ _PASSO_LABEL_CURTO = {
 _AVULSOS_FALLBACK = [
     "gerar_playerstats_todos", "historico_times", "gerar_live",
     "coleta_status", "coleta_times", "coleta_fixtures", "coleta_classificacao",
-    "coleta_folha", "coleta_medias",
+    "coleta_folha", "coleta_folha_1t", "coleta_medias",
     "perfis_de_liga",
 ]
 
