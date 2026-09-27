@@ -43,6 +43,12 @@ import os
 import statistics
 
 _MEMO: dict = {}
+#: Sinal de desfalque/tecnico por fixture, no formato de news_model.injury_signal.
+#: Sai do mesmo memo do dossie: nenhuma consulta nem requisicao a mais.
+_SINAL: dict = {}
+
+#: Titular recente = comecou jogando em pelo menos isto dos ultimos 5 jogos.
+TITULAR_RECENTE = 2
 
 #: (rotulo, coluna do mandante, coluna do visitante). Cartao e' tratado a parte
 #: (amarelo + 2x vermelho, a convencao de liquidacao).
@@ -216,7 +222,9 @@ def _escalacoes_recentes(cur, team_id: int, antes_de, limite: int = 5) -> tuple:
     return ([(r[1], r[2] or []) for r in cur.fetchall()], None)
 
 
-def _desfalques(team_id: int, fixture_id: int) -> list | None:
+def _desfalques(team_id: int, fixture_id: int, escalacoes: list) -> list | None:
+    """Desfalques da partida, cada um com quantas vezes COMECOU JOGANDO nos
+    ultimos jogos (cruzado por id em team_lineups/player_match_stats)."""
     if os.getenv("AI_DOSSIE_DESFALQUES", "on").strip().lower() == "off":
         return None
     try:
@@ -224,19 +232,64 @@ def _desfalques(team_id: int, fixture_id: int) -> list | None:
         lista = fetch_injuries(team_id, fixture_id=fixture_id)
     except Exception:
         return None
+    inicios: dict = {}
+    for _data, titulares in escalacoes or []:
+        for pid in titulares or []:
+            inicios[pid] = inicios.get(pid, 0) + 1
     vistos, saida = set(), []
     for item in lista or []:
         nome = item.get("name")
         if not nome or nome in vistos:
             continue
         vistos.add(nome)
-        saida.append({"jogador": nome, "tipo": item.get("type"), "motivo": item.get("reason")})
-    return saida[:10]
+        saida.append({"jogador": nome, "tipo": item.get("type"), "motivo": item.get("reason"),
+                      "titular_nos_ultimos_jogos": inicios.get(item.get("id"), 0),
+                      "_id": item.get("id")})
+    return saida
+
+
+def _sinal_do_lado(desfalques, rod) -> dict:
+    """Um lado do sinal que news_model.news_score le.
+
+    Separa quem de fato faz falta: "Missing Fixture" de quem vinha comecando
+    jogando. Emprestado, inativo e reserva que nunca joga tambem aparecem em
+    /injuries (medido no Corinthians em 27/09: 10 nomes, varios com motivo
+    "Loan agreement" ou "Inactive") -- contar todos igual penalizava o time por
+    quem nem entraria em campo.
+    """
+    titulares, outros = [], []
+    for d in desfalques or []:
+        fora_do_jogo = (d.get("tipo") or "").lower() == "missing fixture"
+        comeca = d.get("titular_nos_ultimos_jogos", 0) >= TITULAR_RECENTE
+        if fora_do_jogo and comeca:
+            titulares.append(d["jogador"])
+        elif comeca:
+            outros.append(d["jogador"])      # duvida de titular recente
+    return {"titulares_desfalcados": titulares, "outros_desfalcados": outros,
+            "tecnico_mudou": bool((rod or {}).get("tecnico_mudou"))}
+
+
+def sinal_de_desfalques(fixture_id: int) -> dict | None:
+    """Sinal de desfalques e troca de tecnico pro Score Final do motor
+    (news_data de orchestrator.analyze_fixture_markets). None sem dado.
+
+    Liga/desliga por `MOTOR_DESFALQUES` (padrao ligado), independente do
+    dossie da IA: e' o motor lendo o mesmo dado, nao a IA."""
+    if not fixture_id or os.getenv("MOTOR_DESFALQUES", "on").strip().lower() == "off":
+        return None
+    _obter(fixture_id)
+    return _SINAL.get(fixture_id)
 
 
 def montar(fixture_id: int) -> dict | None:
     """Dossie de uma partida do dia, ou None quando nao da' pra montar."""
     if not fixture_id or not habilitado():
+        return None
+    return _obter(fixture_id)
+
+
+def _obter(fixture_id: int) -> dict | None:
+    if not fixture_id:
         return None
     if fixture_id in _MEMO:
         return _MEMO[fixture_id]
@@ -290,14 +343,22 @@ def _montar(fixture_id: int) -> dict | None:
         cur.close()
         conn.close()
 
+    sinal: dict = {"is_approximation": False}
+
     def time(team_id, nome, hist, mando, escal):
+        rod = rodizio(*escal)
+        desf = _desfalques(team_id, fixture_id, escal[0])
+        sinal[mando] = _sinal_do_lado(desf, rod)
+        # Pra IA: titular recente primeiro, e sem o id interno.
+        desf_ia = sorted(({k: v for k, v in d.items() if k != "_id"} for d in desf or []),
+                         key=lambda d: -d["titular_nos_ultimos_jogos"])[:10]
         bloco = {
             "nome": nome,
             "medias_no_mando_deste_jogo": medias_do_time(hist, team_id, mando),
             "forma": forma(hist, team_id),
             "tabela": linha_da_tabela(team_id),
-            "rodizio_de_titulares": rodizio(*escal),
-            "desfalques": _desfalques(team_id, fixture_id),
+            "rodizio_de_titulares": rod,
+            "desfalques": desf_ia,
         }
         return {k: v for k, v in bloco.items() if v not in (None, {}, [])}
 
@@ -308,4 +369,5 @@ def _montar(fixture_id: int) -> dict | None:
         "confronto_direto": confronto_direto(h2h, casa),
         "pressao_de_tabela": competitive_pressure.descrever(pressao) or None,
     }
+    _SINAL[fixture_id] = sinal
     return {k: v for k, v in dossie.items() if v not in (None, {}, [])}

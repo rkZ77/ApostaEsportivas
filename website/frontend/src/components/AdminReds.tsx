@@ -39,6 +39,8 @@ const COR: Record<string, string> = {
   por_pouco:      'text-ink-2',
   leitura_errada: 'text-red-400',
   sem_folha:      'text-ink-3',
+  saiu_cedo:      'text-amber-400',
+  veio_do_banco:  'text-amber-400',
 }
 
 function dataBr(dia: string): string {

@@ -94,3 +94,54 @@ def test_dossie_entra_no_payload_so_quando_existe():
     com = ai_review.build_review_payload([{}], "vip", dossies={"1": {"rodada": "R1"}})
     assert "dossie" not in sem
     assert com["dossie"] == {"1": {"rodada": "R1"}}
+
+
+# ---------------------------------------------------------------------------
+# Desfalque e tecnico no Score Final; ritmo por tempo no ao vivo
+# ---------------------------------------------------------------------------
+from services.pick_engine import news_model
+from services.pick_engine_live import residual_model as rm
+
+
+def test_so_titular_recente_fora_do_jogo_pesa():
+    desf = [
+        {"jogador": "Titular", "tipo": "Missing Fixture", "titular_nos_ultimos_jogos": 4},
+        {"jogador": "Emprestado", "tipo": "Missing Fixture", "titular_nos_ultimos_jogos": 0},
+        {"jogador": "Duvida", "tipo": "Questionable", "titular_nos_ultimos_jogos": 3},
+    ]
+    lado = d._sinal_do_lado(desf, {"tecnico_mudou": {"atual": "A", "anterior": "B"}})
+    assert lado == {"titulares_desfalcados": ["Titular"], "outros_desfalcados": ["Duvida"],
+                    "tecnico_mudou": True}
+
+
+def test_desfalque_e_tecnico_novo_so_derrubam_o_score():
+    neutro = {"home": {"titulares_desfalcados": [], "outros_desfalcados": []},
+              "away": {"titulares_desfalcados": [], "outros_desfalcados": []}}
+    assert news_model.news_score(neutro) == 0.5
+    com = {"home": {"titulares_desfalcados": ["X"], "outros_desfalcados": [], "tecnico_mudou": True},
+           "away": {"titulares_desfalcados": [], "outros_desfalcados": ["Y"]}}
+    assert news_model.news_score(com) == round(0.5 - (0.08 + 0.08 + 0.02), 4)
+
+
+def test_motor_desfalques_desliga(monkeypatch):
+    monkeypatch.setenv("MOTOR_DESFALQUES", "off")
+    assert d.sinal_de_desfalques(123) is None
+
+
+@pytest.mark.parametrize("minuto, status", [(20, "1H"), (45, "HT"), (70, "2H")])
+def test_ritmo_por_tempo_com_meio_a_meio_e_a_conta_antiga(minuto, status):
+    antigo = rm.lambda_residual("corners", 5, minuto, status, 10.0)
+    novo = rm.lambda_residual("corners", 5, minuto, status, 10.0, fracao_1t=0.5)
+    assert novo["lambda_residual"] == pytest.approx(antigo["lambda_residual"], abs=1e-3)
+
+
+def test_segundo_tempo_mais_forte_aumenta_o_que_falta_no_intervalo():
+    uniforme = rm.lambda_residual("corners", 5, 45, "HT", 10.0)["lambda_residual"]
+    medido = rm.lambda_residual("corners", 5, 45, "HT", 10.0, fracao_1t=0.40)["lambda_residual"]
+    assert medido > uniforme
+
+
+def test_parcela_ate():
+    assert rm.parcela_ate(45, 0.4) == pytest.approx(0.4)
+    assert rm.parcela_ate(90, 0.4) == pytest.approx(1.0)
+    assert rm.parcela_ate(0, 0.4) == 0

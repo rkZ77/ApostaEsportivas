@@ -96,7 +96,8 @@ def analisar(estado: dict, observacoes: list, config: LiveEngineConfig = DEFAULT
              baselines: dict | None = None, eventos: dict | None = None,
              fresh: dict | None = None, contexto_pre_jogo: dict | None = None,
              baseline_origens: dict | None = None,
-             historico: dict | None = None) -> dict:
+             historico: dict | None = None,
+             fracoes_1t: dict | None = None) -> dict:
     """Le a partida inteira: pressao, ritmo, tendencia, janelas, necessidade do
     resultado e projecao por familia. Nenhuma chamada de API acontece aqui.
 
@@ -112,6 +113,10 @@ def analisar(estado: dict, observacoes: list, config: LiveEngineConfig = DEFAULT
     agora. Ausente, o motor roda como antes, so' sem esse sinal.
     """
     baselines = baselines or {}
+    #: Fracao dos eventos de cada familia que acontece no 1o tempo, medida no
+    #: historico dos dois times (live_pipeline.fracoes_do_primeiro_tempo).
+    #: Ausente numa familia = ritmo uniforme, o comportamento anterior.
+    fracoes_1t = fracoes_1t or {}
     #: Historico contextual por familia, montado pelo pipeline
     #: (`live_pipeline.historico_contextual`) a partir de `match_statistics`:
     #: uma entrada por familia, com o baseline ponderado, os dois lados
@@ -148,7 +153,11 @@ def analisar(estado: dict, observacoes: list, config: LiveEngineConfig = DEFAULT
             continue
 
         baseline = baselines.get(familia) or rm.BASELINE_PADRAO.get(familia)
-        taxa = rm.taxa_por_minuto(observado, int(minuto), baseline, familia)
+        fracao = fracoes_1t.get(familia)
+        taxa = rm.taxa_por_minuto(
+            observado, int(minuto), baseline, familia, fracao_1t=fracao,
+            restantes=rm.minutos_restantes(int(minuto), estado.get("status") or ""),
+            status=estado.get("status") or "")
         janelas = rit.janelas_recentes(observacoes, familia, int(minuto), observado, config)
         tendencia = rit.tendencia(observacoes, familia, int(minuto), observado, config)
         fator_ritmo = rit.fator_de_ritmo(
@@ -158,7 +167,7 @@ def analisar(estado: dict, observacoes: list, config: LiveEngineConfig = DEFAULT
         lam = rm.lambda_residual(
             familia=familia, observado=observado, minuto=int(minuto),
             status=estado.get("status") or "", baseline_por_partida=baseline,
-            fator_ritmo=fator_ritmo, ajuste=ajuste)
+            fator_ritmo=fator_ritmo, ajuste=ajuste, fracao_1t=fracao)
 
         familias[familia] = {
             "disponivel": lam is not None,

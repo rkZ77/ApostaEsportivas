@@ -13,6 +13,7 @@ from services.fixtures_service import FixturesService
 from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
 from services.team_stats_service import TeamStatsService
+from services.pick_engine import dossie_da_partida
 from services.pick_engine import analyze_fixture_markets, rank_market_candidates, explain, homologation
 from services.pick_engine.ai_review import review_gate
 from services.pick_engine.config import DICA_CONFIG
@@ -258,6 +259,9 @@ def _best_candidate_across_fixtures(fixtures: list,
             league_id=fixture["league_id"], data_quality_score=quality["score"],
             match_context=match_context,
             home_team_id=fixture["home_team_id"], away_team_id=fixture["away_team_id"],
+            # DESFALQUES E TECNICO NOVO (2026-09-27): derrubam o Score Final
+            # via news_score. Mesmo dado do dossie da IA -- ver dossie_da_partida.
+            news_data=dossie_da_partida.sinal_de_desfalques(fixture["fixture_id"]),
             team_stats_home=team_stats_home, team_stats_away=team_stats_away,
             league_baseline=league_baseline,
             rastro=rastro,

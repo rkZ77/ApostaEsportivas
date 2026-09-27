@@ -46,6 +46,10 @@ def fetch_injuries(team_id: int, fixture_id: int = None, season: int = None,
             # Lidos no nivel de cima, vinham sempre vazios -- achado em
             # 27/09/2026 montando o dossie da partida.
             result.append({
+                # Id do jogador: e' por ele que o dossie cruza o desfalque com
+                # as escalacoes de team_lineups. Cruzar por NOME falhava em
+                # grafia (acento, abreviacao) -- ver injury_signal.
+                "id": player.get("id"),
                 "name": name,
                 "type": player.get("type") or item.get("type") or "",
                 "reason": player.get("reason") or item.get("reason") or "",
@@ -150,10 +154,14 @@ def news_score(signal: dict | None) -> float | None:
     if not signal:
         return None
 
+    # TECNICO NOVO pesa como um titular fora (2026-09-27): o historico inteiro
+    # descreve o time do tecnico anterior, que e' a mesma incerteza.
     home_weight = (len(signal["home"]["titulares_desfalcados"]) * 0.08
-                   + len(signal["home"]["outros_desfalcados"]) * 0.02)
+                   + len(signal["home"]["outros_desfalcados"]) * 0.02
+                   + (0.08 if signal["home"].get("tecnico_mudou") else 0.0))
     away_weight = (len(signal["away"]["titulares_desfalcados"]) * 0.08
-                   + len(signal["away"]["outros_desfalcados"]) * 0.02)
+                   + len(signal["away"]["outros_desfalcados"]) * 0.02
+                   + (0.08 if signal["away"].get("tecnico_mudou") else 0.0))
 
     total = min(home_weight + away_weight, 0.5)
     return round(0.5 - total, 4)
