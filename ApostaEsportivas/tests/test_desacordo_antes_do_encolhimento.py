@@ -23,6 +23,22 @@ from datetime import date
 from services.pick_engine import orchestrator, probability_model
 from services.pick_engine.config import PickEngineConfig, DEFAULT_CONFIG
 
+# CONFIGURACAO ANTERIOR A 27/09/2026 (so' o mando, sem modelo na taxa, sem piso
+# por lado). Estes testes fixam numeros de OUTRA mecanica (filtro de mando,
+# prior de mercado, desacordo, arbitro), escritos antes das fontes novas da
+# taxa; rodam com ela pra continuar isolando o que isolavam. As fontes novas
+# tem teste proprio em test_fontes_da_taxa_2026_09.py.
+from dataclasses import replace as _replace
+from services.pick_engine.config import DEFAULT_CONFIG as _DEFAULT
+CFG_ANTERIOR = _replace(_DEFAULT, peso_outro_mando=0.0, peso_modelo_na_taxa=0.0,
+                        min_jogos_mando_por_lado=0)
+
+
+def _sem_fontes_novas(cfg):
+    return _replace(cfg, peso_outro_mando=0.0, peso_modelo_na_taxa=0.0,
+                    min_jogos_mando_por_lado=0)
+
+
 
 def _jogo(match_date, total_corners):
     return {
@@ -52,7 +68,7 @@ def _candidato(config, direcao="Under"):
     candidatos = orchestrator.analyze_fixture_markets(
         _odds(), _HIST, _HIST,
         calibration_data={"by_market": {}, "by_market_league": {}},
-        home_team_id=1, away_team_id=2, config=config,
+        home_team_id=1, away_team_id=2, config=_sem_fontes_novas(config),
     )
     return next(c for c in candidatos if c["value"] == direcao)
 

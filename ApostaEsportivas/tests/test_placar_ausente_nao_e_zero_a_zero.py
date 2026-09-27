@@ -97,7 +97,9 @@ def test_zero_a_zero_de_verdade_continua_gravando():
     s = _servico()
 
     assert s._save_stats(_fx(0, 0), _folha(), _folha()) is True
-    assert len(s.cur.execucoes) == 1
+    # A linha da partida e' o INSERT. Desde 27/09 a folha publicada grava
+    # tambem a finalizacao por zona e o xG (um UPDATE a mais, mesmo commit).
+    assert "INSERT INTO match_statistics" in s.cur.execucoes[0][0]
     assert s.conn.commits == 1
 
 

@@ -20,7 +20,8 @@ _VALUE_FAMILIES = {"goals", "corners", "cards", "shots", "shots_on_target", "off
 def variance_stats(family: str, scope: str, last10_home: list, last10_away: list,
                     team_id: int | None = None,
                     home_team_id: int | None = None,
-                    away_team_id: int | None = None) -> dict | None:
+                    away_team_id: int | None = None,
+                    peso_outro_mando: float = 0.0) -> dict | None:
     """Desvio-padrao populacional e coeficiente de variacao (CV = desvio/
     media) do valor bruto da familia/escopo, no pool de jogos correto. CV
     normaliza o desvio pela media -- compara dispersao entre mercados de
@@ -40,14 +41,19 @@ def variance_stats(family: str, scope: str, last10_home: list, last10_away: list
     # a taxa outro, a penalidade de confidence estaria descrevendo uma amostra
     # que nao e' a que sustenta o pick (ver pool_and_field).
     pool, _ = pool_and_field(family, scope, last10_home, last10_away, team_id,
-                             home_team_id, away_team_id)
+                             home_team_id, away_team_id, peso_outro_mando=peso_outro_mando)
     if not pool or len(pool) < 2:
         return None
 
+    # Media e variancia PONDERADAS pelo peso do mando (jogo do outro mando vale
+    # config.peso_outro_mando), e a amostra efetiva com a mesma conta de
+    # stats_model.weighted_rate -- mesmo pool, mesmo peso, mesma amostra.
     values = [_extract_stat(m, family, scope, team_id) for m in pool]
-    n = len(values)
-    mean = sum(values) / n
-    variance = sum((v - mean) ** 2 for v in values) / n
+    pesos = [m.get("_peso_mando", 1.0) for m in pool]
+    soma = sum(pesos)
+    n = int(round(soma))
+    mean = sum(v * w for v, w in zip(values, pesos)) / soma
+    variance = sum(w * (v - mean) ** 2 for v, w in zip(values, pesos)) / soma
     std_dev = math.sqrt(variance)
     cv = round(std_dev / mean, 4) if mean > 0 else None
 

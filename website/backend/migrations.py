@@ -197,6 +197,44 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
                 cur.execute(f"ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS "
                             f"{_lado}_{_contador} INTEGER;")
         cur.execute("ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS stats_1h_checked_at TIMESTAMP;")
+        # FINALIZACAO POR ZONA E xG (2026-09-27). Quem grava e' o coletor do
+        # motor (CONTADORES_FINALIZACAO); a consulta de historico ja' le.
+        for _col, _tipo in (("shots_insidebox", "INTEGER"), ("shots_outsidebox", "INTEGER"),
+                            ("xg", "NUMERIC(5,2)")):
+            for _lado in ("home", "away"):
+                cur.execute(f"ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS "
+                            f"{_lado}_{_col} {_tipo};")
+        cur.execute("ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS finalizacao_checked_at TIMESTAMP;")
+        # REGISTRO DE MUDANCAS DO MOTOR (2026-09-27, pedido do usuario: "saber
+        # como ficou depois da mudanca"). Cada linha e' uma mudanca com data;
+        # o /admin mostra acerto e lucro de cada produto antes e depois dela.
+        # `produtos` NULL = afeta todos. A carga inicial e' setembro, lido do
+        # git; ON CONFLICT deixa rodar a cada deploy sem duplicar.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS motor_mudancas (
+                id         SERIAL PRIMARY KEY,
+                dia        DATE NOT NULL,
+                titulo     TEXT NOT NULL,
+                descricao  TEXT,
+                produtos   TEXT[],
+                criado_em  TIMESTAMP DEFAULT NOW(),
+                UNIQUE (dia, titulo)
+            )
+        """)
+        cur.execute("""
+            INSERT INTO motor_mudancas (dia, titulo, produtos) VALUES
+                ('2026-09-05', 'Odd ao vivo numa chamada só, e virou filtro de entrada', ARRAY['picks_live']::TEXT[]),
+                ('2026-09-09', 'Cortes de cauda: gols Over sai do ao vivo e a cauda alta sai da Free', ARRAY['picks_live', 'picks_free']::TEXT[]),
+                ('2026-09-10', 'Cartão elegível, bilhete numa casa só e peso do histórico ao vivo pela dispersão', NULL),
+                ('2026-09-11', 'V2 dos motores: Free, Ao Vivo, Pick Boost e Pick Jogador', ARRAY['picks_free', 'picks_live', 'picks_boost', 'picks_player_stats']::TEXT[]),
+                ('2026-09-12', 'DQS passa a reprovar pick, peso do preço vai a zero e Múltipla V2', NULL),
+                ('2026-09-15', 'Peso do adversário sai, a Free escolhe primeiro e escanteios sai da Múltipla', NULL),
+                ('2026-09-25', 'Piso de amostra volta para 8 jogos', ARRAY['picks_vip', 'picks_free', 'picks_multiplas', 'picks_bingo', 'picks_alavancagem']::TEXT[]),
+                ('2026-09-27', 'Motor conhece o 1º tempo, e a IA ganha dossiê da partida e alerta de falha', NULL),
+                ('2026-09-27', 'Desfalque e técnico novo no score, e ritmo por tempo no ao vivo', ARRAY['picks_vip', 'picks_free', 'picks_multiplas', 'picks_bingo', 'picks_alavancagem', 'picks_live']::TEXT[]),
+                ('2026-09-27', 'Fontes da taxa: outro mando com peso 0,5, mínimo de 5 jogos no mando e gols pelos chutes no alvo', ARRAY['picks_vip', 'picks_free', 'picks_multiplas', 'picks_bingo', 'picks_alavancagem']::TEXT[])
+            ON CONFLICT (dia, titulo) DO NOTHING
+        """)
         # ESCALACAO POR TIME (2026-09-27). Mesma DDL de
         # collectors/lineups_collector_service.DDL, no motor: o dossie da IA le
         # esta tabela e precisa dela existindo antes da primeira coleta.

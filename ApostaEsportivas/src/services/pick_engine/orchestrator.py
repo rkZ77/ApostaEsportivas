@@ -576,8 +576,22 @@ def analyze_fixture_markets(
                     # e' quase o dobro da de um lado so'.
                     family="cards", scope="total")
 
-            fit_poisson = probability_model.model_fit(taxa_ajustada, poisson_linha)
-            fit_referee = probability_model.model_fit(taxa_ajustada, referee_linha)
+            # MODELO POR CAUSA NA PROBABILIDADE (2026-09-27): ver
+            # config.peso_modelo_na_taxa. Entra ANTES do encolhimento pro
+            # mercado, so' nas familias medidas. O desacordo (termo M, logo
+            # abaixo) continua comparando com a taxa SEM o modelo -- misturar
+            # antes de medir o desacordo faria as duas estimativas concordarem
+            # por construcao e o confidence subiria sem evidencia nova.
+            taxa_sem_modelo = taxa_ajustada
+            if (config.peso_modelo_na_taxa and poisson_linha is not None
+                    and family in ("goals", "corners", "cards")):
+                w = config.peso_modelo_na_taxa
+                taxa_ajustada = bayesian_model.shrink_taxa(
+                    (1 - w) * taxa_bruta_raw + w * poisson_linha,
+                    taxa["amostra"], prob_baseline["prob"])
+
+            fit_poisson = probability_model.model_fit(taxa_sem_modelo, poisson_linha)
+            fit_referee = probability_model.model_fit(taxa_sem_modelo, referee_linha)
             # O MESMO desacordo medido contra a taxa BRUTA, sempre calculado e
             # sempre gravado -- inclusive quando nao decide nada (config.
             # disagreement_on_raw_rate=False). Sem o par de numeros no rastro nao
@@ -670,6 +684,9 @@ def analyze_fixture_markets(
                 "taxa_real":        taxa_ajustada,
                 "taxa_bruta_pre_bayes": taxa_bruta_raw,
                 "amostra":          taxa["amostra"],
+                # Menor numero de jogos NO MANDO entre os lados que o mercado
+                # le -- o gate de config.min_jogos_mando_por_lado.
+                "amostra_mando_min_lado": taxa.get("amostra_mando_min_lado"),
                 "amostra_label":    taxa["amostra_label"],
                 "Q":                taxa["Q"],
                 "wilson":           taxa.get("wilson"),
@@ -771,7 +788,8 @@ def analyze_fixture_markets(
         # None e a penalidade fica 0).
         var_stats = variance_model.variance_stats(
             family, scope, last10_home, last10_away, team_id=side_team_id,
-            home_team_id=home_team_id, away_team_id=away_team_id)
+            home_team_id=home_team_id, away_team_id=away_team_id,
+            peso_outro_mando=config.peso_outro_mando)
         v_penalty = variance_model.variance_penalty(
             var_stats["coefficient_of_variation"] if var_stats else None
         )

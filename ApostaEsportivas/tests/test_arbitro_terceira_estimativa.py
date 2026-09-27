@@ -15,6 +15,22 @@ import pytest
 from services.pick_engine import orchestrator, probability_model, referee_model
 from services.pick_engine.config import DEFAULT_CONFIG
 
+# CONFIGURACAO ANTERIOR A 27/09/2026 (so' o mando, sem modelo na taxa, sem piso
+# por lado). Estes testes fixam numeros de OUTRA mecanica (filtro de mando,
+# prior de mercado, desacordo, arbitro), escritos antes das fontes novas da
+# taxa; rodam com ela pra continuar isolando o que isolavam. As fontes novas
+# tem teste proprio em test_fontes_da_taxa_2026_09.py.
+from dataclasses import replace as _replace
+from services.pick_engine.config import DEFAULT_CONFIG as _DEFAULT
+CFG_ANTERIOR = _replace(_DEFAULT, peso_outro_mando=0.0, peso_modelo_na_taxa=0.0,
+                        min_jogos_mando_por_lado=0)
+
+
+def _sem_fontes_novas(cfg):
+    return _replace(cfg, peso_outro_mando=0.0, peso_modelo_na_taxa=0.0,
+                    min_jogos_mando_por_lado=0)
+
+
 
 def _arbitro(avg_yellow, avg_red=0.0, games=5, fallback=False):
     return {"reliable": True, "games": games, "avg_yellow": avg_yellow,
@@ -118,7 +134,7 @@ def _rodar(referee_stats, linha="4.5"):
         calibration_data={"by_market": {}, "by_market_league": {}},
         home_team_id=1, away_team_id=2,
         referee_stats=referee_stats,
-        league_stats={"games": 200, "avg_yellow": 4.0, "avg_red": 0.1},
+        league_stats={"games": 200, "avg_yellow": 4.0, "avg_red": 0.1}, config=CFG_ANTERIOR
     )
 
 
@@ -188,7 +204,7 @@ def test_fora_de_cartoes_o_arbitro_nao_entra():
         odds, hist, hist,
         calibration_data={"by_market": {}, "by_market_league": {}},
         home_team_id=1, away_team_id=2,
-        referee_stats={"games": 8, "avg_yellow": 2.0, "avg_red": 0.0},
+        referee_stats={"games": 8, "avg_yellow": 2.0, "avg_red": 0.0}, config=CFG_ANTERIOR
     )
     c = next(x for x in candidatos if x["market_type"] == "corners")
     assert c["referee_probability"] is None
@@ -221,7 +237,7 @@ def _rodar_duas_linhas(referee_stats):
         calibration_data={"by_market": {}, "by_market_league": {}},
         home_team_id=1, away_team_id=2,
         referee_stats=referee_stats,
-        league_stats={"games": 200, "avg_yellow": 4.0, "avg_red": 0.1},
+        league_stats={"games": 200, "avg_yellow": 4.0, "avg_red": 0.1}, config=CFG_ANTERIOR
     )
 
 

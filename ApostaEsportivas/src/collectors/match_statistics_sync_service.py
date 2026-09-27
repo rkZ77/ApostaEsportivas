@@ -82,6 +82,20 @@ CONTADORES_1T = (
     ("Total Shots",   "total_shots_1h"),
 )
 
+#: FINALIZACAO POR ZONA E xG (2026-09-27). Vem na folha do JOGO INTEIRO, na
+#: mesma resposta, e era descartada. Gol e' evento raro e barulhento (0 num
+#: jogo, 3 no outro); chute dentro da area e xG medem a chance criada, que e'
+#: o que se repete. "expected_goals" so' existe nas ligas grandes (Premier
+#: League sim, Brasileirao nao, medido em 27/09) -- ausente fica NULL.
+#: (tipo na folha, sufixo da coluna, tipo SQL)
+CONTADORES_FINALIZACAO = (
+    ("Shots insidebox",  "shots_insidebox",  "INTEGER"),
+    ("Shots outsidebox", "shots_outsidebox", "INTEGER"),
+    ("expected_goals",   "xg",               "NUMERIC(5,2)"),
+)
+COLUNAS_FINALIZACAO = tuple(f"{lado}_{sufixo}" for _, sufixo, _ in CONTADORES_FINALIZACAO
+                            for lado in ("home", "away"))
+
 #: Todas as colunas de 1o tempo, na ordem casa/fora de cada contador.
 COLUNAS_1T = tuple(f"{lado}_{sufixo}" for _, sufixo in CONTADORES_1T
                    for lado in ("home", "away"))
@@ -221,6 +235,15 @@ class MatchStatisticsSyncService:
                 f"ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS {coluna} INTEGER;")
         self.cur.execute(
             "ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS stats_1h_checked_at TIMESTAMP;")
+        for _, sufixo, tipo in CONTADORES_FINALIZACAO:
+            for lado in ("home", "away"):
+                self.cur.execute(f"ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS "
+                                 f"{lado}_{sufixo} {tipo};")
+        # Marca que a folha ja' foi lida COM estes campos -- a do 1o tempo
+        # nao serve de marca, porque 543 partidas de PROD tiveram o 1o tempo
+        # coletado antes destes campos existirem.
+        self.cur.execute(
+            "ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS finalizacao_checked_at TIMESTAMP;")
         self.conn.commit()
 
     def _close(self):
@@ -680,9 +703,30 @@ class MatchStatisticsSyncService:
         ))
 
         self._gravar_primeiro_tempo(fx["fixture_id"], home_1h, away_1h)
+        self._gravar_finalizacao(fx["fixture_id"], home_stats, away_stats)
         self.conn.commit()
         print(f"[OK] {fx['fixture_id']}")
         return True
+
+    def _gravar_finalizacao(self, fixture_id, home_stats, away_stats):
+        """Chute dentro/fora da area e xG da folha cheia, e a marca de lidos.
+
+        Folha nao publicada nao marca: a partida volta no backfill. Publicada
+        sem o tipo (xG fora das ligas grandes) marca com o campo NULL -- a API
+        nao vai passar a publicar depois, e pedir de novo so' gastaria cota."""
+        if not (folha_publicada(home_stats) and folha_publicada(away_stats)):
+            return
+        valores = {}
+        for lado, folha in (("home", home_stats), ("away", away_stats)):
+            for tipo, sufixo, _ in CONTADORES_FINALIZACAO:
+                # robusta=False pelo mesmo motivo do 1o tempo: ausencia de xG
+                # e' o caso normal fora das ligas grandes, nunca zero.
+                valores[f"{lado}_{sufixo}"] = ler_valor(folha, tipo, True, robusta=False)
+        sets = ", ".join(f"{col} = COALESCE(%s, {col})" for col in COLUNAS_FINALIZACAO)
+        self.cur.execute(
+            f"UPDATE match_statistics SET {sets}, finalizacao_checked_at = NOW() "
+            f"WHERE fixture_id = %s;",
+            tuple(valores[col] for col in COLUNAS_FINALIZACAO) + (fixture_id,))
 
     def _gravar_primeiro_tempo(self, fixture_id, home_1h, away_1h):
         """Grava os contadores do 1o tempo e marca que a folha foi pedida.
@@ -1087,7 +1131,7 @@ class MatchStatisticsSyncService:
             self.cur.execute("""
                 SELECT fixture_id, home_team_id
                   FROM match_statistics
-                 WHERE stats_1h_checked_at IS NULL
+                 WHERE (stats_1h_checked_at IS NULL OR finalizacao_checked_at IS NULL)
                    AND status IN %s
                    AND season >= %s
                  ORDER BY match_date DESC
@@ -1104,10 +1148,15 @@ class MatchStatisticsSyncService:
                     continue
                 if not stats or len(stats) < 2:
                     self._gravar_primeiro_tempo(fixture_id, [], [])
+                    # Sem folha nenhuma: marca a finalizacao tambem, senao a
+                    # partida voltaria todo dia pela segunda condicao da fila.
+                    self.cur.execute("UPDATE match_statistics SET finalizacao_checked_at = NOW() "
+                                     "WHERE fixture_id = %s", (fixture_id,))
                     sem_folha += 1
                 else:
-                    _, _, home_1h, away_1h = self._separar_lados(stats, home_id)
+                    home_cheia, away_cheia, home_1h, away_1h = self._separar_lados(stats, home_id)
                     self._gravar_primeiro_tempo(fixture_id, home_1h or [], away_1h or [])
+                    self._gravar_finalizacao(fixture_id, home_cheia, away_cheia)
                     if folha_publicada(home_1h) and folha_publicada(away_1h):
                         com_folha += 1
                     else:
@@ -1115,7 +1164,8 @@ class MatchStatisticsSyncService:
                 self.conn.commit()
             self.cur.execute("""
                 SELECT COUNT(*) FROM match_statistics
-                 WHERE stats_1h_checked_at IS NULL AND status IN %s AND season >= %s;
+                 WHERE (stats_1h_checked_at IS NULL OR finalizacao_checked_at IS NULL)
+                   AND status IN %s AND season >= %s;
             """, (tuple(self.FINISHED), temporada_minima))
             restantes = self.cur.fetchone()[0]
         finally:

@@ -125,17 +125,58 @@ class TeamStatsService:
         proprio = self._baseline_query(
             "WHERE league_id = %s AND season = %s AND games_count > 0",
             (league_id, season))
+        conversao = self._conversao_da_liga(league_id)
         if proprio and (proprio.get("linhas") or 0) >= self.MIN_LINHAS_BASELINE:
-            return proprio
+            return {**proprio, **conversao}
         global_ = self._baseline_query(
             "WHERE season = %s AND games_count > 0", (season,))
         if global_ and (global_.get("linhas") or 0) > 0:
             global_["escopo"] = "global"
-            return global_
+            return {**global_, **conversao}
         # Nem a temporada inteira tem linha: sem alvo, shrink_to_baseline
         # devolve o valor cru -- que e' melhor que encolher pra um numero
         # inventado.
         return proprio
+
+    #: Minimo de chutes no alvo somados pra a conversao da liga valer.
+    MIN_CHUTES_CONVERSAO = 200
+
+    def _conversao_da_liga(self, league_id) -> dict:
+        """Gols por chute no alvo e escanteios por chute, na liga, no ultimo
+        ano. E' o que transforma VOLUME de finalizacao em gols e escanteios
+        esperados (stats_model.lambda_por_causa). Liga com pouco jogo cai na
+        conversao de todas as ligas coletadas. {} sem dado -- ai' o motor usa
+        so' o contador, como antes."""
+        consulta = """
+            SELECT SUM(COALESCE(home_goals_90, home_goals) + COALESCE(away_goals_90, away_goals))
+                       FILTER (WHERE home_shots_on IS NOT NULL AND away_shots_on IS NOT NULL) AS gols,
+                   SUM(home_shots_on + away_shots_on) AS alvo,
+                   SUM(total_corners) FILTER (WHERE home_total_shots IS NOT NULL
+                                                AND away_total_shots IS NOT NULL) AS esc,
+                   SUM(home_total_shots + away_total_shots)
+                       FILTER (WHERE total_corners IS NOT NULL) AS chutes
+              FROM match_statistics
+             WHERE status = 'FT' AND match_date >= NOW() - INTERVAL '365 days' {filtro}
+        """
+        try:
+            for filtro, params in (("AND league_id = %s", (league_id,)), ("", ())):
+                linha = self._consulta_conversao(consulta.format(filtro=filtro), params)
+                if not linha:
+                    continue
+                gols, alvo, esc, chutes = (linha.get(k) for k in ("gols", "alvo", "esc", "chutes"))
+                if alvo and float(alvo) >= self.MIN_CHUTES_CONVERSAO and chutes:
+                    return {"conv_gols_por_chute_no_alvo": float(gols) / float(alvo),
+                            "conv_escanteios_por_chute": float(esc) / float(chutes)}
+        except Exception as e:
+            print(f"[TEAM_STATS] conversao da liga indisponivel: {e}")
+        return {}
+
+    def _consulta_conversao(self, sql, params):
+        """Mesma consulta de `_query`, num metodo proprio: a conversao da liga e'
+        um acrescimo a media da liga, nao parte da escolha dela (propria ou
+        global), e quem finge o `_query` nos testes nao deve ter a fila de
+        respostas deslocada por ela."""
+        return TeamStatsService._query(self, sql, params)
 
     def _baseline_query(self, where: str, params: tuple):
         return self._query(f"""
