@@ -33,14 +33,68 @@ def test_insert_do_retrato_usa_a_conta_com_fuso(monkeypatch):
     assert len(linhas[0]) == 9
 
 
-def test_migracao_recalcula_retratos_antigos_das_colunas_de_origem():
+def test_correcao_recalcula_das_colunas_de_origem():
     """Idempotente: recalcula de match_datetime e captured_at, nao soma 180."""
     import inspect
-    import main
-    fonte = inspect.getsource(main.run_migrations)
-    assert "UPDATE odds_snapshots" in fonte
+    from collectors import odds_collector_service as mod
+    fonte = inspect.getsource(mod.corrigir_minuto_dos_retratos)
     assert "captured_at AT TIME ZONE 'UTC'" in fonte
     assert "minutes_to_kickoff + 180" not in fonte
+
+
+class _ConnCorrecao:
+    """Conexao falsa: `marcado` diz se a correcao ja' rodou; ids 1..450000."""
+
+    def __init__(self, marcado):
+        self.marcado = marcado
+        self.sql = []
+        self.commits = 0
+        conn = self
+
+        class Cur:
+            rowcount = 0
+
+            def execute(self, sql, params=None):
+                conn.sql.append((" ".join(sql.split()), params))
+                self.rowcount = 7 if sql.strip().startswith("UPDATE") else 0
+
+            def fetchone(self):
+                ultimo = conn.sql[-1][0]
+                if "FROM migracoes_motor" in ultimo:
+                    return (1,) if conn.marcado else None
+                if "to_regclass" in ultimo:
+                    return (True,)
+                return (1, 450_000)
+
+            def close(self):
+                pass
+
+        self._cur = Cur()
+
+    def cursor(self):
+        return self._cur
+
+    def commit(self):
+        self.commits += 1
+
+    def rollback(self):
+        pass
+
+
+def test_correcao_roda_em_lotes_e_marca():
+    from collectors import odds_collector_service as mod
+    conn = _ConnCorrecao(marcado=False)
+    assert mod.corrigir_minuto_dos_retratos(conn) == 7 * 3      # 3 lotes de 200 mil
+    updates = [s for s, _ in conn.sql if s.startswith("UPDATE")]
+    assert len(updates) == 3
+    assert any(s.startswith("INSERT INTO migracoes_motor") for s, _ in conn.sql)
+
+
+def test_correcao_nao_roda_duas_vezes():
+    from collectors import odds_collector_service as mod
+    conn = _ConnCorrecao(marcado=True)
+    assert mod.corrigir_minuto_dos_retratos(conn) is None
+    assert not [s for s, _ in conn.sql if s.startswith("UPDATE")]
 
 
 # ── 2. a coleta perto do apito ────────────────────────────────────────────

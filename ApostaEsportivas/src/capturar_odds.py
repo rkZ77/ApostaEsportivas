@@ -3,7 +3,8 @@ from utils.db_utils import get_connection
 from utils.data_br import HOJE_BR, APITO_FUTURO
 from utils.api_client import ApiQuotaEsgotada
 from services import api_quota
-from collectors.odds_collector_service import OddsCollectorService, prune_odds_snapshots
+from collectors.odds_collector_service import (
+    OddsCollectorService, corrigir_minuto_dos_retratos, prune_odds_snapshots)
 
 
 #: Jogos NO MANDO que cada time precisa ter pra a odd da partida valer a
@@ -154,6 +155,9 @@ class OddsMain:
 
         conn.commit()
         cur.close()
+        # Uma vez so' na vida da base (marcador em migracoes_motor): ver
+        # odds_collector_service.corrigir_minuto_dos_retratos.
+        corrigir_minuto_dos_retratos(conn)
         conn.close()
 
         end = time.perf_counter()

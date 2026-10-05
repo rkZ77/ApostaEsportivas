@@ -611,16 +611,11 @@ def run_migrations():
         "ALTER TABLE team_statistics ADD COLUMN IF NOT EXISTS games_by_stat JSONB;",
 
         # -- Minuto do retrato no fuso certo (2026-10-02) ------------------
-        # `match_datetime` e' Brasilia sem fuso e a conta era feita contra o
-        # NOW() em UTC: todo retrato saiu 180 min menor (ver
-        # odds_collector_service.MINUTOS_ATE_O_APITO_SQL). Recalcula das duas
-        # colunas de origem -- captured_at e' NOW() gravado em sessao UTC --,
-        # entao e' idempotente: rodar de novo da' o mesmo numero.
-        """UPDATE odds_snapshots
-              SET minutes_to_kickoff = EXTRACT(EPOCH FROM (
-                      (match_datetime AT TIME ZONE 'America/Sao_Paulo')
-                    - (captured_at AT TIME ZONE 'UTC'))) / 60
-            WHERE match_datetime IS NOT NULL AND captured_at IS NOT NULL;""",
+        # NAO ESTA' AQUI: o recalculo dos retratos antigos roda sozinho, uma
+        # vez, em lotes, na proxima coleta de odds -- ver
+        # odds_collector_service.corrigir_minuto_dos_retratos. Aqui ele seria
+        # um UPDATE unico na tabela inteira, e dependeria de alguem lembrar
+        # do `setup` em PROD.
         # Distancia do fechamento ate' o apito, por perna. NULL = fechamento
         # da regra antiga (ou da tabela closing_odds, que nao guarda o minuto).
         "ALTER TABLE picks_ledger ADD COLUMN IF NOT EXISTS closing_min_to_ko INTEGER;",
