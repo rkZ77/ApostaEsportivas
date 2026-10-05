@@ -334,6 +334,67 @@ MINUTOS_ATE_O_APITO_SQL = (
     "EXTRACT(EPOCH FROM ((%s AT TIME ZONE 'America/Sao_Paulo') - NOW())) / 60")
 
 
+#: Nome da correcao em `migracoes_motor` (marcador de "ja' rodou").
+_CORRECAO_FUSO = "odds_snapshots_minuto_no_fuso_br"
+_LOTE_CORRECAO = 200_000
+
+
+def corrigir_minuto_dos_retratos(conn) -> int | None:
+    """Recalcula `minutes_to_kickoff` dos retratos gravados com o fuso errado.
+
+    UMA VEZ SO', marcada em `migracoes_motor`. Roda dentro da coleta de odds
+    pra nao depender de alguem lembrar do `setup` em PROD, e em lotes por id
+    com commit a cada lote: a tabela tem centenas de milhares de linhas e um
+    UPDATE unico seguraria lock a coleta inteira. O recalculo sai das colunas
+    de origem (captured_at e' NOW() gravado em sessao UTC), entao repetir um
+    lote -- processo morto no meio -- da' o mesmo numero.
+
+    Best-effort: devolve as linhas corrigidas, ou None se ja' tinha rodado ou
+    falhou. Falha aqui nunca pode atrasar a coleta.
+    """
+    cur = conn.cursor()
+    try:
+        cur.execute("""CREATE TABLE IF NOT EXISTS migracoes_motor (
+                           nome TEXT PRIMARY KEY, aplicada_em TIMESTAMP DEFAULT NOW())""")
+        cur.execute("SELECT 1 FROM migracoes_motor WHERE nome = %s", (_CORRECAO_FUSO,))
+        if cur.fetchone():
+            conn.commit()
+            return None
+        cur.execute("SELECT to_regclass('public.odds_snapshots') IS NOT NULL")
+        if not cur.fetchone()[0]:
+            cur.execute("INSERT INTO migracoes_motor (nome) VALUES (%s)", (_CORRECAO_FUSO,))
+            conn.commit()
+            return 0
+        cur.execute("SELECT COALESCE(MIN(id), 0), COALESCE(MAX(id), 0) FROM odds_snapshots")
+        inicio, fim = cur.fetchone()
+        conn.commit()
+        total = 0
+        while inicio <= fim:
+            cur.execute("""
+                UPDATE odds_snapshots
+                   SET minutes_to_kickoff = EXTRACT(EPOCH FROM (
+                           (match_datetime AT TIME ZONE 'America/Sao_Paulo')
+                         - (captured_at AT TIME ZONE 'UTC'))) / 60
+                 WHERE id BETWEEN %s AND %s
+                   AND match_datetime IS NOT NULL AND captured_at IS NOT NULL
+            """, (inicio, inicio + _LOTE_CORRECAO - 1))
+            total += cur.rowcount or 0
+            conn.commit()
+            inicio += _LOTE_CORRECAO
+        cur.execute("INSERT INTO migracoes_motor (nome) VALUES (%s) ON CONFLICT DO NOTHING",
+                    (_CORRECAO_FUSO,))
+        conn.commit()
+        print(f"[ODDS_SNAPSHOTS] Minuto ate' o apito recalculado no fuso de Brasilia: "
+              f"{total} retrato(s).")
+        return total
+    except Exception as e:
+        conn.rollback()
+        print(f"[ODDS_SNAPSHOTS] Aviso: correcao do fuso nao aplicada (tenta na proxima): {e}")
+        return None
+    finally:
+        cur.close()
+
+
 def _inserir_retratos(cur, linhas: list) -> None:
     """`linhas` = (fixture, casa, mercado, selecao, linha, odd, kickoff_br)."""
     _create_odds_snapshots_table(cur)
