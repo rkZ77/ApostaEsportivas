@@ -372,6 +372,9 @@ _PIPELINE_SCRIPTS = {
     # (LIVE_ENGINE_DRY_RUN), que e' a mesma regra do CLI. Passar `--gravar`
     # aqui faria o botao ignorar a variavel do Railway.
     "historico_times":      "atualizar_jogos.py",
+    # Fechamento pro CLV (2026-10-02): retrato da cotacao perto do apito dos
+    # jogos com pick. Roda em `loop` ate' o ultimo jogo com pick comecar.
+    "coleta_fechamento":    "capturar_fechamento.py",
     # OS OUTROS SEIS ESTAGIOS DO `atualizar_jogos.py` (2026-09-11).
     #
     # O Stage 6 tinha botao desde 13/08 e os outros nao, entao refazer UMA
@@ -463,6 +466,7 @@ _PIPELINE_ARGS["coleta_escalacoes"] = ["escalacao"]
 _PIPELINE_ARGS["coleta_calendario"] = ["calendario"]
 _PIPELINE_ARGS["coleta_eventos"] = ["eventos", "300"]
 _PIPELINE_ARGS["coleta_clima"] = ["clima", "1000"]
+_PIPELINE_ARGS["coleta_fechamento"] = ["loop"]
 
 #: SEM argumento de metodo, e e' o que distingue este passo de
 #: `gerar_playerstats`: aquele roda os tres diarios, este roda os seis.
@@ -499,6 +503,9 @@ _DEV_PIPELINE_STEPS = [
 # finalizado da temporada inteira, centenas numa liga de pontos corridos.
 _PIPELINE_TIMEOUTS = {
     "coletar_liga":    5400.0,  # 90 min
+    # O fechamento fica de pe' ate' o ultimo jogo com pick do dia comecar
+    # (teto proprio de 16h em capturar_fechamento.TETO_HORAS).
+    "coleta_fechamento": 16.5 * 3600,
     "default":         3600.0,  # 60 min
 }
 
@@ -532,6 +539,7 @@ _PASSO_DO_COMANDO = {
     # falta. `tudo` nao entra (ele E' a sequencia) e `shadow` nao entra (compara
     # com uma IA que nao gera pick desde 2026-07-17).
     "live":               "gerar_live",
+    "fechamento":         "coleta_fechamento",
     "historico":          "historico_times",
     "playerstats":        "gerar_playerstats_todos",
     "ligas":              "perfis_de_liga",
@@ -660,6 +668,7 @@ _STEP_LABELS = {
     "atualizar_resultados": "Atualizando resultados",
     # Sob demanda · fora da sequencia do "Rodar Tudo".
     "gerar_live":              "Rodando o motor Ao Vivo",
+    "coleta_fechamento":       "Coletando odds de fechamento (até o último jogo com pick)",
     "historico_times":         "Buscando histórico dos times",
     "gerar_playerstats_todos": "Gerando picks de jogador (todos os métodos)",
     "perfis_de_liga":          "Atualizando perfis de liga",
@@ -1082,6 +1091,7 @@ _PASSO_LABEL_CURTO = {
     # Liga" gasta credito da Anthropic e "Ao Vivo" so' faz sentido com jogo
     # rolando -- quem clica precisa saber disso antes, nao depois.
     "gerar_live":              "Rodar Ao Vivo",
+    "coleta_fechamento":       "Odds de Fechamento (CLV)",
     "historico_times":         "Histórico dos Times",
     "gerar_playerstats_todos": "Jogadores (6 métodos)",
     "perfis_de_liga":          "Perfis de Liga (IA)",
@@ -1124,7 +1134,7 @@ _PASSO_LABEL_CURTO = {
 #: ambiente sem PIPELINE_SRC_PATH, e um painel que muda de ordem conforme o
 #: motor esta alcancavel ou nao e pior que um painel sempre igual.
 _AVULSOS_FALLBACK = [
-    "gerar_playerstats_todos", "historico_times", "gerar_live",
+    "gerar_playerstats_todos", "historico_times", "gerar_live", "coleta_fechamento",
     "coleta_status", "coleta_times", "coleta_fixtures", "coleta_classificacao",
     "coleta_folha", "coleta_folha_1t", "coleta_eventos", "coleta_clima", "coleta_calendario", "coleta_escalacoes", "coleta_medias",
     "perfis_de_liga",
@@ -1365,10 +1375,20 @@ def ai_performance(days: int = 60, current_user: dict = Depends(require_admin)):
             return {"days": days, "migration_pending": True, "modelos": [],
                     "por_pipeline": [], "falhas": [], "cobertura": {}}
 
-        cur.execute("""
+        # CLV SO' COM FECHAMENTO PERTO DO APITO (2026-10-05). O de antes de
+        # `closing_min_to_ko` comparava com a odd da manha e dava ~0 por
+        # construcao; misturar os dois puxa a media pra zero. A coluna nasce
+        # na primeira sincronizacao do ledger depois do deploy -- ate' la' o
+        # painel mostra CLV vazio, que e' o certo.
+        cur.execute("""SELECT 1 FROM information_schema.columns
+                       WHERE table_name = 'picks_ledger'
+                         AND column_name = 'closing_min_to_ko' LIMIT 1""")
+        clv_sql = ("CASE WHEN closing_min_to_ko IS NOT NULL THEN clv END AS clv"
+                   if cur.fetchone() else "NULL::numeric AS clv")
+        cur.execute(f"""
             SELECT pick_type, ai_provider, ai_model, ai_decision, ai_status,
                    market, market_type, odd,
-                   result, profit, clv, created_at::date AS dia
+                   result, profit, {clv_sql}, created_at::date AS dia
             FROM picks_ledger
             WHERE created_at >= NOW() - (%s * INTERVAL '1 day')
         """, (days,))

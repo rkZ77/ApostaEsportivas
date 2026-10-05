@@ -79,11 +79,44 @@ def test_sem_market_id_nao_inventa_fechamento():
 
 
 def test_fechamento_filtra_pelo_mercado_da_perna():
-    cur = _CursorFalso([None, (1.72,)])
+    cur = _CursorFalso([None, (1.72, 25)])
     assert sync._closing_odd_for(cur, 123, "Over 4.5", 45) == 1.72
     for sql, params in cur.consultas:
         assert "market_id = %s" in sql, sql
         assert 45 in params
+
+
+def test_fechamento_devolve_o_minuto_do_retrato():
+    cur = _CursorFalso([None, (1.72, 25)])
+    assert sync._fechamento(cur, 123, "Over 4.5", 45) == (1.72, 25)
+
+
+def test_retrato_longe_do_apito_nao_e_fechamento():
+    """O defeito de 2026-10-02: o unico retrato do dia era a coleta da manha,
+    a mesma que gerou o pick, e ele valia como fechamento. CLV ~0 por
+    construcao. A consulta precisa cortar pela distancia do apito."""
+    cur = _CursorFalso([None, (1.72, 25)])
+    sync._fechamento(cur, 123, "Over 4.5", 45)
+    sql, params = cur.consultas[-1]
+    assert "ultimo.m <= %s" in sql
+    assert sync.FECHAMENTO_MAX_MINUTOS in params
+
+
+def test_fechamento_e_a_melhor_odd_entre_as_casas():
+    """A odd de entrada e' a melhor entre as casas; o fechamento tambem tem
+    que ser, senao o CLV infla sempre pro mesmo lado."""
+    cur = _CursorFalso([None, (1.72, 25)])
+    sync._fechamento(cur, 123, "Over 4.5", 45)
+    assert "MAX(s.odd_value)" in cur.consultas[-1][0]
+
+
+def test_sem_retrato_nenhum_o_clv_gravado_fica():
+    """Retencao de 45 dias em odds_snapshots: depois dela o recalculo da' None
+    e o DO UPDATE sem condicao apagava o CLV de toda perna antiga."""
+    cur = _CursorFalso([(False,), (False,)])
+    assert sync._fechamento_ainda_existe(cur, 123) is False
+    cur = _CursorFalso([(True,)])
+    assert sync._fechamento_ainda_existe(cur, 123) is True
 
 
 def test_closing_odds_tem_prioridade_sobre_o_snapshot():
@@ -104,7 +137,7 @@ def test_consulta_que_falha_nao_derruba_a_sincronizacao():
     run_migrations(), que NAO roda quando o pipeline e' disparado pelo site."""
     # so' uma resposta: a consulta que explode nem chega no fetchone, entao o
     # snapshot (a segunda) e' quem consome ela.
-    cur = _CursorFalso([(1.72,)], explode_em=1)
+    cur = _CursorFalso([(1.72, 25)], explode_em=1)
     assert sync._closing_odd_for(cur, 123, "Over 4.5", 45) == 1.72
     assert cur.explodiu, "o teste precisa ter exercitado a falha"
     assert cur.rollbacks_de_conexao == 0, (
@@ -149,11 +182,12 @@ def test_market_id_chega_ao_ledger():
 
 
 def test_fechamento_nao_e_preservado_por_coalesce():
-    """closing_odd e clv sao os UNICOS campos sem COALESCE no DO UPDATE. Com
-    COALESCE, o valor falso ja' gravado sobreviveria pra sempre, porque o
-    caminho corrigido devolve NULL quando nao identifica o mercado."""
+    """closing_odd e clv nao usam COALESCE no DO UPDATE. Com COALESCE, o valor
+    falso ja' gravado sobreviveria pra sempre, porque o caminho corrigido
+    devolve NULL quando nao identifica o mercado. A unica condicao pra manter
+    o gravado e' nao haver mais retrato da partida (retencao)."""
     import inspect
     fonte = inspect.getsource(sync)
-    assert "closing_odd = EXCLUDED.closing_odd," in fonte
-    assert "clv = EXCLUDED.clv," in fonte
+    assert "CASE WHEN %s THEN EXCLUDED.closing_odd" in fonte
+    assert "clv = CASE WHEN %s THEN EXCLUDED.clv" in fonte
     assert "COALESCE(EXCLUDED.closing_odd" not in fonte

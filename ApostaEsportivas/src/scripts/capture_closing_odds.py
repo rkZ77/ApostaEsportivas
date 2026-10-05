@@ -21,6 +21,7 @@ import sys
 sys.path.insert(0, __file__.rsplit("scripts", 1)[0])
 
 from utils.db_utils import get_connection
+from utils.data_br import AGORA_BR
 
 _LOOKAHEAD_MINUTES = 60
 _GRACE_MINUTES = 30
@@ -46,8 +47,10 @@ def _picks_needing_capture(cur) -> list[dict]:
         FROM ({union_sql}) picks
         JOIN fixtures f ON f.fixture_id = picks.fixture_id
         WHERE picks.market_id IS NOT NULL
-          AND f.match_datetime <= NOW() + INTERVAL '{_LOOKAHEAD_MINUTES} minutes'
-          AND f.match_datetime >= NOW() - INTERVAL '{_GRACE_MINUTES} minutes'
+          -- match_datetime e' Brasilia sem fuso; NOW() puro e' UTC e deslocava
+          -- a janela em 3 horas (corrigido em 2026-10-05).
+          AND f.match_datetime <= {AGORA_BR} + INTERVAL '{_LOOKAHEAD_MINUTES} minutes'
+          AND f.match_datetime >= {AGORA_BR} - INTERVAL '{_GRACE_MINUTES} minutes'
           AND NOT EXISTS (
               SELECT 1 FROM closing_odds co
               WHERE co.fixture_id = picks.fixture_id

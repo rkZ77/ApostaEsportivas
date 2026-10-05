@@ -122,8 +122,13 @@ def _tem_coluna(cur, tabela: str, coluna: str) -> bool:
 def fetch_alavancagem_legs(cur) -> list:
     """cur precisa ser RealDictCursor."""
     tem_review = _tem_coluna(cur, "picks_alavancagem", "ai_review")
+    # market_id por perna so' existe desde 2026-10-05 (ver alavancagem_pipeline).
+    tem_market = _tem_coluna(cur, "picks_alavancagem", "market_id_1")
+    mercados = ", ".join(f"market_id_{i}" if tem_market else f"NULL::int AS market_id_{i}"
+                         for i in (1, 2, 3))
     cur.execute(f"""
         SELECT {'ai_review' if tem_review else 'NULL::jsonb AS ai_review'},
+               {mercados},
                id, match_date, created_at,
                fixture_id_1, home_team_1, away_team_1, market_1, market_type_1, line_1, odd_1,
                bet_house_1, confidence_1, prob_real_1, reasoning_1,
@@ -145,10 +150,9 @@ def fetch_alavancagem_legs(cur) -> list:
                 "home_team_id": None, "away_team_id": None,
                 "home_team": row[f"home_team_{i}"], "away_team": row[f"away_team_{i}"],
                 "market": row[f"market_{i}"] or "", "market_type": row[f"market_type_{i}"],
-                # picks_alavancagem nao guarda market_id em nenhuma das 3
-                # pernas -- sem ele nao ha como saber contra qual mercado
-                # comparar o fechamento, e o CLV fica NULL (que e' o certo).
-                "market_id": None,
+                # Gravado desde 2026-10-05; perna anterior fica NULL e sem CLV
+                # (que e' o certo: sem mercado nao ha' fechamento pra comparar).
+                "market_id": row[f"market_id_{i}"],
                 "line": row[f"line_{i}"] or "", "odd": row[f"odd_{i}"], "bet_house": row[f"bet_house_{i}"],
                 "confidence": row[f"confidence_{i}"], "probability": row[f"prob_real_{i}"],
                 "ev": None, "reasoning": row[f"reasoning_{i}"], "stake_pct": None, "stake_units": None,

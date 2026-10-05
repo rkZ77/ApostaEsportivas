@@ -18,6 +18,16 @@ Imprime, por sinal e faixa: n, residuo medio e erro-padrao. Diferenca entre
 faixas maior que ~2 erros-padrao e' sinal pra levar adiante (e medir de novo
 pelo validador antes de ligar); menor que isso e' ruido.
 
+DESCOBERTA x CONFIRMACAO (2026-10-02)
+-------------------------------------
+Sao ~5 sinais x 3 familias x 3-5 faixas: dezenas de comparacoes. A 2 EP, uma
+em cada ~20 passa por acaso -- "congestionamento x escanteios, 2,0 EP" de 27/09
+e' exatamente o tamanho do que o acaso produz. Por isso as partidas sao
+divididas pela data mediana: o par de faixas mais distante e' escolhido na
+DESCOBERTA (metade antiga) e testado, as mesmas duas faixas, na CONFIRMACAO
+(metade recente). So' e' candidato a entrar no motor o sinal que passa de
+2 EP nas duas metades, na mesma direcao.
+
 SINAIS
 ------
   descanso        dias desde o jogo anterior de cada time, em QUALQUER
@@ -200,20 +210,67 @@ def main():
                 res = (vh + va) - esp
                 for sinal, faixa in sinais.items():
                     if faixa is not None:
-                        acum[(sinal, fam)][faixa].append(res)
+                        acum[(sinal, fam)][faixa].append((m["match_date"], res))
 
         por_liga_time[(lg, h)].append(m); por_liga_time[(lg, a)].append(m)
         ultimo_jogo[h] = m["match_date"]; ultimo_jogo[a] = m["match_date"]
 
+    datas = sorted(d for faixas in acum.values() for rs in faixas.values() for d, _ in rs)
+    corte = datas[len(datas) // 2] if datas else None
+    print(f"\nDescoberta: partidas antes de {corte}; confirmacao: a partir dela.")
+
+    vereditos = []
     for (sinal, fam), faixas in acum.items():
         print(f"\n{sinal} | {fam}")
         for faixa, rs in sorted(faixas.items()):
-            n = len(rs)
-            if n < 30:
-                continue
-            media = sum(rs) / n
-            dp = math.sqrt(sum((r - media) ** 2 for r in rs) / (n - 1))
-            print(f"   {faixa:12} n={n:5d} residuo medio={media:+.3f}  (erro-padrao {dp / math.sqrt(n):.3f})")
+            e = estatistica([r for _, r in rs])
+            if e:
+                print(f"   {faixa:12} n={e[0]:5d} residuo medio={e[1]:+.3f}  (erro-padrao {e[2]:.3f})")
+        vereditos.append((sinal, fam, veredito(faixas, corte)))
+
+    print(f"\n{'=' * 80}\nVEREDITO ({len(vereditos)} sinal x familia testados)")
+    for sinal, fam, texto in sorted(vereditos, key=lambda v: not v[2].startswith("CONFIRMADO")):
+        print(f"  {sinal} | {fam}: {texto}")
+
+
+MIN_POR_FAIXA = 30
+
+
+def estatistica(rs: list):
+    """(n, media, erro-padrao) ou None abaixo do minimo."""
+    n = len(rs)
+    if n < MIN_POR_FAIXA:
+        return None
+    media = sum(rs) / n
+    dp = math.sqrt(sum((r - media) ** 2 for r in rs) / (n - 1))
+    return n, media, dp / math.sqrt(n)
+
+
+def _z(a, b):
+    """Diferenca a - b em erros-padrao da diferenca."""
+    ep = math.sqrt(a[2] ** 2 + b[2] ** 2)
+    return (a[1] - b[1]) / ep if ep else 0.0
+
+
+def veredito(faixas: dict, corte) -> str:
+    """Escolhe o par de faixas mais distante na descoberta e testa o MESMO par
+    na confirmacao. Escolher de novo na confirmacao seria repetir o problema."""
+    if corte is None:
+        return "sem dado"
+    desc = {f: estatistica([r for d, r in rs if d < corte]) for f, rs in faixas.items()}
+    conf = {f: estatistica([r for d, r in rs if d >= corte]) for f, rs in faixas.items()}
+    validas = [f for f in desc if desc[f] and conf.get(f)]
+    if len(validas) < 2:
+        return "amostra insuficiente nas duas metades"
+    alta = max(validas, key=lambda f: desc[f][1])
+    baixa = min(validas, key=lambda f: desc[f][1])
+    z_desc, z_conf = _z(desc[alta], desc[baixa]), _z(conf[alta], conf[baixa])
+    par = f"'{alta}' vs '{baixa}'"
+    if z_desc >= 2 and z_conf >= 2:
+        return f"CONFIRMADO {par}: {z_desc:.1f} EP na descoberta, {z_conf:.1f} na confirmacao"
+    if z_desc >= 2:
+        return f"so' na descoberta {par} ({z_desc:.1f} EP; confirmacao {z_conf:+.1f}) -- ruido"
+    return f"ruido ({par}: {z_desc:.1f} EP na descoberta)"
 
 
 if __name__ == "__main__":

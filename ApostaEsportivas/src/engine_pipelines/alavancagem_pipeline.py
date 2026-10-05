@@ -24,7 +24,7 @@ import json
 import textwrap
 import traceback
 from utils.db_utils import get_connection
-from utils.data_br import HOJE_BR
+from utils.data_br import HOJE_BR, APITO_FUTURO
 from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
 from services.team_stats_service import TeamStatsService
@@ -151,6 +151,10 @@ def _create_table_if_needed(cur):
     for _n in (1, 2, 3):
         cur.execute(f"ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS home_team_id_{_n} INTEGER;")
         cur.execute(f"ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS away_team_id_{_n} INTEGER;")
+        # market_id por perna (2026-10-05): era o unico produto sem ele, e sem
+        # market_id a perna nao casa com o fechamento -- alavancagem nao tinha
+        # CLV nenhum. Ver picks_ledger_sync_service._fechamento.
+        cur.execute(f"ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS market_id_{_n} INTEGER;")
     # UM CAMINHO POR DIA ERA REGRA DO BANCO (2026-09-15). `match_date DATE
     # UNIQUE` nasceu na epoca em que a alavancagem era uma aposta so' por dia,
     # e sobreviveu a MAX_CAMINHOS_POR_DIA=5: o motor abria o segundo caminho,
@@ -188,6 +192,7 @@ def _fixtures_with_odds_today(cur) -> list:
         INNER JOIN odds_values ov ON ov.fixture_id = f.fixture_id
         WHERE f.match_datetime::date = {HOJE_BR}
           AND f.status = 'NS'
+          AND f.match_datetime > {APITO_FUTURO}
           AND ov.odd_value BETWEEN %s AND %s
         ORDER BY f.match_datetime
     """, (ODD_INDIVIDUAL_MIN, ODD_INDIVIDUAL_MAX))
@@ -498,13 +503,15 @@ def _save_pick(cur, legs: tuple, confidence_media: float, odd_combined: float,
         cols += [f"fixture_id_{i}", f"home_team_{i}", f"away_team_{i}",
                  f"home_team_id_{i}", f"away_team_id_{i}",
                  f"market_{i}", f"market_type_{i}", f"line_{i}", f"odd_{i}",
-                 f"bet_house_{i}", f"confidence_{i}", f"prob_real_{i}", f"reasoning_{i}"]
-        vals += ["%s"] * 13
+                 f"bet_house_{i}", f"confidence_{i}", f"prob_real_{i}", f"reasoning_{i}",
+                 f"market_id_{i}"]
+        vals += ["%s"] * 14
         params += [
             fx["fixture_id"], fx["home_team"], fx["away_team"],
             fx.get("home_team_id"), fx.get("away_team_id"),
             p["market_name"], p["market_type"], p["value_label"], p["odd"],
             p["best_bookmaker"], p["confidence"], p["taxa_real"], explain(p),
+            p.get("market_id"),
         ]
 
     # EV da aposta COMBINADA, nao a media dos EVs das pernas -- essa media nao

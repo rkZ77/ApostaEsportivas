@@ -319,6 +319,36 @@ def prune_odds_snapshots(cur, dias: int = _SNAPSHOT_RETENTION_DAYS) -> int:
         return 0
 
 
+#: Expressao SQL dos minutos ate' o apito, a partir do `match_datetime` de
+#: `fixtures` -- que e' horario de BRASILIA sem fuso (convert_utc_to_br_naive).
+#:
+#: ATE' 2026-10-02 A CONTA ERA `match_datetime - NOW()`, com o banco em UTC: o
+#: Postgres lia o horario brasileiro como se fosse UTC e todo retrato saia 180
+#: minutos MENOR do que era. Um retrato tirado 30 min antes do apito era
+#: gravado como -150, ou seja "jogo em andamento", e os leitores do fechamento
+#: (`minutes_to_kickoff >= 0`) o descartavam. O "fechamento" do CLV acabava
+#: sendo o ultimo retrato de MAIS de 3 horas antes do jogo -- quase sempre a
+#: coleta da manha, a mesma que gerou o pick. CLV ~ 0 por construcao.
+#: `run_migrations` recalcula as linhas antigas a partir de captured_at.
+MINUTOS_ATE_O_APITO_SQL = (
+    "EXTRACT(EPOCH FROM ((%s AT TIME ZONE 'America/Sao_Paulo') - NOW())) / 60")
+
+
+def _inserir_retratos(cur, linhas: list) -> None:
+    """`linhas` = (fixture, casa, mercado, selecao, linha, odd, kickoff_br)."""
+    _create_odds_snapshots_table(cur)
+    execute_batch(cur, f"""
+        INSERT INTO odds_snapshots
+            (fixture_id, bookmaker_id, market_id, value_name, line_value,
+             odd_value, match_datetime, minutes_to_kickoff, captured_at)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,
+                CASE WHEN %s::timestamp IS NULL THEN NULL
+                     ELSE {MINUTOS_ATE_O_APITO_SQL} END,
+                NOW())
+    """, [(f, b, m, vn, lv, od, kt, kt, kt) for f, b, m, vn, lv, od, kt in linhas],
+        page_size=500)
+
+
 def _save_odds_snapshots(cur, values_batch: list) -> None:
     """Grava o retrato desta coleta. Best-effort: falha aqui nunca pode
     derrubar a coleta de odds em si, que e' o caminho critico -- snapshot e'
@@ -326,24 +356,13 @@ def _save_odds_snapshots(cur, values_batch: list) -> None:
     if not values_batch:
         return
     try:
-        _create_odds_snapshots_table(cur)
-        linhas = [
+        _inserir_retratos(cur, [
             (
                 v[_IDX_FIXTURE], v[_IDX_BOOKMAKER], v[_IDX_MARKET],
                 v[_IDX_VALUE_NAME], v[_IDX_LINE], v[_IDX_ODD_VALUE], v[_IDX_KICKOFF],
             )
             for v in values_batch
-        ]
-        execute_batch(cur, """
-            INSERT INTO odds_snapshots
-                (fixture_id, bookmaker_id, market_id, value_name, line_value,
-                 odd_value, match_datetime, minutes_to_kickoff, captured_at)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,
-                    CASE WHEN %s IS NULL THEN NULL
-                         ELSE EXTRACT(EPOCH FROM (%s - NOW())) / 60 END,
-                    NOW())
-        """, [(f, b, m, vn, lv, od, kt, kt, kt) for f, b, m, vn, lv, od, kt in linhas],
-            page_size=500)
+        ])
     except Exception as e:
         print(f"[ODDS_SNAPSHOTS] Aviso: snapshot nao gravado (coleta segue normal): {e}")
 
@@ -772,6 +791,52 @@ class OddsCollectorService:
             print(f"[ERRO SAVE ODDS] fixture {fixture_id}: {e}")
             raise
 
+        finally:
+            cur.close()
+            conn.close()
+
+    # --------------------------------------------------------
+    # SO' O RETRATO (fechamento pro CLV)
+    # --------------------------------------------------------
+    def save_snapshot_only(self, fixture_id: int, bookmakers: list) -> int:
+        """Grava a cotacao em `odds_snapshots` SEM tocar em `odds_values`.
+
+        E' o caminho da coleta perto do apito (capturar_fechamento.py). Ela nao
+        pode passar por `save_odds`: odds_values e' o que os motores leem, e uma
+        rodada de pick disparada depois veria preco de outro momento do dia
+        num jogo que ja' tem pick publicado. Aqui so' se mede.
+        Devolve quantas linhas gravou.
+        """
+        conn = get_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT match_datetime FROM fixtures WHERE fixture_id = %s",
+                        (fixture_id,))
+            row = cur.fetchone()
+            if not row:
+                return 0
+            kickoff = row[0]
+            linhas = []
+            for bk in bookmakers:
+                if bk["id"] not in self.casas:
+                    continue
+                for bet in bk.get("bets", []):
+                    for sel in bet.get("values", []):
+                        try:
+                            odd_value = float(sel["odd"])
+                        except (KeyError, ValueError, TypeError):
+                            continue
+                        handicap = str(sel.get("handicap", "") or "").strip()
+                        linhas.append((fixture_id, bk["id"], bet["id"],
+                                       str(sel.get("value", "")).strip(),
+                                       handicap or None, odd_value, kickoff))
+            if linhas:
+                _inserir_retratos(cur, linhas)
+                conn.commit()
+            return len(linhas)
+        except Exception:
+            conn.rollback()
+            raise
         finally:
             cur.close()
             conn.close()

@@ -43,6 +43,21 @@ TZ_BR = "America/Sao_Paulo"
 # Data de hoje em Brasilia. Substitui CURRENT_DATE em tudo que e' "do dia".
 HOJE_BR = f"((NOW() AT TIME ZONE '{TZ_BR}')::date)"
 
+# Agora em Brasilia, sem fuso -- comparavel direto com `fixtures.match_datetime`.
+AGORA_BR = f"(NOW() AT TIME ZONE '{TZ_BR}')"
+
+#: Minutos minimos entre a publicacao do pick e o apito.
+MARGEM_APITO_MINUTOS = 10
+
+# JOGO QUE AINDA NAO COMECOU, pelo RELOGIO (2026-10-05).
+#
+# Os motores filtravam so' `status = 'NS'`, e o status so' muda quando a coleta
+# roda. Entre a coleta e a geracao (a captura de odds sozinha leva ate' uma
+# hora num dia cheio), ou num "Gerar X" clicado a tarde, um jogo ja' em
+# andamento continuava NS -- e saia pick com odd pre-jogo que o assinante nao
+# consegue mais pegar. Usar como `f.match_datetime > {APITO_FUTURO}`.
+APITO_FUTURO = f"({AGORA_BR} + INTERVAL '{MARGEM_APITO_MINUTOS} minutes')"
+
 
 def data_br_de(dt):
     """Versao Python de `data_br`: data brasileira de um datetime EM UTC.

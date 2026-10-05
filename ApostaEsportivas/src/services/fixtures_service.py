@@ -1,6 +1,6 @@
 ﻿import datetime
 from utils.db_utils import get_connection
-from utils.data_br import HOJE_BR
+from utils.data_br import HOJE_BR, APITO_FUTURO
 import psycopg2.extras
 
 try:
@@ -61,7 +61,7 @@ class FixturesService:
         tomorrow = today + datetime.timedelta(days=1)
 
         # Inclui jogos de hoje BRT + jogos de 00:00-02:59 BRT do próximo dia
-        rows = self._query("""
+        rows = self._query(f"""
             SELECT
                 f.fixture_id,
                 f.league_id,
@@ -81,6 +81,9 @@ class FixturesService:
                 OR (DATE(f.match_datetime) = %s AND EXTRACT(HOUR FROM f.match_datetime) < 3)
             )
               AND f.status IN ('NS','TBD')
+              -- status so' muda quando a coleta roda; o relogio e' o que
+              -- garante que o jogo nao comecou (ver data_br.APITO_FUTURO).
+              AND f.match_datetime > {APITO_FUTURO}
             ORDER BY f.match_datetime ASC;
         """, (today, tomorrow))
 
@@ -238,6 +241,7 @@ class FixturesService:
             WHERE f.status = 'NS'
               AND s.fixture_id IS NULL
               AND f.match_datetime::date = {HOJE_BR}
+              AND f.match_datetime > {APITO_FUTURO}
             ORDER BY f.match_datetime ASC;
         """)
 

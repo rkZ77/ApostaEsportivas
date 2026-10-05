@@ -1,6 +1,6 @@
 import time
 from utils.db_utils import get_connection
-from utils.data_br import HOJE_BR
+from utils.data_br import HOJE_BR, APITO_FUTURO
 from utils.api_client import ApiQuotaEsgotada
 from services import api_quota
 from collectors.odds_collector_service import OddsCollectorService, prune_odds_snapshots
@@ -100,6 +100,7 @@ class OddsMain:
                                  AND v.league_id = f.league_id
              WHERE f.status IN ('NS', 'TBD')
                AND f.match_datetime::date = {HOJE_BR}
+               AND f.match_datetime > {APITO_FUTURO}
                AND COALESCE(c.n, 0) >= {MIN_JOGOS_NO_MANDO}
                AND COALESCE(v.n, 0) >= {MIN_JOGOS_NO_MANDO}
         """)

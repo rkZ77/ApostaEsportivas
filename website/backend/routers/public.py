@@ -1588,65 +1588,44 @@ def public_leaderboard():
 # sobrevive à variância de resultado, porque não depende do jogo ter dado
 # certo, só de termos entrado num preço melhor que o de fechamento.
 
-# Tabelas de pick que têm odd + market_id e podem casar com closing_odds.
+# Produtos cujo CLV a página pública mostra.
 #
-# Cada uma traz seu par de colunas de time porque o nome diverge entre elas:
-# picks_vip tem home_team_name/away_team_name e picks_free tem home_team/
-# away_team. Um UNION com nome fixo quebrava em uma das duas.
-_CLV_SOURCES = [
-    ("picks_vip",  "vip",  "home_team_name", "away_team_name"),
-    ("picks_free", "free", "home_team",      "away_team"),
-]
+# A FONTE MUDOU EM 2026-10-05. Era um JOIN com `closing_odds`, que só é
+# preenchida por scripts/capture_closing_odds.py -- e esse script nunca rodou
+# em produção. A página respondia "sem odds de fechamento" pra sempre.
+#
+# O fechamento de verdade mora no ledger: `picks_ledger_sync_service` casa cada
+# perna com o retrato da cotação perto do apito (capturar_fechamento.py) pelo
+# MESMO mercado e MESMA linha, e grava `closing_odd`, `clv` e a distância do
+# retrato até o apito. Só entra perna com `closing_min_to_ko` preenchido: o CLV
+# de antes dessa coluna comparava com a odd da manhã e dava ~0 por construção.
+_CLV_PRODUTOS = ("vip", "free")
 
 
 @router.get("/market-movement")
 def public_market_movement(days: int = Query(30, ge=1, le=365)):
     """CLV dos picks resolvidos na janela · sem autenticação."""
-    union_sql = " UNION ALL ".join(
-        f"""SELECT id, fixture_id, market_id, market_type, line, odd, result,
-                   match_date,
-                   {home_col} AS home_team_name,
-                   {away_col} AS away_team_name,
-                   '{label}' AS pick_type
-              FROM {table}
-             WHERE market_id IS NOT NULL AND odd IS NOT NULL"""
-        for table, label, home_col, away_col in _CLV_SOURCES
-    )
-
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute(f"""
-            WITH picks AS ({union_sql}),
-            joined AS (
-                SELECT p.*, co.closing_odd,
-                       -- Movimento em pontos percentuais. Negativo = mercado
-                       -- fechou MAIS BAIXO que a nossa entrada, ou seja, o
-                       -- preco andou a nosso favor.
-                       --
-                       -- Sem sinal de porcentagem neste comentario de
-                       -- proposito: o psycopg2 varre a query inteira atras de
-                       -- placeholder e nao distingue comentario, entao um
-                       -- por-cento solto aqui quebrava o execute com
-                       -- "tuple index out of range" e o endpoint devolvia
-                       -- available:false pra sempre.
-                       ROUND(((co.closing_odd - p.odd) / p.odd * 100)::numeric, 2) AS move_pct
-                  FROM picks p
-                  JOIN closing_odds co
-                    ON co.fixture_id = p.fixture_id
-                   AND co.market_id  = p.market_id
-                   -- A linha entra no casamento, nao so' o mercado: um "Over
-                   -- 4.5" e um "Under 4.5" do MESMO mercado sao precos
-                   -- opostos, e casar so' por (fixture, market_id) mostraria
-                   -- um movimento invertido. Mesmo defeito que corrompeu o
-                   -- CLV do ledger ate' 2026-08-20, um nivel abaixo.
-                   AND co.line       = p.line
-                 WHERE p.match_date >= CURRENT_DATE - %s::int
-                   AND co.closing_odd IS NOT NULL
-                   AND co.closing_odd > 0
-            )
-            SELECT * FROM joined ORDER BY match_date DESC, id DESC LIMIT 200
-        """, (days,))
+        cur.execute("""
+            SELECT source_id AS id, pick_type, match_date,
+                   home_team AS home_team_name, away_team AS away_team_name,
+                   market_type, line, odd, closing_odd, result,
+                   -- Movimento em pontos percentuais: negativo = mercado
+                   -- fechou MAIS BAIXO que a nossa entrada (a nosso favor).
+                   -- Sem sinal de porcentagem neste comentario: o psycopg2
+                   -- leria como placeholder.
+                   ROUND(((closing_odd - odd) / odd * 100)::numeric, 2) AS move_pct
+              FROM picks_ledger
+             WHERE pick_type = ANY(%s)
+               AND match_date >= CURRENT_DATE - %s::int
+               AND odd IS NOT NULL AND odd > 0
+               AND closing_odd IS NOT NULL AND closing_odd > 0
+               AND closing_min_to_ko IS NOT NULL
+             ORDER BY match_date DESC, source_id DESC
+             LIMIT 200
+        """, (list(_CLV_PRODUTOS), days))
         rows = [dict(r) for r in cur.fetchall()]
     except Exception as e:
         logger.error("[MARKET_MOVEMENT] %s", e)
