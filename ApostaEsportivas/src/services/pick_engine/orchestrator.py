@@ -258,7 +258,10 @@ def analyze_fixture_markets(
         calibration_data = calibration.get_market_calibration()
     ctx_score = (context_model.context_score(context_data, match_context)
                  if context_data else None)
-    news_score = news_model.news_score(news_data) if news_data else None
+    # `news_score_sombra` e' sempre gravado; so' entra na nota com
+    # MOTOR_DESFALQUES=on (ver news_model.modo_desfalques).
+    news_score_sombra = news_model.news_score(news_data) if news_data else None
+    news_score = news_score_sombra if news_model.modo_desfalques() == "on" else None
     referee_sig = referee_model.referee_signal(referee_stats, config, league_stats=league_stats)
     game_intensity = referee_model.game_intensity(context_data, matchup_data, referee_sig)
 
@@ -862,6 +865,7 @@ def analyze_fixture_markets(
             "profile_score": team_profile_model.profile_score_for_market(matchup_data, market_type),
             "matchup_raw": matchup_data.get(market_type) if matchup_data else None,
             "news_score": news_score,
+            "news_score_sombra": news_score_sombra,
             "news_raw": news_data,
             "team_strength": team_strength_data,
             "referee_signal": referee_sig if family in _CARDS_FAMILIES else None,

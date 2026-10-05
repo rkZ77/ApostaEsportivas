@@ -338,6 +338,9 @@ def _candidate_summary(c: dict) -> dict:
         "context_score": c.get("context_score"),
         "profile_score": c.get("profile_score"),
         "news_score": c.get("news_score"),
+        # Calculado mesmo quando nao entra na nota (MOTOR_DESFALQUES=shadow):
+        # e' o que scripts/medir_desfalques.py le.
+        "news_score_sombra": c.get("news_score_sombra"),
         "line_score": c.get("line_score"),
         "final_score": c.get("final_score"),
         "is_best_pick": c.get("is_best_pick", False),

@@ -118,6 +118,10 @@ def _create_table_if_needed(cur):
         ("market_id",        "INTEGER"),
         ("closing_odd",      "NUMERIC"),
         ("clv",              "NUMERIC"),   # (odd_entrada / odd_fechamento) - 1
+        # Minutos entre o retrato usado como fechamento e o apito (2026-10-02).
+        # NULL = regra antiga ou tabela closing_odds. Recorte honesto de CLV:
+        # `WHERE closing_min_to_ko IS NOT NULL`.
+        ("closing_min_to_ko", "INTEGER"),
         ("ev_realizado",     "NUMERIC"),   # profit efetivo da perna, alinhado ao ev esperado
         ("engine_version",   "TEXT"),      # commit_sha que gerou a pick
         # ── Quem revisou o pick (2026-08-08) ──────────────────────────────
@@ -374,6 +378,27 @@ def _closing_odd_for(cur, fixture_id: int | None, line: str | None,
     Sem `market_id` a funcao devolve None. CLV nulo e' informacao ausente;
     CLV de outro mercado e' informacao FALSA, e essa alimenta decisao.
     """
+    fechamento = _fechamento(cur, fixture_id, line, market_id)
+    return fechamento[0] if fechamento else None
+
+
+#: Retrato mais longe do apito que isso nao e' fechamento: e' a odd de outro
+#: momento do dia. Ate' 2026-10-02 qualquer retrato pre-jogo valia, e como o
+#: unico retrato do dia costumava ser a coleta da manha -- a mesma que gerou o
+#: pick --, o "fechamento" era a propria odd do pick e o CLV dava ~0 por
+#: construcao. A coleta perto do apito e' capturar_fechamento.py (30 min).
+FECHAMENTO_MAX_MINUTOS = 90
+
+#: Retratos da mesma coleta saem com alguns minutos de diferenca entre casas
+#: (uma requisicao por casa, uma partida por vez). Tudo dentro disto conta
+#: como o mesmo retrato.
+_MESMA_COLETA_MINUTOS = 10
+
+
+def _fechamento(cur, fixture_id, line, market_id):
+    """(odd de fechamento, minutos antes do apito) ou None.
+
+    O minuto e' None quando vem de `closing_odds`, que nao o guarda."""
     if not fixture_id or not market_id:
         return None
     row = _consulta_isolada(cur, """
@@ -384,7 +409,7 @@ def _closing_odd_for(cur, fixture_id: int | None, line: str | None,
         LIMIT 1
     """, (fixture_id, market_id, line, line))
     if row and row[0] is not None:
-        return float(row[0])
+        return float(row[0]), None
 
     # Fallback: ultimo retrato de `odds_snapshots` ANTES do apito inicial.
     #
@@ -400,16 +425,52 @@ def _closing_odd_for(cur, fixture_id: int | None, line: str | None,
     # que e' a definicao pratica de closing line. Quanto mais perto do apito a
     # coleta rodar, melhor a aproximacao -- rodar `main.py odds` uma segunda vez
     # perto dos jogos deixa o CLV bem mais preciso, mas ja' funciona com uma.
+    #
+    # DUAS REGRAS NOVAS (2026-10-02):
+    #   1. o retrato tem que estar a no maximo FECHAMENTO_MAX_MINUTOS do apito;
+    #      mais longe que isso nao e' fechamento, e a perna fica sem CLV.
+    #   2. a odd e' a MAIOR entre as casas daquele retrato. Era a de uma casa
+    #      qualquer (a primeira que ordenasse), enquanto a odd de entrada e' a
+    #      melhor entre as casas -- comparar melhor contra uma qualquer inflava
+    #      o CLV sempre pro mesmo lado.
     row = _consulta_isolada(cur, """
-        SELECT odd_value FROM odds_snapshots
-        WHERE fixture_id = %s
-          AND market_id = %s
-          AND value_name = %s
-          AND minutes_to_kickoff >= 0
-        ORDER BY minutes_to_kickoff ASC, captured_at DESC
-        LIMIT 1
-    """, (fixture_id, market_id, line))
-    return float(row[0]) if row and row[0] is not None else None
+        WITH ultimo AS (
+            SELECT MIN(minutes_to_kickoff) AS m FROM odds_snapshots
+             WHERE fixture_id = %s AND market_id = %s AND value_name = %s
+               AND minutes_to_kickoff >= 0
+        )
+        SELECT MAX(s.odd_value), MIN(ultimo.m)
+          FROM odds_snapshots s, ultimo
+         WHERE s.fixture_id = %s AND s.market_id = %s AND s.value_name = %s
+           AND ultimo.m <= %s
+           AND s.minutes_to_kickoff BETWEEN ultimo.m AND ultimo.m + %s
+    """, (fixture_id, market_id, line, fixture_id, market_id, line,
+          FECHAMENTO_MAX_MINUTOS, _MESMA_COLETA_MINUTOS))
+    if not row or row[0] is None:
+        return None
+    return float(row[0]), (int(row[1]) if row[1] is not None else None)
+
+
+def _fechamento_ainda_existe(cur, fixture_id) -> bool:
+    """Ainda ha' de onde recalcular o fechamento desta partida?
+
+    `odds_snapshots` tem retencao de 45 dias (prune_odds_snapshots). Passado
+    isso, recalcular devolve None -- e como o DO UPDATE sobrescreve sempre, o
+    CLV de toda perna com mais de 45 dias era APAGADO na sincronizacao seguinte.
+    Sem retrato nenhum da partida, o valor ja' gravado fica.
+    """
+    if not fixture_id:
+        return True
+    # Uma consulta por tabela: `closing_odds` pode nao existir (so' nasce no
+    # `setup`), e um OR entre as duas falharia inteiro por causa dela.
+    # Consulta que falhou conta como "nao ha'": na duvida, nao apaga.
+    for tabela in ("odds_snapshots", "closing_odds"):
+        row = _consulta_isolada(
+            cur, f"SELECT EXISTS (SELECT 1 FROM {tabela} WHERE fixture_id = %s)",
+            (fixture_id,))
+        if row and row[0]:
+            return True
+    return False
 
 
 def _ai_review_fields(leg: dict) -> dict:
@@ -448,8 +509,9 @@ def _build_dimensions(cur, leg: dict, ctx: dict | None, league_id, result, profi
     odd = leg.get("odd")
     kickoff = fx["kickoff_at"]
     perfil = competition_profile.get_profile(league_id)
-    fechamento = _closing_odd_for(cur, leg.get("fixture_id"), leg.get("line"),
-                                  leg.get("market_id"))
+    fechamento, minutos_fechamento = (
+        _fechamento(cur, leg.get("fixture_id"), leg.get("line"), leg.get("market_id"))
+        or (None, None))
 
     return {
         "season": (ctx or {}).get("season"),
@@ -474,6 +536,8 @@ def _build_dimensions(cur, leg: dict, ctx: dict | None, league_id, result, profi
         "market_id": leg.get("market_id"),
         "closing_odd": fechamento,
         "clv": attribution.clv(odd, fechamento),
+        "closing_min_to_ko": minutos_fechamento,
+        "recalcular_fechamento": _fechamento_ainda_existe(cur, leg.get("fixture_id")),
         "ev_realizado": (float(profit) if profit is not None
                          else attribution.realized_ev(result, odd)),
         "engine_version": None,  # preenchido quando o pick passar a carimbar o commit
@@ -527,10 +591,10 @@ def sync() -> dict:
                     result, profit, created_at,
                     season, competition_type, round_phase, round_label, referee,
                     kickoff_at, kickoff_hour, pick_side, is_favorite, odd_band,
-                    market_id, closing_odd, clv, ev_realizado, engine_version,
+                    market_id, closing_odd, clv, closing_min_to_ko, ev_realizado, engine_version,
                     ai_provider, ai_model, ai_decision, ai_status, ai_risk
                 ) VALUES (%s,%s,%s,%s,%s, %s,%s,%s,%s,%s,%s, %s,%s,%s,%s,%s,%s, %s,%s,%s,%s,%s,%s, %s,%s,%s,
-                          %s,%s,%s,%s,%s, %s,%s,%s,%s,%s, %s,%s,%s,%s,%s, %s,%s,%s,%s,%s)
+                          %s,%s,%s,%s,%s, %s,%s,%s,%s,%s, %s,%s,%s,%s,%s,%s, %s,%s,%s,%s,%s)
                 ON CONFLICT (source_table, source_id, leg_number) DO UPDATE SET
                     result = EXCLUDED.result,
                     profit = EXCLUDED.profit,
@@ -539,11 +603,18 @@ def sync() -> dict:
                     -- ate' 2026-08-20 vinha de casamento cruzado de mercado e
                     -- era FALSO. COALESCE preservaria o erro pra sempre, ja'
                     -- que o caminho corrigido devolve NULL quando nao consegue
-                    -- identificar o mercado. Recalcular sempre tambem e' barato
-                    -- e correto: `odds_snapshots` e' append-only, entao a mesma
-                    -- perna sempre reproduz o mesmo fechamento.
-                    closing_odd = EXCLUDED.closing_odd,
-                    clv = EXCLUDED.clv,
+                    -- identificar o mercado.
+                    --
+                    -- MAS SO' ENQUANTO HA' DE ONDE RECALCULAR (2026-10-02).
+                    -- `odds_snapshots` tem retencao de 45 dias; depois disso o
+                    -- recalculo devolve NULL e apagava o CLV de toda perna
+                    -- antiga. Sem retrato nenhum da partida, fica o gravado
+                    -- (ver _fechamento_ainda_existe).
+                    closing_odd = CASE WHEN %s THEN EXCLUDED.closing_odd
+                                       ELSE picks_ledger.closing_odd END,
+                    clv = CASE WHEN %s THEN EXCLUDED.clv ELSE picks_ledger.clv END,
+                    closing_min_to_ko = CASE WHEN %s THEN EXCLUDED.closing_min_to_ko
+                                             ELSE picks_ledger.closing_min_to_ko END,
                     ev_realizado = COALESCE(EXCLUDED.ev_realizado, picks_ledger.ev_realizado),
                     season = COALESCE(EXCLUDED.season, picks_ledger.season),
                     competition_type = COALESCE(EXCLUDED.competition_type, picks_ledger.competition_type),
@@ -573,10 +644,13 @@ def sync() -> dict:
                 dim["season"], dim["competition_type"], dim["round_phase"], dim["round_label"],
                 dim["referee"], dim["kickoff_at"], dim["kickoff_hour"], dim["pick_side"],
                 dim["is_favorite"], dim["odd_band"], dim["market_id"],
-                dim["closing_odd"], dim["clv"],
+                dim["closing_odd"], dim["clv"], dim["closing_min_to_ko"],
                 dim["ev_realizado"], dim["engine_version"],
                 dim["ai_provider"], dim["ai_model"], dim["ai_decision"],
                 dim["ai_status"], dim["ai_risk"],
+                # os tres CASE do DO UPDATE
+                dim["recalcular_fechamento"], dim["recalcular_fechamento"],
+                dim["recalcular_fechamento"],
             ))
             was_inserted = plain_cur.fetchone()[0]
             if was_inserted:

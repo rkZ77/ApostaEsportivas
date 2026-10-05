@@ -28,7 +28,7 @@ import textwrap
 import traceback
 
 from utils.db_utils import get_connection
-from utils.data_br import HOJE_BR
+from utils.data_br import HOJE_BR, APITO_FUTURO
 from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
 from services.referee_stats_service import RefereeStatsService
@@ -370,6 +370,7 @@ def _fixtures_de_hoje(cur) -> list:
         LEFT JOIN leagues l ON l.league_id = f.league_id
         WHERE f.match_datetime::date = {HOJE_BR}
           AND f.status IN ('NS', 'TBD')
+          AND f.match_datetime > {APITO_FUTURO}
         ORDER BY f.match_datetime
     """)
     return [

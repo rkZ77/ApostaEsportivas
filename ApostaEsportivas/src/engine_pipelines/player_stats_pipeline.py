@@ -48,7 +48,7 @@ from services.player_stats_engine import (contradiction, count_model, decision,
                                           opponent_model, quality, selection)
 from services.player_stats_engine import methods as cat
 from services.player_stats_engine import player_history
-from utils.data_br import HOJE_BR
+from utils.data_br import HOJE_BR, APITO_FUTURO
 from utils.db_utils import get_connection
 
 MOTOR = "PLAYER_STATS"
@@ -71,6 +71,7 @@ def _fixtures_de_hoje(cur) -> list:
         LEFT JOIN leagues l ON l.league_id = f.league_id
         WHERE f.match_datetime::date = {HOJE_BR}
           AND f.status IN ('NS', 'TBD')
+          AND f.match_datetime > {APITO_FUTURO}
         ORDER BY f.match_datetime
     """)
     return [

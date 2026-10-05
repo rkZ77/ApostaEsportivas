@@ -609,6 +609,21 @@ def run_migrations():
         # media de escanteio por uma amostra que incluia jogo sem escanteio
         # publicado. Ver a docstring de _aggregate_games.
         "ALTER TABLE team_statistics ADD COLUMN IF NOT EXISTS games_by_stat JSONB;",
+
+        # -- Minuto do retrato no fuso certo (2026-10-02) ------------------
+        # `match_datetime` e' Brasilia sem fuso e a conta era feita contra o
+        # NOW() em UTC: todo retrato saiu 180 min menor (ver
+        # odds_collector_service.MINUTOS_ATE_O_APITO_SQL). Recalcula das duas
+        # colunas de origem -- captured_at e' NOW() gravado em sessao UTC --,
+        # entao e' idempotente: rodar de novo da' o mesmo numero.
+        """UPDATE odds_snapshots
+              SET minutes_to_kickoff = EXTRACT(EPOCH FROM (
+                      (match_datetime AT TIME ZONE 'America/Sao_Paulo')
+                    - (captured_at AT TIME ZONE 'UTC'))) / 60
+            WHERE match_datetime IS NOT NULL AND captured_at IS NOT NULL;""",
+        # Distancia do fechamento ate' o apito, por perna. NULL = fechamento
+        # da regra antiga (ou da tabela closing_odds, que nao guarda o minuto).
+        "ALTER TABLE picks_ledger ADD COLUMN IF NOT EXISTS closing_min_to_ko INTEGER;",
     ]
     conn = get_connection()
     cur = conn.cursor()
@@ -913,6 +928,13 @@ def cmd_live(*args):
     run_live_engine(fixture_id=fixture_id, dry_run=dry_run)
 
 
+def cmd_fechamento(*args):
+    """Retrato da cotacao perto do apito dos jogos com pick (o fechamento do
+    CLV). `loop` repete ate' o ultimo jogo com pick do dia comecar."""
+    from capturar_fechamento import run
+    run(loop=_tem(args, "loop"))
+
+
 def cmd_resultados():
     from atualizar_resultados_sugestoes import AIUpdateResultsMain
     AIUpdateResultsMain().update_all_results()
@@ -1214,6 +1236,15 @@ COMANDOS: tuple = (
             detalhe="live                    respeita o .env\n"
                     "live gravar             grava de verdade nesta rodada\n"
                     "live fixture 123456     analisa só essa partida"),
+    # FECHAMENTO (2026-10-02). Fora do `tudo` pelo mesmo motivo do `live`: so'
+    # faz sentido perto dos jogos, nao de manha. Sem ele o CLV nao mede nada --
+    # ver a docstring de capturar_fechamento.py.
+    Comando("fechamento", "Fechamento · odds perto do apito (CLV)",
+            "Retrato da cotação 30 min antes do apito dos jogos com pick",
+            lambda *a: cmd_fechamento(*a),
+            uso="fechamento [loop]",
+            detalhe="fechamento              uma rodada\n"
+                    "fechamento loop         repete até o último jogo com pick começar"),
     # OS ESTAGIOS DO `dados`, AVULSOS (2026-09-11, pedido do usuario: nao
     # conseguia rodar a coleta de time separada). Ver `_estagio` acima pro
     # porque. Sem `etapa`: quem roda a sequencia e' `dados`.

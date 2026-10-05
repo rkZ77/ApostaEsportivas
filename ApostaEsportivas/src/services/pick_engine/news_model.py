@@ -133,6 +133,19 @@ def injury_signal(injuries_home: list, starters_home: dict,
     }
 
 
+def modo_desfalques() -> str:
+    """`MOTOR_DESFALQUES`: off | shadow | on. Padrao `shadow` (2026-10-02).
+
+    O sinal entrou no Score Final em 27/09 sem medicao, contra a regra do
+    proprio dia ("na conta do motor so' depois de medido"). Em `shadow` ele e'
+    calculado e gravado no log de decisao (`news_score_sombra`), mas nao mexe
+    na nota -- a conta volta a ser a de antes de 27/09, quando nenhum pipeline
+    preenchia news_data. scripts/medir_desfalques.py diz quando ligar `on`.
+    """
+    modo = os.getenv("MOTOR_DESFALQUES", "shadow").strip().lower()
+    return modo if modo in ("off", "shadow", "on") else "shadow"
+
+
 def news_score(signal: dict | None) -> float | None:
     """Reduz o sinal de desfalques a um score 0-1 (0.5=neutro) para uso no
     Score Final -- titular desfalcado pesa mais que reserva/nao-confirmado.

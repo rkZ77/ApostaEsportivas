@@ -42,7 +42,7 @@ from services.pick_engine_boost import explanation, goals_history, score as scor
 from services.pick_engine_boost import stats_model
 from services.pick_engine_boost import (baseline, calibration, contradiction,
                                         decision, ht_risk, quality, shrinkage)
-from utils.data_br import HOJE_BR
+from utils.data_br import HOJE_BR, APITO_FUTURO
 from utils.db_utils import get_connection
 
 MOTOR = "PICK_BOOST"
@@ -78,6 +78,7 @@ def _fixtures_de_hoje(cur) -> list:
         LEFT JOIN leagues l ON l.league_id = f.league_id
         WHERE f.match_datetime::date = {HOJE_BR}
           AND f.status IN ('NS', 'TBD')
+          AND f.match_datetime > {APITO_FUTURO}
         ORDER BY f.match_datetime
     """)
     return [

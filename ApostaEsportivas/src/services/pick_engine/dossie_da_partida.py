@@ -315,9 +315,11 @@ def sinal_de_desfalques(fixture_id: int) -> dict | None:
     """Sinal de desfalques e troca de tecnico pro Score Final do motor
     (news_data de orchestrator.analyze_fixture_markets). None sem dado.
 
-    Liga/desliga por `MOTOR_DESFALQUES` (padrao ligado), independente do
-    dossie da IA: e' o motor lendo o mesmo dado, nao a IA."""
-    if not fixture_id or os.getenv("MOTOR_DESFALQUES", "on").strip().lower() == "off":
+    `MOTOR_DESFALQUES` (news_model.modo_desfalques), independente do dossie
+    da IA: e' o motor lendo o mesmo dado, nao a IA. Em `shadow` (padrao) o
+    sinal sai daqui e o orchestrator so' o registra."""
+    from services.pick_engine.news_model import modo_desfalques
+    if not fixture_id or modo_desfalques() == "off":
         return None
     _obter(fixture_id)
     return _SINAL.get(fixture_id)
