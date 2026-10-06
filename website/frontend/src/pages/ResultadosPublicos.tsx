@@ -14,7 +14,7 @@ import PageShell from '../components/PageShell'
 import { PERIODOS, PERIODO_PADRAO, janelaDoPeriodo, nomeDoMes, type PeriodoKey } from '../lib/periodo'
 import CaminhosDaIA from '../components/CaminhosDaIA'
 import { PAGE_WIDTH } from '../lib/pageWidth'
-import { Button, SelectMenu, Spinner, SkeletonRows } from '../components/ui'
+import { Button, Pagination, SelectMenu, Spinner, SkeletonRows } from '../components/ui'
 import SuggestionDetail from '../components/SuggestionDetail'
 import PublicNav from '../components/PublicNav'
 import DailyGreensChart from '../components/DailyGreensChart'
@@ -1040,25 +1040,8 @@ export default function ResultadosPublicos() {
                     ))}
                   </div>
                   {/* Paginação */}
-                  <div className="px-4 py-3 border-t border-line flex items-center justify-between gap-2 flex-wrap">
-                    <button
-                      disabled={recentPage === 0 || loading}
-                      onClick={() => setRecentPage(p => p - 1)}
-                      className="text-xs font-semibold px-3 py-1.5 rounded-md border border-line text-ink-3 hover:text-ink-2 hover:border-line-strong disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                    >
-                      ← Anterior
-                    </button>
-                    <span className="text-[11px] text-ink-4 tabular-nums">
-                      {totalPages > 0 ? `Pág. ${recentPage + 1} de ${totalPages}` : ''}
-                    </span>
-                    <button
-                      disabled={recentPage >= totalPages - 1 || loading}
-                      onClick={() => setRecentPage(p => p + 1)}
-                      className="text-xs font-semibold px-3 py-1.5 rounded-md border border-line text-ink-3 hover:text-ink-2 hover:border-line-strong disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                    >
-                      Próxima →
-                    </button>
-                  </div>
+                  <Pagination page={recentPage} pageSize={RECENT_PAGE_SIZE} total={recentTotal}
+                    onChange={setRecentPage} disabled={loading} unit="picks" />
                 </div>
                 )
               })()}
@@ -1240,19 +1223,9 @@ export default function ResultadosPublicos() {
                       })}
                     </div>
                   </div>
-                  {gamesTotal > GAMES_PAGE_SIZE && (() => {
-                    const totalPages = Math.ceil(gamesTotal / GAMES_PAGE_SIZE)
-                    const goTo = (p: number) => { setGamesPage(p); fetchGames(p, gamesFilter, source, periodo) }
-                    return (
-                      <div className="flex items-center justify-center gap-1 mt-4 flex-wrap">
-                        <button disabled={gamesPage === 0} onClick={() => goTo(gamesPage - 1)}
-                          className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-line-strong text-ink-2 hover:border-ink-4 disabled:opacity-30 transition-colors">Ant</button>
-                        <span className="text-xs text-ink-3 px-2">{gamesPage + 1} / {totalPages}</span>
-                        <button disabled={(gamesPage + 1) * GAMES_PAGE_SIZE >= gamesTotal} onClick={() => goTo(gamesPage + 1)}
-                          className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-line-strong text-ink-2 hover:border-ink-4 disabled:opacity-30 transition-colors">Próx</button>
-                      </div>
-                    )
-                  })()}
+                  <Pagination page={gamesPage} pageSize={GAMES_PAGE_SIZE} total={gamesTotal}
+                    onChange={p => { setGamesPage(p); fetchGames(p, gamesFilter, source, periodo) }}
+                    unit="jogos" className="mt-2 border-t-0 px-0" />
                 </>
               )}
             </div>
