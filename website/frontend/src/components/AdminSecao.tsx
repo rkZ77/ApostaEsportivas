@@ -25,6 +25,18 @@ import { ChevronDown, HelpCircle, X } from 'lucide-react'
  * funcionar igual, só sem lembrar.
  */
 
+/*
+ * Ação pequena do admin: "ver log", "por quê", "limpar filtro", "abrir tudo".
+ *
+ * Eram texto sublinhado, e no meio de texto explicativo sublinhado não se
+ * distingue de link nem de ênfase · quem opera não sabia onde dava pra
+ * clicar. Ação tem cara de botão: borda e fundo que acende.
+ */
+export const BOTAO_PEQUENO =
+  'inline-flex items-center justify-center gap-1 text-[11px] font-semibold px-2.5 py-1 min-h-[28px] ' +
+  'rounded-md border border-line-strong text-ink-2 hover:text-ink-1 hover:border-ink-4 hover:bg-surface-2 ' +
+  'transition-colors touch-manipulation disabled:opacity-40 disabled:pointer-events-none'
+
 const CHAVE = (id: string) => `admin.secao.${id}`
 const EVENTO_ABRIR = 'admin:abrir-secao'
 const EVENTO_TODAS = 'admin:todas-secoes'
@@ -139,11 +151,11 @@ export function GuiaDaAba({ aba, paraQue, quando = [], secoes = [] }: GuiaProps)
           {s.titulo}
         </button>
       ))}
-      <span className="flex gap-2 ml-auto pl-2">
+      <span className="flex gap-1.5 ml-auto pl-2">
         <button type="button" onClick={() => window.dispatchEvent(new CustomEvent(EVENTO_TODAS, { detail: true }))}
-          className="text-[10px] text-ink-4 hover:text-ink-2 underline underline-offset-4">abrir tudo</button>
+          className={BOTAO_PEQUENO}>Abrir tudo</button>
         <button type="button" onClick={() => window.dispatchEvent(new CustomEvent(EVENTO_TODAS, { detail: false }))}
-          className="text-[10px] text-ink-4 hover:text-ink-2 underline underline-offset-4">fechar tudo</button>
+          className={BOTAO_PEQUENO}>Fechar tudo</button>
       </span>
     </div>
   )
@@ -153,9 +165,9 @@ export function GuiaDaAba({ aba, paraQue, quando = [], secoes = [] }: GuiaProps)
       <div className="mb-4 flex items-start gap-2">
         <div className="flex-1 min-w-0">{indice}</div>
         <button type="button" onClick={() => mudar(false)}
-          className="shrink-0 flex items-center gap-1 text-[10px] text-ink-4 hover:text-ink-2"
+          className={`${BOTAO_PEQUENO} shrink-0`}
           aria-label="Mostrar explicação da aba">
-          <HelpCircle className="w-3.5 h-3.5" /> para que serve
+          <HelpCircle className="w-3.5 h-3.5" /> Para que serve
         </button>
       </div>
     )

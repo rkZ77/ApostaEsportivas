@@ -5,7 +5,7 @@ import { ArrowRight } from 'lucide-react'
 import api from '../services/api'
 import { rotuloDoMercado } from '../utils/marketTranslate'
 import {
-  Button, PanelHead, Panel, PickTypeBadge, ResultBadge, SectionHead, Spinner,
+  Button, Pagination, PanelHead, Panel, PickTypeBadge, ResultBadge, SectionHead, Spinner,
 } from '../components/ui'
 import { TeamLogo } from '../components/TeamLogo'
 import PipelineProfitChart from '../components/PipelineProfitChart'
@@ -193,32 +193,15 @@ export default function RecentResults({ summary }: { summary: PublicSummary | nu
             )}
 
             {/* Paginação */}
-            <div className="px-4 py-3 border-t border-line flex items-center justify-between gap-2 flex-wrap">
-              <button
-                onClick={() => setPage(p => Math.max(0, p - 1))}
-                disabled={page === 0 || pageLoading}
-                className="text-xs font-semibold px-3 py-1.5 rounded-md border border-line text-ink-3 hover:text-ink-2 hover:border-line-strong disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              >
-                ← Anterior
-              </button>
-              <span className="text-[11px] text-ink-4 tabular-nums">
-                {totalPages > 0 ? `Pág. ${page + 1} de ${totalPages}` : ''}
-              </span>
-              <button
-                onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-                disabled={page >= totalPages - 1 || pageLoading}
-                className="text-xs font-semibold px-3 py-1.5 rounded-md border border-line text-ink-3 hover:text-ink-2 hover:border-line-strong disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              >
-                Próxima →
-              </button>
-            </div>
+            <Pagination page={page} pageSize={PAGE_SIZE} total={total}
+              onChange={setPage} disabled={pageLoading} unit="picks" />
 
-            <div className="px-5 pb-4 flex items-center justify-center gap-4 flex-wrap">
-              <Button to="/resultados" variant="link" size="sm">Ver histórico completo</Button>
-              <span className="text-ink-4">,</span>
-              <Button to="/login?mode=register" variant="link" size="sm" className="text-accent-ink hover:text-accent-hover">
-                Criar conta grátis
-              </Button>
+            {/* Dois botões de verdade, e não dois textos soltos com uma
+                vírgula no meio: são as duas saídas do bloco, e a de criar
+                conta é a principal. */}
+            <div className="px-4 pb-4 pt-1 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-2">
+              <Button to="/resultados" variant="ghost" size="sm">Ver histórico completo</Button>
+              <Button to="/login?mode=register" variant="primary" size="sm">Criar conta grátis</Button>
             </div>
           </Panel>
 

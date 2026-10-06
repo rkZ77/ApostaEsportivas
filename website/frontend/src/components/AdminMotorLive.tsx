@@ -4,7 +4,8 @@ import {
 } from 'lucide-react'
 import api from '../services/api'
 import { Spinner } from './ui'
-import { Secao } from './AdminSecao'
+import Pagination from './ui/Pagination'
+import { Secao, BOTAO_PEQUENO } from './AdminSecao'
 
 /*
  * Painel do Motor Ao Vivo · acompanhar e testar, nada mais.
@@ -311,8 +312,6 @@ export default function AdminMotorLive() {
   const totalPaginas = Math.max(1, Math.ceil(picks.length / POR_PAGINA))
   const paginaSegura = Math.min(pagina, totalPaginas - 1)
   const picksDaPagina = picks.slice(paginaSegura * POR_PAGINA, paginaSegura * POR_PAGINA + POR_PAGINA)
-  const primeiroDaPagina = picks.length === 0 ? 0 : paginaSegura * POR_PAGINA + 1
-  const ultimoDaPagina = Math.min(picks.length, (paginaSegura + 1) * POR_PAGINA)
 
   const emLaco  = !!watch?.ativo
 
@@ -648,8 +647,8 @@ export default function AdminMotorLive() {
           </button>
           {run && run.status !== 'idle' && (
             <button onClick={() => setLogAberto(!logAberto)}
-              className="text-[11px] text-ink-4 hover:text-ink-2 underline">
-              {logAberto ? 'esconder log' : 'ver log'}
+              className={BOTAO_PEQUENO}>
+              {logAberto ? 'Esconder log' : 'Ver log'}
             </button>
           )}
         </div>
@@ -900,36 +899,8 @@ export default function AdminMotorLive() {
             </table>
           </div>
 
-          {totalPaginas > 1 && (
-            <div className="flex items-center justify-between gap-2 pt-3 mt-1 border-t border-line/60">
-              <span className="text-[10px] text-ink-4 tabular-nums">
-                {primeiroDaPagina}–{ultimoDaPagina} de {picks.length}
-              </span>
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => setPagina(p => Math.max(0, p - 1))}
-                  disabled={paginaSegura === 0}
-                  className="text-[11px] px-2 py-1 rounded-md border border-line text-ink-3
-                             hover:text-ink-1 hover:border-line-strong transition-colors
-                             disabled:opacity-30 disabled:cursor-not-allowed"
-                >
-                  anterior
-                </button>
-                <span className="text-[10px] text-ink-4 tabular-nums px-1">
-                  {paginaSegura + 1}/{totalPaginas}
-                </span>
-                <button
-                  onClick={() => setPagina(p => Math.min(totalPaginas - 1, p + 1))}
-                  disabled={paginaSegura >= totalPaginas - 1}
-                  className="text-[11px] px-2 py-1 rounded-md border border-line text-ink-3
-                             hover:text-ink-1 hover:border-line-strong transition-colors
-                             disabled:opacity-30 disabled:cursor-not-allowed"
-                >
-                  próxima
-                </button>
-              </div>
-            </div>
-          )}
+          <Pagination page={paginaSegura} pageSize={POR_PAGINA} total={picks.length}
+            onChange={setPagina} unit="picks" className="mt-1 px-0 pb-0" />
           </>
         )}
       </div>

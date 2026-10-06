@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
-import { Plus, Play, AlertTriangle } from 'lucide-react'
+import { Play, AlertTriangle } from 'lucide-react'
 import PageShell from '../components/PageShell'
 import { Button, Modal, Spinner, SpinnerBlock } from '../components/ui'
+import Pagination from '../components/ui/Pagination'
 import AdminShareResults from '../components/AdminShareResults'
 import AdminIAPerformance from '../components/AdminIAPerformance'
 import AdminMotorLive from '../components/AdminMotorLive'
@@ -21,7 +22,7 @@ import AdminDisparos from '../components/AdminDisparos'
 import AdminAlertaIA from '../components/AdminAlertaIA'
 import AdminReds from '../components/AdminReds'
 import AdminMudancas from '../components/AdminMudancas'
-import { Secao, GuiaDaAba, abrirSecao } from '../components/AdminSecao'
+import { Secao, GuiaDaAba, abrirSecao, BOTAO_PEQUENO } from '../components/AdminSecao'
 import { fmtBRL } from '../utils/format'
 import { sinalizarNavegacao } from '../services/progressBus'
 
@@ -360,10 +361,8 @@ export default function Admin() {
   const [users, setUsers]     = useState<User[]>([])
   const [stats, setStats]     = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
-  const [creating, setCreating] = useState(false)
   const [search, setSearch]   = useState('')
   const [planFilter, setPlanFilter] = useState<PlanFilter>('todos')
-  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', plan: 'free' })
   const [runningCmd, setRunningCmd] = useState<string | null>(null)
   const [pipelineStatus, setPipelineStatus] = useState<Record<string, { status: string; started_at: string | null; finished_at: string | null; error: string | null; log: string | null }>>({})
   const [aiReviewStatus, setAiReviewStatus] = useState<AIReviewStatus | null>(null)
@@ -609,15 +608,20 @@ export default function Admin() {
           {s?.status === 'error'   && <span className="w-2 h-2 rounded-full bg-red-500" />}
         </div>
         <p className="text-xs font-semibold text-ink-2 leading-tight">{label}</p>
-        {s && !isRunning && (
-          <p
-            className={`text-[10px] cursor-pointer truncate ${s.status === 'error' ? 'text-red-400 underline' : 'text-ink-4'}`}
+        {/* O horário era o próprio botão do log (texto clicável, sublinhado
+            só no erro). Agora o horário é texto e o log tem botão. */}
+        {s && !isRunning && s.status !== 'error' && s.finished_at && (
+          <p className="text-[10px] text-ink-4 truncate">{s.finished_at}</p>
+        )}
+        {s && !isRunning && (s.error || s.log) && (
+          <button
+            type="button"
             onClick={() => setExpandedLog(expandedLog === command ? null : command)}
+            className={`${BOTAO_PEQUENO} ${s.status === 'error' ? 'border-red-500/40 text-red-400 hover:text-red-300' : ''}`}
           >
-            {s.status === 'error'
-              ? <span className="inline-flex items-center gap-1"><AlertTriangle className="w-2.5 h-2.5" /> ver log</span>
-              : s.finished_at ?? ''}
-          </p>
+            {s.status === 'error' && <AlertTriangle className="w-3 h-3" />}
+            {expandedLog === command ? 'Esconder log' : s.status === 'error' ? 'Ver erro' : 'Ver log'}
+          </button>
         )}
         <button
           onClick={() => runPipeline(command)}
@@ -636,9 +640,9 @@ export default function Admin() {
         {isRunning && (
           <button
             onClick={() => abrirLog(command)}
-            className="text-[10px] text-ink-4 underline hover:text-ink-2"
+            className={BOTAO_PEQUENO}
           >
-            {logAberto && logCmd === command ? 'esconder log' : 'ver ao vivo'}
+            {logAberto && logCmd === command ? 'Esconder log' : 'Ver ao vivo'}
           </button>
         )}
       </div>
@@ -819,18 +823,6 @@ export default function Admin() {
     } finally { setSettingResult(null) }
   }
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault()
-    try {
-      const { data } = await api.post('/admin/users', newUser)
-      setUsers(u => [data, ...u])
-      setNewUser({ name: '', email: '', password: '', plan: 'free' })
-      setCreating(false)
-      showToast('Usuário criado')
-      reload()
-    } catch (err: any) { showToast(err.response?.data?.detail || 'Erro ao criar usuário', false) }
-  }
-
   const filtered = users.filter(u => {
     const q = search.toLowerCase()
     const matchSearch = !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
@@ -860,16 +852,6 @@ export default function Admin() {
         back: '/picks',
         title: 'Painel Admin',
         sub: 'Gerenciar usuários e planos',
-        actions: (
-          <Button size="sm" Icon={Plus} onClick={() => {
-            // O formulário mora na aba Usuários; clicado de outra aba, ele
-            // abria escondido e o botão parecia não fazer nada.
-            if (aba !== 'usuarios') { setAba('usuarios'); window.location.hash = 'usuarios'; setCreating(true) }
-            else setCreating(v => !v)
-          }}>
-            Novo usuário
-          </Button>
-        ),
       }}
     >
       {toast && (
@@ -1028,11 +1010,9 @@ export default function Admin() {
                     {isTudoRunning ? 'Rodando tudo...' : 'Rodar tudo'}
                   </Button>
                   {s && (
-                    <span
-                      className={`text-[10px] cursor-pointer underline ${s.status === 'error' ? 'text-red-500' : 'text-ink-4'}`}
-                      onClick={() => setExpandedLog(expandedLog === 'tudo' ? null : 'tudo')}
-                    >
-                      {s.status === 'running' ? 'rodando...' : `último: ${s.finished_at ?? 's/d'}`}
+                    <span className={`text-[10px] ${s.status === 'error' ? 'text-red-400' : 'text-ink-4'}`}>
+                      {s.status === 'running' ? 'rodando...'
+                        : `${s.status === 'error' ? 'falhou' : 'último'}: ${s.finished_at ?? 's/d'}`}
                     </span>
                   )}
                   {expandedLog === 'tudo' && (s?.error || s?.log) && (
@@ -1040,12 +1020,22 @@ export default function Admin() {
                       {s.error || s.log}
                     </pre>
                   )}
-                  <button
-                    onClick={() => abrirLog('tudo')}
-                    className="text-[10px] text-ink-4 underline hover:text-ink-2"
-                  >
-                    {logAberto && logCmd === 'tudo' ? 'esconder log ao vivo' : 'acompanhar log ao vivo'}
-                  </button>
+                  <div className="flex gap-1.5">
+                    {s && s.status !== 'running' && (s.error || s.log) && (
+                      <button
+                        onClick={() => setExpandedLog(expandedLog === 'tudo' ? null : 'tudo')}
+                        className={BOTAO_PEQUENO}
+                      >
+                        {expandedLog === 'tudo' ? 'Esconder resultado' : 'Ver resultado'}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => abrirLog('tudo')}
+                      className={BOTAO_PEQUENO}
+                    >
+                      {logAberto && logCmd === 'tudo' ? 'Esconder log ao vivo' : 'Log ao vivo'}
+                    </button>
+                  </div>
                 </div>
               )
             })()}
@@ -1103,8 +1093,8 @@ export default function Admin() {
                     seguir
                   </label>
                   <button onClick={() => setLogAberto(false)}
-                          className="text-[10px] text-ink-4 underline hover:text-ink-2">
-                    fechar
+                          className={BOTAO_PEQUENO}>
+                    Fechar
                   </button>
                 </div>
               </div>
@@ -1492,15 +1482,8 @@ export default function Admin() {
                   </tbody>
                 </table>
               </div>
-              {paymentsTotalPages > 1 && (
-                <div className="flex items-center justify-between px-4 py-3 border-t border-line">
-                  <span className="text-xs text-ink-4">Página {paymentsPageSafe + 1} de {paymentsTotalPages}</span>
-                  <div className="flex gap-2">
-                    <button onClick={() => setPaymentsPage(p => Math.max(0, p - 1))} disabled={paymentsPageSafe === 0} className="px-3 py-1 text-xs rounded border border-line-strong text-ink-2 hover:text-ink-1 disabled:opacity-30">← Ant</button>
-                    <button onClick={() => setPaymentsPage(p => Math.min(paymentsTotalPages - 1, p + 1))} disabled={paymentsPageSafe === paymentsTotalPages - 1} className="px-3 py-1 text-xs rounded border border-line-strong text-ink-2 hover:text-ink-1 disabled:opacity-30">Próx</button>
-                  </div>
-                </div>
-              )}
+              <Pagination page={paymentsPageSafe} pageSize={PAYMENTS_PER_PAGE}
+                total={payments.length} onChange={setPaymentsPage} unit="pagamentos" />
             </>
           )}
         </div>
@@ -1874,24 +1857,9 @@ export default function Admin() {
         {/* A lista vem antes do funil e dos vencidos (2026-10-06): é o que
             se usa quase toda vez que a aba abre, e ficava embaixo de dois
             painéis de análise. */}
-        {/* Criar usuário */}
-        {creating && (
-          <form onSubmit={handleCreate} className="card p-5 mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-            <input className="input" placeholder="Nome" value={newUser.name} onChange={e => setNewUser(v => ({ ...v, name: e.target.value }))} required />
-            <input className="input" placeholder="Email" type="email" value={newUser.email} onChange={e => setNewUser(v => ({ ...v, email: e.target.value }))} required />
-            <input className="input" placeholder="Senha (min 10 chars, maiúscula, número)" type="password" value={newUser.password} onChange={e => setNewUser(v => ({ ...v, password: e.target.value }))} required />
-            <select className="input" value={newUser.plan} onChange={e => setNewUser(v => ({ ...v, plan: e.target.value }))}>
-              <option value="free">Free</option>
-              <option value="trial">Teste</option>
-              <option value="vip">Assinante</option>
-              <option value="admin">Admin</option>
-            </select>
-            <div className="flex gap-2">
-              <button type="submit" className="btn-primary flex-1">Criar</button>
-              <button type="button" onClick={() => setCreating(false)} className="px-3 py-2 rounded-lg border border-line-strong text-ink-2 hover:text-ink-1 text-sm transition-colors">✕</button>
-            </div>
-          </form>
-        )}
+        {/* O formulário de criar usuário saiu em 06/10, a pedido: conta nasce
+            pelo cadastro do site, nunca pelo admin. A rota POST /admin/users
+            continua no backend. */}
 
         <Secao id="usuarios-lista" abertaPorPadrao
           titulo="Buscar um usuário e mudar plano, validade ou acesso"
@@ -2059,15 +2027,6 @@ export default function Admin() {
                 )}
               </tbody>
             </table>
-            {usersTotalPages > 1 && (
-              <div className="flex items-center justify-between px-4 py-3 border-t border-line">
-                <span className="text-xs text-ink-4">Página {usersPageSafe + 1} de {usersTotalPages}, {filtered.length} usuário(s)</span>
-                <div className="flex gap-2">
-                  <button onClick={() => setUsersPage(p => Math.max(0, p - 1))} disabled={usersPageSafe === 0} className="px-3 py-1 text-xs rounded border border-line-strong text-ink-2 hover:text-ink-1 disabled:opacity-30">← Ant</button>
-                  <button onClick={() => setUsersPage(p => Math.min(usersTotalPages - 1, p + 1))} disabled={usersPageSafe === usersTotalPages - 1} className="px-3 py-1 text-xs rounded border border-line-strong text-ink-2 hover:text-ink-1 disabled:opacity-30">Próx</button>
-                </div>
-              </div>
-            )}
           </div>
         </div>
 
@@ -2145,6 +2104,11 @@ export default function Admin() {
             </div>
           ))}
         </div>
+        {/* Fora da tabela de propósito: ela só existe do md pra cima, e a
+            paginação morava dentro dela · no celular os cartões mostravam a
+            primeira página e não havia como passar dela. */}
+        <Pagination page={usersPageSafe} pageSize={USERS_PER_PAGE} total={filtered.length}
+          onChange={setUsersPage} unit="usuários" className="mt-3 border-t-0 px-0" />
         </Secao>
 
         {/* Passagem de etapa: os números do topo dizem quantos SÃO
