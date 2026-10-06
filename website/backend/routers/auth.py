@@ -210,6 +210,40 @@ def _detect_image_type(data: bytes) -> str | None:
     return None
 
 
+#: Lado do avatar gravado. O maior uso e' o `lg` do Avatar.tsx (64 px), e 256
+#: cobre ate' tela 4x. Antes ia a foto original, de ate' 3 MB: o PageSpeed
+#: apontou um PNG de 39 KB desenhado em 28 px na Home (2026-10-06).
+_AVATAR_LADO = 256
+
+
+def _reduzir_avatar(dados: bytes, ext: str) -> tuple[bytes, str]:
+    """Foto reduzida pra `_AVATAR_LADO` em WebP, ou a original se nao der.
+
+    GIF fica como veio: pode ser animado, e o WebP de um quadro so' trocaria a
+    animacao que a pessoa escolheu por uma foto parada. Falha do Pillow tambem
+    devolve a original -- a imagem ja' passou pela checagem de magic bytes, e
+    recusar o upload por nao conseguir comprimir seria pior que servir grande.
+    """
+    if ext == "gif":
+        return dados, ext
+    try:
+        import io
+        from PIL import Image, ImageOps
+        with Image.open(io.BytesIO(dados)) as im:
+            # Foto de celular vem deitada com a rotacao no EXIF; sem isto ela
+            # aparece de lado depois de perder o EXIF na conversao.
+            im = ImageOps.exif_transpose(im)
+            im = im.convert("RGBA" if im.mode in ("RGBA", "LA", "P") else "RGB")
+            im.thumbnail((_AVATAR_LADO, _AVATAR_LADO), Image.LANCZOS)
+            saida = io.BytesIO()
+            im.save(saida, format="WEBP", quality=82, method=6)
+        reduzido = saida.getvalue()
+        return (reduzido, "webp") if len(reduzido) < len(dados) else (dados, ext)
+    except Exception:
+        logger.warning("[AVATAR] nao consegui reduzir, gravando a original", exc_info=True)
+        return dados, ext
+
+
 def _validate_password(password: str) -> None:
     if len(password) < 10:
         raise HTTPException(400, "Senha deve ter pelo menos 10 caracteres")
@@ -1452,7 +1486,7 @@ def upload_avatar(
     if not detected_ext:
         raise HTTPException(400, "Arquivo não reconhecido como imagem válida.")
 
-    ext = detected_ext
+    contents, ext = _reduzir_avatar(contents, detected_ext)
 
     uid = current_user["sub"]
     dest = _AVATARS_DIR / f"{uid}.{ext}"
@@ -1462,7 +1496,10 @@ def upload_avatar(
         old.unlink(missing_ok=True)
 
     dest.write_bytes(contents)
-    avatar_url = f"/static/avatars/{uid}.{ext}"
+    # `?v=` porque o /static/avatars agora tem cache de navegador (ver
+    # main.py:_StaticComCache) e o nome do arquivo se repete a cada troca de
+    # foto. Sem a versao, quem ja' viu a foto antiga continuaria vendo por dias.
+    avatar_url = f"/static/avatars/{uid}.{ext}?v={int(time.time())}"
 
     conn = get_connection()
     cur  = conn.cursor()

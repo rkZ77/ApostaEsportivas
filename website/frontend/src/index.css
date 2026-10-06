@@ -4,6 +4,46 @@
    comece a baixar sem esperar este CSS terminar. Ver src/fontes.css. */
 @import './fontes.css';
 
+/*
+ * A FONTE DO SISTEMA, NA MEDIDA DA NUNITO (2026-10-06).
+ *
+ * O hero pre-renderizado (scripts/prerender-hero.mjs) pinta antes de a Nunito
+ * chegar, entao ele pinta na fonte do sistema. Quando o React sobe, a Home
+ * troca aquele paragrafo por um novo, ja' na Nunito · e o novo era MAIOR:
+ * a caixa de cada linha mede ascent + descent da fonte, 1,364 na Nunito
+ * contra 1,172 na Roboto, 1,33 na Segoe UI e 1,117 na Arial. Elemento novo e
+ * maior vira novo candidato a LCP, e o LCP saia do hero estatico (1,5 s no
+ * teste) para o do React (2,1 s; 3,7 s no Lighthouse do PageSpeed).
+ *
+ * Esta face e' a fonte do sistema com as metricas verticais da Nunito
+ * (ascent 101,1%, descent 35,3%, sem line-gap · lidas do proprio woff2). A
+ * largura media das quatro fica a 3% da Nunito; o size-adjust de 103% deixa a
+ * substituta um fio MAIOR, nunca menor, porque o que nao pode acontecer e' o
+ * texto final ocupar mais area que o primeiro. De brinde, a troca de fonte
+ * deixa de mexer o layout.
+ *
+ * Pesos separados porque `local()` aponta pra um arquivo so': sem a face 700
+ * o titulo sairia em negrito sintetico da Regular.
+ */
+@font-face {
+  font-family: 'Nunito Fallback';
+  font-weight: 400;
+  src: local('Roboto'), local('Roboto-Regular'), local('Segoe UI'), local('Helvetica Neue'), local('Arial'), local('ArialMT');
+  size-adjust: 103%;
+  ascent-override: 101.1%;
+  descent-override: 35.3%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Nunito Fallback';
+  font-weight: 700;
+  src: local('Roboto Bold'), local('Roboto-Bold'), local('Segoe UI Bold'), local('SegoeUI-Bold'), local('Helvetica Neue Bold'), local('Arial Bold'), local('Arial-BoldMT');
+  size-adjust: 103%;
+  ascent-override: 101.1%;
+  descent-override: 35.3%;
+  line-gap-override: 0%;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -38,7 +78,11 @@
   --ink-1: 250 250 250;       /* #fafafa · 17.8:1 · titulo, numero   */
   --ink-2: 199 199 207;       /* #c7c7cf · 11.0:1 · corpo            */
   --ink-3: 148 148 158;       /* #94949e ·  6.2:1 · apoio, rotulo    */
-  --ink-4: 117 117 127;       /* #75757f ·  4.1:1 · so' texto grande */
+  /* ink-4 era #75757f (4,1:1) e se dizia "so' texto grande" · na pratica ele
+     e' o rotulo de 10-11px do site inteiro, e o PageSpeed reprovou o
+     contraste em seis lugares so' na Home (2026-10-06). Agora passa 4,5:1 ate'
+     sobre surface-2, o fundo mais claro onde ele aparece. */
+  --ink-4: 134 134 144;       /* #868690 ·  5.1:1 · rotulo pequeno   */
 
   --accent:        0 204   0; /* #00CC00 · a marca, intocada         */
   --accent-hover: 26 224  26;
@@ -159,7 +203,7 @@
  * card e' mais claro que a pagina; aqui e' mais escuro. A relacao e' a mesma.
  *
  * A rampa de tinta foi medida em WCAG sobre surface-0, como a do escuro:
- * 18.3:1 / 10.4:1 / 5.9:1 / 4.2:1.
+ * 18.3:1 / 10.4:1 / 7.0:1 / 4.9:1 (os dois ultimos sobre surface-1).
  */
 :root[data-theme="light"] {
   color-scheme: light;
@@ -174,8 +218,11 @@
 
   --ink-1:  22  22  26;       /* #16161a · 18.3:1 · titulo, numero   */
   --ink-2:  63  63  71;       /* #3f3f47 · 10.4:1 · corpo            */
-  --ink-3: 100 100 110;       /* #64646e ·  5.9:1 · apoio, rotulo    */
-  --ink-4: 124 124 134;       /* #7c7c86 ·  4.2:1 · so' texto grande */
+  /* ink-3 desceu um degrau junto com o ink-4 (2026-10-06): o ink-4 precisou
+     ir a #6a6a74 pra passar 4,5:1 em surface-2, e com o ink-3 no #64646e
+     os dois ficariam indistinguiveis. */
+  --ink-3:  88  88  98;       /* #585862 ·  7.0:1 · apoio, rotulo    */
+  --ink-4: 106 106 116;       /* #6a6a74 ·  4.9:1 · rotulo pequeno   */
 
   /* O botao da marca nao muda de cor entre os temas · so' o verde escrito.
      #009a00 e' o #00CC00 escurecido NA MESMA MATIZ (120 graus), nao um verde
@@ -357,7 +404,7 @@
 
   body {
     @apply bg-surface-0 text-ink-2 antialiased;
-    font-family: Nunito, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    font-family: Nunito, 'Nunito Fallback', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
     /* Folga da barra de navegação inferior do celular · a própria barra
        publica a altura (components/BarraInferior). Sem ela, 0. */
     padding-bottom: var(--barra-inferior, 0px);
@@ -371,7 +418,7 @@
    * tira um arquivo de fonte do carregamento.
    */
   h1, h2, h3, .font-display {
-    font-family: Nunito, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    font-family: Nunito, 'Nunito Fallback', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
     /* Nunito ja e uma fonte arredondada e de contraste baixo: o tracking
        negativo que a Inter precisava aqui deixava as letras se tocando.
        -0.01em segura a densidade do titulo sem colar. */

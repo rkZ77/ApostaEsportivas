@@ -162,8 +162,8 @@ export default {
        * mesmo com os digitos mudando.
        */
       fontFamily: {
-        display: ['Nunito', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', '"Open Sans"', '"Helvetica Neue"', 'sans-serif'],
-        sans:    ['Nunito', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', '"Open Sans"', '"Helvetica Neue"', 'sans-serif'],
+        display: ['Nunito', '"Nunito Fallback"', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', '"Open Sans"', '"Helvetica Neue"', 'sans-serif'],
+        sans:    ['Nunito', '"Nunito Fallback"', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', '"Open Sans"', '"Helvetica Neue"', 'sans-serif'],
         mono:    ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
       },
       // escala de raio enxuta: 3 degraus + pilula. xl/2xl foram dobrados em lg.

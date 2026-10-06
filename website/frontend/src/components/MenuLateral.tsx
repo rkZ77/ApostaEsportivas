@@ -153,7 +153,7 @@ export function GavetaLateral({ open, onClose, logoTo = '/', topo, rodape, child
             className="absolute inset-y-0 left-0 w-[min(300px,85vw)] flex flex-col bg-surface-0 border-r border-line shadow-elev"
           >
             <div className="h-16 shrink-0 flex items-center justify-between px-5 border-b border-line">
-              <Link to={logoTo} onClick={onClose} className="flex items-center gap-2.5" aria-label="Pick IA, início">
+              <Link to={logoTo} onClick={onClose} className="flex items-center gap-2.5" aria-label="PickIA, página inicial">
                 <img src="/logo-64.webp" alt="" width={28} height={28} className="w-7 h-7 rounded-full object-cover" />
                 <span className="font-display font-semibold text-base text-ink-1">
                   Pick<span className="text-accent-ink">IA</span>

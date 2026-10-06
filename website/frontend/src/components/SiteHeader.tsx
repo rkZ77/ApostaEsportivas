@@ -68,7 +68,7 @@ export default function SiteHeader() {
         >
           <Menu className="w-5 h-5" />
         </button>
-        <Link to="/" className="flex items-center gap-2.5 shrink-0" aria-label="Pick IA, início">
+        <Link to="/" className="flex items-center gap-2.5 shrink-0" aria-label="PickIA, página inicial">
           {/* logo-64.webp, e nao logo.png: o PNG tem 320 px e 9,3 KB para
               aparecer em 32 · e' a "entrega de imagens" que o PageSpeed
               cobrava. O webp de 64 px pesa 2,6 KB e ainda cobre tela 2x.

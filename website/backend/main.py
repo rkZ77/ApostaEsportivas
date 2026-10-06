@@ -244,8 +244,13 @@ async def security_headers(request: Request, call_next):
         # endpoint de sessao (connect) e desenha o proprio botao e o popup
         # dentro de um iframe (frame). Faltando uma delas o botao some sem
         # erro visivel -- o CSP bloqueia calado.
+        # static.cloudflareinsights.com: o Web Analytics do Cloudflare injeta o
+        # beacon dele no HTML na borda. Bloqueado, ele virava o erro vermelho
+        # no console que derrubava "Praticas recomendadas" no PageSpeed
+        # (2026-10-06) -- e a medicao de visita real do Cloudflare nunca rodou.
         "script-src 'self' https://accounts.google.com https://www.googletagmanager.com "
-        "https://www.google-analytics.com https://challenges.cloudflare.com"
+        "https://www.google-analytics.com https://challenges.cloudflare.com "
+        "https://static.cloudflareinsights.com"
         + (" " + _CSP_SCRIPT_INLINE if _CSP_SCRIPT_INLINE else "") + "; "
         # accounts.google.com tambem no style-src: o GIS busca a folha de estilo
         # do proprio botao em /gsi/style. Bloqueada, o botao aparece mas sem
@@ -260,7 +265,7 @@ async def security_headers(request: Request, call_next):
         "connect-src 'self' https://accounts.google.com https://www.google-analytics.com "
         "https://analytics.google.com https://region1.google-analytics.com "
         "https://stats.g.doubleclick.net https://www.google.com "
-        "https://challenges.cloudflare.com; "
+        "https://challenges.cloudflare.com https://cloudflareinsights.com; "
         # As fontes sao servidas pelo proprio dominio desde 03/09 (ver
         # frontend/src/fontes.css). O fonts.gstatic.com saiu daqui e o
         # fonts.googleapis.com saiu do style-src junto: dominio que ninguem
@@ -436,7 +441,26 @@ _base_dir = pathlib.Path(__file__).parent
 _static_dir = _base_dir / "static"
 _avatars_dir = _static_dir / "avatars"
 _avatars_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
+
+
+class _StaticComCache(StaticFiles):
+    """/static com cache de navegador de 7 dias (2026-10-06).
+
+    Ele saia sem Cache-Control nenhum, e o PageSpeed marcava o avatar da Home
+    como "ciclo de vida de cache ineficiente". Sete dias e nao um ano porque o
+    nome do avatar se repete quando a pessoa troca de foto: o upload novo leva
+    `?v=` na URL (ver routers/auth.py:upload_avatar) e fura o cache, mas a URL
+    antiga, sem versao, ainda existe no banco de quem nao trocou desde entao.
+    """
+
+    async def get_response(self, path, scope):
+        resposta = await super().get_response(path, scope)
+        if resposta.status_code == 200:
+            resposta.headers["Cache-Control"] = "public, max-age=604800, stale-while-revalidate=86400"
+        return resposta
+
+
+app.mount("/static", _StaticComCache(directory=str(_static_dir)), name="static")
 
 _LOGO_BASE = "https://media.api-sports.io/football"
 # Trinta dias, e nao sete: escudo de time e de liga praticamente nao muda, e

@@ -77,7 +77,7 @@ export default function Footer() {
 
           {/* Marca */}
           <div className="min-w-0">
-            <Link to="/" className="inline-flex items-center gap-3 mb-3" aria-label="Pick IA, início">
+            <Link to="/" className="inline-flex items-center gap-3 mb-3" aria-label="PickIA, página inicial">
               <span className="w-10 h-10 rounded-lg border border-line bg-surface-1 flex items-center justify-center">
                 <img src="/logo-64.webp" alt="" width={28} height={28} className="w-7 h-7 rounded-full object-cover" />
               </span>

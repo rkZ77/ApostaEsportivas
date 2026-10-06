@@ -61,9 +61,10 @@ const SIZE_PX = {
  * deploy paga uma consulta e restaura o cache pra todos os outros.
  *
  * So' o proprio `<id>` do caminho e' reaproveitado: nada de texto de fora entra
- * na URL nova. */
+ * na URL nova. O `?v=<versao>` opcional e' o que o upload acrescenta desde
+ * 06/10, pra trocar de foto furar o cache do navegador. */
 function rotaDoBanco(imageUrl: string): string | null {
-  const m = imageUrl.match(/\/static\/avatars\/(\d+)\.[a-z]+$/i)
+  const m = imageUrl.match(/\/static\/avatars\/(\d+)\.[a-z]+(\?v=\d+)?$/i)
   return m ? `/api/auth/avatar/${m[1]}` : null
 }
 
@@ -104,6 +105,11 @@ export default function Avatar({ name, imageUrl, size = 'md', className = '' }: 
         alt={nome}
         width={SIZE_PX[size]}
         height={SIZE_PX[size]}
+        /* Avatar nunca e' o conteudo principal da tela, e na Home ele so'
+           aparece la' embaixo (ProvaSocial) · o PageSpeed contava os 39 KB
+           dele como download da primeira tela. */
+        loading="lazy"
+        decoding="async"
         className={`${SIZE[size]} rounded-full object-cover shrink-0 ${className}`}
         /* Sem rota do banco (avatar do Google, por exemplo) a primeira falha ja'
            vai direto pras iniciais · nao ha' segunda fonte pra tentar. */
