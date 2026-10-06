@@ -3,7 +3,7 @@ import { Pagination, SelectMenu, Spinner, SkeletonPickGrid } from '../components
 import { PERIODOS, PERIODO_PADRAO, dentroDoPeriodo, nomeDoMes, type PeriodoKey } from '../lib/periodo'
 import { ChevronLeft, ChevronRight, Trash2, RotateCcw } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, m as motion } from 'framer-motion'
 import { tabFade, toastUp } from '../lib/motion'
 import api from '../services/api'
 import PageShell from '../components/PageShell'

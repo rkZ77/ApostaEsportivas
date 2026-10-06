@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, m as motion } from 'framer-motion'
 import {
   Radio, ChevronDown, RefreshCw, CornerUpRight, RectangleVertical,
   Footprints, Hand, Crosshair, Target, Flag, Goal,

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { motion } from 'framer-motion'
+import { m as motion } from 'framer-motion'
 import { AlertTriangle } from 'lucide-react'
 import { backdropFade, dialogScale } from '../lib/motion'
 import { fmtSigned } from '../utils/format'

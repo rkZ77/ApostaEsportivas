@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { m as motion } from 'framer-motion'
 import { Lock, Sparkles, X } from 'lucide-react'
 import { backdropFade, sheetUp } from '../lib/motion'
 

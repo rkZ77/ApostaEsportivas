@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Spinner } from '../components/ui'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, m as motion } from 'framer-motion'
 import PageShell from '../components/PageShell'
 import BancaTabs from '../components/BancaTabs'
 import api from '../services/api'

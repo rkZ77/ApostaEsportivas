@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion'
+import { m as motion } from 'framer-motion'
 import { Check, X as XIcon } from 'lucide-react'
 
 import { Badge, Button, SectionHead } from '../components/ui'

@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { m as motion } from 'framer-motion'
 import { Zap, TrendingUp, BarChart2, Wallet, Bot, BookOpen, ArrowRight, Check, X, Compass, Radio, UserSquare, Flag } from 'lucide-react'
 import PageShell from '../components/PageShell'
 import { Button } from '../components/ui'

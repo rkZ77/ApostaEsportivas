@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion'
+import { m as motion } from 'framer-motion'
 import { NumberTicker, Skeleton } from '../components/ui'
 import { taxaAcerto, fmtUnits, STAKE_LABEL_PADRAO } from '../utils/format'
 import { fadeInUp, staggerContainer } from '../lib/motion'

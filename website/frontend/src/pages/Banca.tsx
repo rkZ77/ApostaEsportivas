@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { TrendingUp, Info } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, m as motion } from 'framer-motion'
 import { backdropFade, dialogScale } from '../lib/motion'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'

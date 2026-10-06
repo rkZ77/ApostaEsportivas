@@ -1,6 +1,6 @@
 import { useState, memo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, m as motion } from 'framer-motion'
 import { toastUp, fadeInUp } from '../lib/motion'
 import api from '../services/api'
 import { prefetchAnalise } from '../services/analisePick'

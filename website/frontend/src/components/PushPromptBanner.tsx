@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, m as motion } from 'framer-motion'
 import { Bell, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useOnboarding } from '../context/OnboardingContext'

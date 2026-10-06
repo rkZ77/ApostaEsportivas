@@ -1,6 +1,6 @@
 import { useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { m as motion } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
 import { X as XIcon, Send, Lock, Sparkles } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'

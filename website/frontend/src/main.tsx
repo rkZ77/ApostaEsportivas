@@ -1,7 +1,24 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+import { LazyMotion } from 'framer-motion'
 import App from './App'
 import './index.css'
+
+/*
+ * ANIMAÇÃO SEM PESAR NA PRIMEIRA TELA (2026-10-06).
+ *
+ * O site usava `motion.*`, que embute o motor de animação inteiro no
+ * componente: 131 KB (43 KB comprimidos) baixados e executados antes de a
+ * Home existir, sem animar nada que importe pro primeiro quadro. O PageSpeed
+ * simula o LCP contando todo JavaScript que roda antes dele, e era essa conta
+ * que deixava o LCP de laboratório em 4 s mesmo com o hero pré-renderizado.
+ *
+ * Agora todo componente usa `m` (importado como `m as motion`, então o JSX
+ * não mudou) e o motor chega por `import()`, depois. `strict` faz um
+ * `motion.*` completo esquecido em algum arquivo novo dar erro na hora, em vez
+ * de trazer os 131 KB de volta calado.
+ */
+const recursosDeAnimacao = () => import('./lib/motionRecursos').then(r => r.default)
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -23,6 +40,8 @@ window.addEventListener('vite:preloadError', () => {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
+    <LazyMotion features={recursosDeAnimacao} strict>
+      <App />
+    </LazyMotion>
   </React.StrictMode>
 )

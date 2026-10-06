@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback, lazy, Suspense } from 'react'
 import { Sparkles } from 'lucide-react'
 import { Spinner } from './ui'
 import { useLocation } from 'react-router-dom'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, m as motion } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
 
 // react-markdown (usado no painel) é pesado -- carrega só quando o usuário

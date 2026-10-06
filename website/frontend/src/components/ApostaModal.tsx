@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, m as motion } from 'framer-motion'
 import { backdropFade, sheetUp, tabFade } from '../lib/motion'
 
 const HOUSES = ['Superbet', 'Bet365', 'Betano', 'Outra']

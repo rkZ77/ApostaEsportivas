@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, m as motion } from 'framer-motion'
 import { TrendingUp, TrendingDown, X, BadgeCheck, Share2, Check, ChevronRight, ArrowLeft } from 'lucide-react'
 import api from '../services/api'
 import { fmtBRL, fmtUnits, taxaAcerto } from '../utils/format'

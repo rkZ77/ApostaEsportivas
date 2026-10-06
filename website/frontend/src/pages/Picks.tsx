@@ -1,6 +1,6 @@
 ﻿import { useEffect, useState, useCallback, useMemo, useRef, memo, lazy, Suspense } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, m as motion } from 'framer-motion'
 import { toastUp, fadeInUp, staggerContainer, tabFade } from '../lib/motion'
 import api from '../services/api'
 import { prefetchAnalise } from '../services/analisePick'
