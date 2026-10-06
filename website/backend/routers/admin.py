@@ -363,10 +363,6 @@ _PIPELINE_SCRIPTS = {
     #                diarios (ver _PIPELINE_ARGS), entao os outros tres nao
     #                tinham porta nenhuma no painel.
     #   ligas        perfil de liga por IA · consome credito da Anthropic.
-    #
-    # `shadow` continua de fora DE PROPOSITO, e nao por esquecimento: ele
-    # compara o motor com "os picks que a IA salvou hoje", e a IA foi cortada
-    # da geracao em 2026-07-17. Nao ha com o que comparar.
     "gerar_live":           os.path.join("engine_pipelines", "live_pipeline.py"),
     # Sem argumento: o pipeline decide o dry run pelo ambiente
     # (LIVE_ENGINE_DRY_RUN), que e' a mesma regra do CLI. Passar `--gravar`
@@ -401,20 +397,18 @@ _PIPELINE_SCRIPTS = {
     "coleta_clima":         "atualizar_jogos.py",
     "gerar_playerstats_todos": os.path.join("engine_pipelines", "player_stats_pipeline.py"),
     "perfis_de_liga":       "atualizar_ligas.py",
-    # Fase de homologacao/validacao (compara motor vs IA em uma base DEV
-    # separada, ANTES de promover mudanca pro motor de producao acima) --
-    # prefixo "dev_" sinaliza que _run_and_track() precisa injetar DB_ENV=dev
-    # (ver _dev_env()) e exige DB_HOST_DEV configurado de verdade. Nao e' o
-    # gatilho de producao (isso e' os steps gerar_* acima, sem prefixo).
+    # Base DEV separada, pra testar mudanca ANTES de promover pro motor de
+    # producao acima -- prefixo "dev_" sinaliza que _run_and_track() precisa
+    # injetar DB_ENV=dev (ver _dev_env()) e exige DB_HOST_DEV configurado de
+    # verdade. Nao e' o gatilho de producao (isso e' os steps gerar_* acima).
+    #
+    # Os quatro `dev_homolog_*` (motor x IA) sairam em 2026-10-06 junto com os
+    # scripts: comparavam com picks de uma IA que nao gera nada desde 17/07.
     "dev_gerar_vip":           os.path.join("engine_pipelines", "vip_pipeline.py"),
     "dev_gerar_dica":          os.path.join("engine_pipelines", "dica_pipeline.py"),
     "dev_gerar_multipla":      os.path.join("engine_pipelines", "multipla_pipeline.py"),
     "dev_gerar_bingo":         os.path.join("engine_pipelines", "bingo_pipeline.py"),
     "dev_gerar_alavancagem":   os.path.join("engine_pipelines", "alavancagem_pipeline.py"),
-    "dev_homolog_vip":         os.path.join("ai", "vip_engine_shadow.py"),
-    "dev_homolog_dica":        os.path.join("ai", "dica_homologation.py"),
-    "dev_homolog_multipla":    os.path.join("ai", "multipla_homologation.py"),
-    "dev_homolog_alavancagem": os.path.join("ai", "alavancagem_homologation.py"),
 }
 
 #: Argumentos fixos de alguns passos. O /admin roda script por CAMINHO, entao
@@ -478,7 +472,6 @@ _DEV_PIPELINE_STEPS = [
     "dev_atualizar_jogos", "dev_capturar_odds",
     "dev_gerar_vip", "dev_gerar_dica", "dev_gerar_multipla", "dev_gerar_bingo",
     "dev_gerar_alavancagem",
-    "dev_homolog_vip", "dev_homolog_dica", "dev_homolog_multipla", "dev_homolog_alavancagem",
 ]
 
 # Timeouts por comando (segundos). atualizar_jogos roda 7 stages (0 a 6) + API
@@ -536,8 +529,7 @@ _PASSO_DO_COMANDO = {
     "resultados":         "atualizar_resultados",
     # --- Sob demanda: Comando SEM `etapa`, botao fora do "Rodar Tudo" -------
     # Ver o bloco grande em _PIPELINE_SCRIPTS pro que cada um destes fazia
-    # falta. `tudo` nao entra (ele E' a sequencia) e `shadow` nao entra (compara
-    # com uma IA que nao gera pick desde 2026-07-17).
+    # falta. `tudo` nao entra (ele E' a sequencia).
     "live":               "gerar_live",
     "fechamento":         "coleta_fechamento",
     "historico":          "historico_times",
@@ -895,12 +887,11 @@ def _notificar_picks_publicados():
 
 
 async def _run_dev_pipeline():
-    """Motor deterministico + fase de homologacao (ver plano de validacao
-    antes de promover pra producao) -- coleta jogos/odds do dia, roda os 4
-    engine_pipelines de verdade (grava picks reais em DEV) e os 4 scripts
-    de homologacao (so leitura + log JSONL, comparam contra o pick real
-    da IA em PROD). Sem custo de API -- motor determinista, nunca chama
-    Anthropic. So roda de fato quando DB_HOST_DEV existe (ver _dev_env)."""
+    """Motor deterministico na base DEV (validar antes de promover pra
+    producao) -- coleta jogos/odds do dia e roda os engine_pipelines de
+    verdade (grava picks reais em DEV). Sem custo de API -- motor
+    determinista, nunca chama Anthropic. So roda de fato quando DB_HOST_DEV
+    existe (ver _dev_env)."""
     now = lambda: datetime.now(timezone.utc).strftime("%H:%M:%S")
     started = now()
     _pipeline_status["dev_tudo"] = {"status": "running", "started_at": started, "finished_at": None, "returncode": None, "error": None, "log": "Iniciando..."}
@@ -1127,7 +1118,7 @@ _PASSO_LABEL_CURTO = {
 #:
 #: Agora o criterio e' o mesmo dos dois lados: Comando sem `etapa` que tenha
 #: traducao em `_PASSO_DO_COMANDO` vira botao avulso. Quem nao deve ter botao
-#: simplesmente nao entra no mapa (`tudo`, que E' a sequencia, e `shadow`), e
+#: simplesmente nao entra no mapa (`tudo`, que E' a sequencia), e
 #: isso fica escrito la'.
 #: Mesma ordem em que os Comandos sem `etapa` aparecem no registro do motor.
 #: NA ORDEM DO REGISTRO DO MOTOR, e ha teste cobrando isso: a lista existe pra

@@ -101,3 +101,7 @@ jobs:
       - name: Build
         working-directory: website/frontend
         run: npm run build
+      # Vitest desde 06/10/2026 · a sincronia entre telas (lib/sincronia.ts).
+      - name: Testes
+        working-directory: website/frontend
+        run: npm test

@@ -7,6 +7,7 @@
     "dev": "vite",
     "prebuild": "node scripts/gerar-blog-index.mjs",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "build": "tsc && vite build && node scripts/prerender-hero.mjs",
     "build:comprimir": "node scripts/precomprimir.mjs",
     "preview": "vite preview"
@@ -29,9 +30,11 @@
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.4.19",
+    "jsdom": "^25.0.1",
     "postcss": "^8.4.39",
     "tailwindcss": "^3.4.4",
     "typescript": "^5.2.2",
-    "vite": "^5.3.1"
+    "vite": "^5.3.1",
+    "vitest": "^2.1.9"
   }
 }

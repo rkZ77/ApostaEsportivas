@@ -142,7 +142,6 @@ def test_metodo_novo_nasce_fora_do_pipeline_diario():
 @pytest.mark.parametrize("nome, porque", [
     ("live", "motor em validacao, so' faz sentido durante os jogos"),
     ("ligas", "chama a Anthropic, custo real por rodada"),
-    ("shadow", "so' registra comparacao, nao gera pick"),
 ])
 def test_comandos_caros_ficam_fora_do_tudo(nome, porque):
     assert main.COMANDOS_POR_NOME[nome].etapa == "", porque
@@ -187,12 +186,6 @@ def test_o_live_roda_nos_dois_ambientes():
     com DB_ENV=dev, que e' o ambiente errado. Nada roda agendado neste projeto.
     """
     assert main.COMANDOS_POR_NOME["live"].ambientes == ("dev", "prod")
-
-
-def test_o_shadow_continua_so_de_dev():
-    """Compara o motor com os picks que a IA salvou hoje, contra uma base de
-    homologacao. Oferecer no menu de prod seria um botao que so' sabe recusar."""
-    assert main.COMANDOS_POR_NOME["shadow"].ambientes == ("dev",)
 
 
 def test_so_o_setup_dispara_as_migracoes():

@@ -245,18 +245,34 @@
 
       Isto substitui o public/gtag.js, que existia so' pra rodar estas quatro
       linhas num arquivo separado (mais um pedido de rede pelo mesmo efeito).
+
+      E NEM NO `load` (2026-10-06). Medido no celular simulado: o gtag.js
+      chegava aos 5 s e executava em dois long tasks (207 + 141 ms), metade do
+      Total Blocking Time da Home. Agora ele espera a PRIMEIRA INTERACAO (toque,
+      rolagem, tecla) ou, sem nenhuma, 5 s depois do `load`. O page_view nao se
+      perde: ele ja' esta' na fila desde a linha do `config`. So' quem fecha a
+      aba antes de 5 s sem tocar em nada deixa de ser contado.
     -->
     <script>
       window.dataLayer = window.dataLayer || []
       function gtag() { dataLayer.push(arguments) }
       gtag('js', new Date())
       gtag('config', 'G-L801QMZ5ZS')
-      addEventListener('load', function () {
-        var s = document.createElement('script')
-        s.async = true
-        s.src = 'https://www.googletagmanager.com/gtag/js?id=G-L801QMZ5ZS'
-        document.head.appendChild(s)
-      })
+      ;(function () {
+        var feito = false
+        var eventos = ['pointerdown', 'keydown', 'scroll', 'touchstart']
+        function carregar() {
+          if (feito) return
+          feito = true
+          eventos.forEach(function (e) { removeEventListener(e, carregar, true) })
+          var s = document.createElement('script')
+          s.async = true
+          s.src = 'https://www.googletagmanager.com/gtag/js?id=G-L801QMZ5ZS'
+          document.head.appendChild(s)
+        }
+        eventos.forEach(function (e) { addEventListener(e, carregar, { capture: true, passive: true, once: true }) })
+        addEventListener('load', function () { setTimeout(carregar, 5000) })
+      })()
     </script>
 
     <!-- PWA -->
