@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
+import { m as motion } from 'framer-motion'
 import { ArrowRight, Check, Gift, History, Lock } from 'lucide-react'
 import api from '../services/api'
 import { translateMarket, translateLine } from '../utils/marketTranslate'

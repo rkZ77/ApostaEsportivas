@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
+import { m as motion } from 'framer-motion'
 import { CheckCircle, XCircle, Clock, ShieldCheck } from 'lucide-react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import PageShell from '../components/PageShell'

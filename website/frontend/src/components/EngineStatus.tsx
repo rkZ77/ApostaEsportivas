@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, m as motion } from 'framer-motion'
 import { CheckCircle2, CircleDashed, Loader2, XCircle } from 'lucide-react'
 import api from '../services/api'
 import { LiveDot } from './ui'

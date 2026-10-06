@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { motion } from 'framer-motion'
+import { m as motion } from 'framer-motion'
 import { fmtUnits } from '../utils/format'
 
 /*

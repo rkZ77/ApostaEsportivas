@@ -38,7 +38,7 @@
  * aposta que já não existe.
  */
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, m as motion } from 'framer-motion'
 import { Radio, RefreshCw, Timer, CheckCircle2, Clock, PowerOff, CalendarClock,
          Goal, Flag, Target, Crosshair, Lock, Radar, Ban, Square, Share2, Loader2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'

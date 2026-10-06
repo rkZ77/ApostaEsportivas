@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion'
+import { m as motion } from 'framer-motion'
 import { ArrowRight, Check } from 'lucide-react'
 import { Button } from '../components/ui'
 

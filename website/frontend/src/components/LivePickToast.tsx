@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, m as motion } from 'framer-motion'
 import { Activity, X } from 'lucide-react'
 import { useNotifications } from '../context/NotificationContext'
 import { LiveDot } from './ui'

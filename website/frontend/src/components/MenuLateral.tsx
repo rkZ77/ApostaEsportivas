@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, m as motion } from 'framer-motion'
 import {
   X, Home, Target, CalendarDays, BarChart3, TrendingUp, Crown, BookOpen,
   User, Headphones, HelpCircle, FileText, ShieldCheck, Newspaper,

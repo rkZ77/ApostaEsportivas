@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, m as motion } from 'framer-motion'
 import api from '../services/api'
 import PageShell from '../components/PageShell'
 import { PAGE_WIDTH } from '../lib/pageWidth'

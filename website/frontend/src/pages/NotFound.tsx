@@ -1,5 +1,5 @@
 import { Helmet } from 'react-helmet-async'
-import { motion, useReducedMotion } from 'framer-motion'
+import { m as motion, useReducedMotion } from 'framer-motion'
 import { Button } from '../components/ui'
 import { useRevelacao, classesRevelacao, FADE_REVELACAO_MS } from '../hooks/useRevelacao'
 

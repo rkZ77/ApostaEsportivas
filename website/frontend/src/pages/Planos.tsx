@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { m as motion } from 'framer-motion'
 import { Lightbulb, Crown, User, Check, Lock } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'

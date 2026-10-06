@@ -142,8 +142,12 @@ export default defineConfig({
           // scheduler é dependência interna do react-dom; junto evita um chunk
           // solto de 5 KB que sempre viaja com o react mesmo.
           if (/\/node_modules\/(react|react-dom|react-router|react-router-dom|scheduler)\//.test(p)) return 'vendor-react'
-          // motion-dom e motion-utils são pacotes irmãos publicados pelo framer.
-          if (/\/node_modules\/(framer-motion|motion-dom|motion-utils)\//.test(p)) return 'vendor-motion'
+          // O FRAMER NÃO TEM MAIS CHUNK FIXO (2026-10-06). Desde o LazyMotion
+          // (ver main.tsx) ele tem duas metades: o `m` e o AnimatePresence,
+          // pequenos, que a primeira tela usa; e o motor (`domMax`), que chega
+          // por import(). Um `vendor-motion` fixo juntaria as duas e puxaria o
+          // motor de volta pro carregamento inicial. Sem regra, o Rollup separa
+          // pelo grafo de import, que é exatamente a divisão certa.
           if (/\/node_modules\/axios\//.test(p)) return 'vendor-net'
         },
       },
