@@ -7,7 +7,7 @@ import api from '../services/api'
 import AdminAmostra, { type AlvoAmostra } from './AdminAmostra'
 import AdminLacunasJogador from './AdminLacunasJogador'
 // `Secao` aqui já é o nome do tipo das sub-abas; o painel recolhível entra como Bloco.
-import { Secao as Bloco } from './AdminSecao'
+import { Secao as Bloco, BOTAO_PEQUENO } from './AdminSecao'
 import { sinalizarNavegacao } from '../services/progressBus'
 import {
   Button, EmptyState, ErrorState, Pagination, Skeleton, SkeletonRows, SpinnerBlock, StatTile,
@@ -332,9 +332,9 @@ function PorQue({ children }: { children: React.ReactNode }) {
       <button
         type="button"
         onClick={() => setAberto(x => !x)}
-        className="text-[10px] font-semibold text-ink-4 hover:text-ink-2 underline underline-offset-4"
+        className={BOTAO_PEQUENO}
       >
-        {aberto ? 'esconder' : 'por quê'}
+        {aberto ? 'Esconder' : 'Por quê?'}
       </button>
       {aberto && (
         <p className="text-[11px] text-ink-3 mt-1.5 leading-relaxed">{children}</p>
@@ -989,9 +989,9 @@ export default function AdminDados() {
               <button
                 type="button"
                 onClick={() => setVerBuracos(x => !x)}
-                className="mt-2 text-[11px] font-semibold text-ink-2 underline underline-offset-4 hover:text-ink-1"
+                className={`mt-2 ${BOTAO_PEQUENO}`}
               >
-                {verBuracos ? 'esconder as partidas' : `ver as ${buracos.length} mais recentes`}
+                {verBuracos ? 'Esconder as partidas' : `Ver as ${buracos.length} mais recentes`}
               </button>
             )}
           </div>
@@ -1037,9 +1037,9 @@ export default function AdminDados() {
                         type="button"
                         onClick={() => rodar(b.fixture_id, true)}
                         disabled={rodando != null}
-                        className="text-[11px] font-semibold text-ink-2 underline underline-offset-4 hover:text-ink-1 disabled:opacity-50"
+                        className={BOTAO_PEQUENO}
                       >
-                        criar a linha assim mesmo, pra preencher à mão
+                        Criar a linha assim mesmo, pra preencher à mão
                       </button>
                     )}
                   </div>
@@ -1846,9 +1846,9 @@ export default function AdminDados() {
               <button
                 type="button"
                 onClick={limparFiltro}
-                className="text-[11px] font-semibold text-ink-2 underline underline-offset-4 hover:text-ink-1"
+                className={BOTAO_PEQUENO}
               >
-                limpar o filtro
+                Limpar o filtro
               </button>
             </div>
           ) : (

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { SelectMenu, Spinner, SkeletonPickGrid } from '../components/ui'
+import { Pagination, SelectMenu, Spinner, SkeletonPickGrid } from '../components/ui'
 import { PERIODOS, PERIODO_PADRAO, dentroDoPeriodo, nomeDoMes, type PeriodoKey } from '../lib/periodo'
 import { ChevronLeft, ChevronRight, Trash2, RotateCcw } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
@@ -671,22 +671,9 @@ export default function MeusPicks() {
                 )}
 
                 {/* Paginação · só no modo Todos (daysBack=0) */}
-                {daysBack === 'tudo' && filteredTabEntries.length > PAGE_SIZE && (
-                  <div className="flex items-center justify-center gap-2 flex-wrap">
-                    <button
-                      disabled={todayPage === 0}
-                      onClick={() => setTodayPage(p => p - 1)}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-line-strong text-ink-2 hover:border-ink-4 disabled:opacity-30 transition-colors"
-                    >Ant</button>
-                    <span className="text-xs text-ink-3">
-                      {todayPage * PAGE_SIZE + 1}, {Math.min((todayPage + 1) * PAGE_SIZE, filteredTabEntries.length)} de {filteredTabEntries.length}
-                    </span>
-                    <button
-                      disabled={(todayPage + 1) * PAGE_SIZE >= filteredTabEntries.length}
-                      onClick={() => setTodayPage(p => p + 1)}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-line-strong text-ink-2 hover:border-ink-4 disabled:opacity-30 transition-colors"
-                    >Próx</button>
-                  </div>
+                {daysBack === 'tudo' && (
+                  <Pagination page={todayPage} pageSize={PAGE_SIZE} total={filteredTabEntries.length}
+                    onChange={setTodayPage} unit="apostas" className="border-t-0 px-0" />
                 )}
 
                 {/* Carregar mais resolvidos do servidor · histórico cresce sem limite */}
