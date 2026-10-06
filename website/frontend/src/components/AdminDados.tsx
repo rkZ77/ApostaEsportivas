@@ -6,6 +6,8 @@ import {
 import api from '../services/api'
 import AdminAmostra, { type AlvoAmostra } from './AdminAmostra'
 import AdminLacunasJogador from './AdminLacunasJogador'
+// `Secao` aqui já é o nome do tipo das sub-abas; o painel recolhível entra como Bloco.
+import { Secao as Bloco, BOTAO_PEQUENO } from './AdminSecao'
 import { sinalizarNavegacao } from '../services/progressBus'
 import {
   Button, EmptyState, ErrorState, Pagination, Skeleton, SkeletonRows, SpinnerBlock, StatTile,
@@ -277,12 +279,16 @@ const POR_PAGINA = 10
  * tabelas grandes empilhadas, e a lista de jogos · que é onde ficam os botões
  * de conserto · era a última das três. Quem abria "Partidas" caía em árbitros.
  */
+//
+// O terceiro campo é a frase que aparece embaixo dos botões (2026-10-06): o
+// nome sozinho ("Cobertura", "Pessoas") não diz o que tem lá dentro pra quem
+// não escreveu a tela.
 const SECOES = [
-  ['problemas', 'Problemas'],
-  ['cobertura', 'Cobertura'],
-  ['times', 'Times'],
-  ['partidas', 'Partidas'],
-  ['pessoas', 'Pessoas'],
+  ['problemas', 'Problemas', 'O que está errado agora nos dados, com o botão que conserta. Se estiver vazio, está tudo certo.'],
+  ['cobertura', 'Cobertura', 'Quanto do histórico tem estatística completa e onde faltam números. Clicar num número leva às partidas por trás dele.'],
+  ['times', 'Times', 'As médias de cada time, que são o que o motor lê para decidir, e se estão atualizadas.'],
+  ['partidas', 'Partidas', 'Jogo a jogo: o que foi coletado e o que veio vazio. É aqui que se busca de novo na API ou se digita o número olhando a súmula.'],
+  ['pessoas', 'Pessoas', 'Árbitros e jogadores: as médias usadas nos mercados de cartões e de jogador, e as lacunas para preencher.'],
 ] as const
 
 type Secao = (typeof SECOES)[number][0]
@@ -326,9 +332,9 @@ function PorQue({ children }: { children: React.ReactNode }) {
       <button
         type="button"
         onClick={() => setAberto(x => !x)}
-        className="text-[10px] font-semibold text-ink-4 hover:text-ink-2 underline underline-offset-4"
+        className={BOTAO_PEQUENO}
       >
-        {aberto ? 'esconder' : 'por quê'}
+        {aberto ? 'Esconder' : 'Por quê?'}
       </button>
       {aberto && (
         <p className="text-[11px] text-ink-3 mt-1.5 leading-relaxed">{children}</p>
@@ -948,6 +954,9 @@ export default function AdminDados() {
           )
         })}
       </div>
+      <p className="text-[11px] text-ink-3 leading-relaxed -mt-3">
+        {SECOES.find(([chave]) => chave === secao)?.[2]}
+      </p>
 
       {secao === 'problemas' && (<>
 
@@ -980,9 +989,9 @@ export default function AdminDados() {
               <button
                 type="button"
                 onClick={() => setVerBuracos(x => !x)}
-                className="mt-2 text-[11px] font-semibold text-ink-2 underline underline-offset-4 hover:text-ink-1"
+                className={`mt-2 ${BOTAO_PEQUENO}`}
               >
-                {verBuracos ? 'esconder as partidas' : `ver as ${buracos.length} mais recentes`}
+                {verBuracos ? 'Esconder as partidas' : `Ver as ${buracos.length} mais recentes`}
               </button>
             )}
           </div>
@@ -1028,9 +1037,9 @@ export default function AdminDados() {
                         type="button"
                         onClick={() => rodar(b.fixture_id, true)}
                         disabled={rodando != null}
-                        className="text-[11px] font-semibold text-ink-2 underline underline-offset-4 hover:text-ink-1 disabled:opacity-50"
+                        className={BOTAO_PEQUENO}
                       >
-                        criar a linha assim mesmo, pra preencher à mão
+                        Criar a linha assim mesmo, pra preencher à mão
                       </button>
                     )}
                   </div>
@@ -1167,8 +1176,12 @@ export default function AdminDados() {
 
       </>)}
 
-      {secao === 'cobertura' && (<>
+      {secao === 'cobertura' && (<div>
 
+      <Bloco id="dados-contagem" abertaPorPadrao
+        titulo="Quanto temos no banco?"
+        oQueE="Jogos coletados, quantos têm estatística, médias de time e quando foi a última partida lida."
+        tecnico="Contagem">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <StatTile label="Jogos coletados"  value={numero(dados.contagem?.fixtures)} />
         <StatTile label="Com estatística"  value={numero(dados.contagem?.match_statistics)} tone="green" />
@@ -1181,10 +1194,14 @@ export default function AdminDados() {
         <StatTile label="Picks Premium"        value={numero(dados.contagem?.picks_vip)} />
         <StatTile label="Picks free"       value={numero(dados.contagem?.picks_free)} />
       </div>
+      </Bloco>
 
       {/* Coleta automática · o que substituiu o clique manual. */}
+      <Bloco id="dados-coleta-auto"
+        titulo="A busca automática de estatística está ligada?"
+        oQueE="Quando um jogo termina sem estatística, o sistema busca sozinho de tempos em tempos. Aqui se vê se ela está ligada e quando rodou pela última vez."
+        tecnico="Coleta automática">
       <div className="card p-4">
-        <h3 className="text-sm font-bold text-ink-1 mb-2">Coleta automática</h3>
         {v.erro ? (
           <p className="text-[11px] text-red-400">{v.erro}</p>
         ) : (
@@ -1214,6 +1231,7 @@ export default function AdminDados() {
           </>
         )}
       </div>
+      </Bloco>
 
       {/* Diagnóstico do histórico · a varredura que o resumo das 40 não faz.
         *
@@ -1223,6 +1241,12 @@ export default function AdminDados() {
         * pra API. Em qualquer outra família, inventar o número seria fabricar
         * estatística. Pras outras só existem dois caminhos honestos, e os dois
         * estão aqui: pedir de novo pra API, ou digitar olhando a súmula. */}
+      <Bloco id="dados-diagnostico" abertaPorPadrao
+        titulo="Onde falta estatística no histórico?"
+        oQueE="Nos últimos meses (você escolhe a janela), quantos jogos vieram com estatística incompleta ou zerada, por tipo de estatística. Cada número é clicável e leva às partidas, onde dá para buscar de novo ou preencher na mão."
+        tecnico="Diagnóstico do histórico">
+      {!diagnostico && <p className="text-xs text-ink-4 px-1">Diagnóstico indisponível agora.</p>}
+      {diagnostico?.erro && <p className="text-xs text-red-400 px-1">{diagnostico.erro}</p>}
       {diagnostico && !diagnostico.erro && (
         <div className="card p-4">
           <div className="flex flex-wrap items-start justify-between gap-3 mb-2">
@@ -1397,12 +1421,20 @@ export default function AdminDados() {
           </div>
         </div>
       )}
+      </Bloco>
 
       {/* Cobertura e média andam juntas de propósito.
         *
         * Cobertura sozinha não vê o jogo coletado zerado (zero não é nulo).
         * Média sozinha não diz se saiu de 40 partidas ou de 2. Lado a lado,
         * número torto e amostra curta ficam visíveis na mesma olhada. */}
+      <Bloco id="dados-medias-familia"
+        titulo="As médias recentes fazem sentido?"
+        oQueE="Média por jogo de cada estatística nas últimas partidas, e em quantas ela veio preenchida. Serve para pegar coleta torta: posse média longe de 50% é sinal de problema."
+        tecnico="Médias das últimas partidas">
+      {!(historico && !historico.erro && familias.length > 0) && (
+        <p className="text-xs text-ink-4 px-1">Sem partidas recentes para calcular.</p>
+      )}
       {historico && !historico.erro && familias.length > 0 && (
         <div className="card p-4">
           <h3 className="text-sm font-bold text-ink-1">
@@ -1444,6 +1476,7 @@ export default function AdminDados() {
           </p>
         </div>
       )}
+      </Bloco>
 
       {/* Árbitros · a mesma régua dos times, com a amostra à vista.
         *
@@ -1454,7 +1487,7 @@ export default function AdminDados() {
         * coletor, que é onde a média nasce · aqui fica o que faltava, que é
         * enxergar a amostra e poder refazer a conta sem esperar o próximo jogo
         * daquele árbitro. Refazer não custa cota: sai tudo do banco. */}
-      </>)}
+      </div>)}
 
       {secao === 'times' && (<>
       {/* Médias desatualizadas.
@@ -1813,9 +1846,9 @@ export default function AdminDados() {
               <button
                 type="button"
                 onClick={limparFiltro}
-                className="text-[11px] font-semibold text-ink-2 underline underline-offset-4 hover:text-ink-1"
+                className={BOTAO_PEQUENO}
               >
-                limpar o filtro
+                Limpar o filtro
               </button>
             </div>
           ) : (
@@ -2162,12 +2195,24 @@ export default function AdminDados() {
         * Componente próprio, em arquivo próprio: este arquivo já passa de 2.400
         * linhas e onze endpoints, e foi exatamente somar bloco aqui dentro que
         * o deixou difícil de mexer. */}
-      <AdminLacunasJogador />
+      <Bloco id="dados-lacunas-jogador" abertaPorPadrao
+        titulo="Jogadores com estatística faltando"
+        oQueE="Atuações em que um número do jogador (como defesas do goleiro) não veio da API. É o único bloco desta sub-aba que pede ação: preencher o número."
+        tecnico="Lacunas por jogador">
+        <AdminLacunasJogador />
+      </Bloco>
 
       {/* Árbitros. Renderiza mesmo com a página vazia desde 27/08: com busca e
         * paginação, lista vazia é resultado de filtro, não ausência de dado ·
         * sumir com o card inteiro esconderia o campo de busca junto e prenderia
         * quem digitou errado. */}
+      <Bloco id="dados-arbitros"
+        titulo="Quantos cartões cada árbitro costuma dar?"
+        oQueE="Média de cartões por árbitro e em quantos jogos ela se baseia. Com poucos jogos, o motor usa a média da liga no lugar."
+        tecnico="Árbitros">
+      {!(arbitros && (arbitros.total ?? arbitros.arbitros.length)) && (
+        <p className="text-xs text-ink-4 px-1">Nenhum árbitro com dados.</p>
+      )}
       {!!arbitros && !!(arbitros.total ?? arbitros.arbitros.length) && (
         <div className="card p-0 overflow-hidden">
           <div className="px-4 py-3 border-b border-line flex flex-wrap items-center justify-between gap-2">
@@ -2283,6 +2328,7 @@ export default function AdminDados() {
           )}
         </div>
       )}
+      </Bloco>
 
       {/* Jogadores · a mesma régua dos times e dos árbitros, aplicada ao
         * indivíduo.
@@ -2295,6 +2341,13 @@ export default function AdminDados() {
         * O MANDO É O RECORTE, e não enfeite: o próprio motor separa casa de
         * fora ao ler o volume do adversário, com a justificativa de que a média
         * misturada não descreve nem um caso nem o outro. Vale igual aqui. */}
+      <Bloco id="dados-jogadores"
+        titulo="Qual a média de cada jogador?"
+        oQueE="Chutes, faltas, desarmes, passes e defesas por jogo de cada jogador, separado em casa e fora. É o que o motor de picks de jogador lê."
+        tecnico="Jogadores">
+      {!(jogadores && !jogadores.erro) && (
+        <p className="text-xs text-ink-4 px-1">Sem dados de jogadores agora.</p>
+      )}
       {!!jogadores && !jogadores.erro && (
         <div className="card p-0 overflow-hidden">
           <div className="px-4 py-3 border-b border-line">
@@ -2498,6 +2551,7 @@ export default function AdminDados() {
           )}
         </div>
       )}
+      </Bloco>
 
       </>)}
 

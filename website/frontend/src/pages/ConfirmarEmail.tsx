@@ -5,6 +5,7 @@ import { Crown, Check, Mail } from 'lucide-react'
 
 import api from '../services/api'
 import PublicNav from '../components/PublicNav'
+import { Button } from '../components/ui'
 import { useAuth } from '../context/AuthContext'
 
 /*
@@ -132,13 +133,11 @@ export default function ConfirmarEmail() {
             , e o trial sai do mesmo jeito.
           </p>
 
-          <button
-            type="button"
-            onClick={() => navigate('/picks', { replace: true })}
-            className="text-sm text-ink-3 hover:text-ink-1 transition-colors underline underline-offset-4"
-          >
+          {/* Era texto sublinhado. É uma ação (sai da tela e entra no site),
+              então tem cara de botão, só que mais apagado que o "Reenviar". */}
+          <Button variant="subtle" block onClick={() => navigate('/picks', { replace: true })}>
             Entrar sem confirmar agora
-          </button>
+          </Button>
           <p className="text-[11px] text-ink-4 mt-1.5">
             Você entra no plano free e o link continua valendo depois.
           </p>

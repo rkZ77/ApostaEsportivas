@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>PickIA · 02 · Como uma entrada é gerada</title>
+<link rel="stylesheet" href="base.css">
+<style>
+/* Esteira vertical: cinco etapas, uma acende por vez, dados descem pela linha */
+.trilho { position: absolute; left: 130px; top: 380px; width: 6px; height: 1290px; background: var(--s3); border-radius: 3px; }
+.trilho b { position: absolute; inset: 0; background: linear-gradient(180deg, var(--g), var(--g2)); box-shadow: 0 0 20px var(--g); transform-origin: top; }
+.etapa { position: absolute; left: 70px; width: 940px; height: 222px; }
+.etapa .num { position: absolute; left: 22px; top: 50px; width: 120px; height: 120px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--bg); border: 4px solid var(--line2); font: 800 46px/1 Inter; color: var(--ink3); }
+.etapa .num.on { border-color: var(--g); color: var(--g); box-shadow: 0 0 40px rgba(0,204,0,.5); }
+.etapa .box { position: absolute; left: 180px; right: 0; top: 0; bottom: 0; padding: 26px 30px; }
+.etapa h3 { font: 700 44px/1 Inter; letter-spacing: .02em; text-transform: uppercase; display: flex; align-items: center; gap: 16px; }
+.etapa .row { display: flex; align-items: center; gap: 16px; margin-top: 22px; flex-wrap: wrap; }
+.mkt { display: flex; align-items: center; gap: 14px; font: 600 22px/1 Inter; color: var(--ink2); margin-top: 12px; }
+.mkt span { width: 190px; }
+.mkt i { flex: 1; height: 14px; border-radius: 7px; background: var(--s3); position: relative; overflow: hidden; }
+.mkt i b { position: absolute; inset: 0; background: var(--g); border-radius: 7px; transform-origin: left; transform: scaleX(var(--w)); }
+.vs2 { display: grid; grid-template-columns: 200px 1fr; gap: 10px 16px; align-items: center; margin-top: 18px; font: 600 22px/1 Inter; color: var(--ink2); }
+.vs2 i { height: 22px; border-radius: 11px; display: block; transform-origin: left; animation: grow2 .8s cubic-bezier(.16, 1, .3, 1) both; animation-delay: calc(var(--at) * 1s); }
+.corte { position: absolute; right: 26px; top: 22px; padding: 12px 18px; border-radius: 12px; background: var(--g); color: #001a00; font: 800 22px/1 Inter; letter-spacing: .06em; animation: stampin .4s cubic-bezier(.3, 1.6, .5, 1) both; animation-delay: calc(var(--at) * 1s); }
+@keyframes stampin { from { opacity: 0; transform: scale(2.4) rotate(-14deg); } to { transform: rotate(-4deg); } }
+.pulso { position: absolute; left: 124px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 0 20px 6px var(--g); }
+.pick { display: flex; align-items: center; gap: 22px; }
+.pick .mk { font: 700 34px/1.15 Inter; }
+.pick .od { margin-left: auto; text-align: right; }
+.pick .od b { font: 700 64px/1 var(--mono); color: var(--g); display: block; }
+.typing::after { content: '▍'; animation: blink .6s steps(2) infinite; color: var(--g); }
+</style>
+</head>
+<body data-dur="24" data-cortes="3,5.5,19">
+<div id="stage">
+
+  <section class="scene" data-in="0" data-out="3">
+    <div class="abs cx a fade" style="--at:0;top:480px"><span class="ilus">Antes de publicar</span></div>
+    <h1 class="hl abs cx" style="top:600px">
+      <span class="ln split fit" data-at=".1" style="font-size:120px">Antes de gerar</span>
+      <span class="ln split fit typing" data-at=".35" style="font-size:120px">uma entrada...</span>
+    </h1>
+  </section>
+
+  <section class="scene" data-in="3" data-out="5.5">
+    <h1 class="hl abs cx" style="top:640px">
+      <span class="ln split fit" data-at="3.05" style="font-size:130px">A PickIA</span>
+      <span class="ln fit a slam" style="--at:3.4;font-size:130px"><em>analisa o jogo.</em></span>
+    </h1>
+  </section>
+
+  <section class="scene" data-in="5.5" data-out="19">
+    <div class="abs cx a down" style="--at:5.5;top:200px"><span class="kicker" style="font-size:30px">Como nasce uma entrada</span></div>
+    <div class="trilho"><b id="trilho"></b></div>
+    <div class="pulso" id="pulso"></div>
+
+    <div class="etapa" style="top:380px" data-on="5.9">
+      <div class="num">1</div>
+      <div class="box card a fr" style="--at:5.9">
+        <h3>Jogo <span class="ilus" style="margin-left:auto">Brasileirão Série B · 29/09</span></h3>
+        <div class="row" style="font:700 36px/1 Inter;flex-wrap:nowrap;white-space:nowrap"><span id="esc1"></span>Botafogo SP <span style="color:var(--ink4);font-size:28px">x</span> Ponte Preta<span id="esc2"></span></div>
+      </div>
+    </div>
+
+    <div class="etapa" style="top:640px" data-on="8.4">
+      <div class="num">2</div>
+      <div class="box card a fr" style="--at:8.4">
+        <h3>Dados</h3>
+        <div class="row">
+          <span class="chip a pop" style="--at:8.7">Estatística dos times</span>
+          <span class="chip a pop" style="--at:8.85">Casa / fora</span>
+          <span class="chip a pop" style="--at:9.0">Forma recente</span>
+          <span class="chip g a pop" style="--at:9.15">Odds do mercado</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="etapa" style="top:900px" data-on="10.9">
+      <div class="num">3</div>
+      <div class="box card a fr" style="--at:10.9">
+        <h3>Análise <span class="lbl" style="margin-left:auto;text-transform:none;letter-spacing:0;font-size:22px">probabilidade de cada mercado</span></h3>
+        <div class="mkt"><span>Gols</span><i><b id="m1"></b></i></div>
+        <div class="mkt"><span>Escanteios</span><i><b id="m2"></b></i></div>
+        <div class="mkt"><span>Cartões</span><i><b id="m3"></b></i></div>
+      </div>
+    </div>
+
+    <div class="etapa" style="top:1160px" data-on="13.4">
+      <div class="num">4</div>
+      <div class="box card a fr" style="--at:13.4">
+        <h3>IA</h3>
+        <div class="vs2">
+          <span>Modelo</span><i style="--at:13.7;width:78%;background:var(--g)"></i>
+          <span>Odd da casa</span><i style="--at:13.9;width:62%;background:#55555f"></i>
+        </div>
+        <div class="corte" style="--at:14.9">✓ Passou no corte de valor</div>
+      </div>
+    </div>
+
+    <div class="etapa" style="top:1420px" data-on="15.9">
+      <div class="num">5</div>
+      <div class="box card a fr" style="--at:15.9;border-color:rgba(0,204,0,.6);box-shadow:0 0 60px rgba(0,204,0,.25)">
+        <h3>Entrada <span class="ilus" style="margin-left:auto">Pick real · histórico público</span></h3>
+        <div class="pick" style="margin-top:18px">
+          <div class="mk a up" style="--at:16.3">Escanteios do mandante<br><span class="verde">Menos de 8.5</span></div>
+          <div class="od a pop" style="--at:16.7"><span class="lbl">Odd</span><b>1.66</b></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="scene endcard" data-in="19" data-out="24.01" data-l1="Antes da entrada," data-l2="a análise." data-f1="96" data-f2="140"></section>
+</div>
+
+<script src="base.js"></script>
+<script>
+/* A etapa 5 é o pick gratuito 117 do histórico público (/p/free/117):
+   Botafogo SP x Ponte Preta, 29/09/2026, "Escanteios Casa Mais/Menos,
+   Menos de 8.5", odd 1.66. O resultado fica de fora de propósito: o vídeo
+   mostra como a entrada nasce, não vende o acerto. As barras das etapas 3 e 4
+   são esquemáticas (sem número): a análise completa é conteúdo de assinante. */
+A.montar(() => {
+  esc1.outerHTML = A.esc(2618, 70);
+  esc2.outerHTML = A.esc(139, 70);
+});
+const etapas = [...document.querySelectorAll('.etapa')];
+const ONS = etapas.map(e => parseFloat(e.dataset.on));
+A.quadro(t => {
+  etapas.forEach((e, i) => e.querySelector('.num').classList.toggle('on', t >= ONS[i]));
+  // a linha verde desce acompanhando a etapa acesa
+  const k = A.clamp((t - 5.9) / (16.2 - 5.9));
+  trilho.style.transform = `scaleY(${k})`;
+  const y = 380 + 110 + ((t * 0.9) % 1) * 1290 * k;
+  pulso.style.top = (y - 9) + 'px';
+  pulso.style.opacity = t > 6 && t < 18.5 ? 1 : 0;
+  // barras da analise oscilam enquanto a IA calcula e assentam depois
+  [m1, m2, m3].forEach((m, i) => {
+    const fim = [.72, .58, .41][i];
+    const w = t < 12.6 ? .2 + A.rnd(Math.floor(t * 8) + i * 13) * .7 : fim;
+    m.style.transform = `scaleX(${t < 11.1 ? 0 : w})`;
+  });
+});
+</script>
+</body>
+</html>

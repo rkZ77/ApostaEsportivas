@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>PickIA · 10 · Por que usar a PickIA</title>
+<link rel="stylesheet" href="base.css">
+<style>
+/* Montagem rápida: uma palavra gigante e uma moldura com um pedaço do
+   produto, trocando a cada 1.5s. No fim todas as molduras viram miniaturas e
+   convergem pro logo. */
+.seg .palavra { position: absolute; left: 0; right: 0; top: 230px; text-align: center; }
+.seg .moldura { position: absolute; left: 110px; top: 560px; width: 860px; height: 1040px; border-radius: 44px; overflow: hidden; border: 3px solid #2b2b31; background: var(--bg); box-shadow: 0 40px 120px rgba(0,0,0,.8), 0 0 100px rgba(0,204,0,.12); }
+.seg .moldura img { position: absolute; left: 0; top: 0; width: 100%; }
+.seg .moldura.inclina { transform: perspective(1600px) rotateY(-10deg) rotateX(4deg); }
+.seg .moldura.inclina2 { transform: perspective(1600px) rotateY(10deg) rotateX(4deg); }
+.drift { animation: drift 1.6s linear both; animation-delay: calc(var(--at) * 1s); }
+@keyframes drift { from { transform: translateY(0); } to { transform: translateY(var(--dy, -160px)); } }
+.numeros { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(4, 1fr); align-content: center; gap: 30px 0; text-align: center; font: 700 64px/1 var(--mono); color: var(--ink2); }
+.numeros span:nth-child(3n) { color: var(--g); }
+.nucleo { position: absolute; left: 50%; top: 50%; }
+.nucleo i { position: absolute; border-radius: 50%; border: 4px dashed rgba(0,204,0,.7); }
+.mini-tile { position: absolute; width: 200px; height: 240px; border-radius: 22px; overflow: hidden; border: 2px solid #33333a; background: var(--s1); }
+.mini-tile img { width: 100%; }
+</style>
+</head>
+<body data-dur="22" data-cortes="1.5,3,4.5,6,7.5,9,10.5,12,13.5,15,17">
+<div id="stage">
+  <div id="segs"></div>
+
+  <!-- 15–17 · tudo converge -->
+  <section class="scene" data-in="15" data-out="17">
+    <div id="tiles"></div>
+    <div class="abs a zoomin" style="--at:16;left:390px;top:560px;width:300px;height:300px">
+      <div class="logo-ring" style="animation-delay:16s"></div>
+      <img src="../../../frontend/public/logo.png" alt="" style="width:100%;height:100%">
+    </div>
+    <div class="abs cx a slam" style="--at:16.2;top:930px"><span class="hl wordmark" style="font-size:200px;text-transform:none">Pick<i>IA</i></span></div>
+  </section>
+
+  <section class="scene endcard" data-in="17" data-out="22.01" data-l1="Analise mais." data-l2="Escolha com mais informação." data-f1="120" data-f2="84"></section>
+</div>
+
+<script src="base.js"></script>
+<script>
+/* Cada segmento: [palavra, destaque?, conteúdo]. As cinco palavras pedidas
+   (JOGOS, DADOS, IA, ANÁLISES, GESTÃO) entram grandes; as outras partes do
+   produto entram com rótulo menor. Imagens = recortes reais (telas.py). */
+const SEG = [
+  ['Jogos.',     true,  'img', 'palpites-fila', 'inclina', -200],
+  ['Dados.',     true,  'num'],
+  ['IA.',        true,  'ia'],
+  ['Motores',    false, 'motores'],
+  ['Análises.',  true,  'img', 'como-funciona', 'inclina2', -900],
+  ['Entradas',   false, 'img', 'palpites-resolvidos', 'inclina', -260],
+  ['Gestão.',    true,  'img', 'banca-topo', 'inclina2', -260],
+  ['Ligas',      false, 'ligas'],
+  ['Planos',     false, 'img', 'planos-pickia', 'inclina', -1380],
+  ['Dashboard',  false, 'img', 'resultados-lista', 'inclina2', -200],
+];
+const DUR_SEG = 1.5;
+A.montar(() => {
+  segs.innerHTML = SEG.map((s, i) => {
+    const t0 = i * DUR_SEG, [palavra, grande, tipo] = s;
+    let corpo = '';
+    if (tipo === 'img') corpo = `<div class="moldura ${s[4]} a zoomin" style="--at:${t0}"><img class="drift" src="${A.tela(s[3])}" style="--at:${t0};--dy:${s[5]}px" alt=""></div>`;
+    if (tipo === 'num') corpo = `<div class="moldura a zoomin" style="--at:${t0}"><div class="numeros">${Array.from({ length: 24 }, (_, k) => `<span data-fl="0.5,${[3, 99, 14, 9][k % 4]},${k % 4 === 0 ? 1 : 0}">0</span>`).join('')}</div></div>`;
+    if (tipo === 'ia') corpo = `<div class="moldura a zoomin" style="--at:${t0};border-color:rgba(0,204,0,.5)"><div class="nucleo">
+        <i style="left:-130px;top:-130px;width:260px;height:260px;animation:spin 3s linear infinite"></i>
+        <i style="left:-220px;top:-220px;width:440px;height:440px;animation:spin 5s linear infinite reverse;border-style:dotted"></i>
+        <i style="left:-320px;top:-320px;width:640px;height:640px;animation:spin 8s linear infinite;opacity:.5"></i>
+        <span style="position:absolute;left:-200px;top:-80px;width:400px;text-align:center;font:800 160px/1 Nunito;color:var(--g);text-shadow:0 0 50px rgba(0,204,0,.6)">IA</span></div></div>`;
+    if (tipo === 'motores') corpo = `<div class="moldura a zoomin" style="--at:${t0};padding:70px 60px;display:flex;flex-direction:column;gap:22px">${['Pré-jogo', 'Ao vivo', 'Pick Boost', 'Estatística de jogador', 'Mercado de faltas', 'Defesas de goleiro'].map((m, k) => `<span class="chip g a fr" style="--at:${t0 + .1 + k * .07};font-size:34px;justify-content:flex-start"><span class="dot"></span>${m}</span>`).join('')}</div>`;
+    if (tipo === 'ligas') corpo = `<div class="moldura a zoomin" style="--at:${t0};display:grid;grid-template-columns:repeat(3,1fr);place-items:center;padding:60px">${[71, 39, 140, 135, 78, 61, 2, 13, 73].map((id, k) => `<span class="a pop" style="--at:${t0 + .05 + k * .05}">${A.lgo(id, 200)}</span>`).join('')}</div>`;
+    return `<section class="scene seg" data-in="${t0}" data-out="${t0 + DUR_SEG}">
+      <div class="palavra"><div class="hl a slam" style="--at:${t0};font-size:${grande ? 220 : 150}px;${grande ? '' : 'color:var(--ink2)'}">${palavra}</div></div>
+      ${corpo}</section>`;
+  }).join('');
+  // miniaturas que convergem pro logo
+  const ims = ['palpites-fila', 'como-funciona', 'palpites-resolvidos', 'banca-topo', 'planos-pickia', 'resultados-lista', 'banca-evolucao', 'home-topo'];
+  document.head.insertAdjacentHTML('beforeend', '<style>@keyframes junta{to{transform:translate(var(--dx),var(--dy)) scale(.1) rotate(var(--r));opacity:0}}</style>');
+  tiles.innerHTML = ims.map((n, k) => {
+    const a = k / ims.length * Math.PI * 2, x = 440 + Math.cos(a) * 380, y = 600 + Math.sin(a) * 560;
+    // tres caixas porque sao tres transforms: posicao, entrada (pop) e o voo pro centro
+    return `<div style="position:absolute;left:${x}px;top:${y}px"><div class="a pop" style="--at:${15 + k * .03}">
+      <div class="mini-tile" style="position:relative;animation:junta .5s cubic-bezier(.7,0,.84,0) both;animation-delay:15.55s;--dx:${440 - x}px;--dy:${600 - y}px;--r:${(k % 2 ? 1 : -1) * 40}deg"><img src="${A.tela(n)}" alt=""></div></div></div>`;
+  }).join('');
+});
+</script>
+</body>
+</html>

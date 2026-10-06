@@ -294,9 +294,9 @@ export default function AdminAuditoriaResultados() {
                 ))}
               </ul>
               <p className="text-[10px] text-ink-4 mt-3 leading-relaxed">
-                Pendência e perna em aberto costumam sair no botão "Atualizar resultados"
-                logo abaixo. Se o número do jogo é que está em dúvida, quem responde é a
-                reconferência, que pergunta ao provedor.
+                Pendência e perna em aberto costumam sair no botão "Atualizar resultados",
+                mais acima nesta aba. Se o número do jogo é que está em dúvida, quem
+                responde é a reconferência, que pergunta ao provedor.
               </p>
             </div>
           )}
