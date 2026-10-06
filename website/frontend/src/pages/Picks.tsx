@@ -52,6 +52,7 @@ import { fmtUnits, pctProb, capitalizarFrase, plural } from '../utils/format'
 import { getResultStyle, PICK_TYPE_CLS, PICK_TYPE_BORDER, cascaDoPick, caixaDoPick } from '../utils/resultStyle'
 import { useShareStoryImage, useShareAlavancagemImage, useShareBilheteImage } from '../hooks/useShareStoryImage'
 import { useOddAtualizada } from '../hooks/useOddAtualizada'
+import { useBilhete, useRecarregarQuandoMudar } from '../lib/sincronia'
 import { useOddAgora } from '../hooks/useOddsAgora'
 import { translateMarket, translateLine, translateTeamName } from '../utils/marketTranslate'
 // Copa do Mundo 2026 · fase pelo match_date
@@ -560,7 +561,6 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
   const navigate = useNavigate()
   // probability quando existir; confidence e' o fallback dos picks antigos
   const pct = Math.round(Number(dica.probability ?? dica.confidence ?? 0) * 100)
-  const [followed, setFollowed] = useState(dica.is_followed ?? false)
   const [following, setFollowing] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [modalOdd, setModalOdd] = useState(Number(dica.odd))
@@ -581,9 +581,13 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
   const [registrado, setRegistrado] = useState<
     { stakeUnits: number; actualOdd: number; betHouse: string } | null
   >(null)
-  const seguido      = registrado != null || (dica.is_followed ?? false)
-  const stakeSeguida = registrado?.stakeUnits ?? dica.user_stake_units ?? null
-  const oddSeguida   = registrado?.actualOdd ?? dica.user_actual_odd ?? null
+  /* E o registro da sessão, que sobrevive ao card · ver lib/sincronia. */
+  const local        = useBilhete('free', dica.id)
+  const seguido      = local !== undefined
+    ? local !== null
+    : registrado != null || (dica.is_followed ?? false)
+  const stakeSeguida = local?.stakeUnits ?? registrado?.stakeUnits ?? dica.user_stake_units ?? null
+  const oddSeguida   = local?.actualOdd ?? registrado?.actualOdd ?? dica.user_actual_odd ?? null
   /* Congela em quem já pegou o bilhete e em pick já liquidado · nos dois a odd
      que vale é a do passado, não a da vitrine. */
   const oddDeAgora   = useOddAgora('free', dica.id, seguido || !!dica.result)
@@ -591,7 +595,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
   const oddExibida   = seguido && oddSeguida != null
     ? Number(oddSeguida)
     : (oddCorrente ?? Number(dica.odd))
-  const casaSeguida  = registrado?.betHouse ?? dica.user_bet_house ?? null
+  const casaSeguida  = local?.betHouse ?? registrado?.betHouse ?? dica.user_bet_house ?? null
   const { share: shareStory, sharing, shared } = useShareStoryImage()
   const { odd: buscarOdd, buscando: buscandoOdd } = useOddAtualizada()
   // Prioridade: suggested_stake_units do backend, senão calcFreeStake fallback (max 2%)
@@ -642,7 +646,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
      A conferência da odd corre por baixo, com o modal já na tela. */
   const handleFollow = (e: React.MouseEvent) => {
     e.stopPropagation()
-    if (followed) return
+    if (seguido) return
     // Abre com a odd que a pessoa está VENDO no card, e não com a da
     // publicação: o modal que começa com outro número parece corrigir o card.
     setModalOdd(oddExibida)
@@ -659,7 +663,6 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
     setApiError(null)
     try {
       await api.post('/banca/follow', { pick_id: dica.id, pick_type: 'free', stake_units: stakeUnits, actual_odd: actualOdd, bet_house: betHouse })
-      setFollowed(true)
       setRegistrado({ stakeUnits, actualOdd, betHouse })
       setShowModal(false)
       setShowSuccess(true)
@@ -920,7 +923,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
 
       <PickCardFooter
         onBet={!dica.result ? (banca ? handleFollow : () => navigate('/banca')) : undefined}
-        betState={following || buscandoOdd ? 'loading' : followed ? 'done' : 'idle'}
+        betState={following || buscandoOdd ? 'loading' : seguido ? 'done' : 'idle'}
         hasBanca={!!banca}
         onShare={handleShare}
         shareState={sharing ? 'loading' : shared ? 'done' : 'idle'}
@@ -1048,7 +1051,6 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
     if (pernas.length === 0) return null
     return pernas.reduce((a: number, b: number) => a * b, 1)
   })()
-  const [followed, setFollowed] = useState<boolean>(!!m.is_followed)
   const [following, setFollowing] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [modalOdd, setModalOdd] = useState<number | null>(null)
@@ -1059,9 +1061,12 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
   const [registrado, setRegistrado] = useState<
     { stakeUnits: number; actualOdd: number; betHouse: string } | null
   >(null)
-  const seguido      = registrado != null || !!m.is_followed
-  const stakeSeguida = registrado?.stakeUnits ?? m.user_stake_units ?? null
-  const oddSeguida   = registrado?.actualOdd ?? m.user_actual_odd ?? null
+  const local        = useBilhete(tipo, m.id)
+  const seguido      = local !== undefined
+    ? local !== null
+    : registrado != null || !!m.is_followed
+  const stakeSeguida = local?.stakeUnits ?? registrado?.stakeUnits ?? m.user_stake_units ?? null
+  const oddSeguida   = local?.actualOdd ?? registrado?.actualOdd ?? m.user_actual_odd ?? null
   const { share: shareBilhete, sharing, shared } = useShareBilheteImage()
   const { oddBilhete, buscando: buscandoBilhete } = useOddAtualizada()
   // Prioridade: suggested_stake_units do backend, senão calcMultiplaStake fallback (max 2.5%)
@@ -1124,7 +1129,7 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
      A conferência da odd corre por baixo, com o modal já na tela. */
   const handleFollow = (e: React.MouseEvent) => {
     e.stopPropagation()
-    if (following || followed) return
+    if (following || seguido) return
     setModalOdd(Number(m.total_odd))
     setShowModal(true)
     // Bilhete não tem odd numa casa: o backend reconsulta cada perna e refaz o
@@ -1143,7 +1148,6 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
         actual_odd: actualOdd,
         bet_house: betHouse,
       })
-      setFollowed(true)
       setRegistrado({ stakeUnits, actualOdd, betHouse })
       setShowModal(false)
       setShowSuccess(true)
@@ -1411,7 +1415,7 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
 
       <PickCardFooter
         onBet={!m.result ? (banca ? handleFollow : () => navigate('/banca')) : undefined}
-        betState={following || buscandoBilhete ? 'loading' : followed ? 'done' : 'idle'}
+        betState={following || buscandoBilhete ? 'loading' : seguido ? 'done' : 'idle'}
         hasBanca={!!banca}
         onShare={handleShare}
         shareState={sharing ? 'loading' : shared ? 'done' : 'idle'}
@@ -1491,7 +1495,9 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
     : pick.result === 'RED'
     ? -stake
     : null
-  const [followed, setFollowed] = useState<boolean>(!!pick.is_followed)
+  /* Registro da sessão primeiro, lista depois · ver lib/sincronia. */
+  const local    = useBilhete('alavancagem', pick.id)
+  const followed = local !== undefined ? local !== null : !!pick.is_followed
   const [following, setFollowing] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [modalOdd, setModalOdd] = useState<number | null>(null)
@@ -1517,7 +1523,6 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
     setApiError(null)
     try {
       await api.post('/banca/follow', { pick_id: pick.id, pick_type: 'alavancagem', stake_units: stakeUnits, actual_odd: actualOdd, bet_house: betHouse })
-      setFollowed(true)
       setShowModal(false)
       setShowSuccess(true)
       setTimeout(() => setShowSuccess(false), 3000)
@@ -3192,6 +3197,23 @@ export default function Picks() {
       .catch(() => setTodayError(true))
       .finally(() => setTodayLoading(false))
   }, [selectedOffset])
+
+  /* A LISTA ACOMPANHA O QUE MUDOU EM OUTRO LUGAR (2026-10-06).
+   *
+   * Sem esqueleto e sem apagar o que está na tela: é a mesma busca de cima,
+   * por baixo, disparada quando uma escrita deu certo (pegar bilhete, desfazer
+   * em Meus Picks, ajustar a banca) ou quando a pessoa volta pra aba depois de
+   * um tempo. Falha aqui não vira tela de erro · o que já está na tela continua
+   * valendo até a próxima. Ver lib/sincronia. */
+  useRecarregarQuandoMudar(() => {
+    const params = selectedOffset < 0 ? { date: getBrasiliaDateIso(selectedOffset) } : {}
+    api.get('/suggestions/today', { params }).then(r => setToday(r.data)).catch(() => {})
+    api.get('/banca/summary').then(r => {
+      setBancaSummary(r.data)
+      setSemBanca(!r.data.has_banca)
+    }).catch(() => {})
+    if (canSeeVip) api.get('/banca/alavancagem-serie').then(r => setUserAlavSerie(r.data)).catch(() => {})
+  })
 
   useEffect(() => {
     api.get('/public/results', { params: { blocos: 'by_day' } })

@@ -17,6 +17,7 @@ import {
 } from './PickCardParts'
 import { useShareStoryImage, useShareBilheteImage } from '../hooks/useShareStoryImage'
 import { useOddAtualizada } from '../hooks/useOddAtualizada'
+import { useBilhete } from '../lib/sincronia'
 import { useOddAgora } from '../hooks/useOddsAgora'
 import { ehCartela } from '../utils/cartela'
 import { TeamLogo, LeagueLogo, PlayerPhoto } from './TeamLogo'
@@ -167,7 +168,6 @@ function SuggestionCard({
 }: { s: Suggestion; onClick?: () => void; banca?: BancaSummary | null; isLive?: boolean }) {
   const navigate = useNavigate()
   const pct = Math.round((s.confidence ?? 0) * 100)
-  const [followed, setFollowed]   = useState(s.is_followed ?? false)
   const [following, setFollowing] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [showAnalysis, setShowAnalysis] = useState(false)
@@ -204,9 +204,21 @@ function SuggestionCard({
    * Sem isto, cada lugar do card decidia sozinho entre `s.*` e o estado local,
    * e foi assim que "Registrado" e "Apostar 2u" apareceram na mesma tela.
    */
-  const seguido      = registrado != null || (s.is_followed ?? false)
-  const stakeSeguida = registrado?.stakeUnits ?? s.user_stake_units ?? null
-  const oddSeguida   = registrado?.actualOdd ?? s.user_actual_odd ?? null
+  /*
+   * E O QUE ESTA SESSÃO SABE, DE QUALQUER TELA (2026-10-06).
+   *
+   * `registrado` morre com o card. Trocar de aba ou de dia recriava o card a
+   * partir da lista antiga, sem o follow, e o botão voltava a "Pegar bilhete"
+   * até o F5. O registro de lib/sincronia é preenchido pelo próprio api.ts a
+   * cada POST/DELETE em /banca/follow, então vale pra todo card de todo lugar.
+   * `null` ali é "desfez nesta sessão" e vence o `is_followed` velho da lista.
+   */
+  const local        = useBilhete(s.pick_type ?? 'vip', s.id)
+  const seguido      = local !== undefined
+    ? local !== null
+    : registrado != null || (s.is_followed ?? false)
+  const stakeSeguida = local?.stakeUnits ?? registrado?.stakeUnits ?? s.user_stake_units ?? null
+  const oddSeguida   = local?.actualOdd ?? registrado?.actualOdd ?? s.user_actual_odd ?? null
   /* A ODD DE AGORA NO CARD (10/09/2026, pedido do usuário) · ver o comentário
      gêmeo no card free em Picks.tsx e hooks/useOddsAgora.
      BILHETE FICA DE FORA: num pick de pernas o número é o produto de duas odds,
@@ -219,7 +231,7 @@ function SuggestionCard({
   const oddExibida   = seguido && oddSeguida != null
     ? Number(oddSeguida)
     : (oddCorrente ?? Number(s.odd))
-  const casaSeguida  = registrado?.betHouse ?? s.user_bet_house ?? null
+  const casaSeguida  = local?.betHouse ?? registrado?.betHouse ?? s.user_bet_house ?? null
   const { share: shareStory, sharing, shared } = useShareStoryImage()
   /* Pick com pernas compartilha como BILHETE · ver handleShare. */
   const { share: shareBilhete, sharing: sharingBilhete, shared: sharedBilhete } = useShareBilheteImage()
@@ -348,7 +360,7 @@ function SuggestionCard({
    * ela e' visivel. */
   const handleFollow = (e: React.MouseEvent) => {
     e.stopPropagation()
-    if (followed) return
+    if (seguido) return
     // Abre com a odd que está no card · ver o comentário gêmeo em Picks.tsx.
     setModalOdd(oddExibida)
     setShowModal(true)
@@ -374,7 +386,6 @@ function SuggestionCard({
         actual_odd: actualOdd,
         bet_house: betHouse,
       })
-      setFollowed(true)
       // O card passa a descrever a aposta DELE na mesma hora, sem esperar
       // recarregar a lista -- ver o comentário em `registrado`.
       setRegistrado({ stakeUnits, actualOdd, betHouse })
@@ -952,7 +963,7 @@ function SuggestionCard({
 
       <PickCardFooter
         onBet={!s.result ? (banca ? handleFollow : () => navigate('/banca')) : undefined}
-        betState={following || buscandoOdd ? 'loading' : followed ? 'done' : 'idle'}
+        betState={following || buscandoOdd ? 'loading' : seguido ? 'done' : 'idle'}
         hasBanca={!!banca}
         onShare={handleShare}
         shareState={(sharing || sharingBilhete) ? 'loading'

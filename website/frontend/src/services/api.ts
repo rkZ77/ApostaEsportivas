@@ -3,6 +3,7 @@ import { notifyError } from './errorToast'
 import { chaveDaPrecarga, consumir } from './precarga'
 import { chaveDoGet, compartilhar, limparDedupe } from './dedupeGet'
 import { requisicaoIniciou, requisicaoTerminou } from './progressBus'
+import { avisarEscrita, desmarcarBilhete, marcarBilhete } from '../lib/sincronia'
 
 // withCredentials envia/recebe cookies httpOnly automaticamente
 const api = axios.create({ baseURL: '/api', withCredentials: true, timeout: 15000 })
@@ -160,11 +161,43 @@ api.get = ((url: string, config?: any) => {
   return compartilhar(chave, () => _get(url, config))
 }) as typeof api.get
 
+/*
+ * Toda escrita que deu certo avisa as telas abertas (lib/sincronia) · e o
+ * bilhete, que é a escrita que mais aparece em tela, entra no registro com os
+ * dados que a própria requisição levou. Feito aqui, e não nos seis lugares que
+ * registram aposta, porque o defeito de 06/10 ("Pegar bilhete" voltando depois
+ * de navegar) era justamente cada lugar ter que lembrar de avisar os outros.
+ */
+const FOLLOW_DELETE = /\/banca\/follow\/([^/]+)\/([^/?]+)/
+
+/* Escrita de bastidor: não muda nada que uma lista mostre. Contar estas faria
+   toda tela aberta recarregar a cada notificação lida ou reação dada. */
+const SEM_RECARGA = /^\/(auth\/(refresh|resend-verification|phone\/|forgot-password|reset-password)|notifications\/|personal\/tutorial|social\/)/
+
+function registrarEscrita(metodo: string, url: string | undefined, corpo: any) {
+  if (url && SEM_RECARGA.test(url)) return
+  if (url === '/banca/follow' && metodo === 'post' && corpo?.pick_id != null) {
+    marcarBilhete(corpo.pick_type ?? 'vip', corpo.pick_id, {
+      stakeUnits: corpo.stake_units ?? null,
+      actualOdd: corpo.actual_odd ?? null,
+      betHouse: corpo.bet_house ?? null,
+    })
+  } else if (metodo === 'delete' && url) {
+    const m = url.match(FOLLOW_DELETE)
+    if (m) desmarcarBilhete(m[2], m[1])
+  }
+  avisarEscrita()
+}
+
 for (const metodo of ['post', 'put', 'patch', 'delete'] as const) {
   const original = (api[metodo] as any).bind(api)
   ;(api[metodo] as any) = (...args: any[]) => {
     limparDedupe()
-    return original(...args)
+    return original(...args).then((res: any) => {
+      // `delete` não tem corpo na posição 1 · ali é o config.
+      try { registrarEscrita(metodo, args[0], metodo === 'delete' ? undefined : args[1]) } catch { /* nunca derruba a resposta */ }
+      return res
+    })
   }
 }
 

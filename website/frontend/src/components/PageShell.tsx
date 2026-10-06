@@ -133,8 +133,14 @@ export default function PageShell({
 
       {nav === true ? <Navbar width={width} /> : nav || null}
 
+      {/* SEM FAIXA PRÓPRIA (2026-10-06, pedido do usuário).
+          A barra era uma tira de largura total com borda embaixo, e somada à
+          borda da Navbar logo acima virava duas linhas cortando o topo de toda
+          tela do app, com o título preso entre elas. Agora o título é o começo
+          da página: mesma largura do conteúdo, sem borda, e o <main> logo
+          abaixo encosta nele (pt-0) em vez de abrir outro respiro. */}
       {bar && (
-        <div className="border-b border-line">
+        <div>
           {/* Quebra em duas linhas antes de espremer o título.
               A fila de ações é `shrink-0`, então ela nunca cede largura · sem
               `flex-wrap` aqui, quem cedia era o título, que tem `min-w-0` e
@@ -142,15 +148,15 @@ export default function PageShell({
               Sacar, Configurar e Zerar mês) "Minha Banca" virava "Minha B...".
               Com a quebra, as ações descem inteiras para a linha de baixo e o
               título fica legível, que é a ordem certa de prioridade. */}
-          <div className={cn('mx-auto py-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2', PAGE_WIDTH[width])}>
-            <div className="flex items-center gap-3 min-w-0">
-              {bar.back && <BackButton to={typeof bar.back === 'string' ? bar.back : undefined} />}
+          <div className={cn('mx-auto pt-5 md:pt-7 pb-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-2', PAGE_WIDTH[width])}>
+            <div className="flex items-center gap-2 min-w-0">
+              {bar.back && <BackButton to={typeof bar.back === 'string' ? bar.back : undefined} className="-ml-2" />}
               <div className="min-w-0">
-                <h1 className="font-display text-base font-semibold text-ink-1 leading-tight truncate">
+                <h1 className="font-display text-xl md:text-2xl font-bold tracking-tight text-ink-1 leading-tight truncate">
                   {bar.title}
                 </h1>
                 {bar.sub != null && (
-                  <p className={`text-ink-3 text-[11px] mt-0.5 ${bar.subMobile ? '' : 'hidden sm:block'}`}>{bar.sub}</p>
+                  <p className={`text-ink-3 text-xs mt-1 ${bar.subMobile ? '' : 'hidden sm:block'}`}>{bar.sub}</p>
                 )}
               </div>
             </div>
@@ -184,6 +190,7 @@ export default function PageShell({
       <main
         className={cn(
           'flex-1 w-full mx-auto py-6 md:py-8',
+          bar && !beforeMain && 'pt-4 md:pt-5',
           PAGE_WIDTH[width],
           classesRevelacao(revelado),
           mainClassName,
