@@ -59,6 +59,7 @@ const Login          = lazy(() => import('./pages/Login'))
 const Picks          = lazy(() => import('./pages/Picks'))
 const Admin          = lazy(() => import('./pages/Admin'))
 const Fixtures       = lazy(() => import('./pages/Fixtures'))
+const JogoRaioX      = lazy(() => import('./pages/JogoRaioX'))
 /*
  * A HOME NAO E' lazy(), E AS OUTRAS SAO.
  *
@@ -272,6 +273,9 @@ export default function App() {
                 <Route path="/picks" element={<PrivateRoute><Picks /></PrivateRoute>} />
                 <Route path="/results" element={<Navigate to="/resultados" replace />} />
                 <Route path="/fixtures" element={<PrivateRoute><Fixtures /></PrivateRoute>} />
+                {/* Raio-X de um jogo em página própria · é o que o celular abre
+                    ao tocar no jogo (no computador ele vive ao lado da lista). */}
+                <Route path="/jogos/:fixtureId" element={<PrivateRoute><JogoRaioX /></PrivateRoute>} />
                 <Route path="/admin" element={<PrivateRoute><Admin /></PrivateRoute>} />
                 <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
                 <Route path="/planos" element={<Planos />} />
