@@ -709,8 +709,10 @@ def test_today_nao_repete_consulta_de_faltas_e_goleiros():
 def test_favoritos_sairam_do_frontend():
     """Coracao no card, no cabecalho das secoes de mercado e na agenda, mais
     filtro em dois lugares · muita superficie pra uma preferencia sem uso."""
+    # (AgendaInteligente.tsx saiu da lista em 06/10/2026: a aba Agenda foi
+    # removida, duplicava a aba Jogos.)
     for arq in ("App.tsx", "pages/Picks.tsx", "components/SuggestionCard.tsx",
-                "components/AgendaInteligente.tsx", "lib/mercadoFiltro.ts"):
+                "lib/mercadoFiltro.ts"):
         src = _front(arq)
         for termo in ("FavoriteButton", "useFavorites", "FavoritesProvider"):
             assert termo not in src, f"{arq} ainda usa {termo}"

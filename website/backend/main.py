@@ -31,7 +31,7 @@ load_dotenv(os.path.join(_env_dir, ".env.prod"), override=False)
 import agent_web
 import cache_publico
 from migrations import run_startup_migrations
-from routers import admin, auth, banca, chat, explorer, fixtures, leaderboard, live, live_picks, notifications, palpites, payments, personal, public, social, suggestions
+from routers import admin, auth, banca, chat, fixtures, leaderboard, live, live_picks, notifications, palpites, payments, personal, public, social, suggestions
 from runtime_env import is_production, side_effects_note
 
 _log_level = logging.DEBUG if os.getenv("APP_ENV") != "production" else logging.INFO
@@ -625,7 +625,9 @@ app.include_router(auth.router)
 app.include_router(suggestions.router)
 app.include_router(admin.router)
 app.include_router(fixtures.router)
-app.include_router(explorer.router)
+# /api/explorer saiu em 2026-10-06 junto com a aba Explorar: ligas fora do
+# cadastro, lidas da API-Football a cada uso. A aba Jogos ficou so' com as
+# ligas cadastradas, a pedido do usuario.
 app.include_router(public.router)
 # Landing pages de busca (/palpites/...). Depois de public: ela reusa o UNION
 # de la, e o prefixo /api/public/palpites nao colide com nenhuma rota daquele.
