@@ -49,7 +49,9 @@ class TestUmCartaoSo:
         tela = _admin()
         i = tela.index("const cartaoDoPasso = (")
         fim = tela.index("const runPipeline", i)
-        cartao = tela[i:fim]
+        # Sem diferenciar maiuscula: em 06/10 o "ver ao vivo" sublinhado virou
+        # botao "Ver ao vivo", e o que o teste guarda e' o atalho existir.
+        cartao = tela[i:fim].lower()
         assert "animate-pulse" in cartao, "sem bolinha pulsando enquanto roda"
         assert "bg-green-500" in cartao, "sem sinal de concluído"
         assert "bg-red-500" in cartao, "sem sinal de erro"
