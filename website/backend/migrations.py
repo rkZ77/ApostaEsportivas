@@ -1159,6 +1159,31 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
             ON match_statistics (league_id, match_date DESC)
         """)
 
+        # "OS ULTIMOS N JOGOS DESTE TIME" (2026-10-06). E' a pergunta da aba
+        # Jogos inteira (forma na lista, Raio-X, painel antigo), e nao tinha
+        # indice nenhum: era varredura da tabela a cada time. Um indice por
+        # LADO, porque o time aparece em home_team_id OU away_team_id, e as
+        # consultas fazem UNION ALL das duas metades pra que cada uma use o
+        # seu. O DESC casa com o ORDER BY ... LIMIT: o Postgres le' so' as N
+        # primeiras entradas e para.
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_match_stats_home_date
+            ON match_statistics (home_team_id, match_date DESC)
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_match_stats_away_date
+            ON match_statistics (away_team_id, match_date DESC)
+        """)
+        # Os ultimos jogos do arbitro (cartoes por jogo no Raio-X). A coluna
+        # nasce na coleta do motor; o ADD e' no-op onde ela ja' existe e evita
+        # que o indice derrube a migracao numa instancia que nunca coletou.
+        cur.execute("ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS referee TEXT")
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_match_stats_referee_date
+            ON match_statistics (referee, match_date DESC)
+            WHERE referee IS NOT NULL
+        """)
+
         # EXCLUSAO DE CONTA (LGPD art. 18, 2026-09-12).
         #
         # A conta excluida nao sai da tabela: `payments` referencia users com
