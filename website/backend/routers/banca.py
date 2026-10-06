@@ -7,6 +7,7 @@ from typing import Optional
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import alavancagem_caminho
+import bilhete_pessoal
 from data_br import data_br
 from database import get_connection
 from taxa_acerto import taxa_acerto
@@ -138,11 +139,18 @@ def _mercado_maps(cur, followed: list, colunas: str = "id, result, odd") -> dict
 #: a odd do bilhete em `total_odd`. Múltipla e Bingo do Dia têm o mesmo
 #: esquema, e é por isso que uma função só atende as duas.
 _TABELAS_CARTELA = {"multipla": "picks_multiplas",
-                    "bingo":    "picks_bingo"}
+                    "bingo":    "picks_bingo",
+                    # Bilhete PESSOAL (2026-10-06): o que o usuario montou no
+                    # Raio-X da aba Jogos. Mesmo esquema das cartelas, e por
+                    # isso entra aqui e herda saldo, lista e fechamento. Os ids
+                    # vem sempre de `user_followed_picks` DO PROPRIO usuario,
+                    # entao ninguem le' o bilhete de outro por aqui.
+                    "pessoal":  "bilhetes_pessoais"}
 
 #: Como a cartela se apresenta na lista de apostas. O rótulo é o que vai pra
 #: coluna `market`, já que nenhuma delas tem mercado próprio.
-_ROTULO_CARTELA = {"multipla": "Múltipla", "bingo": "Bingo do Dia"}
+_ROTULO_CARTELA = {"multipla": "Múltipla", "bingo": "Bingo do Dia",
+                   "pessoal": "Meu bilhete"}
 
 
 def _cartela_maps(cur, followed: list, display: bool = False) -> dict:
@@ -237,6 +245,16 @@ def _resolve_pick(cur, pick_id: int, pick_type: str) -> Optional[dict]:
                    COALESCE(prob_combinada, score_combo) AS confidence,
                    NULL AS match_datetime
             FROM {_tab} WHERE id = %s
+        """, (pick_id,))
+    elif pick_type == "pessoal":
+        cur.execute("""
+            SELECT result, profit, 1 AS stake,
+                   NULL AS home_team_name, NULL AS away_team_name,
+                   NULL AS home_team_id, NULL AS away_team_id,
+                   NULL AS market, NULL AS line,
+                   total_odd AS odd, games AS legs_json,
+                   NULL AS confidence, NULL AS match_datetime
+            FROM bilhetes_pessoais WHERE id = %s
         """, (pick_id,))
     elif pick_type == "alavancagem":
         cur.execute("""
@@ -338,7 +356,7 @@ def _resolve_pick(cur, pick_id: int, pick_type: str) -> Optional[dict]:
     d = dict(row)
     # Para as cartelas (múltipla e bingo): extrai primeiro time dos legs +
     # kickoff mais cedo entre as pernas
-    if pick_type in ("multipla", "bingo") and d.get("legs_json"):
+    if pick_type in _TABELAS_CARTELA and d.get("legs_json"):
         import json as _json
         try:
             legs = _json.loads(d["legs_json"]) if isinstance(d["legs_json"], str) else (d["legs_json"] or [])
@@ -355,7 +373,9 @@ def _resolve_pick(cur, pick_id: int, pick_type: str) -> Optional[dict]:
                 cur.execute("SELECT MIN(match_datetime) AS md FROM fixtures WHERE fixture_id = ANY(%s)", (fixture_ids,))
                 md_row = cur.fetchone()
                 d["match_datetime"] = md_row["md"] if md_row else None
-        d["market"] = f"Múltipla · {len(legs)} seleções"
+        # O rotulo do tipo, e nao "Multipla" fixo: o Bingo saia escrito como
+        # Multipla aqui, e o bilhete pessoal sairia tambem.
+        d["market"] = f"{_ROTULO_CARTELA[pick_type]} · {len(legs)} seleções"
         del d["legs_json"]
     return d
 
@@ -544,6 +564,10 @@ PIPELINES_DA_QUEBRA: tuple = (
     ("mercados",  "Mercados",  ("faltas", "goleiros", "player_stats")),
     ("boost",     "Pick Boost", ("boost",)),
     ("live",      "Ao Vivo",   ("live",)),
+    # Por ultimo e com nome proprio (2026-10-06): sao as apostas que o usuario
+    # montou sozinho. Ao lado dos produtos da IA, a linha responde a pergunta
+    # que ele vai fazer · "minhas ideias rendem mais ou menos que o motor?".
+    ("pessoal",   "Meus bilhetes", ("pessoal",)),
 )
 
 
@@ -780,6 +804,10 @@ def get_banca(
     conn = get_connection()
     cur = conn.cursor()
     try:
+        # Bilhetes pessoais fecham na leitura (nada roda agendado): antes de
+        # montar a lista, os pendentes deste usuario sao conferidos contra os
+        # numeros ja' coletados. Ver bilhete_pessoal.py.
+        bilhete_pessoal.liquidar_sem_quebrar(conn, cur, user_id)
         cur.execute("SELECT bankroll_start, unit_value, last_manual_setup_month FROM user_banca WHERE user_id = %s", (user_id,))
         row = cur.fetchone()
         bankroll_start = float(row["bankroll_start"]) if row else 100.0
@@ -1361,13 +1389,24 @@ STAKE_LIMITS = {
     # motivo do cap em pick_engine/staking.py: o motor Live ainda nao tem
     # historico proprio e a odd pode mudar entre a publicacao e a aposta.
     "live":       (1, 4),
+    # Bilhete pessoal: a decisao e' do usuario, nao do motor, entao o teto e'
+    # o mais largo dos produtos pre-jogo (o do Premium). Meia unidade entra
+    # porque e' a stake de quem quer acompanhar uma ideia sem arriscar muito.
+    "pessoal":    (0.5, 20),
 }
+
+#: Tipos seguiveis que NAO sao pick da IA: a aposta que o proprio usuario
+#: montou. Entram na banca dele (saldo, lista, fechamento, conquistas) e ficam
+#: fora de tudo que mede o motor · ranking, placar publico, plano de stake e o
+#: agente. Os testes de contabilizacao descontam esta lista.
+TIPOS_DO_USUARIO = {"pessoal"}
 
 STAKE_LABELS = {
     "vip": "Premium", "free": "Free", "multipla": "Múltipla", "bingo": "Bingo do Dia",
     "alavancagem": "Alavancagem", "faltas": "de Faltas", "goleiros": "de Defesas",
     "player_stats": "de Jogador", "boost": "Pick Boost",
     "live": "Ao Vivo",
+    "pessoal": "do seu bilhete",
 }
 
 #: Produtos que o free NAO pode seguir. E' a lista dos que ele tambem nao pode
@@ -1426,6 +1465,11 @@ def _pode_seguir(cur, user: dict, pick_type: str, pick_id: int) -> bool:
     # ja' no lugar e o de escrita atras.
     if pick_type == "live":
         return tem_tier_pro(user)
+    # Bilhete pessoal NAO se segue por id: ele nasce lancado, em
+    # POST /bilhete-pessoal, pro proprio dono. Sem esta linha, qualquer um
+    # lancaria na propria banca o bilhete de outra pessoa adivinhando o id.
+    if pick_type == bilhete_pessoal.PICK_TYPE:
+        return False
     if pick_type not in _FOLLOW_SO_VIP:
         if pick_type == "boost" and not is_vip_active(user):
             return boost_liberado_do_dia(cur, pick_id)
@@ -1476,6 +1520,53 @@ def follow_pick(body: FollowPick, current_user: dict = Depends(get_current_user)
               body.actual_odd, body.bet_house, user_id))
         conn.commit()
         return {"ok": True, "already_followed": False}
+    finally:
+        cur.close()
+        conn.close()
+
+
+class BilhetePessoalBody(BaseModel):
+    pernas: list = Field(..., min_length=1, max_length=bilhete_pessoal.MAX_PERNAS)
+    stake_units: float = Field(..., gt=0)
+    actual_odd: float = Field(..., ge=1.01, le=10000)
+    bet_house: Optional[str] = Field(None, max_length=60)
+
+
+@router.post("/bilhete-pessoal")
+def registrar_bilhete_pessoal(body: BilhetePessoalBody, current_user: dict = Depends(get_current_user)):
+    """Lanca na banca o bilhete montado no Raio-X (2026-10-06).
+
+    Exige banca configurada pelo mesmo motivo do follow: a aposta precisa da
+    unidade de hoje pra virar R$. As pernas sao conferidas por
+    `bilhete_pessoal.validar_pernas` · so' entra o que a liquidacao sabe
+    conferir, senao o bilhete ficaria pendente pra sempre.
+    """
+    _check_banca_rate(current_user["id"])
+    min_u, max_u = STAKE_LIMITS[bilhete_pessoal.PICK_TYPE]
+    if not (min_u <= body.stake_units <= max_u):
+        raise HTTPException(400, f"Stake do bilhete deve ser entre {min_u:g} e {max_u:g} unidades.")
+    try:
+        pernas = bilhete_pessoal.validar_pernas(body.pernas)
+    except bilhete_pessoal.PernaInvalida as e:
+        raise HTTPException(400, f"Bilhete invalido: {e}.")
+    user_id = current_user["id"]
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT 1 FROM user_banca WHERE user_id = %s", (user_id,))
+        if not cur.fetchone():
+            raise HTTPException(400, "Configure sua banca antes de registrar um bilhete.")
+        bilhete_id = bilhete_pessoal.registrar(
+            cur, user_id, pernas, body.stake_units, body.actual_odd,
+            (body.bet_house or "").strip() or None)
+        conn.commit()
+        return {"ok": True, "id": bilhete_id, "pick_type": bilhete_pessoal.PICK_TYPE,
+                "pernas": len(pernas)}
+    except HTTPException:
+        raise
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         cur.close()
         conn.close()
@@ -1896,6 +1987,7 @@ def get_banca_summary(current_user: dict = Depends(get_current_user)):
     conn = get_connection()
     cur = conn.cursor()
     try:
+        bilhete_pessoal.liquidar_sem_quebrar(conn, cur, user_id)
         cur.execute("SELECT bankroll_start, unit_value FROM user_banca WHERE user_id = %s", (user_id,))
         row = cur.fetchone()
         if not row:
@@ -2498,6 +2590,11 @@ def unfollow_pick(pick_id: int, pick_type: str, current_user: dict = Depends(get
             "DELETE FROM user_followed_picks WHERE user_id=%s AND pick_id=%s AND pick_type=%s",
             (user_id, pick_id, pick_type),
         )
+        # O bilhete pessoal so' existe pra esta aposta: desfeita ela, ele sai
+        # junto. `user_id` no WHERE e' o que impede apagar o de outro.
+        if pick_type == bilhete_pessoal.PICK_TYPE:
+            cur.execute("DELETE FROM bilhetes_pessoais WHERE id = %s AND user_id = %s",
+                        (pick_id, user_id))
         conn.commit()
         return {"ok": True}
     finally:

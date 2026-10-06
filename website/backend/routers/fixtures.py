@@ -324,7 +324,10 @@ _COLUNAS_DO_JOGO = """fixture_id, match_date, league_id, home_team_id, away_team
                home_goals, away_goals, home_corners, away_corners,
                home_yellow_cards, away_yellow_cards, home_red_cards, away_red_cards,
                home_shots_on, away_shots_on, home_fouls, away_fouls,
-               home_possession, away_possession"""
+               home_possession, away_possession,
+               home_goals_ht, away_goals_ht, home_corners_1h, away_corners_1h,
+               home_yellow_cards_1h, away_yellow_cards_1h,
+               home_shots_on_1h, away_shots_on_1h"""
 
 
 def _ultimos_jogos(cur, team_ids: list, antes_de, n: int) -> list:
@@ -527,6 +530,15 @@ def _serie_do_time(linhas: list, team_id: int) -> list:
             "chutes_alvo_pro": r[f"{lado}_shots_on"], "chutes_alvo_contra": r[f"{outro}_shots_on"],
             "faltas_pro": r[f"{lado}_fouls"], "faltas_contra": r[f"{outro}_fouls"],
             "posse": r[f"{lado}_possession"],
+            # 1o TEMPO (folha do 1o tempo, coletada desde 27/09). O 2o tempo a
+            # tela tira por conta (total - 1o). Null = jogo antigo, sem folha.
+            "gols_pro_1t": r.get(f"{lado}_goals_ht"), "gols_contra_1t": r.get(f"{outro}_goals_ht"),
+            "escanteios_pro_1t": r.get(f"{lado}_corners_1h"),
+            "escanteios_contra_1t": r.get(f"{outro}_corners_1h"),
+            "amarelos_pro_1t": r.get(f"{lado}_yellow_cards_1h"),
+            "amarelos_contra_1t": r.get(f"{outro}_yellow_cards_1h"),
+            "chutes_alvo_pro_1t": r.get(f"{lado}_shots_on_1h"),
+            "chutes_alvo_contra_1t": r.get(f"{outro}_shots_on_1h"),
         })
     return jogos
 

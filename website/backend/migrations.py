@@ -487,6 +487,25 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
                 UNIQUE (user_id, pick_id, pick_type)
             )
         """)
+        # BILHETE PESSOAL (2026-10-06): o bilhete que o usuario monta no Raio-X
+        # da aba Jogos. Mesmo formato das cartelas (picks_multiplas): pernas no
+        # JSONB `games`, `total_odd`, `result` e `profit` por unidade · e' isso
+        # que deixa a banca le-lo pelo mesmo caminho. Ver bilhete_pessoal.py.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS bilhetes_pessoais (
+                id          SERIAL PRIMARY KEY,
+                user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                games       JSONB NOT NULL,
+                total_odd   NUMERIC(8,2) NOT NULL,
+                result      VARCHAR(10),
+                profit      NUMERIC(8,2),
+                observacao  TEXT,
+                settled_at  TIMESTAMP,
+                created_at  TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_bilhetes_pessoais_pendentes "
+                    "ON bilhetes_pessoais (user_id) WHERE result IS NULL")
         cur.execute("""
             CREATE TABLE IF NOT EXISTS pick_reactions (
                 id         SERIAL PRIMARY KEY,

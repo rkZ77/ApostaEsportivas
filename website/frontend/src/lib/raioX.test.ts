@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest'
-import { ambasMarcam, fraseDoJogador, ESTATS_DE_JOGADOR, resultadoDoJogo, rotuloDaLinha, taxa,
+import { ambasMarcam, fraseDoJogador, ESTATS_DE_JOGADOR, numero, resultadoDoJogo, rotuloDaLinha, taxa,
          taxaDoJogador, type Jogador, type JogoDoTime } from './raioX'
 import { adicionar, chanceCombinada, limpar, remover, textoDoBilhete, type Selecao } from './bilheteMontado'
 
@@ -56,6 +56,30 @@ describe('jogo', () => {
   it('"2+ chutes no alvo" é valor >= 2 em cada jogo do jogador', () => {
     const j = { jogos: [{ chutes_alvo: 2 }, { chutes_alvo: 1 }, { chutes_alvo: 3 }, { chutes_alvo: null }] } as unknown as Jogador
     expect(taxaDoJogador(j, 'chutes_alvo', 2)).toMatchObject({ bateu: 2, n: 3 })
+  })
+})
+
+describe('numero: faz, cede e tempo do jogo', () => {
+  const j = jogo({ escanteios_pro: 7, escanteios_contra: 3, escanteios_pro_1t: 4, escanteios_contra_1t: 1,
+                   faltas_pro: 10, faltas_contra: 12 })
+
+  it('faz, cede e jogo', () => {
+    expect(numero(j, 'escanteios', 'pro', 'total')).toBe(7)
+    expect(numero(j, 'escanteios', 'contra', 'total')).toBe(3)
+    expect(numero(j, 'escanteios', 'jogo', 'total')).toBe(10)
+  })
+
+  it('1º tempo da folha e 2º tempo por subtração', () => {
+    expect(numero(j, 'escanteios', 'pro', '1t')).toBe(4)
+    expect(numero(j, 'escanteios', 'jogo', '1t')).toBe(5)
+    expect(numero(j, 'escanteios', 'pro', '2t')).toBe(3)
+    expect(numero(j, 'escanteios', 'contra', '2t')).toBe(2)
+  })
+
+  it('sem folha do 1º tempo não inventa número', () => {
+    expect(numero(jogo({}), 'escanteios', 'pro', '1t')).toBeNull()
+    expect(numero(jogo({}), 'escanteios', 'jogo', '2t')).toBeNull()
+    expect(numero(j, 'faltas', 'pro', '1t')).toBeNull()
   })
 })
 

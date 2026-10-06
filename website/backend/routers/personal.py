@@ -160,6 +160,9 @@ PICK_TABLES = {
     # aposta ja' era seguivel havia semanas. Tabela que nao existe custa so'
     # aquela metrica (o laco engole por tabela), entao ela entra sem guarda.
     "live":         "picks_live",
+    # Bilhete pessoal (06/10): o GREEN de uma aposta montada pelo proprio
+    # usuario tambem e' green da banca dele.
+    "pessoal":      "bilhetes_pessoais",
 }
 
 

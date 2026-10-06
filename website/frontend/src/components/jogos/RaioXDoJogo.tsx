@@ -5,9 +5,9 @@ import { cn } from '../../lib/cn'
 import { ErrorState, Skeleton } from '../ui'
 import { LeagueLogo, PlayerPhoto, TeamLogo } from '../TeamLogo'
 import {
-  ambasMarcam, ehGoleiro, ESTATS_DE_JOGADOR, fraseDoJogador, MERCADOS_DE_TIME, resultadoDoJogo,
-  rotuloDaLinha, taxa, taxaDoJogador, tomDaTaxa,
-  type EstatDeJogador, type Jogador, type JogoDoTime, type Lado, type RaioX, type Taxa,
+  ambasMarcam, comPeriodo, ehGoleiro, ESTATS_DE_JOGADOR, fraseDoJogador, MERCADOS_DE_TIME, numero,
+  resultadoDoJogo, ROTULO_PERIODO, rotuloDaLinha, taxa, taxaDoJogador, tomDaTaxa,
+  type EstatDeJogador, type Jogador, type JogoDoTime, type Lado, type Periodo, type RaioX, type Taxa,
 } from '../../lib/raioX'
 import { alternar, useBilheteMontado, type Selecao } from '../../lib/bilheteMontado'
 
@@ -269,106 +269,172 @@ function BotaoBilhete({ selecao, cheio }: { selecao: Selecao; cheio?: boolean })
 function AbaMercados({ dados, nomeJogo }: { dados: RaioX; nomeJogo: string }) {
   const [id, setId] = useState(MERCADOS_DE_TIME[0].id)
   const mercado = MERCADOS_DE_TIME.find(m => m.id === id)!
+  const [periodoEscolhido, setPeriodo] = useState<Periodo>('total')
+  /* Faltas só existem no jogo todo · o seletor fica, desligado, e a conta
+     usa "total" sem perder a escolha da pessoa pros outros mercados. */
+  const periodo: Periodo = mercado.soTotal ? 'total' : periodoEscolhido
   const [linhas, setLinhas] = useState<Record<string, number>>({})
   const [lado, setLado] = useState<Lado>('mais')
-  const linha = linhas[id] ?? mercado.linhaPadrao
-  const mudarLinha = (d: number) => setLinhas(l => ({ ...l, [id]: Math.max(0.5, linha + d) }))
+  const [timeFoco, setTimeFoco] = useState<'home' | 'away'>('home')
+  const chaveLinha = `${id}:${periodo}`
+  const linha = linhas[chaveLinha] ?? (periodo === 'total' ? mercado.linhaPadrao : mercado.linhaPadraoTempo)
+  const mudarLinha = (d: number) => setLinhas(l => ({ ...l, [chaveLinha]: Math.max(0.5, linha + d) }))
 
   const { home, away } = dados.times
   const f = dados.fixture
-  const valoresHome = home.jogos.map(mercado.valor)
-  const valoresAway = away.jogos.map(mercado.valor)
-  const tHome = taxa(valoresHome, linha, lado)
-  const tAway = taxa(valoresAway, linha, lado)
-  const tJuntos = taxa([...valoresHome, ...valoresAway], linha, lado)
-  const ehDoTime = id.endsWith('_time')
+  const base = {
+    fixture_id: f.fixture_id, home_team_id: f.home_team_id, away_team_id: f.away_team_id,
+    home: f.home_team, away: f.away_team,
+  }
+  const linhaTxt = rotuloDaLinha(linha, lado)
 
-  const linhaTime = (team: 'home' | 'away', valores: Array<number | null>, t: Taxa) => {
-    const tid = team === 'home' ? f.home_team_id : f.away_team_id
-    const nome = team === 'home' ? f.home_team : f.away_team
+  /* Uma série vira um quadro: barras jogo a jogo + "bateu X/N". */
+  const Quadro = ({ titulo, sub, teamId, nomeTime, valores, selecao, destaque }: {
+    titulo: string; sub: string; teamId?: number; nomeTime?: string
+    valores: Array<number | null>; selecao?: Selecao; destaque?: boolean
+  }) => {
+    const t = taxa(valores, linha, lado)
     return (
-      <div className="card p-4">
+      <div className={cn('card p-4', destaque && 'border-accent/30')}>
         <div className="flex items-center gap-3 mb-3">
-          <TeamLogo id={tid} name={nome} size={28} />
+          {teamId != null && <TeamLogo id={teamId} name={nomeTime ?? ''} size={28} />}
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-bold text-ink-1 truncate">{nome}</div>
-            <div className="text-[11px] text-ink-3">últimos {valores.length} jogos</div>
+            <div className="text-sm font-bold text-ink-1 truncate">{titulo}</div>
+            <div className="text-[11px] text-ink-3">{sub}</div>
           </div>
-          <NumeroDaTaxa t={t} />
-          {ehDoTime && (
-            <BotaoBilhete selecao={{
-              id: `${f.fixture_id}:${id}:${team}:${lado}:${linha}`, fixture_id: f.fixture_id, jogo: nomeJogo,
-              descricao: `${mercado.frase} (${nome}) · ${rotuloDaLinha(linha, lado)}`, bateu: t.bateu, n: t.n,
-            }} />
-          )}
+          <NumeroDaTaxa t={t} grande={destaque} />
+          {selecao && !destaque && <BotaoBilhete selecao={{ ...selecao, bateu: t.bateu, n: t.n }} />}
         </div>
         <Barras valores={valores} linha={linha} lado={lado} />
+        {selecao && destaque && (
+          <div className="mt-3"><BotaoBilhete cheio selecao={{ ...selecao, bateu: t.bateu, n: t.n }} /></div>
+        )}
       </div>
     )
   }
 
-  const btts = useMemo(() => ({
-    home: taxa(home.jogos.map(ambasMarcam).map(b => (b == null ? null : b ? 1 : 0)), 0.5, 'mais'),
-    away: taxa(away.jogos.map(ambasMarcam).map(b => (b == null ? null : b ? 1 : 0)), 0.5, 'mais'),
-  }), [home.jogos, away.jogos])
-  const bttsJuntos: Taxa = {
-    bateu: btts.home.bateu + btts.away.bateu, n: btts.home.n + btts.away.n,
-    pct: btts.home.n + btts.away.n ? (btts.home.bateu + btts.away.bateu) / (btts.home.n + btts.away.n) : null,
-    media: null,
+  const btts = useMemo(() => {
+    const serie = [...home.jogos, ...away.jogos].map(ambasMarcam).map(b => (b == null ? null : b ? 1 : 0))
+    return taxa(serie, 0.5, 'mais')
+  }, [home.jogos, away.jogos])
+
+  /* ── mercado do JOGO: os dois times somados ── */
+  const quadrosDoJogo = () => {
+    const vHome = home.jogos.map(j => numero(j, mercado.contador, 'jogo', periodo))
+    const vAway = away.jogos.map(j => numero(j, mercado.contador, 'jogo', periodo))
+    const descricao = `${comPeriodo(mercado.frase, periodo)} · ${linhaTxt}`
+    const selecao: Selecao = {
+      id: `${f.fixture_id}:${id}:${periodo}:${lado}:${linha}`, fixture_id: f.fixture_id, jogo: nomeJogo,
+      descricao, bateu: 0, n: 0,
+      perna: { ...base, descricao, tipo: 'time', mercado: id, direcao: lado, linha, periodo },
+    }
+    return (
+      <>
+        <Quadro destaque titulo="Nos jogos dos dois times" sub={descricao}
+          valores={[...vHome, ...vAway]} selecao={selecao} />
+        <Quadro titulo={f.home_team} sub={`últimos ${vHome.length} jogos`} teamId={f.home_team_id}
+          nomeTime={f.home_team} valores={vHome} />
+        <Quadro titulo={f.away_team} sub={`últimos ${vAway.length} jogos`} teamId={f.away_team_id}
+          nomeTime={f.away_team} valores={vAway} />
+      </>
+    )
+  }
+
+  /* ── mercado DO TIME: o que ele faz x o que o adversário cede ──
+     É a leitura que quem aposta "escanteios do time" faz de cabeça: o mandante
+     costuma ter quantos, e o visitante costuma deixar quantos. Os dois juntos
+     são a amostra do confronto. */
+  const quadrosDoTime = () => {
+    const ehCasa = timeFoco === 'home'
+    const time = ehCasa ? home : away
+    const adv = ehCasa ? away : home
+    const nomeTime = ehCasa ? f.home_team : f.away_team
+    const nomeAdv = ehCasa ? f.away_team : f.home_team
+    const faz = time.jogos.map(j => numero(j, mercado.contador, 'pro', periodo))
+    const cede = adv.jogos.map(j => numero(j, mercado.contador, 'contra', periodo))
+    const descricao = `${comPeriodo(`${mercado.frase} do ${nomeTime}`, periodo)} · ${linhaTxt}`
+    const selecao: Selecao = {
+      id: `${f.fixture_id}:${id}:${timeFoco}:${periodo}:${lado}:${linha}`, fixture_id: f.fixture_id,
+      jogo: nomeJogo, descricao, bateu: 0, n: 0,
+      perna: { ...base, descricao, tipo: 'time', mercado: id, direcao: lado, linha, periodo, lado_time: timeFoco },
+    }
+    return (
+      <>
+        <div className="grid grid-cols-2 gap-2">
+          {(['home', 'away'] as const).map(t => {
+            const tid = t === 'home' ? f.home_team_id : f.away_team_id
+            const nome = t === 'home' ? f.home_team : f.away_team
+            return (
+              <button key={t} onClick={() => setTimeFoco(t)}
+                className={cn('h-12 rounded-lg border flex items-center justify-center gap-2 px-2 text-sm font-bold transition-colors min-w-0',
+                  timeFoco === t ? 'bg-surface-2 border-line-strong text-ink-1' : 'bg-surface-1 border-line text-ink-3')}>
+                <TeamLogo id={tid} name={nome} size={22} />
+                <span className="truncate">{nome}</span>
+              </button>
+            )
+          })}
+        </div>
+        <Quadro destaque titulo="No confronto" sub={`${nomeTime} faz + ${nomeAdv} cede`}
+          valores={[...faz, ...cede]} selecao={selecao} />
+        <Quadro titulo={`${nomeTime} faz`} sub={`${mercado.frase.toLowerCase()} a favor, últimos ${faz.length} jogos`}
+          teamId={ehCasa ? f.home_team_id : f.away_team_id} nomeTime={nomeTime} valores={faz} />
+        <Quadro titulo={`${nomeAdv} cede`} sub={`${mercado.frase.toLowerCase()} contra, últimos ${cede.length} jogos`}
+          teamId={ehCasa ? f.away_team_id : f.home_team_id} nomeTime={nomeAdv} valores={cede} />
+      </>
+    )
   }
 
   return (
     <div className="space-y-3">
       <Chips opcoes={MERCADOS_DE_TIME.map(m => ({ id: m.id, rotulo: m.rotulo }))} valor={id} onChange={setId} />
 
-      <div className="card p-3 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex rounded-lg border border-line p-0.5 bg-surface-1">
-          {(['mais', 'menos'] as Lado[]).map(l => (
-            <button key={l} onClick={() => setLado(l)}
-              className={cn('h-10 px-4 rounded-md text-sm font-bold transition-colors',
-                lado === l ? 'bg-surface-3 text-ink-1' : 'text-ink-3')}>
-              {l === 'mais' ? 'Mais de' : 'Menos de'}
+      <div className="card p-3 space-y-3">
+        {/* Tempo do jogo · 1º e 2º tempo saem da folha do 1º tempo. */}
+        <div className="grid grid-cols-3 rounded-lg border border-line p-0.5 bg-surface-1">
+          {(['total', '1t', '2t'] as Periodo[]).map(p => (
+            <button key={p} onClick={() => setPeriodo(p)} disabled={mercado.soTotal && p !== 'total'}
+              className={cn('h-10 rounded-md text-sm font-bold transition-colors disabled:opacity-30',
+                periodo === p ? 'bg-surface-3 text-ink-1' : 'text-ink-3')}>
+              {ROTULO_PERIODO[p]}
             </button>
           ))}
         </div>
-        <Passo rotulo={rotuloDaLinha(linha, lado)} onMenos={() => mudarLinha(-mercado.passo)}
-          onMais={() => mudarLinha(mercado.passo)} desabilitaMenos={linha <= 0.5} />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex rounded-lg border border-line p-0.5 bg-surface-1">
+            {(['mais', 'menos'] as Lado[]).map(l => (
+              <button key={l} onClick={() => setLado(l)}
+                className={cn('h-10 px-4 rounded-md text-sm font-bold transition-colors',
+                  lado === l ? 'bg-surface-3 text-ink-1' : 'text-ink-3')}>
+                {l === 'mais' ? 'Mais de' : 'Menos de'}
+              </button>
+            ))}
+          </div>
+          <Passo rotulo={linhaTxt} onMenos={() => mudarLinha(-1)} onMais={() => mudarLinha(1)}
+            desabilitaMenos={linha <= 0.5} />
+        </div>
+        {mercado.soTotal && (
+          <p className="text-[11px] text-ink-3">Faltas só existem no jogo todo: o provedor não separa por tempo.</p>
+        )}
       </div>
 
-      {!ehDoTime && (
-        <div className="card p-4 border-accent/30">
-          <div className="flex items-center gap-3">
-            <div className="flex-1 min-w-0">
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">Nos jogos dos dois times</div>
-              <div className="text-base font-bold text-ink-1 mt-0.5">{mercado.frase} · {rotuloDaLinha(linha, lado)}</div>
-            </div>
-            <NumeroDaTaxa t={tJuntos} grande />
-          </div>
-          <div className="mt-3">
-            <BotaoBilhete cheio selecao={{
-              id: `${f.fixture_id}:${id}:${lado}:${linha}`, fixture_id: f.fixture_id, jogo: nomeJogo,
-              descricao: `${mercado.frase} · ${rotuloDaLinha(linha, lado)}`, bateu: tJuntos.bateu, n: tJuntos.n,
-            }} />
-          </div>
-        </div>
+      {mercado.escopo === 'jogo' ? quadrosDoJogo() : quadrosDoTime()}
+
+      {mercado.contador === 'amarelos' && periodo === 'total' && dados.arbitro && (
+        <CartaoDoArbitro arbitro={dados.arbitro} linha={linha} lado={lado} />
       )}
 
-      {linhaTime('home', valoresHome, tHome)}
-      {linhaTime('away', valoresAway, tAway)}
-
-      {id === 'cartoes' && dados.arbitro && <CartaoDoArbitro arbitro={dados.arbitro} linha={linha} lado={lado} />}
-
-      {id === 'gols' && (
+      {id === 'gols' && periodo === 'total' && (
         <div className="card p-4">
           <div className="flex items-center gap-3">
             <div className="flex-1 min-w-0">
               <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">Também no jogo</div>
               <div className="text-base font-bold text-ink-1 mt-0.5">Ambas marcam · Sim</div>
             </div>
-            <NumeroDaTaxa t={bttsJuntos} />
+            <NumeroDaTaxa t={btts} />
             <BotaoBilhete selecao={{
               id: `${f.fixture_id}:btts`, fixture_id: f.fixture_id, jogo: nomeJogo,
-              descricao: 'Ambas marcam · Sim', bateu: bttsJuntos.bateu, n: bttsJuntos.n,
+              descricao: 'Ambas marcam · Sim', bateu: btts.bateu, n: btts.n,
+              perna: { ...base, descricao: 'Ambas marcam · Sim', tipo: 'time', mercado: 'btts' },
             }} />
           </div>
         </div>
@@ -489,6 +555,11 @@ function AbaJogadores({ dados, nomeJogo }: { dados: RaioX; nomeJogo: string }) {
               <BotaoBilhete selecao={{
                 id: `${f.fixture_id}:p${j.player_id}:${estatId}:${minimo}`, fixture_id: f.fixture_id, jogo: nomeJogo,
                 descricao: `${j.nome} · ${fraseDoJogador(estat, minimo)}`, bateu: t.bateu, n: t.n, player_id: j.player_id,
+                perna: {
+                  fixture_id: f.fixture_id, home_team_id: f.home_team_id, away_team_id: f.away_team_id,
+                  home: f.home_team, away: f.away_team, descricao: `${j.nome} · ${fraseDoJogador(estat, minimo)}`,
+                  tipo: 'jogador', estat: estatId, minimo, player_id: j.player_id, player_name: j.nome,
+                },
               }} />
             </div>
           ))}
