@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>PickIA · 03 · Controle de banca</title>
+<link rel="stylesheet" href="base.css">
+<style>
+/* Um painel grande no centro troca de recorte da tela real de /banca, e o
+   rótulo de cima diz o que olhar. Ritmo de "tour guiado". */
+.painel { position: absolute; left: 90px; width: 900px; top: 470px; height: 1060px; border-radius: 40px; overflow: hidden;
+  border: 3px solid #2b2b31; background: #0a0a0c; box-shadow: 0 40px 120px rgba(0,0,0,.8), 0 0 100px rgba(0,204,0,.15); }
+.painel img { position: absolute; left: 0; width: 100%; }
+.passo { position: absolute; left: 0; right: 0; top: 200px; text-align: center; }
+.passo .n { font: 700 26px/1 var(--mono); color: var(--g); letter-spacing: .2em; }
+.zoom { animation: zoomlento 2.2s ease-out both; animation-delay: calc(var(--at) * 1s); transform-origin: 50% 0; }
+@keyframes zoomlento { from { transform: scale(1.08); filter: blur(6px); opacity: 0; } 25% { filter: blur(0); opacity: 1; } to { transform: scale(1); } }
+.caos { position: absolute; left: 0; top: 0; width: 1080px; height: 1920px; }
+.unid { padding: 60px 56px; }
+.unid .slider { height: 22px; border-radius: 11px; background: var(--s3); position: relative; margin: 46px 0 20px; }
+.unid .slider b { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 11px; background: linear-gradient(90deg, var(--g), var(--g2)); }
+.unid .slider i { position: absolute; top: 50%; width: 54px; height: 54px; margin: -27px 0 0 -27px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 8px rgba(0,204,0,.35); }
+.unid .faixa { display: flex; justify-content: space-between; font: 600 22px/1 Inter; color: var(--ink3); }
+.unid .linha { display: flex; justify-content: space-between; align-items: baseline; padding: 30px 0; border-bottom: 1.5px solid var(--line); font: 500 32px/1 Inter; color: var(--ink2); }
+.unid .linha b { font: 700 52px/1 var(--mono); color: var(--ink1); }
+</style>
+</head>
+<body data-dur="22" data-cortes="3,6,17">
+<div id="stage">
+
+  <!-- 0–3 · banca no escuro: grafico sem controle -->
+  <section class="scene" data-in="0" data-out="3">
+    <svg class="caos" viewBox="0 0 1080 1920">
+      <polyline id="caos" fill="none" stroke="#ef4444" stroke-width="7" stroke-linejoin="round" stroke-linecap="round" opacity=".85" pathLength="1"
+        points="0,1250 90,1090 160,1350 240,1010 300,1420 380,1150 450,1520 520,1060 600,1600 680,1240 760,1680 840,1300 920,1760 1000,1500 1080,1840"
+        style="stroke-dasharray:1;stroke-dashoffset:1;animation:draw 2.6s linear both"/>
+    </svg>
+    <h1 class="hl abs cx" style="top:330px">
+      <span class="ln split fit" data-at=".1" style="font-size:132px">Você controla</span>
+      <span class="ln fit a slam" style="--at:.5;font-size:180px"><span class="glitch" data-t="SUA BANCA?">SUA BANCA?</span></span>
+    </h1>
+  </section>
+
+  <!-- 3–6 · virada -->
+  <section class="scene" data-in="3" data-out="6">
+    <svg class="caos" viewBox="0 0 1080 1920">
+      <polyline fill="none" stroke="#00cc00" stroke-width="7" stroke-linejoin="round" stroke-linecap="round" pathLength="1"
+        points="0,1500 120,1470 240,1490 360,1430 480,1450 600,1390 720,1410 840,1350 960,1370 1080,1320"
+        style="stroke-dasharray:1;stroke-dashoffset:1;animation:draw 2.2s ease-out both;animation-delay:3.1s"/>
+    </svg>
+    <h1 class="hl abs cx" style="top:560px">
+      <span class="ln split fit" data-at="3.05" style="font-size:112px">Gestão também</span>
+      <span class="ln fit a slam" style="--at:3.45;font-size:112px"><em>faz parte do jogo.</em></span>
+    </h1>
+  </section>
+
+  <!-- 6–17 · tour pela tela real -->
+  <section class="scene" data-in="6" data-out="17">
+    <div class="passo" id="passo"></div>
+    <div class="painel a rise" style="--at:6">
+      <img class="zoom" style="--at:6.1;top:0" id="i1" alt="">
+      <div class="zoom unid" style="--at:8.3;position:absolute;inset:0;background:var(--bg)" id="i2">
+        <div class="lbl">Banca de demonstração</div>
+        <div class="linha"><span>Banca inicial</span><b>R$ 500</b></div>
+        <div class="linha"><span>Valor da unidade</span><b><span data-cnt="5,25,8.6,9.6">5</span></b></div>
+        <div class="slider"><b id="sb"></b><i id="si"></i></div>
+        <div class="faixa"><span>1%</span><span style="color:var(--g)">por entrada: <b id="pct" style="font-family:var(--mono)">1%</b></span><span>10%</span></div>
+        <div class="linha" style="border:0;margin-top:30px"><span>Stake sugerida</span><b style="font-size:40px;color:var(--g)">por Kelly</b></div>
+      </div>
+      <img class="zoom" style="--at:10.5;top:30px" id="i3" alt="">
+      <img class="zoom" style="--at:12.7;top:30px" id="i4" alt="">
+      <div id="i4b" style="position:absolute;left:56px;right:56px;top:560px">
+        <div class="linha a up" style="--at:13.1;display:flex;gap:20px;align-items:center;font:600 34px/1.25 Inter;padding:24px 0;border-bottom:1.5px solid var(--line)"><span class="dot"></span>Stake sugerida por Kelly</div>
+        <div class="linha a up" style="--at:13.3;display:flex;gap:20px;align-items:center;font:600 34px/1.25 Inter;padding:24px 0;border-bottom:1.5px solid var(--line)"><span class="dot"></span>Controle de unidade</div>
+        <div class="linha a up" style="--at:13.5;display:flex;gap:20px;align-items:center;font:600 34px/1.25 Inter;padding:24px 0"><span class="dot"></span>Fechamento mensal automático</div>
+      </div>
+      <img class="zoom" style="--at:14.9;top:0" id="i5" alt="">
+      <div class="hlbox a pop" style="--at:6.7;left:28px;top:778px;width:414px;height:292px" id="h1"></div>
+    </div>
+    <div class="abs cx a fade" style="--at:6.4;top:1570px"><span class="ilus">Tela real · banca de demonstração</span></div>
+  </section>
+
+  <section class="scene endcard" data-in="17" data-out="22.01" data-l1="Controle sua banca" data-l2="com a PickIA." data-f1="96" data-f2="128"></section>
+</div>
+
+<script src="base.js"></script>
+<script>
+/* Recortes reais de /banca (telas.py), abertos com a banca de demonstração de
+   fixtures.py: R$ 500 de banca, unidade de R$ 25 (5%). Nada aqui é conta de
+   cliente. */
+const PASSOS = [
+  [6.0, '01', 'Banca'], [8.3, '02', '% por entrada'], [10.5, '03', 'Evolução'],
+  [12.7, '04', 'Gestão de risco'], [14.9, '05', 'Histórico'],
+];
+A.montar(() => {
+  i1.src = A.tela('banca-topo'); i3.src = A.tela('banca-evolucao');
+  i4.src = A.tela('banca-distribuicao'); i5.src = A.tela('banca-historico');
+  // cada camada some quando a seguinte entra
+  const camadas = [i1, i2, i3, i4, i5];
+  camadas.forEach((c, k) => { if (k < 4) c.style.cssText += `;--fim:${PASSOS[k + 1][0]}`; });
+});
+A.quadro(t => {
+  let atual = PASSOS[0];
+  PASSOS.forEach(p => { if (t >= p[0]) atual = p; });
+  const novo = atual[1];
+  if (passo.dataset.n !== novo) {
+    passo.dataset.n = novo;
+    passo.innerHTML = `<div class="n">${atual[1]} / 05</div><div class="hl" style="font-size:96px;margin-top:14px;white-space:nowrap">${atual[2]}</div>`;
+  }
+  // entrada do rotulo: sobe nos primeiros 0.3s de cada passo
+  const k = A.clamp((t - atual[0]) / .3);
+  passo.style.opacity = k; passo.style.transform = `translateY(${(1 - A.ease(k)) * 40}px)`;
+  [i1, i2, i3, i4, i5].forEach((c, j) => {
+    const ini = PASSOS[j][0], fim = j < 4 ? PASSOS[j + 1][0] : 99;
+    c.style.visibility = t >= ini && t < fim ? '' : 'hidden';
+  });
+  h1.style.visibility = t < 8.3 ? '' : 'hidden';
+  i4b.style.visibility = t >= 12.7 && t < 14.9 ? '' : 'hidden';
+  // a unidade desliza de 1% ate 5%
+  const u = A.clamp((t - 8.6) / 1);
+  const v = 1 + 4 * A.ease(u);
+  sb.style.width = (v - 1) / 9 * 100 + '%'; si.style.left = (v - 1) / 9 * 100 + '%';
+  document.getElementById('pct').textContent = Math.round(v) + '%';
+  // passo 03: a imagem da evolucao e' mais larga que alta; amplia pra encher o painel
+  i3.style.width = '100%'; i4.style.width = '100%';
+});
+document.querySelector('[data-cnt]').dataset.pre = 'R$ ';
+</script>
+</body>
+</html>
