@@ -1,14 +1,15 @@
 import { useEffect, useState, useRef, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { AnimatePresence, m as motion } from 'framer-motion'
 import api from '../services/api'
 import PageShell from '../components/PageShell'
 import { PAGE_WIDTH } from '../lib/pageWidth'
 import { capitalizarFrase } from '../utils/format'
-import FixtureStatsModal from '../components/FixtureStatsModal'
+import RaioXDoJogo, { FormaPontos } from '../components/jogos/RaioXDoJogo'
+import BandejaDoBilhete from '../components/jogos/BandejaDoBilhete'
 import { EstatisticasContent } from './Estatisticas'
 import { useAuth } from '../context/AuthContext'
-import { Badge, ErrorState, LiveDot, Spinner } from '../components/ui'
+import { Badge, ErrorState, LiveDot, SearchInput, Spinner } from '../components/ui'
 import AgendaInteligente from '../components/AgendaInteligente'
 import ExplorarLigas from '../components/ExplorarLigas'
 import { sinalizarNavegacao } from '../services/progressBus'
@@ -143,6 +144,9 @@ interface Fixture {
   has_pick?: boolean
   pick_market?: string | null
   pick_type_flag?: 'vip' | 'free' | null
+  /** Ultimos 5 resultados de cada time, do mais recente pro mais antigo. */
+  forma_home?: string[]
+  forma_away?: string[]
 }
 
 interface LiveStats {
@@ -219,6 +223,30 @@ export default function Fixtures() {
   const [collapsed, setCollapsed]      = useState<Set<string>>(new Set())
   const [liveStats, setLiveStats]      = useState<Record<number, LiveStats>>({})
   const [erro, setErro]                = useState(false)
+  const [busca, setBusca]              = useState('')
+  const [filtro, setFiltro]            = useState<'todos' | 'pick' | 'aovivo'>('todos')
+  const navigate = useNavigate()
+
+  /*
+   * TOCAR NUM JOGO (2026-10-06).
+   *
+   * No computador o Raio-X abre no painel ao lado, como antes. No celular ele
+   * abre na PROPRIA PAGINA (/jogos/<id>), e nao numa folha sobre a lista: tem
+   * endereco, o voltar do aparelho funciona e a lista de jogadores ganha a
+   * tela inteira. Os times vao na URL porque o jogo pode ser de uma data que
+   * a coleta ainda nao trouxe pro banco.
+   */
+  function abrirJogo(f: Fixture) {
+    if (!canSeeStats) { setLockPrompt(true); return }
+    if (isDesktop) { setStatsFixture(f); return }
+    const q = new URLSearchParams()
+    if (f.home_team_id) q.set('home', String(f.home_team_id))
+    if (f.away_team_id) q.set('away', String(f.away_team_id))
+    q.set('league', String(f.league_id))
+    q.set('casa', f.home_team); q.set('fora', f.away_team)
+    if (f.match_datetime) q.set('quando', f.match_datetime)
+    navigate(`/jogos/${f.fixture_id}?${q}`)
+  }
 
   function fetchFixtures(d: string) {
     setLoading(true)
@@ -288,10 +316,20 @@ export default function Fixtures() {
     }
   }, [fixtures])
 
+  /* Busca por time e os dois recortes que importam num dia cheio: o que a IA
+     escolheu e o que está rolando agora. Sem acento e sem caixa: quem digita
+     "sao paulo" tem que achar o São Paulo. */
+  const semAcento = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  const termo = semAcento(busca.trim())
+  const visiveis = fixtures.filter(f =>
+    (filtro !== 'pick' || f.has_pick) &&
+    (filtro !== 'aovivo' || isLive(f.status)) &&
+    (!termo || semAcento(`${f.home_team} ${f.away_team} ${f.league_name}`).includes(termo)))
+
   // Agrupa por liga (preserva ordem de aparição)
   const grouped: { key: string; league_id: number; logo?: string; flag?: string; country?: string; games: Fixture[] }[] = []
   const seen = new Set<string>()
-  for (const f of fixtures) {
+  for (const f of visiveis) {
     if (!seen.has(f.league_name)) {
       seen.add(f.league_name)
       grouped.push({
@@ -409,18 +447,25 @@ export default function Fixtures() {
 
       {pageTab === 'jogos' && <motion.div key="jogos" variants={tabFade} initial="hidden" animate="visible" exit="exit">
 
-        {/* Banner informativo */}
-        <div className="flex items-start gap-3 bg-surface-1 border border-line rounded-lg px-4 py-3 mb-5">
-          <svg className="w-4 h-4 text-ink-3 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <div>
-            <p className="text-ink-2 text-xs leading-relaxed">
-              Exibindo apenas jogos das <span className="text-ink-1 font-semibold">ligas monitoradas pela IA</span>.
-              Os picks são gerados automaticamente antes de cada rodada e aparecem com o badge <span className="text-green-400 font-semibold">Pick IA</span> no jogo correspondente.
-            </p>
+        {/* Busca e recortes · no celular a lista de um sábado passa de 40
+            jogos, e achar "o do Flamengo" rolando é o que mais se faz aqui. */}
+        <div className="flex flex-col sm:flex-row gap-2 mb-4 lg:max-w-[720px]">
+          <SearchInput value={busca} onChange={setBusca} placeholder="Buscar time ou liga"
+            label="Buscar jogo" className="flex-1" />
+          <div className="flex gap-2">
+            {([['todos', 'Todos'], ['pick', 'Com pick'], ['aovivo', 'Ao vivo']] as const).map(([k, r]) => (
+              <button key={k} onClick={() => setFiltro(k)}
+                className={`h-11 px-4 rounded-full text-sm font-semibold border shrink-0 transition-colors ${
+                  filtro === k ? 'bg-accent text-on-fill border-accent' : 'bg-surface-1 text-ink-2 border-line'}`}>
+                {r}{k === 'aovivo' && liveCount > 0 ? ` · ${liveCount}` : ''}
+              </button>
+            ))}
           </div>
         </div>
+        <p className="text-[11px] text-ink-3 mb-4">
+          Só as ligas cadastradas no site. Toque num jogo pra abrir o Raio-X: taxa de acerto por linha,
+          jogadores, confronto e árbitro.
+        </p>
 
         {loading ? (
           <div className="card p-16 flex items-center justify-center">
@@ -432,6 +477,12 @@ export default function Fixtures() {
               title="Não deu pra carregar os jogos"
               onRetry={() => fetchFixtures(date)}
             />
+          </div>
+        ) : fixtures.length > 0 && visiveis.length === 0 ? (
+          <div className="card p-10 text-center">
+            <p className="text-ink-2 text-sm">Nenhum jogo com esse filtro.</p>
+            <button onClick={() => { setBusca(''); setFiltro('todos') }}
+              className="mt-3 h-11 px-4 rounded-lg border border-line text-sm font-semibold text-ink-2">Limpar filtro</button>
           </div>
         ) : fixtures.length === 0 ? (
           <div className="card p-12 text-center border-dashed">
@@ -506,7 +557,7 @@ export default function Fixtures() {
                           // isso não dá pra saber de qual jogo ele fala.
                           statsFixture?.fixture_id === f.fixture_id
                             ? 'bg-surface-2/60' : 'hover:bg-surface-2/30'}`}
-                        onClick={() => canSeeStats ? setStatsFixture(f) : setLockPrompt(true)}
+                        onClick={() => abrirJogo(f)}
                       >
 
                         {/*
@@ -538,9 +589,9 @@ export default function Fixtures() {
 
                         <div className="flex-1 min-w-0 space-y-1">
                           {([
-                            ['home', f.home_team, f.home_team_id, f.home_goals, f.away_goals] as const,
-                            ['away', f.away_team, f.away_team_id, f.away_goals, f.home_goals] as const,
-                          ]).map(([lado, nome, id, gols, golsAdv]) => {
+                            ['home', f.home_team, f.home_team_id, f.home_goals, f.away_goals, f.forma_home] as const,
+                            ['away', f.away_team, f.away_team_id, f.away_goals, f.home_goals, f.forma_away] as const,
+                          ]).map(([lado, nome, id, gols, golsAdv, forma]) => {
                             // Placar decidido escurece o perdedor, como em
                             // qualquer placar ao vivo · a leitura de quem ganhou
                             // fica instantânea, sem comparar os dois números.
@@ -553,6 +604,11 @@ export default function Fixtures() {
                                          : live ? 'text-ink-1 font-bold' : 'text-ink-1 font-semibold'}`}>
                                   {nome}
                                 </span>
+                                {!live && !finished && forma && forma.length > 0 && (
+                                  <span className="hidden min-[380px]:block shrink-0">
+                                    <FormaPontos forma={forma} tamanho="sm" />
+                                  </span>
+                                )}
                                 {(finished || live) && (
                                   <span className={`font-mono text-sm font-black tabular-nums shrink-0 w-5 text-right ${
                                     live ? 'text-green-400' : perdeu ? 'text-ink-4' : 'text-ink-1'}`}>
@@ -626,17 +682,14 @@ export default function Fixtures() {
           */}
           <div className="hidden lg:block flex-1 min-w-0">
             {statsFixture ? (
-              <FixtureStatsModal
-                key={statsFixture.fixture_id}
-                fixture={statsFixture}
-                onClose={() => setStatsFixture(null)}
-                inline
-              />
+              <div className="sticky top-4 max-h-[calc(100dvh-2rem)] overflow-y-auto pr-1 scrollbar-none">
+                <RaioXDoJogo key={statsFixture.fixture_id} jogo={statsFixture} />
+              </div>
             ) : (
               <div className="card border-dashed p-12 text-center sticky top-4">
-                <p className="text-sm text-ink-3">Clique em um jogo para ver a análise.</p>
+                <p className="text-sm text-ink-3">Clique em um jogo para abrir o Raio-X.</p>
                 <p className="text-xs text-ink-4 mt-1.5">
-                  Forma recente dos dois times, gols, escanteios e cartões.
+                  Taxa de acerto por linha, jogadores com foto, confronto e árbitro.
                 </p>
               </div>
             )}
@@ -646,14 +699,7 @@ export default function Fixtures() {
       </motion.div>}
       </AnimatePresence>
 
-      <AnimatePresence>
-      {statsFixture && !isDesktop && (
-        <FixtureStatsModal
-          fixture={statsFixture}
-          onClose={() => setStatsFixture(null)}
-        />
-      )}
-      </AnimatePresence>
+      {pageTab === 'jogos' && <BandejaDoBilhete />}
 
       {/* Lock modal para usuários free */}
       <AnimatePresence>

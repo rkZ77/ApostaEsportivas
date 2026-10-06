@@ -1,0 +1,620 @@
+import { useEffect, useMemo, useState } from 'react'
+import { Check, Flag, Minus, Plus, Shield, Users } from 'lucide-react'
+import api from '../../services/api'
+import { cn } from '../../lib/cn'
+import { ErrorState, Skeleton } from '../ui'
+import { LeagueLogo, PlayerPhoto, TeamLogo } from '../TeamLogo'
+import {
+  ambasMarcam, ehGoleiro, ESTATS_DE_JOGADOR, fraseDoJogador, MERCADOS_DE_TIME, resultadoDoJogo,
+  rotuloDaLinha, taxa, taxaDoJogador, tomDaTaxa,
+  type EstatDeJogador, type Jogador, type JogoDoTime, type Lado, type RaioX, type Taxa,
+} from '../../lib/raioX'
+import { alternar, useBilheteMontado, type Selecao } from '../../lib/bilheteMontado'
+
+/*
+ * Raio-X do jogo (2026-10-06) · o lugar de pesquisar antes de montar bilhete.
+ *
+ * DESENHADO PRO CELULAR PRIMEIRO, a pedido do usuário: uma coluna, controles
+ * de 44px (o dedo, não o mouse), números grandes e a evidência em barra, que
+ * se lê de relance. No computador o mesmo componente vive no painel ao lado da
+ * lista de jogos, com mais respiro e nada a mais.
+ *
+ * A conta (linha, taxa, média) é toda de lib/raioX.ts · aqui é só desenho.
+ */
+
+type Aba = 'mercados' | 'jogadores' | 'confronto' | 'forma'
+
+export interface JogoBase {
+  fixture_id: number
+  home_team_id?: number
+  away_team_id?: number
+  league_id?: number
+  home_team?: string
+  away_team?: string
+  match_datetime?: string | null
+  forma_home?: string[]
+  forma_away?: string[]
+}
+
+export default function RaioXDoJogo({ jogo }: { jogo: JogoBase }) {
+  const [dados, setDados] = useState<RaioX | null>(null)
+  const [erro, setErro] = useState(false)
+  const [aba, setAba] = useState<Aba>('mercados')
+
+  const carregar = () => {
+    setErro(false)
+    setDados(null)
+    api.get(`/fixtures/${jogo.fixture_id}/raio-x`, {
+      params: { home: jogo.home_team_id, away: jogo.away_team_id, league: jogo.league_id },
+    })
+      .then(r => setDados(r.data))
+      .catch(() => setErro(true))
+  }
+  useEffect(carregar, [jogo.fixture_id])
+
+  const nomeJogo = `${dados?.fixture.home_team || jogo.home_team || 'Casa'} x ${dados?.fixture.away_team || jogo.away_team || 'Fora'}`
+
+  return (
+    <div className="min-w-0">
+      <Placar jogo={jogo} dados={dados} />
+
+      {/* Abas fixas ao rolar · no celular a lista de jogadores é longa e a
+          troca de aba não pode exigir voltar ao topo. */}
+      <div className="sticky top-0 z-20 -mx-4 px-4 sm:mx-0 sm:px-0 bg-surface-0/95 backdrop-blur border-b border-line">
+        <div className="flex overflow-x-auto scrollbar-none" role="tablist">
+          {([
+            ['mercados', 'Mercados'], ['jogadores', 'Jogadores'],
+            ['confronto', 'Confronto'], ['forma', 'Forma'],
+          ] as [Aba, string][]).map(([k, rotulo]) => (
+            <button key={k} role="tab" aria-selected={aba === k} onClick={() => setAba(k)}
+              className={cn(
+                'relative flex-1 min-w-[88px] h-12 text-sm font-bold transition-colors',
+                aba === k ? 'text-ink-1' : 'text-ink-3 hover:text-ink-2',
+              )}>
+              {rotulo}
+              {aba === k && <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-accent" />}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="pt-4 pb-28 md:pb-6">
+        {erro ? (
+          <div className="card"><ErrorState title="Não deu pra carregar o Raio-X" onRetry={carregar} /></div>
+        ) : !dados ? (
+          <div className="space-y-3">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-36 w-full" />
+            <Skeleton className="h-36 w-full" />
+          </div>
+        ) : aba === 'mercados' ? (
+          <AbaMercados dados={dados} nomeJogo={nomeJogo} />
+        ) : aba === 'jogadores' ? (
+          <AbaJogadores dados={dados} nomeJogo={nomeJogo} />
+        ) : aba === 'confronto' ? (
+          <AbaConfronto dados={dados} />
+        ) : (
+          <AbaForma dados={dados} />
+        )}
+      </div>
+    </div>
+  )
+}
+
+/* ── Placar ─────────────────────────────────────────────────────────────── */
+
+function Placar({ jogo, dados }: { jogo: JogoBase; dados: RaioX | null }) {
+  const f = dados?.fixture
+  const quando = f?.match_datetime ?? jogo.match_datetime
+  const hora = quando ? new Date(quando).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '--:--'
+  const dia = quando ? new Date(quando).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }) : ''
+  const formaHome = jogo.forma_home ?? dados?.times.home.jogos.slice(0, 5).map(resultadoDoJogo).filter(Boolean) as string[] ?? []
+  const formaAway = jogo.forma_away ?? dados?.times.away.jogos.slice(0, 5).map(resultadoDoJogo).filter(Boolean) as string[] ?? []
+
+  const Time = ({ id, nome, forma }: { id?: number; nome?: string; forma: string[] }) => (
+    <div className="flex-1 min-w-0 flex flex-col items-center text-center gap-2">
+      <TeamLogo id={id} name={nome ?? ''} size={52} />
+      <span className="text-sm font-bold text-ink-1 leading-tight line-clamp-2">{nome}</span>
+      <FormaPontos forma={forma} />
+    </div>
+  )
+
+  return (
+    <div className="card p-4 mb-3 relative overflow-hidden">
+      <div aria-hidden className="absolute inset-0 bg-data-grid bg-[length:24px_24px] opacity-60 [mask-image:radial-gradient(ellipse_at_top,black,transparent_70%)]" />
+      <div className="relative">
+        <div className="flex items-center justify-center gap-2 text-[11px] text-ink-3 mb-3">
+          <LeagueLogo id={f?.league_id ?? jogo.league_id} size={14} />
+          <span className="truncate">{f?.round ?? ''}</span>
+        </div>
+        <div className="flex items-start gap-2">
+          <Time id={f?.home_team_id ?? jogo.home_team_id} nome={f?.home_team || jogo.home_team} forma={formaHome} />
+          <div className="shrink-0 pt-3 text-center">
+            <div className="font-mono text-2xl font-black text-ink-1 tabular-nums">{hora}</div>
+            <div className="text-[11px] text-ink-3 capitalize mt-0.5">{dia}</div>
+          </div>
+          <Time id={f?.away_team_id ?? jogo.away_team_id} nome={f?.away_team || jogo.away_team} forma={formaAway} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function FormaPontos({ forma, tamanho = 'md' }: { forma: string[]; tamanho?: 'sm' | 'md' }) {
+  if (!forma.length) return null
+  const cor: Record<string, string> = {
+    V: 'bg-green-500 text-on-fill', E: 'bg-surface-3 text-ink-2', D: 'bg-red-500 text-on-fill',
+  }
+  return (
+    <div className="flex gap-1" aria-label={`Últimos jogos: ${forma.join(' ')}`}>
+      {/* Do mais antigo pro mais recente, da esquerda pra direita: é como
+          qualquer placar mostra, e o último jogo fica na ponta onde o olho
+          termina de ler. */}
+      {[...forma].reverse().map((r, i) => (
+        <span key={i} className={cn(
+          'grid place-items-center rounded font-black',
+          tamanho === 'md' ? 'w-5 h-5 text-[10px]' : 'w-3.5 h-3.5 text-[8px]',
+          cor[r] ?? cor.E,
+        )}>{r}</span>
+      ))}
+    </div>
+  )
+}
+
+/* ── Peças comuns ───────────────────────────────────────────────────────── */
+
+function Chips<T extends string>({ opcoes, valor, onChange }: {
+  opcoes: Array<{ id: T; rotulo: string }>; valor: T; onChange: (v: T) => void
+}) {
+  return (
+    <div className="-mx-4 px-4 sm:mx-0 sm:px-0 flex gap-2 overflow-x-auto scrollbar-none pb-1">
+      {opcoes.map(o => (
+        <button key={o.id} onClick={() => onChange(o.id)}
+          className={cn(
+            'shrink-0 h-10 px-4 rounded-full text-sm font-semibold border transition-colors',
+            valor === o.id
+              ? 'bg-accent text-on-fill border-accent'
+              : 'bg-surface-1 text-ink-2 border-line hover:border-line-strong',
+          )}>
+          {o.rotulo}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function Passo({ rotulo, onMenos, onMais, desabilitaMenos }: {
+  rotulo: string; onMenos: () => void; onMais: () => void; desabilitaMenos?: boolean
+}) {
+  const botao = 'w-11 h-11 grid place-items-center rounded-lg border border-line bg-surface-1 text-ink-1 hover:border-line-strong disabled:opacity-30 active:scale-95 transition'
+  return (
+    <div className="flex items-center gap-2">
+      <button className={botao} onClick={onMenos} disabled={desabilitaMenos} aria-label="Diminuir linha"><Minus size={18} /></button>
+      <span className="min-w-[124px] text-center font-mono font-black text-base text-ink-1 tabular-nums">{rotulo}</span>
+      <button className={botao} onClick={onMais} aria-label="Aumentar linha"><Plus size={18} /></button>
+    </div>
+  )
+}
+
+const TOM: Record<ReturnType<typeof tomDaTaxa>, string> = {
+  bom: 'text-accent-ink', medio: 'text-amber-400', ruim: 'text-red-400', nenhum: 'text-ink-4',
+}
+
+function NumeroDaTaxa({ t, grande }: { t: Taxa; grande?: boolean }) {
+  return (
+    <div className="text-right shrink-0">
+      <div className={cn('font-mono font-black tabular-nums leading-none', grande ? 'text-2xl' : 'text-lg', TOM[tomDaTaxa(t.pct)])}>
+        {t.n ? `${t.bateu}/${t.n}` : '—'}
+      </div>
+      <div className="text-[11px] text-ink-3 mt-1 tabular-nums">
+        {t.pct != null ? `${Math.round(t.pct * 100)}%` : 'sem dado'}
+        {t.media != null && <> · média {t.media.toFixed(1)}</>}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Uma barra por jogo, do mais antigo pro mais recente, com a linha desenhada.
+ * Verde = bateu. É o gráfico que responde "bate sempre ou bateu duas vezes
+ * muito?" melhor que qualquer média.
+ */
+function Barras({ valores, linha, lado }: { valores: Array<number | null>; linha: number; lado: Lado }) {
+  const serie = [...valores].reverse()
+  const max = Math.max(linha + 1, ...serie.map(v => v ?? 0))
+  const yLinha = 100 - (linha / max) * 100
+  return (
+    <div className="relative h-14 flex items-end gap-[3px]" aria-hidden>
+      {serie.map((v, i) => {
+        const bateu = v != null && v !== linha && (lado === 'mais' ? v > linha : v < linha)
+        return (
+          <div key={i} className="flex-1 h-full flex flex-col justify-end items-center gap-0.5">
+            <span className="text-[9px] font-mono text-ink-3 tabular-nums leading-none">{v ?? ''}</span>
+            <div
+              className={cn('w-full rounded-sm', v == null ? 'bg-surface-3/40' : bateu ? 'bg-green-500' : 'bg-surface-3')}
+              style={{ height: `${v == null ? 6 : Math.max(6, (v / max) * 78)}%` }}
+            />
+          </div>
+        )
+      })}
+      <div className="absolute inset-x-0 border-t border-dashed border-ink-3/60 pointer-events-none"
+        style={{ top: `${yLinha * 0.78 + 22}%` }} />
+    </div>
+  )
+}
+
+function BotaoBilhete({ selecao, cheio }: { selecao: Selecao; cheio?: boolean }) {
+  const bilhete = useBilheteMontado()
+  const dentro = bilhete.some(s => s.id === selecao.id)
+  return (
+    <button
+      onClick={() => alternar(selecao)}
+      aria-pressed={dentro}
+      aria-label={dentro ? 'Tirar do bilhete' : 'Pôr no bilhete'}
+      className={cn(
+        'flex items-center justify-center rounded-lg border font-bold transition active:scale-95',
+        cheio ? 'w-full h-12 gap-2 text-sm' : 'w-11 h-11 shrink-0',
+        dentro
+          ? 'bg-accent/15 border-accent/50 text-accent-ink'
+          : cheio ? 'bg-accent text-on-fill border-accent hover:bg-accent-hover' : 'bg-surface-1 border-line text-ink-2 hover:border-accent/50',
+      )}>
+      {dentro ? <Check size={18} /> : <Plus size={18} />}
+      {cheio && <span>{dentro ? 'No bilhete' : 'Pôr no bilhete'}</span>}
+    </button>
+  )
+}
+
+/* ── Mercados ───────────────────────────────────────────────────────────── */
+
+function AbaMercados({ dados, nomeJogo }: { dados: RaioX; nomeJogo: string }) {
+  const [id, setId] = useState(MERCADOS_DE_TIME[0].id)
+  const mercado = MERCADOS_DE_TIME.find(m => m.id === id)!
+  const [linhas, setLinhas] = useState<Record<string, number>>({})
+  const [lado, setLado] = useState<Lado>('mais')
+  const linha = linhas[id] ?? mercado.linhaPadrao
+  const mudarLinha = (d: number) => setLinhas(l => ({ ...l, [id]: Math.max(0.5, linha + d) }))
+
+  const { home, away } = dados.times
+  const f = dados.fixture
+  const valoresHome = home.jogos.map(mercado.valor)
+  const valoresAway = away.jogos.map(mercado.valor)
+  const tHome = taxa(valoresHome, linha, lado)
+  const tAway = taxa(valoresAway, linha, lado)
+  const tJuntos = taxa([...valoresHome, ...valoresAway], linha, lado)
+  const ehDoTime = id.endsWith('_time')
+
+  const linhaTime = (team: 'home' | 'away', valores: Array<number | null>, t: Taxa) => {
+    const tid = team === 'home' ? f.home_team_id : f.away_team_id
+    const nome = team === 'home' ? f.home_team : f.away_team
+    return (
+      <div className="card p-4">
+        <div className="flex items-center gap-3 mb-3">
+          <TeamLogo id={tid} name={nome} size={28} />
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-bold text-ink-1 truncate">{nome}</div>
+            <div className="text-[11px] text-ink-3">últimos {valores.length} jogos</div>
+          </div>
+          <NumeroDaTaxa t={t} />
+          {ehDoTime && (
+            <BotaoBilhete selecao={{
+              id: `${f.fixture_id}:${id}:${team}:${lado}:${linha}`, fixture_id: f.fixture_id, jogo: nomeJogo,
+              descricao: `${mercado.frase} (${nome}) · ${rotuloDaLinha(linha, lado)}`, bateu: t.bateu, n: t.n,
+            }} />
+          )}
+        </div>
+        <Barras valores={valores} linha={linha} lado={lado} />
+      </div>
+    )
+  }
+
+  const btts = useMemo(() => ({
+    home: taxa(home.jogos.map(ambasMarcam).map(b => (b == null ? null : b ? 1 : 0)), 0.5, 'mais'),
+    away: taxa(away.jogos.map(ambasMarcam).map(b => (b == null ? null : b ? 1 : 0)), 0.5, 'mais'),
+  }), [home.jogos, away.jogos])
+  const bttsJuntos: Taxa = {
+    bateu: btts.home.bateu + btts.away.bateu, n: btts.home.n + btts.away.n,
+    pct: btts.home.n + btts.away.n ? (btts.home.bateu + btts.away.bateu) / (btts.home.n + btts.away.n) : null,
+    media: null,
+  }
+
+  return (
+    <div className="space-y-3">
+      <Chips opcoes={MERCADOS_DE_TIME.map(m => ({ id: m.id, rotulo: m.rotulo }))} valor={id} onChange={setId} />
+
+      <div className="card p-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex rounded-lg border border-line p-0.5 bg-surface-1">
+          {(['mais', 'menos'] as Lado[]).map(l => (
+            <button key={l} onClick={() => setLado(l)}
+              className={cn('h-10 px-4 rounded-md text-sm font-bold transition-colors',
+                lado === l ? 'bg-surface-3 text-ink-1' : 'text-ink-3')}>
+              {l === 'mais' ? 'Mais de' : 'Menos de'}
+            </button>
+          ))}
+        </div>
+        <Passo rotulo={rotuloDaLinha(linha, lado)} onMenos={() => mudarLinha(-mercado.passo)}
+          onMais={() => mudarLinha(mercado.passo)} desabilitaMenos={linha <= 0.5} />
+      </div>
+
+      {!ehDoTime && (
+        <div className="card p-4 border-accent/30">
+          <div className="flex items-center gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">Nos jogos dos dois times</div>
+              <div className="text-base font-bold text-ink-1 mt-0.5">{mercado.frase} · {rotuloDaLinha(linha, lado)}</div>
+            </div>
+            <NumeroDaTaxa t={tJuntos} grande />
+          </div>
+          <div className="mt-3">
+            <BotaoBilhete cheio selecao={{
+              id: `${f.fixture_id}:${id}:${lado}:${linha}`, fixture_id: f.fixture_id, jogo: nomeJogo,
+              descricao: `${mercado.frase} · ${rotuloDaLinha(linha, lado)}`, bateu: tJuntos.bateu, n: tJuntos.n,
+            }} />
+          </div>
+        </div>
+      )}
+
+      {linhaTime('home', valoresHome, tHome)}
+      {linhaTime('away', valoresAway, tAway)}
+
+      {id === 'cartoes' && dados.arbitro && <CartaoDoArbitro arbitro={dados.arbitro} linha={linha} lado={lado} />}
+
+      {id === 'gols' && (
+        <div className="card p-4">
+          <div className="flex items-center gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">Também no jogo</div>
+              <div className="text-base font-bold text-ink-1 mt-0.5">Ambas marcam · Sim</div>
+            </div>
+            <NumeroDaTaxa t={bttsJuntos} />
+            <BotaoBilhete selecao={{
+              id: `${f.fixture_id}:btts`, fixture_id: f.fixture_id, jogo: nomeJogo,
+              descricao: 'Ambas marcam · Sim', bateu: bttsJuntos.bateu, n: bttsJuntos.n,
+            }} />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CartaoDoArbitro({ arbitro, linha, lado }: { arbitro: NonNullable<RaioX['arbitro']>; linha: number; lado: Lado }) {
+  const t = taxa(arbitro.jogos.map(j => j.amarelos), linha, lado)
+  return (
+    <div className="card p-4">
+      <div className="flex items-center gap-3 mb-3">
+        <span className="w-9 h-9 grid place-items-center rounded-full bg-yellow-400/15 text-yellow-400 shrink-0"><Flag size={18} /></span>
+        <div className="flex-1 min-w-0">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">Árbitro</div>
+          <div className="text-sm font-bold text-ink-1 truncate">{arbitro.nome}</div>
+        </div>
+        <NumeroDaTaxa t={t} />
+      </div>
+      {arbitro.jogos.length > 0
+        ? <Barras valores={arbitro.jogos.map(j => j.amarelos)} linha={linha} lado={lado} />
+        : <p className="text-xs text-ink-3">Sem jogos dele no histórico das nossas ligas.</p>}
+    </div>
+  )
+}
+
+/* ── Jogadores ──────────────────────────────────────────────────────────── */
+
+/* De onde veio o "titular provável", na língua de quem lê (o backend manda a
+   chave sem acento). */
+const FONTE_TITULARES: Record<string, string> = {
+  'escalacao oficial': 'escalação oficial do jogo',
+  'escalacao provavel': 'escalação provável do jogo',
+  'escalacao do jogo': 'escalação do jogo',
+  'ultima escalacao': 'última escalação do time',
+}
+
+function AbaJogadores({ dados, nomeJogo }: { dados: RaioX; nomeJogo: string }) {
+  const [time, setTime] = useState<'home' | 'away'>('home')
+  const [estatId, setEstatId] = useState<EstatDeJogador['id']>('chutes_alvo')
+  const estat = ESTATS_DE_JOGADOR.find(e => e.id === estatId)!
+  const [minimos, setMinimos] = useState<Record<string, number>>({})
+  const minimo = minimos[estatId] ?? estat.minimoPadrao
+  const { fonte_titulares, lista } = dados.jogadores[time]
+  const f = dados.fixture
+
+  /* Goleiro só aparece em Defesas, e Defesas só mostra goleiro: zagueiro com
+     "0 defesas" em dez jogos é uma linha inteira dizendo nada. Quem jogou um
+     jogo só fica pro fim · 1/1 não é tendência, é anedota. */
+  const jogadores = useMemo(() => {
+    const filtrados = lista.filter(j => (estat.soGoleiro ? ehGoleiro(j) : !ehGoleiro(j)))
+    return filtrados
+      .map(j => ({ j, t: taxaDoJogador(j, estatId, minimo) }))
+      .sort((a, b) =>
+        Number(b.j.titular_provavel) - Number(a.j.titular_provavel)
+        || Number(b.t.n >= 3) - Number(a.t.n >= 3)
+        || (b.t.pct ?? -1) - (a.t.pct ?? -1)
+        || b.j.minutos_total - a.j.minutos_total)
+  }, [lista, estatId, minimo, estat.soGoleiro])
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-2">
+        {(['home', 'away'] as const).map(t => {
+          const id = t === 'home' ? f.home_team_id : f.away_team_id
+          const nome = t === 'home' ? f.home_team : f.away_team
+          return (
+            <button key={t} onClick={() => setTime(t)}
+              className={cn('h-12 rounded-lg border flex items-center justify-center gap-2 px-2 text-sm font-bold transition-colors min-w-0',
+                time === t ? 'bg-surface-2 border-line-strong text-ink-1' : 'bg-surface-1 border-line text-ink-3')}>
+              <TeamLogo id={id} name={nome} size={22} />
+              <span className="truncate">{nome}</span>
+            </button>
+          )
+        })}
+      </div>
+
+      <Chips opcoes={ESTATS_DE_JOGADOR.map(e => ({ id: e.id, rotulo: e.rotulo }))} valor={estatId} onChange={setEstatId} />
+
+      <div className="card p-3 flex items-center justify-between gap-3">
+        <span className="text-sm text-ink-2">Em cada jogo</span>
+        <Passo rotulo={fraseDoJogador(estat, minimo)}
+          onMenos={() => setMinimos(m => ({ ...m, [estatId]: Math.max(1, minimo - 1) }))}
+          onMais={() => setMinimos(m => ({ ...m, [estatId]: minimo + 1 }))}
+          desabilitaMenos={minimo <= 1} />
+      </div>
+
+      {fonte_titulares && (
+        <p className="flex items-center gap-1.5 text-[11px] text-ink-3 px-1">
+          <Shield size={12} /> Titular provável: {FONTE_TITULARES[fonte_titulares] ?? fonte_titulares}.
+        </p>
+      )}
+
+      {jogadores.length === 0 ? (
+        <div className="card p-8 text-center">
+          <Users className="mx-auto text-ink-4 mb-2" size={22} />
+          <p className="text-sm text-ink-2">Sem estatística de jogador desse time nos últimos jogos.</p>
+          <p className="text-xs text-ink-3 mt-1">A coleta por jogador cobre as ligas principais; as outras chegam aos poucos.</p>
+        </div>
+      ) : (
+        <div className="card divide-y divide-line/60 overflow-hidden">
+          {jogadores.map(({ j, t }) => (
+            <div key={j.player_id} className="p-3 flex items-center gap-3">
+              <PlayerPhoto id={j.player_id} name={j.nome} size={44} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="text-sm font-bold text-ink-1 truncate">{j.nome}</span>
+                  {j.posicao && <span className="text-[10px] font-bold text-ink-3 border border-line rounded px-1 shrink-0">{j.posicao}</span>}
+                </div>
+                <div className="flex items-center gap-2 mt-1">
+                  {j.titular_provavel && <span className="text-[10px] font-bold text-accent-ink">Titular provável</span>}
+                  <span className="text-[11px] text-ink-3">{j.jogos.length} jogos</span>
+                </div>
+                <div className="mt-1.5 max-w-[200px]"><MiniSerie jogos={j} estat={estatId} minimo={minimo} /></div>
+              </div>
+              <NumeroDaTaxa t={t} />
+              <BotaoBilhete selecao={{
+                id: `${f.fixture_id}:p${j.player_id}:${estatId}:${minimo}`, fixture_id: f.fixture_id, jogo: nomeJogo,
+                descricao: `${j.nome} · ${fraseDoJogador(estat, minimo)}`, bateu: t.bateu, n: t.n, player_id: j.player_id,
+              }} />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Quadradinhos por jogo do jogador: verde bateu, cinza não, vazado sem dado. */
+function MiniSerie({ jogos, estat, minimo }: { jogos: Jogador; estat: EstatDeJogador['id']; minimo: number }) {
+  return (
+    <div className="flex gap-[3px]" aria-hidden>
+      {[...jogos.jogos].reverse().map((g, i) => {
+        const v = g[estat]
+        return (
+          <span key={i} title={v == null ? 'sem dado' : String(v)}
+            className={cn('flex-1 h-2 rounded-[2px] max-w-[14px]',
+              v == null ? 'border border-line' : v >= minimo ? 'bg-green-500' : 'bg-surface-3')} />
+        )
+      })}
+    </div>
+  )
+}
+
+/* ── Confronto ──────────────────────────────────────────────────────────── */
+
+/* Por TEXTO, e não `new Date()`: "2025-03-10" sem hora é lido como meia-noite
+   UTC, e no fuso de Brasília vira 09/03 · o jogo aparecia um dia antes. */
+function dataCurta(iso: string | null): string {
+  const m = iso?.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  return m ? `${m[3]}/${m[2]}/${m[1].slice(2)}` : ''
+}
+
+function AbaConfronto({ dados }: { dados: RaioX }) {
+  const f = dados.fixture
+  const jogos = dados.h2h
+  if (!jogos.length) {
+    return <div className="card p-8 text-center text-sm text-ink-2">Os dois ainda não se enfrentaram no nosso histórico.</div>
+  }
+  let vHome = 0, empates = 0, vAway = 0
+  for (const j of jogos) {
+    if (j.home_goals == null || j.away_goals == null) continue
+    const golsHome = j.home_team_id === f.home_team_id ? j.home_goals : j.away_goals
+    const golsAway = j.home_team_id === f.home_team_id ? j.away_goals : j.home_goals
+    if (golsHome > golsAway) vHome++
+    else if (golsHome < golsAway) vAway++
+    else empates++
+  }
+  const gols = jogos.filter(j => j.home_goals != null).map(j => (j.home_goals ?? 0) + (j.away_goals ?? 0))
+  const esc = jogos.map(j => j.escanteios).filter((v): v is number => v != null)
+  const media = (xs: number[]) => (xs.length ? (xs.reduce((a, b) => a + b, 0) / xs.length).toFixed(1) : '—')
+
+  return (
+    <div className="space-y-3">
+      <div className="card p-4">
+        <div className="grid grid-cols-3 text-center">
+          {[[vHome, f.home_team], [empates, 'Empates'], [vAway, f.away_team]].map(([n, r], i) => (
+            <div key={i} className="min-w-0">
+              <div className={cn('font-mono text-3xl font-black tabular-nums', i === 1 ? 'text-ink-2' : 'text-ink-1')}>{n}</div>
+              <div className="text-[11px] text-ink-3 truncate px-1">{r}</div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-4 pt-3 border-t border-line grid grid-cols-2 text-center text-sm">
+          <div><span className="font-mono font-bold text-ink-1">{media(gols)}</span> <span className="text-ink-3 text-xs">gols/jogo</span></div>
+          <div><span className="font-mono font-bold text-ink-1">{media(esc)}</span> <span className="text-ink-3 text-xs">escanteios/jogo</span></div>
+        </div>
+      </div>
+      <div className="card divide-y divide-line/60">
+        {jogos.map((j, i) => (
+          <div key={i} className="px-4 py-3 flex items-center gap-3 text-sm">
+            <span className="text-[11px] text-ink-3 w-16 shrink-0 tabular-nums">{dataCurta(j.data)}</span>
+            <TeamLogo id={j.home_team_id} name="" size={18} />
+            <span className="font-mono font-black text-ink-1 tabular-nums">{j.home_goals ?? '-'} - {j.away_goals ?? '-'}</span>
+            <TeamLogo id={j.away_team_id} name="" size={18} />
+            <span className="ml-auto text-[11px] text-ink-3 tabular-nums">{j.escanteios ?? '—'} esc · {j.amarelos} cart</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* ── Forma ──────────────────────────────────────────────────────────────── */
+
+function AbaForma({ dados }: { dados: RaioX }) {
+  const f = dados.fixture
+  const bloco = (id: number, nome: string, jogos: JogoDoTime[]) => (
+    <div className="card overflow-hidden">
+      <div className="px-4 py-3 flex items-center gap-2 border-b border-line bg-surface-2/40">
+        <TeamLogo id={id} name={nome} size={22} />
+        <span className="text-sm font-bold text-ink-1 truncate">{nome}</span>
+      </div>
+      {jogos.length === 0 ? (
+        <p className="p-4 text-sm text-ink-3">Sem jogos encerrados no histórico.</p>
+      ) : (
+        <div className="divide-y divide-line/60">
+          {jogos.map(j => {
+            const r = resultadoDoJogo(j)
+            return (
+              <div key={j.fixture_id} className="px-4 py-2.5 flex items-center gap-3">
+                <span className={cn('w-6 h-6 grid place-items-center rounded font-black text-[11px] shrink-0',
+                  r === 'V' ? 'bg-green-500 text-on-fill' : r === 'D' ? 'bg-red-500 text-on-fill' : 'bg-surface-3 text-ink-2')}>
+                  {r ?? '?'}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-ink-1 truncate">
+                    <span className="text-ink-3 text-xs mr-1">{j.em_casa ? 'vs' : '@'}</span>{j.adversario || '—'}
+                  </div>
+                  <div className="text-[11px] text-ink-3 tabular-nums">
+                    {j.escanteios_pro ?? '—'}-{j.escanteios_contra ?? '—'} esc · {j.amarelos_pro ?? '—'}-{j.amarelos_contra ?? '—'} cart
+                  </div>
+                </div>
+                <span className="font-mono font-black text-ink-1 tabular-nums">{j.gols_pro ?? '-'}-{j.gols_contra ?? '-'}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+  return (
+    <div className="space-y-3">
+      {bloco(f.home_team_id, f.home_team, dados.times.home.jogos)}
+      {bloco(f.away_team_id, f.away_team, dados.times.away.jogos)}
+    </div>
+  )
+}

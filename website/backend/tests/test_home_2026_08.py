@@ -924,11 +924,11 @@ def test_entenda_a_analise_cobre_os_seis_pipelines():
 
 
 def test_botao_de_detalhes_saiu_do_card():
-    """O detalhe do jogo mora na aba Jogos (FixtureStatsModal). No card fica so'
-    "Entenda esta analise"."""
+    """O detalhe do jogo mora na aba Jogos. No card fica so' "Entenda esta
+    analise". Desde 06/10/2026 o detalhe e' o Raio-X (components/jogos)."""
     assert "onDetails" not in _front("components/PickCardParts.tsx")
     assert "onDetails" not in _front("components/SuggestionCard.tsx")
-    assert "FixtureStatsModal" in _front("pages/Fixtures.tsx")
+    assert "RaioXDoJogo" in _front("pages/Fixtures.tsx")
 
 
 def test_zerar_mes_recusa_mes_ja_fechado():
