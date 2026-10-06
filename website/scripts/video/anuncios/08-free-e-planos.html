@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>PickIA · 08 · Free e planos</title>
+<link rel="stylesheet" href="base.css">
+<style>
+.zero { position: absolute; right: 70px; top: 520px; width: 250px; height: 250px; border-radius: 50%; display: grid; place-items: center; text-align: center;
+  background: var(--g); color: #001a00; font: 800 82px/0.9 Inter; box-shadow: 0 0 80px rgba(0,204,0,.55); transform: rotate(-8deg); }
+.zero small { display: block; font: 800 26px/1 Inter; letter-spacing: .1em; margin-top: 8px; }
+.item { position: absolute; }
+.dupla .phone { width: 470px; height: 1400px; top: 560px; }
+.dupla .nomep { position: absolute; top: 470px; width: 470px; text-align: center; font: 800 40px/1 Inter; letter-spacing: .04em; text-transform: uppercase; }
+.scroll { animation: rolar .9s cubic-bezier(.65, 0, .35, 1) both; animation-delay: calc(var(--at) * 1s); }
+@keyframes rolar { from { transform: translateY(var(--y0, 0)); } to { transform: translateY(var(--y1)); } }
+</style>
+</head>
+<body data-dur="22" data-cortes="2.5,10.5,13,18">
+<div id="stage">
+
+  <section class="scene" data-in="0" data-out="2.5">
+    <h1 class="hl abs cx" style="top:620px">
+      <span class="ln split fit" data-at=".1" style="font-size:170px">Quer</span>
+      <span class="ln fit a slam" style="--at:.4;font-size:210px"><em>testar?</em></span>
+    </h1>
+  </section>
+
+  <section class="scene" data-in="2.5" data-out="10.5">
+    <h1 class="hl abs cx" style="top:180px"><span class="ln fit a slam" style="--at:2.55;font-size:150px">Comece <em>grátis.</em></span></h1>
+    <div class="phone a rise" style="--at:2.6;left:150px;top:470px;width:640px;height:880px">
+      <div class="notch"></div>
+      <img class="tela" id="free" style="top:30px" alt="">
+    </div>
+    <div class="zero a pop" style="--at:3.4">R$ 0<small>FREE</small></div>
+    <div class="item a fr" style="--at:4.4;right:50px;top:880px"><span class="chip g"><span class="dot"></span>Dica do dia</span></div>
+    <div class="item a fr" style="--at:5.4;right:50px;top:990px"><span class="chip g"><span class="dot"></span>Gestão de banca</span></div>
+    <div class="item a fr" style="--at:6.4;right:50px;top:1100px"><span class="chip g"><span class="dot"></span>Resultados auditáveis</span></div>
+    <div class="item a fr" style="--at:7.4;right:50px;top:1210px"><span class="chip g"><span class="dot"></span>Agenda de jogos</span></div>
+    <div class="abs cx a fade" style="--at:3;top:1400px"><span class="ilus">Tela real · pickia.com.br/planos</span></div>
+  </section>
+
+  <section class="scene" data-in="10.5" data-out="13">
+    <h1 class="hl abs cx" style="top:620px">
+      <span class="ln split fit" data-at="10.55" style="font-size:150px">Quer mais</span>
+      <span class="ln fit a slam" style="--at:10.85;font-size:170px"><em>recursos?</em></span>
+    </h1>
+  </section>
+
+  <section class="scene dupla" data-in="13" data-out="18">
+    <h1 class="hl abs cx" style="top:160px">
+      <span class="ln split fit" data-at="13.05" style="font-size:104px">Conheça nossos</span>
+      <span class="ln fit a slam" style="--at:13.3;font-size:150px"><em>planos.</em></span>
+    </h1>
+    <div class="nomep a down" style="--at:13.4;left:50px">Pick IA</div>
+    <div class="nomep a down" style="--at:13.5;left:560px;color:var(--gold)">Pick IA Pro</div>
+    <div class="phone a fl" style="--at:13.2;left:50px">
+      <div class="notch"></div>
+      <img class="tela scroll" id="pkia" style="--at:14.6;--y1:-1490px" alt="">
+    </div>
+    <div class="phone a fr" style="--at:13.3;left:560px">
+      <div class="notch"></div>
+      <img class="tela scroll" id="pro" style="--at:15.2;--y1:-470px" alt="">
+    </div>
+    <div class="abs cx a fade" style="--at:13.6;top:1860px"><span class="ilus">Preços e recursos reais da página de planos</span></div>
+  </section>
+
+  <section class="scene endcard" data-in="18" data-out="22.01" data-l1="Comece grátis." data-f1="130"></section>
+</div>
+
+<script src="base.js"></script>
+<script>
+/* Tudo que aparece de plano e preço é recorte da página real (/planos).
+   Os quatro itens do Free são os de MODULOS_FREE em lib/oferta.ts. */
+A.montar(() => { free.src = A.tela('planos-free'); pkia.src = A.tela('planos-pickia'); pro.src = A.tela('planos-pro'); });
+</script>
+</body>
+</html>

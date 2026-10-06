@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>PickIA · 04 · Por dentro dos motores</title>
+<link rel="stylesheet" href="base.css">
+<style>
+/* Estética de planta técnica: grade azulada fina, linhas de fluxo tracejadas. */
+.planta { position: absolute; inset: 0; background-image: linear-gradient(rgba(96,165,250,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(96,165,250,.06) 1px, transparent 1px); background-size: 30px 30px; }
+.motor { position: absolute; width: 470px; height: 252px; padding: 24px 26px; }
+.motor .tag { font: 700 18px/1 var(--mono); letter-spacing: .2em; color: var(--ink4); }
+.motor .ic { width: 64px; height: 64px; border-radius: 16px; display: grid; place-items: center; border: 2px solid currentColor; float: right; margin: -6px 0 0 10px; }
+.motor .ic svg { width: 34px; height: 34px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.motor h3 { font: 700 38px/1.05 Inter; margin-top: 14px; }
+.motor p { font: 500 22px/1.3 Inter; color: var(--ink3); margin-top: 12px; }
+.motor.on { border-color: currentColor; box-shadow: 0 0 60px -10px currentColor; }
+.fluxo { position: absolute; inset: 0; }
+.fluxo path { fill: none; stroke-width: 4; stroke-dasharray: 10 18; animation: corre .6s linear infinite; }
+@keyframes corre { to { stroke-dashoffset: -28; } }
+.no { position: absolute; left: 290px; width: 500px; height: 92px; border-radius: 46px; display: flex; align-items: center; justify-content: center; gap: 16px; font: 700 32px/1 Inter; letter-spacing: .06em; text-transform: uppercase; }
+.pick0 { position: absolute; left: 190px; width: 700px; padding: 40px 44px; }
+.pick0 .l { height: 26px; border-radius: 13px; background: var(--s3); margin-top: 18px; }
+</style>
+</head>
+<body data-dur="24" data-cortes="3,6,20">
+<div id="stage">
+  <div class="planta"></div>
+
+  <!-- 0–6 · o pick e o que vem antes -->
+  <section class="scene" data-in="0" data-out="6">
+    <h1 class="hl abs cx" style="top:330px" id="t1">
+      <span class="ln split fit" data-at=".1" style="font-size:150px">Você vê</span>
+      <span class="ln fit a slam" style="--at:.45;font-size:150px"><em>o pick.</em></span>
+    </h1>
+    <div class="pick0 card" id="pick0" style="top:820px">
+      <div style="display:flex;align-items:center;gap:16px"><span class="ilus" style="color:var(--g);border-color:rgba(0,204,0,.5)">Pick</span><span class="lbl" style="margin-left:auto">Publicado</span></div>
+      <div class="l" style="width:70%;margin-top:34px;height:40px;background:#3a3a42"></div>
+      <div class="l" style="width:46%"></div>
+      <div style="display:flex;gap:20px;margin-top:34px"><div class="l" style="flex:1;height:90px;margin:0"></div><div class="l" style="width:200px;height:90px;margin:0;background:rgba(0,204,0,.25)"></div></div>
+    </div>
+    <h1 class="hl abs cx" style="top:330px" id="t2">
+      <span class="ln split fit" data-at="3.05" style="font-size:104px">Mas sabe o que</span>
+      <span class="ln split fit" data-at="3.3" style="font-size:104px"><em>acontece antes dele?</em></span>
+    </h1>
+  </section>
+
+  <!-- 6–20 · os seis motores, depois trabalhando juntos -->
+  <section class="scene" data-in="6" data-out="20">
+    <div class="abs cx a down" style="--at:6;top:200px"><span class="kicker" style="font-size:32px">Os motores da PickIA</span></div>
+
+    <svg class="fluxo" viewBox="0 0 1080 1920" id="fluxo"></svg>
+    <div class="no card a pop" style="--at:17.05;top:300px;color:var(--ink2)"><span class="dot"></span>Dados de futebol</div>
+    <div id="motores"></div>
+    <div class="no a pop" style="--at:17.9;top:1420px;background:var(--g);color:#001a00;box-shadow:0 0 60px rgba(0,204,0,.5)">Pick</div>
+    <div class="abs cx a up" style="--at:18.2;top:1540px;font:500 28px/1.3 Inter;color:var(--ink2)">Só sai o que passa no corte de valor</div>
+  </section>
+
+  <section class="scene endcard" data-in="20" data-out="24.01" data-l1="Por trás da PickIA existem" data-l2="motores de análise." data-f1="84" data-f2="110"></section>
+</div>
+
+<script src="base.js"></script>
+<script>
+/* Os seis motores com modelo próprio que o site descreve (ComoFunciona.tsx e
+   lib/oferta.ts). Múltiplas, Bingo e Alavancagem ficam de fora de propósito:
+   são combinações de picks, não modelos de análise. */
+const IC = {
+  pre:  '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>',
+  vivo: '<circle cx="12" cy="12" r="2"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 7.8a6 6 0 0 1 0 8.4M4.9 4.9a10 10 0 0 0 0 14.2M19.1 4.9a10 10 0 0 1 0 14.2"/>',
+  boost:'<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+  jog:  '<rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="10" r="3"/><path d="M7 18c1-2.5 3-3.5 5-3.5s4 1 5 3.5"/>',
+  falta:'<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>',
+  gol:  '<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/>',
+};
+const MOTORES = [
+  ['pre',  'Pré-jogo',               'Estatística dos dois times e a odd de cada mercado', 'var(--g)'],
+  ['vivo', 'Ao vivo',                'Lê a partida em andamento, decisão própria',         'var(--sky)'],
+  ['boost','Pick Boost',             'Varre as linhas alternativas do mesmo jogo',         'var(--blue)'],
+  ['jog',  'Estatística de jogador', 'Projeção individual por atleta',                     'var(--orange)'],
+  ['falta','Mercado de faltas',      'Modelo próprio que considera o árbitro',             'var(--purple)'],
+  ['gol',  'Defesas de goleiro',     'Volume de finalização esperado dos dois lados',      'var(--sky)'],
+];
+const POS = MOTORES.map((_, i) => [i % 2 ? 560 : 50, 470 + Math.floor(i / 2) * 300]);
+const T0 = 6.4, PASSO = 1.75;
+A.montar(() => {
+  motores.innerHTML = MOTORES.map(([ic, nome, desc, cor], i) => `
+    <div class="motor card a pop" style="--at:${(T0 + i * PASSO).toFixed(2)};left:${POS[i][0]}px;top:${POS[i][1]}px;color:${cor}" data-i="${i}">
+      <span class="ic"><svg viewBox="0 0 24 24">${IC[ic]}</svg></span>
+      <div class="tag">MOTOR 0${i + 1}</div>
+      <h3 style="color:var(--ink1)">${nome}</h3>
+      <p>${desc}</p>
+    </div>`).join('');
+  // fluxo: da fonte pra cada motor, e de cada motor pro pick
+  let d = '';
+  POS.forEach(([x, y], i) => {
+    const cx = x + 235, cor = MOTORES[i][3].replace('var(--', '').replace(')', '');
+    d += `<path d="M540 392 C540 430 ${cx} ${y - 60} ${cx} ${y}" stroke="#60a5fa" stroke-opacity=".6"/>`;
+    d += `<path d="M${cx} ${y + 252} C${cx} ${y + 330} 540 1380 540 1420" stroke="#00cc00" stroke-opacity=".7"/>`;
+  });
+  fluxo.innerHTML = d;
+  fluxo.style.cssText = 'opacity:0';
+});
+const cards = () => document.querySelectorAll('.motor');
+A.quadro(t => {
+  // na apresentacao, o motor da vez acende e os anteriores apagam um pouco
+  const vez = Math.floor((t - T0) / PASSO);
+  cards().forEach((c, i) => {
+    const junto = t >= 17;
+    c.classList.toggle('on', junto || i === vez);
+    c.style.opacity = junto || i >= vez ? 1 : .55;
+  });
+  fluxo.style.opacity = A.clamp((t - 17) / .4);
+  // cena 1-2: o titulo troca e o pick desce pro pe da tela
+  t1.style.visibility = t < 3 ? '' : 'hidden';
+  t2.style.visibility = t >= 3 ? '' : 'hidden';
+  const k = A.ease(A.clamp((t - 3) / .8));
+  pick0.style.transform = `translateY(${k * 520}px) scale(${1 - k * .35})`;
+  pick0.style.opacity = t < 0.15 ? 0 : 1;
+});
+</script>
+</body>
+</html>

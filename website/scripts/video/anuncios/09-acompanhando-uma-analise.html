@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>PickIA · 09 · Acompanhando uma análise</title>
+<link rel="stylesheet" href="base.css">
+<style>
+.cel { position: absolute; left: 200px; top: 330px; width: 680px; height: 1700px; }
+.tl { position: absolute; inset: 0; overflow: hidden; background: var(--bg); }
+/* telas no estilo do app, desenhadas aqui (a análise real é de assinante) */
+.app-top { height: 120px; padding: 56px 34px 0; display: flex; align-items: center; gap: 14px; border-bottom: 1.5px solid var(--line); }
+.app-top img { width: 44px; height: 44px; }
+.app-top .wordmark { font-size: 30px; }
+.app-tit { display: flex; align-items: center; gap: 18px; padding: 26px 34px; border-bottom: 1.5px solid var(--line); font: 700 30px/1 Inter; }
+.app-tit .vt { width: 54px; height: 54px; border-radius: 50%; border: 1.5px solid var(--line2); display: grid; place-items: center; color: var(--ink3); font-size: 28px; }
+.app-body { padding: 26px 30px; }
+.mini { border-radius: 22px; background: var(--s1); border: 1.5px solid var(--line2); padding: 22px 24px; margin-bottom: 18px; }
+.mini .lbl { font-size: 18px; }
+.mini .val { font: 700 46px/1 var(--mono); margin-top: 8px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.p { display: flex; gap: 16px; align-items: flex-start; font: 500 27px/1.35 Inter; color: var(--ink2); padding: 18px 0; border-bottom: 1.5px solid var(--line); }
+.p::before { content: ''; flex: none; width: 14px; height: 14px; margin-top: 11px; border-radius: 50%; background: var(--g); box-shadow: 0 0 10px var(--g); }
+.passos { position: absolute; left: 0; right: 0; top: 150px; display: flex; justify-content: center; gap: 12px; }
+.passos i { width: 56px; height: 8px; border-radius: 4px; background: var(--s3); }
+.passos i.on { background: var(--g); box-shadow: 0 0 12px var(--g); }
+.etq { position: absolute; left: 0; right: 0; top: 190px; text-align: center; }
+.trans { animation: entra .45s cubic-bezier(.16, 1, .3, 1) both; animation-delay: calc(var(--at) * 1s); }
+@keyframes entra { from { transform: translateX(100%); } }
+</style>
+</head>
+<body data-dur="24" data-cortes="2.2,21">
+<div id="stage">
+
+  <section class="scene" data-in="0" data-out="2.2">
+    <h1 class="hl abs cx" style="top:640px">
+      <span class="ln split fit" data-at=".1" style="font-size:150px">Do jogo</span>
+      <span class="ln fit a slam" style="--at:.45;font-size:170px"><em>à análise.</em></span>
+    </h1>
+  </section>
+
+  <section class="scene" data-in="2.2" data-out="21">
+    <div class="passos" id="passos"></div>
+    <div class="etq"><div class="hl" id="etq" style="font-size:72px"></div></div>
+    <div class="cel phone a rise" style="--at:2.2">
+      <div class="notch"></div>
+
+      <div class="tl" id="t1"><img class="tela scroll2" id="home" alt="" style="animation:rolar2 1.4s ease-in-out both;animation-delay:3.4s"></div>
+
+      <div class="tl trans" id="t2" style="--at:5"><img class="tela" id="fila" alt=""></div>
+
+      <div class="tl trans" id="t3" style="--at:8">
+        <div class="app-top"><img src="../../../frontend/public/logo.png" alt=""><span class="wordmark">Pick<i>IA</i></span></div>
+        <div class="app-tit"><span class="vt">‹</span>Mandante x Visitante<span class="ilus" style="margin-left:auto;font-size:15px">Ilustrativo</span></div>
+        <div class="app-body">
+          <div class="lbl" style="margin-bottom:18px">Estatísticas</div>
+          <div class="grid2">
+            <div class="mini a up" style="--at:8.4"><div class="lbl">Média de gols</div><div class="val" data-fl="1,4,1" data-stop="9.2" data-v="2.7">2.7</div></div>
+            <div class="mini a up" style="--at:8.55"><div class="lbl">Escanteios</div><div class="val" data-fl="6,13,1" data-stop="9.3" data-v="10.2">10.2</div></div>
+            <div class="mini a up" style="--at:8.7"><div class="lbl">Forma (5j)</div><div class="val" style="font-size:34px;letter-spacing:.1em"><span class="verde">VV</span>E<span class="verde">V</span><span style="color:var(--red)">D</span></div></div>
+            <div class="mini a up" style="--at:8.85"><div class="lbl">Casa / fora</div><div class="val" data-fl="40,90,0" data-suf="%" data-stop="9.4" data-v="72%">72%</div></div>
+          </div>
+          <div class="mini a up" style="--at:9.1;margin-top:16px"><div class="lbl">Últimos 10 jogos</div>
+            <div class="bars" style="height:150px;margin-top:16px">${''}</div></div>
+        </div>
+      </div>
+
+      <div class="tl" id="t4" style="background:transparent">
+        <div class="scanbeam" style="animation-delay:11s"></div>
+        <div style="position:absolute;left:60px;right:60px;top:560px" class="card a pop" >
+          <div style="padding:30px 34px">
+            <div class="kicker" style="font-size:22px">IA processando</div>
+            <div style="font:700 60px/1 var(--mono);margin-top:18px"><span data-cnt="0,8640,11.1,13.2">0</span> <small style="font:600 20px Inter;color:var(--ink3)">DADOS</small></div>
+            <div style="height:14px;border-radius:7px;background:var(--s3);margin-top:22px;overflow:hidden"><b class="fill" style="display:block;height:100%;background:var(--g);--at:11.1;animation-duration:2.1s"></b></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tl trans" id="t5" style="--at:13.5">
+        <div class="app-top"><img src="../../../frontend/public/logo.png" alt=""><span class="wordmark">Pick<i>IA</i></span></div>
+        <div class="app-tit"><span class="vt">‹</span>Análise da IA<span class="ilus" style="margin-left:auto;font-size:15px">Ilustrativo</span></div>
+        <div class="app-body">
+          <div class="p a up" style="--at:13.9">Mandante cria a maior parte das jogadas pelos lados</div>
+          <div class="p a up" style="--at:14.4">Visitante cede mais escanteios fora de casa</div>
+          <div class="p a up" style="--at:14.9">A linha oferecida fica abaixo da projeção do modelo</div>
+          <div class="p a up" style="--at:15.4;border:0">Passou no corte de valor</div>
+        </div>
+      </div>
+
+      <div class="tl trans" id="t6" style="--at:16.6">
+        <div class="app-top"><img src="../../../frontend/public/logo.png" alt=""><span class="wordmark">Pick<i>IA</i></span></div>
+        <div class="app-tit"><span class="vt">‹</span>Entrada<span class="ilus" style="margin-left:auto;font-size:15px">Exemplo ilustrativo</span></div>
+        <div class="app-body">
+          <div class="card a pop" style="--at:17;padding:34px;border-color:rgba(0,204,0,.6);box-shadow:0 0 60px rgba(0,204,0,.25)">
+            <div class="lbl">Mandante x Visitante · pré-jogo</div>
+            <div style="font:700 56px/1.05 Inter;margin-top:20px">Escanteios<br><span class="verde">Mais de 9.5</span></div>
+            <div style="display:flex;gap:16px;margin-top:30px">
+              <div class="mini" style="flex:1;margin:0"><div class="lbl">Odd</div><div class="val" style="color:var(--g)">1.80</div></div>
+              <div class="mini" style="flex:1;margin:0"><div class="lbl">Stake</div><div class="val" style="font-size:34px;margin-top:14px">por Kelly</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="tap" style="--at:6.4;left:427px;top:631px"></div>
+    <div class="abs cx" id="tudo" style="top:1560px"><div class="hl a slam" style="--at:19.2;font-size:110px;background:rgba(10,10,12,.85);display:inline-block;padding:20px 40px;border-radius:30px">Tudo em <em>um só lugar.</em></div></div>
+  </section>
+
+  <section class="scene endcard" data-in="21" data-out="24.01" data-l1="Do jogo à análise." data-f1="110"></section>
+</div>
+
+<script src="base.js"></script>
+<script>
+/* Telas 1 e 2 são reais (home e fila de jogos do dia). A partir da 3 o
+   conteúdo é de assinante, então as telas seguem o visual do app com times
+   genéricos e a marca "ilustrativo" à vista. */
+document.head.insertAdjacentHTML('beforeend', '<style>@keyframes rolar2{to{transform:translateY(-700px)}}</style>');
+const PASSOS = [[2.2, 'Entra na plataforma'], [5, 'Escolhe a partida'], [8, 'Vê as estatísticas'], [11, 'A IA processa'], [13.5, 'A análise aparece'], [16.6, 'A entrada']];
+A.montar(() => {
+  home.src = A.tela('home-topo'); fila.src = A.tela('palpites-fila');
+  passos.innerHTML = PASSOS.map(() => '<i></i>').join('');
+  document.querySelector('#t3 .bars').innerHTML = [.5,.8,.4,.9,.6,1,.7,.55,.85,.65].map((h, j) => `<i style="--h:${h};--at:${9.3 + j * .04}"></i>`).join('');
+});
+const telas = ['t1', 't2', 't3', 't4', 't5', 't6'];
+A.quadro(t => {
+  let vez = 0;
+  PASSOS.forEach((p, i) => { if (t >= p[0]) vez = i; });
+  passos.querySelectorAll('i').forEach((b, i) => b.classList.toggle('on', i <= vez));
+  const txt = `${vez + 1} · ${PASSOS[vez][1]}`;
+  if (etq.textContent !== txt) etq.textContent = txt;
+  // cada tela fica visivel do seu passo ate a proxima terminar de entrar
+  telas.forEach((id, i) => {
+    const ini = PASSOS[i][0], fim = i < 5 ? PASSOS[i + 1][0] + .5 : 99;
+    document.getElementById(id).style.visibility = t >= ini && t < fim ? '' : 'hidden';
+  });
+  // a tela 3 fica por baixo enquanto a IA processa (passo 4 e' sobreposicao)
+  t3.style.visibility = t >= 8 && t < 14 ? '' : 'hidden';
+});
+</script>
+</body>
+</html>

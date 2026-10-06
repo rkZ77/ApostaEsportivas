@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>PickIA · 06 · Análise de gols</title>
+<link rel="stylesheet" href="base.css">
+<style>
+/* Tela dividida: mandante à esquerda, visitante à direita, barras saindo do
+   centro pros lados. Comparação espelhada, sem uma tabela à vista. */
+.placar { position: absolute; left: 190px; top: 380px; width: 700px; height: 300px; border-radius: 36px; display: flex; align-items: center; justify-content: center; gap: 40px;
+  background: #050506; border: 3px solid var(--line2); box-shadow: inset 0 0 60px rgba(0,204,0,.15), 0 30px 80px rgba(0,0,0,.6); font: 700 200px/1 var(--mono); color: var(--g); text-shadow: 0 0 40px rgba(0,204,0,.6); }
+.placar span:nth-child(2) { font-size: 90px; color: var(--ink4); text-shadow: none; }
+.lado { position: absolute; top: 0; bottom: 0; width: 540px; }
+.lado.m { left: 0; background: linear-gradient(90deg, rgba(31,111,63,.25), transparent); }
+.lado.v { right: 0; background: linear-gradient(270deg, rgba(43,76,138,.28), transparent); }
+.topo { position: absolute; top: 330px; width: 540px; text-align: center; }
+.topo b { display: block; font: 700 44px/1 Inter; margin-top: 18px; }
+.linha { position: absolute; left: 40px; right: 40px; height: 150px; }
+.linha .rot { position: absolute; left: 0; right: 0; top: 0; text-align: center; font: 700 26px/1 Inter; letter-spacing: .12em; color: var(--ink2); text-transform: uppercase; }
+.linha .esq, .linha .dir { position: absolute; top: 46px; height: 46px; width: 400px; }
+.linha .esq { right: 540px; } .linha .dir { left: 540px; }
+.linha .esq i, .linha .dir i { position: absolute; top: 0; bottom: 0; border-radius: 23px; animation: grow2 .8s cubic-bezier(.16, 1, .3, 1) both; animation-delay: calc(var(--at) * 1s); }
+.linha .esq i { right: 0; background: linear-gradient(270deg, #22c55e, #1f6f3f); transform-origin: right; }
+.linha .dir i { left: 0; background: linear-gradient(90deg, #60a5fa, #2b4c8a); transform-origin: left; }
+.linha em { position: absolute; top: 46px; font: 700 40px/46px var(--mono); font-style: normal; }
+.linha .ve { right: 950px; } .linha .vd { left: 950px; }
+.forma { position: absolute; top: 40px; display: flex; gap: 10px; }
+.forma i { width: 54px; height: 54px; border-radius: 12px; display: grid; place-items: center; font: 800 26px/1 Inter; font-style: normal; color: #fff; }
+.v1 { background: #0f9d2f; } .e1 { background: #55555f; } .d1 { background: #c0392b; }
+.dist { position: absolute; left: 110px; right: 110px; top: 760px; height: 560px; display: flex; align-items: flex-end; gap: 22px; }
+.dist div { flex: 1; text-align: center; }
+.dist i { display: block; border-radius: 14px 14px 4px 4px; background: linear-gradient(180deg, var(--g2), rgba(0,204,0,.3)); transform-origin: bottom; animation: grow .7s cubic-bezier(.16, 1, .3, 1) both; animation-delay: calc(var(--at) * 1s); }
+.dist small { display: block; font: 700 34px/1 var(--mono); margin-top: 16px; color: var(--ink2); }
+.corte { position: absolute; top: 760px; bottom: 600px; width: 4px; background: repeating-linear-gradient(180deg, #fff 0 14px, transparent 14px 26px); }
+.corte span { position: absolute; top: -56px; left: 50%; transform: translateX(-50%); white-space: nowrap; font: 700 24px/1 Inter; color: #fff; background: #000; border: 2px solid #fff; border-radius: 10px; padding: 8px 12px; }
+</style>
+</head>
+<body data-dur="22" data-cortes="3,13,17">
+<div id="stage">
+
+  <section class="scene" data-in="0" data-out="3">
+    <div class="placar a zoomin" style="--at:0"><span id="g1">?</span><span>x</span><span id="g2">?</span></div>
+    <h1 class="hl abs cx" style="top:820px">
+      <span class="ln split fit" data-at=".3" style="font-size:118px">Quanto esse jogo</span>
+      <span class="ln fit a slam" style="--at:.7;font-size:150px"><em>pode produzir?</em></span>
+    </h1>
+  </section>
+
+  <section class="scene" data-in="3" data-out="13">
+    <div class="lado m a fl" style="--at:3"></div><div class="lado v a fr" style="--at:3"></div>
+    <div class="abs" style="left:540px;top:300px;bottom:300px;width:2px;background:rgba(255,255,255,.12)"></div>
+    <div class="topo a down" style="--at:3.1;left:0"><span class="neutro" style="width:130px;height:130px;margin:0 auto;background:#1f6f3f;font-size:44px">M</span><b>Mandante</b></div>
+    <div class="topo a down" style="--at:3.1;right:0"><span class="neutro" style="width:130px;height:130px;margin:0 auto;background:#2b4c8a;font-size:44px">V</span><b>Visitante</b></div>
+    <div class="abs cx a fade" style="--at:3.3;top:200px"><span class="ilus">Dados ilustrativos</span></div>
+    <div id="linhas"></div>
+  </section>
+
+  <section class="scene" data-in="13" data-out="17">
+    <div class="abs cx a down" style="--at:13;top:220px"><span class="kicker" style="font-size:32px">IA processando</span></div>
+    <h2 class="hl abs cx" style="top:300px"><span class="ln split fit" data-at="13.1" style="font-size:100px">Projeção de gols</span></h2>
+    <div class="abs cx a fade" style="--at:13.3;top:430px"><span class="ilus">Distribuição ilustrativa</span></div>
+    <div class="dist"></div>
+    <div class="corte a fade" style="--at:14.6;left:390px"><span>Mais de 1.5</span></div>
+    <div class="corte a fade" style="--at:15.2;left:538px;top:700px"><span>Mais de 2.5</span></div>
+  </section>
+
+  <section class="scene" data-in="17" data-out="19">
+    <h1 class="hl abs cx" style="top:700px">
+      <span class="ln split fit" data-at="17.05" style="font-size:130px">Analise antes</span>
+      <span class="ln fit a slam" style="--at:17.4;font-size:150px"><em>da partida.</em></span>
+    </h1>
+  </section>
+  <section class="scene endcard" data-in="19" data-out="22.01" data-l1="" data-l2="Com PickIA." data-f2="170"></section>
+</div>
+
+<script src="base.js"></script>
+<script>
+/* Times genéricos e números ilustrativos (a análise real de cada jogo é de
+   assinante). As linhas de 1.5 e 2.5 gols são mercados que a PickIA publica
+   de fato: aparecem no histórico público como "Gols Mais/Menos". */
+const LINHAS = [
+  ['Gols marcados',  [.78, '1.9'], [.55, '1.3']],
+  ['Gols sofridos',  [.38, '0.9'], [.62, '1.4']],
+  ['Média de gols',  [.70, '2.8'], [.66, '2.7']],
+  ['Forma recente',  null, null],
+  ['Casa / fora',    [.74, '2.1'], [.48, '1.1']],
+];
+A.montar(() => {
+  linhas.innerHTML = LINHAS.map(([nome, m, v], i) => {
+    const at = 4 + i * 1.7, top = 620 + i * 200;
+    if (!m) return `<div class="linha" style="top:${top}px"><div class="rot a fade" style="--at:${at}">${nome}</div>
+        <div class="forma" style="right:580px">${['v1','v1','e1','v1','d1'].map((c, j) => `<i class="${c} a pop" style="--at:${at + .1 + j * .06}">${c[0].toUpperCase()}</i>`).join('')}</div>
+        <div class="forma" style="left:580px">${['e1','v1','d1','v1','e1'].map((c, j) => `<i class="${c} a pop" style="--at:${at + .1 + j * .06}">${c[0].toUpperCase()}</i>`).join('')}</div></div>`;
+    return `<div class="linha" style="top:${top}px"><div class="rot a fade" style="--at:${at}">${nome}</div>
+      <div class="esq"><i style="width:${m[0] * 100}%;--at:${at + .1}"></i></div><em class="ve a fade" style="--at:${at + .4}">${m[1]}</em>
+      <div class="dir"><i style="width:${v[0] * 100}%;--at:${at + .1}"></i></div><em class="vd a fade" style="--at:${at + .4}">${v[1]}</em></div>`;
+  }).join('');
+  const D = [['0', .18], ['1', .45], ['2', .78], ['3', 1], ['4', .62], ['5+', .34]];
+  document.querySelector('.dist').innerHTML = D.map(([g, h], j) =>
+    `<div><i style="height:${h * 460}px;--at:${13.4 + j * .12}"></i><small>${g}</small></div>`).join('');
+});
+A.quadro(t => {
+  // placar do gancho girando sem parar: e' a pergunta, nao a resposta
+  const n = Math.floor(t * 12);
+  g1.textContent = t < .4 ? '?' : (t % .5 < .25 ? '?' : Math.floor(A.rnd(n) * 5));
+  g2.textContent = t < .4 ? '?' : (t % .5 >= .25 ? '?' : Math.floor(A.rnd(n + 77) * 5));
+});
+</script>
+</body>
+</html>

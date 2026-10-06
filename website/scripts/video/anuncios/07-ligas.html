@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>PickIA · 07 · Ligas e campeonatos</title>
+<link rel="stylesheet" href="base.css">
+<style>
+.orbita { position: absolute; left: 540px; top: 1180px; width: 0; height: 0; animation: spin 9s linear infinite; }
+.orbita .s { position: absolute; transform: translate(-50%, -50%); }
+.orbita .s > span { animation: spin 9s linear infinite reverse; }
+.liga .placa { position: absolute; left: 330px; top: 360px; }
+.liga .nome { position: absolute; left: 0; right: 0; top: 860px; text-align: center; }
+.liga .pais { position: absolute; left: 0; right: 0; top: 1010px; text-align: center; font: 600 34px/1 Inter; letter-spacing: .2em; color: var(--ink3); text-transform: uppercase; }
+.liga .times { position: absolute; left: 0; right: 0; top: 1110px; display: flex; justify-content: center; gap: 34px; }
+.liga .idx { position: absolute; left: 0; right: 0; top: 220px; text-align: center; font: 700 26px/1 var(--mono); color: var(--g); letter-spacing: .3em; }
+.liga .halo { position: absolute; left: 540px; top: 550px; width: 0; height: 0; }
+.liga .halo i { position: absolute; left: -330px; top: -330px; width: 660px; height: 660px; border-radius: 50%; background: radial-gradient(circle, rgba(0,204,0,.28), transparent 65%); }
+.phone .tela { transition: none; }
+</style>
+</head>
+<body data-dur="20" data-cortes="2.6,3.8,5,6.2,7.4,8.6,9.8,11,15.5">
+<div id="stage">
+
+  <section class="scene" data-in="0" data-out="2.6">
+    <h1 class="hl abs cx" style="top:300px">
+      <span class="ln split fit" data-at=".1" style="font-size:150px">Qual é a</span>
+      <span class="ln fit a slam" style="--at:.45;font-size:190px"><em>sua liga?</em></span>
+    </h1>
+    <div class="orbita" id="orbita"></div>
+  </section>
+
+  <div id="ligas"></div>
+
+  <section class="scene" data-in="11" data-out="15.5">
+    <div class="abs cx a down" style="--at:11;top:180px"><span class="kicker" style="font-size:30px">Escolha a liga, escolha o jogo</span></div>
+    <div class="phone a rise" style="--at:11;left:220px;top:300px;width:640px;height:1700px">
+      <div class="notch"></div>
+      <img class="tela" id="tl1" alt="">
+      <img class="tela" id="tl2" alt="">
+      <div class="scanbeam" id="beam" style="animation-delay:13.6s"></div>
+      <div class="hlbox" id="sel" style="left:14px;right:14px;top:236px;height:100px;opacity:0"></div>
+    </div>
+    <div class="tap" style="--at:11.8;left:527px;top:400px"></div>
+    <div class="tap" style="--at:13.1;left:417px;top:597px"></div>
+    <div class="abs a pop" id="analisando" style="--at:13.7;left:300px;top:1000px"><span class="chip g" style="font-size:32px;padding:20px 32px"><span class="dot"></span>IA analisando</span></div>
+  </section>
+
+  <section class="scene endcard" data-in="15.5" data-out="20.01" data-l1="Analise jogos do" data-l2="futebol mundial." data-f1="100" data-f2="128"></section>
+</div>
+
+<script src="base.js"></script>
+<script>
+/* Só competições que aparecem em "Palpites por campeonato" no site real
+   (/palpites-de-futebol-hoje). Os escudos são de times dessas ligas, só pra
+   ambientar: o vídeo não afirma jogo marcado de nenhum deles. */
+const LIGAS = [
+  [71,  'Brasileirão',      'Brasil',     [127, 121, 131, 126]],
+  [39,  'Premier League',   'Inglaterra', [40, 42, 50, 49]],
+  [140, 'La Liga',          'Espanha',    [541, 529, 530, 536]],
+  [135, 'Serie A',          'Itália',     [505, 489, 496, 492]],
+  [78,  'Bundesliga',       'Alemanha',   [157, 165, 168, 173]],
+  [61,  'Ligue 1',          'França',     [85, 81, 80, 91]],
+  [2,   'Champions League', 'Europa',     [541, 157, 50, 85]],
+];
+A.montar(() => {
+  ligas.innerHTML = LIGAS.map(([id, nome, pais, times], i) => {
+    const t0 = 2.6 + i * 1.2;
+    return `<section class="scene liga" data-in="${t0}" data-out="${(t0 + 1.2).toFixed(2)}">
+      <div class="halo"><i class="a pop" style="--at:${t0}"></i></div>
+      <div class="idx a fade" style="--at:${t0}">${String(i + 1).padStart(2, '0')} / 07</div>
+      <div class="placa a zoomin" style="--at:${t0}">${A.lgo(id, 420)}</div>
+      <div class="nome"><div class="hl fit a slam" style="--at:${t0 + .1};font-size:120px">${nome}</div></div>
+      <div class="pais a up" style="--at:${t0 + .2}">${pais}</div>
+      <div class="times">${times.map((tm, j) => `<span class="a pop" style="--at:${t0 + .3 + j * .07}">${A.esc(tm, 150)}</span>`).join('')}</div>
+    </section>`;
+  }).join('');
+  const orb = [71, 39, 140, 135, 78, 61, 2, 13, 73, 88, 94, 253];
+  orbita.innerHTML = orb.map((id, i) => {
+    const a = i / orb.length * Math.PI * 2;
+    return `<div class="s" style="left:${Math.cos(a) * 400}px;top:${Math.sin(a) * 400}px"><span class="a pop" style="display:block;--at:${.2 + i * .06}">${A.lgo(id, 130)}</span></div>`;
+  }).join('');
+  tl1.src = A.tela('palpites-ligas'); tl2.src = A.tela('palpites-fila');
+});
+A.quadro(t => {
+  tl2.style.visibility = t >= 12.5 ? '' : 'hidden';
+  tl1.style.visibility = t < 12.5 ? '' : 'hidden';
+  sel.style.opacity = t >= 13.4 ? 1 : 0;
+  beam.style.visibility = t >= 13.6 ? '' : 'hidden';
+});
+</script>
+</body>
+</html>

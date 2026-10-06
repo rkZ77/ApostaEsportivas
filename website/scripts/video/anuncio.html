@@ -1,0 +1,792 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PickIA · anúncio 25s</title>
+<!--
+  Anúncio de 25s, 1080x1920, SEM VOZ (a narração entra depois, gravada pelo
+  criador). Abra no navegador pra assistir em loop; `anuncio.py` abre com
+  ?render e fotografa quadro a quadro.
+
+  Tudo e' funcao do tempo: as animacoes CSS ficam pausadas e `__seek(t)` poe
+  cada uma no instante t. Por isso o quadro 412 sai igual em qualquer maquina,
+  por mais lenta que seja a captura.
+
+  Telas reais do site (home, planos) vem de saida/anuncio/, geradas pelo
+  `anuncio.py`. Sem elas o celular aparece vazio e o resto funciona.
+-->
+<style>
+@font-face { font-family: 'Inter'; font-weight: 400 700; src: url('../../frontend/public/fonts/inter-latin.woff2') format('woff2'); }
+@font-face { font-family: 'Nunito'; font-weight: 400 800; src: url('../../frontend/public/fonts/nunito-latin.woff2') format('woff2'); }
+
+:root {
+  --bg: #0a0a0c; --s1: #141418; --s2: #1f1f24; --s3: #2b2b31;
+  --line: #232329; --line2: #33333a;
+  --ink1: #fafafa; --ink2: #c7c7cf; --ink3: #94949e; --ink4: #75757f;
+  --g: #00cc00; --g2: #1ae01a; --gold: #facc15;
+  --mono: Consolas, 'Cascadia Mono', monospace;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { background: #000; height: 100%; overflow: hidden; }
+body { color: var(--ink1); font-family: Inter, 'Segoe UI', sans-serif; }
+
+#stage {
+  position: absolute; left: 50%; top: 50%; width: 1080px; height: 1920px;
+  overflow: hidden; background: var(--bg); transform-origin: center;
+  transform: translate(-50%, -50%) scale(var(--k, 1));
+}
+.scene { position: absolute; inset: 0; visibility: hidden; }
+.abs { position: absolute; }
+.center-x { left: 0; right: 0; text-align: center; }
+
+/* ------------------------------------------------------------ fundo */
+.bg-grid {
+  position: absolute; inset: -120px;
+  background-image:
+    linear-gradient(rgba(0,204,0,.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,204,0,.07) 1px, transparent 1px);
+  background-size: 60px 60px;
+  animation: gridmove 25s linear infinite;
+}
+@keyframes gridmove { to { transform: translate(60px, 240px); } }
+.bg-glow {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(900px 700px at 50% 0%, rgba(0,204,0,.16), transparent 70%),
+    radial-gradient(700px 600px at 100% 100%, rgba(0,204,0,.08), transparent 70%);
+}
+.bg-vig { position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.6) 100%); pointer-events: none; }
+
+/* ------------------------------------------------------------ entradas */
+.a {
+  animation-duration: .55s; animation-fill-mode: both;
+  animation-timing-function: cubic-bezier(.16, 1, .3, 1);
+  animation-delay: calc(var(--at, 0) * 1s);
+}
+.up    { animation-name: up; }
+.pop   { animation-name: pop; animation-timing-function: cubic-bezier(.3, 1.5, .5, 1); }
+.fl    { animation-name: fl; }
+.fr    { animation-name: fr; }
+.fade  { animation-name: fade; }
+.slam  { animation-name: slam; animation-duration: .45s; }
+.rise  { animation-name: rise; animation-duration: .8s; }
+.unfold{ animation-name: unfold; animation-duration: .6s; }
+@keyframes up    { from { opacity: 0; transform: translateY(70px); } }
+@keyframes pop   { from { opacity: 0; transform: scale(.4); } }
+@keyframes fl    { from { opacity: 0; transform: translateX(-140px); } }
+@keyframes fr    { from { opacity: 0; transform: translateX(140px); } }
+@keyframes fade  { from { opacity: 0; } }
+@keyframes slam  { 0% { opacity: 0; transform: scale(2.6); filter: blur(14px); } 60% { opacity: 1; transform: scale(.94); filter: blur(0); } 100% { transform: scale(1); } }
+@keyframes rise  { from { opacity: 0; transform: translateY(500px) scale(.9); } }
+@keyframes unfold{ 0% { opacity: 0; transform: scaleY(.02) scaleX(.3); } 40% { opacity: 1; transform: scaleY(.02) scaleX(1); } 100% { transform: none; } }
+
+/* palavra por palavra: o JS embrulha cada palavra de .split */
+/* folga em cima e embaixo pro til, acento e cedilha nao serem cortados pela mascara */
+.wm { display: inline-block; overflow: hidden; vertical-align: top; padding: .16em .02em .16em; margin: -.16em 0; }
+.w  { display: inline-block; animation: wup .5s cubic-bezier(.16, 1, .3, 1) both; animation-delay: calc(var(--at) * 1s); }
+@keyframes wup { from { transform: translateY(105%); } }
+
+/* ------------------------------------------------------------ tipografia */
+.hl {
+  font-weight: 700; text-transform: uppercase; letter-spacing: -.02em;
+  line-height: .98; text-align: center; color: var(--ink1);
+  text-shadow: 0 6px 30px rgba(0,0,0,.6);
+}
+.hl .ln { display: block; white-space: nowrap; }
+.hl em { font-style: normal; color: var(--g); }
+.kicker { font: 600 26px/1 Inter; letter-spacing: .22em; text-transform: uppercase; color: var(--g); }
+.wordmark { font-family: Nunito; font-weight: 800; letter-spacing: -.02em; }
+.wordmark i { font-style: normal; color: var(--g); }
+
+/* ------------------------------------------------------------ peças */
+.chip {
+  display: inline-flex; align-items: center; gap: 14px;
+  padding: 14px 24px; border-radius: 999px;
+  background: rgba(20,20,24,.88); border: 1.5px solid var(--line2);
+  font: 600 26px/1 Inter; letter-spacing: .06em; text-transform: uppercase; color: var(--ink2);
+  box-shadow: 0 10px 30px rgba(0,0,0,.5); backdrop-filter: blur(8px);
+}
+.chip.g { border-color: rgba(0,204,0,.55); color: var(--ink1); }
+.dot { width: 14px; height: 14px; border-radius: 50%; background: var(--g); box-shadow: 0 0 14px var(--g); animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: .25; } }
+.card {
+  background: linear-gradient(180deg, rgba(31,31,36,.92), rgba(20,20,24,.92));
+  border: 1.5px solid var(--line2); border-radius: 28px;
+  box-shadow: 0 20px 50px rgba(0,0,0,.55);
+}
+.crest {
+  width: 120px; height: 120px; border-radius: 50%; display: grid; place-items: center;
+  font: 800 34px/1 Inter; color: #fff; border: 4px solid rgba(255,255,255,.18);
+  box-shadow: 0 10px 30px rgba(0,0,0,.5); text-shadow: 0 2px 6px rgba(0,0,0,.6);
+}
+.crest.fla { background: repeating-linear-gradient(180deg, #c8102e 0 20%, #141414 20% 40%); }
+.crest.pal { background: radial-gradient(circle at 35% 30%, #0b8a4e, #00512b); }
+.crest.sm { width: 72px; height: 72px; font-size: 22px; border-width: 3px; }
+/* Escudos e logos reais (API-Football, cache em saida/anuncio/logos). Placa
+   clara porque boa parte foi desenhada pra fundo branco: Juventus e' cinza
+   claro sobre transparente, Ligue 1 e' preto, e os dois somem no #0a0a0c. */
+.esc { border-radius: 50%; background: #f4f4f6; display: grid; place-items: center; flex: none;
+  box-shadow: 0 0 0 4px rgba(255,255,255,.12), 0 10px 30px rgba(0,0,0,.5); }
+.esc img { width: 74%; height: 74%; object-fit: contain; }
+.lgo { width: 100px; height: 100px; border-radius: 22px; background: #f4f4f6; display: grid; place-items: center; flex: none; box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+.lgo img { width: 80%; height: 80%; object-fit: contain; }
+.flag.mini { width: 42px; height: 28px; border-radius: 5px; }
+
+.phone {
+  position: absolute; border-radius: 70px; background: #050506;
+  border: 12px solid #1f1f24; outline: 2px solid #33333a;
+  box-shadow: 0 0 0 1px #000, 0 40px 120px rgba(0,0,0,.8), 0 0 120px rgba(0,204,0,.18);
+  overflow: hidden;
+}
+.phone .notch { position: absolute; top: 18px; left: 50%; width: 150px; height: 40px; margin-left: -75px; background: #000; border-radius: 30px; z-index: 5; }
+.phone .tela { position: absolute; left: 0; top: 0; width: 100%; display: block; }
+
+.flag { width: 110px; height: 74px; border-radius: 10px; flex: none; box-shadow: inset 0 0 0 2px rgba(255,255,255,.15); position: relative; overflow: hidden; }
+.f-bra { background: #009c3b; }
+.f-bra::before { content: ''; position: absolute; inset: 9px 12px; background: #ffdf00; clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+.f-bra::after { content: ''; position: absolute; width: 30px; height: 30px; left: 40px; top: 22px; border-radius: 50%; background: #002776; }
+.f-eng { background: linear-gradient(#ce1124, #ce1124) center / 100% 20% no-repeat, linear-gradient(#ce1124, #ce1124) center / 16% 100% no-repeat, #fff; }
+.f-esp { background: linear-gradient(#aa151b 25%, #f1bf00 25% 75%, #aa151b 75%); }
+.f-ita { background: linear-gradient(90deg, #009246 33.3%, #fff 33.3% 66.6%, #ce2b37 66.6%); }
+.f-ger { background: linear-gradient(#111 33.3%, #dd0000 33.3% 66.6%, #ffce00 66.6%); }
+.f-eur { background: radial-gradient(circle, transparent 18px, #ffcc00 19px 22px, transparent 23px), #0b2a6b; }
+
+/* ============================================================ CENA 1 */
+.s1 .wall {
+  position: absolute; left: -110px; top: 520px; width: 1300px;
+  transform: perspective(1500px) rotateX(24deg) rotateZ(-4deg);
+  transform-origin: 50% 0;
+}
+.s1 .wall-in { position: relative; animation: wallscroll 3s linear both; }
+@keyframes wallscroll { from { transform: translateY(80px); } to { transform: translateY(-170px); } }
+.mt {
+  position: absolute; width: 300px; height: 196px; padding: 18px 20px;
+  border-radius: 20px; background: rgba(20,20,24,.95); border: 1.5px solid var(--line2);
+  font-family: Inter;
+}
+.mt-h { display: flex; justify-content: space-between; font: 600 15px/1 Inter; letter-spacing: .12em; color: var(--ink3); }
+.mt-t { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 12px 0 8px; font: 800 26px/1 Inter; }
+.mt-t em { font-style: normal; font-size: 18px; color: var(--ink4); margin: 0 2px; }
+.mt-t .esc { width: 50px; height: 50px; box-shadow: none; }
+.mt-r { display: flex; align-items: center; gap: 10px; font: 600 15px/1 Inter; color: var(--ink3); margin-top: 9px; }
+.mt-r b { font-family: var(--mono); color: var(--ink1); width: 46px; text-align: right; }
+.mt-r i { flex: 1; height: 7px; border-radius: 4px; background: var(--s3); overflow: hidden; position: relative; }
+.mt-r i::after { content: ''; position: absolute; inset: 0; background: var(--g); transform-origin: left; transform: scaleX(var(--w)); opacity: .8; }
+.mt.alt i::after { background: #8b8b96; }
+.hilite {
+  position: absolute; width: 324px; height: 220px; margin: -12px 0 0 -12px;
+  border: 4px solid var(--gold); border-radius: 26px;
+  box-shadow: 0 0 40px rgba(250,204,21,.45), inset 0 0 30px rgba(250,204,21,.15);
+}
+.hilite::after {
+  content: '?'; position: absolute; right: -26px; top: -40px; width: 64px; height: 64px; border-radius: 50%;
+  background: var(--gold); color: #111; font: 800 46px/64px Inter; text-align: center;
+}
+.s1 .scrim { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10,10,12,.97) 0, rgba(10,10,12,.9) 36%, rgba(10,10,12,.15) 52%, rgba(10,10,12,.2) 70%, rgba(10,10,12,.9) 100%); }
+.s1 .person { position: absolute; left: 190px; top: 1290px; width: 700px; filter: drop-shadow(0 0 30px rgba(0,204,0,.25)); }
+.s1 .person .ph { animation: phglow .5s steps(2) infinite; }
+@keyframes phglow { 50% { opacity: .7; } }
+.qm {
+  position: absolute; font: 800 120px/1 Inter; color: var(--gold);
+  text-shadow: 0 0 30px rgba(250,204,21,.5);
+}
+.qm span { display: inline-block; animation: bob 1.2s ease-in-out infinite alternate; }
+@keyframes bob { to { transform: translateY(-24px) rotate(8deg); } }
+.glitch { position: relative; display: inline-block; color: var(--ink1); }
+.glitch::before, .glitch::after {
+  content: attr(data-t); position: absolute; left: 0; top: 0; width: 100%;
+}
+.glitch::before { color: #ff2d55; mix-blend-mode: screen; animation: gA .5s steps(1) infinite; }
+.glitch::after  { color: #00e5ff; mix-blend-mode: screen; animation: gB .5s steps(1) infinite; }
+@keyframes gA { 0% { transform: translate(-8px, 2px); clip-path: inset(0 0 60% 0); } 25% { transform: translate(6px, -3px); clip-path: inset(40% 0 20% 0); } 50% { transform: translate(-4px, 0); clip-path: inset(70% 0 0 0); } 75% { transform: translate(9px, 2px); clip-path: inset(10% 0 70% 0); } }
+@keyframes gB { 0% { transform: translate(7px, -2px); clip-path: inset(50% 0 10% 0); } 25% { transform: translate(-6px, 3px); clip-path: inset(0 0 75% 0); } 50% { transform: translate(5px, 0); clip-path: inset(20% 0 45% 0); } 75% { transform: translate(-9px, -2px); clip-path: inset(80% 0 0 0); } }
+.s1 .warn { position: absolute; top: 210px; left: 0; right: 0; text-align: center; }
+.s1 .warn .chip { border-color: rgba(250,204,21,.6); color: var(--gold); }
+.s1 .warn .dot { background: var(--gold); box-shadow: 0 0 14px var(--gold); }
+
+/* transicao 1 -> 2: escurece e o logo atravessa */
+.s1 .dark { position: absolute; inset: 0; background: var(--bg); animation: fade .25s linear both; animation-delay: 2.62s; }
+.s1 .logo-fly {
+  position: absolute; left: 390px; top: 810px; width: 300px; height: 300px;
+  animation: logofly .38s cubic-bezier(.6, 0, .2, 1) both; animation-delay: 2.62s;
+}
+@keyframes logofly {
+  0%   { opacity: 0; transform: translate(0, 0) scale(.2) rotate(-90deg); }
+  45%  { opacity: 1; transform: translate(0, 0) scale(1.05) rotate(0); }
+  100% { opacity: 1; transform: translate(0, -685px) scale(.5); }
+}
+.logo-ring { position: absolute; inset: -40px; border-radius: 50%; border: 3px solid var(--g); animation: ringout .9s ease-out infinite; }
+@keyframes ringout { from { transform: scale(.7); opacity: 1; } to { transform: scale(1.5); opacity: 0; } }
+
+/* ============================================================ CENA 2 */
+.s2 .logo { position: absolute; left: 465px; top: 200px; width: 150px; height: 150px; }
+.s2 .phone { left: 250px; top: 800px; width: 580px; height: 1240px; }
+.scanbeam {
+  position: absolute; left: 0; right: 0; height: 220px; top: -220px;
+  background: linear-gradient(180deg, transparent, rgba(0,204,0,.18) 80%, rgba(0,255,0,.9) 98%, transparent);
+  animation: scan 1.1s cubic-bezier(.45, 0, .55, 1) infinite; animation-delay: 3.35s;
+}
+@keyframes scan { from { transform: translateY(0); } to { transform: translateY(1400px); } }
+.brackets { position: absolute; border: 0; }
+.brackets::before, .brackets::after { content: ''; position: absolute; width: 60px; height: 60px; border: 6px solid var(--g); }
+.brackets::before { left: 0; top: 0; border-right: 0; border-bottom: 0; border-radius: 14px 0 0 0; }
+.brackets::after  { right: 0; bottom: 0; border-left: 0; border-top: 0; border-radius: 0 0 14px 0; }
+.lock { animation: lockon 1s ease-in-out infinite alternate; }
+@keyframes lockon { to { transform: scale(1.04); } }
+.s2 .home-scroll { animation: homescroll 3s linear both; animation-delay: 3s; }
+@keyframes homescroll { to { transform: translateY(-330px); } }
+
+/* ============================================================ CENA 3 */
+.match-bar {
+  position: absolute; left: 70px; right: 70px; height: 116px; display: flex; align-items: center; justify-content: center; gap: 28px;
+  font: 700 40px/1 Inter;
+}
+.match-bar .vs { font-size: 26px; color: var(--ink4); }
+.dc { position: absolute; width: 475px; height: 238px; padding: 24px 28px; overflow: hidden; }
+.dc h4 { font: 700 30px/1 Inter; letter-spacing: .04em; display: flex; align-items: center; gap: 12px; }
+.dc h4::before { content: ''; width: 12px; height: 12px; border-radius: 3px; background: var(--g); box-shadow: 0 0 12px var(--g); }
+.dc .ok {
+  position: absolute; right: 22px; top: 18px; width: 46px; height: 46px; border-radius: 50%;
+  background: var(--g); color: #001a00; font: 800 28px/46px Inter; text-align: center;
+}
+.dc .spin { position: absolute; right: 22px; top: 18px; width: 46px; height: 46px; border-radius: 50%; border: 5px solid var(--s3); border-top-color: var(--g); animation: spin .6s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.dc .hide { animation: hidenow .01s linear both; }
+@keyframes hidenow { to { opacity: 0; } }
+.big { font: 700 64px/1 var(--mono); color: var(--ink1); letter-spacing: -.02em; }
+.lbl { font: 500 20px/1.2 Inter; color: var(--ink3); text-transform: uppercase; letter-spacing: .08em; }
+.bars { display: flex; align-items: flex-end; gap: 9px; height: 110px; }
+.bars i { flex: 1; border-radius: 6px 6px 2px 2px; background: linear-gradient(180deg, var(--g2), rgba(0,204,0,.35)); height: calc(var(--h) * 100%); transform-origin: bottom; animation: grow .6s cubic-bezier(.16, 1, .3, 1) both; animation-delay: calc(var(--at) * 1s); }
+@keyframes grow { from { transform: scaleY(0); } }
+.duo { display: flex; align-items: center; gap: 12px; font: 600 18px/1 Inter; color: var(--ink3); margin-top: 14px; text-transform: uppercase; letter-spacing: .06em; }
+.duo span { width: 150px; }
+.duo .tr { flex: 1; height: 14px; border-radius: 7px; background: var(--s3); position: relative; overflow: hidden; }
+.duo .tr b { position: absolute; left: 0; top: 0; bottom: 0; width: calc(var(--w) * 100%); border-radius: 7px; background: var(--c, var(--g)); transform-origin: left; animation: grow2 .8s cubic-bezier(.16, 1, .3, 1) both; animation-delay: calc(var(--at) * 1s); }
+@keyframes grow2 { from { transform: scaleX(0); } }
+.duo em { font: 700 22px/1 var(--mono); color: var(--ink1); font-style: normal; width: 64px; text-align: right; }
+.form { display: flex; align-items: center; gap: 10px; margin-top: 18px; }
+.form .tm { font: 800 22px/1 Inter; width: 64px; color: var(--ink2); }
+.form i { width: 52px; height: 52px; border-radius: 12px; display: grid; place-items: center; font: 800 24px/1 Inter; font-style: normal; color: #fff; }
+.form .v { background: #0f9d2f; } .form .e { background: #55555f; } .form .d { background: #c0392b; }
+.odds { display: flex; gap: 12px; margin-top: 18px; }
+.odds div { flex: 1; border-radius: 14px; background: var(--s2); border: 1.5px solid var(--line2); padding: 12px 0; text-align: center; }
+.odds div small { display: block; font: 600 18px/1 Inter; color: var(--ink3); margin-bottom: 8px; }
+.odds div b { font: 700 30px/1 var(--mono); }
+.odds div.on { border-color: var(--g); background: rgba(0,204,0,.12); box-shadow: 0 0 24px rgba(0,204,0,.25); }
+.proc { position: absolute; left: 70px; right: 70px; top: 1400px; height: 128px; padding: 24px 30px; }
+.proc .row { display: flex; justify-content: space-between; align-items: center; }
+.proc .track { height: 16px; border-radius: 8px; background: var(--s3); margin-top: 20px; overflow: hidden; }
+.proc .track b { display: block; height: 100%; background: linear-gradient(90deg, var(--g), var(--g2)); box-shadow: 0 0 20px var(--g); transform-origin: left; animation: grow2 5s cubic-bezier(.4, .1, .3, 1) both; animation-delay: 6.3s; }
+.suck { animation: suck .45s cubic-bezier(.7, 0, .84, 0) both; animation-delay: 11.5s; }
+@keyframes suck { to { transform: translate(var(--dx), var(--dy)) scale(.08); opacity: 0; } }
+.core-burst { position: absolute; left: 540px; top: 1000px; width: 0; height: 0; }
+.core-burst i { position: absolute; left: -200px; top: -200px; width: 400px; height: 400px; border-radius: 50%; background: radial-gradient(circle, rgba(0,255,0,.9), rgba(0,204,0,.3) 40%, transparent 70%); animation: burst .5s ease-out both; animation-delay: 11.85s; }
+@keyframes burst { from { transform: scale(0); opacity: 1; } to { transform: scale(2.2); opacity: 0; } }
+
+/* ============================================================ CENA 4 */
+.ticket { position: absolute; left: 80px; width: 920px; top: 450px; padding: 44px 50px 40px; border-radius: 36px;
+  background: linear-gradient(180deg, #19191e, #121216); border: 2px solid rgba(0,204,0,.45);
+  box-shadow: 0 0 0 1px #000, 0 40px 100px rgba(0,0,0,.7), 0 0 80px rgba(0,204,0,.15);
+}
+.ticket .floaty { animation: floaty 2.4s ease-in-out infinite alternate; }
+@keyframes floaty { to { transform: translateY(-10px); } }
+.tk-head { display: flex; align-items: center; gap: 16px; }
+.tk-head img { width: 64px; height: 64px; }
+.tk-head .wordmark { font-size: 40px; }
+.tk-head .ex { margin-left: auto; font: 600 18px/1 Inter; letter-spacing: .14em; color: var(--ink3); border: 1.5px solid var(--line2); border-radius: 8px; padding: 10px 14px; }
+.tk-lg { margin-top: 34px; font: 600 22px/1 Inter; letter-spacing: .2em; color: var(--ink3); text-align: center; }
+.tk-teams { display: flex; align-items: center; justify-content: center; gap: 46px; margin-top: 26px; }
+.tk-teams .x { font: 700 34px/1 Inter; color: var(--ink4); }
+.tk-name { text-align: center; font: 700 54px/1 Inter; margin-top: 24px; letter-spacing: -.01em; }
+.perf { position: relative; height: 2px; margin: 36px -50px; border-top: 3px dashed var(--line2); }
+.perf::before, .perf::after { content: ''; position: absolute; top: -26px; width: 48px; height: 48px; border-radius: 50%; background: var(--bg); border: 2px solid rgba(0,204,0,.45); }
+.perf::before { left: -26px; clip-path: inset(0 0 0 50%); }
+.perf::after { right: -26px; clip-path: inset(0 50% 0 0); }
+.tk-entry { font: 700 84px/1 Inter; letter-spacing: -.02em; margin-top: 16px; }
+.tk-entry::after { content: ''; display: block; height: 6px; width: 100%; margin-top: 14px; border-radius: 3px; background: linear-gradient(90deg, var(--g), transparent); transform-origin: left; animation: grow2 .6s ease-out both; animation-delay: 13.7s; }
+.tk-row { display: flex; gap: 22px; margin-top: 34px; }
+.tk-box { border-radius: 22px; background: var(--s2); border: 1.5px solid var(--line2); padding: 22px 26px; }
+.tk-odd b { font: 700 92px/1 var(--mono); color: var(--g); text-shadow: 0 0 30px rgba(0,204,0,.4); }
+.tk-tags { flex: 1; display: flex; flex-direction: column; gap: 14px; }
+.tk-tags .t { display: flex; align-items: center; gap: 12px; font: 600 26px/1 Inter; color: var(--ink2); }
+.tk-tags .t::before { content: '✓'; width: 34px; height: 34px; border-radius: 50%; background: rgba(0,204,0,.15); color: var(--g); font: 800 20px/34px Inter; text-align: center; }
+.stamp {
+  position: absolute; right: 40px; top: -44px; padding: 16px 26px; border-radius: 16px;
+  background: var(--g); color: #001a00; font: 800 26px/1 Inter; letter-spacing: .08em;
+  box-shadow: 0 10px 40px rgba(0,204,0,.45);
+  animation: stampin .4s cubic-bezier(.3, 1.6, .5, 1) both; animation-delay: 14.9s;
+}
+@keyframes stampin { from { opacity: 0; transform: scale(2.4) rotate(-14deg); } to { transform: rotate(-4deg); } }
+.sweep { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; pointer-events: none; }
+.sweep::after { content: ''; position: absolute; top: 0; bottom: 0; width: 220px; left: -300px; background: linear-gradient(90deg, transparent, rgba(255,255,255,.12), transparent); transform: skewX(-18deg); animation: sweep .9s ease-in-out both; animation-delay: calc(var(--sw) * 1s); }
+@keyframes sweep { to { left: 120%; } }
+
+/* ============================================================ CENA 5 */
+.lg { position: absolute; left: 70px; width: 940px; height: 128px; display: flex; align-items: center; gap: 30px; padding: 0 30px; overflow: hidden; }
+.lg b { font: 700 52px/1 Inter; letter-spacing: -.01em; text-transform: uppercase; }
+.lg small { margin-left: auto; font: 600 22px/1 Inter; letter-spacing: .14em; color: var(--ink3); text-transform: uppercase; display: flex; align-items: center; gap: 12px; }
+.lg.ucl { border-color: rgba(0,204,0,.6); background: linear-gradient(90deg, rgba(0,204,0,.14), rgba(20,20,24,.92) 60%); }
+.ticker { position: absolute; left: 0; right: 0; top: 1395px; overflow: hidden; white-space: nowrap; }
+.ticker-in { display: inline-flex; gap: 18px; animation: tick 4s linear both; animation-delay: 17s; }
+@keyframes tick { from { transform: translateX(0); } to { transform: translateX(-900px); } }
+.ticker .chip { font-size: 24px; }
+
+/* ============================================================ CENA 6 */
+.s6a .phone { left: 230px; top: 560px; width: 620px; height: 1500px; }
+.s6a .plans { animation: plansroll .45s cubic-bezier(.65, 0, .35, 1) both; animation-delay: 21.95s; }
+@keyframes plansroll { from { transform: translateY(var(--y0)); } to { transform: translateY(var(--y1)); } }
+.s6a .hl-box { position: absolute; left: 20px; right: 20px; border-radius: 26px; border: 5px solid var(--g); box-shadow: 0 0 40px rgba(0,204,0,.5), inset 0 0 40px rgba(0,204,0,.12); }
+.s6a .hl-box.gold { border-color: var(--gold); box-shadow: 0 0 40px rgba(250,204,21,.45), inset 0 0 40px rgba(250,204,21,.1); }
+.out-quick { animation: hidenow .01s linear both; animation-delay: 21.95s; }
+.s6b .rays { position: absolute; left: 540px; top: 700px; width: 0; height: 0; }
+.s6b .rays svg { position: absolute; left: -700px; top: -700px; width: 1400px; height: 1400px; animation: spin 14s linear infinite; }
+.s6b .logo { position: absolute; left: 380px; top: 540px; width: 320px; height: 320px; }
+.ring2 { position: absolute; border-radius: 50%; border: 2px dashed rgba(0,204,0,.6); }
+.ring2.r1 { inset: -50px; animation: spin 6s linear infinite; }
+.ring2.r2 { inset: -90px; border-style: dotted; border-color: rgba(0,204,0,.35); animation: spin 9s linear infinite reverse; }
+.url {
+  display: inline-flex; align-items: center; gap: 18px; padding: 26px 46px; border-radius: 999px;
+  border: 3px solid var(--g); background: rgba(0,204,0,.1);
+  font: 700 66px/1 Inter; letter-spacing: -.01em; box-shadow: 0 0 60px rgba(0,204,0,.35);
+}
+.scanline { position: absolute; left: 0; right: 0; height: 6px; background: var(--g); box-shadow: 0 0 30px 8px rgba(0,204,0,.6); animation: scanl 0.9s cubic-bezier(.6, 0, .4, 1) both; animation-delay: 24.05s; }
+@keyframes scanl { from { top: 380px; opacity: 1; } 90% { opacity: 1; } to { top: 1500px; opacity: 0; } }
+
+/* ------------------------------------------------------------ corte */
+#flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; mix-blend-mode: overlay; }
+#cutbar { position: absolute; left: 0; right: 0; height: 0; background: var(--g); opacity: 0; }
+
+/* ------------------------------------------------------------ preview */
+#ctl { position: fixed; left: 12px; bottom: 12px; color: #aaa; font: 13px Inter, sans-serif; display: flex; gap: 8px; align-items: center; z-index: 9; }
+#ctl button { background: #222; color: #ddd; border: 1px solid #444; border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+#ctl input { width: 260px; }
+.render #ctl { display: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="bg-grid"></div>
+  <div class="bg-glow"></div>
+
+  <!-- ======================================================== CENA 1 · 0–3s -->
+  <section class="scene s1" data-in="0" data-out="3">
+    <div class="wall"><div class="wall-in" id="wall"><div class="hilite" id="hilite"></div></div></div>
+    <div class="scrim"></div>
+
+    <div class="warn a fade" style="--at:.05"><span class="chip"><span class="dot"></span>Qual jogo? Qual entrada?</span></div>
+    <h1 class="hl abs center-x" style="top:330px">
+      <span class="ln split fit" data-at=".12" style="font-size:112px">Escolhe suas</span>
+      <span class="ln split fit" data-at=".3" style="font-size:112px">entradas no</span>
+      <span class="ln fit a slam" style="--at:.62;font-size:196px;margin-top:14px"><span class="glitch" data-t="ACHISMO?">ACHISMO?</span></span>
+    </h1>
+
+    <svg class="person" viewBox="0 0 700 700" aria-hidden="true">
+      <defs>
+        <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#00cc00" stop-opacity=".9"/><stop offset=".6" stop-color="#00cc00" stop-opacity="0"/></linearGradient>
+        <radialGradient id="scr" cx=".5" cy=".4" r=".7"><stop offset="0" stop-color="#d9ffd9"/><stop offset="1" stop-color="#00cc00"/></radialGradient>
+      </defs>
+      <!-- costas, ombros, cabeca -->
+      <path d="M40 700 C40 520 140 430 350 420 C560 430 660 520 660 700 Z" fill="#050506" stroke="url(#rim)" stroke-width="4"/>
+      <rect x="305" y="330" width="90" height="110" rx="30" fill="#050506"/>
+      <ellipse cx="350" cy="250" rx="112" ry="128" fill="#050506" stroke="url(#rim)" stroke-width="4"/>
+      <!-- braco erguendo o celular -->
+      <path d="M560 560 C600 480 600 420 560 360" stroke="#050506" stroke-width="70" stroke-linecap="round" fill="none"/>
+      <g class="ph" transform="rotate(-12 545 300)">
+        <rect x="490" y="215" width="110" height="190" rx="18" fill="#111" stroke="#2b2b31" stroke-width="5"/>
+        <rect x="500" y="228" width="90" height="164" rx="10" fill="url(#scr)" opacity=".85"/>
+        <rect x="510" y="245" width="70" height="10" rx="5" fill="#003300" opacity=".5"/>
+        <rect x="510" y="265" width="50" height="10" rx="5" fill="#003300" opacity=".5"/>
+        <rect x="510" y="300" width="70" height="44" rx="8" fill="#003300" opacity=".35"/>
+      </g>
+    </svg>
+    <div class="qm a pop" style="--at:.9;left:150px;top:1180px"><span>?</span></div>
+    <div class="qm a pop" style="--at:1.35;left:820px;top:1110px;font-size:90px"><span style="animation-delay:-.4s">?</span></div>
+    <div class="qm a pop" style="--at:1.8;left:300px;top:1040px;font-size:70px"><span style="animation-delay:-.8s">?</span></div>
+
+    <div class="dark"></div>
+    <div class="logo-fly"><div class="logo-ring"></div><img src="../../frontend/public/logo.png" alt="" style="width:100%;height:100%"></div>
+  </section>
+
+  <!-- ======================================================== CENA 2 · 3–6s -->
+  <section class="scene s2" data-in="3" data-out="6">
+    <img class="logo" src="../../frontend/public/logo.png" alt="">
+    <div class="abs center-x" style="top:380px">
+      <div class="hl split" data-at="3.05" style="font-size:66px;color:var(--ink2)">Conheça a</div>
+      <div class="hl wordmark a slam" style="--at:3.2;font-size:200px;text-transform:none;margin-top:4px">Pick<i>IA</i></div>
+    </div>
+    <div class="abs center-x a up" style="--at:3.45;top:660px"><span class="chip g" style="font-size:34px;padding:18px 34px"><span class="dot"></span>IA + dados de futebol</span></div>
+
+    <div class="phone a rise" style="--at:3.1">
+      <div class="notch"></div>
+      <img class="tela home-scroll" src="saida/anuncio/home.png" alt="" onerror="this.style.display='none'">
+      <div class="brackets lock" style="left:30px;right:30px;top:780px;height:330px;position:absolute"></div>
+      <div class="scanbeam"></div>
+    </div>
+    <div class="abs a fl" style="--at:3.7;left:40px;top:1420px"><span class="chip g"><span class="dot"></span>IA analisando</span></div>
+    <div class="abs a fr" style="--at:4.15;right:40px;top:1505px"><span class="chip">Lendo estatísticas</span></div>
+    <div class="abs a fl" style="--at:4.6;left:40px;top:1790px"><span class="chip">Comparando odds</span></div>
+  </section>
+
+  <!-- ======================================================== CENA 3 · 6–12s -->
+  <section class="scene s3" data-in="6" data-out="12">
+    <h2 class="hl abs center-x" style="top:180px">
+      <span class="ln split fit" data-at="6.05" style="font-size:96px">Análise completa</span>
+      <span class="ln split fit" data-at="6.25" style="font-size:96px"><em>antes da partida</em></span>
+    </h2>
+    <div class="match-bar card a up" style="--at:6.2;top:420px">
+      <div class="esc" style="width:76px;height:76px"><img src="saida/anuncio/logos/teams/127.png" alt=""></div><span>Flamengo</span><span class="vs">x</span><span>Palmeiras</span><div class="esc" style="width:76px;height:76px"><img src="saida/anuncio/logos/teams/121.png" alt=""></div>
+    </div>
+
+    <div id="dcards">
+      <div class="dc card a pop" style="--at:6.45;left:50px;top:580px" data-ok="7.9">
+        <h4>Estatísticas</h4>
+        <div class="duo"><span>Finalizações</span><div class="tr"><b style="--w:.72;--at:6.7"></b></div><em data-fl="9,18,0" data-stop="7.6" data-v="14">14</em></div>
+        <div class="duo"><span>Posse</span><div class="tr"><b style="--w:.56;--at:6.8"></b></div><em data-fl="40,65,0" data-stop="7.6" data-v="56%">56%</em></div>
+        <div class="duo"><span>Chances</span><div class="tr"><b style="--w:.64;--at:6.9"></b></div><em data-fl="3,12,0" data-stop="7.6" data-v="8">8</em></div>
+      </div>
+      <div class="dc card a pop" style="--at:6.9;left:555px;top:580px" data-ok="8.4">
+        <h4>Gols</h4>
+        <div style="display:flex;gap:26px;align-items:flex-end;margin-top:18px">
+          <div><div class="big" data-fl="1.2,3.9,1" data-stop="8.1" data-v="2.7">2.7</div><div class="lbl" style="margin-top:8px">média/jogo</div></div>
+          <div class="bars" style="flex:1">
+            <i style="--h:.5;--at:7.1"></i><i style="--h:.8;--at:7.15"></i><i style="--h:.35;--at:7.2"></i><i style="--h:.9;--at:7.25"></i><i style="--h:.6;--at:7.3"></i><i style="--h:1;--at:7.35"></i><i style="--h:.7;--at:7.4"></i>
+          </div>
+        </div>
+      </div>
+      <div class="dc card a pop" style="--at:7.35;left:50px;top:840px" data-ok="8.9">
+        <h4>Escanteios</h4>
+        <div style="display:flex;gap:26px;align-items:flex-end;margin-top:18px">
+          <div><div class="big" data-fl="6,13,1" data-stop="8.6" data-v="9.8">9.8</div><div class="lbl" style="margin-top:8px">média total</div></div>
+          <svg viewBox="0 0 200 110" style="flex:1;height:110px;overflow:visible">
+            <polyline class="draw" style="--at:7.55" pathLength="1" points="0,90 30,60 60,74 90,40 120,52 150,22 180,34 200,12" fill="none" stroke="#00cc00" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+          </svg>
+        </div>
+      </div>
+      <div class="dc card a pop" style="--at:7.8;left:555px;top:840px" data-ok="9.4">
+        <h4>Forma recente</h4>
+        <div class="form"><span class="tm">FLA</span><i class="v a pop" style="--at:8.0">V</i><i class="v a pop" style="--at:8.05">V</i><i class="e a pop" style="--at:8.1">E</i><i class="v a pop" style="--at:8.15">V</i><i class="v a pop" style="--at:8.2">V</i></div>
+        <div class="form" style="margin-top:12px"><span class="tm">PAL</span><i class="v a pop" style="--at:8.25">V</i><i class="e a pop" style="--at:8.3">E</i><i class="v a pop" style="--at:8.35">V</i><i class="d a pop" style="--at:8.4">D</i><i class="v a pop" style="--at:8.45">V</i></div>
+      </div>
+      <div class="dc card a pop" style="--at:8.25;left:50px;top:1100px" data-ok="9.9">
+        <h4>Casa / Fora</h4>
+        <div class="duo" style="margin-top:28px"><span>FLA em casa</span><div class="tr"><b style="--w:.78;--at:8.5"></b></div><em data-fl="40,90,0" data-stop="9.3" data-v="78%">78%</em></div>
+        <div class="duo" style="margin-top:22px"><span>PAL fora</span><div class="tr"><b style="--w:.61;--at:8.6;--c:#0b8a4e"></b></div><em data-fl="30,80,0" data-stop="9.3" data-v="61%">61%</em></div>
+      </div>
+      <div class="dc card a pop" style="--at:8.7;left:555px;top:1100px" data-ok="10.5">
+        <h4>Odds</h4>
+        <div class="odds">
+          <div><small>1</small><b data-fl="1.5,2.6,2" data-stop="9.7" data-v="1.95">1.95</b></div>
+          <div><small>X</small><b data-fl="2.8,3.9,2" data-stop="9.7" data-v="3.40">3.40</b></div>
+          <div class="on"><small>+1.5 gols</small><b data-fl="1.2,1.9,2" data-stop="9.9" data-v="1.45">1.45</b></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="proc card a up" style="--at:6.3">
+      <div class="row">
+        <span class="kicker" id="proc-lbl" style="font-size:24px">IA processando dados</span>
+        <span style="font:700 34px/1 var(--mono)"><span data-cnt="0,12480,6.3,11.3">0</span> <small style="font:600 18px Inter;color:var(--ink3)">DADOS</small></span>
+      </div>
+      <div class="track"><b></b></div>
+    </div>
+    <div class="core-burst"><i></i></div>
+  </section>
+
+  <!-- ======================================================== CENA 4 · 12–17s -->
+  <section class="scene s4" data-in="12" data-out="17">
+    <h2 class="hl abs center-x" style="top:160px">
+      <span class="ln split fit" data-at="12.1" style="font-size:84px">Sugestões de entradas</span>
+      <span class="ln split fit" data-at="12.3" style="font-size:84px"><em>baseadas em dados</em></span>
+    </h2>
+
+    <div class="ticket a unfold" style="--at:12.05">
+      <div class="sweep" style="--sw:15.6"></div>
+      <div class="stamp">✓ Gerada pela IA</div>
+      <div class="tk-head a fade" style="--at:12.4">
+        <img src="../../frontend/public/logo.png" alt="">
+        <span class="wordmark">Pick<i>IA</i></span>
+        <span class="ex">EXEMPLO ILUSTRATIVO</span>
+      </div>
+      <div class="tk-lg a fade" style="--at:12.5">BRASILEIRÃO · PRÉ-JOGO</div>
+      <div class="tk-teams">
+        <div class="esc a fl" style="--at:12.55;width:140px;height:140px"><img src="saida/anuncio/logos/teams/127.png" alt=""></div>
+        <span class="x a fade" style="--at:12.7">x</span>
+        <div class="esc a fr" style="--at:12.55;width:140px;height:140px"><img src="saida/anuncio/logos/teams/121.png" alt=""></div>
+      </div>
+      <div class="tk-name a up" style="--at:12.7">Flamengo x Palmeiras</div>
+      <div class="perf a fade" style="--at:12.9"></div>
+      <div class="lbl a fade" style="--at:13.0;font-size:24px;letter-spacing:.18em">Entrada sugerida</div>
+      <div class="tk-entry"><span data-type="Mais de 1.5 gols" data-t0="13.1" data-cps="30"></span></div>
+      <div class="tk-row">
+        <div class="tk-box tk-odd a pop" style="--at:13.8">
+          <div class="lbl" style="margin-bottom:12px">Odd</div>
+          <b data-cnt="1,1.45,13.85,14.4,2">1.00</b>
+        </div>
+        <div class="tk-box tk-tags">
+          <div class="lbl">Baseada em</div>
+          <div class="t a fr" style="--at:14.2">Média de gols</div>
+          <div class="t a fr" style="--at:14.35">Forma recente</div>
+          <div class="t a fr" style="--at:14.5">Casa / fora</div>
+        </div>
+      </div>
+    </div>
+    <div class="abs center-x a fade" style="--at:13.2;top:1385px;font:500 24px/1.4 Inter;color:var(--ink4)">Exemplo ilustrativo. Não é recomendação de aposta.</div>
+  </section>
+
+  <!-- ======================================================== CENA 5 · 17–21s -->
+  <section class="scene s5" data-in="17" data-out="21">
+    <h2 class="hl abs center-x" style="top:170px">
+      <span class="ln split fit" data-at="17.05" style="font-size:100px">Principais ligas</span>
+      <span class="ln split fit" data-at="17.2" style="font-size:100px"><em>e competições</em></span>
+    </h2>
+    <div class="lg card a fr" style="--at:17.3;top:450px"><div class="sweep" style="--sw:17.6"></div><span class="lgo"><img src="saida/anuncio/logos/leagues/71.png" alt=""></span><b>Brasileirão</b><small><span class="flag mini f-bra"></span>Brasil</small></div>
+    <div class="lg card a fr" style="--at:17.45;top:598px"><div class="sweep" style="--sw:17.75"></div><span class="lgo"><img src="saida/anuncio/logos/leagues/39.png" alt=""></span><b>Premier League</b><small><span class="flag mini f-eng"></span>Inglaterra</small></div>
+    <div class="lg card a fr" style="--at:17.6;top:746px"><div class="sweep" style="--sw:17.9"></div><span class="lgo"><img src="saida/anuncio/logos/leagues/140.png" alt=""></span><b>La Liga</b><small><span class="flag mini f-esp"></span>Espanha</small></div>
+    <div class="lg card a fr" style="--at:17.75;top:894px"><div class="sweep" style="--sw:18.05"></div><span class="lgo"><img src="saida/anuncio/logos/leagues/135.png" alt=""></span><b>Serie A</b><small><span class="flag mini f-ita"></span>Itália</small></div>
+    <div class="lg card a fr" style="--at:17.9;top:1042px"><div class="sweep" style="--sw:18.2"></div><span class="lgo"><img src="saida/anuncio/logos/leagues/78.png" alt=""></span><b>Bundesliga</b><small><span class="flag mini f-ger"></span>Alemanha</small></div>
+    <div class="lg card ucl a fr" style="--at:18.05;top:1190px"><div class="sweep" style="--sw:18.35"></div><span class="lgo"><img src="saida/anuncio/logos/leagues/2.png" alt=""></span><b>Champions League</b><small><span class="flag mini f-eur"></span>Europa</small></div>
+    <div class="ticker a fade" style="--at:18.4">
+      <div class="ticker-in" id="ticker"></div>
+    </div>
+  </section>
+
+  <!-- ======================================================== CENA 6a · 21–23s -->
+  <section class="scene s6a" data-in="21" data-out="23">
+    <div class="abs center-x" style="top:170px">
+      <div class="hl a slam" style="--at:21.05;font-size:170px;color:var(--g);text-shadow:0 0 50px rgba(0,204,0,.4)">Grátis</div>
+      <div class="hl a slam" style="--at:21.95;font-size:130px;margin-top:10px">e planos</div>
+    </div>
+    <div class="phone a rise" style="--at:21">
+      <div class="notch"></div>
+      <img class="tela plans" style="--y0:-950px;--y1:-1752px" src="saida/anuncio/planos.png" alt="" onerror="this.style.display='none'">
+      <div class="hl-box a pop out-quick" style="--at:21.3;top:30px;height:790px"></div>
+      <div class="hl-box gold a pop" style="--at:22.4;top:30px;height:880px"></div>
+    </div>
+  </section>
+
+  <!-- ======================================================== CENA 6b · 23–25s -->
+  <section class="scene s6b" data-in="23" data-out="25.01">
+    <div class="rays a fade" style="--at:23"><svg viewBox="-700 -700 1400 1400" id="rays"></svg></div>
+    <div class="logo a pop" style="--at:23.02">
+      <div class="ring2 r1"></div><div class="ring2 r2"></div>
+      <div class="logo-ring" style="animation-delay:23s"></div>
+      <img src="../../frontend/public/logo.png" alt="" style="width:100%;height:100%;filter:drop-shadow(0 0 40px rgba(0,204,0,.45))">
+    </div>
+    <h2 class="hl abs center-x" style="top:960px">
+      <span class="ln split fit" data-at="23.2" style="font-size:104px">Para de escolher</span>
+      <span class="ln fit a slam" style="--at:23.45;font-size:132px"><em>no achismo.</em></span>
+    </h2>
+    <div class="abs center-x a up" style="--at:23.75;top:1260px"><span class="url"><span class="dot" style="width:20px;height:20px"></span>pickia.com.br</span></div>
+    <div class="scanline"></div>
+  </section>
+
+  <div class="bg-vig"></div>
+  <div id="cutbar"></div>
+  <div id="flash"></div>
+</div>
+
+<div id="ctl"><button id="pp">pausar</button><input id="scrub" type="range" min="0" max="25" step="0.01" value="0"><span id="tt">0.00s</span></div>
+
+<script>
+const DUR = 25;
+const CORTES = [3, 6, 12, 17, 21, 23];
+const RENDER = new URLSearchParams(location.search).has('render');
+if (RENDER) document.documentElement.classList.add('render');
+
+/* ---------------------------------------------------------------- montagem */
+const rnd = n => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+
+// Parede de jogos da cena 1: confrontos de cenario (nao sao jogos marcados).
+// [sigla, id API, sigla, id API, liga, hora] · os ids estao em TIMES do anuncio.py.
+const JOGOS = [
+  ['FLA',127,'PAL',121,'BRASILEIRÃO','16:00'], ['LIV',40,'CHE',49,'PREMIER','11:30'], ['RMA',541,'BAR',529,'LA LIGA','17:00'], ['INT',505,'MIL',489,'SERIE A','15:45'],
+  ['BAY',157,'BVB',165,'BUNDESLIGA','13:30'], ['COR',131,'SAO',126,'BRASILEIRÃO','18:30'], ['ARS',42,'TOT',47,'PREMIER','12:00'], ['PSG',85,'OM',81,'LIGUE 1','16:45'],
+  ['ATM',530,'SEV',536,'LA LIGA','14:15'], ['GRE',130,'INT',119,'BRASILEIRÃO','21:00'], ['JUV',496,'NAP',492,'SERIE A','15:45'], ['MCI',50,'MUN',33,'PREMIER','13:30'],
+  ['BEN',211,'POR',212,'PRIMEIRA','17:30'], ['BOT',120,'FLU',124,'BRASILEIRÃO','19:00'], ['AJA',194,'PSV',197,'EREDIVISIE','14:30'], ['LEV',168,'RBL',173,'BUNDESLIGA','10:30'],
+  ['VAS',133,'CRU',135,'BRASILEIRÃO','20:00'], ['NEW',34,'AVL',66,'PREMIER','11:00'], ['ROM',497,'LAZ',487,'SERIE A','15:45'], ['BET',543,'VIL',533,'LA LIGA','16:00'],
+  ['SAN',128,'BAH',118,'BRASILEIRÃO','18:00'], ['LYO',80,'MON',91,'LIGUE 1','16:00'], ['BRI',51,'EVE',45,'PREMIER','11:00'], ['ATA',499,'FIO',502,'SERIE A','13:00'],
+];
+const esc = id => `<span class="esc"><img src="saida/anuncio/logos/teams/${id}.png" alt=""></span>`;
+
+// Faixa de "outras competicoes" da cena 5, com o logo de cada uma
+const OUTRAS = [[61,'Ligue 1'],[13,'Libertadores'],[73,'Copa do Brasil'],[72,'Série B'],[88,'Eredivisie'],[94,'Primeira Liga'],[40,'Championship'],[11,'Sul-Americana'],[253,'MLS']];
+document.getElementById('ticker').innerHTML = OUTRAS.map(([id, n]) =>
+  `<span class="chip"><span class="lgo" style="width:44px;height:44px;border-radius:10px"><img src="saida/anuncio/logos/leagues/${id}.png" alt=""></span>${n}</span>`).join('');
+const wall = document.getElementById('wall');
+const TW = 324, TH = 220, COLS = 4;
+JOGOS.forEach((j, i) => {
+  const d = document.createElement('div');
+  d.className = 'mt a pop' + (i % 3 ? '' : ' alt');
+  d.style.cssText = `left:${(i % COLS) * TW}px;top:${Math.floor(i / COLS) * TH}px;--at:${(0.02 * i).toFixed(2)}`;
+  const s = k => `data-fl="${k}"`;
+  d.innerHTML = `<div class="mt-h"><span>${j[4]}</span><span>HOJE ${j[5]}</span></div>
+    <div class="mt-t">${esc(j[1])}<span>${j[0]}</span><em>x</em><span>${j[2]}</span>${esc(j[3])}</div>
+    <div class="mt-r">xG<i style="--w:${(.3 + rnd(i) * .6).toFixed(2)}"></i><b ${s('0.4,2.9,1')}>1.6</b></div>
+    <div class="mt-r">POS<i style="--w:${(.3 + rnd(i + 9) * .5).toFixed(2)}"></i><b ${s('38,66,0')}>52</b></div>
+    <div class="mt-r">ESC<i style="--w:${(.2 + rnd(i + 3) * .7).toFixed(2)}"></i><b ${s('3,14,0')}>9</b></div>`;
+  wall.appendChild(d);
+});
+const hilite = document.getElementById('hilite');
+const DUVIDA = [5, 2, 9, 6, 13, 10, 1, 14, 7, 12, 4, 9, 6];
+
+// Raios da cena final
+(() => {
+  const svg = document.getElementById('rays'); let h = '';
+  for (let i = 0; i < 36; i++) {
+    const a = i / 36 * Math.PI * 2, r0 = 260 + rnd(i) * 80, r1 = r0 + 140 + rnd(i + 50) * 260;
+    const x = r => (Math.cos(a) * r).toFixed(1), y = r => (Math.sin(a) * r).toFixed(1);
+    h += `<line x1="${x(r0)}" y1="${y(r0)}" x2="${x(r1)}" y2="${y(r1)}" stroke="#00cc00" stroke-opacity="${(.15 + rnd(i + 7) * .35).toFixed(2)}" stroke-width="3" stroke-linecap="round"/>`
+       + `<circle cx="${x(r1)}" cy="${y(r1)}" r="6" fill="#00cc00" fill-opacity=".6"/>`;
+  }
+  svg.innerHTML = h;
+})();
+
+// Cards da cena 3: spinner ate' o check, e o deslocamento pro "sugar" no fim.
+document.querySelectorAll('#dcards .dc').forEach(c => {
+  const ok = parseFloat(c.dataset.ok);
+  c.insertAdjacentHTML('beforeend',
+    `<div class="spin" style=""></div><div class="ok a pop" style="--at:${ok}">✓</div>`);
+  const sp = c.querySelector('.spin');
+  sp.style.cssText = `animation: spin .6s linear infinite, hidenow .01s linear ${ok}s both`;
+  const x = parseFloat(c.style.left) + 237, y = parseFloat(c.style.top) + 119;
+  const w = document.createElement('div');
+  while (c.firstChild) w.appendChild(c.firstChild);
+  // o pop de entrada e o "sugar" de saida mexem em transform: um em cada caixa
+  const outer = document.createElement('div');
+  outer.className = 'suck';
+  outer.style.cssText = `position:absolute;inset:0;--dx:${540 - x}px;--dy:${1000 - y}px`;
+  c.parentNode.insertBefore(outer, c); outer.appendChild(c); c.appendChild(w);
+});
+document.querySelectorAll('polyline.draw').forEach(p => {
+  p.style.cssText += ';stroke-dasharray:1;stroke-dashoffset:1;animation:draw .8s ease-out both;animation-delay:' + p.style.getPropertyValue('--at') + 's';
+});
+document.head.insertAdjacentHTML('beforeend', '<style>@keyframes draw{to{stroke-dashoffset:0}}</style>');
+
+// Palavra por palavra
+document.querySelectorAll('.split').forEach(el => {
+  let at = parseFloat(el.dataset.at), passo = 0.07;
+  const walk = node => {
+    [...node.childNodes].forEach(n => {
+      if (n.nodeType === 3) {
+        const frag = document.createDocumentFragment();
+        n.textContent.split(/(\s+)/).forEach(p => {
+          if (!p) return;
+          if (/^\s+$/.test(p)) { frag.appendChild(document.createTextNode(' ')); return; }
+          const m = document.createElement('span'); m.className = 'wm';
+          const w = document.createElement('span'); w.className = 'w'; w.textContent = p;
+          w.style.setProperty('--at', at.toFixed(2)); at += passo;
+          m.appendChild(w); frag.appendChild(m);
+        });
+        n.replaceWith(frag);
+      } else walk(n);
+    });
+  };
+  walk(el);
+});
+
+// Linha que nao cabe encolhe ate' caber. Mede antes de qualquer animacao.
+function encaixar() {
+  document.querySelectorAll('.fit').forEach(el => {
+    let fs = parseFloat(el.style.fontSize);
+    el.style.display = 'block';
+    const max = 990;
+    // offsetWidth ignora transform: nem o scale do palco nem o da entrada contam
+    const probe = () => { el.style.display = 'inline-block'; const w = el.offsetWidth; el.style.display = 'block'; return w; };
+    while (probe() > max && fs > 30) { fs -= 2; el.style.fontSize = fs + 'px'; }
+  });
+}
+
+/* ---------------------------------------------------------------- tempo */
+const scenes = [...document.querySelectorAll('.scene')];
+const flick = [...document.querySelectorAll('[data-fl]')];
+const cnts = [...document.querySelectorAll('[data-cnt]')];
+const types = [...document.querySelectorAll('[data-type]')];
+const flash = document.getElementById('flash'), cutbar = document.getElementById('cutbar');
+const procLbl = document.getElementById('proc-lbl');
+const fmt = (v, dec) => dec ? v.toFixed(dec) : Math.round(v).toLocaleString('pt-BR');
+const ease = x => 1 - Math.pow(1 - x, 3);
+
+function update(t) {
+  scenes.forEach(s => { s.style.visibility = (t >= +s.dataset.in && t < +s.dataset.out) ? 'visible' : 'hidden'; });
+
+  const tick = Math.floor(t * 9);
+  flick.forEach((el, i) => {
+    const stop = el.dataset.stop ? parseFloat(el.dataset.stop) : Infinity;
+    if (t >= stop) { el.textContent = el.dataset.v; return; }
+    const [a, b, dec] = el.dataset.fl.split(',').map(Number);
+    const v = a + rnd(tick * 31 + i * 7) * (b - a);
+    el.textContent = v.toFixed(dec) + (el.dataset.v && el.dataset.v.endsWith('%') ? '%' : '');
+  });
+  cnts.forEach(el => {
+    const [a, b, t0, t1, dec] = el.dataset.cnt.split(',').map(Number);
+    const k = Math.min(1, Math.max(0, (t - t0) / (t1 - t0)));
+    el.textContent = fmt(a + (b - a) * ease(k), dec || 0);
+  });
+  types.forEach(el => {
+    const n = Math.max(0, Math.floor((t - parseFloat(el.dataset.t0)) * parseFloat(el.dataset.cps)));
+    const full = el.dataset.type;
+    el.textContent = full.slice(0, n) + (n < full.length && n > 0 ? '▍' : '');
+    if (n === 0) el.textContent = ' ';
+  });
+
+  // Duvida: o destaque pula de jogo em jogo
+  const di = DUVIDA[Math.min(DUVIDA.length - 1, Math.floor(t / 0.24))];
+  hilite.style.left = (di % COLS) * TW + 'px';
+  hilite.style.top = Math.floor(di / COLS) * TH + 'px';
+  hilite.style.opacity = t > 0.35 ? 1 : 0;
+
+  procLbl.textContent = t >= 11.3 ? '✓ Análise concluída' : 'IA processando dados';
+
+  // Corte: clarao curto e uma barra verde que atravessa
+  let f = 0, bar = null;
+  CORTES.forEach(c => { const d = t - c; if (d >= 0 && d < .2) f = Math.max(f, 1 - d / .2); if (d >= -0.12 && d < 0.1) bar = (d + .12) / .22; });
+  flash.style.opacity = (f * .7).toFixed(3);
+  if (bar !== null) { cutbar.style.opacity = 1; cutbar.style.top = (bar * 1920 - 40) + 'px'; cutbar.style.height = '80px'; cutbar.style.boxShadow = '0 0 80px 30px rgba(0,204,0,.5)'; }
+  else cutbar.style.opacity = 0;
+}
+
+let anims = [];
+function seek(t) {
+  anims.forEach(a => { a.currentTime = t * 1000; });
+  update(t);
+}
+
+/* ---------------------------------------------------------------- arranque */
+async function pronto() {
+  await document.fonts.ready;
+  await Promise.all([...document.images].map(i => i.decode().catch(() => {})));
+  scenes.forEach(s => s.style.visibility = 'visible');
+  encaixar();
+  anims = document.getAnimations();
+  anims.forEach(a => a.pause());
+  seek(0);
+  window.__seek = t => { seek(t); return true; };
+  window.__pronto = true;
+}
+
+function escala() {
+  const k = Math.min(innerWidth / 1080, innerHeight / 1920);
+  window.__k = k;
+  document.getElementById('stage').style.setProperty('--k', k);
+}
+escala(); addEventListener('resize', escala);
+
+pronto().then(() => {
+  if (RENDER) return;
+  let t0 = performance.now(), tocando = true, tPausa = 0;
+  const scrub = document.getElementById('scrub'), tt = document.getElementById('tt'), pp = document.getElementById('pp');
+  const loop = () => {
+    if (tocando) {
+      const t = ((performance.now() - t0) / 1000) % DUR;
+      seek(t); scrub.value = t; tt.textContent = t.toFixed(2) + 's';
+    }
+    requestAnimationFrame(loop);
+  };
+  pp.onclick = () => { tocando = !tocando; pp.textContent = tocando ? 'pausar' : 'tocar'; if (tocando) t0 = performance.now() - tPausa * 1000; else tPausa = +scrub.value; };
+  scrub.oninput = () => { const t = +scrub.value; tPausa = t; t0 = performance.now() - t * 1000; seek(t); tt.textContent = t.toFixed(2) + 's'; };
+  loop();
+});
+</script>
+</body>
+</html>

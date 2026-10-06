@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>PickIA · 01 · O que é a PickIA</title>
+<link rel="stylesheet" href="base.css">
+<style>
+/* parede de jogos (cena 1) */
+.wall { position: absolute; left: -110px; top: 560px; width: 1300px; transform: perspective(1500px) rotateX(24deg) rotateZ(-4deg); transform-origin: 50% 0; }
+.wall-in { position: relative; animation: wallscroll 3s linear both; }
+@keyframes wallscroll { from { transform: translateY(80px); } to { transform: translateY(-170px); } }
+.mt { position: absolute; width: 300px; height: 196px; padding: 18px 20px; border-radius: 20px; background: rgba(20,20,24,.95); border: 1.5px solid var(--line2); }
+.mt-h { display: flex; justify-content: space-between; font: 600 15px/1 Inter; letter-spacing: .12em; color: var(--ink3); }
+.mt-t { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 12px 0 8px; font: 800 26px/1 Inter; }
+.mt-t em { font-style: normal; font-size: 18px; color: var(--ink4); }
+.mt-r { display: flex; align-items: center; gap: 10px; font: 600 15px/1 Inter; color: var(--ink3); margin-top: 9px; }
+.mt-r b { font-family: var(--mono); color: var(--ink1); width: 46px; text-align: right; }
+.mt-r i { flex: 1; height: 7px; border-radius: 4px; background: var(--s3); position: relative; overflow: hidden; }
+.mt-r i::after { content: ''; position: absolute; inset: 0; background: var(--g); transform-origin: left; transform: scaleX(var(--w)); opacity: .8; }
+.hilite { position: absolute; width: 324px; height: 220px; margin: -12px 0 0 -12px; border: 4px solid var(--gold); border-radius: 26px; box-shadow: 0 0 40px rgba(250,204,21,.45); }
+.hilite::after { content: '?'; position: absolute; right: -26px; top: -40px; width: 64px; height: 64px; border-radius: 50%; background: var(--gold); color: #111; font: 800 46px/64px Inter; text-align: center; }
+.scrim { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10,10,12,.97) 0, rgba(10,10,12,.9) 36%, rgba(10,10,12,.15) 52%, rgba(10,10,12,.2) 70%, rgba(10,10,12,.9) 100%); }
+.person { position: absolute; left: 190px; top: 1290px; width: 700px; filter: drop-shadow(0 0 30px rgba(0,204,0,.25)); }
+
+/* vitrine (cenas 4 a 7): celular inclinado alternando de lado */
+.vit .phone { width: 600px; height: 1300px; top: 560px; }
+.vit.esq .phone { left: 90px; transform: perspective(1800px) rotateY(14deg); }
+.vit.dir .phone { left: 390px; transform: perspective(1800px) rotateY(-14deg); }
+.vit .rot { position: absolute; top: 170px; }
+.vit.esq .rot { right: 70px; text-align: right; }
+.vit.dir .rot { left: 70px; text-align: left; }
+.vit .rot .hl { text-align: inherit; }
+.vit .rot p { font: 500 34px/1.3 Inter; color: var(--ink2); margin-top: 18px; max-width: 760px; }
+.roll { animation: roll 2.5s linear both; animation-delay: calc(var(--at) * 1s); }
+@keyframes roll { to { transform: translateY(var(--ate)); } }
+.dash { position: absolute; left: 0; right: 0; top: 0; bottom: 0; padding: 120px 34px; }
+</style>
+</head>
+<body data-dur="22" data-cortes="3,5,8,10.5,13,15.5,18">
+<div id="stage">
+
+  <!-- 0–3 · alguém no achismo -->
+  <section class="scene" data-in="0" data-out="3">
+    <div class="wall"><div class="wall-in" id="wall"><div class="hilite" id="hilite"></div></div></div>
+    <div class="scrim"></div>
+    <h1 class="hl abs cx" style="top:300px">
+      <span class="ln split fit" data-at=".1" style="font-size:118px">Você ainda</span>
+      <span class="ln split fit" data-at=".3" style="font-size:118px">escolhe no</span>
+      <span class="ln fit a slam" style="--at:.62;font-size:200px;margin-top:14px"><span class="glitch" data-t="ACHISMO?">ACHISMO?</span></span>
+    </h1>
+    <svg class="person" viewBox="0 0 700 700" aria-hidden="true">
+      <defs><linearGradient id="rim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#00cc00" stop-opacity=".9"/><stop offset=".6" stop-color="#00cc00" stop-opacity="0"/></linearGradient>
+      <radialGradient id="scr" cx=".5" cy=".4" r=".7"><stop offset="0" stop-color="#d9ffd9"/><stop offset="1" stop-color="#00cc00"/></radialGradient></defs>
+      <path d="M40 700 C40 520 140 430 350 420 C560 430 660 520 660 700 Z" fill="#050506" stroke="url(#rim)" stroke-width="4"/>
+      <rect x="305" y="330" width="90" height="110" rx="30" fill="#050506"/>
+      <ellipse cx="350" cy="250" rx="112" ry="128" fill="#050506" stroke="url(#rim)" stroke-width="4"/>
+      <path d="M560 560 C600 480 600 420 560 360" stroke="#050506" stroke-width="70" stroke-linecap="round" fill="none"/>
+      <g transform="rotate(-12 545 300)"><rect x="490" y="215" width="110" height="190" rx="18" fill="#111" stroke="#2b2b31" stroke-width="5"/><rect x="500" y="228" width="90" height="164" rx="10" fill="url(#scr)" opacity=".85"/></g>
+    </svg>
+  </section>
+
+  <!-- 3–5 · logo -->
+  <section class="scene" data-in="3" data-out="5">
+    <div class="abs a zoomin" style="--at:3;left:365px;top:430px;width:350px;height:350px">
+      <div class="logo-ring" style="animation-delay:3s"></div><div class="ring2 r1"></div>
+      <img src="../../../frontend/public/logo.png" alt="" style="width:100%;height:100%">
+    </div>
+    <div class="abs cx" style="top:900px">
+      <div class="hl split" data-at="3.15" style="font-size:72px;color:var(--ink2)">Conheça a</div>
+      <div class="hl wordmark a slam" style="--at:3.35;font-size:210px;text-transform:none">Pick<i>IA</i></div>
+    </div>
+  </section>
+
+  <!-- 5–8 · IA + dados, site real -->
+  <section class="scene" data-in="5" data-out="8">
+    <h2 class="hl abs cx" style="top:190px">
+      <span class="ln split fit" data-at="5.05" style="font-size:120px">IA + dados</span>
+      <span class="ln split fit" data-at="5.25" style="font-size:120px"><em>de futebol</em></span>
+    </h2>
+    <div class="phone a rise" style="--at:5.05;left:240px;top:520px;width:600px;height:1500px">
+      <div class="notch"></div>
+      <img class="tela" id="home" alt="">
+      <div class="scanbeam" style="animation-delay:5.5s"></div>
+    </div>
+  </section>
+
+  <!-- 8–10.5 · jogos -->
+  <section class="scene vit esq" data-in="8" data-out="10.5">
+    <div class="rot"><div class="hl a slam" style="--at:8.05;font-size:150px">Jogos</div><p class="a up" style="--at:8.3">A agenda do dia, na fila da análise</p></div>
+    <div class="phone a fl" style="--at:8"><div class="notch"></div><img class="tela roll" style="--at:8.4;--ate:-300px" id="fila" alt=""></div>
+  </section>
+
+  <!-- 10.5–13 · estatisticas -->
+  <section class="scene vit dir" data-in="10.5" data-out="13">
+    <div class="rot"><div class="hl a slam fit" style="--at:10.55;font-size:120px">Estatísticas</div><p class="a up" style="--at:10.8">Números dos times antes do apito</p></div>
+    <div class="phone a fr" style="--at:10.5"><div class="notch"></div>
+      <div class="dash">
+        <div class="ilus" style="margin-bottom:26px">Dados ilustrativos</div>
+        <div id="statcards"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 13–15.5 · analises -->
+  <section class="scene vit esq" data-in="13" data-out="15.5">
+    <div class="rot"><div class="hl a slam" style="--at:13.05;font-size:140px">Análises</div><p class="a up" style="--at:13.3">Um modelo por tipo de mercado</p></div>
+    <div class="phone a fl" style="--at:13"><div class="notch"></div><img class="tela roll" style="--at:13.3;--ate:-1500px" id="como" alt=""></div>
+  </section>
+
+  <!-- 15.5–18 · entradas -->
+  <section class="scene vit dir" data-in="15.5" data-out="18">
+    <div class="rot"><div class="hl a slam" style="--at:15.55;font-size:140px">Entradas</div><p class="a up" style="--at:15.8">Publicadas e registradas no histórico</p></div>
+    <div class="phone a fr" style="--at:15.5"><div class="notch"></div><img class="tela roll" style="--at:15.8;--ate:-500px" id="resolvidos" alt=""></div>
+  </section>
+
+  <section class="scene endcard" data-in="18" data-out="22.01" data-l1="Conheça a" data-l2="PickIA" data-sub="IA + dados de futebol" data-f1="80" data-f2="150"></section>
+</div>
+
+<script src="base.js"></script>
+<script>
+A.montar(() => {
+  home.src = A.tela('home-topo'); fila.src = A.tela('palpites-fila');
+  como.src = A.tela('como-funciona'); resolvidos.src = A.tela('palpites-resolvidos');
+
+  const JOGOS = [
+    ['FLA',127,'PAL',121,'BRASILEIRÃO','16:00'], ['LIV',40,'CHE',49,'PREMIER','11:30'], ['RMA',541,'BAR',529,'LA LIGA','17:00'], ['INT',505,'MIL',489,'SERIE A','15:45'],
+    ['BAY',157,'BVB',165,'BUNDESLIGA','13:30'], ['COR',131,'SAO',126,'BRASILEIRÃO','18:30'], ['ARS',42,'TOT',47,'PREMIER','12:00'], ['PSG',85,'OM',81,'LIGUE 1','16:45'],
+    ['ATM',530,'SEV',536,'LA LIGA','14:15'], ['GRE',130,'INT',119,'BRASILEIRÃO','21:00'], ['JUV',496,'NAP',492,'SERIE A','15:45'], ['MCI',50,'MUN',33,'PREMIER','13:30'],
+    ['BEN',211,'POR',212,'PRIMEIRA','17:30'], ['BOT',120,'FLU',124,'BRASILEIRÃO','19:00'], ['AJA',194,'PSV',197,'EREDIVISIE','14:30'], ['LEV',168,'RBL',173,'BUNDESLIGA','10:30'],
+    ['VAS',133,'CRU',135,'BRASILEIRÃO','20:00'], ['NEW',34,'AVL',66,'PREMIER','11:00'], ['ROM',497,'LAZ',487,'SERIE A','15:45'], ['BET',543,'VIL',533,'LA LIGA','16:00'],
+  ];
+  JOGOS.forEach((j, i) => {
+    const d = document.createElement('div');
+    d.className = 'mt a pop';
+    d.style.cssText = `left:${(i % 4) * 324}px;top:${Math.floor(i / 4) * 220}px;--at:${(0.02 * i).toFixed(2)}`;
+    d.innerHTML = `<div class="mt-h"><span>${j[4]}</span><span>HOJE ${j[5]}</span></div>
+      <div class="mt-t">${A.esc(j[1], 50)}<span>${j[0]}</span><em>x</em><span>${j[2]}</span>${A.esc(j[3], 50)}</div>
+      <div class="mt-r">xG<i style="--w:${(.3 + A.rnd(i) * .6).toFixed(2)}"></i><b data-fl="0.4,2.9,1">1.6</b></div>
+      <div class="mt-r">POS<i style="--w:${(.3 + A.rnd(i + 9) * .5).toFixed(2)}"></i><b data-fl="38,66,0">52</b></div>
+      <div class="mt-r">ESC<i style="--w:${(.2 + A.rnd(i + 3) * .7).toFixed(2)}"></i><b data-fl="3,14,0">9</b></div>`;
+    wall.appendChild(d);
+  });
+
+  // quatro cartoes de estatistica, todos ilustrativos
+  const C = [['Média de gols', '2.6', [.5,.8,.35,.9,.6,1,.7]], ['Escanteios', '9.4', [.6,.4,.8,.5,.9,.7,.6]], ['Finalizações', '13', [.7,.5,.9,.6,.8,.4,1]], ['Posse', '54%', [.5,.6,.55,.7,.5,.65,.6]]];
+  statcards.innerHTML = C.map(([n, v, hs], k) => `
+    <div class="card a up" style="--at:${10.7 + k * .25};padding:24px 28px;margin-bottom:22px;display:flex;align-items:flex-end;gap:24px">
+      <div style="flex:none;width:200px"><div class="lbl">${n}</div><div class="big" style="margin-top:12px">${v}</div></div>
+      <div class="bars" style="flex:1;height:100px">${hs.map((h, j) => `<i style="--h:${h};--at:${10.9 + k * .25 + j * .04}"></i>`).join('')}</div>
+    </div>`).join('');
+});
+const DUVIDA = [5, 2, 9, 6, 13, 10, 1, 14, 7, 12, 4, 9, 6];
+A.quadro(t => {
+  const di = DUVIDA[Math.min(DUVIDA.length - 1, Math.floor(t / 0.24))];
+  hilite.style.left = (di % 4) * 324 + 'px'; hilite.style.top = Math.floor(di / 4) * 220 + 'px';
+  hilite.style.opacity = t > .35 ? 1 : 0;
+});
+</script>
+</body>
+</html>

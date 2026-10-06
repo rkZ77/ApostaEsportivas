@@ -21,6 +21,7 @@ import AdminDisparos from '../components/AdminDisparos'
 import AdminAlertaIA from '../components/AdminAlertaIA'
 import AdminReds from '../components/AdminReds'
 import AdminMudancas from '../components/AdminMudancas'
+import { Secao, GuiaDaAba, abrirSecao } from '../components/AdminSecao'
 import { fmtBRL } from '../utils/format'
 import { sinalizarNavegacao } from '../services/progressBus'
 
@@ -164,33 +165,161 @@ const PICK_LABEL: Record<string, string> = {
 // Pipeline, contagem do dia em Picks, receita em Financeiro. O cartao de
 // "ultimo pipeline" nao mudou de casa, foi apagado -- a aba Pipeline ja diz
 // isso por step, com log.
+//
+// AGRUPADAS POR ASSUNTO (2026-10-06). Eram onze abas numa fila só, e o nome
+// de cada uma ("Pipeline", "Dados", "Motor") não dizia a quem servia. Agora
+// a barra separa três assuntos: o dia a dia da operação, os clientes e o
+// dinheiro, e o motor por dentro. As vizinhanças que já existiam continuam:
+// Usuários ao lado de Disparos (medir quem sumiu e falar com eles), Ligas ao
+// lado de Dados ao lado de Motor ("por que não saiu pick" desce nessa ordem).
 const ABAS = [
-  { key: 'usuarios',   label: 'Usuários'    },
-  // Logo depois de Usuarios de proposito: a aba ao lado mede quem sumiu
-  // (Funil, planos vencidos) e esta e' a unica que age sobre isso. Separadas
-  // por outras cinco, "quantos sumiram" e "falar com eles" viram duas visitas.
-  { key: 'disparos',   label: 'Disparos'    },
-  { key: 'pipeline',   label: 'Pipeline'    },
-  { key: 'live',       label: 'Ao Vivo'     },
-  { key: 'ia',         label: 'IA'          },
-  { key: 'financeiro', label: 'Financeiro'  },
-  { key: 'picks',      label: 'Picks'       },
-  { key: 'ligas',      label: 'Ligas'       },
-  // Depois de Ligas de proposito: a pergunta "o motor esta enxergando?" quase
-  // sempre termina em "qual liga nao coletou", que e' a aba ao lado.
-  { key: 'dados',      label: 'Dados'       },
-  // E ao lado de Dados pelo mesmo motivo: "por que nao saiu pick" quase
-  // sempre termina em "o motor nem viu o jogo", que e' a aba anterior.
-  //
-  // A aba passou a ter DUAS camadas em 27/08, nesta ordem: as execucoes em
-  // cima (que motor rodou, em que versao, com que desfecho) e o retrato do dia
-  // embaixo (que jogos o motor olhou). A ordem importa -- a pergunta comeca em
-  // "o motor rodou?" e so' depois desce pra "o que ele viu?"; invertida, a
-  // tela responde a segunda antes de a primeira ter resposta.
-  { key: 'motor',      label: 'Motor'       },
-  { key: 'casas',      label: 'Casas'       },
+  { key: 'picks',      label: 'Picks',      grupo: 'Dia a dia' },
+  { key: 'pipeline',   label: 'Pipeline',   grupo: 'Dia a dia' },
+  { key: 'live',       label: 'Ao Vivo',    grupo: 'Dia a dia' },
+  { key: 'usuarios',   label: 'Usuários',   grupo: 'Clientes'  },
+  { key: 'disparos',   label: 'Disparos',   grupo: 'Clientes'  },
+  { key: 'financeiro', label: 'Financeiro', grupo: 'Clientes'  },
+  { key: 'ligas',      label: 'Ligas',      grupo: 'Motor'     },
+  { key: 'dados',      label: 'Dados',      grupo: 'Motor'     },
+  { key: 'motor',      label: 'Motor',      grupo: 'Motor'     },
+  { key: 'ia',         label: 'IA',         grupo: 'Motor'     },
+  { key: 'casas',      label: 'Casas',      grupo: 'Motor'     },
 ] as const
 type AdminAba = typeof ABAS[number]['key']
+
+/*
+ * O guia de cada aba, em português de quem opera.
+ *
+ * `secoes` repete os ids e títulos das <Secao> da aba, e é isso que vira o
+ * índice clicável no topo. Aba feita de um componente só (Disparos, Ao Vivo,
+ * Dados) não tem índice: o próprio componente é a seção.
+ */
+const GUIAS: Record<AdminAba, { paraQue: string; quando: string[]; secoes?: { id: string; titulo: string }[] }> = {
+  picks: {
+    paraQue: 'Os picks já publicados: quantos saíram hoje, marcar green ou red de quem já jogou, e corrigir resultado errado.',
+    quando: [
+      'acabou a rodada e os picks continuam sem resultado',
+      'alguém avisou que um pick foi marcado errado',
+      'no fechamento do mês, para conferir se tudo que está gravado bate',
+    ],
+    secoes: [
+      { id: 'picks-hoje', titulo: 'Picks de hoje' },
+      { id: 'picks-atualizar', titulo: 'Atualizar resultados' },
+      { id: 'picks-pendencias', titulo: 'Sem resultado' },
+      { id: 'picks-corrigir', titulo: 'Corrigir na mão' },
+      { id: 'picks-auditoria', titulo: 'Conferir o mês' },
+      { id: 'picks-compartilhar', titulo: 'Imagens para redes' },
+    ],
+  },
+  pipeline: {
+    paraQue: 'A rotina diária que busca jogos e odds e gera os picks. Nada roda sozinho: é daqui que se dispara.',
+    quando: [
+      'é hora de gerar os picks do dia',
+      'não saiu pick nenhum e você quer saber se a coleta rodou',
+      'o site parou de atualizar e pode ser a cota da API que acabou',
+    ],
+    secoes: [
+      { id: 'pipeline-cota', titulo: 'Cota da API' },
+      { id: 'pipeline-coleta', titulo: 'Jogos coletados' },
+      { id: 'pipeline-rodar', titulo: 'Rodar o pipeline' },
+    ],
+  },
+  live: {
+    paraQue: 'O motor que publica picks durante os jogos. Aqui se liga, acompanha e testa uma rodada, e se vê quanto ele acerta.',
+    quando: [
+      'não estão saindo picks ao vivo',
+      'você quer testar uma rodada e ver o log',
+    ],
+  },
+  usuarios: {
+    paraQue: 'Quem usa o site: quantos são, quem assina, onde as pessoas desistem, e mudar plano ou validade de alguém.',
+    quando: [
+      'alguém pagou e o acesso não liberou (confira também em Financeiro)',
+      'você precisa dar, estender ou tirar acesso de alguém',
+      'quer saber quantos assinantes ativos existem e quem está vencendo',
+    ],
+    secoes: [
+      { id: 'usuarios-numeros', titulo: 'Números da base' },
+      { id: 'usuarios-lista', titulo: 'Lista de usuários' },
+      { id: 'usuarios-funil', titulo: 'Onde desistem' },
+      { id: 'usuarios-vencidos', titulo: 'Planos vencidos' },
+    ],
+  },
+  disparos: {
+    paraQue: 'Mandar e-mail ou mensagem para grupos de usuários, por exemplo quem se cadastrou e nunca voltou. O público aparece antes do botão de enviar.',
+    quando: [
+      'você quer chamar de volta quem sumiu ou quem o teste acabou',
+    ],
+  },
+  financeiro: {
+    paraQue: 'O dinheiro: quanto entrou, de quais planos, cada pagamento, e as tentativas de liberar acesso que falharam.',
+    quando: [
+      'alguém diz que pagou e não recebeu acesso',
+      'fechamento do mês',
+    ],
+    secoes: [
+      { id: 'fin-mes', titulo: 'Este mês' },
+      { id: 'fin-historico', titulo: 'Histórico' },
+      { id: 'fin-pagamentos', titulo: 'Pagamentos' },
+      { id: 'fin-eventos', titulo: 'Falhas de liberação' },
+    ],
+  },
+  ligas: {
+    paraQue: 'Os campeonatos que o sistema acompanha. Liga fora desta lista não tem jogo coletado, e sem jogo não sai pick.',
+    quando: [
+      'você quer começar a dar pick de um campeonato novo',
+      'uma liga aparece com 0 jogos ou 0 times',
+    ],
+    secoes: [
+      { id: 'ligas-cadastrar', titulo: 'Adicionar liga' },
+      { id: 'ligas-lista', titulo: 'Ligas acompanhadas' },
+    ],
+  },
+  dados: {
+    paraQue: 'A qualidade da estatística dos jogos que o motor usa para decidir. Buraco aqui vira pick que não sai ou resultado que não fecha.',
+    quando: [
+      'a auditoria de resultados disse "sem folha do jogo"',
+      'um mercado parou de gerar pick e você desconfia de dado faltando',
+    ],
+  },
+  motor: {
+    paraQue: 'Como os picks são escolhidos e se isso está funcionando: o caminho de cada motor, o que mudou, por que perdeu, se rodou e o que viu.',
+    quando: [
+      'não saiu pick de algum produto e você quer saber por quê',
+      'um produto está dando muito red',
+      'depois de mudar algo no motor, para ver se melhorou',
+    ],
+    secoes: [
+      { id: 'motor-execucoes', titulo: 'Os motores rodaram?' },
+      { id: 'motor-decisoes', titulo: 'O que viu no dia' },
+      { id: 'motor-reds', titulo: 'Por que perdeu' },
+      { id: 'motor-mudancas', titulo: 'Antes e depois' },
+      { id: 'motor-fluxo', titulo: 'Como nasce um pick' },
+    ],
+  },
+  ia: {
+    paraQue: 'A revisão por IA: depois que o motor escolhe um pick, uma IA aprova ou veta. Aqui se vê quanto ela vetou e se os vetos acertaram.',
+    quando: [
+      'você quer saber se vale manter o veto da IA ligado',
+      'um mercado está dando prejuízo e você quer ver o histórico dele',
+    ],
+    secoes: [
+      { id: 'ia-hoje', titulo: 'Revisões recentes' },
+      { id: 'ia-desempenho', titulo: 'Desempenho por mercado' },
+    ],
+  },
+  casas: {
+    paraQue: 'As casas de aposta de onde vêm as odds. Casa desativada para de ser coletada, e o que já foi coletado fica.',
+    quando: [
+      'uma casa nova precisa entrar na coleta',
+      'o nome de uma casa aparece errado',
+    ],
+    secoes: [
+      { id: 'casas-cadastrar', titulo: 'Adicionar ou renomear' },
+      { id: 'casas-lista', titulo: 'Casas coletadas' },
+    ],
+  },
+}
 
 const planBadge = (plan: string) => {
   if (plan === 'vip')   return 'badge-vip'
@@ -732,7 +861,12 @@ export default function Admin() {
         title: 'Painel Admin',
         sub: 'Gerenciar usuários e planos',
         actions: (
-          <Button size="sm" Icon={Plus} onClick={() => setCreating(v => !v)}>
+          <Button size="sm" Icon={Plus} onClick={() => {
+            // O formulário mora na aba Usuários; clicado de outra aba, ele
+            // abria escondido e o botão parecia não fazer nada.
+            if (aba !== 'usuarios') { setAba('usuarios'); window.location.hash = 'usuarios'; setCreating(true) }
+            else setCreating(v => !v)
+          }}>
             Novo usuário
           </Button>
         ),
@@ -754,32 +888,50 @@ export default function Admin() {
             pagina de Picks. */}
         <div className="relative mb-6 -mx-4">
           <div className="pointer-events-none absolute right-0 top-0 h-full w-10 bg-gradient-to-l from-surface-0 to-surface-0/0 z-10" />
-          <div className="flex border-b border-line px-4 overflow-x-auto scrollbar-none">
-            {ABAS.map(a => (
-              <button
-                key={a.key}
-                onClick={() => {
-                  if (aba !== a.key) sinalizarNavegacao()
-                  setAba(a.key); window.location.hash = a.key
-                }}
-                className={`relative px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold mr-1 whitespace-nowrap flex-shrink-0 transition-colors ${
-                  aba === a.key ? 'text-ink-1' : 'text-ink-3 hover:text-ink-2'
-                }`}
-              >
-                {a.label}
-                <div className={`absolute left-0 right-0 -bottom-px h-0.5 ${aba === a.key ? 'bg-green-500' : 'bg-transparent'}`} />
-              </button>
-            ))}
+          <div className="flex items-end border-b border-line px-4 overflow-x-auto scrollbar-none">
+            {ABAS.map((a, i) => {
+              const abreGrupo = i === 0 || ABAS[i - 1].grupo !== a.grupo
+              return (
+                <div key={a.key} className={`flex flex-col flex-shrink-0 ${abreGrupo && i > 0 ? 'ml-3 pl-3 border-l border-line' : ''}`}>
+                  {/* Nome do grupo só em cima da primeira aba dele; nas outras
+                      fica a altura vazia, pra todas as abas alinharem embaixo. */}
+                  <span className="text-[9px] uppercase tracking-wider text-ink-4 px-3 sm:px-4 pt-1 h-4 whitespace-nowrap">
+                    {abreGrupo ? a.grupo : ''}
+                  </span>
+                  <button
+                    onClick={() => {
+                      if (aba !== a.key) sinalizarNavegacao()
+                      setAba(a.key); window.location.hash = a.key
+                    }}
+                    className={`relative px-3 sm:px-4 pb-3 pt-1 text-xs sm:text-sm font-semibold whitespace-nowrap transition-colors ${
+                      aba === a.key ? 'text-ink-1' : 'text-ink-3 hover:text-ink-2'
+                    }`}
+                  >
+                    {a.label}
+                    <div className={`absolute left-0 right-0 -bottom-px h-0.5 ${aba === a.key ? 'bg-green-500' : 'bg-transparent'}`} />
+                  </button>
+                </div>
+              )
+            })}
           </div>
         </div>
+
+        <GuiaDaAba aba={aba} {...GUIAS[aba]} />
 
 
         {aba === 'pipeline' && (<>
         {/* Cota da API-Football. Primeiro bloco de proposito: e' o recurso
             que ja parou o site inteiro por estouro, e o unico numero aqui
             que vem de fora e nao da' pra descobrir olhando o banco. */}
+        <Secao id="pipeline-cota" abertaPorPadrao
+          titulo="Quanto da API de futebol ainda dá pra usar hoje?"
+          oQueE="Toda coleta gasta requisições da API-Football. Se chegar no limite, nada mais atualiza até o dia seguinte."
+          tecnico="Cota da API-Football">
+        {!overview?.api_football && (
+          <p className="text-xs text-ink-4 px-1">Não foi possível ler a cota agora.</p>
+        )}
         {overview?.api_football && (
-          <div className="card p-4 mb-4">
+          <div className="card p-4">
             <div className="flex items-center justify-between mb-2 gap-3">
               <h2 className="text-xs font-semibold text-ink-3">Cota da API-Football</h2>
               <span className={`text-[10px] font-black border px-1.5 py-0.5 rounded ${
@@ -810,12 +962,19 @@ export default function Admin() {
             )}
           </div>
         )}
+        </Secao>
 
         {/* Saúde da coleta. Sem isso, "não saiu pick hoje" fica
             indistinguível de "a coleta nem rodou". */}
+        <Secao id="pipeline-coleta" abertaPorPadrao
+          titulo="Os jogos de hoje foram coletados?"
+          oQueE="Quantos jogos, odds e estatísticas estão no banco. Zero aqui explica por que não saiu pick."
+          tecnico="Coleta">
+        {!overview?.coleta && (
+          <p className="text-xs text-ink-4 px-1">Sem dados da coleta agora.</p>
+        )}
         {overview?.coleta && (
-          <div className="card p-4 mb-4">
-            <h2 className="text-xs font-semibold text-ink-3 mb-3">Coleta</h2>
+          <div className="card p-4">
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
               {[
                 { label: 'Jogos hoje',      value: overview.coleta.jogos_hoje },
@@ -844,11 +1003,16 @@ export default function Admin() {
             )}
           </div>
         )}
+        </Secao>
 
         {/* Pipeline */}
-        <div className="card p-4 mb-6">
+        <Secao id="pipeline-rodar" abertaPorPadrao
+          titulo="Gerar os picks do dia"
+          oQueE={'"Rodar tudo" faz as etapas na ordem: buscar jogos, odds e estatísticas, depois gerar os picks. Cada etapa também roda sozinha, e o log mostra o que está acontecendo.'}
+          tecnico="Pipeline">
+        <div className="card p-4">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xs font-semibold text-ink-3">Pipeline</h2>
+            <h2 className="text-xs font-semibold text-ink-3">Etapas</h2>
             {(() => {
               const s = pipelineStatus['tudo']
               const isTudoRunning = runningCmd === 'tudo' || s?.status === 'running'
@@ -963,8 +1127,7 @@ export default function Admin() {
             </div>
           )}
         </div>
-
-
+        </Secao>
         </>)}
 
         {aba === 'disparos' && <AdminDisparos />}
@@ -974,21 +1137,53 @@ export default function Admin() {
         {aba === 'dados' && <AdminDados />}
 
         {aba === 'motor' && (
-          <div className="space-y-8">
-            {/* O DESENHO VEM PRIMEIRO. As duas telas abaixo respondem o que
-                aconteceu (quais execuções rodaram, o que o motor olhou num
-                dia); esta responde como o motor chega num pick, que é a
-                pergunta anterior às duas. */}
-            <AdminFluxoDosMotores />
-            <AdminMudancas />
-            <AdminReds />
-            <AdminAuditoriaMotores />
-            <AdminMotorDecisoes />
+          <div>
+            {/* A ORDEM É A DA INVESTIGAÇÃO, NÃO A DO DESENHO (2026-10-06).
+                O fluxo abria a aba porque "como nasce um pick" é a pergunta
+                anterior às outras · e é verdade, mas é a pergunta de quem
+                está aprendendo, uma vez. Quem abre a aba no dia a dia chega
+                com "não saiu pick" ou "deu muito red", e a primeira resposta
+                é "o motor rodou?". O fluxo continua aqui, por último e
+                fechado, pra quando a dúvida for o caminho. */}
+            <Secao id="motor-execucoes" abertaPorPadrao
+              titulo="Os motores rodaram hoje?"
+              oQueE="Cada execução de cada motor: se rodou, se falhou, quantos jogos olhou e quantos picks saíram. É o primeiro lugar a olhar quando um produto ficou sem pick."
+              tecnico="Auditoria dos motores">
+              <AdminAuditoriaMotores />
+            </Secao>
+            <Secao id="motor-decisoes"
+              titulo="Quais jogos o motor olhou num dia, e por que escolheu esses?"
+              oQueE="Jogo por jogo: o que foi descartado antes (e por qual motivo), os mercados que ele avaliou e por que o escolhido ganhou dos outros."
+              tecnico="O que o motor olhou">
+              <AdminMotorDecisoes />
+            </Secao>
+            <Secao id="motor-reds"
+              titulo="Por que os picks deram red?"
+              oQueE="Cada red do período, com o que o motor esperava e o que aconteceu em campo: perdeu por pouco, expulsão, time reserva."
+              tecnico="REDs">
+              <AdminReds />
+            </Secao>
+            <Secao id="motor-mudancas"
+              titulo="A última mudança no motor melhorou ou piorou?"
+              oQueE="Cada mudança feita no motor, com o resultado de cada produto antes e depois. Olhe o número de apostas antes de concluir: amostra pequena engana."
+              tecnico="Mudanças">
+              <AdminMudancas />
+            </Secao>
+            <Secao id="motor-fluxo"
+              titulo="Como um pick é criado, passo a passo"
+              oQueE="O caminho de cada motor, do jogo até o pick publicado, com os filtros e limites reais que ele usa hoje."
+              tecnico="Fluxo dos motores">
+              <AdminFluxoDosMotores />
+            </Secao>
           </div>
         )}
 
         {aba === 'ia' && (
-          <div className="space-y-6">
+          <div>
+            <Secao id="ia-hoje" abertaPorPadrao
+              titulo="Quantos picks a IA revisou e vetou?"
+              oQueE="Contagem de hoje e das últimas 24h. Cache é revisão reaproveitada, que não custa chamada nova à IA."
+              tecnico="Revisão por IA">
 
             {/* Revisão por IA · o cabeçalho da aba.
               *
@@ -1025,25 +1220,40 @@ export default function Admin() {
             </div>)}
           </div>
         </div>
-            <AdminIAPerformance status={aiReviewStatus} />
+            </Secao>
+            <Secao id="ia-desempenho" abertaPorPadrao
+              titulo="Quais mercados dão lucro, e os vetos da IA acertam?"
+              oQueE="Resultado por mercado e, para cada pick vetado, o que teria acontecido se ele tivesse saído. Veto que barra mais green do que red está atrapalhando."
+              tecnico="Mercados e revisão da IA">
+              <AdminIAPerformance status={aiReviewStatus} />
+            </Secao>
           </div>
         )}
 
         {aba === 'financeiro' && (<>
         {/* Receita do mês · era o único número financeiro que morava fora
             desta aba. */}
-        {overview?.financeiro && (
-          <div className="card p-4 mb-4">
-            <h2 className="text-xs font-semibold text-ink-3 mb-2">Receita do mês</h2>
+        <Secao id="fin-mes" abertaPorPadrao
+          titulo="Quanto entrou este mês?"
+          oQueE="Receita do mês corrente, só com pagamentos aprovados."
+          tecnico="Receita do mês">
+        {overview?.financeiro ? (
+          <div className="card p-4">
             <div className="font-mono text-3xl font-black text-green-400">{fmtBRL(overview.financeiro.receita_mes)}</div>
             <p className="text-[11px] text-ink-4 mt-1">{overview.financeiro.pagamentos_mes} pagamento(s) aprovado(s)</p>
           </div>
+        ) : (
+          <p className="text-xs text-ink-4 px-1">Sem dados de receita agora.</p>
         )}
+        </Secao>
         {/* Financeiro */}
+        <Secao id="fin-historico" abertaPorPadrao
+          titulo="Como a receita evoluiu, e de quais planos ela vem?"
+          oQueE="Total desde o início, ticket médio, assinantes ativos de cada plano, receita mês a mês e a divisão por tipo de plano."
+          tecnico="Financeiro">
+        {!revenue && <p className="text-xs text-ink-4 px-1">Carregando...</p>}
         {revenue && (
-          <div className="mb-6">
-            <h2 className="text-xs font-semibold text-ink-3 mb-3">Financeiro</h2>
-
+          <div>
             {/* KPIs */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
               {[
@@ -1161,9 +1371,14 @@ export default function Admin() {
             </div>
           </div>
         )}
+        </Secao>
 
         {/* Pagamentos */}
-        <div className="card overflow-hidden mb-6">
+        <Secao id="fin-pagamentos"
+          titulo="Pagamentos recebidos"
+          oQueE={'Cada pagamento, de quem e de qual plano. Se alguém pagou e não ganhou acesso, "Sincronizar com MercadoPago" busca o que faltou e libera.'}
+          tecnico="Pagamentos">
+        <div className="card overflow-hidden">
           <div className="px-4 py-3 border-b border-line flex items-center justify-between gap-3 flex-wrap">
             <h2 className="text-xs font-semibold text-ink-3">Pagamentos</h2>
             <div className="flex items-center gap-2 flex-wrap">
@@ -1289,17 +1504,16 @@ export default function Admin() {
             </>
           )}
         </div>
+        </Secao>
 
         {/* Trilha de processamento. O webhook rejeitado por assinatura não
             deixava rastro nenhum: o comprador seguia free e a venda sumia do
             relatório sem nada para olhar. Aqui a recusa aparece. */}
-        <div className="card overflow-hidden mb-6">
-          <div className="px-4 py-3 border-b border-line">
-            <h2 className="text-xs font-semibold text-ink-3">Eventos de pagamento</h2>
-            <p className="text-[11px] text-ink-4 mt-0.5">
-              Últimas tentativas de processar pagamento, inclusive as recusadas.
-            </p>
-          </div>
+        <Secao id="fin-eventos"
+          titulo="Tentativas de liberar acesso, inclusive as que falharam"
+          oQueE={'Cada vez que o MercadoPago avisou de um pagamento e o que o site fez com ele. Status diferente de "ativado" é onde mora o "paguei e não recebi".'}
+          tecnico="Eventos de pagamento">
+        <div className="card overflow-hidden">
           {paymentEvents.length === 0 ? (
             <p className="text-center text-ink-4 text-sm py-6">Nenhum evento registrado.</p>
           ) : (
@@ -1352,6 +1566,7 @@ export default function Admin() {
             </>
           )}
         </div>
+        </Secao>
         </>)}
 
         {aba === 'picks' && (<>
@@ -1359,9 +1574,13 @@ export default function Admin() {
             Eram 6 fixos e o motor passou a produzir 9 (Jogadores e Pick Boost
             em 28/08, Ao Vivo em 29/08); a grade cresce sozinha porque a lista
             vem do backend, não de cards escritos aqui. */}
+        <Secao id="picks-hoje" abertaPorPadrao
+          titulo="Quantos picks saíram hoje?"
+          oQueE="Por produto. Laranja é pick cujo resultado ainda não foi marcado."
+          tecnico="Picks de hoje">
+        {!overview?.picks_hoje && <p className="text-xs text-ink-4 px-1">Sem contagem agora.</p>}
         {overview?.picks_hoje && (
-          <div className="card p-4 mb-4">
-            <h2 className="text-xs font-semibold text-ink-3 mb-3">Picks de hoje</h2>
+          <div className="card p-4">
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               {Object.entries(overview.picks_hoje).map(([chave, c]) => (
                 <div key={chave} className="flex items-center gap-3 bg-surface-1 rounded-md px-3 py-2.5">
@@ -1378,16 +1597,22 @@ export default function Admin() {
             </div>
           </div>
         )}
+        </Secao>
 
-        <AdminShareResults />
-        <AdminAuditoriaResultados />
-        <AdminPendencias />
         {/* Ações de resultado. Os dois endpoints já existiam no backend desde
             que o scheduler foi removido, mas não tinham botão nenhum -- só
             dava pra chamar por fora. Sem scheduler, esta é a única forma de
-            resolver pick em lote. */}
-        <div className="card p-4 mb-4">
-          <h2 className="text-xs font-semibold text-ink-3 mb-1">Resultados</h2>
+            resolver pick em lote.
+
+            ORDEM DA ABA (2026-10-06): a do uso. Atualizar é o que se faz todo
+            dia, então vem logo depois da contagem; o que sobra sem resultado,
+            a correção manual e a conferência do mês vêm depois, nessa ordem;
+            as imagens de divulgação, que não mexem em resultado, por último. */}
+        <Secao id="picks-atualizar" abertaPorPadrao
+          titulo="Marcar green/red dos jogos que já terminaram"
+          oQueE="Nada roda sozinho: depois da rodada, clique aqui. Ele marca os resultados e confere escanteios e cartões que a API corrigiu depois do jogo."
+          tecnico="Resultados">
+        <div className="card p-4">
           <p className="text-xs text-ink-3 mb-3 leading-relaxed">
             Nada roda agendado. Este botão faz as duas coisas, na ordem que elas
             precisam acontecer: marca GREEN/RED nos picks cujo jogo já terminou e,
@@ -1450,9 +1675,20 @@ export default function Admin() {
               : 'Atualizar resultados'}
           </button>
         </div>
+        </Secao>
 
-        <div className="card p-4 mb-6">
-          <h2 className="text-xs font-semibold text-ink-3 mb-3">Corrigir Resultado de Pick</h2>
+        <Secao id="picks-pendencias"
+          titulo="Picks que deviam ter fechado e continuam sem resultado"
+          oQueE="Jogo terminou, mas o pick não foi marcado, quase sempre porque a estatística do jogo não chegou. Cada um diz o motivo e o que fazer."
+          tecnico="Pendências">
+          <AdminPendencias />
+        </Secao>
+
+        <Secao id="picks-corrigir"
+          titulo="Corrigir o resultado de um pick na mão"
+          oQueE="Procure pelo time ou pela data e troque o resultado. O lucro é recalculado e quem seguiu o pick recebe aviso da correção. Use quando você já conferiu o jogo."
+          tecnico="Corrigir resultado">
+        <div className="card p-4">
           {(() => {
             const brt = (daysAgo = 0) => {
               const d = new Date()
@@ -1586,14 +1822,33 @@ export default function Admin() {
             <p className="text-ink-4 text-xs text-center py-4">Nenhum pick encontrado.</p>
           )}
         </div>
+        </Secao>
+
+        <Secao id="picks-auditoria"
+          titulo="Os resultados gravados no mês estão certos?"
+          oQueE="Refaz a conta de cada pick do mês e aponta o que não bate. Só aponta, não corrige nada, e não gasta cota da API. Divergência aqui é suspeita: confirme no jogo antes de corrigir."
+          tecnico="Auditoria de resultados">
+          <AdminAuditoriaResultados />
+        </Secao>
+
+        <Secao id="picks-compartilhar"
+          titulo="Gerar imagens de resultado para as redes sociais"
+          oQueE="Imagens no formato de story com os resultados, prontas para postar. Não altera nada nos picks."
+          tecnico="Compartilhar resultados">
+          <AdminShareResults />
+        </Secao>
         </>)}
 
         {aba === 'usuarios' && (<>
         {/* Contagem por plano e atividade. Moraram na Visao geral ate 16/08 e
             vieram pra ca: sao numeros SOBRE USUARIO, e quem esta olhando a
             base nao devia trocar de aba pra ver quantos VIP existem. */}
+        <Secao id="usuarios-numeros" abertaPorPadrao
+          titulo="Quantos usuários temos, e de que tipo?"
+          oQueE={'Assinante paga; Teste está no período grátis; Free não paga. "Ativos" são as contas não desativadas, e "Expirando" é assinatura que vence nos próximos 7 dias.'}
+          tecnico="Contagem por plano">
         {stats && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             {[
               { label: 'Total',         value: stats.total,          color: 'text-ink-1' },
               { label: 'Assinantes',    value: stats.vip,            color: 'text-yellow-400' },
@@ -1615,10 +1870,10 @@ export default function Admin() {
           * ninguém deu opt-in, então os quatro cartões eram zero permanente
           * com um aviso explicando por que eram zero. O arquivo do componente
           * fica no disco pra voltar quando o WhatsApp de fato disparar. */}
-        {/* Passagem de etapa, antes do estoque: os cartões acima dizem
-            quantos SÃO VIP, e este painel diz onde a base para de andar. */}
-        <AdminFunil />
-        <AdminPlanosVencidos />
+        </Secao>
+        {/* A lista vem antes do funil e dos vencidos (2026-10-06): é o que
+            se usa quase toda vez que a aba abre, e ficava embaixo de dois
+            painéis de análise. */}
         {/* Criar usuário */}
         {creating && (
           <form onSubmit={handleCreate} className="card p-5 mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
@@ -1638,6 +1893,10 @@ export default function Admin() {
           </form>
         )}
 
+        <Secao id="usuarios-lista" abertaPorPadrao
+          titulo="Buscar um usuário e mudar plano, validade ou acesso"
+          oQueE="Procure por nome ou e-mail. Na linha dá pra trocar o plano, o tipo de assinatura, a data de vencimento, e desativar a conta. Tudo grava na hora."
+          tecnico="Usuários">
         {/* Busca + filtro */}
         <div className="flex flex-col sm:flex-row gap-3 mb-4">
           <input
@@ -1886,11 +2145,30 @@ export default function Admin() {
             </div>
           ))}
         </div>
+        </Secao>
+
+        {/* Passagem de etapa: os números do topo dizem quantos SÃO
+            assinantes, e este painel diz onde a base para de andar. */}
+        <Secao id="usuarios-funil"
+          titulo="Em que etapa as pessoas desistem antes de assinar?"
+          oQueE="De quem criou conta: quantos confirmaram e-mail ou telefone, quantos usaram o teste e quantos assinaram. Mostra onde está o maior vazamento."
+          tecnico="Funil">
+          <AdminFunil />
+        </Secao>
+        <Secao id="usuarios-vencidos"
+          titulo="Quem venceu e ainda aparece como assinante ou teste?"
+          oQueE="Normalmente fica zerado, porque o sistema rebaixa sozinho. Olhe depois de mudar uma data de vencimento na mão."
+          tecnico="Planos vencidos">
+          <AdminPlanosVencidos />
+        </Secao>
         </>)}
 
         {aba === 'ligas' && (<>
-          <div className="card p-4 mb-4">
-            <h2 className="text-xs font-semibold text-ink-3 mb-1">Cadastrar liga</h2>
+          <Secao id="ligas-cadastrar"
+            titulo="Adicionar um campeonato"
+            oQueE='Informe o número da liga na API-Football e a temporada, clique em Verificar para ver se ela existe e já começou, depois Cadastrar. Para trazer os jogos, use "Coletar" na lista.'
+            tecnico="Cadastrar liga">
+          <div className="card p-4">
             <p className="text-xs text-ink-3 mb-3 leading-relaxed">
               O ID é o da API-Football (ex.: 71 = Brasileirão Série A). O nome é
               buscado automaticamente, só preencha se a validação estiver fora do ar.
@@ -2034,11 +2312,13 @@ export default function Admin() {
               </div>
             )}
           </div>
+          </Secao>
 
+          <Secao id="ligas-lista" abertaPorPadrao
+            titulo={`Quais campeonatos estamos acompanhando?${ligas ? ` (${ligas.length})` : ''}`}
+            oQueE='Cada liga com quantos times e jogos já estão no banco. "Coletar" busca tudo da temporada (gasta cota da API); "Tirar da coleta" para de buscar dados novos sem apagar nada.'
+            tecnico="Ligas na coleta">
           <div className="card p-4">
-            <h2 className="text-xs font-semibold text-ink-3 mb-3">
-              Ligas na coleta {ligas ? `(${ligas.length})` : ''}
-            </h2>
             {ligasErro ? (
               <div className="flex flex-wrap items-center gap-3 rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2.5">
                 <p className="text-sm text-red-300 flex-1 min-w-[200px]">{ligasErro}</p>
@@ -2175,6 +2455,7 @@ export default function Admin() {
               com o andamento na própria linha da liga.
             </p>
           </div>
+          </Secao>
 
           {/*
             Card de confirmação no lugar do window.confirm: a ação gasta cota
@@ -2254,8 +2535,11 @@ export default function Admin() {
 
         {aba === 'casas' && (<>
           {/* Cadastrar casa */}
-          <div className="card p-4 mb-4">
-            <h2 className="text-xs font-semibold text-ink-3 mb-1">Cadastrar / editar casa de aposta</h2>
+          <Secao id="casas-cadastrar"
+            titulo="Adicionar ou renomear uma casa de aposta"
+            oQueE='Número da casa na API-Football e o nome que deve aparecer no site. "Editar" na lista preenche este formulário.'
+            tecnico="Cadastrar / editar casa">
+          <div className="card p-4">
             <p className="text-xs text-ink-3 mb-3 leading-relaxed">
               O ID é o que a API-Football usa (ex.: 8 = Bet365, 32 = Betano).
               Casas já coletadas aparecem na lista abaixo; aqui você pode cadastrar
@@ -2297,8 +2581,13 @@ export default function Admin() {
               </button>
             </div>
           </div>
+          </Secao>
 
           {/* Lista de casas */}
+          <Secao id="casas-lista" abertaPorPadrao
+            titulo={`De quais casas de aposta pegamos odds?${bookmakers ? ` (${bookmakers.length})` : ''}`}
+            oQueE="Cada casa com quantas odds e jogos já foram coletados. Desativar só para a coleta futura, o histórico fica."
+            tecnico="Casas coletadas">
           <div className="card overflow-hidden">
             <div className="px-4 py-3 border-b border-line flex items-center justify-between gap-3">
               <h2 className="text-xs font-semibold text-ink-3">
@@ -2336,10 +2625,13 @@ export default function Admin() {
                     </p>
                     <button
                       className="mt-2 text-[11px] text-ink-2 border border-line-strong rounded px-2 py-1 hover:text-ink-1 transition-colors"
-                      onClick={() => setNovoBookmaker({
-                        bookmaker_id: String(bk.bookmaker_id),
-                        bookmaker_name: bk.bookmaker_name,
-                      })}>
+                      onClick={() => {
+                        setNovoBookmaker({
+                          bookmaker_id: String(bk.bookmaker_id),
+                          bookmaker_name: bk.bookmaker_name,
+                        })
+                        abrirSecao('casas-cadastrar')
+                      }}>
                       Editar
                     </button>
                   </li>
@@ -2371,10 +2663,13 @@ export default function Admin() {
                           <div className="flex gap-2">
                             <button
                               className="text-[11px] text-ink-2 border border-line-strong rounded px-2 py-1 hover:text-ink-1 hover:border-accent/40 transition-colors"
-                              onClick={() => setNovoBookmaker({
-                                bookmaker_id: String(bk.bookmaker_id),
-                                bookmaker_name: bk.bookmaker_name,
-                              })}>
+                              onClick={() => {
+                                setNovoBookmaker({
+                                  bookmaker_id: String(bk.bookmaker_id),
+                                  bookmaker_name: bk.bookmaker_name,
+                                })
+                                abrirSecao('casas-cadastrar')
+                              }}>
                               Editar
                             </button>
                             {bk.ativo && (
@@ -2430,6 +2725,7 @@ export default function Admin() {
               O ID é o mesmo que a API-Football usa internamente.
             </p>
           </div>
+          </Secao>
         </>)}
 
     </PageShell>

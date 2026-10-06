@@ -130,6 +130,40 @@ cobrindo tudo foi testado e descartado: dava 70 segundos e ninguém termina.
 | `minha-banca` | a evolução da sua banca | sim |
 | `agente` | conversar com o Agente IA | sim |
 
+## Anúncios sem voz (motion graphics)
+
+Série de Reels 1080x1920, **mudos de propósito**: a narração é gravada depois,
+por cima. Não grava a tela; cada vídeo é uma página HTML animada como função
+do tempo, fotografada quadro a quadro (30 fps).
+
+```
+python anuncio.py --todos                 captura telas reais e renderiza os 10
+python anuncio.py --sem-captura --video 03            só o 03, reusando as telas
+python anuncio.py --sem-captura --video 03 --quadros 2,8,15   PNGs + folha de contato
+python telas.py                           só recaptura os recortes do site
+```
+
+| arquivo | o quê |
+|---|---|
+| `anuncios/base.css`, `base.js` | tokens, peças e o motor de tempo comuns |
+| `anuncios/NN-*.html` | um vídeo cada; abre no navegador e toca em loop |
+| `telas.py` | recortes do site real, achados pelo título da seção |
+| `anuncio.html` | o primeiro anúncio de 25s (fora da série) |
+| `pronto/pickia-NN-*.mp4` | **o mp4 final** |
+
+Regras de conteúdo que a série segue, e que vale manter:
+
+- Motores, planos, preços e ligas: só o que existe no site (`lib/oferta.ts`,
+  `ComoFunciona.tsx`, página de planos, "Palpites por campeonato").
+- A análise completa de um pick é de assinante. Onde o vídeo precisa de
+  número de jogo, os times são genéricos (Mandante x Visitante) e a tela diz
+  "dados ilustrativos". O único pick real mostrado é o gratuito 117 do
+  histórico público, sem o resultado.
+- `/banca` e `/meus-picks` abrem com sessão simulada só no navegador e com a
+  banca de demonstração de `fixtures.py`; nenhuma escrita chega no servidor.
+- Os recortes da home e da fila de jogos mudam todo dia. Recapture antes de
+  publicar.
+
 ## Carrosséis pro feed
 
 ```
