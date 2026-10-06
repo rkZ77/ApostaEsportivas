@@ -10,8 +10,6 @@ import BandejaDoBilhete from '../components/jogos/BandejaDoBilhete'
 import { EstatisticasContent } from './Estatisticas'
 import { useAuth } from '../context/AuthContext'
 import { Badge, ErrorState, LiveDot, SearchInput, Spinner } from '../components/ui'
-import AgendaInteligente from '../components/AgendaInteligente'
-import ExplorarLigas from '../components/ExplorarLigas'
 import { sinalizarNavegacao } from '../services/progressBus'
 import { backdropFade, dialogScale, tabFade } from '../lib/motion'
 import { aoVivo as isLive, encerrado as isFinished, escudoDoTime } from '../lib/aoVivo'
@@ -160,7 +158,7 @@ interface LiveStats {
   away_possession: number
 }
 
-type PageTab = 'jogos' | 'agenda' | 'estatistica' | 'explorar'
+type PageTab = 'jogos' | 'estatistica'
 
 export default function Fixtures() {
   const { isVip, isAdmin, user }   = useAuth()
@@ -386,15 +384,14 @@ export default function Fixtures() {
             )}
             <div className="flex">
               {([
+                /* DUAS ABAS (2026-10-06): o jogo e a liga. Agenda saiu porque
+                   repetia a lista de Jogos com três contadores; Explorar saiu
+                   porque lia ligas FORA do cadastro direto da API, gastando
+                   cota pra mostrar só placar, e a aba ficou só com as ligas
+                   cadastradas. "Estatísticas" virou "Ligas": é a visão da
+                   liga (tendência, ranking, árbitros), e o Raio-X é a do jogo. */
                 { key: 'jogos',       label: 'Jogos' },
-                { key: 'agenda',      label: 'Agenda' },
-                { key: 'estatistica', label: 'Estatísticas' },
-                // Explorar fica DEPOIS de Estatísticas de propósito: as duas
-                // respondem a mesma pergunta, mas Estatísticas fala das ligas
-                // que a IA cobre, que é o que quase todo mundo quer. Explorar é
-                // o passo seguinte, pra quem foi atrás de liga ou ano que o
-                // banco não tem.
-                { key: 'explorar',    label: 'Explorar' },
+                { key: 'estatistica', label: 'Ligas' },
               ] as { key: PageTab; label: string }[]).map(t => (
                 <motion.button
                   key={t.key}
@@ -403,8 +400,8 @@ export default function Fixtures() {
                     /* A barra verde do topo fecha quando a tela nova para de
                        buscar dados, mas ela só COMEÇA na troca de rota · e
                        estas abas são estado, não rota. Sem o aviso, trocar pra
-                       Estatísticas ou Explorar ficava alguns segundos sem sinal
-                       nenhum de que algo estava vindo. */
+                       Ligas ficava alguns segundos sem sinal nenhum de que
+                       algo estava vindo. */
                     if (t.key !== pageTab) sinalizarNavegacao()
                     setPageTab(t.key)
                   }}
@@ -424,24 +421,9 @@ export default function Fixtures() {
       }
     >
       <AnimatePresence mode="wait">
-      {pageTab === 'agenda' && (
-        <motion.div key="agenda" variants={tabFade} initial="hidden" animate="visible" exit="exit">
-          <AgendaInteligente />
-        </motion.div>
-      )}
-
       {pageTab === 'estatistica' && (
         <motion.div key="estatistica" variants={tabFade} initial="hidden" animate="visible" exit="exit">
           <EstatisticasContent />
-        </motion.div>
-      )}
-
-      {pageTab === 'explorar' && (
-        <motion.div key="explorar" variants={tabFade} initial="hidden" animate="visible" exit="exit">
-          {/* O gate VIP mora dentro do componente, igual ao de
-              EstatisticasContent · assim as duas abas irmãs recusam do mesmo
-              jeito e ninguém precisa lembrar de repetir a checagem aqui. */}
-          <ExplorarLigas />
         </motion.div>
       )}
 
