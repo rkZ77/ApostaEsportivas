@@ -295,16 +295,15 @@ def test_todo_comando_sob_demanda_do_motor_tem_botao():
     o motor AO VIVO -- de um produto publicado pro assinante, num projeto onde
     nada roda agendado.
 
-    `tudo` e `shadow` ficam fora DE PROPOSITO e por isso a lista de excecoes e'
-    explicita aqui: `tudo` E' a sequencia (tem botao proprio) e `shadow` compara
-    o motor com picks de uma IA que nao gera nada desde 2026-07-17.
+    `tudo` fica fora DE PROPOSITO e por isso a excecao e' explicita aqui: ele
+    E' a sequencia (tem botao proprio).
     """
     import routers.admin as admin
 
     motor = _motor_main()
     sem_botao = [c.nome for c in motor.COMANDOS
                  if not c.etapa
-                 and c.nome not in ("tudo", "shadow")
+                 and c.nome != "tudo"
                  and c.nome not in admin._PASSO_DO_COMANDO]
     assert not sem_botao, (
         f"comandos sob demanda do motor sem botao no /admin: {sem_botao}")

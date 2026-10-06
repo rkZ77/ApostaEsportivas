@@ -935,14 +935,6 @@ def cmd_resultados():
     AIUpdateResultsMain().update_all_results()
 
 
-def cmd_shadow():
-    """Modo sombra do motor de picks (Fase 3): roda pick_engine em paralelo
-    aos picks já salvos pela IA hoje, só para registrar a comparação em
-    logs/shadow_consensus.jsonl. Nunca escreve em tabela de produção."""
-    from shadow_consensus import run_shadow_comparison
-    run_shadow_comparison()
-
-
 def cmd_ligas():
     from atualizar_ligas import AILeagueUpdateMain
     ai = AILeagueUpdateMain()
@@ -1201,9 +1193,6 @@ COMANDOS: tuple = (
             uso="playerstats [metodo ...]",
             detalhe="playerstats             roda os seis métodos\n"
                     "playerstats saves       roda só defesas de goleiro"),
-    Comando("shadow", "Modo sombra (log IA vs motor)",
-            "Motor de picks em modo sombra (só log, não afeta picks)",
-            lambda *a: cmd_shadow(), ambientes=("dev",)),
     # Roda sozinho dentro do `dados` (Stage 6). Aqui é a versão sob demanda,
     # para forçar um limiar maior ou liberar mais cota num dia de mata-mata.
     Comando("historico", "Historico por time (API)",
