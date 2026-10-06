@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { AnimatePresence, m as motion } from 'framer-motion'
-import { Check, ChevronUp, Copy, Ticket, Trash2, X } from 'lucide-react'
+import { ArrowLeft, Check, ChevronUp, Copy, Ticket, Trash2, Wallet, X } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import { chanceCombinada, limpar, remover, textoDoBilhete, useBilheteMontado } from '../../lib/bilheteMontado'
+import RegistrarBilhete from './RegistrarBilhete'
 
 /*
  * A bandeja do bilhete montado (2026-10-06).
@@ -19,9 +20,14 @@ export default function BandejaDoBilhete() {
   const selecoes = useBilheteMontado()
   const [aberta, setAberta] = useState(false)
   const [copiado, setCopiado] = useState(false)
+  /* 'registrar' troca a lista pelo formulário da banca. Ela segura a folha
+     aberta mesmo com o bilhete vazio: registrar LIMPA o bilhete, e sem isso a
+     confirmação de sucesso sumiria junto com a última seleção. */
+  const [modo, setModo] = useState<'lista' | 'registrar'>('lista')
   const chance = chanceCombinada(selecoes)
+  const fechar = () => { setAberta(false); setModo('lista') }
 
-  if (!selecoes.length) return null
+  if (!selecoes.length && !(aberta && modo === 'registrar')) return null
 
   const copiar = async () => {
     const texto = textoDoBilhete(selecoes)
@@ -38,7 +44,7 @@ export default function BandejaDoBilhete() {
 
   return (
     <>
-      {!aberta && (
+      {!aberta && selecoes.length > 0 && (
         <button
           onClick={() => setAberta(true)}
           className="fixed z-40 left-1/2 -translate-x-1/2 md:left-auto md:right-6 md:translate-x-0
@@ -62,7 +68,7 @@ export default function BandejaDoBilhete() {
           <motion.div
             className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end md:items-center md:justify-center"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            onClick={() => setAberta(false)}
+            onClick={fechar}
           >
             <motion.div
               role="dialog" aria-label="Bilhete montado"
@@ -75,15 +81,23 @@ export default function BandejaDoBilhete() {
             >
               <div className="md:hidden mx-auto mt-2 h-1 w-10 rounded-full bg-line-strong" aria-hidden />
               <div className="px-4 pt-3 pb-3 flex items-center gap-3 border-b border-line">
-                <Ticket className="text-accent-ink" size={20} />
+                {modo === 'registrar' ? (
+                  <button onClick={() => setModo('lista')} aria-label="Voltar pro bilhete"
+                    className="w-11 h-11 -ml-2 grid place-items-center rounded-lg text-ink-3 hover:bg-surface-2"><ArrowLeft size={20} /></button>
+                ) : <Ticket className="text-accent-ink" size={20} />}
                 <div className="flex-1">
-                  <div className="font-bold text-ink-1">Meu bilhete</div>
-                  <div className="text-[11px] text-ink-3">{selecoes.length} {selecoes.length === 1 ? 'seleção' : 'seleções'}</div>
+                  <div className="font-bold text-ink-1">{modo === 'registrar' ? 'Registrar na banca' : 'Meu bilhete'}</div>
+                  <div className="text-[11px] text-ink-3">
+                    {selecoes.length ? `${selecoes.length} ${selecoes.length === 1 ? 'seleção' : 'seleções'}` : 'Pronto'}
+                  </div>
                 </div>
-                <button onClick={() => setAberta(false)} aria-label="Fechar"
+                <button onClick={fechar} aria-label="Fechar"
                   className="w-11 h-11 grid place-items-center rounded-lg text-ink-3 hover:bg-surface-2"><X size={20} /></button>
               </div>
 
+              {modo === 'registrar' ? (
+                <div className="overflow-y-auto"><RegistrarBilhete selecoes={selecoes} onFechar={fechar} /></div>
+              ) : (<>
               <div className="overflow-y-auto divide-y divide-line/60">
                 {selecoes.map(s => (
                   <div key={s.id} className="px-4 py-3 flex items-center gap-3">
@@ -111,18 +125,23 @@ export default function BandejaDoBilhete() {
                   Estimativa pela taxa de acerto de cada seleção nos últimos jogos, como se fossem independentes.
                   Seleções do mesmo jogo andam juntas, e o passado não garante o próximo.
                 </p>
+                <button onClick={() => setModo('registrar')}
+                  className="w-full h-12 rounded-lg bg-accent text-on-fill hover:bg-accent-hover text-sm font-bold flex items-center justify-center gap-2">
+                  <Wallet size={18} /> Registrar na banca
+                </button>
                 <div className="grid grid-cols-[auto_1fr] gap-2">
-                  <button onClick={() => { limpar(); setAberta(false) }}
+                  <button onClick={() => { limpar(); fechar() }}
                     className="h-12 px-4 rounded-lg border border-line text-sm font-semibold text-ink-2 hover:border-line-strong">
                     Limpar
                   </button>
                   <button onClick={copiar}
-                    className={cn('h-12 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-colors',
-                      copiado ? 'bg-accent/15 text-accent-ink border border-accent/40' : 'bg-accent text-on-fill hover:bg-accent-hover')}>
-                    {copiado ? <><Check size={18} /> Copiado</> : <><Copy size={18} /> Copiar bilhete</>}
+                    className={cn('h-12 rounded-lg border text-sm font-bold flex items-center justify-center gap-2 transition-colors',
+                      copiado ? 'bg-accent/15 text-accent-ink border-accent/40' : 'border-line text-ink-1 hover:border-line-strong')}>
+                    {copiado ? <><Check size={18} /> Copiado</> : <><Copy size={18} /> Copiar texto</>}
                   </button>
                 </div>
               </div>
+              </>)}
             </motion.div>
           </motion.div>
         )}

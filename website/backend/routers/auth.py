@@ -2202,6 +2202,8 @@ _TABELAS_PESSOAIS = (
     "user_achievements",
     "user_favorites",
     "user_followed_picks",
+    # As apostas que a pessoa montou sozinha (aba Jogos, 2026-10-06).
+    "bilhetes_pessoais",
     "pick_reactions",
     "pick_comments",
     "chat_messages",

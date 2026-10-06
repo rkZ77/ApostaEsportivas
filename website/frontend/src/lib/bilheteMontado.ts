@@ -11,6 +11,21 @@
  */
 import { useSyncExternalStore } from 'react'
 
+/**
+ * A seleção do jeito que o backend sabe liquidar (bilhete_pessoal.validar_pernas).
+ * É ela que vai pra banca quando a pessoa registra o bilhete; `descricao` é só
+ * o texto que a pessoa leu.
+ */
+export type Perna =
+  | { tipo: 'time'; mercado: string; direcao?: 'mais' | 'menos'; linha?: number
+      periodo?: 'total' | '1t' | '2t'; lado_time?: 'home' | 'away' }
+  | { tipo: 'jogador'; estat: string; minimo: number; player_id: number; player_name: string }
+
+export interface PernaCompleta {
+  fixture_id: number; home_team_id: number; away_team_id: number
+  home: string; away: string; descricao: string
+}
+
 export interface Selecao {
   /** Estável por seleção: o mesmo mercado no mesmo jogo não entra duas vezes. */
   id: string
@@ -22,7 +37,12 @@ export interface Selecao {
   bateu: number
   n: number
   player_id?: number
+  /** Ausente nas seleções salvas antes de 06/10: essas não vão pra banca. */
+  perna?: Perna & PernaCompleta
 }
+
+/** As seleções que dá pra registrar na banca (têm a perna estruturada). */
+export const registraveis = (lista: Selecao[]) => lista.filter(s => s.perna)
 
 const CHAVE = 'pickia_bilhete_montado'
 const MAXIMO = 20

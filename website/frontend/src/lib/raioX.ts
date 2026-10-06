@@ -23,6 +23,11 @@ export interface JogoDoTime {
   chutes_alvo_pro: number | null; chutes_alvo_contra: number | null
   faltas_pro: number | null; faltas_contra: number | null
   posse: number | null
+  /* 1º tempo · null em jogo sem a folha do 1º tempo (coletada desde 27/09). */
+  gols_pro_1t?: number | null; gols_contra_1t?: number | null
+  escanteios_pro_1t?: number | null; escanteios_contra_1t?: number | null
+  amarelos_pro_1t?: number | null; amarelos_contra_1t?: number | null
+  chutes_alvo_pro_1t?: number | null; chutes_alvo_contra_1t?: number | null
 }
 
 export interface JogoDoJogador {
@@ -66,6 +71,33 @@ export interface RaioX {
 /* ── Mercados de time ───────────────────────────────────────────────────── */
 
 export type Lado = 'mais' | 'menos'
+export type Periodo = 'total' | '1t' | '2t'
+/** Do ponto de vista de um time: o que ele FAZ, o que ele CEDE, ou o jogo todo. */
+export type Quem = 'pro' | 'contra' | 'jogo'
+
+export const ROTULO_PERIODO: Record<Periodo, string> = { total: 'Jogo todo', '1t': '1º tempo', '2t': '2º tempo' }
+
+type Contador = 'gols' | 'escanteios' | 'amarelos' | 'chutes_alvo' | 'faltas'
+
+/**
+ * O número de um jogo: de quem (pro/contra/jogo) e em que tempo.
+ *
+ * 2º tempo é total − 1º, e só existe quando os dois existem. Faltas não têm
+ * 1º tempo no provedor, então fora do "jogo todo" o valor é null (a tela
+ * desliga os tempos nesse mercado, e o null aqui é só a garantia).
+ */
+export function numero(j: JogoDoTime, c: Contador, quem: Quem, periodo: Periodo): number | null {
+  const lado = (q: 'pro' | 'contra'): number | null => {
+    const total = j[`${c}_${q}` as keyof JogoDoTime] as number | null
+    if (periodo === 'total') return total
+    const prim = (j[`${c}_${q}_1t` as keyof JogoDoTime] ?? null) as number | null
+    if (periodo === '1t') return prim
+    return total == null || prim == null ? null : total - prim
+  }
+  if (quem !== 'jogo') return lado(quem)
+  const a = lado('pro'), b = lado('contra')
+  return a == null || b == null ? null : a + b
+}
 
 export interface MercadoDeTime {
   id: string
@@ -73,32 +105,31 @@ export interface MercadoDeTime {
   rotulo: string
   /** Como a seleção se lê no bilhete: "Escanteios no jogo". */
   frase: string
+  contador: Contador
+  /** 'jogo' soma os dois times; 'time' é de um time só (faz x cede). */
+  escopo: 'jogo' | 'time'
   linhaPadrao: number
-  passo: number
-  /** O número daquele jogo, do ponto de vista do time; null = sem dado. */
-  valor: (j: JogoDoTime) => number | null
+  /** Linha padrão quando o recorte é um tempo só (metade do jogo, mais ou menos). */
+  linhaPadraoTempo: number
+  /** Faltas só existem no jogo todo. */
+  soTotal?: boolean
 }
 
-const soma = (a: number | null, b: number | null) => (a == null || b == null ? null : a + b)
-
 export const MERCADOS_DE_TIME: MercadoDeTime[] = [
-  { id: 'gols', rotulo: 'Gols', frase: 'Gols no jogo', linhaPadrao: 2.5, passo: 1,
-    valor: j => soma(j.gols_pro, j.gols_contra) },
-  { id: 'escanteios', rotulo: 'Escanteios', frase: 'Escanteios no jogo', linhaPadrao: 9.5, passo: 1,
-    valor: j => soma(j.escanteios_pro, j.escanteios_contra) },
-  { id: 'cartoes', rotulo: 'Cartões', frase: 'Cartões amarelos no jogo', linhaPadrao: 4.5, passo: 1,
-    valor: j => soma(j.amarelos_pro, j.amarelos_contra) },
-  { id: 'chutes_alvo', rotulo: 'Chutes no alvo', frase: 'Chutes no alvo no jogo', linhaPadrao: 8.5, passo: 1,
-    valor: j => soma(j.chutes_alvo_pro, j.chutes_alvo_contra) },
-  { id: 'faltas', rotulo: 'Faltas', frase: 'Faltas no jogo', linhaPadrao: 22.5, passo: 1,
-    valor: j => soma(j.faltas_pro, j.faltas_contra) },
-  { id: 'gols_time', rotulo: 'Gols do time', frase: 'Gols do time', linhaPadrao: 0.5, passo: 1,
-    valor: j => j.gols_pro },
-  { id: 'escanteios_time', rotulo: 'Escanteios do time', frase: 'Escanteios do time', linhaPadrao: 4.5, passo: 1,
-    valor: j => j.escanteios_pro },
-  { id: 'cartoes_time', rotulo: 'Cartões do time', frase: 'Cartões do time', linhaPadrao: 1.5, passo: 1,
-    valor: j => j.amarelos_pro },
+  { id: 'gols', rotulo: 'Gols', frase: 'Gols no jogo', contador: 'gols', escopo: 'jogo', linhaPadrao: 2.5, linhaPadraoTempo: 0.5 },
+  { id: 'escanteios', rotulo: 'Escanteios', frase: 'Escanteios no jogo', contador: 'escanteios', escopo: 'jogo', linhaPadrao: 9.5, linhaPadraoTempo: 4.5 },
+  { id: 'cartoes', rotulo: 'Cartões', frase: 'Cartões amarelos no jogo', contador: 'amarelos', escopo: 'jogo', linhaPadrao: 4.5, linhaPadraoTempo: 1.5 },
+  { id: 'chutes_alvo', rotulo: 'Chutes no alvo', frase: 'Chutes no alvo no jogo', contador: 'chutes_alvo', escopo: 'jogo', linhaPadrao: 8.5, linhaPadraoTempo: 3.5 },
+  { id: 'faltas', rotulo: 'Faltas', frase: 'Faltas no jogo', contador: 'faltas', escopo: 'jogo', linhaPadrao: 22.5, linhaPadraoTempo: 22.5, soTotal: true },
+  { id: 'gols_time', rotulo: 'Gols do time', frase: 'Gols', contador: 'gols', escopo: 'time', linhaPadrao: 0.5, linhaPadraoTempo: 0.5 },
+  { id: 'escanteios_time', rotulo: 'Escanteios do time', frase: 'Escanteios', contador: 'escanteios', escopo: 'time', linhaPadrao: 4.5, linhaPadraoTempo: 2.5 },
+  { id: 'cartoes_time', rotulo: 'Cartões do time', frase: 'Cartões', contador: 'amarelos', escopo: 'time', linhaPadrao: 1.5, linhaPadraoTempo: 0.5 },
 ]
+
+/** "Escanteios no jogo · 1º tempo" · o tempo só entra no texto quando não é o jogo todo. */
+export function comPeriodo(frase: string, periodo: Periodo): string {
+  return periodo === 'total' ? frase : `${frase} · ${ROTULO_PERIODO[periodo]}`
+}
 
 /** Ambas marcam é sim/não, não linha · fica fora da régua de linha. */
 export const ambasMarcam = (j: JogoDoTime): boolean | null =>

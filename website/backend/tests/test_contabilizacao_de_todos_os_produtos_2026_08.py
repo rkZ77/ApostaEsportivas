@@ -34,6 +34,14 @@ def _tipos_seguiveis() -> set:
     return set(banca.STAKE_LIMITS)
 
 
+def _produtos_da_ia() -> set:
+    """Os seguiveis que sao PICK DA IA. O bilhete pessoal (06/10/2026) e'
+    seguivel e entra na banca e nas conquistas, mas nao e' produto: fica fora
+    do ranking, do plano de stake publico e do agente de proposito."""
+    import routers.banca as banca
+    return _tipos_seguiveis() - banca.TIPOS_DO_USUARIO
+
+
 def test_a_banca_soma_todo_tipo_que_ela_deixa_seguir():
     """`_resolve_pick` aceitar o tipo nao basta: o follow entra no banco e o
     somatorio ignora o pick.
@@ -77,7 +85,7 @@ def test_o_ranking_conta_todo_tipo_seguivel():
     import pick_sources
 
     tipos = {f[0] for f in pick_sources._FONTES}
-    assert _tipos_seguiveis() <= tipos, _tipos_seguiveis() - tipos
+    assert _produtos_da_ia() <= tipos, _produtos_da_ia() - tipos
 
 
 def test_os_dois_rankings_leem_a_mesma_lista():
@@ -102,7 +110,7 @@ def test_todo_tipo_tem_peso_declarado_no_plano_de_stake():
     placar com um peso que ninguem escolheu."""
     from stake_plan import STAKE_PADRAO
 
-    esperado = {t if t != "multipla" else "multiplas" for t in _tipos_seguiveis()}
+    esperado = {t if t != "multipla" else "multiplas" for t in _produtos_da_ia()}
     faltando = esperado - set(STAKE_PADRAO)
     assert not faltando, f"{faltando} sem peso declarado"
 
@@ -168,7 +176,7 @@ def test_o_agente_conhece_todos_os_produtos():
     import futebol_agent.tools.pickia_db as db
 
     tipos = {p[0] for p in db._PRODUTOS}
-    assert _tipos_seguiveis() <= tipos, _tipos_seguiveis() - tipos
+    assert _produtos_da_ia() <= tipos, _produtos_da_ia() - tipos
 
 
 def test_o_admin_conta_os_picks_de_hoje_de_todos_os_motores():
