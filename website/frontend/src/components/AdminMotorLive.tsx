@@ -4,6 +4,7 @@ import {
 } from 'lucide-react'
 import api from '../services/api'
 import { Spinner } from './ui'
+import { Secao } from './AdminSecao'
 
 /*
  * Painel do Motor Ao Vivo · acompanhar e testar, nada mais.
@@ -357,7 +358,14 @@ export default function AdminMotorLive() {
         </div>
       </div>
 
-      {/* ── Diagnóstico · sempre visível ──────────────────────────────────── */}
+      {/* ── Diagnóstico ───────────────────────────────────────────────────── */}
+      {/* Era "sempre visível". Continua aberto por padrão, e o veredito
+          (pronto ou falta configurar) vai no título, que aparece fechado. */}
+      <div>
+      <Secao id="live-precondicoes" abertaPorPadrao
+        titulo={`Está tudo pronto para rodar?${diag ? (diag.pronto ? ' Sim.' : ' Falta configurar.') : ''}`}
+        oQueE="Tudo o que o motor precisa para funcionar, item por item, e em qual banco ele grava. Item amarelo é o que falta."
+        tecnico="Pré-condições">
       <div className="bg-surface-1 border border-line rounded-lg p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-xs font-semibold text-ink-3">Pré-condições</h3>
@@ -414,6 +422,7 @@ export default function AdminMotorLive() {
           ))}
         </ul>
       </div>
+      </Secao>
 
       {/* ── Cota da API-Football gasta por ESTE motor ─────────────────────── */}
       {/*
@@ -426,6 +435,10 @@ export default function AdminMotorLive() {
         juntas: os dois gastam a mesma cota pela mesma partida, e separá-los
         aqui faria o consumo parecer menor do que é.
       */}
+      <Secao id="live-cota"
+        titulo="Quanto da cota da API o Ao Vivo está gastando?"
+        oQueE="Chamadas do Ao Vivo hoje e nos dias anteriores. É o número que diz se dá para rodar com mais frequência ou com mais jogos."
+        tecnico="Cota gasta pelo Ao Vivo">
       <div className="bg-surface-1 border border-line rounded-lg p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-xs font-semibold text-ink-3">Cota da API gasta pelo Ao Vivo</h3>
@@ -503,12 +516,17 @@ export default function AdminMotorLive() {
           </>
         )}
       </div>
+      </Secao>
 
       {/* ── Acompanhamento contínuo ───────────────────────────────────────── */}
       {/* Vem ANTES do disparo avulso de propósito: com o motor ao vivo, a
           rodada única é a exceção (serve pra testar um fixture), e o laço é o
           modo normal de operar · a primeira passada sobre uma partida não tem
           janela de ritmo pra ler, quem constrói isso é a segunda e a terceira. */}
+      <Secao id="live-continuo" abertaPorPadrao
+        titulo={`Ligar o motor ao vivo${emLaco ? ' (ligado agora)' : ' (desligado)'}`}
+        oQueE="Ligado, ele roda sozinho a cada X minutos e publica os picks durante os jogos, até você desligar. Um deploy do site também desliga."
+        tecnico="Acompanhamento contínuo">
       <div className={`rounded-lg border p-4 ${
         emLaco ? 'border-green-500/40 bg-green-500/[0.06]' : 'bg-surface-1 border-line'}`}>
         <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -584,10 +602,14 @@ export default function AdminMotorLive() {
           e o painel volta a mostrar &quot;Ligar&quot;. Fechar esta página não desliga nada.
         </p>
       </div>
+      </Secao>
 
       {/* ── Disparo ───────────────────────────────────────────────────────── */}
+      <Secao id="live-avulsa"
+        titulo="Rodar uma vez, para testar"
+        oQueE={'Uma rodada só, na hora. Marque "dry run" para ver o que sairia sem publicar nada. "Liquidar agora" marca o resultado dos picks ao vivo já encerrados.'}
+        tecnico="Rodada avulsa">
       <div className="bg-surface-1 border border-line rounded-lg p-4">
-        <h3 className="text-xs font-semibold text-ink-3 mb-3">Rodada avulsa</h3>
         <div className="flex flex-wrap items-center gap-2">
           <label className="flex items-center gap-1.5 text-[11px] text-ink-2 cursor-pointer">
             <input type="checkbox" checked={dryRun} onChange={e => setDryRun(e.target.checked)}
@@ -653,8 +675,16 @@ export default function AdminMotorLive() {
           </pre>
         )}
       </div>
+      </Secao>
 
       {/* ── Log do motor ──────────────────────────────────────────────────── */}
+      <Secao id="live-log"
+        titulo="O que aconteceu em cada rodada?"
+        oQueE="Uma linha por rodada, com hora e se deu certo. Clique para ver o log. A lista zera quando o site reinicia."
+        tecnico="Log do motor">
+      {!(rodadas !== null && rodadas.length > 0) && (
+        <p className="text-xs text-ink-4 px-1">Nenhuma rodada desde o último reinício do site.</p>
+      )}
       {rodadas !== null && rodadas.length > 0 && (
         <div className="bg-surface-1 border border-line rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
@@ -717,8 +747,14 @@ export default function AdminMotorLive() {
           </p>
         </div>
       )}
+      </Secao>
 
       {/* ── O que o motor produziu ────────────────────────────────────────── */}
+      <Secao id="live-desempenho" abertaPorPadrao
+        titulo="Quanto o Ao Vivo acerta?"
+        oQueE="Picks gerados, taxa de acerto e lucro em unidades, só dos picks ao vivo."
+        tecnico="Desempenho">
+      {!stats && <p className="text-xs text-ink-4 px-1">Sem números ainda.</p>}
       {stats && (
         <div className="bg-surface-1 border border-line rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
@@ -745,8 +781,13 @@ export default function AdminMotorLive() {
           </p>
         </div>
       )}
+      </Secao>
 
       {/* ── Picks da rodada ───────────────────────────────────────────────── */}
+      <Secao id="live-picks" abertaPorPadrao
+        titulo="Quais picks o Ao Vivo publicou?"
+        oQueE="Cada pick com jogo, mercado, minuto em que saiu, odd e resultado. Escolha o período no canto."
+        tecnico="Picks gerados">
       <div className="bg-surface-1 border border-line rounded-lg p-4">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <h3 className="text-xs font-semibold text-ink-3">
@@ -891,6 +932,8 @@ export default function AdminMotorLive() {
           )}
           </>
         )}
+      </div>
+      </Secao>
       </div>
     </div>
   )
