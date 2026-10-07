@@ -26,6 +26,7 @@ export default function JogoRaioX() {
   const jogo = {
     fixture_id: Number(fixtureId),
     home_team_id: num('home'), away_team_id: num('away'), league_id: num('league'),
+    league_name: q.get('liga') ?? undefined,
     home_team: q.get('casa') ?? undefined, away_team: q.get('fora') ?? undefined,
     match_datetime: q.get('quando'),
   }

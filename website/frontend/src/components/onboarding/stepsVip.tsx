@@ -1,8 +1,9 @@
 import type { LucideIcon } from 'lucide-react'
 import {
   BarChart2, Bot, CircleCheck, ClipboardCheck, Crown, Layers, Radio, Rocket, ShieldQuestion,
-  Sparkles, Trophy, TrendingUp, Wallet, Zap,
+  Sparkles, TrendingUp, Wallet, Zap,
 } from 'lucide-react'
+import BolaDeFutebol from '../icones/BolaDeFutebol'
 import type { TourStep } from './steps'
 import { Etiqueta, Lista, Linhas } from './steps'
 import { TOTAL_PASSOS_VIP } from './constantes'
@@ -59,7 +60,7 @@ export const TOUR_STEPS_VIP: TourStep[] = [
             [ShieldQuestion, 'Faltas e picks de jogador'],
             [Rocket, 'Pick Boost'],
             [Radio, 'Picks Ao Vivo'],
-            [Trophy, 'Estatísticas de cada jogo'],
+            [BolaDeFutebol, 'Estatísticas de cada jogo'],
             [Bot, 'Agente IA'],
           ]}
         />
@@ -183,7 +184,7 @@ export const TOUR_STEPS_VIP: TourStep[] = [
   {
     id: 'vip-jogos',
     titulo: 'Estatísticas de cada jogo',
-    Icon: Trophy,
+    Icon: BolaDeFutebol,
     rota: '/picks',
     alvos: ['[data-tour="nav-jogos"]'],
     resumo: 'Na aba Jogos, clicar numa partida passa a abrir os números dela em vez do convite para assinar.',
