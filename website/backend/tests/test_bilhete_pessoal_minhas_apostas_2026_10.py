@@ -68,6 +68,30 @@ def test_perna_de_jogador_mostra_o_estado_do_jogo(monkeypatch):
     assert leg["market"] == "Hulk · 2+ chutes"
 
 
+def _leg_de_cartao(monkeypatch, amarelo_casa, verm_casa, amarelo_fora):
+    from routers import live
+    monkeypatch.setattr(live, "_enrich_leg", lambda *a, **k: {
+        "is_live": True, "is_ft": False, "pick_status": "losing", "is_locked": True,
+        "current_val": amarelo_casa + 2 * verm_casa + amarelo_fora,
+        "home_stats": {"Yellow Cards": amarelo_casa, "Red Cards": verm_casa},
+        "away_stats": {"Yellow Cards": amarelo_fora, "Red Cards": 0}})
+    return live
+
+
+def test_cartao_do_bilhete_pessoal_conta_so_amarelo(monkeypatch):
+    live = _leg_de_cartao(monkeypatch, 2, 1, 1)
+    # Menos de 4.5: com o vermelho valendo 2 seriam 5 (perdendo e travado);
+    # pela regra do bilhete sao 3 amarelos, ainda ganhando.
+    leg = live._perna_pessoal_ao_vivo(time(mercado="cartoes", direcao="menos", linha=4.5))
+    assert leg["current_val"] == 3 and leg["pick_status"] == "winning" and not leg["is_locked"]
+
+
+def test_cartao_do_time_le_o_lado_certo(monkeypatch):
+    live = _leg_de_cartao(monkeypatch, 2, 1, 3)
+    leg = live._perna_pessoal_ao_vivo(time(mercado="cartoes_time", lado_time="away", linha=2.5))
+    assert leg["current_val"] == 3 and leg["pick_status"] == "winning" and leg["is_locked"]
+
+
 def test_dia_de_brasilia_de_timestamp_utc():
     from routers import live
     # 01:30 UTC de 08/10 ainda e' 07/10 em Brasilia.
