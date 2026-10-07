@@ -289,7 +289,13 @@ export default function Checkout() {
       // MercadoPago leva o usuário pra fora e quem paga por PIX costuma não
       // voltar pro /checkout/sucesso, então evento de compra no navegador
       // perderia boa parte da receita. Ver backend/analytics.py.
-      const gaCookie = document.cookie.split('; ').find(c => c.startsWith('_ga='))?.slice(4) ?? ''
+      const cookie = (nome: string) =>
+        document.cookie.split('; ').find(c => c.startsWith(nome + '='))?.slice(nome.length + 1) ?? ''
+      const gaCookie = cookie('_ga')
+      // Pelo mesmo motivo, os cookies do pixel do Meta: são eles que ligam a
+      // venda aprovada no servidor ao clique no anúncio.
+      const fbp = cookie('_fbp')
+      const fbc = cookie('_fbc')
       // begin_checkout é o último passo que o navegador consegue medir: daqui
       // o usuário sai pro MercadoPago e só o servidor vê o resto.
       if (selected) iniciouCheckout(selected)
@@ -299,7 +305,7 @@ export default function Checkout() {
           expiraAntes: user?.expires_at ?? null,
         }))
       } catch { /* storage bloqueado: a volta cai na regra antiga */ }
-      const { data } = await api.post('/payments/create', { plan: selected.id, ga_cookie: gaCookie })
+      const { data } = await api.post('/payments/create', { plan: selected.id, ga_cookie: gaCookie, fbp, fbc })
       window.location.href = data.init_point
     } catch (err: any) {
       setError(err.response?.data?.detail ?? 'Erro ao iniciar pagamento. Tente novamente.')
