@@ -109,6 +109,40 @@ export const aoVivo = {
   estatisticas: () => api.get('/live-picks/stats').then((r) => r.data),
 }
 
+/* ── jogos e Raio-X (07/10/2026) ──────────────────────────────────────── */
+
+/* As mesmas rotas da aba Jogos do site. A conta (linha, taxa, odd com valor)
+   é de src/lib/raioX.ts e oddsDoJogo.ts, cópias das do site · lógica pura,
+   sem nada de navegador, então o número do app é o mesmo do site. */
+export interface JogoDoDia {
+  fixture_id: number
+  match_datetime: string
+  home_team: string
+  away_team: string
+  home_team_id?: number
+  away_team_id?: number
+  league_id: number
+  league_name: string
+  status: string
+  elapsed?: number | null
+  home_goals: number | null
+  away_goals: number | null
+  has_pick?: boolean
+  forma_home?: string[]
+  forma_away?: string[]
+}
+
+export const jogos = {
+  doDia: (data?: string) =>
+    api.get<JogoDoDia[]>('/fixtures/today', { params: data ? { date: data } : undefined }).then((r) => r.data),
+
+  raioX: (fixtureId: number, params: { home?: number; away?: number; league?: number }) =>
+    api.get(`/fixtures/${fixtureId}/raio-x`, { params }).then((r) => r.data),
+
+  odds: (fixtureId: number) =>
+    api.get<{ odds: import('../lib/oddsDoJogo').OddDaCasa[] }>(`/fixtures/${fixtureId}/odds`).then((r) => r.data.odds ?? []),
+}
+
 /* ── minhas apostas ───────────────────────────────────────────────────── */
 
 export const minhasApostas = {
