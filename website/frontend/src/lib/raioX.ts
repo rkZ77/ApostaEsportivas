@@ -124,6 +124,24 @@ export const MERCADOS_DE_TIME: MercadoDeTime[] = [
   { id: 'gols_time', rotulo: 'Gols do time', frase: 'Gols', contador: 'gols', escopo: 'time', linhaPadrao: 0.5, linhaPadraoTempo: 0.5 },
   { id: 'escanteios_time', rotulo: 'Escanteios do time', frase: 'Escanteios', contador: 'escanteios', escopo: 'time', linhaPadrao: 4.5, linhaPadraoTempo: 2.5 },
   { id: 'cartoes_time', rotulo: 'Cartões do time', frase: 'Cartões', contador: 'amarelos', escopo: 'time', linhaPadrao: 1.5, linhaPadraoTempo: 0.5 },
+  { id: 'chutes_alvo_time', rotulo: 'Chutes no alvo do time', frase: 'Chutes no alvo', contador: 'chutes_alvo', escopo: 'time', linhaPadrao: 3.5, linhaPadraoTempo: 1.5 },
+  { id: 'faltas_time', rotulo: 'Faltas do time', frase: 'Faltas', contador: 'faltas', escopo: 'time', linhaPadrao: 11.5, linhaPadraoTempo: 11.5, soTotal: true },
+]
+
+/*
+ * OS CINCO MERCADOS DA TELA (2026-10-07, pedido do usuário).
+ *
+ * Eram oito botões ("Gols", "Gols do time", "Escanteios do time"...), e a
+ * fileira passava da tela. Agora são cinco, e dentro de cada um a pessoa
+ * escolhe DE QUEM: os dois times somados, só o mandante ou só o visitante.
+ * Cada par aponta pros dois mercados de cima: o "do jogo" e o "do time".
+ */
+export const MERCADOS_PRINCIPAIS: Array<{ id: string; rotulo: string; jogo: string; time: string }> = [
+  { id: 'gols', rotulo: 'Gols', jogo: 'gols', time: 'gols_time' },
+  { id: 'escanteios', rotulo: 'Escanteios', jogo: 'escanteios', time: 'escanteios_time' },
+  { id: 'cartoes', rotulo: 'Cartões', jogo: 'cartoes', time: 'cartoes_time' },
+  { id: 'chutes_alvo', rotulo: 'Chutes no alvo', jogo: 'chutes_alvo', time: 'chutes_alvo_time' },
+  { id: 'faltas', rotulo: 'Faltas', jogo: 'faltas', time: 'faltas_time' },
 ]
 
 /** "Escanteios no jogo · 1º tempo" · o tempo só entra no texto quando não é o jogo todo. */

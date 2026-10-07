@@ -191,3 +191,12 @@ def test_faltas_so_no_jogo_inteiro_e_tempo_desconhecido_recusado():
     with pytest.raises(bp.PernaInvalida):
         bp.validar_pernas([perna_time(periodo="prorrogacao")])
     assert bp.validar_pernas([perna_time()])[0]["periodo"] == "total"
+
+
+def test_chutes_e_faltas_de_um_time_so():
+    alvo = perna_time(mercado="chutes_alvo_time", lado_time="home", linha=4.5)
+    assert bp.liquidar_perna(alvo, JOGO, None, False, False)[:2] == ("GREEN", 5)
+    faltas = perna_time(mercado="faltas_time", lado_time="away", linha=12.5, direcao="menos")
+    assert bp.liquidar_perna(faltas, JOGO, None, False, False)[:2] == ("RED", 13)
+    with pytest.raises(bp.PernaInvalida):
+        bp.validar_pernas([perna_time(mercado="faltas_time", lado_time="away", periodo="1t")])
