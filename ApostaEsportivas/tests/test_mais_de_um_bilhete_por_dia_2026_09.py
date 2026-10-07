@@ -1,7 +1,7 @@
 """Múltipla e alavancagem passam a publicar mais de um por dia.
 
-Decisao do usuario em 2026-09-05. O Free continua UM -- ele e' a vitrine
-diaria, e duas dicas gratis por dia mudam o produto, nao o motor.
+Decisao do usuario em 2026-09-05. O Free ficou UM ate' 2026-10-07, quando o
+usuario pediu que ele tambem escalasse com o tamanho do dia.
 
 O QUE ESTES TESTES GUARDAM nao e' o teto (numero muda), e' a regra que o
 sustenta: PERNA NAO SE REPETE ENTRE BILHETES. Dois bilhetes que dividem uma
@@ -17,13 +17,35 @@ import engine_pipelines.multipla_pipeline as mult
 import engine_pipelines.dica_pipeline as dica
 
 
-def test_o_free_continua_um_por_dia():
-    """A fonte da regra do Free e' `_has_today_dica`, e ela nao ganhou teto."""
-    fonte = dica._has_today_dica.__doc__ or ""
-    assert "MAX" not in fonte
+def test_o_free_escala_com_os_jogos_do_dia():
+    """Ate' 06/10 a Free era UMA por dia (a vitrine). Em 07/10 o usuario pediu
+    mais de uma quando o dia tem muito jogo -- com piso mais alto que o da
+    multipla, porque a Free nao pode virar um segundo VIP de graca."""
+    assert dica.teto_de_free(0) == 0
+    assert dica.teto_de_free(1) == 1
+    assert dica.teto_de_free(7) == 1
+    assert dica.teto_de_free(8) == 2
+    assert dica.teto_de_free(16) == 3
+    assert dica.teto_de_free(500) == dica.MAX_FREE_POR_DIA == 3
+
+
+def test_o_free_nunca_repete_jogo():
+    """Duas Free no mesmo jogo seriam a mesma vitrine duas vezes. O INSERT
+    checa o jogo na mesma instrucao, e o indice (dia, jogo) fecha a corrida.
+    O `ON CONFLICT (match_date) DO UPDATE` antigo sobrescreveria a primeira."""
     import inspect
-    corpo = inspect.getsource(dica._has_today_dica)
-    assert ">= 1" in corpo or "> 0" in corpo
+    fonte = inspect.getsource(dica._save_pick)
+    assert "f.fixture_id = %s" in fonte
+    assert "ON CONFLICT DO NOTHING" in fonte
+    assert "DO UPDATE" not in fonte
+    esquema = inspect.getsource(dica._garantir_esquema)
+    assert "(match_date, fixture_id)" in esquema
+
+
+def test_free_de_hoje_le_o_dia():
+    import inspect
+    corpo = inspect.getsource(dica._frees_de_hoje)
+    assert "match_date" in corpo and "HOJE_BR" in corpo
 
 
 def test_tetos_declarados():
