@@ -250,7 +250,10 @@ async def security_headers(request: Request, call_next):
         # (2026-10-06) -- e a medicao de visita real do Cloudflare nunca rodou.
         "script-src 'self' https://accounts.google.com https://www.googletagmanager.com "
         "https://www.google-analytics.com https://challenges.cloudflare.com "
-        "https://static.cloudflareinsights.com"
+        "https://static.cloudflareinsights.com "
+        # connect.facebook.net: Meta Pixel. Baixa o fbevents.js e, depois
+        # dele, o /signals/config/<id> -- os dois sao script.
+        "https://connect.facebook.net"
         + (" " + _CSP_SCRIPT_INLINE if _CSP_SCRIPT_INLINE else "") + "; "
         # accounts.google.com tambem no style-src: o GIS busca a folha de estilo
         # do proprio botao em /gsi/style. Bloqueada, o botao aparece mas sem
@@ -265,7 +268,10 @@ async def security_headers(request: Request, call_next):
         "connect-src 'self' https://accounts.google.com https://www.google-analytics.com "
         "https://analytics.google.com https://region1.google-analytics.com "
         "https://stats.g.doubleclick.net https://www.google.com "
-        "https://challenges.cloudflare.com https://cloudflareinsights.com; "
+        "https://challenges.cloudflare.com https://cloudflareinsights.com "
+        # www.facebook.com/tr: pra onde o Meta Pixel manda os eventos quando
+        # usa fetch/sendBeacon (o fallback de imagem ja' passa no img-src).
+        "https://www.facebook.com https://connect.facebook.net; "
         # As fontes sao servidas pelo proprio dominio desde 03/09 (ver
         # frontend/src/fontes.css). O fonts.gstatic.com saiu daqui e o
         # fonts.googleapis.com saiu do style-src junto: dominio que ninguem
