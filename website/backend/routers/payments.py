@@ -281,6 +281,50 @@ def _record_event(source: str, status: str, mp_payment_id="", detail: str = "") 
         logger.warning("[PAYMENTS] Falha ao registrar evento %s/%s: %s", source, status, e)
 
 
+def _avisar_ativacao(user_id: int, payment_id: str, titulo_plano: str, expires_at,
+                     indicador_id, nome_indicado: str | None) -> None:
+    """Sino + celular de quem pagou e, se houver, de quem indicou (2026-10-07).
+
+    Quem pagou recebia so' e-mail · e e' o momento em que a pessoa esta' na
+    tela esperando a confirmacao. Quem indicou ganhava +2 dias em silencio, e
+    indicacao que ninguem ve render nao se repete.
+
+    Depois do commit da ativacao, em conexao propria, e sem propagar erro:
+    aviso nao pode desfazer nem atrasar o acesso de quem pagou. A `dedupe_key`
+    pelo id do pagamento faz o reprocessamento do mesmo pagamento nao avisar
+    de novo (alem de ele nem chegar aqui, ver o ON CONFLICT acima).
+    """
+    try:
+        from routers.notifications import (TYPE_INDICACAO, TYPE_PAGAMENTO_OK,
+                                           create_notification, push_para_usuario)
+        validade = expires_at.strftime("%d/%m/%Y") if hasattr(expires_at, "strftime") else str(expires_at)
+        titulo = "Pagamento aprovado"
+        corpo = f"Seu {titulo_plano} está ativo até {validade}. Bons picks!"
+        conn = get_connection()
+        cur = conn.cursor()
+        try:
+            create_notification(cur, user_id, TYPE_PAGAMENTO_OK, titulo, f"pagamento:{payment_id}",
+                                body=corpo, url="/picks",
+                                payload={"payment_id": payment_id, "expires_at": validade})
+            if indicador_id:
+                primeiro = (nome_indicado or "").split(" ")[0] or "Quem você indicou"
+                create_notification(
+                    cur, indicador_id, TYPE_INDICACAO, "Você ganhou 2 dias de Pick IA",
+                    f"indicacao:{payment_id}",
+                    body=f"{primeiro} assinou pela sua indicação. Os 2 dias já estão na sua conta.",
+                    url="/profile")
+            conn.commit()
+        finally:
+            cur.close()
+            conn.close()
+        push_para_usuario(user_id, titulo, corpo, "/picks")
+        if indicador_id:
+            push_para_usuario(indicador_id, "Você ganhou 2 dias de Pick IA",
+                              "Quem você indicou acabou de assinar.", "/profile")
+    except Exception as e:
+        logger.warning("[PAYMENTS] aviso de ativacao falhou (pagamento %s): %s", payment_id, e)
+
+
 def _apply_approved_payment(payment: dict, source: str) -> dict:
     """Grava o pagamento e ativa o VIP a partir de um objeto de pagamento do MP.
 
@@ -415,6 +459,9 @@ def _apply_approved_payment(payment: dict, source: str) -> dict:
         conn.close()
 
     _record_event(source, "ativado", payment_id, f"user_id={user_id} plano={plan_key}")
+
+    _avisar_ativacao(user_id_int, payment_id, plan_info["title"], expires_at,
+                     ref_row["referred_by"] if ref_row else None, user_name)
 
     # Receita no GA. Só chega aqui quem passou pelo ON CONFLICT DO NOTHING lá em
     # cima, então é um evento por pagamento real · reprocessar o mesmo pagamento

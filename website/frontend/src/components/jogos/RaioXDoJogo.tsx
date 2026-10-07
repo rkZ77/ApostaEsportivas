@@ -11,6 +11,7 @@ import {
   type EstatDeJogador, type Jogador, type JogoDoTime, type Lado, type Periodo, type RaioX, type Taxa,
 } from '../../lib/raioX'
 import { alternar, useBilheteMontado, type Selecao } from '../../lib/bilheteMontado'
+import Campinho from './Campinho'
 
 /*
  * Raio-X do jogo (2026-10-06) · o lugar de pesquisar antes de montar bilhete.
@@ -23,7 +24,7 @@ import { alternar, useBilheteMontado, type Selecao } from '../../lib/bilheteMont
  * A conta (linha, taxa, média) é toda de lib/raioX.ts · aqui é só desenho.
  */
 
-type Aba = 'mercados' | 'jogadores' | 'confronto' | 'forma'
+type Aba = 'mercados' | 'jogadores' | 'escalacao' | 'confronto' | 'forma'
 
 export interface JogoBase {
   fixture_id: number
@@ -66,7 +67,7 @@ export default function RaioXDoJogo({ jogo }: { jogo: JogoBase }) {
       <div className="sticky top-0 z-20 -mx-4 px-4 sm:mx-0 sm:px-0 bg-surface-0/95 backdrop-blur border-b border-line">
         <div className="flex overflow-x-auto scrollbar-none" role="tablist">
           {([
-            ['mercados', 'Mercados'], ['jogadores', 'Jogadores'],
+            ['mercados', 'Mercados'], ['jogadores', 'Jogadores'], ['escalacao', 'Escalação'],
             ['confronto', 'Confronto'], ['forma', 'Forma'],
           ] as [Aba, string][]).map(([k, rotulo]) => (
             <button key={k} role="tab" aria-selected={aba === k} onClick={() => setAba(k)}
@@ -94,6 +95,12 @@ export default function RaioXDoJogo({ jogo }: { jogo: JogoBase }) {
           <AbaMercados dados={dados} nomeJogo={nomeJogo} />
         ) : aba === 'jogadores' ? (
           <AbaJogadores dados={dados} nomeJogo={nomeJogo} />
+        ) : aba === 'escalacao' ? (
+          /* Pedida só ao abrir a aba: é a parte do Raio-X que fala com a
+             API-Football, e quem não olha a escalação não gasta cota. */
+          <Campinho fixtureId={dados.fixture.fixture_id}
+            homeId={dados.fixture.home_team_id} awayId={dados.fixture.away_team_id}
+            homeNome={dados.fixture.home_team} awayNome={dados.fixture.away_team} />
         ) : aba === 'confronto' ? (
           <AbaConfronto dados={dados} />
         ) : (
@@ -229,16 +236,27 @@ function NumeroDaTaxa({ t, grande }: { t: Taxa; grande?: boolean }) {
  * Verde = bateu. É o gráfico que responde "bate sempre ou bateu duas vezes
  * muito?" melhor que qualquer média.
  */
-function Barras({ valores, linha, lado }: { valores: Array<number | null>; linha: number; lado: Lado }) {
+function Barras({ valores, linha, lado, rotulos, max: maxFixo }: {
+  valores: Array<number | null>; linha: number; lado: Lado
+  /** Legenda de cada jogo (mesma ordem de `valores`), mostrada no toque/hover. */
+  rotulos?: string[]
+  /** Escala comum, pra duas metades lado a lado terem barras comparáveis. */
+  max?: number
+}) {
   const serie = [...valores].reverse()
-  const max = Math.max(linha + 1, ...serie.map(v => v ?? 0))
+  const legendas = rotulos ? [...rotulos].reverse() : []
+  const max = maxFixo ?? Math.max(linha + 1, ...serie.map(v => v ?? 0))
   const yLinha = 100 - (linha / max) * 100
   return (
-    <div className="relative h-14 flex items-end gap-[3px]" aria-hidden>
+    <div className="relative h-14 flex items-end gap-[3px]">
       {serie.map((v, i) => {
         const bateu = v != null && v !== linha && (lado === 'mais' ? v > linha : v < linha)
+        const legenda = legendas[i]
+          ? `${legendas[i]}: ${v ?? 'sem dado'}`
+          : String(v ?? 'sem dado')
         return (
-          <div key={i} className="flex-1 h-full flex flex-col justify-end items-center gap-0.5">
+          <div key={i} title={legenda} aria-label={legenda}
+            className="flex-1 h-full flex flex-col justify-end items-center gap-0.5">
             <span className="text-[9px] font-mono text-ink-3 tabular-nums leading-none">{v ?? ''}</span>
             <div
               className={cn('w-full rounded-sm', v == null ? 'bg-surface-3/40' : bateu ? 'bg-green-500' : 'bg-surface-3')}
@@ -298,12 +316,32 @@ function AbaMercados({ dados, nomeJogo }: { dados: RaioX; nomeJogo: string }) {
   }
   const linhaTxt = rotuloDaLinha(linha, lado)
 
-  /* Uma série vira um quadro: barras jogo a jogo + "bateu X/N". */
-  const Quadro = ({ titulo, sub, teamId, nomeTime, valores, selecao, destaque }: {
+  /* "vs Palmeiras · 12/09/26" pra legenda de cada barra. */
+  const rotulosDe = (jogos: JogoDoTime[]) =>
+    jogos.map(j => `${j.em_casa ? 'vs' : '@'} ${j.adversario || 'adversário'} · ${dataCurta(j.data)}`)
+
+  /* "últimos 10 jogos", ou quantos têm o dado de verdade · no 1º e 2º tempo
+     os jogos antigos não têm a folha do 1º tempo, e a barra vazia sem
+     explicação parece jogo de zero. */
+  const amostra = (valores: Array<number | null>) => {
+    const com = valores.filter(v => v != null).length
+    if (com === valores.length) return `últimos ${valores.length} jogos`
+    return `${com} de ${valores.length} jogos com dado ${periodo === 'total' ? '' : `do ${ROTULO_PERIODO[periodo]}`}`.trim()
+  }
+
+  interface Grupo { teamId: number; nome: string; valores: Array<number | null>; rotulos: string[] }
+
+  /* Uma série vira um quadro: barras jogo a jogo + "bateu X/N".
+     Com `grupos`, a série é a soma de duas (os dois times, ou faz + cede), e o
+     gráfico se divide em duas metades com escudo e nome · antes eram vinte
+     barras seguidas e não dava pra saber de quem era cada uma. */
+  const Quadro = ({ titulo, sub, teamId, nomeTime, valores, rotulos, grupos, selecao, destaque }: {
     titulo: string; sub: string; teamId?: number; nomeTime?: string
-    valores: Array<number | null>; selecao?: Selecao; destaque?: boolean
+    valores: Array<number | null>; rotulos?: string[]; grupos?: Grupo[]
+    selecao?: Selecao; destaque?: boolean
   }) => {
     const t = taxa(valores, linha, lado)
+    const maxComum = Math.max(linha + 1, ...valores.map(v => v ?? 0))
     return (
       <div className={cn('card p-4', destaque && 'border-accent/30')}>
         <div className="flex items-center gap-3 mb-3">
@@ -315,7 +353,27 @@ function AbaMercados({ dados, nomeJogo }: { dados: RaioX; nomeJogo: string }) {
           <NumeroDaTaxa t={t} grande={destaque} />
           {selecao && !destaque && <BotaoBilhete selecao={{ ...selecao, bateu: t.bateu, n: t.n }} />}
         </div>
-        <Barras valores={valores} linha={linha} lado={lado} />
+        {grupos ? (
+          <div className="grid grid-cols-2 gap-3">
+            {grupos.map(g => {
+              const tg = taxa(g.valores, linha, lado)
+              return (
+                <div key={g.nome} className="min-w-0">
+                  <div className="flex items-center gap-1.5 mb-1.5 min-w-0">
+                    <TeamLogo id={g.teamId} name={g.nome} size={16} />
+                    <span className="text-[11px] font-semibold text-ink-2 truncate flex-1">{g.nome}</span>
+                    <span className={cn('font-mono text-[11px] font-black tabular-nums shrink-0', TOM[tomDaTaxa(tg.pct)])}>
+                      {tg.n ? `${tg.bateu}/${tg.n}` : '—'}
+                    </span>
+                  </div>
+                  <Barras valores={g.valores} rotulos={g.rotulos} linha={linha} lado={lado} max={maxComum} />
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <Barras valores={valores} rotulos={rotulos} linha={linha} lado={lado} />
+        )}
         {selecao && destaque && (
           <div className="mt-3"><BotaoBilhete cheio selecao={{ ...selecao, bateu: t.bateu, n: t.n }} /></div>
         )}
@@ -341,11 +399,15 @@ function AbaMercados({ dados, nomeJogo }: { dados: RaioX; nomeJogo: string }) {
     return (
       <>
         <Quadro destaque titulo="Nos jogos dos dois times" sub={descricao}
-          valores={[...vHome, ...vAway]} selecao={selecao} />
-        <Quadro titulo={f.home_team} sub={`últimos ${vHome.length} jogos`} teamId={f.home_team_id}
-          nomeTime={f.home_team} valores={vHome} />
-        <Quadro titulo={f.away_team} sub={`últimos ${vAway.length} jogos`} teamId={f.away_team_id}
-          nomeTime={f.away_team} valores={vAway} />
+          valores={[...vHome, ...vAway]} selecao={selecao}
+          grupos={[
+            { teamId: f.home_team_id, nome: f.home_team, valores: vHome, rotulos: rotulosDe(home.jogos) },
+            { teamId: f.away_team_id, nome: f.away_team, valores: vAway, rotulos: rotulosDe(away.jogos) },
+          ]} />
+        <Quadro titulo={f.home_team} sub={amostra(vHome)} teamId={f.home_team_id}
+          nomeTime={f.home_team} valores={vHome} rotulos={rotulosDe(home.jogos)} />
+        <Quadro titulo={f.away_team} sub={amostra(vAway)} teamId={f.away_team_id}
+          nomeTime={f.away_team} valores={vAway} rotulos={rotulosDe(away.jogos)} />
       </>
     )
   }
@@ -385,11 +447,15 @@ function AbaMercados({ dados, nomeJogo }: { dados: RaioX; nomeJogo: string }) {
           })}
         </div>
         <Quadro destaque titulo="No confronto" sub={`${nomeTime} faz + ${nomeAdv} cede`}
-          valores={[...faz, ...cede]} selecao={selecao} />
-        <Quadro titulo={`${nomeTime} faz`} sub={`${mercado.frase.toLowerCase()} a favor, últimos ${faz.length} jogos`}
-          teamId={ehCasa ? f.home_team_id : f.away_team_id} nomeTime={nomeTime} valores={faz} />
-        <Quadro titulo={`${nomeAdv} cede`} sub={`${mercado.frase.toLowerCase()} contra, últimos ${cede.length} jogos`}
-          teamId={ehCasa ? f.away_team_id : f.home_team_id} nomeTime={nomeAdv} valores={cede} />
+          valores={[...faz, ...cede]} selecao={selecao}
+          grupos={[
+            { teamId: ehCasa ? f.home_team_id : f.away_team_id, nome: `${nomeTime} faz`, valores: faz, rotulos: rotulosDe(time.jogos) },
+            { teamId: ehCasa ? f.away_team_id : f.home_team_id, nome: `${nomeAdv} cede`, valores: cede, rotulos: rotulosDe(adv.jogos) },
+          ]} />
+        <Quadro titulo={`${nomeTime} faz`} sub={`${mercado.frase.toLowerCase()} a favor, ${amostra(faz)}`}
+          teamId={ehCasa ? f.home_team_id : f.away_team_id} nomeTime={nomeTime} valores={faz} rotulos={rotulosDe(time.jogos)} />
+        <Quadro titulo={`${nomeAdv} cede`} sub={`${mercado.frase.toLowerCase()} contra, ${amostra(cede)}`}
+          teamId={ehCasa ? f.away_team_id : f.home_team_id} nomeTime={nomeAdv} valores={cede} rotulos={rotulosDe(adv.jogos)} />
       </>
     )
   }

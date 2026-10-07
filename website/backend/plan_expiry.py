@@ -208,7 +208,7 @@ def avisar_plano_expirando(cur, user: dict, site_url: str,
     if cur.fetchone():
         return None
 
-    from routers.notifications import TYPE_PLAN_EXPIRING, create_notification
+    from routers.notifications import TYPE_PLAN_EXPIRING, create_notification, push_para_usuario
 
     titulo, corpo = _mensagem(plan, dias, user.get("plan_tier"))
     create_notification(
@@ -216,6 +216,9 @@ def avisar_plano_expirando(cur, user: dict, site_url: str,
         body=corpo, url="/checkout",
         payload={"plan": plan, "dias_restantes": dias, "expires_at": str(data_exp)},
     )
+    # Celular tambem (2026-10-07): o e-mail de renovacao cai no meio de cem
+    # outros, e o site e' usado no celular. Mesma faixa, mesmo "uma vez so'".
+    push_para_usuario(user["id"], titulo, corpo, "/checkout")
 
     if enviar_email:
         enviar_email(
@@ -313,12 +316,13 @@ def _avisar_acesso_encerrado(cur, user: dict, plan: str, chave: str,
             return
 
         from routers.notifications import (TYPE_TRIAL_ENDED, TYPE_VIP_ENDED,
-                                           create_notification)
+                                           create_notification, push_para_usuario)
         create_notification(
             cur, user["id"],
             TYPE_TRIAL_ENDED if plan == "trial" else TYPE_VIP_ENDED,
             titulo, chave, body=corpo, url="/checkout",
         )
+        push_para_usuario(user["id"], titulo, corpo, "/checkout")
     except Exception:
         # Sem linha no sino não se manda e-mail: o dedupe mora na tabela, e um
         # e-mail sem ela é um e-mail que pode repetir na próxima requisição.

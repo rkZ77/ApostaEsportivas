@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, m as motion } from 'framer-motion'
 import {
-  Activity, Bell, BellOff, CalendarCheck, CheckCheck, CheckCircle2, Crown, Lock, MinusCircle,
+  Activity, Bell, BellOff, CalendarCheck, CheckCheck, CheckCircle2, Crown, Gift, Lock, MinusCircle,
   PlayCircle, TimerReset, X, XCircle, Zap,
 } from 'lucide-react'
 import { useNotifications, type AppNotification } from '../context/NotificationContext'
@@ -72,6 +72,10 @@ function NotificationIcon({ n }: { n: AppNotification }) {
      diz qual dos dois acabou. */
   if (n.type === 'trial_ended' || n.type === 'vip_ended')
     return <Lock className={`${base} text-ink-3`} />
+  /* Pagamento aprovado: a coroa do plano, agora conquistado. Indicação: o
+     presente de quem trouxe um amigo (2026-10-07). */
+  if (n.type === 'payment_ok')      return <Crown className={`${base} text-accent-ink`} />
+  if (n.type === 'referral_credit') return <Gift className={`${base} text-accent-ink`} />
   /* Certo/errado e não seta de tendência: o item já diz GREEN ou RED no título,
      o ícone só precisa confirmar "deu" ou "não deu". Seta pra cima/baixo lia
      como variação de saldo. PUSH fica neutro · anulado não é vitória. */

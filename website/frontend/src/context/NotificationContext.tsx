@@ -21,6 +21,8 @@ export type NotificationType =
    * um pick que ninguém pegou ainda. */
   | 'monthly_close' | 'new_picks' | 'pick_live' | 'live_novo' | 'pick_result' | 'plan_expiring'
   | 'trial_ended' | 'vip_ended'
+  /* Pagamento aprovado e crédito de indicação (2026-10-07). */
+  | 'payment_ok' | 'referral_credit'
   /* Único tipo que NÃO vem do servidor. O convite de plano é um estado
      permanente da conta ("você está no free"), não um evento, então não existe
      linha em `notifications` para ele · criar uma por usuário seria inventar um
