@@ -243,6 +243,60 @@ def send_push_to_all_vip(title: str, body: str, url: str = "/picks"):
     logger.info("[PUSH] %d enviados, %d expirados removidos.", ok_count, len(expired))
 
 
+def _enviar_push_do_usuario(user_id: int, data: str) -> None:
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT endpoint, p256dh, auth FROM user_push_subscriptions WHERE user_id = %s",
+                    (user_id,))
+        subs = cur.fetchall()
+        expirados = []
+        for s in subs:
+            try:
+                _send_push(s["endpoint"], s["p256dh"], s["auth"], data)
+            except Exception as e:
+                err = str(e)
+                if "404" in err or "410" in err or "Gone" in err:
+                    expirados.append(s["endpoint"])
+                else:
+                    logger.debug("[PUSH] Falha pro user %s: %s", user_id, e)
+        if expirados:
+            cur.execute("DELETE FROM user_push_subscriptions WHERE endpoint = ANY(%s)", (expirados,))
+            conn.commit()
+        cur.close()
+    except Exception as e:
+        logger.warning("[PUSH] user %s: %s", user_id, e)
+    finally:
+        conn.close()
+
+
+def push_para_usuario(user_id: int, title: str, body: str = "", url: str = "/") -> None:
+    """Push no celular de UMA pessoa (2026-10-07).
+
+    Ate' aqui o push so' existia em massa (`send_push_to_all_vip`): aviso
+    pessoal · pagamento aprovado, plano vencendo, resultado do pick que ELA
+    seguiu · ficava so' no sino e no e-mail, e o site e' usado no celular.
+
+    Em thread: o envio fala com o servidor de push de cada aparelho, e quem
+    chama (webhook do MercadoPago, liquidacao, login) nao pode esperar.
+
+    Respeita SIDE_EFFECTS: o noprod aponta pro banco de PRODUCAO, e uma aba de
+    teste mandaria push pro celular de cliente de verdade.
+    """
+    if not VAPID_PRIVATE_KEY:
+        return
+    try:
+        from runtime_env import side_effects_enabled
+        if not side_effects_enabled():
+            return
+    except Exception:
+        return
+    import threading
+    data = json.dumps({"title": title[:120], "body": (body or "")[:240], "url": url})
+    threading.Thread(target=_enviar_push_do_usuario, args=(user_id, data),
+                     name="push-usuario", daemon=True).start()
+
+
 # ── Notificações in-app (o sino da navbar) ────────────────────────────────────
 # Push é entrega, isto é histórico: o push some da bandeja do sistema e não
 # volta, então tudo que importa também vira linha em `notifications` pra o
@@ -269,6 +323,13 @@ TYPE_TRIAL_ENDED   = "trial_ended"
 # Um tipo por plano encerrado, e não um "access_ended" só: o ícone e a
 # cópia do popup mudam (assinar x renovar), e o sino escolhe pelo tipo.
 TYPE_VIP_ENDED     = "vip_ended"
+#: Pagamento aprovado (2026-10-07). Ia so' por e-mail · e' o momento em que a
+#: pessoa esta' olhando a tela esperando a confirmacao, e o sino e o celular
+#: sao onde ela olha.
+TYPE_PAGAMENTO_OK  = "payment_ok"
+#: Credito de indicacao (2026-10-07). O indicador ganhava +2 dias em silencio
+#: quando o amigo assinava · indicacao que ninguem ve render nao se repete.
+TYPE_INDICACAO     = "referral_credit"
 
 LIST_LIMIT   = 40
 PURGE_DAYS   = 60   # notificações lidas mais velhas que isso são descartadas
@@ -454,6 +515,10 @@ def notify_pick_result(cur, pick_id: int, pick_type: str, result: str) -> None:
             match_label = "Bingo do Dia"
         elif pick_type == "alavancagem":
             match_label = "Alavancagem"
+        elif pick_type == "pessoal":
+            # O bilhete montado no Raio-X · o nome do primeiro jogo diria que
+            # e' aposta num jogo so', e ele pode ter seis.
+            match_label = "Meu bilhete"
         elif home and away:
             match_label = f"{home} x {away}"
         else:
@@ -470,10 +535,14 @@ def notify_pick_result(cur, pick_id: int, pick_type: str, result: str) -> None:
             if pnl_r is not None:
                 sign = "+" if pnl_r >= 0 else ""
                 parts.append(f"{sign}{fmt_brl(pnl_r)} ({sign}{profit_u:.2f}u)")
+            chave = f"pick_result:{pick_type}:{pick_id}"
+            cur.execute("SELECT 1 FROM notifications WHERE user_id = %s AND dedupe_key = %s",
+                        (f["user_id"], chave))
+            novo = cur.fetchone() is None
             create_notification(
                 cur, f["user_id"], TYPE_PICK_RESULT,
                 title=f"{label}: {match_label}",
-                dedupe_key=f"pick_result:{pick_type}:{pick_id}",
+                dedupe_key=chave,
                 body=" ".join(parts) or None,
                 url="/banca",
                 payload={
@@ -484,6 +553,13 @@ def notify_pick_result(cur, pick_id: int, pick_type: str, result: str) -> None:
                     "pnl":          round(pnl_r, 2) if pnl_r is not None else None,
                 },
             )
+            # E no celular (2026-10-07). Pessoal, do pick que ELA seguiu, com o
+            # dinheiro dela · e' o aviso que mais faz a pessoa voltar pro site.
+            # So' na primeira vez: o resultado e' reescrito quando o provedor
+            # revisa, e um segundo push do mesmo GREEN seria ruido.
+            if novo:
+                push_para_usuario(f["user_id"], f"{label}: {match_label}",
+                                  " ".join(parts) or "", "/banca")
             # O mesmo resultado no WhatsApp, pra quem ligou. Depois do sino
             # pelo motivo de sempre: o item do sino é a fonte da verdade e não
             # pode depender de a Meta responder.

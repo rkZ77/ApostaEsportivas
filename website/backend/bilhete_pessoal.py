@@ -321,6 +321,10 @@ def liquidar_pendentes(cur, user_id: int, agora: datetime | None = None) -> int:
               final, final, b["id"]))
         if final:
             fechados += 1
+            # Avisa o dono: sino, celular e WhatsApp, com o dinheiro dele · o
+            # mesmo aviso de qualquer pick seguido. Nunca propaga erro.
+            from routers.notifications import notify_pick_result
+            notify_pick_result(cur, b["id"], PICK_TYPE, final)
     return fechados
 
 

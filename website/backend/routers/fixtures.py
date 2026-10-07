@@ -703,6 +703,35 @@ def get_raio_x(
     )
 
 
+@router.get("/{fixture_id}/escalacao")
+def get_escalacao(
+    fixture_id: int,
+    current_user: dict = Depends(get_current_user),
+    home: Optional[int] = Query(None),
+    away: Optional[int] = Query(None),
+):
+    """Campinho do Raio-X: escalação oficial ou provável e os desfalques.
+
+    Rota separada do Raio-X de propósito: ela fala com a API-Football (o
+    Raio-X é só banco) e muda perto do apito, enquanto o resto é histórico.
+    Ver escalacao.py.
+    """
+    import escalacao
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT home_team_id, away_team_id FROM fixtures WHERE fixture_id = %s",
+                    (fixture_id,))
+        fix = cur.fetchone()
+        home_id = (fix or {}).get("home_team_id") or home
+        away_id = (fix or {}).get("away_team_id") or away
+        if not home_id or not away_id:
+            raise HTTPException(404, "Jogo nao encontrado")
+        return escalacao.escalacao_do_jogo(cur, fixture_id, home_id, away_id)
+    finally:
+        cur.close(); conn.close()
+
+
 def _montar_raio_x(fixture_id: int, home, away, league, n: int) -> dict:
     """Sete consultas numa conexao so', todas em indice · ver cada helper."""
     conn = get_connection()
