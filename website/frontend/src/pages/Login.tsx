@@ -45,52 +45,52 @@ function RealWinRate({ className = 'mt-5' }: { className?: string }) {
   )
 }
 
-/* O fundo da tela · um meio-campo visto de cima.
+/* O fundo da tela · grade fina e um brilho no canto (07/10/2026, pedido do
+   usuário).
 
-   Fundo preto liso fazia esta página parecer erro de servidor ao lado do resto
-   do site. O que entra aqui não é enfeite aleatório: é o mesmo vocabulário que
-   a Home e o 404 já usam (verde da marca em opacidade baixa, formas simples,
-   nada que dispute com o formulário). A bola do 404 mostrou que dá pra falar
-   de futebol sem ilustração pesada, e o campo faz isso ocupando só as bordas.
+   O meio-campo desenhado que morava aqui saiu: as faixas de gramado e as
+   linhas do campo atrás do formulário liam como enfeite de site de aposta
+   barato, o contrário do que uma tela de senha precisa passar. A referência
+   pedida é a de produto de software: grade quase invisível do lado do
+   formulário e um brilho da cor da marca no canto, sem desenho nenhum
+   disputando com os campos.
 
-   Tudo em SVG e gradiente, sem imagem: são poucos bytes, escala em qualquer
-   tela e acompanha o tema claro sozinho, porque a cor sai do token `--accent`
-   em vez de estar assada num arquivo. */
-function FundoDeCampo() {
+   Só gradiente, sem imagem nem blur (desfoque grande é o efeito mais caro no
+   Safari do iPhone). A cor sai do token, então o tema claro acompanha. */
+function FundoSobrio() {
   return (
     <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-      {/* Faixas do gramado. A máscara apaga o centro: onde mora o formulário,
-          o fundo tem que sumir. */}
-      <div className="absolute inset-0 bg-field-pattern bg-[length:100%_72px] opacity-70 [mask-image:radial-gradient(ellipse_90%_70%_at_50%_40%,transparent_35%,black)]" />
-
-      {/* Halo verde no topo, o mesmo do hero da Home. Em radial-gradient e não
-          em blur, porque desfoque grande é o efeito mais caro no Safari do
-          iPhone e esta é uma tela que a maioria abre no celular. */}
       <div
-        className="absolute -top-40 left-1/2 -translate-x-1/2 w-[860px] h-[560px]"
-        style={{ background: 'radial-gradient(50% 50% at 50% 50%, rgb(var(--accent) / 0.13), transparent 70%)' }}
+        className="absolute inset-0 opacity-60 [mask-image:linear-gradient(to_left,black,transparent_75%)]"
+        style={{
+          backgroundImage:
+            'linear-gradient(rgb(var(--ink-4) / 0.08) 1px, transparent 1px), linear-gradient(90deg, rgb(var(--ink-4) / 0.08) 1px, transparent 1px)',
+          backgroundSize: '56px 56px',
+        }}
       />
+      <div
+        className="absolute -top-48 -right-40 w-[720px] h-[620px]"
+        style={{ background: 'radial-gradient(50% 50% at 50% 50%, rgb(var(--accent) / 0.12), transparent 70%)' }}
+      />
+      <div
+        className="absolute -bottom-56 -left-40 w-[620px] h-[520px]"
+        style={{ background: 'radial-gradient(50% 50% at 50% 50%, rgb(var(--accent) / 0.05), transparent 70%)' }}
+      />
+    </div>
+  )
+}
 
-      {/* As linhas do campo. Meio-campo, círculo central e as duas grandes
-          áreas, com o traço fino que elas têm de verdade vistas de cima. */}
-      <svg
-        className="absolute inset-x-0 top-0 w-full h-full"
-        viewBox="0 0 400 800"
-        preserveAspectRatio="xMidYMid slice"
-        fill="none"
-        stroke="rgb(var(--accent) / 0.16)"
-        strokeWidth="1.5"
-      >
-        <line x1="0" y1="400" x2="400" y2="400" />
-        <circle cx="200" cy="400" r="76" />
-        <circle cx="200" cy="400" r="3" fill="rgb(var(--accent) / 0.22)" stroke="none" />
-        <rect x="110" y="-1" width="180" height="86" />
-        <rect x="110" y="715" width="180" height="86" />
-      </svg>
-
-      {/* Véu por cima de tudo: o desenho precisa ficar na periferia da visão,
-          não competir com o campo de senha. */}
-      <div className="absolute inset-0 bg-surface-0/70" />
+/* A marca grande do painel da esquerda: o mesmo logotipo da barra, em
+   tamanho de capa. */
+function MarcaGrande({ compacta = false }: { compacta?: boolean }) {
+  return (
+    <div className={`flex items-center ${compacta ? 'gap-3' : 'gap-4'}`}>
+      <span className={`${compacta ? 'w-11 h-11 rounded-lg' : 'w-16 h-16 rounded-xl'} bg-surface-1 border border-line flex items-center justify-center shrink-0`}>
+        <img src="/logo-64.webp" alt="" width={64} height={64} className={compacta ? 'w-7 h-7' : 'w-10 h-10'} />
+      </span>
+      <span className={`font-display font-black tracking-tight text-ink-1 ${compacta ? 'text-2xl' : 'text-5xl'}`}>
+        Pick<span className="text-accent-ink">IA</span>
+      </span>
     </div>
   )
 }
@@ -363,16 +363,9 @@ export default function Login() {
     { key: 'phone',    label: 'Telefone' },
   ]
 
-  /* Coluna única, centralizada, com a marca no topo · o formato que todo
-     mundo já viu em banco e em e-mail.
-
-     A tela dividida saiu porque ela custava caro e entregava pouco: metade do
-     desktop era um painel decorativo que o celular (a maioria de quem entra
-     aqui) nunca via, e no lugar dele cabia o que de fato importa nesta tela,
-     que é responder "posso confiar neste site?" antes de pedir e-mail e senha.
-     O conteúdo daquele painel não se perdeu: o win rate real virou a primeira
-     linha do selo abaixo do card, e a lista do trial virou uma faixa acima
-     dele, visível TAMBÉM no celular, onde antes não aparecia. */
+  /* O painel da esquerda (desktop) responde "posso confiar neste site?"
+     antes de pedir e-mail e senha: marca, promessa e o selo de confiança com
+     o win rate real. No celular o selo desce pra baixo do card. */
   return (
     <div className={`relative min-h-screen bg-surface-0 flex flex-col overflow-hidden ${classesRevelacao(revelado)}`} style={{ transitionDuration: `${FADE_REVELACAO_MS}ms` }} aria-busy={!revelado}>
       <Helmet>
@@ -406,16 +399,31 @@ export default function Login() {
         }
       />
 
-      {/* UMA COLUNA, CENTRALIZADA.
-          A tela dividida foi tentada e reprovada: no desktop ela empurra o
-          formulário para um dos lados e deixa metade da janela conversando
-          sozinha. Centralizado, o olho cai direto no campo de usuário, que é o
-          que a pessoa veio fazer. O conteúdo do painel não sumiu, continua
-          abaixo do formulário, onde o celular já o via. */}
-      <FundoDeCampo />
+      <FundoSobrio />
 
-      <main className="relative flex-1 flex justify-center px-5 sm:px-6 py-8 sm:py-12">
-        <div className="relative w-full max-w-md">
+      {/* DUAS COLUNAS NO DESKTOP, DE NOVO (07/10/2026, pedido do usuário, com
+          a referência na mão). A versão dividida antiga foi reprovada porque o
+          painel da esquerda era decoração; este é a marca, a promessa em uma
+          frase e as três razões de confiança, e o formulário fica num card
+          próprio à direita. No celular vira uma coluna: marca compacta em
+          cima, card logo abaixo, confiança no fim. */}
+      <main className="relative flex-1 flex items-center px-4 sm:px-6 py-8 sm:py-14">
+        <div className="mx-auto w-full max-w-6xl grid lg:grid-cols-2 gap-10 lg:gap-20 items-center">
+
+        <section className="hidden lg:block">
+          <MarcaGrande />
+          <p className="mt-10 font-display text-4xl xl:text-[2.75rem] font-black leading-[1.12] tracking-tight text-ink-1">
+            Picks de futebol com estatística.{' '}
+            <span className="text-accent-ink">E resultado em público.</span>
+          </p>
+          <p className="mt-5 text-lg text-ink-2 leading-relaxed max-w-lg">
+            A IA lê escanteios, cartões, gols e chutes de cada jogo e só publica quando acha valor. Cada pick vira GREEN ou RED no histórico aberto.
+          </p>
+          <SeloDeConfianca className="mt-10 max-w-lg" />
+        </section>
+
+        <div className="relative w-full max-w-md mx-auto lg:mr-0">
+          <div className="lg:hidden mb-7"><MarcaGrande compacta /></div>
           {/* Este e o <h1> da pagina. A marca acima e logotipo, e aparecia
               duas vezes como h1 (uma no painel de desktop, outra no bloco
               mobile): so uma renderiza, mas as duas existiam no DOM, entao
@@ -466,6 +474,9 @@ export default function Login() {
             </div>
           )}
 
+          {/* O formulário num card próprio, como na referência: separa "o que
+              preencher" do resto da tela sem precisar de enfeite no fundo. */}
+          <div className="rounded-xl border border-line bg-surface-1 p-5 sm:p-7 shadow-[0_24px_60px_-30px_rgb(0_0_0/0.6)]">
           {/* NO CADASTRO O GOOGLE VEM PRIMEIRO (2026-09-25). O motivo de ele
               ficar embaixo (ver o comentário depois do formulário) é o login:
               lá, em cima, ele cria a conta duplicada de quem já tem senha. No
@@ -497,16 +508,19 @@ export default function Login() {
                 <div>
                   <label htmlFor="login-identifier" className="block text-sm text-ink-2 mb-2 font-medium">Entrar com</label>
                   {/* Tabs estilo Betano */}
-                  <div className="flex rounded-md overflow-hidden border border-line-strong mb-3">
+                  {/* Segmento discreto: o verde cheio fica só no botão de
+                      Entrar, que é a ação. Duas manchas verdes no mesmo card
+                      disputavam o olho. */}
+                  <div className="flex gap-1 p-1 rounded-lg bg-surface-2 border border-line mb-3">
                     {loginTabs.map(tab => (
                       <button
                         key={tab.key}
                         type="button"
                         onClick={() => { setLoginMethod(tab.key); setError('') }}
-                        className={`flex-1 py-2 text-xs font-bold transition-colors ${
+                        className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-colors ${
                           loginMethod === tab.key
-                            ? 'bg-green-500 text-black'
-                            : 'bg-surface-1 text-ink-2 hover:text-ink-1'
+                            ? 'bg-surface-0 text-ink-1 shadow-sm'
+                            : 'text-ink-3 hover:text-ink-1'
                         }`}
                       >
                         {tab.label}
@@ -748,6 +762,7 @@ export default function Login() {
               desabilitado={loading}
             />
           )}
+          </div>
 
           {/* AS DUAS SAÍDAS, EM FRASE (01/09/2026, pedido do usuário).
               Elas já foram frase, viraram botão de largura cheia e voltam a ser
@@ -782,8 +797,9 @@ export default function Login() {
             )}
           </div>
 
-          <SeloDeConfianca />
-          </div>
+          <SeloDeConfianca className="mt-8 lg:hidden" />
+        </div>
+        </div>
       </main>
 
       <footer className="relative border-t border-line">
