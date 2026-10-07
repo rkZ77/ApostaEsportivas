@@ -259,6 +259,13 @@
       download espera junto com o gtag.js. A troca de rota do SPA o proprio
       fbevents.js conta: ele escuta o pushState e dispara PageView sozinho.
       O <noscript> do snippet ficou de fora: sem JS o app nao abre.
+      Sao DOIS pixels (dois `init`): um `track` sem id dispara pra todos.
+
+      fbclid -> _fbc. Quem chega por anuncio traz ?fbclid= na URL, mas o
+      fbevents.js so' roda depois da primeira interacao, e ate' la' o SPA pode
+      ter trocado de rota e apagado o parametro. Sem o _fbc o Purchase do
+      servidor (backend/analytics.py) nao liga a venda ao clique. O cookie e'
+      gravado aqui no formato do proprio Meta, e o fbevents.js reaproveita.
     -->
     <script>
       window.dataLayer = window.dataLayer || []
@@ -272,7 +279,12 @@
         n.push = n; n.loaded = !0; n.version = '2.0'; n.queue = []
       }(window)
       fbq('init', '1059298736832153')
+      fbq('init', '4622246931353146')
       fbq('track', 'PageView')
+      try {
+        var fbclid = new URLSearchParams(location.search).get('fbclid')
+        if (fbclid) document.cookie = '_fbc=fb.1.' + Date.now() + '.' + encodeURIComponent(fbclid) + '; path=/; max-age=7776000; SameSite=Lax'
+      } catch (e) {}
       ;(function () {
         var feito = false
         var eventos = ['pointerdown', 'keydown', 'scroll', 'touchstart']

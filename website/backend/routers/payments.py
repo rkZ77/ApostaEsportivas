@@ -371,7 +371,8 @@ def _apply_approved_payment(payment: dict, source: str) -> dict:
         # com "agora + dias do plano" -- sem isso, quem renova antes de vencer
         # (comportamento comum) perdia os dias restantes que ja tinha pago.
         # Mesmo padrao ja usado abaixo pro credito de indicacao (GREATEST).
-        cur.execute("SELECT name, email, expires_at, ga_client_id, plan, plan_tier FROM users WHERE id = %s", (user_id_int,))
+        cur.execute("SELECT name, email, expires_at, ga_client_id, plan, plan_tier, "
+                    "meta_fbp, meta_fbc, meta_ip, meta_user_agent FROM users WHERE id = %s", (user_id_int,))
         row = cur.fetchone()
         if not row:
             logger.error("[PAYMENTS] user_id=%s não encontrado · pagamento %s ignorado", user_id, payment_id)
@@ -381,6 +382,7 @@ def _apply_approved_payment(payment: dict, source: str) -> dict:
         user_name     = row["name"]
         user_email    = row["email"]
         ga_client_id  = row["ga_client_id"]
+        meta_dados    = {k: row.get(k) or "" for k in ("meta_fbp", "meta_fbc", "meta_ip", "meta_user_agent")}
         current_expires = row["expires_at"]  # naive UTC (coluna timestamp without time zone)
         now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
         base = current_expires if (current_expires and current_expires > now_naive) else now_naive
@@ -470,11 +472,19 @@ def _apply_approved_payment(payment: dict, source: str) -> dict:
     # pra confirmar um pagamento seria trocar dinheiro por métrica.
     import threading
 
-    from analytics import send_purchase
+    from analytics import send_meta_purchase, send_purchase
 
     threading.Thread(
         target=send_purchase,
         args=(ga_client_id, user_id_int, payment_id, plan_key, plan_info["title"], amount),
+        daemon=True,
+    ).start()
+    # Mesma venda pro Meta (API de Conversões), mesmas razões.
+    threading.Thread(
+        target=send_meta_purchase,
+        args=(user_id_int, payment_id, plan_key, plan_info["title"], amount,
+              user_email or "", user_name or "", meta_dados["meta_fbp"],
+              meta_dados["meta_fbc"], meta_dados["meta_ip"], meta_dados["meta_user_agent"]),
         daemon=True,
     ).start()
 
@@ -629,10 +639,15 @@ class CreatePreferenceBody(BaseModel):
     # entrada não confiável: só o formato conhecido é aceito (ver parse_ga_cookie)
     # e o resto vira string vazia.
     ga_cookie: Optional[str] = None
+    # `_fbp` e `_fbc` do pixel do Meta, mesma regra: só o formato conhecido
+    # passa (ver parse_meta_cookie).
+    fbp: Optional[str] = None
+    fbc: Optional[str] = None
 
 
 @router.post("/create")
-def create_preference(body: CreatePreferenceBody, current_user: dict = Depends(get_current_user)):
+def create_preference(body: CreatePreferenceBody, request: Request,
+                      current_user: dict = Depends(get_current_user)):
     _check_rate("create_pref", current_user["id"], 6)
     access_token = os.getenv("MERCADOPAGO_ACCESS_TOKEN")
     if not access_token:
@@ -684,13 +699,25 @@ def create_preference(body: CreatePreferenceBody, current_user: dict = Depends(g
             # O client_id só é gravado quando veio um cookie legível: se o
             # usuário voltar ao checkout com bloqueador ligado, o COALESCE
             # preserva o id capturado numa visita anterior em vez de apagá-lo.
-            from analytics import parse_ga_cookie
+            from analytics import parse_ga_cookie, parse_meta_cookie
 
             ga_client_id = parse_ga_cookie(body.ga_cookie or "")
+            # IP real atrás do Cloudflare; sem o cabeçalho (dev) fica vazio
+            # em vez de gravar o IP do proxy, que o Meta trataria como do
+            # cliente.
+            ip = (request.headers.get("CF-Connecting-IP") or "").strip()[:64]
+            user_agent = (request.headers.get("User-Agent") or "")[:500]
             cur.execute(
                 "UPDATE users SET checkout_started_at = NOW(), "
-                "ga_client_id = COALESCE(NULLIF(%s, ''), ga_client_id) WHERE id = %s",
-                (ga_client_id, current_user["id"]),
+                "ga_client_id = COALESCE(NULLIF(%s, ''), ga_client_id), "
+                "meta_fbp = COALESCE(NULLIF(%s, ''), meta_fbp), "
+                "meta_fbc = COALESCE(NULLIF(%s, ''), meta_fbc), "
+                "meta_ip = COALESCE(NULLIF(%s, ''), meta_ip), "
+                "meta_user_agent = COALESCE(NULLIF(%s, ''), meta_user_agent) "
+                "WHERE id = %s",
+                (ga_client_id, parse_meta_cookie(body.fbp or ""),
+                 parse_meta_cookie(body.fbc or ""), ip, user_agent,
+                 current_user["id"]),
             )
             conn.commit()
         finally:
