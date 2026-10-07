@@ -12,6 +12,7 @@ import BancaTabs from '../components/BancaTabs'
 import { rotuloDoMercado } from '../utils/marketTranslate'
 import ProfitChart from '../components/ProfitChart'
 import SuggestionDetail from '../components/SuggestionDetail'
+import DetalheDoBilhetePessoal from '../components/jogos/DetalheDoBilhetePessoal'
 import { fmtBRL, fmtSigned, fmtUnits } from '../utils/format'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { TeamLogo } from '../components/TeamLogo'
@@ -22,6 +23,7 @@ import MonthlyCloseSection from '../components/MonthlyCloseSection'
 
 const SOURCE_LBL: Record<string, string> = {
   vip: 'Premium', free: 'Free', multipla: 'Múlt.', bingo: 'Bingo', alavancagem: 'Alav.',
+  pessoal: 'Meu bilhete',
 }
 
 // lock overlay para free
@@ -382,7 +384,9 @@ export default function Banca() {
       </AnimatePresence>
 
       <AnimatePresence>
-      {detailPick && (
+      {detailPick && detailPick.pick_type === 'pessoal' ? (
+        <DetalheDoBilhetePessoal id={detailPick.id} onClose={() => setDetailPick(null)} />
+      ) : detailPick && (
         <SuggestionDetail
           id={detailPick.id}
           pickType={detailPick.pick_type}

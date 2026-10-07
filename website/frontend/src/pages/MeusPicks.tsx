@@ -9,6 +9,7 @@ import api from '../services/api'
 import PageShell from '../components/PageShell'
 import { translateMarket, translateLine } from '../utils/marketTranslate'
 import SuggestionDetail from '../components/SuggestionDetail'
+import DetalheDoBilhetePessoal from '../components/jogos/DetalheDoBilhetePessoal'
 import ProfitChart from '../components/ProfitChart'
 import DiasVerdeVermelho from '../components/DiasVerdeVermelho'
 import { fmtBRL, fmtSigned, taxaAcerto, capitalizarFrase } from '../utils/format'
@@ -23,7 +24,7 @@ import { sinalizarNavegacao } from '../services/progressBus'
 const SOURCE_LBL: Record<string, string> = {
   vip: 'Premium', free: 'Free', multipla: 'Múlt.', bingo: 'Bingo', alavancagem: 'Alav.',
   faltas: 'Faltas', goleiros: 'Defesas', player_stats: 'Jogador', boost: 'Boost',
-  live: 'Ao Vivo',
+  live: 'Ao Vivo', pessoal: 'Meu bilhete',
 }
 
 /* Sub-páginas em aba. `apostas` é a lista de sempre; `pipelines` é a leitura
@@ -319,7 +320,9 @@ export default function MeusPicks() {
       )}
       </AnimatePresence>
       <AnimatePresence>
-      {detailPick && (
+      {detailPick && detailPick.pick_type === 'pessoal' ? (
+        <DetalheDoBilhetePessoal id={detailPick.id} onClose={() => setDetailPick(null)} />
+      ) : detailPick && (
         <SuggestionDetail
           id={detailPick.id}
           pickType={detailPick.pick_type}
