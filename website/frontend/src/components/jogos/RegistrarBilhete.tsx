@@ -4,6 +4,7 @@ import { CheckCircle2, Wallet } from 'lucide-react'
 import api from '../../services/api'
 import { cn } from '../../lib/cn'
 import { limpar, oddCombinada, registraveis, type Selecao } from '../../lib/bilheteMontado'
+import { REGISTRO_MAX_UNIDADES } from '../ApostaModal'
 
 /*
  * Registrar o bilhete montado na banca (2026-10-06, pedido do usuário).
@@ -45,7 +46,7 @@ export default function RegistrarBilhete({ selecoes, onFechar }: {
 
   const unidades = numeroBr(stake)
   const oddNum = numeroBr(odd)
-  const valido = validas.length > 0 && unidades >= 0.5 && unidades <= 20 && oddNum >= 1.01
+  const valido = validas.length > 0 && unidades >= 0.5 && unidades <= REGISTRO_MAX_UNIDADES && oddNum >= 1.01
   const reais = banca?.unit_value ? unidades * banca.unit_value : null
 
   const registrar = async () => {
