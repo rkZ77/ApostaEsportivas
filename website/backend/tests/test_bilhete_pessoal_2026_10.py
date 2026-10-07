@@ -200,3 +200,18 @@ def test_chutes_e_faltas_de_um_time_so():
     assert bp.liquidar_perna(faltas, JOGO, None, False, False)[:2] == ("RED", 13)
     with pytest.raises(bp.PernaInvalida):
         bp.validar_pernas([perna_time(mercado="faltas_time", lado_time="away", periodo="1t")])
+
+
+# ── odd de cada selecao (07/10) ────────────────────────────────────────────
+def test_perna_guarda_a_odd_so_quando_e_odd():
+    assert bp.validar_pernas([{**perna_time(), "odd": "1.85"}])[0]["odd"] == 1.85
+    assert "odd" not in bp.validar_pernas([{**perna_time(), "odd": "abc"}])[0]
+    assert "odd" not in bp.validar_pernas([{**perna_time(), "odd": 0.5}])[0]
+
+
+def test_odd_recalculada_tira_a_perna_anulada():
+    pernas = [{"resultado": "GREEN", "odd": 1.5}, {"resultado": "VOID", "odd": 2.0}]
+    assert bp.odd_recalculada(pernas, 3.0) == 1.5
+    # anulada sem odd: nao da' pra saber, fica a registrada
+    assert bp.odd_recalculada([{"resultado": "VOID"}], 3.0) is None
+    assert bp.odd_recalculada([{"resultado": "GREEN", "odd": 2}], 3.0) is None

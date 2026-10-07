@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useCallback, useMemo, useRef, memo, lazy, Suspense } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef, memo, lazy, Suspense } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { AnimatePresence, m as motion } from 'framer-motion'
 import { toastUp, fadeInUp, staggerContainer, tabFade } from '../lib/motion'
@@ -243,15 +243,15 @@ function TabBar({ tab, setTab, canSeeVip, canSeePro, verAoVivo, verBingo, temFal
     { key: 'hoje',         label: 'Hoje'            },
     /* Sem selo "FREE": o nome da aba já diz. Ver o comentário da marcação
        lá embaixo, no render. */
-    { key: 'pick_seguro',  label: 'Picks Free' },
-    { key: 'vip',          label: 'Picks Premium',       premiumOnly: true },
+    { key: 'pick_seguro',  label: 'Free' },
+    { key: 'vip',          label: 'Premium',       premiumOnly: true },
     {
       /* Pick Boost · combinação fixa (Over 1.5 FT + Under 2.5 HT) em que o
          motor escolhe os JOGOS, não o mercado.
          SEM `premiumOnly`: um pick por dia é gratuito, e uma aba marcada VIP
          que abre com um pick liberado dentro contradiz o próprio selo. O
          restante do dia vem trancado, com o mesmo teaser dos outros. */
-      key: 'boost' as Tab, label: 'Pick Boost',
+      key: 'boost' as Tab, label: 'Boost',
       /* O "NOVO" saiu: o Pick Boost estreou em 28/08/2026 e um selo de
          novidade que ninguém retira vira mobília. Se um produto realmente
          estrear, o selo volta com data pra sair. */
@@ -266,7 +266,7 @@ function TabBar({ tab, setTab, canSeeVip, canSeePro, verAoVivo, verBingo, temFal
          Sem badge próprio · o rótulo já diz o que é, e o selo VIP de
          `premiumOnly` já ocupa esse espaço. Dois selos na mesma aba viram
          ruído numa barra que rola no celular. */
-      key: 'ao_vivo' as Tab, label: 'Picks Ao Vivo',
+      key: 'ao_vivo' as Tab, label: 'Ao Vivo',
       /* `premiumOnly` DE VOLTA (10/09, decisão do usuário).
          De 01/09 até aqui a aba usava badge em vez de cadeado, porque um pick
          por dia era gratuito e cadeado seria mentira. O free do dia acabou: o
@@ -287,7 +287,11 @@ function TabBar({ tab, setTab, canSeeVip, canSeePro, verAoVivo, verBingo, temFal
          Ver `podeVerAoVivo` aqui. */
       oculta: !verAoVivo,
     },
-    { key: 'multiplas',    label: 'Múltiplas',       premiumOnly: true },
+    /* NOMES NO MESMO FORMATO (07/10/2026, pedido do usuário): o nome curto do
+       produto, no singular, sem "Pick(s)" na frente · a página inteira já é de
+       picks. Antes eram quatro formatos na mesma barra ("Picks Free", "Pick
+       Boost", "Múltiplas", "Bingo do Dia"). */
+    { key: 'multiplas',    label: 'Múltipla',        premiumOnly: true },
     /* BINGO DO DIA · aba própria e não uma seção das Múltiplas.
        As duas são cartelas, mas prometem coisas diferentes: a múltipla é a
        MELHOR combinação que o dia permite (2 ou 3 pernas, o tamanho varia com
@@ -299,7 +303,7 @@ function TabBar({ tab, setTab, canSeeVip, canSeePro, verAoVivo, verBingo, temFal
        Ver `bingoVisivel` em config.ts. Liberado pra todos em 12/09, entao a
        aba esta' na barra de todo mundo -- o cadeado de `premiumOnly` e' que
        separa quem assina de quem nao assina, como nos outros produtos VIP. */
-    { key: 'bingo',        label: 'Bingo do Dia',    premiumOnly: true,
+    { key: 'bingo',        label: 'Bingo',    premiumOnly: true,
       oculta: !verBingo },
     { key: 'alavancagem',  label: 'Alavancagem',      premiumOnly: true },
     {
@@ -310,7 +314,7 @@ function TabBar({ tab, setTab, canSeeVip, canSeePro, verAoVivo, verBingo, temFal
          diluia um produto de modelo proprio numa lista de outro.
          O que decide aqui e' o arbitro e o quanto o jogo trava, nao o
          confronto: e' outro modelo, com outra amostra. */
-      key: 'faltas' as Tab, label: 'Pick Falta', premiumOnly: true,
+      key: 'faltas' as Tab, label: 'Falta', premiumOnly: true,
       oculta: !temFaltasHoje,
     },
     {
@@ -320,7 +324,7 @@ function TabBar({ tab, setTab, canSeeVip, canSeePro, verAoVivo, verBingo, temFal
          "Pick Jogador" e nao "Jogadores" (08/09): a barra nomeia PRODUTOS
          (Pick Boost, Pick Falta), e um plural solto lia como uma lista de
          atletas, nao como um pick sobre um deles. */
-      key: 'jogadores' as Tab, label: 'Pick Jogador', premiumOnly: true,
+      key: 'jogadores' as Tab, label: 'Jogador', premiumOnly: true,
     },
     {
       /* O que o usuário decidiu seguir. O contador pulsante continua aqui,
@@ -416,11 +420,8 @@ function TabBar({ tab, setTab, canSeeVip, canSeePro, verAoVivo, verBingo, temFal
                   esta aba é do plano de cima. As de pré-jogo não precisam de
                   selo, porque quem assina qualquer um dos dois já as tem, e
                   quem não assina vê o cadeado. */}
-              {t.proOnly && canSeePro && (
-                <span className="ml-1.5 text-[10px] bg-indigo-400/10 text-indigo-300 border border-indigo-400/20 px-1.5 py-0.5 rounded font-bold">
-                  Pro
-                </span>
-              )}
+              {/* O "Pro" também saiu (07/10/2026, pedido do usuário): quem tem
+                  o Pro já sabe que tem, e quem não tem vê o cadeado roxo. */}
               {/* O cadeado herda a cor do que falta: roxo quando o que falta é
                   o Pro, amarelo quando é a assinatura. Um cadeado amarelo numa
                   aba de selo roxo mandava dois sinais diferentes sobre a mesma
@@ -663,6 +664,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
       fixture_id: dica.fixture_id,
       market_type: dica.market_type,
       line: dica.line,
+      market: dica.market,
     }).then(({ odd }) => setModalOdd(odd))
   }
 

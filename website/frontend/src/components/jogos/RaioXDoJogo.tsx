@@ -11,6 +11,7 @@ import {
   type EstatDeJogador, type Jogador, type JogoDoTime, type Lado, type Periodo, type RaioX, type Taxa,
 } from '../../lib/raioX'
 import { alternar, useBilheteMontado, type Selecao } from '../../lib/bilheteMontado'
+import { oddDaSelecao, vantagem, type OddDaCasa } from '../../lib/oddsDoJogo'
 import Campinho from './Campinho'
 import Classificacao from './Classificacao'
 
@@ -57,6 +58,14 @@ export default function RaioXDoJogo({ jogo }: { jogo: JogoBase }) {
   }
   useEffect(carregar, [jogo.fixture_id])
 
+  /* Odds das casas · pedido à parte e sem travar a tela: sem odd o Raio-X
+     funciona igual, só sem o preço ao lado da taxa. */
+  const [odds, setOdds] = useState<OddDaCasa[]>([])
+  useEffect(() => {
+    setOdds([])
+    api.get(`/fixtures/${jogo.fixture_id}/odds`).then(r => setOdds(r.data?.odds ?? [])).catch(() => {})
+  }, [jogo.fixture_id])
+
   const nomeJogo = `${dados?.fixture.home_team || jogo.home_team || 'Casa'} x ${dados?.fixture.away_team || jogo.away_team || 'Fora'}`
 
   return (
@@ -96,7 +105,7 @@ export default function RaioXDoJogo({ jogo }: { jogo: JogoBase }) {
             <Skeleton className="h-36 w-full" />
           </div>
         ) : aba === 'mercados' ? (
-          <AbaMercados dados={dados} nomeJogo={nomeJogo} />
+          <AbaMercados dados={dados} nomeJogo={nomeJogo} odds={odds} />
         ) : aba === 'jogadores' ? (
           <AbaJogadores dados={dados} nomeJogo={nomeJogo} />
         ) : aba === 'escalacao' ? (
@@ -347,9 +356,31 @@ function BotaoBilhete({ selecao, cheio }: { selecao: Selecao; cheio?: boolean })
   )
 }
 
+/**
+ * "Odd 1.85 · Betano" e o veredito: com valor, justa ou sem valor, pela taxa
+ * dos últimos jogos. A conta é a do tipster (chance × odd − 1) e a tela diz
+ * de onde vem a chance · não é a probabilidade do motor.
+ */
+function LinhaDaOdd({ odd, bateu, n }: { odd: OddDaCasa | null; bateu: number; n: number }) {
+  if (!odd) return null
+  const v = vantagem(bateu, n, odd.odd)
+  const selo = v == null ? null
+    : v >= 0.05 ? { txt: `Valor +${Math.round(v * 100)}%`, cls: 'bg-accent/15 text-accent-ink border-accent/40' }
+    : v > -0.05 ? { txt: 'Odd justa', cls: 'bg-surface-2 text-ink-2 border-line' }
+    : { txt: 'Sem valor', cls: 'bg-red-500/10 text-red-400 border-red-500/30' }
+  return (
+    <div className="mt-3 flex items-center gap-2 flex-wrap text-sm">
+      <span className="text-ink-3">Odd</span>
+      <span className="font-mono font-black text-ink-1 tabular-nums">{odd.odd.toFixed(2)}</span>
+      {odd.casa && <span className="text-ink-3 text-xs">· {odd.casa}</span>}
+      {selo && <span className={cn('ml-auto text-[11px] font-bold px-2 py-0.5 rounded border', selo.cls)}>{selo.txt}</span>}
+    </div>
+  )
+}
+
 /* ── Mercados ───────────────────────────────────────────────────────────── */
 
-function AbaMercados({ dados, nomeJogo }: { dados: RaioX; nomeJogo: string }) {
+function AbaMercados({ dados, nomeJogo, odds }: { dados: RaioX; nomeJogo: string; odds: OddDaCasa[] }) {
   /* Mercado + DE QUEM (os dois somados, ou um time só) · ver MERCADOS_PRINCIPAIS. */
   const [principal, setPrincipal] = useState(MERCADOS_PRINCIPAIS[0].id)
   const [quem, setQuem] = useState<'jogo' | 'home' | 'away'>('jogo')
@@ -394,6 +425,13 @@ function AbaMercados({ dados, nomeJogo }: { dados: RaioX; nomeJogo: string }) {
      Com `grupos`, a série é a soma de duas (os dois times, ou faz + cede), e o
      gráfico se divide em duas metades com escudo e nome · antes eram vinte
      barras seguidas e não dava pra saber de quem era cada uma. */
+  /* A odd da casa pra exatamente esta seleção (mercado, de quem, tempo, linha). */
+  const oddAtual = oddDaSelecao(odds, { mercado: id, quem, periodo, lado, linha })
+  const comOdd = (s: Selecao, bateu: number, n: number, o: OddDaCasa | null): Selecao => ({
+    ...s, bateu, n,
+    ...(o ? { odd: o.odd, casa: o.casa, perna: s.perna ? { ...s.perna, odd: o.odd } : s.perna } : {}),
+  })
+
   const Quadro = ({ titulo, sub, teamId, nomeTime, valores, rotulos, grupos, selecao, destaque }: {
     titulo: string; sub: string; teamId?: number; nomeTime?: string
     valores: Array<number | null>; rotulos?: string[]; grupos?: Grupo[]
@@ -434,7 +472,10 @@ function AbaMercados({ dados, nomeJogo }: { dados: RaioX; nomeJogo: string }) {
           <Barras valores={valores} rotulos={rotulos} linha={linha} lado={lado} />
         )}
         {selecao && destaque && (
-          <div className="mt-3"><BotaoBilhete cheio selecao={{ ...selecao, bateu: t.bateu, n: t.n }} /></div>
+          <>
+            <LinhaDaOdd odd={oddAtual} bateu={t.bateu} n={t.n} />
+            <div className="mt-3"><BotaoBilhete cheio selecao={comOdd(selecao, t.bateu, t.n, oddAtual)} /></div>
+          </>
         )}
       </div>
     )
@@ -567,12 +608,13 @@ function AbaMercados({ dados, nomeJogo }: { dados: RaioX; nomeJogo: string }) {
               <div className="text-base font-bold text-ink-1 mt-0.5">Ambas marcam · Sim</div>
             </div>
             <NumeroDaTaxa t={btts} />
-            <BotaoBilhete selecao={{
+            <BotaoBilhete selecao={comOdd({
               id: `${f.fixture_id}:btts`, fixture_id: f.fixture_id, jogo: nomeJogo,
               descricao: 'Ambas marcam · Sim', bateu: btts.bateu, n: btts.n,
               perna: { ...base, descricao: 'Ambas marcam · Sim', tipo: 'time', mercado: 'btts' },
-            }} />
+            }, btts.bateu, btts.n, oddDaSelecao(odds, { mercado: 'btts', quem: 'jogo', periodo: 'total' }))} />
           </div>
+          <LinhaDaOdd odd={oddDaSelecao(odds, { mercado: 'btts', quem: 'jogo', periodo: 'total' })} bateu={btts.bateu} n={btts.n} />
         </div>
       )}
     </div>
