@@ -1,17 +1,18 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Check, Flag, Minus, Plus, Shield, Users } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Check, ChevronLeft, ChevronRight, Flag, Minus, Plus, Shield, Users } from 'lucide-react'
 import api from '../../services/api'
 import { cn } from '../../lib/cn'
 import { ErrorState, Skeleton } from '../ui'
 import { LeagueLogo, PaisDaLigaTag, PlayerPhoto, TeamLogo } from '../TeamLogo'
 import { nomeDaLigaPt, rotuloDaRodada } from '../../lib/paisDaLiga'
 import {
-  ambasMarcam, comPeriodo, ehGoleiro, ESTATS_DE_JOGADOR, fraseDoJogador, MERCADOS_DE_TIME, numero,
+  ambasMarcam, comPeriodo, ehGoleiro, ESTATS_DE_JOGADOR, fraseDoJogador, MERCADOS_DE_TIME, MERCADOS_PRINCIPAIS, numero,
   resultadoDoJogo, ROTULO_PERIODO, rotuloDaLinha, taxa, taxaDoJogador, tomDaTaxa,
   type EstatDeJogador, type Jogador, type JogoDoTime, type Lado, type Periodo, type RaioX, type Taxa,
 } from '../../lib/raioX'
 import { alternar, useBilheteMontado, type Selecao } from '../../lib/bilheteMontado'
 import Campinho from './Campinho'
+import Classificacao from './Classificacao'
 
 /*
  * Raio-X do jogo (2026-10-06) · o lugar de pesquisar antes de montar bilhete.
@@ -24,7 +25,7 @@ import Campinho from './Campinho'
  * A conta (linha, taxa, média) é toda de lib/raioX.ts · aqui é só desenho.
  */
 
-type Aba = 'mercados' | 'jogadores' | 'escalacao' | 'confronto' | 'forma'
+type Aba = 'mercados' | 'jogadores' | 'escalacao' | 'tabela' | 'confronto' | 'forma'
 
 export interface JogoBase {
   fixture_id: number
@@ -65,14 +66,17 @@ export default function RaioXDoJogo({ jogo }: { jogo: JogoBase }) {
       {/* Abas fixas ao rolar · no celular a lista de jogadores é longa e a
           troca de aba não pode exigir voltar ao topo. */}
       <div className="sticky top-0 z-20 -mx-4 px-4 sm:mx-0 sm:px-0 bg-surface-0/95 backdrop-blur border-b border-line">
-        <div className="flex overflow-x-auto scrollbar-none" role="tablist">
+        {/* Seis abas não cabem numa linha de celular, e aba escondida fora da
+            tela é aba que ninguém descobre: no celular viram 3 x 2, todas à
+            vista; do tablet pra cima, uma linha só. */}
+        <div className="grid grid-cols-3 sm:flex" role="tablist">
           {([
-            ['mercados', 'Mercados'], ['jogadores', 'Jogadores'], ['escalacao', 'Escalação'],
+            ['mercados', 'Mercados'], ['jogadores', 'Jogadores'], ['escalacao', 'Escalação'], ['tabela', 'Tabela'],
             ['confronto', 'Confronto'], ['forma', 'Forma'],
           ] as [Aba, string][]).map(([k, rotulo]) => (
             <button key={k} role="tab" aria-selected={aba === k} onClick={() => setAba(k)}
               className={cn(
-                'relative flex-1 min-w-[88px] h-12 text-sm font-bold transition-colors',
+                'relative sm:flex-1 h-11 sm:h-12 px-1 text-sm font-bold transition-colors whitespace-nowrap',
                 aba === k ? 'text-ink-1' : 'text-ink-3 hover:text-ink-2',
               )}>
               {rotulo}
@@ -101,6 +105,9 @@ export default function RaioXDoJogo({ jogo }: { jogo: JogoBase }) {
           <Campinho fixtureId={dados.fixture.fixture_id}
             homeId={dados.fixture.home_team_id} awayId={dados.fixture.away_team_id}
             homeNome={dados.fixture.home_team} awayNome={dados.fixture.away_team} />
+        ) : aba === 'tabela' ? (
+          <Classificacao fixtureId={dados.fixture.fixture_id} leagueId={dados.fixture.league_id}
+            homeId={dados.fixture.home_team_id} awayId={dados.fixture.away_team_id} />
         ) : aba === 'confronto' ? (
           <AbaConfronto dados={dados} />
         ) : (
@@ -180,22 +187,70 @@ export function FormaPontos({ forma, tamanho = 'md' }: { forma: string[]; tamanh
 
 /* ── Peças comuns ───────────────────────────────────────────────────────── */
 
+/*
+ * Fileira de opções (2026-10-07, pedido do usuário: "fica ruim de ver, não tem
+ * botão pra ir pro lado").
+ *
+ * COMPUTADOR: quebra em linhas, tudo à vista · lá não se arrasta com o dedo,
+ * e uma fileira cortada escondia "Cartões do time" sem aviso nenhum.
+ * CELULAR: continua deslizando (uma linha só poupa a altura da tela), mas com
+ * seta e esmaecido na ponta que ainda tem opção escondida, e a opção escolhida
+ * rola pra dentro da tela sozinha.
+ */
 function Chips<T extends string>({ opcoes, valor, onChange }: {
   opcoes: Array<{ id: T; rotulo: string }>; valor: T; onChange: (v: T) => void
 }) {
+  const trilho = useRef<HTMLDivElement>(null)
+  const [sobra, setSobra] = useState({ esq: false, dir: false })
+
+  const medir = () => {
+    const el = trilho.current
+    if (!el) return
+    setSobra({ esq: el.scrollLeft > 4, dir: el.scrollLeft + el.clientWidth < el.scrollWidth - 4 })
+  }
+  useEffect(() => {
+    medir()
+    window.addEventListener('resize', medir)
+    return () => window.removeEventListener('resize', medir)
+  }, [opcoes.length])
+  useEffect(() => {
+    trilho.current?.querySelector<HTMLElement>('[aria-pressed="true"]')
+      ?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
+  }, [valor])
+
+  const rolar = (dir: 1 | -1) =>
+    trilho.current?.scrollBy({ left: dir * trilho.current.clientWidth * 0.7, behavior: 'smooth' })
+
+  const seta = 'md:hidden absolute top-0 z-10 h-10 w-10 grid place-items-center rounded-full bg-surface-2 border border-line-strong text-ink-1 shadow-elev-sm'
   return (
-    <div className="-mx-4 px-4 sm:mx-0 sm:px-0 flex gap-2 overflow-x-auto scrollbar-none pb-1">
-      {opcoes.map(o => (
-        <button key={o.id} onClick={() => onChange(o.id)}
-          className={cn(
-            'shrink-0 h-10 px-4 rounded-full text-sm font-semibold border transition-colors',
-            valor === o.id
-              ? 'bg-accent text-on-fill border-accent'
-              : 'bg-surface-1 text-ink-2 border-line hover:border-line-strong',
-          )}>
-          {o.rotulo}
-        </button>
-      ))}
+    <div className="relative">
+      <div ref={trilho} onScroll={medir}
+        className="-mx-4 px-4 sm:mx-0 sm:px-0 flex gap-2 overflow-x-auto scrollbar-none pb-1
+                   md:flex-wrap md:overflow-visible">
+        {opcoes.map(o => (
+          <button key={o.id} onClick={() => onChange(o.id)} aria-pressed={valor === o.id}
+            className={cn(
+              'shrink-0 h-10 px-4 rounded-full text-sm font-semibold border transition-colors',
+              valor === o.id
+                ? 'bg-accent text-on-fill border-accent'
+                : 'bg-surface-1 text-ink-2 border-line hover:border-line-strong',
+            )}>
+            {o.rotulo}
+          </button>
+        ))}
+      </div>
+      {sobra.esq && (
+        <>
+          <div aria-hidden className="md:hidden pointer-events-none absolute left-0 top-0 h-10 w-12 bg-gradient-to-r from-surface-0 to-transparent" />
+          <button className={cn(seta, 'left-0')} onClick={() => rolar(-1)} aria-label="Ver opções anteriores"><ChevronLeft size={18} /></button>
+        </>
+      )}
+      {sobra.dir && (
+        <>
+          <div aria-hidden className="md:hidden pointer-events-none absolute right-0 top-0 h-10 w-12 bg-gradient-to-l from-surface-0 to-transparent" />
+          <button className={cn(seta, 'right-0')} onClick={() => rolar(1)} aria-label="Ver mais opções"><ChevronRight size={18} /></button>
+        </>
+      )}
     </div>
   )
 }
@@ -295,7 +350,11 @@ function BotaoBilhete({ selecao, cheio }: { selecao: Selecao; cheio?: boolean })
 /* ── Mercados ───────────────────────────────────────────────────────────── */
 
 function AbaMercados({ dados, nomeJogo }: { dados: RaioX; nomeJogo: string }) {
-  const [id, setId] = useState(MERCADOS_DE_TIME[0].id)
+  /* Mercado + DE QUEM (os dois somados, ou um time só) · ver MERCADOS_PRINCIPAIS. */
+  const [principal, setPrincipal] = useState(MERCADOS_PRINCIPAIS[0].id)
+  const [quem, setQuem] = useState<'jogo' | 'home' | 'away'>('jogo')
+  const par = MERCADOS_PRINCIPAIS.find(p => p.id === principal)!
+  const id = quem === 'jogo' ? par.jogo : par.time
   const mercado = MERCADOS_DE_TIME.find(m => m.id === id)!
   const [periodoEscolhido, setPeriodo] = useState<Periodo>('total')
   /* Faltas só existem no jogo todo · o seletor fica, desligado, e a conta
@@ -303,7 +362,7 @@ function AbaMercados({ dados, nomeJogo }: { dados: RaioX; nomeJogo: string }) {
   const periodo: Periodo = mercado.soTotal ? 'total' : periodoEscolhido
   const [linhas, setLinhas] = useState<Record<string, number>>({})
   const [lado, setLado] = useState<Lado>('mais')
-  const [timeFoco, setTimeFoco] = useState<'home' | 'away'>('home')
+  const timeFoco: 'home' | 'away' = quem === 'away' ? 'away' : 'home'
   const chaveLinha = `${id}:${periodo}`
   const linha = linhas[chaveLinha] ?? (periodo === 'total' ? mercado.linhaPadrao : mercado.linhaPadraoTempo)
   const mudarLinha = (d: number) => setLinhas(l => ({ ...l, [chaveLinha]: Math.max(0.5, linha + d) }))
@@ -432,20 +491,6 @@ function AbaMercados({ dados, nomeJogo }: { dados: RaioX; nomeJogo: string }) {
     }
     return (
       <>
-        <div className="grid grid-cols-2 gap-2">
-          {(['home', 'away'] as const).map(t => {
-            const tid = t === 'home' ? f.home_team_id : f.away_team_id
-            const nome = t === 'home' ? f.home_team : f.away_team
-            return (
-              <button key={t} onClick={() => setTimeFoco(t)}
-                className={cn('h-12 rounded-lg border flex items-center justify-center gap-2 px-2 text-sm font-bold transition-colors min-w-0',
-                  timeFoco === t ? 'bg-surface-2 border-line-strong text-ink-1' : 'bg-surface-1 border-line text-ink-3')}>
-                <TeamLogo id={tid} name={nome} size={22} />
-                <span className="truncate">{nome}</span>
-              </button>
-            )
-          })}
-        </div>
         <Quadro destaque titulo="No confronto" sub={`${nomeTime} faz + ${nomeAdv} cede`}
           valores={[...faz, ...cede]} selecao={selecao}
           grupos={[
@@ -462,9 +507,24 @@ function AbaMercados({ dados, nomeJogo }: { dados: RaioX; nomeJogo: string }) {
 
   return (
     <div className="space-y-3">
-      <Chips opcoes={MERCADOS_DE_TIME.map(m => ({ id: m.id, rotulo: m.rotulo }))} valor={id} onChange={setId} />
+      <Chips opcoes={MERCADOS_PRINCIPAIS.map(m => ({ id: m.id, rotulo: m.rotulo }))} valor={principal} onChange={setPrincipal} />
 
       <div className="card p-3 space-y-3">
+        {/* DE QUEM: os dois times somados, ou um só (faz x cede). */}
+        <div className="grid grid-cols-3 rounded-lg border border-line p-0.5 bg-surface-1">
+          {([
+            ['jogo', 'Os dois', null],
+            ['home', f.home_team, f.home_team_id],
+            ['away', f.away_team, f.away_team_id],
+          ] as const).map(([k, rotulo, tid]) => (
+            <button key={k} onClick={() => setQuem(k)} aria-pressed={quem === k}
+              className={cn('h-10 rounded-md text-sm font-bold transition-colors flex items-center justify-center gap-1.5 px-1 min-w-0',
+                quem === k ? 'bg-surface-3 text-ink-1' : 'text-ink-3')}>
+              {tid != null && <TeamLogo id={tid} name={rotulo} size={18} />}
+              <span className="truncate">{rotulo}</span>
+            </button>
+          ))}
+        </div>
         {/* Tempo do jogo · 1º e 2º tempo saem da folha do 1º tempo. */}
         <div className="grid grid-cols-3 rounded-lg border border-line p-0.5 bg-surface-1">
           {(['total', '1t', '2t'] as Periodo[]).map(p => (

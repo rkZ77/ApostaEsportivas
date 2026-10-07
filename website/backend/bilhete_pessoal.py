@@ -45,6 +45,9 @@ _MERCADOS_TIME = {
     "gols_time": ("time", "goals"),
     "escanteios_time": ("time", "corners"),
     "cartoes_time": ("time", "yellow_cards"),
+    # Desde 07/10 todo mercado tem o recorte "de quem" (os dois, casa, fora).
+    "chutes_alvo_time": ("time", "shots_on"),
+    "faltas_time": ("time", "fouls"),
 }
 #: Coluna do 1o tempo de cada contador (folha do 1o tempo). Faltas nao tem: o
 #: provedor so' publica o total, entao mercado de faltas so' existe no jogo

@@ -116,3 +116,39 @@ def test_oficial_completa_nunca_mais_e_pedida(monkeypatch):
     monkeypatch.setattr(esc, "TTL_DESFALQUES", 0)
     esc.escalacao_do_jogo(Cur(), 556, 10, 20)
     assert chamadas.count("fixtures/lineups") == 1
+
+
+# ── classificacao ──────────────────────────────────────────────────────────
+def test_classificacao_le_a_temporada_mais_recente_da_liga_do_jogo(monkeypatch):
+    import cache_publico
+    import routers.fixtures as fx
+    cache_publico.invalidar()
+    feitas = []
+
+    class C:
+        def __init__(self):
+            self._r = []
+
+        def execute(self, sql, params=None):
+            feitas.append((sql, params))
+            if "FROM fixtures" in sql:
+                self._r = [{"league_id": 71}]
+            elif "FROM league_standings" in sql:
+                self._r = [{"group_name": None, "team_id": 127, "team_name": "Flamengo", "rank": 1, "points": 60}]
+
+        def fetchone(self):
+            return self._r[0] if self._r else None
+
+        def fetchall(self):
+            return self._r
+
+        def close(self):
+            pass
+
+    cur = C()
+    monkeypatch.setattr(fx, "get_connection", lambda: type("K", (), {"cursor": lambda s: cur, "close": lambda s: None})())
+    r = fx.get_classificacao(555, current_user={}, league=None)
+    assert r["league_id"] == 71 and r["linhas"][0]["team_name"] == "Flamengo"
+    sql, params = next(f for f in feitas if "league_standings" in f[0])
+    assert "MAX(season)" in sql and params == (71, 71)
+    cache_publico.invalidar()

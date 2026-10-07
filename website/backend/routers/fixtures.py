@@ -732,6 +732,47 @@ def get_escalacao(
         cur.close(); conn.close()
 
 
+@router.get("/{fixture_id}/classificacao")
+def get_classificacao(
+    fixture_id: int,
+    current_user: dict = Depends(get_current_user),
+    league: Optional[int] = Query(None),
+):
+    """A tabela da liga do jogo (2026-10-07, pedido do usuario).
+
+    Le' `league_standings`, que a coleta de classificacao refaz inteira a cada
+    passada (geral, casa e fora). So' banco · e muda uma vez por rodada, entao
+    10 minutos de cache nao escondem nada. Liga de grupos volta separada por
+    `grupo`, na ordem da posicao.
+    """
+    def montar():
+        conn = get_connection()
+        cur = conn.cursor()
+        try:
+            liga = league
+            if not liga:
+                cur.execute("SELECT league_id FROM fixtures WHERE fixture_id = %s", (fixture_id,))
+                linha = cur.fetchone()
+                liga = linha["league_id"] if linha else None
+            if not liga:
+                raise HTTPException(404, "Liga do jogo nao encontrada")
+            cur.execute("""
+                SELECT group_name, team_id, team_name, rank, points, goals_diff, form,
+                       description, played, win, draw, lose, goals_for, goals_against,
+                       home_played, home_win, home_draw, home_lose, home_goals_for, home_goals_against,
+                       away_played, away_win, away_draw, away_lose, away_goals_for, away_goals_against
+                  FROM league_standings
+                 WHERE league_id = %s
+                   AND season = (SELECT MAX(season) FROM league_standings WHERE league_id = %s)
+                 ORDER BY group_name NULLS FIRST, rank
+            """, (liga, liga))
+            return {"league_id": liga, "linhas": [dict(r) for r in cur.fetchall()]}
+        finally:
+            cur.close(); conn.close()
+
+    return cache_publico.obter(f"classificacao:{fixture_id}:{league}", 600, montar)
+
+
 def _montar_raio_x(fixture_id: int, home, away, league, n: int) -> dict:
     """Sete consultas numa conexao so', todas em indice · ver cada helper."""
     conn = get_connection()
