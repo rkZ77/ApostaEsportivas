@@ -43,8 +43,9 @@ GA_ENDPOINT       = "https://www.google-analytics.com/mp/collect"
 # só o Purchase, pelo mesmo motivo do purchase do GA (ver docstring do módulo).
 # O token da API de Conversões nasce dentro de UM pixel no Gerenciador de
 # Eventos. O site tem dois (ver index.html); a variável aceita lista separada
-# por vírgula, mas só vale incluir pixel a que o token tem acesso.
-META_PIXEL_IDS     = [p.strip() for p in os.getenv("META_PIXEL_ID", "1059298736832153").split(",") if p.strip()]
+# por vírgula, mas só vale incluir pixel a que o token tem acesso. O padrão é
+# o pixel onde o token foi gerado (2026-10-07).
+META_PIXEL_IDS     = [p.strip() for p in os.getenv("META_PIXEL_ID", "4622246931353146").split(",") if p.strip()]
 META_CAPI_TOKEN    = os.getenv("META_CAPI_TOKEN", "")
 META_GRAPH_VERSION = os.getenv("META_GRAPH_VERSION", "v24.0")
 
