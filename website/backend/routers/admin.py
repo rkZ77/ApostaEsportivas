@@ -805,6 +805,13 @@ async def _run_tudo():
     # e' pior que log nenhum, porque parece progresso.
     _pipeline_logs["tudo"] = _LogBuffer()
     total = len(_TUDO_STEPS)
+    # ETAPA QUE FALHA NAO PARA AS OUTRAS (2026-10-07). Ate' aqui o primeiro erro
+    # dava `return`: em 07/10 o Dica quebrou (TypeError na explicacao) e VIP,
+    # multipla, bingo, alavancagem, faltas, jogador, Pick Boost e RESULTADOS
+    # nao rodaram -- nem o aviso de picks publicados saiu. `main.py tudo` ja'
+    # seguia adiante desde 02/08 pelo mesmo motivo; o botao do painel, que e'
+    # o caminho que de fato roda em producao, tinha ficado de fora.
+    falhas: list = []
     for i, cmd in enumerate(_TUDO_STEPS, start=1):
         script = os.path.join(_PIPELINE_DIR, _PIPELINE_SCRIPTS[cmd])
         _pipeline_status["tudo"]["log"] = f"Rodando {cmd}..."
@@ -813,11 +820,29 @@ async def _run_tudo():
         await _run_and_track(cmd, script, args=_PIPELINE_ARGS.get(cmd),
                              espelhar_em="tudo")
         if _pipeline_status[cmd]["status"] == "error":
-            err = _pipeline_status[cmd].get("error") or _pipeline_status[cmd].get("log") or ""
-            _pipeline_status["tudo"] = {"status": "error", "started_at": started, "finished_at": now(), "returncode": -1, "error": f"Falhou em '{cmd}': {err[:300]}"}
-            return
-    _pipeline_status["tudo"] = {"status": "ok", "started_at": started, "finished_at": now(), "returncode": 0, "log": "Pipeline completo!", "error": None}
-    _notificar_picks_publicados()
+            falhas.append(cmd)
+            _pipeline_logs["tudo"].append(f"! Etapa {cmd} FALHOU · seguindo para a próxima")
+    if falhas:
+        _pipeline_status["tudo"] = {"status": "error", "started_at": started, "finished_at": now(), "returncode": -1,
+                                    "log": f"Pipeline concluído com {len(falhas)} etapa(s) com falha",
+                                    "error": _resumo_das_falhas(falhas)}
+    else:
+        _pipeline_status["tudo"] = {"status": "ok", "started_at": started, "finished_at": now(), "returncode": 0, "log": "Pipeline completo!", "error": None}
+    # Avisa quando ALGUM gerador publicou · um motor quebrado nao pode calar o
+    # aviso dos que gravaram picks.
+    if any(c.startswith("gerar_") and c not in falhas for c in _TUDO_STEPS):
+        _notificar_picks_publicados()
+
+
+def _resumo_das_falhas(falhas: list) -> str:
+    """'Falhou em ...' com o rabo do erro de cada etapa, no tamanho que o painel mostra."""
+    partes = []
+    for cmd in falhas:
+        st = _pipeline_status.get(cmd) or {}
+        err = (st.get("error") or st.get("log") or "").strip()
+        ultima = err.splitlines()[-1] if err else ""
+        partes.append(f"'{cmd}': {ultima[:200]}")
+    return "Falhou em " + " | ".join(partes)
 
 
 def _notificar_picks_publicados():
@@ -895,15 +920,20 @@ async def _run_dev_pipeline():
     now = lambda: datetime.now(timezone.utc).strftime("%H:%M:%S")
     started = now()
     _pipeline_status["dev_tudo"] = {"status": "running", "started_at": started, "finished_at": None, "returncode": None, "error": None, "log": "Iniciando..."}
+    # Mesma regra do _run_tudo: uma etapa que falha nao para as outras.
+    falhas: list = []
     for cmd in _DEV_PIPELINE_STEPS:
         script = os.path.join(_PIPELINE_DIR, _PIPELINE_SCRIPTS[cmd])
         _pipeline_status["dev_tudo"]["log"] = f"Rodando {cmd}..."
         await _run_and_track(cmd, script, args=_PIPELINE_ARGS.get(cmd))
         if _pipeline_status[cmd]["status"] == "error":
-            err = _pipeline_status[cmd].get("error") or _pipeline_status[cmd].get("log") or ""
-            _pipeline_status["dev_tudo"] = {"status": "error", "started_at": started, "finished_at": now(), "returncode": -1, "error": f"Falhou em '{cmd}': {err[:300]}"}
-            return
-    _pipeline_status["dev_tudo"] = {"status": "ok", "started_at": started, "finished_at": now(), "returncode": 0, "log": "Pipeline DEV completo!", "error": None}
+            falhas.append(cmd)
+    if falhas:
+        _pipeline_status["dev_tudo"] = {"status": "error", "started_at": started, "finished_at": now(), "returncode": -1,
+                                        "log": f"Pipeline DEV concluído com {len(falhas)} etapa(s) com falha",
+                                        "error": _resumo_das_falhas(falhas)}
+    else:
+        _pipeline_status["dev_tudo"] = {"status": "ok", "started_at": started, "finished_at": now(), "returncode": 0, "log": "Pipeline DEV completo!", "error": None}
 
 
 @router.get("/db-pool")
