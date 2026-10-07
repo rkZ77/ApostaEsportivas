@@ -49,6 +49,13 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         # que a tabela payments -- de qual canal veio quem paga -- fica sem
         # resposta. Ver analytics.py.
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS ga_client_id VARCHAR(50);")
+        # O mesmo pra API de Conversoes do Meta: cookies do pixel, IP e user
+        # agent do clique em "assinar". Sao o que liga a venda aprovada horas
+        # depois (PIX) ao clique no anuncio. Ver analytics.send_meta_purchase.
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS meta_fbp VARCHAR(100);")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS meta_fbc VARCHAR(600);")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS meta_ip VARCHAR(64);")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS meta_user_agent VARCHAR(500);")
         # Consentimento pra WhatsApp. Separado do telefone de proposito: o
         # `phone` foi coletado no cadastro pra CONTA, nao pra marketing, e
         # disparar pra base inteira sem opt-in explicito e o caminho mais curto

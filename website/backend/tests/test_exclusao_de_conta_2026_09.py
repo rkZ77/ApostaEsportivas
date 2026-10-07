@@ -186,7 +186,8 @@ def _update_de_users(cur):
 
 @pytest.mark.parametrize("campo", [
     "name", "email", "username", "phone", "cpf", "google_sub",
-    "avatar_url", "ga_client_id", "password_hash", "pending_password_hash",
+    "avatar_url", "ga_client_id", "meta_fbp", "meta_fbc", "meta_ip",
+    "meta_user_agent", "password_hash", "pending_password_hash",
     "reset_token", "email_verification_token", "referral_code",
 ])
 def test_cada_campo_identificavel_e_limpo(banco, campo):
