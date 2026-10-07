@@ -29,8 +29,10 @@ minimo" e' limiar). `analisados` zero passou a significar so' uma coisa:
 nenhum jogo de hoje tinha odds coletadas.
 """
 import json
+import re
 import textwrap
 import traceback
+from collections import Counter
 
 from services.engine_audit import EngineRun
 from services.match_stats_service import MatchStatsService
@@ -832,6 +834,30 @@ def _dados_da_auditoria(c: dict, motivo: str | None) -> dict:
     }
 
 
+def _funil(slug: str, sem_candidato: list, fixtures_com_candidato: set,
+           descartados: list, excedentes: int, salvos: int) -> str:
+    """Uma linha com ONDE os candidatos do metodo morreram (2026-10-07).
+
+    "Nenhum pick aprovado" sozinho nao diz se faltou mercado na casa, jogador
+    na base ou probabilidade -- e o usuario passou dias sem pick de jogador sem
+    ter como saber qual. A auditoria por candidato ja' vai pro banco; isto e' o
+    resumo que aparece no log do painel. Numeros saem do motivo pra agrupar
+    ("probabilidade 55%" e "probabilidade 58%" sao o mesmo corte).
+    """
+    contagem = Counter()
+    for fixture, motivos in sem_candidato:
+        motivo = motivos.get(slug)
+        if motivo and fixture["fixture_id"] not in fixtures_com_candidato:
+            contagem[f"jogo: {motivo}"] += 1
+    for _c, motivo in descartados:
+        sem_numero = re.sub(r"\s*\(.*?\)|[-+]?\d+(?:[.,]\d+)?%?", "", motivo or "sem motivo")
+        contagem[" ".join(sem_numero.split())] += 1
+    if excedentes:
+        contagem["fora do teto da rodada"] += excedentes
+    partes = " | ".join(f"{m}: {n}" for m, n in contagem.most_common()) or "nada avaliado"
+    return f"[PLAYER_STATS/{slug}] Funil · salvos {salvos} · {partes}"
+
+
 def run_player_stats_engine(metodos: tuple | None = None):
     """Uma execucao POR METODO -- a auditoria e' por motor+metodo.
 
@@ -1010,6 +1036,8 @@ def run_player_stats_engine(metodos: tuple | None = None):
             if not salvos:
                 print(f"[PLAYER_STATS/{metodo.slug}] {MOTIVO_NENHUM_APROVADO} "
                       f"({len(candidatos)} candidato(s) avaliados).")
+            print(_funil(metodo.slug, sem_candidato, fixtures_com_candidato,
+                         reprovados + repetidos, len(excedentes), salvos))
 
     cur.close()
     conn.close()

@@ -49,9 +49,71 @@ _LEAGUE_PRIORITY = {
 }
 
 
-def _has_today_dica(cur) -> bool:
-    cur.execute(f"SELECT COUNT(*) FROM picks_free WHERE match_date = {HOJE_BR}")
-    return cur.fetchone()[0] >= 1
+#: MAIS DE UMA FREE NUM DIA CHEIO (2026-10-07, pedido do usuario).
+#:
+#: De 05/09 ate' aqui a Free era UMA por dia por decisao de produto ("a
+#: vitrine diaria"). O usuario reabriu: num dia com muito jogo, uma so' deixa
+#: pick bom na mesa. A moeda e' a mesma da multipla -- jogos com pelo menos um
+#: candidato APROVADO no DICA_CONFIG, nao jogos do calendario --, mas com piso
+#: mais alto, porque a Free continua sendo a isca do VIP e nao pode virar um
+#: segundo VIP de graca. Nunca repete jogo: uma Free por partida.
+#: (piso de jogos com candidato aprovado, quantas Free o dia pode ter)
+FREE_POR_JOGOS = ((16, 3), (8, 2), (1, 1))
+MAX_FREE_POR_DIA = max(teto for _piso, teto in FREE_POR_JOGOS)
+
+
+def teto_de_free(jogos_com_aprovado: int) -> int:
+    """Quantas Free o dia PODE publicar -- nunca quantas deve."""
+    for piso, teto in FREE_POR_JOGOS:
+        if jogos_com_aprovado >= piso:
+            return teto
+    return 0
+
+
+def _garantir_esquema(cur):
+    """Tira a unicidade de `match_date` e poe a de (dia, jogo) no lugar.
+
+    `picks_free` nasceu com UMA linha por dia garantida pelo banco, e o INSERT
+    usava `ON CONFLICT (match_date) DO UPDATE` -- a segunda Free do dia
+    SOBRESCREVERIA a primeira em silencio. Mesmo defeito que a alavancagem
+    teve em 15/09 com MAX_CAMINHOS_POR_DIA. O nome da constraint nao e'
+    garantido (tabela criada a mao ha' meses), entao procura pelo que ela e':
+    UNIQUE so' em match_date.
+    """
+    cur.execute("""
+        DO $$
+        DECLARE r record;
+        BEGIN
+            FOR r IN
+                SELECT c.conname FROM pg_constraint c
+                 WHERE c.conrelid = 'picks_free'::regclass AND c.contype IN ('u', 'p')
+                   AND c.conkey = ARRAY[(SELECT attnum FROM pg_attribute
+                                          WHERE attrelid = 'picks_free'::regclass
+                                            AND attname = 'match_date')]::smallint[]
+            LOOP
+                EXECUTE format('ALTER TABLE picks_free DROP CONSTRAINT %I', r.conname);
+            END LOOP;
+            FOR r IN
+                SELECT i.indexrelid::regclass::text AS nome FROM pg_index i
+                 WHERE i.indrelid = 'picks_free'::regclass AND i.indisunique
+                   AND NOT i.indisprimary
+                   AND i.indkey::text = (SELECT attnum::text FROM pg_attribute
+                                          WHERE attrelid = 'picks_free'::regclass
+                                            AND attname = 'match_date')
+            LOOP
+                EXECUTE format('DROP INDEX IF EXISTS %s', r.nome);
+            END LOOP;
+        END $$;
+    """)
+    cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS picks_free_dia_jogo "
+                "ON picks_free (match_date, fixture_id)")
+
+
+def _frees_de_hoje(cur) -> set:
+    """Jogos que ja' tem Free hoje · o teto e' por DIA e nao por execucao,
+    senao rodar o motor duas vezes dobraria a vitrine."""
+    cur.execute(f"SELECT fixture_id FROM picks_free WHERE match_date = {HOJE_BR}")
+    return {r[0] for r in cur.fetchall()}
 
 
 def _picks_vip_de_hoje(cur) -> set:
@@ -151,11 +213,11 @@ def _load_history(match_stats: MatchStatsService, team_id: int, season: int, lea
     return match_stats.get_all_matches_full(team_id, season, league_id, since_date=since_date)
 
 
-def _best_candidate_across_fixtures(fixtures: list,
-                                    picks_vip: set | None = None) -> tuple | None:
-    """Roda o motor pra cada fixture candidato e devolve (fixture, pick,
-    data_quality_score) do maior Score Final entre os que passam DICA_CONFIG,
-    ou None se nenhum passar.
+def _melhores_por_jogo(fixtures: list, picks_vip: set | None = None) -> list:
+    """Roda o motor pra cada fixture candidato e devolve o melhor pick DE CADA
+    JOGO que passa DICA_CONFIG, como [(final_score, fixture, pick,
+    data_quality_score)] do maior Score Final pro menor. Lista vazia se nenhum
+    passar. O tamanho da lista e' a moeda do teto (`teto_de_free`).
 
     Desde 2026-09-02 a DICA_CONFIG e' a mesma regua do VIP -- a Free deixou de
     ter limiar proprio (o `min_confidence` de 0.72 saiu) e passa a buscar o
@@ -173,9 +235,9 @@ def _best_candidate_across_fixtures(fixtures: list,
     referee_service = RefereeStatsService()
     standings_service = StandingsService()
 
-    # Maior final_score ate agora. Era uma tupla (nivel, -final_score) enquanto
-    # existia a escada da exclusividade; hoje o criterio e' um so.
-    melhor = None
+    # O melhor de CADA jogo · desde 07/10 o dia pode publicar mais de uma Free,
+    # e nunca duas no mesmo jogo.
+    por_jogo: list = []
 
     for fixture in fixtures:
         structured_odds = odds_service.load_odds_structured(fixture["fixture_id"])
@@ -277,6 +339,7 @@ def _best_candidate_across_fixtures(fixtures: list,
         # se o melhor do jogo for justamente o que o VIP ja publicou identico,
         # o segundo colocado do mesmo jogo continua valendo.
         aceitos = 0
+        melhor = None
         for p in picks:
             if _repete_pick_do_vip(p, fixture["fixture_id"], picks_vip):
                 continue
@@ -299,12 +362,11 @@ def _best_candidate_across_fixtures(fixtures: list,
         if aceitos == 0:
             print(f"[DICA_ENGINE] Fixture {fixture['fixture_id']}: os {len(picks)} candidato(s) "
                   f"aprovados no DICA_CONFIG repetiriam o pick que o VIP ja publicou neste jogo.")
+        if melhor is not None:
+            por_jogo.append(melhor)
 
-    if melhor is None:
-        return None
-
-    _, fixture, pick, quality_score = melhor
-    return fixture, pick, quality_score
+    por_jogo.sort(key=lambda m: m[0], reverse=True)
+    return por_jogo
 
 
 def _save_pick(cur, fixture: dict, pick: dict, data_quality_score: float | None):
@@ -370,27 +432,15 @@ def _save_pick(cur, fixture: dict, pick: dict, data_quality_score: float | None)
                 AND v.market_type = %s
                 AND LOWER(TRIM(COALESCE(v.line, ''))) = LOWER(TRIM(COALESCE(%s, '')))
          )
-        ON CONFLICT (match_date) DO UPDATE SET
-            fixture_id   = EXCLUDED.fixture_id,
-            home_team    = EXCLUDED.home_team,
-            away_team    = EXCLUDED.away_team,
-            home_team_id = EXCLUDED.home_team_id,
-            away_team_id = EXCLUDED.away_team_id,
-            league_id    = EXCLUDED.league_id,
-            league_name  = EXCLUDED.league_name,
-            market       = EXCLUDED.market,
-            market_type  = EXCLUDED.market_type,
-            line         = EXCLUDED.line,
-            odd          = EXCLUDED.odd,
-            bet_house    = EXCLUDED.bet_house,
-            market_id    = EXCLUDED.market_id,
-            confidence   = EXCLUDED.confidence,
-            prob_real    = EXCLUDED.prob_real,
-            edge         = EXCLUDED.edge,
-            reasoning    = EXCLUDED.reasoning,
-            stake_pct    = EXCLUDED.stake_pct,
-            stake_units  = EXCLUDED.stake_units,
-            engine_debug = EXCLUDED.engine_debug
+           -- Uma Free por JOGO (2026-10-07). Era `ON CONFLICT (match_date) DO
+           -- UPDATE`, que com mais de uma Free por dia trocaria a primeira pela
+           -- segunda em silencio. Esta guarda vale mesmo antes de o indice
+           -- (match_date, fixture_id) existir; o indice fecha a corrida.
+           AND NOT EXISTS (
+             SELECT 1 FROM picks_free f
+              WHERE f.match_date = {HOJE_BR} AND f.fixture_id = %s
+         )
+        ON CONFLICT DO NOTHING
     """, (
         fixture["fixture_id"], fixture["home_team"], fixture["away_team"],
         fixture["home_team_id"], fixture["away_team_id"],
@@ -404,12 +454,14 @@ def _save_pick(cur, fixture: dict, pick: dict, data_quality_score: float | None)
         pick["market_name"], pick["market_type"], pick["value_label"], pick["odd"], pick["best_bookmaker"],
         pick["market_id"], pick["confidence"], pick["taxa_real"], pick["edge"], reasoning,
         stake_pct, stake_units, engine_debug,
-        # Os tres do WHERE NOT EXISTS acima.
+        # Os tres do WHERE NOT EXISTS contra o VIP, e o jogo da guarda da Free.
         fixture["fixture_id"], pick["market_type"], pick["value_label"],
+        fixture["fixture_id"],
     ))
     if cur.rowcount == 0:
         print("[DICA_ENGINE] Pick descartado no gravar: o VIP publicou este mesmo "
-              "pick (jogo + mercado + linha) enquanto a Free rodava.")
+              "pick (jogo + mercado + linha) enquanto a Free rodava, ou o jogo "
+              "ja' tem Free hoje.")
         return False
     return True
 
@@ -428,8 +480,21 @@ def run_dica_engine():
     # de antes -- nada quebra, so' se sabe menos.
     competition_rules_store.carregar(cur)
 
-    if _has_today_dica(cur):
-        print("[DICA_ENGINE] Já existe pick de hoje.")
+    try:
+        _garantir_esquema(cur)
+        conn.commit()
+    except Exception as e:
+        # Sem a troca de indice a Free continua saindo, so' que uma por dia:
+        # a segunda bate na unicidade antiga e o ON CONFLICT DO NOTHING a
+        # descarta sem derrubar a rodada.
+        conn.rollback()
+        print(f"[DICA_ENGINE] Nao consegui trocar o indice de picks_free ({e}) · "
+              f"o dia fica limitado a uma Free.")
+
+    ja_publicadas = _frees_de_hoje(cur)
+    if len(ja_publicadas) >= MAX_FREE_POR_DIA:
+        print(f"[DICA_ENGINE] Já existem {len(ja_publicadas)} Free hoje, que é o teto "
+              f"absoluto ({MAX_FREE_POR_DIA}).")
         cur.close()
         conn.close()
         return
@@ -452,8 +517,8 @@ def run_dica_engine():
         print(f"[DICA_ENGINE] O VIP rodou antes da Free hoje ({len(picks_vip)} pick(s)) · "
               f"o jogo e o mercado dele continuam liberados, so' a aposta identica nao sai")
 
-    result = _best_candidate_across_fixtures(fixtures, picks_vip)
-    if not result:
+    melhores = _melhores_por_jogo(fixtures, picks_vip)
+    if not melhores:
         motivo = ("nenhum candidato passou no DICA_CONFIG, ou o que sobrou repetiria "
                   "uma aposta identica a que o VIP ja publicou hoje")
         print(f"[DICA_ENGINE] {motivo}.")
@@ -462,31 +527,48 @@ def run_dica_engine():
         conn.close()
         return
 
-    fixture, pick, quality_score = result
-    reviewed = review_gate("dica").apply([pick], "dica", fixture)
-    if not reviewed:
-        print("[DICA_ENGINE] Pick vetado pela revisao de IA.")
+    teto = teto_de_free(len(melhores))
+    vagas = teto - len(ja_publicadas)
+    print(f"[DICA_ENGINE] {len(melhores)} jogo(s) com candidato aprovado · teto do dia "
+          f"{teto} Free · {len(ja_publicadas)} ja' publicada(s) · {max(vagas, 0)} vaga(s)")
+    if vagas <= 0:
         cur.close()
         conn.close()
         return
-    pick = reviewed[0]
-    gravou = _save_pick(cur, fixture, pick, quality_score)
-    conn.commit()
+
+    salvas = 0
+    for _score, fixture, pick, quality_score in melhores:
+        if salvas >= vagas:
+            break
+        if fixture["fixture_id"] in ja_publicadas:
+            continue
+        reviewed = review_gate("dica").apply([pick], "dica", fixture)
+        if not reviewed:
+            # Vetado nao encerra mais o dia: o proximo jogo da fila ainda pode
+            # ser a Free. Antes do teto, um veto deixava o dia sem Free nenhuma.
+            print(f"[DICA_ENGINE] Fixture {fixture['fixture_id']}: pick vetado pela revisao de IA.")
+            continue
+        pick = reviewed[0]
+        gravou = _save_pick(cur, fixture, pick, quality_score)
+        conn.commit()
+        if not gravou:
+            continue
+        salvas += 1
+        ja_publicadas.add(fixture["fixture_id"])
+        # As contagens da aba de Auditoria: `contabilizar` ja' somou este jogo
+        # como analisado/descartado quando o decision_log gravou a linha dele;
+        # aqui a pick salva move a contagem pro lado certo.
+        registrar_selecao("DICA_ENGINE", [fixture["fixture_id"]])
+        print(f"[DICA_ENGINE] Salvo ({salvas}/{vagas}): fixture {fixture['fixture_id']} · "
+              f"{pick['market_name']} {pick['value_label']} @ {pick['odd']} "
+              f"(confidence={pick['confidence']*100:.0f}%, ev={pick['ev']*100:+.1f}%)")
+
     cur.close()
     conn.close()
-
-    if not gravou:
+    if not salvas:
         log_run("DICA_ENGINE",
-                "o VIP publicou este mesmo pick enquanto a Free rodava")
-        return
-
-    # As contagens da aba de Auditoria: `contabilizar` ja' somou este jogo
-    # como analisado/descartado quando o decision_log gravou a linha dele;
-    # aqui a pick salva move a contagem pro lado certo.
-    registrar_selecao("DICA_ENGINE", [fixture["fixture_id"]])
-    print(f"[DICA_ENGINE] Salvo: fixture {fixture['fixture_id']} · "
-          f"{pick['market_name']} {pick['value_label']} @ {pick['odd']} "
-          f"(confidence={pick['confidence']*100:.0f}%, ev={pick['ev']*100:+.1f}%)")
+                "candidatos vetados pela revisao de IA ou ja' publicados pelo VIP "
+                "enquanto a Free rodava")
 
 
 if __name__ == "__main__":
