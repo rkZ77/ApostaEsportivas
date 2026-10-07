@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { CheckCircle2, Wallet } from 'lucide-react'
 import api from '../../services/api'
 import { cn } from '../../lib/cn'
-import { limpar, registraveis, type Selecao } from '../../lib/bilheteMontado'
+import { limpar, oddCombinada, registraveis, type Selecao } from '../../lib/bilheteMontado'
 
 /*
  * Registrar o bilhete montado na banca (2026-10-06, pedido do usuário).
@@ -28,7 +28,12 @@ export default function RegistrarBilhete({ selecoes, onFechar }: {
   const antigas = selecoes.length - validas.length
   const [banca, setBanca] = useState<Banca | null>(null)
   const [stake, setStake] = useState('1')
-  const [odd, setOdd] = useState('')
+  /* Vem sugerida pelo produto das odds das casas quando todas as seleções têm
+     odd; a pessoa confirma ou troca pelo número que a casa mostrou. */
+  const [odd, setOdd] = useState(() => {
+    const o = oddCombinada(registraveis(selecoes))
+    return o ? o.toFixed(2).replace('.', ',') : ''
+  })
   const [casa, setCasa] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)

@@ -624,6 +624,29 @@ _PRE_OVERUNDER_NAMES = {
 }
 
 
+#: O MESMO mercado, de UM time (2026-10-07). Antes daqui, "Total de Cartões
+#: Visitante, Menos de 3.5" caía em "cards over/under" (os cartões do JOGO) e o
+#: card mostrava 3.85 numa aposta publicada a 1.60: outro mercado, outra odd.
+_PRE_OVERUNDER_DO_TIME = {
+    "goals": {"home": {"total - home", "home team total goals"},
+              "away": {"total - away", "away team total goals"}},
+    "corners": {"home": {"home corners over/under", "home team total corners", "home corners over under"},
+                "away": {"away corners over/under", "away team total corners", "away corners over under"}},
+    "cards": {"home": {"home team total cards", "home team cards over/under"},
+              "away": {"away team total cards", "away team cards over/under"}},
+}
+
+_RE_TEMPO = re.compile(r"(1º|2º|1o|2o|primeiro|segundo)\s*tempo|\b(1t|2t|ht|1h|2h)\b|half", re.IGNORECASE)
+
+
+def _recorte_do_mercado(market_name: str | None) -> tuple[str, bool]:
+    """(escopo 'home'|'away'|'total', é de um tempo só) pelo nome do mercado."""
+    if not market_name:
+        return "total", False
+    from market_form import escopo_do_mercado
+    return escopo_do_mercado(market_name), bool(_RE_TEMPO.search(market_name))
+
+
 def _valor_over_under(texto: str) -> tuple[str | None, float | None]:
     """'Over 2.5' -> ('over', 2.5). Na odd pre-jogo a linha vem grudada no
     rotulo do valor, diferente da odd ao vivo, que traz `handicap` em campo
@@ -641,15 +664,24 @@ def _valor_over_under(texto: str) -> tuple[str | None, float | None]:
 
 
 def _find_prematch_odd(market_type: str | None, line: str | None,
-                       bookmakers: list, casas: set) -> tuple[float | None, str | None]:
+                       bookmakers: list, casas: set,
+                       market_name: str | None = None) -> tuple[float | None, str | None]:
     """(melhor odd pre-jogo, nome da casa) pro mercado/linha do pick.
 
     Melhor = maior odd entre as casas ativas, que e' o mesmo criterio que o
     coletor usa pra escolher a odd publicada no pick. Best-effort e silencioso
     igual ao caminho ao vivo: sem correspondencia clara devolve (None, None).
+
+    `market_name` decide o RECORTE: mercado de um time so' procura o mercado
+    daquele time, e mercado de um tempo so' nao casa com o do jogo inteiro.
+    Na duvida, nenhuma odd: o card mostra a publicada, que e' certa, em vez de
+    uma odd de outro mercado.
     """
     mtype = (market_type or "").lower()
     direction, line_val = _extract_line(line)
+    escopo, de_um_tempo = _recorte_do_mercado(market_name)
+    if de_um_tempo:
+        return None, None
 
     def _alvo() -> set:
         """Rotulos de valor aceitos pra este mercado, ja' em minuscula."""
@@ -672,8 +704,13 @@ def _find_prematch_odd(market_type: str | None, line: str | None,
                      }.get(l, "")} - {""}
         return set()
 
-    nomes_ou: set = _PRE_OVERUNDER_NAMES.get(mtype, set())
-    nomes_diretos = {
+    if escopo != "total":
+        nomes_ou: set = _PRE_OVERUNDER_DO_TIME.get(mtype, {}).get(escopo, set())
+        if not nomes_ou:
+            return None, None
+    else:
+        nomes_ou = _PRE_OVERUNDER_NAMES.get(mtype, set())
+    nomes_diretos = {} if escopo != "total" else {
         "btts":          {"both teams score", "both teams to score"},
         "double_chance": {"double chance"},
         "result_1x2":    {"match winner", "fulltime result", "1x2"},
@@ -715,7 +752,7 @@ def _find_prematch_odd(market_type: str | None, line: str | None,
 
 
 def odd_atual(fixture_id: int, market_type: str | None,
-              line: str | None) -> tuple[float | None, str | None, str | None]:
+              line: str | None, market_name: str | None = None) -> tuple[float | None, str | None, str | None]:
     """(odd, origem, status) pro mercado/linha de uma fixture. Origem e'
     'live', 'prematch' ou None.
 
@@ -731,11 +768,17 @@ def odd_atual(fixture_id: int, market_type: str | None,
         return None, None, status
 
     if status in LIVE_STATUSES:
+        # O mapa ao vivo so' conhece o mercado do JOGO inteiro: pra um time ou
+        # um tempo, nenhuma odd e' melhor que a odd de outro mercado.
+        escopo, de_um_tempo = _recorte_do_mercado(market_name)
+        if escopo != "total" or de_um_tempo:
+            return None, None, status
         odd = _find_live_odd(market_type, line, _fetch_live_odds(fixture_id))
         return odd, ("live" if odd is not None else None), status
 
     odd, _casa = _find_prematch_odd(market_type, line,
-                                    _fetch_prematch_odds(fixture_id), _casas_ativas())
+                                    _fetch_prematch_odds(fixture_id), _casas_ativas(),
+                                    market_name)
     return odd, ("prematch" if odd is not None else None), status
 
 
@@ -2151,6 +2194,7 @@ def get_is_live(fixture_ids: str, current_user: dict = Depends(get_current_user)
 
 @router.get("/pick-odd")
 def get_current_pick_odd(fixture_id: int, market_type: str = "", line: str = "",
+                         market: str = "",
                          current_user: dict = Depends(get_current_user)):
     """Odd atual do mercado, buscada na API-Football no momento da consulta --
     chamado quando o usuário clica em "Apostei", antes de abrir o modal.
@@ -2164,7 +2208,7 @@ def get_current_pick_odd(fixture_id: int, market_type: str = "", line: str = "",
     clara, jogo encerrado ou API fora devolvem odd=None, nunca erro. Não existe
     limite de direção -- a odd volta como está na casa, maior ou menor que a
     do pick."""
-    odd, origem, status = odd_atual(fixture_id, market_type, line)
+    odd, origem, status = odd_atual(fixture_id, market_type, line, market or None)
     return {
         "odd": odd,
         "source": origem,
@@ -2195,14 +2239,15 @@ def _pernas_do_bilhete(cur, pick_id: int, pick_type: str) -> list[dict]:
                 legs = []
         return [
             {"fixture_id": l.get("fixture_id"), "market_type": l.get("market_type"),
+             "market": l.get("market"),
              "line": l.get("line"), "odd": float(l.get("odd") or 0)}
             for l in (legs or []) if isinstance(l, dict)
         ]
 
     cur.execute("""
-        SELECT fixture_id_1, market_type_1, line_1, odd_1,
-               fixture_id_2, market_type_2, line_2, odd_2,
-               fixture_id_3, market_type_3, line_3, odd_3
+        SELECT fixture_id_1, market_type_1, market_1, line_1, odd_1,
+               fixture_id_2, market_type_2, market_2, line_2, odd_2,
+               fixture_id_3, market_type_3, market_3, line_3, odd_3
         FROM picks_alavancagem WHERE id = %s
     """, (pick_id,))
     row = cur.fetchone()
@@ -2215,6 +2260,7 @@ def _pernas_do_bilhete(cur, pick_id: int, pick_type: str) -> list[dict]:
         pernas.append({
             "fixture_id":  row[f"fixture_id_{i}"],
             "market_type": row[f"market_type_{i}"],
+            "market":      row[f"market_{i}"],
             "line":        row[f"line_{i}"],
             "odd":         float(row[f"odd_{i}"]),
         })
@@ -2267,7 +2313,8 @@ def get_current_ticket_odd(pick_id: int, pick_type: str,
         if not perna["fixture_id"]:
             return (None, None, None)
         try:
-            return odd_atual(perna["fixture_id"], perna["market_type"], perna["line"])
+            return odd_atual(perna["fixture_id"], perna["market_type"], perna["line"],
+                             perna.get("market"))
         except Exception:
             # Best-effort igual ao resto do caminho: a perna entra com a odd
             # salva e o bilhete volta marcado como parcial.

@@ -24,6 +24,9 @@ export type Perna =
 export interface PernaCompleta {
   fixture_id: number; home_team_id: number; away_team_id: number
   home: string; away: string; descricao: string
+  /** Odd da casa quando entrou no bilhete · o backend usa pra recalcular o
+   *  lucro quando uma seleção é anulada. */
+  odd?: number
 }
 
 export interface Selecao {
@@ -37,6 +40,10 @@ export interface Selecao {
   bateu: number
   n: number
   player_id?: number
+  /** Melhor odd da casa quando a seleção entrou no bilhete (07/10). Só mercado
+   *  que a coleta traz; chute no alvo, falta e jogador ficam sem. */
+  odd?: number
+  casa?: string | null
   /** Ausente nas seleções salvas antes de 06/10: essas não vão pra banca. */
   perna?: Perna & PernaCompleta
 }
@@ -113,11 +120,22 @@ export function chanceCombinada(lista: Selecao[]): number | null {
   return lista.reduce((p, s) => p * (s.bateu / s.n), 1)
 }
 
+/**
+ * Odd do bilhete pelo produto das odds das casas. Só quando TODAS as seleções
+ * têm odd: com uma faltando, o produto seria menor que o real e enganaria.
+ * É estimativa (a casa pode pagar outro valor no combinado), por isso a tela
+ * sugere e a pessoa confirma o número que a casa mostrou.
+ */
+export function oddCombinada(lista: Selecao[]): number | null {
+  if (!lista.length || lista.some(s => !s.odd)) return null
+  return Math.round(lista.reduce((p, s) => p * (s.odd as number), 1) * 100) / 100
+}
+
 /** Texto pra copiar e colar na casa de aposta ou no WhatsApp. */
 export function textoDoBilhete(lista: Selecao[]): string {
   const porJogo = new Map<string, Selecao[]>()
   for (const s of lista) porJogo.set(s.jogo, [...(porJogo.get(s.jogo) ?? []), s])
   const blocos = [...porJogo].map(([jogo, ss]) =>
-    `${jogo}\n${ss.map(s => `• ${s.descricao} (${s.bateu}/${s.n} nos últimos jogos)`).join('\n')}`)
+    `${jogo}\n${ss.map(s => `• ${s.descricao}${s.odd ? ` @ ${s.odd.toFixed(2)}` : ''} (${s.bateu}/${s.n} nos últimos jogos)`).join('\n')}`)
   return `Meu bilhete · Pick IA\n\n${blocos.join('\n\n')}`
 }

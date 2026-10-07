@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { AnimatePresence, m as motion } from 'framer-motion'
 import { ArrowLeft, Check, ChevronUp, Copy, Ticket, Trash2, Wallet, X } from 'lucide-react'
 import { cn } from '../../lib/cn'
-import { chanceCombinada, limpar, remover, textoDoBilhete, useBilheteMontado } from '../../lib/bilheteMontado'
+import { chanceCombinada, limpar, oddCombinada, remover, textoDoBilhete, useBilheteMontado } from '../../lib/bilheteMontado'
 import RegistrarBilhete from './RegistrarBilhete'
 
 /*
@@ -25,6 +25,8 @@ export default function BandejaDoBilhete() {
      confirmação de sucesso sumiria junto com a última seleção. */
   const [modo, setModo] = useState<'lista' | 'registrar'>('lista')
   const chance = chanceCombinada(selecoes)
+  /* Produto das odds das casas · só quando todas as seleções têm odd. */
+  const oddTotal = oddCombinada(selecoes)
   const fechar = () => { setAberta(false); setModo('lista') }
 
   if (!selecoes.length && !(aberta && modo === 'registrar')) return null
@@ -105,7 +107,12 @@ export default function BandejaDoBilhete() {
                       <div className="text-[11px] text-ink-3 truncate">{s.jogo}</div>
                       <div className="text-sm font-semibold text-ink-1">{s.descricao}</div>
                     </div>
-                    <span className="font-mono text-sm font-black text-ink-2 tabular-nums shrink-0">{s.bateu}/{s.n}</span>
+                    <div className="text-right shrink-0">
+                      <div className="font-mono text-sm font-black text-ink-2 tabular-nums">{s.bateu}/{s.n}</div>
+                      {s.odd != null && (
+                        <div className="font-mono text-[11px] text-ink-3 tabular-nums">@ {s.odd.toFixed(2)}</div>
+                      )}
+                    </div>
                     <button onClick={() => remover(s.id)} aria-label="Tirar do bilhete"
                       className="w-11 h-11 grid place-items-center rounded-lg text-ink-3 hover:text-red-400 hover:bg-surface-2 shrink-0">
                       <Trash2 size={18} />
@@ -121,6 +128,12 @@ export default function BandejaDoBilhete() {
                     {chance != null ? `${Math.round(chance * 100)}%` : '—'}
                   </span>
                 </div>
+                {oddTotal != null && (
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-sm text-ink-2">Odd do bilhete (estimada)</span>
+                    <span className="font-mono text-xl font-black text-ink-1 tabular-nums">{oddTotal.toFixed(2)}</span>
+                  </div>
+                )}
                 <p className="text-[11px] text-ink-3 leading-relaxed">
                   Estimativa pela taxa de acerto de cada seleção nos últimos jogos, como se fossem independentes.
                   Seleções do mesmo jogo andam juntas, e o passado não garante o próximo.

@@ -372,6 +372,7 @@ function SuggestionCard({
       fixture_id: s.fixture_id,
       market_type: s.market_type,
       line: s.line,
+      market: s.market,
     }).then(({ odd }) => setModalOdd(odd))
   }
 

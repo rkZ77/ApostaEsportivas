@@ -778,6 +778,45 @@ def get_classificacao(
     return cache_publico.obter(f"classificacao:{fixture_id}:{league}", 600, montar)
 
 
+@router.get("/{fixture_id}/odds")
+def get_odds_do_jogo(fixture_id: int, current_user: dict = Depends(get_current_user)):
+    """Melhor odd de cada mercado/linha do jogo, entre as casas ATIVAS (2026-10-07).
+
+    O Raio-X cruza com isto a selecao que a pessoa montou ("escanteios do
+    mandante, 1o tempo, mais de 2.5" -> market 132, "Over 2.5") pra mostrar o
+    preco ao lado do "bateu X de 10" e dizer se ha' valor. So' banco
+    (`odds_values`, que a coleta de odds mantem), cache de 2 minutos.
+
+    Casa desativada no /admin nao entra · mesma regra do motor: mostrar o
+    preco de uma casa que o site nao recomenda seria contradicao.
+    """
+    def montar():
+        conn = get_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute("""
+                SELECT DISTINCT ON (ov.market_id, ov.value_name)
+                       ov.market_id, ov.value_name, ov.odd_value, ov.bookmaker_name
+                  FROM odds_values ov
+                  LEFT JOIN bookmakers b ON b.bookmaker_id = ov.bookmaker_id
+                 WHERE ov.fixture_id = %s
+                   AND COALESCE(b.ativo, TRUE)
+                   AND ov.odd_value > 1
+                 ORDER BY ov.market_id, ov.value_name, ov.odd_value DESC
+            """, (fixture_id,))
+            return {"odds": [{"market_id": r["market_id"], "valor": r["value_name"],
+                              "odd": float(r["odd_value"]), "casa": r["bookmaker_name"]}
+                             for r in cur.fetchall()]}
+        except Exception:
+            # Sem odd o Raio-X funciona igual, so' sem o preco ao lado.
+            logger.warning("[ODDS] leitura do jogo %s falhou", fixture_id, exc_info=True)
+            return {"odds": []}
+        finally:
+            cur.close(); conn.close()
+
+    return cache_publico.obter(f"odds-jogo:{fixture_id}", 120, montar)
+
+
 def _montar_raio_x(fixture_id: int, home, away, league, n: int) -> dict:
     """Sete consultas numa conexao so', todas em indice · ver cada helper."""
     conn = get_connection()

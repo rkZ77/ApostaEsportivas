@@ -101,6 +101,15 @@ def validar_pernas(pernas) -> list[dict]:
             "away": str(p.get("away") or "")[:80],
             "descricao": str(p.get("descricao") or "")[:160],
         }
+        # Odd da casa quando a selecao entrou no bilhete (07/10). Opcional, e
+        # so' entra se for um numero de odd: e' ela que deixa recalcular o
+        # bilhete quando uma perna e' anulada.
+        try:
+            odd_perna = float(p.get("odd")) if p.get("odd") is not None else None
+        except (TypeError, ValueError):
+            odd_perna = None
+        if odd_perna is not None and 1.01 <= odd_perna <= 1000:
+            base["odd"] = round(odd_perna, 2)
         tipo = p.get("tipo")
         if tipo == "time":
             mercado = p.get("mercado")
@@ -225,6 +234,20 @@ def resultado_do_bilhete(resultados: list) -> str | None:
     return "GREEN"
 
 
+def odd_recalculada(pernas: list, odd_registrada: float) -> float | None:
+    """A odd que a casa paga quando pernas sao anuladas: a registrada dividida
+    pelas odds das anuladas. None se alguma anulada nao tem odd (nao da' pra
+    saber) ou se o resultado nao faz sentido (abaixo de 1.01)."""
+    anuladas = [p for p in pernas if p.get("resultado") == "VOID"]
+    if not anuladas or any(not p.get("odd") for p in anuladas):
+        return None
+    divisor = 1.0
+    for p in anuladas:
+        divisor *= float(p["odd"])
+    nova = round(odd_registrada / divisor, 2)
+    return nova if nova >= 1.01 else None
+
+
 # ── banco ─────────────────────────────────────────────────────────────────
 
 
@@ -310,9 +333,24 @@ def liquidar_pendentes(cur, user_id: int, agora: datetime | None = None) -> int:
         final = resultado_do_bilhete(resultados)
         observacao = None
         if final == "GREEN" and "VOID" in resultados:
-            # A casa recalcula a odd sem a perna anulada, e o site nao sabe a
-            # odd de cada perna: o lucro sai pela odd registrada, e a tela avisa.
-            observacao = "Uma selecao foi anulada: a casa recalcula a odd do bilhete."
+            # A casa recalcula a odd sem a perna anulada. Com a odd de cada
+            # perna anulada (gravada desde 07/10), a aposta passa a valer a odd
+            # que a casa paga de fato; sem ela, fica a registrada e a tela avisa.
+            cur.execute("""
+                SELECT actual_odd FROM user_followed_picks
+                 WHERE user_id = %s AND pick_id = %s AND pick_type = %s
+            """, (user_id, b["id"], PICK_TYPE))
+            lanc = cur.fetchone()
+            nova = odd_recalculada(b["games"], float(lanc["actual_odd"])) if lanc and lanc["actual_odd"] else None
+            if nova:
+                cur.execute("""
+                    UPDATE user_followed_picks SET actual_odd = %s
+                     WHERE user_id = %s AND pick_id = %s AND pick_type = %s
+                """, (nova, user_id, b["id"], PICK_TYPE))
+                observacao = (f"Selecao anulada: a odd do bilhete foi recalculada "
+                              f"de {float(lanc['actual_odd']):.2f} para {nova:.2f}, como a casa faz.")
+            else:
+                observacao = "Uma selecao foi anulada: a casa recalcula a odd do bilhete."
         cur.execute("""
             UPDATE bilhetes_pessoais
                SET games = %s::jsonb, result = %s, observacao = %s,

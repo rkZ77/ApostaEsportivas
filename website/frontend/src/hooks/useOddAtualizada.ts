@@ -43,7 +43,10 @@ export function useOddAtualizada() {
   /** Pick de um jogo só (VIP, free, faltas, defesas). */
   async function odd(
     pickOdd: number,
-    params: { fixture_id?: number | null; market_type?: string | null; line?: string | null },
+    /* `market` é o NOME do mercado ("Total de Cartões Visitante"): sem ele a
+       busca não sabia de qual time era o mercado e trazia a odd do jogo
+       inteiro (07/10/2026). */
+    params: { fixture_id?: number | null; market_type?: string | null; line?: string | null; market?: string | null },
   ): Promise<OddAtualizada> {
     const base = Number(pickOdd)
     if (!params.fixture_id) return { odd: base, mudou: false, origem: null, parcial: false, aoVivo: false }
@@ -54,6 +57,7 @@ export function useOddAtualizada() {
           fixture_id: params.fixture_id,
           market_type: params.market_type ?? '',
           line: params.line ?? '',
+          market: params.market ?? '',
         },
       })
       // JOGO EM ANDAMENTO NAO ATUALIZA A ODD.

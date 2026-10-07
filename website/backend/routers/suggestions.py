@@ -4507,7 +4507,7 @@ def odds_agora_prejogo(current_user: dict = Depends(get_current_user)):
                              ("player_stats", "picks_player_stats")):
             partes.append(
                 "SELECT '{t}' AS pick_type, p.id, p.fixture_id, p.market_type, "
-                "       p.line, p.odd "
+                "       p.market, p.line, p.odd "
                 "  FROM {tab} p "
                 "  JOIN fixtures f ON f.fixture_id = p.fixture_id "
                 " WHERE p.result IS NULL "
@@ -4556,7 +4556,10 @@ def odds_agora_prejogo(current_user: dict = Depends(get_current_user)):
         if not livro:
             continue
         try:
-            nova, casa = _find_prematch_odd(l["market_type"], l["line"], livro, casas)
+            # O NOME do mercado vai junto: "Total de Cartões Visitante" sem ele
+            # virava a odd dos cartões do jogo inteiro (bug de 07/10).
+            nova, casa = _find_prematch_odd(l["market_type"], l["line"], livro, casas,
+                                            l.get("market"))
         except Exception:
             nova, casa = None, None
         if not nova:
