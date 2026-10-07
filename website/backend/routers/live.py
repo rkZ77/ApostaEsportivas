@@ -2526,6 +2526,32 @@ def _pernas_pessoais(bilhete: dict) -> list:
 _STATUS_DA_PERNA = {"GREEN": "winning", "RED": "losing", "VOID": "neutral"}
 
 
+def _so_amarelos(leg: dict, perna: dict, line: str) -> None:
+    """Cartao do bilhete pessoal conta so' AMARELO, porque e' assim que a
+    liquidacao confere (match_statistics.yellow_cards) e e' o numero que o
+    Raio-X mostrou na hora de montar. O `_enrich_leg` le' cartao na regra dos
+    picks da IA (vermelho vale 2), e a tela ao vivo ficava 1 ou 2 acima do que
+    decidiria o bilhete. Aqui o contador e o estado sao refeitos com a folha
+    que o proprio `_enrich_leg` ja' trouxe."""
+    lado = perna.get("lado_time") if perna["mercado"].endswith("_time") else None
+
+    def amarelos(folha):
+        v = (folha or {}).get("Yellow Cards")
+        return None if v is None else float(v)
+
+    casa, fora = amarelos(leg.get("home_stats")), amarelos(leg.get("away_stats"))
+    valor = casa if lado == "home" else fora if lado == "away" else (
+        None if casa is None or fora is None else casa + fora)
+    leg["current_val"] = valor
+    if valor is None:
+        leg["pick_status"] = "neutral"
+        return
+    leg["pick_status"] = _pick_status(valor, line)
+    # Linha N.5: passou dela, nao volta (cartao nao e' retirado).
+    if not leg.get("is_ft"):
+        leg["is_locked"] = valor > perna["linha"]
+
+
 def _perna_pessoal_ao_vivo(perna: dict) -> dict:
     """A perna do bilhete pessoal no formato de perna de cartela.
 
@@ -2560,6 +2586,8 @@ def _perna_pessoal_ao_vivo(perna: dict) -> dict:
             "is_live": status in LIVE_STATUSES, "is_ft": status in FT_STATUSES,
             "is_locked": False, "kickoff_ts": fix.get("timestamp"),
         }
+    if mercado and perna.get("mercado", "").startswith("cartoes"):
+        _so_amarelos(leg, perna, mercado[2])
     # O que a tela precisa e o _enrich_leg nao manda: o texto que o proprio
     # usuario escolheu e o veredito da liquidacao.
     leg.pop("home_stats", None)
