@@ -6,7 +6,7 @@ import logging
 import threading
 import requests
 from decimal import Decimal
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends
 from database import get_connection
@@ -2503,6 +2503,80 @@ def _anular_sem_estatistica(cur, conn, today_br, resolved) -> None:
         logger.error("[AUTO-RESULT] anulacao boost query erro: %s", e)
 
 
+def _data_br(momento) -> date:
+    """Dia em Brasilia de um timestamp do banco. NOW() grava UTC sem fuso
+    (settled_at, created_at), entao o naive e' lido como UTC."""
+    if isinstance(momento, datetime):
+        if momento.tzinfo is None:
+            momento = momento.replace(tzinfo=timezone.utc)
+        return momento.astimezone(_BR_TZ).date()
+    return momento
+
+
+def _pernas_pessoais(bilhete: dict) -> list:
+    pernas = bilhete.get("games")
+    if isinstance(pernas, str):
+        try:
+            pernas = json.loads(pernas)
+        except Exception:
+            pernas = []
+    return [p for p in (pernas or []) if isinstance(p, dict) and p.get("fixture_id")]
+
+
+_STATUS_DA_PERNA = {"GREEN": "winning", "RED": "losing", "VOID": "neutral"}
+
+
+def _perna_pessoal_ao_vivo(perna: dict) -> dict:
+    """A perna do bilhete pessoal no formato de perna de cartela.
+
+    Perna de time passa pelo mesmo `_enrich_leg` dos picks da IA (placar,
+    contador ao vivo, barra). Perna de jogador so' ganha o estado do jogo: o
+    numero dela sai da ficha do jogador, publicada no fim. Em qualquer caso,
+    o resultado ja' gravado pela liquidacao VENCE o que a leitura ao vivo
+    diria."""
+    import bilhete_pessoal
+    fid = perna["fixture_id"]
+    odd = float(perna.get("odd") or 1)
+    home, away = perna.get("home") or "", perna.get("away") or ""
+    h_id, a_id = perna.get("home_team_id"), perna.get("away_team_id")
+    mercado = bilhete_pessoal.mercado_ao_vivo(perna)
+    if mercado:
+        market, mtype, line = mercado
+        leg = _enrich_leg(fid, market, line, home, away, h_id, a_id, odd, market_type=mtype)
+    else:
+        fix_data = _fetch_fixture(fid)
+        fix = fix_data.get("fixture", {}) or {}
+        goals = fix_data.get("goals", {}) or {}
+        status = (fix.get("status") or {}).get("short", "NS")
+        leg = {
+            "fixture_id": fid, "league_id": (fix_data.get("league") or {}).get("id"),
+            "home_team": home, "away_team": away,
+            "home_team_id": h_id, "away_team_id": a_id,
+            "market": perna.get("descricao") or "", "market_type": "player", "line": "",
+            "odd": odd, "status": status, "elapsed": (fix.get("status") or {}).get("elapsed"),
+            "home_goals": goals.get("home"), "away_goals": goals.get("away"),
+            "stat_label": perna.get("player_name") or "Jogador",
+            "current_val": None, "line_val": None, "pick_status": "neutral",
+            "is_live": status in LIVE_STATUSES, "is_ft": status in FT_STATUSES,
+            "is_locked": False, "kickoff_ts": fix.get("timestamp"),
+        }
+    # O que a tela precisa e o _enrich_leg nao manda: o texto que o proprio
+    # usuario escolheu e o veredito da liquidacao.
+    leg.pop("home_stats", None)
+    leg.pop("away_stats", None)
+    leg["descricao"] = perna.get("descricao") or ""
+    resultado = perna.get("resultado")
+    if resultado in _STATUS_DA_PERNA:
+        leg["resultado"] = resultado
+        leg["pick_status"] = _STATUS_DA_PERNA[resultado]
+        leg["is_locked"] = True
+        if perna.get("valor") is not None:
+            leg["current_val"] = perna["valor"]
+        if perna.get("motivo"):
+            leg["motivo"] = perna["motivo"]
+    return leg
+
+
 @router.get("/my-picks")
 def get_live_my_picks(current_user: dict = Depends(get_current_user)):
     user_id  = current_user["id"]
@@ -2549,8 +2623,25 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
     # lugar nenhum. Lista vazia em qualquer ambiente sem motor Live, entao
     # nada muda pro pre-jogo.
     live_ids        = [r["pick_id"] for r in followed if r["pick_type"] == "live"]
+    # Bilhete montado pelo proprio usuario no Raio-X (07/10). Entra aqui como
+    # qualquer cartela, com o rotulo "Meu bilhete" no front, e e' liquidado
+    # ANTES da leitura pela mesma regra da banca (bilhete_pessoal).
+    pessoal_ids     = [r["pick_id"] for r in followed if r["pick_type"] == "pessoal"]
 
     # ── Batch fetch all pick data ────────────────────────────────────────────
+    pessoal_map: dict = {}
+    if pessoal_ids:
+        import bilhete_pessoal
+        bilhete_pessoal.liquidar_sem_quebrar(conn, cur, user_id)
+        try:
+            cur.execute("""
+                SELECT id, games, total_odd, result, observacao, created_at, settled_at
+                FROM bilhetes_pessoais WHERE id = ANY(%s) AND user_id = %s
+            """, (pessoal_ids, user_id))
+            pessoal_map = {r["id"]: r for r in cur.fetchall()}
+        except Exception as e:
+            conn.rollback()
+            logger.error("[LIVE] bilhetes_pessoais indisponivel em my-picks: %s", e)
     vip_map: dict = {}
     if vip_ids:
         cur.execute("""
@@ -2711,6 +2802,9 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
             fid = p.get(f"fixture_id_{i}")
             if fid:
                 all_fixture_ids.add(fid)
+    for p in pessoal_map.values():
+        for perna in _pernas_pessoais(p):
+            all_fixture_ids.add(perna["fixture_id"])
 
     if all_fixture_ids:
         _fetch_fixtures_bulk(list(all_fixture_ids))
@@ -2773,7 +2867,7 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                     "market", "line", "status", "elapsed",
                     "home_goals", "away_goals",
                     "stat_label", "current_val", "line_val",
-                    "pick_status", "is_locked",
+                    "pick_status", "is_locked", "kickoff_ts",
                 )},
             })
 
@@ -2828,7 +2922,7 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                     "market", "line", "status", "elapsed",
                     "home_goals", "away_goals",
                     "stat_label", "current_val", "line_val",
-                    "pick_status", "is_locked",
+                    "pick_status", "is_locked", "kickoff_ts",
                 )},
             })
 
@@ -2968,6 +3062,39 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                     "result":         final_result,
                     "legs":           legs_out,
                 })
+
+        # ── MEU BILHETE (montado pelo usuario) ──────────────────────────────
+        # So' LE: o resultado ja' foi decidido por bilhete_pessoal antes do
+        # laco. Nada aqui grava, entao o acompanhamento ao vivo nunca contradiz
+        # a liquidacao da banca.
+        elif pick_type == "pessoal":
+            p = pessoal_map.get(pick_id)
+            if not p:
+                continue
+            final_result = p["result"]
+            fechado_em = p.get("settled_at")
+            if final_result is not None and (
+                    fechado_em is None or _data_br(fechado_em) != today_br):
+                continue
+            legs_out = [_perna_pessoal_ao_vivo(perna) for perna in _pernas_pessoais(p)]
+            if not legs_out:
+                continue
+            criado = p.get("created_at")
+            result.append({
+                "pick_id":        pick_id,
+                "pick_type":      "pessoal",
+                "match_date":     str(_data_br(criado)) if criado else str(today_br),
+                "odd":            float(p["total_odd"] or 1),
+                "actual_odd":     actual_odd,
+                "bet_house":      bet_house,
+                "stake_units":    stake_u,
+                "cashout_amount": cashout_amt,
+                "is_live":        any(l["is_live"] for l in legs_out),
+                "status":         "FT" if final_result else None,
+                "result":         final_result,
+                "observacao":     p.get("observacao"),
+                "legs":           legs_out,
+            })
 
     conn.close()
 

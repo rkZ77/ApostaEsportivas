@@ -248,6 +248,40 @@ def odd_recalculada(pernas: list, odd_registrada: float) -> float | None:
     return nova if nova >= 1.01 else None
 
 
+#: Nome da familia no texto que o acompanhamento ao vivo (routers/live.py,
+#: `_stat_for_market`) sabe ler, e o market_type que desempata.
+_FAMILIA_AO_VIVO = {
+    "gols": ("Gols", "goals"), "escanteios": ("Escanteios", "corners"),
+    "cartoes": ("Cartões", "cards"), "chutes_alvo": ("Chutes no Alvo", "shots_on_target"),
+    "faltas": ("Faltas", "fouls"),
+}
+
+
+def mercado_ao_vivo(perna: dict) -> tuple[str, str | None, str] | None:
+    """(market, market_type, line) no formato dos picks da IA, pra a perna
+    de TIME ser acompanhada ao vivo em Minhas Apostas pelo mesmo motor que
+    acompanha o VIP. None pra perna de jogador: o feed ao vivo nao traz ficha
+    de jogador, e ela so' tem numero quando o jogo acaba.
+
+    E' so' a TELA: quem decide GREEN/RED continua sendo `liquidar_pendentes`,
+    com match_statistics."""
+    if perna.get("tipo") != "time":
+        return None
+    if perna["mercado"] == "btts":
+        return "Ambas Marcam", "btts", "Sim"
+    base = perna["mercado"].removesuffix("_time")
+    nome, mtype = _FAMILIA_AO_VIVO[base]
+    if perna["mercado"].endswith("_time"):
+        nome += " Casa" if perna.get("lado_time") == "home" else " Fora"
+    periodo = perna.get("periodo") or "total"
+    if periodo == "1t":
+        nome += " 1º Tempo"
+    elif periodo == "2t":
+        nome += " 2º Tempo"
+    linha = f"{'Over' if perna['direcao'] == 'mais' else 'Under'} {perna['linha']:g}"
+    return nome, mtype, linha
+
+
 # ── banco ─────────────────────────────────────────────────────────────────
 
 

@@ -67,6 +67,8 @@ function Guarda() {
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="pick/[id]" options={{ title: 'Pick' }} />
+      <Stack.Screen name="jogos/index" options={{ title: 'Jogos de hoje' }} />
+      <Stack.Screen name="jogos/[id]" options={{ title: 'Raio-X do jogo' }} />
       <Stack.Screen name="conta/excluir" options={{ title: 'Excluir conta' }} />
     </Stack>
   )

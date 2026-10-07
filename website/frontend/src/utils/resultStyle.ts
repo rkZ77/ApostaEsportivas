@@ -158,4 +158,7 @@ export const PICK_TYPE_CLS: Record<string, string> = {
   player_stats:'text-amber-400 bg-amber-400/10 border-amber-400/20',
   boost:       'text-cyan-400 bg-cyan-400/10 border-cyan-400/20',
   live:        'text-accent-ink bg-accent/10 border-accent/25',
+  // Bilhete montado pela propria pessoa (07/10): neutro, porque nao e' produto
+  // da IA e nao pode vestir a cor de nenhum.
+  pessoal:     'text-ink-2 bg-surface-3 border-line-strong',
 }

@@ -10,7 +10,7 @@ import { useCallback } from 'react'
 import { RefreshControl, ScrollView, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Activity, ChevronRight, Target } from 'lucide-react-native'
+import { Activity, CalendarDays, ChevronRight, Target } from 'lucide-react-native'
 import { useAuth } from '../../src/auth/AuthContext'
 import { rotuloDoPlano } from '../../src/auth/plano'
 import { useDados } from '../../src/hooks/useDados'
@@ -102,6 +102,17 @@ export default function Inicio() {
           <ChevronRight size={18} color={cores.ink3} />
         </Card>
       ) : null}
+
+      {/* Jogos e Raio-X (07/10/2026) · tela da pilha, não aba: a barra de
+          baixo já tem cinco, que é o teto pro polegar. */}
+      <Card onPress={() => router.push('/jogos')} style={{ flexDirection: 'row', alignItems: 'center', gap: espaco.md }}>
+        <CalendarDays size={20} color={cores.accent} />
+        <View style={{ flex: 1, gap: 2 }}>
+          <Txt variante="corpo" cor={cores.ink1}>Jogos de hoje e Raio-X</Txt>
+          <Txt variante="apoio">Taxa de acerto por linha, faz x cede e odd com valor</Txt>
+        </View>
+        <ChevronRight size={18} color={cores.ink3} />
+      </Card>
 
       {/* destaque do dia */}
       <View style={{ gap: espaco.md }}>

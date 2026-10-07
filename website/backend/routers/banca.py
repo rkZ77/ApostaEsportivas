@@ -1589,6 +1589,71 @@ def registrar_bilhete_pessoal(body: BilhetePessoalBody, current_user: dict = Dep
         conn.close()
 
 
+@router.get("/bilhete-pessoal/{bilhete_id}")
+def detalhe_bilhete_pessoal(bilhete_id: int, current_user: dict = Depends(get_current_user)):
+    """O bilhete pessoal aberto (2026-10-07): cada selecao com o valor que saiu
+    e o resultado dela, mais a aposta (stake, odd, casa, lucro).
+
+    So' o DONO le' (o WHERE leva user_id). Abrir confere o resultado na hora
+    (liquidar_pendentes do dono), entao quem abre depois do jogo ja' ve o GREEN
+    ou RED sem esperar a banca recarregar.
+    """
+    user_id = current_user["id"]
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        bilhete_pessoal.liquidar_sem_quebrar(conn, cur, user_id)
+        cur.execute("""
+            SELECT bp.id, bp.games, bp.total_odd, bp.result, bp.profit, bp.observacao,
+                   bp.created_at, bp.settled_at,
+                   uf.stake_units, uf.actual_odd, uf.bet_house, uf.unit_value
+              FROM bilhetes_pessoais bp
+              LEFT JOIN user_followed_picks uf
+                ON uf.pick_id = bp.id AND uf.pick_type = %s AND uf.user_id = bp.user_id
+             WHERE bp.id = %s AND bp.user_id = %s
+        """, (bilhete_pessoal.PICK_TYPE, bilhete_id, user_id))
+        b = cur.fetchone()
+        if not b:
+            raise HTTPException(404, "Bilhete nao encontrado.")
+        b = dict(b)
+        pernas = b["games"]
+        if isinstance(pernas, str):
+            import json as _json
+            pernas = _json.loads(pernas)
+        # Placar e situacao de cada jogo · o que diz "ainda vai comecar", "ao
+        # vivo" ou "acabou" enquanto a perna nao tem resultado.
+        fids = sorted({p.get("fixture_id") for p in pernas if p.get("fixture_id")})
+        jogos = {}
+        if fids:
+            cur.execute("""
+                SELECT fixture_id, status, match_datetime FROM fixtures WHERE fixture_id = ANY(%s)
+            """, (fids,))
+            jogos = {r["fixture_id"]: dict(r) for r in cur.fetchall()}
+        for p in pernas:
+            j = jogos.get(p.get("fixture_id")) or {}
+            p["status_jogo"] = j.get("status")
+            p["inicio"] = j["match_datetime"].isoformat() if j.get("match_datetime") else None
+        unidade = float(b["unit_value"]) if b.get("unit_value") else None
+        lucro_u = None
+        if b["result"] and b.get("actual_odd") is not None and b.get("stake_units") is not None:
+            odd = float(b["actual_odd"])
+            lucro_u = {"GREEN": odd - 1, "RED": -1.0, "PUSH": 0.0}.get(b["result"])
+            if lucro_u is not None:
+                lucro_u *= float(b["stake_units"])
+        return {
+            "id": b["id"], "pernas": pernas, "result": b["result"], "observacao": b["observacao"],
+            "odd": float(b["actual_odd"] if b.get("actual_odd") is not None else b["total_odd"]),
+            "stake_units": float(b["stake_units"]) if b.get("stake_units") is not None else None,
+            "casa": b.get("bet_house"),
+            "lucro_unidades": round(lucro_u, 2) if lucro_u is not None else None,
+            "lucro_reais": round(lucro_u * unidade, 2) if lucro_u is not None and unidade else None,
+            "criado_em": b["created_at"].isoformat() if b.get("created_at") else None,
+        }
+    finally:
+        cur.close()
+        conn.close()
+
+
 # ── Caminhos de alavancagem ───────────────────────────────────────────────────
 # Alavancagem não é uma aposta por dia, é um caminho: entra com um valor e a cada
 # GREEN reaposta o bolo inteiro no dia seguinte. Por isso o lucro do meio do

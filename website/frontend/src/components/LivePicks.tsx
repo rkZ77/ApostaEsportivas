@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import { AnimatePresence, m as motion } from 'framer-motion'
 import {
   Radio, ChevronDown, RefreshCw, CornerUpRight, RectangleVertical,
-  Footprints, Hand, Crosshair, Target, Flag, Goal,
+  Footprints, Hand, Crosshair, Target, Flag, Goal, User, CalendarDays, Clock,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import api from '../services/api'
@@ -12,21 +13,79 @@ import { backdropFade, sheetUp } from '../lib/motion'
 import { AO_VIVO as LIVE_SET, ENCERRADO as FINISHED_SET, STATUS_LABEL } from '../lib/aoVivo'
 import { TeamLogo } from './TeamLogo'
 import { ehCartela } from '../utils/cartela'
+import { PICK_TYPE_CLS, PICK_TYPE_LABEL } from '../utils/resultStyle'
 
 // Régua de status e escudo saíram daqui pra `lib/aoVivo.ts` em 02/09: as
 // mesmas listas viviam copiadas em Fixtures, FixtureStatsModal e no feed de
 // Picks Ao Vivo, divergindo entre si. Ver o cabeçalho de lá.
-const TYPE_CLS: Record<string, string> = {
-  vip: 'text-yellow-400 bg-yellow-400/10', free: 'text-green-400 bg-green-400/10',
-  multipla: 'text-blue-400 bg-blue-400/10', alavancagem: 'text-orange-400 bg-orange-400/10',
-  // Aposta que veio de um pick Ao Vivo. Sem isso o card aparecia aqui sem
-  // rótulo nenhum e o usuário não distinguia de uma aposta pré-jogo · são
-  // produtos com risco diferente e a origem precisa ficar visível.
-  live: 'text-accent-ink bg-accent/10',
+//
+// Selo do produto (07/10): sai do mapa do site inteiro. A cópia local só
+// conhecia cinco tipos, e Bingo, Boost e o bilhete pessoal apareciam aqui com
+// o id cru ("bingo", "pessoal") num selo cinza.
+const rotuloDoTipo = (t: string) =>
+  t === 'pessoal' ? 'Meu bilhete' : (PICK_TYPE_LABEL[t] ?? t)
+
+/* Bilhete com pernas: as cartelas da IA, a alavancagem e o bilhete montado
+   pelo próprio usuário. */
+const temPernas = (t: string) => ehCartela(t) || t === 'alavancagem' || t === 'pessoal'
+
+/* "Hoje 21:30", "Amanhã 16:00" ou "12/10 19:00" · o que falta pro jogo é a
+   primeira pergunta de quem abre uma aposta que ainda não começou. */
+function quandoJoga(ts?: number | null): string | null {
+  if (!ts) return null
+  const d = new Date(ts * 1000)
+  const hora = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0)
+  const dia = new Date(d); dia.setHours(0, 0, 0, 0)
+  const diff = Math.round((dia.getTime() - hoje.getTime()) / 86_400_000)
+  if (diff === 0) return `Hoje ${hora}`
+  if (diff === 1) return `Amanhã ${hora}`
+  return `${d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} ${hora}`
 }
-const TYPE_LABEL: Record<string, string> = {
-  vip: 'PREMIUM', free: 'FREE', multipla: 'MÚLT.', alavancagem: 'ALAV.',
-  live: 'AO VIVO',
+
+/* O primeiro apito que ainda vai acontecer na aposta. */
+function proximoApito(pick: any): number | null {
+  const tss = temPernas(pick.pick_type)
+    ? (pick.legs ?? []).filter((l: any) => l.status === 'NS').map((l: any) => l.kickoff_ts)
+    : pick.status === 'NS' ? [pick.kickoff_ts] : []
+  const validos = tss.filter((t: any) => typeof t === 'number')
+  return validos.length ? Math.min(...validos) : null
+}
+
+/* Estado de cada perna pra trilha do bilhete: o que já fechou, o que está
+   em jogo e o que ainda vai começar. */
+function estadoDaPerna(leg: any): 'green' | 'red' | 'void' | 'live' | 'wait' {
+  if (leg.resultado === 'VOID') return 'void'
+  if (leg.is_locked || FINISHED_SET.has(leg.status)) {
+    if (leg.pick_status === 'winning') return 'green'
+    if (leg.pick_status === 'losing') return 'red'
+    return 'void'
+  }
+  return LIVE_SET.has(leg.status) ? 'live' : 'wait'
+}
+
+const COR_DA_TRILHA = {
+  green: 'bg-green-500', red: 'bg-red-500', void: 'bg-ink-4',
+  live: 'bg-green-400/50 animate-pulse', wait: 'bg-surface-3',
+} as const
+
+/* A trilha do bilhete: um segmento por seleção, visível com o card FECHADO.
+   Na casa de aposta é preciso abrir o bilhete pra saber quantas pernas já
+   bateram; aqui a resposta está na lista. */
+function TrilhaDoBilhete({ legs }: { legs: any[] }) {
+  if (legs.length < 2) return null
+  const estados = legs.map(estadoDaPerna)
+  const bateram = estados.filter(e => e === 'green').length
+  return (
+    <div className="flex items-center gap-2 mt-2">
+      <div className="flex flex-1 gap-0.5" aria-hidden>
+        {estados.map((e, i) => <span key={i} className={`h-1.5 flex-1 rounded-full ${COR_DA_TRILHA[e]}`} />)}
+      </div>
+      <span className="font-mono text-[10px] text-ink-3 tabular-nums shrink-0">
+        {bateram}/{legs.length}
+      </span>
+    </div>
+  )
 }
 
 // Poisson-based live win probability (same math bookmakers use)
@@ -318,14 +377,26 @@ function LiveLeg({ leg, syncedAt }: { leg: any; syncedAt: number }) {
           {leg.is_locked && leg.pick_status === 'losing' && (
             <span className="text-[9px] font-black text-red-400 bg-red-400/15 border border-red-500/30 px-1.5 py-0.5 rounded">✗</span>
           )}
+          {leg.resultado === 'VOID' && (
+            <span className="text-[9px] font-black text-ink-2 bg-surface-3 border border-line-strong px-1.5 py-0.5 rounded">ANULADA</span>
+          )}
+          {leg.status === 'NS' && quandoJoga(leg.kickoff_ts) && (
+            <span className="font-mono text-[10px] text-ink-3 tabular-nums">{quandoJoga(leg.kickoff_ts)}</span>
+          )}
         </div>
       </div>
       <div className="flex items-center justify-between text-xs">
-        <span className="text-ink-3 truncate">{rotuloDoMercado(leg.market, leg.line)}</span>
+        {/* O bilhete pessoal manda o texto que o próprio usuário escolheu no
+            Raio-X · é ele que bate com o que está escrito na casa. */}
+        <span className="text-ink-3 truncate flex items-center gap-1">
+          {leg.market_type === 'player' && <User className="w-3 h-3 shrink-0" />}
+          {leg.descricao || rotuloDoMercado(leg.market, leg.line)}
+        </span>
         {leg.current_val != null && (
           <StatChip label={leg.stat_label} value={leg.current_val} cls={stColor} compact />
         )}
       </div>
+      {leg.motivo && <p className="text-[10px] text-ink-4 mt-1">Anulada: {leg.motivo}</p>}
       {hasBar && !leg.is_locked && (
         <StatBar currentVal={leg.current_val} lineVal={leg.line_val} direction={direction} />
       )}
@@ -491,7 +562,7 @@ function PickCard({ pick, unitValue, onRefresh, syncedAt }: {
   /* Bilhete é bilhete: múltipla, Bingo e alavancagem. O Bingo estava fora
      desta régua e era tratado como pick de um jogo só, inclusive no
      travamento antecipado. Ver utils/cartela. */
-  const isMulti     = ehCartela(pick.pick_type) || pick.pick_type === 'alavancagem'
+  const isMulti     = temPernas(pick.pick_type)
   const hasCashout  = pick.cashout_amount != null
 
   const earlyLocked     = !pick.is_locked && isLive && !isMulti && isEarlyLocked(pick)
@@ -568,6 +639,8 @@ function PickCard({ pick, unitValue, onRefresh, syncedAt }: {
         <span className="text-sm font-black text-green-400">+R${(potRetR - (stakeR ?? 0)).toFixed(2)}</span>
       ) : effectiveResult === 'RED' && stakeR != null ? (
         <span className="text-sm font-black text-red-400">-R${stakeR.toFixed(2)}</span>
+      ) : pick.result === 'PUSH' ? (
+        <span className="text-xs font-bold text-ink-2">Devolvida</span>
       ) : (
         <span className="text-xs text-ink-3">{STATUS_LABEL[pick.status] ?? pick.status}</span>
       )}
@@ -583,6 +656,10 @@ function PickCard({ pick, unitValue, onRefresh, syncedAt }: {
     <span className="flex items-center gap-1 text-[9px] font-black text-indigo-300">
       <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
       AO VIVO
+    </span>
+  ) : quandoJoga(proximoApito(pick)) ? (
+    <span className="font-mono flex items-center gap-1 text-[10px] text-ink-3 tabular-nums">
+      <Clock className="w-3 h-3" />{quandoJoga(proximoApito(pick))}
     </span>
   ) : (
     <span className="text-[10px] text-ink-4">{STATUS_LABEL[pick.status] ?? 'Aguardando'}</span>
@@ -612,8 +689,8 @@ function PickCard({ pick, unitValue, onRefresh, syncedAt }: {
         {/* Esquerda: badge + valor apostado + sub */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${TYPE_CLS[pick.pick_type] ?? 'text-ink-2 bg-surface-3/50'}`}>
-              {TYPE_LABEL[pick.pick_type] ?? pick.pick_type}
+            <span className={`text-[10px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded border ${PICK_TYPE_CLS[pick.pick_type] ?? 'text-ink-2 bg-surface-3/50 border-line'}`}>
+              {rotuloDoTipo(pick.pick_type)}
             </span>
             {isLive && (
               <span className="font-mono flex items-center gap-1 text-[10px] font-black text-green-400 tabular-nums">
@@ -631,6 +708,7 @@ function PickCard({ pick, unitValue, onRefresh, syncedAt }: {
           {headerSub && (
             <p className="text-xs text-ink-3 mt-0.5 truncate">{headerSub}</p>
           )}
+          {isMulti && <TrilhaDoBilhete legs={pick.legs ?? []} />}
         </div>
 
         {/* Direita: cashout / resultado + chevron */}
@@ -734,6 +812,12 @@ function PickCard({ pick, unitValue, onRefresh, syncedAt }: {
                 <span className="font-black text-orange-400">R${Number(pick.cashout_amount).toFixed(2)}</span>
               </div>
             )}
+            {pick.observacao && (
+              <p className="text-[11px] text-ink-3 leading-relaxed">{pick.observacao}</p>
+            )}
+            {pick.pick_type === 'pessoal' && (
+              <p className="text-[10px] text-ink-4">Bilhete montado por você no Raio-X. Não é pick da IA e não entra no placar público.</p>
+            )}
             {canCashout && (
               /* Alvo de toque cheio no celular; no desktop encolhe e vai pra
                  direita, onde moram os valores · registrar cashout é exceção,
@@ -776,6 +860,43 @@ function PickCard({ pick, unitValue, onRefresh, syncedAt }: {
 
 const REFRESH_LIVE = 30_000 // 30s · alinhado com o TTL de fixture do backend (30s)
 
+type Filtro = 'todas' | 'vivo' | 'aguardando' | 'encerradas'
+
+/* Valor em reais de uma aposta, pela mesma regra do card: o valor pronto do
+   servidor (alavancagem) vence a conta por unidades. */
+function stakeEmReais(p: any, unitValue?: number): number | null {
+  if (p.stake_amount != null) return Number(p.stake_amount)
+  return unitValue != null ? Number(p.stake_units) * unitValue : null
+}
+
+/* Os três números do topo da aba. Nulo sem valor de unidade: sem ele não há
+   reais pra mostrar, e "R$0,00" em jogo seria mentira. */
+export function resumoDoDia(picks: any[], unitValue?: number) {
+  if (unitValue == null) return null
+  let emJogo = 0, potencial = 0, resultado = 0
+  for (const p of picks) {
+    const stake = stakeEmReais(p, unitValue)
+    if (stake == null) continue
+    const odd = Number(p.actual_odd ?? p.odd) || 1
+    if (p.cashout_amount != null) { resultado += Number(p.cashout_amount) - stake; continue }
+    if (p.result === 'GREEN') resultado += stake * (odd - 1)
+    else if (p.result === 'RED') resultado -= stake
+    else if (p.result === 'HALF-WIN') resultado += stake * (odd - 1) / 2
+    else if (p.result === 'HALF-LOSS') resultado -= stake / 2
+    else if (!p.result) { emJogo += stake; potencial += stake * odd }
+  }
+  return { emJogo, potencial, resultado }
+}
+
+function ResumoCelula({ rotulo, valor, cls = 'text-ink-1' }: { rotulo: string; valor: string; cls?: string }) {
+  return (
+    <div className="px-3 py-3 min-w-0">
+      <p className="text-[10px] uppercase tracking-wide text-ink-4 truncate">{rotulo}</p>
+      <p className={`font-mono text-sm sm:text-base font-black tabular-nums truncate ${cls}`}>{valor}</p>
+    </div>
+  )
+}
+
 function LiveSkeleton() {
   return (
     <div className="space-y-3 animate-pulse">
@@ -807,6 +928,7 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
   const [loading, setLoading]       = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
+  const [filtro, setFiltro]         = useState<Filtro>('todas')
 
   /* Instante em que os minutos deste lote chegaram do servidor · é a âncora do
      relógio de cada card (ver useRelogio). Fica separado de `lastUpdate`
@@ -977,29 +1099,46 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
   const live      = allPicks.filter(p => p.is_live)
   const pending   = allPicks.filter(p => !p.is_live && !FINISHED_SET.has(p.status))
   const finalized = allPicks.filter(p => FINISHED_SET.has(p.status))
+  const resumo    = resumoDoDia(allPicks, unitValue)
+  const mostrar   = (g: Filtro) => filtro === 'todas' || filtro === g
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3 flex-wrap">
-          {live.length > 0 && (
-            <div className="flex items-center gap-1.5 bg-green-500/10 border border-green-500/20 rounded-sm px-3 py-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-              <span className="text-xs font-black text-green-400">{live.length} ao vivo</span>
-            </div>
-          )}
-          <p className="text-xs text-ink-3">
-            Clique em "Pegar bilhete" em qualquer pick para acompanhar aqui.
-          </p>
+    <div className="space-y-5">
+      {/* ── Resumo do dia ──
+          O que a pessoa quer saber ao abrir a aba, antes de qualquer card:
+          quanto está em jogo, quanto pode voltar e como o dia está indo. */}
+      {allPicks.length > 0 && resumo && (
+        <div className="grid grid-cols-3 rounded-lg border border-line bg-surface-1 divide-x divide-line">
+          <ResumoCelula rotulo="Em jogo" valor={`R$${resumo.emJogo.toFixed(2)}`} />
+          <ResumoCelula rotulo="Pode voltar" valor={`R$${resumo.potencial.toFixed(2)}`} cls="text-ink-1" />
+          <ResumoCelula
+            rotulo="Resultado hoje"
+            valor={`${resumo.resultado >= 0 ? '+' : '-'}R$${Math.abs(resumo.resultado).toFixed(2)}`}
+            cls={resumo.resultado > 0 ? 'text-green-400' : resumo.resultado < 0 ? 'text-red-400' : 'text-ink-2'}
+          />
+        </div>
+      )}
+
+      {/* Header: filtros + atualizar */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex gap-1.5 overflow-x-auto scrollbar-none -mx-1 px-1" role="tablist">
+          {([
+            ['todas', 'Todas', allPicks.length],
+            ['vivo', 'Ao vivo', live.length],
+            ['aguardando', 'Aguardando', pending.length],
+            ['encerradas', 'Encerradas', finalized.length],
+          ] as [Filtro, string, number][]).map(([id, rotulo, n]) => (
+            <button key={id} role="tab" aria-selected={filtro === id} onClick={() => setFiltro(id)}
+              className={`shrink-0 flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${
+                filtro === id ? 'bg-accent/15 border-accent/40 text-accent-ink' : 'border-line text-ink-3 hover:text-ink-1'
+              }`}>
+              {id === 'vivo' && n > 0 && <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />}
+              {rotulo}
+              <span className="font-mono text-[10px] opacity-70 tabular-nums">{n}</span>
+            </button>
+          ))}
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {refreshing && (
-            <span className="flex items-center gap-1 text-[10px] text-accent-ink">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-ping shrink-0" />
-              Atualizando...
-            </span>
-          )}
           <button onClick={load} aria-label="Atualizar" disabled={refreshing}
             className="flex items-center justify-center text-accent-ink hover:text-green-400 border border-green-500/20 hover:border-green-500/40 w-9 h-9 rounded-lg transition-colors disabled:opacity-50">
             <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
@@ -1014,14 +1153,25 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
               <Radio className="w-6 h-6 text-green-400" />
             </div>
           </div>
-          <p className="font-semibold text-ink-2">Nenhum pick sendo acompanhado</p>
+          <p className="font-semibold text-ink-2">Nenhuma aposta sendo acompanhada</p>
           <p className="text-sm text-ink-3 mt-2 max-w-xs mx-auto leading-relaxed">
-            Clique em <span className="text-green-400 font-semibold">Pegar bilhete</span> em qualquer pick para acompanhar o resultado ao vivo aqui.
+            Toque em <span className="text-green-400 font-semibold">Pegar bilhete</span> num pick, ou monte o seu bilhete no Raio-X de um jogo. Ele aparece aqui com o placar e a estatística ao vivo.
           </p>
+          <div className="flex flex-col sm:flex-row gap-2 justify-center mt-5">
+            <Link to="/picks" className="flex items-center justify-center gap-1.5 text-sm font-semibold text-accent-ink bg-accent/10 border border-accent/40 rounded-md px-4 py-2.5 hover:bg-accent/20 transition-colors">
+              <Target className="w-4 h-4" /> Ver os picks de hoje
+            </Link>
+            <Link to="/jogos" className="flex items-center justify-center gap-1.5 text-sm font-semibold text-ink-2 border border-line-strong rounded-md px-4 py-2.5 hover:bg-surface-2 transition-colors">
+              <CalendarDays className="w-4 h-4" /> Montar meu bilhete
+            </Link>
+          </div>
         </div>
       ) : (
         <>
-          {live.length > 0 && (
+          {[live, pending, finalized].every((g, i) => !mostrar((['vivo', 'aguardando', 'encerradas'] as Filtro[])[i]) || g.length === 0) && (
+            <p className="text-sm text-ink-3 text-center py-8">Nada nesse filtro agora.</p>
+          )}
+          {mostrar('vivo') && live.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
@@ -1034,7 +1184,7 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
             </div>
           )}
 
-          {pending.length > 0 && (
+          {mostrar('aguardando') && pending.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <span className="w-2 h-2 bg-ink-4 rounded-full" />
@@ -1047,7 +1197,7 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
             </div>
           )}
 
-          {finalized.length > 0 && (
+          {mostrar('encerradas') && finalized.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <span className="w-2 h-2 bg-surface-3 rounded-full" />
