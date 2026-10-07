@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { TrendingUp, Info } from 'lucide-react'
+import { TrendingUp, Info, Wallet } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AnimatePresence, m as motion } from 'framer-motion'
 import { backdropFade, dialogScale } from '../lib/motion'
@@ -492,6 +492,48 @@ export default function Banca() {
                 </div>
               ))}
             </div>
+
+            {/* INVESTIDO (07/10/2026, pedido do usuário). Os quatro números de
+                cima são de RESULTADO; faltava o de DINHEIRO POSTO: quanto está
+                em jogo agora, quanto entrou hoje e quanto foi apostado no
+                período, com o que voltou ao lado. Segue o filtro de período e
+                produto, porque sai da mesma lista. */}
+            {data?.investido && (
+              <div className="card p-4 sm:p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-sm text-ink-2 font-semibold flex items-center gap-2">
+                    <Wallet className="w-4 h-4 text-ink-3" /> Investido
+                  </p>
+                  <span className="text-[11px] text-ink-4">
+                    {PERIODOS.find(p => p.key === period)?.label ?? (period.startsWith('mes:') ? nomeDoMes(period.slice(4)) : '')}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-line rounded-lg overflow-hidden">
+                  {[
+                    {
+                      rotulo: 'Em jogo agora',
+                      valor: fmtBRL(data.investido.em_aberto),
+                      sub: data.investido.apostas_em_aberto === 1 ? '1 aposta aberta' : `${data.investido.apostas_em_aberto} apostas abertas`,
+                      cls: data.investido.em_aberto > 0 ? 'text-yellow-400' : 'text-ink-1',
+                    },
+                    { rotulo: 'Apostado hoje', valor: fmtBRL(data.investido.hoje), sub: 'resolvido ou não', cls: 'text-ink-1' },
+                    { rotulo: 'Total investido', valor: fmtBRL(data.investido.total), sub: 'no período escolhido', cls: 'text-ink-1' },
+                    {
+                      rotulo: 'Voltou',
+                      valor: fmtBRL(data.investido.retornou),
+                      sub: 'das apostas resolvidas',
+                      cls: (data.total_pnl ?? 0) > 0 ? 'text-accent-ink' : (data.total_pnl ?? 0) < 0 ? 'text-red-400' : 'text-ink-1',
+                    },
+                  ].map(({ rotulo, valor, sub, cls }) => (
+                    <div key={rotulo} className="bg-surface-1 px-3 py-3 min-w-0">
+                      <p className="text-[10px] uppercase tracking-wide text-ink-4 truncate">{rotulo}</p>
+                      <p className={`font-mono text-base sm:text-lg font-black tabular-nums whitespace-nowrap ${cls}`}>{valor}</p>
+                      <p className="text-[10px] text-ink-4 truncate">{sub}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Alavancagem · o que entra nesta banca é caminho ENCERRADO, não
                 green de degrau.
