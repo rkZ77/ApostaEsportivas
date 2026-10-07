@@ -3714,9 +3714,14 @@ export default function Picks() {
               {dicasDoDia(today).length > 0 && (
                 <section className="space-y-2">
                   <SectionHeader color="bg-green-500" label={dicasDoDia(today).length > 1 ? 'Picks Free do Dia' : 'Pick Free do Dia'} />
-                  {dicasDoDia(today).map((d: any) => (
-                    <PickSeguroCard key={d.id} dica={d} compact banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(d.fixture_id)} />
-                  ))}
+                  {/* GRADE, COMO O PREMIUM (2026-10-07, pedido do usuário). Desde
+                      que o Free passou a ter até 3 por dia, um embaixo do outro
+                      na largura toda virava uma parede no computador. */}
+                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    {dicasDoDia(today).map((d: any) => (
+                      <PickSeguroCard key={d.id} dica={d} compact banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(d.fixture_id)} />
+                    ))}
+                  </div>
                 </section>
               )}
 
@@ -4016,9 +4021,14 @@ export default function Picks() {
               <div className="space-y-3">
                 <SectionHeader color="bg-green-500" label={dicasDoDia(today).length > 1 ? 'Picks Free do Dia' : 'Pick Free do Dia'} />
                 {dicasDoDia(today).length > 0
-                  ? dicasDoDia(today).map((d: any) => (
-                      <PickSeguroCard key={d.id} dica={d} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(d.fixture_id)} />
-                    ))
+                  ? (
+                    /* Mesma grade da aba Hoje e do Premium · ver a nota lá. */
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                      {dicasDoDia(today).map((d: any) => (
+                        <PickSeguroCard key={d.id} dica={d} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(d.fixture_id)} />
+                      ))}
+                    </div>
+                  )
                   : <PickSeguroEmpty />}
               </div>
             )}
