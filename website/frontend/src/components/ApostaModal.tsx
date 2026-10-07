@@ -37,10 +37,17 @@ interface Props {
   conferindoOdd?: boolean
 }
 
+/** Espelha banca.REGISTRO_MAX_UNIDADES (07/10/2026): o teto do REGISTRO. O
+ *  `maxUnits` que cada card passa é o teto da SUGESTÃO, e virou só o ponto a
+ *  partir do qual a tela pede confirmação · quem apostou 23u na casa precisa
+ *  conseguir lançar 23u. */
+export const REGISTRO_MAX_UNIDADES = 100
+
 export default function ApostaModal({
-  pickOdd, originalOdd, suggestedUnits = 1, suggestedHouse, maxUnits = 10, hideUnits = false,
+  pickOdd, originalOdd, suggestedUnits = 1, suggestedHouse, maxUnits: maxSugerido = 10, hideUnits = false,
   onConfirm, onCancel, loading, error, conferindoOdd = false
 }: Props) {
+  const maxUnits = Math.max(maxSugerido, REGISTRO_MAX_UNIDADES)
   const [oddStr, setOddStr] = useState(String(pickOdd))
 
   /* A odd que chega da conferencia entra no campo · mas so' enquanto a pessoa

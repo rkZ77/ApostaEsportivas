@@ -1401,6 +1401,23 @@ STAKE_LIMITS = {
 #: agente. Os testes de contabilizacao descontam esta lista.
 TIPOS_DO_USUARIO = {"pessoal"}
 
+#: O QUE A PESSOA PODE REGISTRAR (2026-10-07, pedido do usuario).
+#:
+#: STAKE_LIMITS e' o teto da stake que o site SUGERE (suggestions.py le' dele) e
+#: e' prudencia de produto: 20u no Premium, 5u na multipla. Ele tambem recusava
+#: o REGISTRO acima disso, e ai' deixava de ser prudencia pra virar mentira: quem
+#: apostou 23u numa casa nao conseguia lancar a aposta como foi. Agora o
+#: registro aceita ate' REGISTRO_MAX_UNIDADES em qualquer produto; a tela segue
+#: avisando quando passa da sugestao. A sugestao nao mudou.
+REGISTRO_MAX_UNIDADES = 100
+
+
+def limites_de_registro(pick_type: str) -> tuple[float, float]:
+    """(minimo, maximo) de unidades que o follow/bilhete aceita gravar."""
+    min_u, max_u = STAKE_LIMITS[pick_type]
+    return min_u, max(max_u, REGISTRO_MAX_UNIDADES)
+
+
 STAKE_LABELS = {
     "vip": "Premium", "free": "Free", "multipla": "Múltipla", "bingo": "Bingo do Dia",
     "alavancagem": "Alavancagem", "faltas": "de Faltas", "goleiros": "de Defesas",
@@ -1485,10 +1502,10 @@ def follow_pick(body: FollowPick, current_user: dict = Depends(get_current_user)
     # resto da banca (resolve, P&L, historico) ja sabendo lidar com eles.
     if body.pick_type not in STAKE_LIMITS:
         raise HTTPException(400, "Tipo inválido.")
-    min_u, max_u = STAKE_LIMITS[body.pick_type]
+    min_u, max_u = limites_de_registro(body.pick_type)
     if not (min_u <= body.stake_units <= max_u):
         label = STAKE_LABELS.get(body.pick_type, body.pick_type)
-        raise HTTPException(400, f"Stake para picks {label} deve ser entre {min_u} e {max_u} unidades.")
+        raise HTTPException(400, f"Stake para picks {label} deve ser entre {min_u:g} e {max_u:g} unidades.")
     user_id = current_user["id"]
     conn = get_connection()
     cur = conn.cursor()
@@ -1542,7 +1559,7 @@ def registrar_bilhete_pessoal(body: BilhetePessoalBody, current_user: dict = Dep
     conferir, senao o bilhete ficaria pendente pra sempre.
     """
     _check_banca_rate(current_user["id"])
-    min_u, max_u = STAKE_LIMITS[bilhete_pessoal.PICK_TYPE]
+    min_u, max_u = limites_de_registro(bilhete_pessoal.PICK_TYPE)
     if not (min_u <= body.stake_units <= max_u):
         raise HTTPException(400, f"Stake do bilhete deve ser entre {min_u:g} e {max_u:g} unidades.")
     try:
