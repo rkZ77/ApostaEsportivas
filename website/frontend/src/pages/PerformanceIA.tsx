@@ -66,6 +66,60 @@ interface ClvData {
   recent: ClvRow[]
 }
 
+/**
+ * A CURVA DO CLV (2026-10-07). O CLV médio sozinho não diz se a vantagem é
+ * constante ou se veio de três picks felizes: a curva do CLV MÉDIO ACUMULADO,
+ * pick a pick do mais antigo pro mais recente, mostra se ela se sustenta. Linha
+ * acima de zero e estável é o que um apostador profissional quer ver · e é a
+ * prova que não depende do resultado dos jogos.
+ *
+ * SVG à mão, sem biblioteca: é uma linha e uma área, e uma lib de gráfico
+ * pesaria mais que a página inteira.
+ */
+export function curvaAcumulada(linhas: { clv: number | null }[]): number[] {
+  const serie: number[] = []
+  let soma = 0
+  for (const r of linhas) {
+    if (r.clv == null) continue
+    soma += r.clv
+    serie.push(soma / (serie.length + 1))
+  }
+  return serie
+}
+
+function CurvaClv({ linhas }: { linhas: ClvRow[] }) {
+  // `recent` vem do mais novo pro mais antigo; a curva anda no tempo.
+  const serie = curvaAcumulada([...linhas].reverse())
+  if (serie.length < 5) return null
+  const W = 600, H = 160, P = 8
+  const min = Math.min(0, ...serie), max = Math.max(0, ...serie)
+  const faixa = max - min || 1
+  const x = (i: number) => P + (i / (serie.length - 1)) * (W - 2 * P)
+  const y = (v: number) => P + (1 - (v - min) / faixa) * (H - 2 * P)
+  const pontos = serie.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ')
+  const final = serie[serie.length - 1]
+  const cor = final >= 0 ? 'rgb(var(--accent))' : 'rgb(var(--c-red-400))'
+  return (
+    <Panel>
+      <PanelHead label="CLV médio acumulado" meta={`${serie.length} picks, do mais antigo ao mais recente`} />
+      <div className="px-4 pb-4">
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-40" role="img"
+          aria-label={`CLV médio acumulado termina em ${final.toFixed(2)}%`}>
+          <line x1={P} x2={W - P} y1={y(0)} y2={y(0)} style={{ stroke: 'rgb(var(--line-strong))' }} strokeDasharray="4 4" />
+          <polygon points={`${x(0)},${y(0)} ${pontos} ${x(serie.length - 1)},${y(0)}`}
+            style={{ fill: cor, opacity: 0.12 }} />
+          <polyline points={pontos} fill="none" style={{ stroke: cor }} strokeWidth={2.5} strokeLinejoin="round" />
+        </svg>
+        <div className="flex justify-between text-[11px] text-ink-3 mt-1">
+          <span>mais antigo</span>
+          <span className="font-mono">linha tracejada = 0% (empate com o fechamento)</span>
+          <span>hoje</span>
+        </div>
+      </div>
+    </Panel>
+  )
+}
+
 function ClvSection({ data, loading }: { data: ClvData | null; loading: boolean }) {
   if (loading) return <SpinnerBlock />
 
@@ -150,6 +204,8 @@ function ClvSection({ data, loading }: { data: ClvData | null; loading: boolean 
           encontrou valor, porque independe do resultado do jogo.
         </p>
       </div>
+
+      <CurvaClv linhas={data.recent} />
 
       <Panel>
         <PanelHead label="Comparação pick a pick" meta={`${data.recent.length} mais recentes`} />
