@@ -102,6 +102,10 @@ export default function AgenteButton() {
   // Só aparece pra quem já tem conta (visitante sem login não vê o atalho) e
   // some dentro da página /agente cheia -- nao faz sentido flutuar o mesmo chat por cima dela
   if (!user || location.pathname.startsWith('/agente')) return null
+  /* No Raio-X do jogo, no celular, o rodapé já é da bandeja do bilhete: os
+     dois juntos cobriam os números dos quadros (07/10/2026). No computador
+     cabe tudo e o atalho fica. */
+  const someNoCelular = location.pathname.startsWith('/jogos/')
 
   const style: React.CSSProperties = pos
     ? { left: pos.x, top: pos.y }
@@ -125,7 +129,7 @@ export default function AgenteButton() {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.7, transition: { duration: 0.15 } }}
             transition={{ type: 'spring', stiffness: 400, damping: 26, delay: 0.3 }}
-            className={`fixed ${pos ? '' : 'right-4'} z-50`}
+            className={`fixed ${pos ? '' : 'right-4'} z-50 ${someNoCelular ? 'hidden md:block' : ''}`}
           >
             <div
               ref={containerRef}
@@ -133,19 +137,25 @@ export default function AgenteButton() {
                  assinante (ver routers/chat.py), então o passo aponta para o
                  botão de verdade. */
               data-tour="agente"
-              className="flex flex-col items-end gap-1.5 touch-none select-none cursor-grab active:cursor-grabbing"
+              className="relative touch-none select-none cursor-grab active:cursor-grabbing"
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
               onPointerCancel={onPointerUp}
             >
-              {/* X separado acima do botão */}
+              {/* O X é um selo no canto do botão (07/10/2026). Era um círculo
+                  inteiro em cima dele, e os dois juntos tapavam um bloco do
+                  canto da tela · no celular, justamente onde ficam os números
+                  dos quadros. A área de toque continua confortável pelo
+                  padding invisível em volta do selo. */}
               <button
                 onClick={e => { e.stopPropagation(); if (wasDraggedRef.current) { wasDraggedRef.current = false; return }; setDismissed(true) }}
                 aria-label="Fechar atalho do Agente IA"
-                className="w-9 h-9 flex items-center justify-center rounded-full bg-surface-2 border border-line-strong hover:bg-surface-3 text-ink-2 text-base font-black transition-colors shadow"
+                className="absolute -top-3 -left-3 z-10 p-1.5 group"
               >
-                ×
+                <span className="w-5 h-5 flex items-center justify-center rounded-full bg-surface-2 border border-line-strong group-hover:bg-surface-3 text-ink-2 text-xs font-black leading-none shadow">
+                  ×
+                </span>
               </button>
 
               <button
@@ -153,7 +163,7 @@ export default function AgenteButton() {
                 draggable={false}
                 onDragStart={e => e.preventDefault()}
                 aria-label="Conversar com o Agente IA"
-                className="flex items-center gap-2 bg-green-500 hover:bg-green-400 active:bg-green-600 text-black font-bold shadow-lg shadow-black/40 transition-all hover:scale-105 active:scale-95 rounded-full px-3 py-3 sm:px-4 sm:py-3"
+                className="flex items-center gap-2 bg-green-500 hover:bg-green-400 active:bg-green-600 text-black font-bold shadow-lg shadow-black/40 transition-all hover:scale-105 active:scale-95 rounded-full p-2.5 sm:px-4 sm:py-3"
               >
                 {/* O ICONE VOLTOU NO LUGAR DO MASCOTE (10/09/2026, pedido do
                     usuario).

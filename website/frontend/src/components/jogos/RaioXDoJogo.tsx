@@ -225,7 +225,7 @@ function Chips<T extends string>({ opcoes, valor, onChange }: {
   return (
     <div className="relative">
       <div ref={trilho} onScroll={medir}
-        className="-mx-4 px-4 sm:mx-0 sm:px-0 flex gap-2 overflow-x-auto scrollbar-none pb-1
+        className="-mx-4 pl-4 pr-14 sm:mx-0 sm:pl-0 sm:pr-12 md:pr-0 flex gap-2 overflow-x-auto scrollbar-none pb-1
                    md:flex-wrap md:overflow-visible">
         {opcoes.map(o => (
           <button key={o.id} onClick={() => onChange(o.id)} aria-pressed={valor === o.id}
@@ -241,13 +241,13 @@ function Chips<T extends string>({ opcoes, valor, onChange }: {
       </div>
       {sobra.esq && (
         <>
-          <div aria-hidden className="md:hidden pointer-events-none absolute left-0 top-0 h-10 w-12 bg-gradient-to-r from-surface-0 to-transparent" />
+          <div aria-hidden className="md:hidden pointer-events-none -left-4 sm:left-0 absolute top-0 h-10 w-20 bg-gradient-to-r from-surface-0 from-60% to-transparent" />
           <button className={cn(seta, 'left-0')} onClick={() => rolar(-1)} aria-label="Ver opções anteriores"><ChevronLeft size={18} /></button>
         </>
       )}
       {sobra.dir && (
         <>
-          <div aria-hidden className="md:hidden pointer-events-none absolute right-0 top-0 h-10 w-12 bg-gradient-to-l from-surface-0 to-transparent" />
+          <div aria-hidden className="md:hidden pointer-events-none -right-4 sm:right-0 absolute top-0 h-10 w-20 bg-gradient-to-l from-surface-0 from-60% to-transparent" />
           <button className={cn(seta, 'right-0')} onClick={() => rolar(1)} aria-label="Ver mais opções"><ChevronRight size={18} /></button>
         </>
       )}
