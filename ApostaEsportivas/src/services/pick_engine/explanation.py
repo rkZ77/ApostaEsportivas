@@ -34,6 +34,23 @@ def _n_de_jogos(candidate: dict):
     return int(valor)
 
 
+def _nome_do_desfalque(item) -> str:
+    """Nome de um titular desfalcado, venha de onde vier.
+
+    DOIS FORMATOS NO MESMO CAMPO (bug de produção, 2026-10-07). O sinal de
+    desfalques tem dois produtores: `news_model.injury_signal` devolve dicts
+    (`{"name": ..., "starts_recentes": ...}`) e `dossie_da_partida`
+    (`sinal_de_desfalques`, que os 5 pipelines passam como news_data desde
+    27/09) devolve só o NOME, string. Esta linha lia `t["name"]` e derrubava o
+    motor inteiro (TypeError no _save_pick) no primeiro jogo com titular fora.
+    """
+    if isinstance(item, str):
+        return item
+    if isinstance(item, dict):
+        return item.get("name") or item.get("jogador") or ""
+    return ""
+
+
 def build_explanation(candidate: dict) -> dict:
     """Retorna a explicacao estruturada como dict -- quem chama decide
     como serializar (texto pro campo reasoning hoje; JSON no futuro sem
@@ -227,12 +244,13 @@ def build_explanation(candidate: dict) -> dict:
     news = candidate.get("news_raw")
     if news:
         for side_key, side_label in (("home", "Mandante"), ("away", "Visitante")):
-            titulares = news.get(side_key, {}).get("titulares_desfalcados", [])
+            titulares = (news.get(side_key) or {}).get("titulares_desfalcados") or []
+            nomes = ", ".join(n for n in (_nome_do_desfalque(t) for t in titulares[:3]) if n)
             if titulares:
-                nomes = ", ".join(t["name"] for t in titulares[:3])
                 risks.append(
-                    f"{side_label} desfalcado de {len(titulares)} titular(es) recente(s) ({nomes}) "
-                    f"· aproximação por cruzamento de nome entre lesões e escalações recentes"
+                    f"{side_label} desfalcado de {len(titulares)} titular(es) recente(s)"
+                    + (f" ({nomes})" if nomes else "")
+                    + " · cruzamento entre a lista de lesões/suspensões e as escalações recentes"
                 )
 
     # Projecao x linha em texto. Os dois lados aparecem: folga confortavel e'
