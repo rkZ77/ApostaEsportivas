@@ -740,13 +740,27 @@ def get_today_suggestions(
             FROM picks_free pf
             LEFT JOIN fixtures f ON f.fixture_id = pf.fixture_id
             WHERE {_pf_where}
-            ORDER BY pf.match_date DESC, pf.created_at DESC
-            LIMIT 1
+            ORDER BY pf.match_date DESC, pf.created_at ASC
         """
 
+        def _dicas_do_dia() -> list:
+            """Todas as Free do dia mais recente, da melhor pra pior.
+
+            MAIS DE UMA FREE POR DIA (2026-10-07). O motor grava na ordem do
+            Score Final, entao `created_at ASC` e' a ordem do ranking -- o
+            `DESC` antigo, com varias no dia, poria a PIOR como Dica do Dia.
+            `dica_do_dia` continua sendo a primeira, pra app e telas que so'
+            conhecem uma.
+            """
+            linhas = [dict(r) for r in _safe_query(cur, _picks_free_sql, _d)]
+            if not linhas:
+                return []
+            dia = linhas[0]["match_date"]
+            return [r for r in linhas if r["match_date"] == dia]
+
         if is_vip:
-            row = _safe_query_one(cur, _picks_free_sql, _d)
-            result["dica_do_dia"] = dict(row) if row else None
+            result["dicas_do_dia"] = _dicas_do_dia()
+            result["dica_do_dia"] = result["dicas_do_dia"][0] if result["dicas_do_dia"] else None
 
             # VIP picks completos com league_id e league_name
             rows = _safe_query(cur, f"""
@@ -967,8 +981,8 @@ def get_today_suggestions(
                            .replace("result IS NULL", "pl.result IS NULL"),
                 _d)
         else:
-            row = _safe_query_one(cur, _picks_free_sql, _d)
-            result["dica_do_dia"] = dict(row) if row else None
+            result["dicas_do_dia"] = _dicas_do_dia()
+            result["dica_do_dia"] = result["dicas_do_dia"][0] if result["dicas_do_dia"] else None
             # Mercados proprios sao VIP. A chave existe sempre pro front nao
             # precisar checar `undefined` antes de iterar.
             result["faltas"] = []

@@ -556,6 +556,14 @@ function UserGreeting({ user, isVip, isAdmin, daysUntilExpiry }: {
 
 // Pick do Dia card
 
+/** As Free do dia, da melhor pra pior. Desde 07/10 o motor publica até 3
+ *  num dia cheio · `dica_do_dia` (só a primeira) fica de recuo pra resposta
+ *  de backend antigo. */
+function dicasDoDia(today: any): any[] {
+  if (today?.dicas_do_dia?.length) return today.dicas_do_dia
+  return today?.dica_do_dia ? [today.dica_do_dia] : []
+}
+
 function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = false }: { dica: any; compact?: boolean; onClick?: () => void; banca?: { bankroll_current: number; unit_value: number } | null; isLive?: boolean }) {
   const [showAnalysis, setShowAnalysis] = useState(false)
   const navigate = useNavigate()
@@ -3257,8 +3265,8 @@ export default function Picks() {
   useEffect(() => {
     if (!today) return
     const ids = new Set<number>()
-    if (today.dica_do_dia && !today.dica_do_dia.result && today.dica_do_dia.fixture_id) {
-      ids.add(today.dica_do_dia.fixture_id)
+    for (const d of dicasDoDia(today)) {
+      if (!d.result && d.fixture_id) ids.add(d.fixture_id)
     }
     for (const s of today.vip ?? []) {
       if (!s.result && s.fixture_id) ids.add(s.fixture_id)
@@ -3559,7 +3567,7 @@ export default function Picks() {
           liveCount={liveCount}
           temFaltasHoje={(today?.faltas ?? []).length > 0}
           counts={{
-            pick_seguro: today?.dica_do_dia && !today.dica_do_dia.result ? 1 : undefined,
+            pick_seguro: dicasDoDia(today).filter((d: any) => !d.result).length || undefined,
             /* Cada produto conta o SEU: faltas saiu do VIP em 08/09 e voltou
                a ter aba, entao somar as duas diria "5" numa aba com 3 picks. */
             vip:         ((today?.vip ?? []).filter((s: any) => !s.result).length) || undefined,
@@ -3703,10 +3711,12 @@ export default function Picks() {
               })()}
 
               {/* Pick Seguro · visível para todos; some se não houver dica hoje */}
-              {today?.dica_do_dia && (
-                <section>
-                  <SectionHeader color="bg-green-500" label="Pick Free do Dia" />
-                  <PickSeguroCard dica={today.dica_do_dia} compact banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(today.dica_do_dia.fixture_id)} />
+              {dicasDoDia(today).length > 0 && (
+                <section className="space-y-2">
+                  <SectionHeader color="bg-green-500" label={dicasDoDia(today).length > 1 ? 'Picks Free do Dia' : 'Pick Free do Dia'} />
+                  {dicasDoDia(today).map((d: any) => (
+                    <PickSeguroCard key={d.id} dica={d} compact banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(d.fixture_id)} />
+                  ))}
                 </section>
               )}
 
@@ -4003,9 +4013,13 @@ export default function Picks() {
 
             {/* Pick de hoje */}
             {todayLoading ? <PickLoading /> : (
-              <div>
-                <SectionHeader color="bg-green-500" label="Pick Free do Dia" />
-                {today?.dica_do_dia ? <PickSeguroCard dica={today.dica_do_dia} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(today.dica_do_dia.fixture_id)} /> : <PickSeguroEmpty />}
+              <div className="space-y-3">
+                <SectionHeader color="bg-green-500" label={dicasDoDia(today).length > 1 ? 'Picks Free do Dia' : 'Pick Free do Dia'} />
+                {dicasDoDia(today).length > 0
+                  ? dicasDoDia(today).map((d: any) => (
+                      <PickSeguroCard key={d.id} dica={d} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(d.fixture_id)} />
+                    ))
+                  : <PickSeguroEmpty />}
               </div>
             )}
 
