@@ -502,6 +502,36 @@ def _dia_br(followed_at_iso: Optional[str]):
     return dt.astimezone(BR_TZ).date()
 
 
+def _resumo_investido(entries: list, total_pnl: float, hoje=None) -> dict:
+    """Dinheiro posto em aposta, em reais.
+
+    `total`: tudo o que foi apostado no recorte (resolvido + em aberto).
+    `em_aberto`: o que ainda esta' em jogo, sem resultado.
+    `hoje`: o que foi apostado hoje (dia de Brasilia), resolvido ou nao.
+    `retornou`: o que voltou das apostas resolvidas (stake + lucro), pra a
+    tela dizer "investi X, voltou Y" sem a pessoa fazer conta."""
+    hoje = hoje or datetime.now(BR_TZ).date()
+    total = em_aberto = do_dia = resolvido = 0.0
+    abertas = 0
+    for e in entries:
+        stake = float(e.get("stake_reais") or 0)
+        total += stake
+        if e.get("result"):
+            resolvido += stake
+        else:
+            em_aberto += stake
+            abertas += 1
+        if _dia_br(e.get("followed_at")) == hoje:
+            do_dia += stake
+    return {
+        "total": round(total, 2),
+        "em_aberto": round(em_aberto, 2),
+        "apostas_em_aberto": abertas,
+        "hoje": round(do_dia, 2),
+        "retornou": round(resolvido + total_pnl, 2),
+    }
+
+
 def _curva_diaria(entries: list, bankroll_start: float) -> list[dict]:
     """Evolução da banca com UM ponto por dia, e só de dia já encerrado.
 
@@ -917,6 +947,10 @@ def get_banca(
                     "pick_id":        f["pick_id"],
                     "pick_type":      f["pick_type"],
                     "stake_units":    float(f["stake_units"]),
+                    # Em reais, com a unidade DA APOSTA (mesma regra de
+                    # _compute_follow_pnl): trocar a unidade hoje nao reescreve
+                    # quanto foi investido ontem.
+                    "stake_reais":    round(float(f["stake_units"]) * float(f.get("unit_value") or unit_value), 2),
                     "followed_at":    f["followed_at"].isoformat() if f["followed_at"] else None,
                     "home_team_name": pick.get("home_team_name"),
                     "away_team_name": pick.get("away_team_name"),
@@ -946,6 +980,11 @@ def get_banca(
         total_profit_units  = sum(e["pnl"] / unit_value for e in resolved if e["pnl"] is not None)
         total_staked_units  = sum(e["stake_units"] for e in resolved)
         yield_roi = round(total_profit_units / total_staked_units * 100, 1) if total_staked_units > 0 else 0
+
+        # INVESTIDO (2026-10-07, pedido do usuario): quanto dinheiro entrou em
+        # aposta no periodo, quanto esta' em jogo agora e quanto voltou. Mesma
+        # lista do resto da tela, entao o filtro de periodo e produto vale aqui.
+        investido = _resumo_investido(entries, total_pnl)
 
         # Streak pessoal
         streak_info = _compute_streak(resolved)
@@ -1020,6 +1059,7 @@ def get_banca(
             "yield_roi":            yield_roi,
             "ia_roi":               ia_roi,
             "total_pnl":            round(total_pnl, 2),
+            "investido":            investido,
             "streak":               streak_info["streak"],
             "streak_type":          streak_info["streak_type"],
             "best_streak":          streak_info["best_streak"],
