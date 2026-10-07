@@ -1,5 +1,5 @@
 /**
- * Eventos de funil no GA4.
+ * Eventos de funil no GA4 e no Meta Pixel.
  *
  * O QUE ESTE ARQUIVO **NÃO** FAZ: `purchase`. A receita é enviada pelo
  * servidor, de `_apply_approved_payment` (ver backend/analytics.py), e o
@@ -59,6 +59,23 @@ function evento(nome: string, parametros: Parametros = {}): void {
   }
 }
 
+/**
+ * O mesmo funil pro Meta Pixel (fila `fbq` criada no index.html).
+ *
+ * Só eventos padrão do Meta, que são os que as campanhas sabem otimizar. O
+ * `Purchase` também não sai daqui: vai pelo servidor, pela API de Conversões
+ * (backend/analytics.py), pelo mesmo motivo do `purchase` do GA.
+ */
+function eventoMeta(nome: string, parametros: Parametros = {}): void {
+  try {
+    const fbq = (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq
+    if (typeof fbq !== 'function') return
+    fbq('track', nome, parametros)
+  } catch {
+    /* medição não quebra tela */
+  }
+}
+
 function paraItem(plano: PlanoGA): ItemGA {
   return {
     item_id: plano.id,
@@ -76,6 +93,11 @@ export function viuOsPlanos(planos: Array<PlanoGA>): void {
     item_list_id: 'planos',
     item_list_name: 'Planos de assinatura',
     items: planos.map(paraItem),
+  })
+  eventoMeta('ViewContent', {
+    content_type: 'product',
+    content_ids: planos.map(p => p.id),
+    content_name: 'Planos de assinatura',
   })
 }
 
@@ -96,10 +118,18 @@ export function iniciouCheckout(plano: PlanoGA): void {
     value: Number(plano.price) || 0,
     items: [paraItem(plano)],
   })
+  eventoMeta('InitiateCheckout', {
+    currency: MOEDA,
+    value: Number(plano.price) || 0,
+    content_type: 'product',
+    content_ids: [plano.id],
+    num_items: 1,
+  })
 }
 
 export function criouConta(): void {
   evento('sign_up', { method: 'email' })
+  eventoMeta('CompleteRegistration', { status: true })
 }
 
 export function entrou(): void {
