@@ -7,9 +7,10 @@ import { useNotifications } from '../context/NotificationContext'
 import { useOnboarding } from '../context/OnboardingContext'
 import { useCallback, useState, useEffect } from 'react'
 import {
-  Zap, Trophy, BarChart2, Bot, Wallet, ListChecks, ShieldCheck, Crown,
+  Zap, BarChart2, Bot, Wallet, ListChecks, ShieldCheck, Crown,
   LogOut, Menu, BookOpen, MessageCircle, History, Compass,
 } from 'lucide-react'
+import BolaDeFutebol from './icones/BolaDeFutebol'
 import Avatar from './Avatar'
 import { GavetaLateral, ItemDaGaveta, Secao } from './MenuLateral'
 import { rotuloDoPlano } from './ui'
@@ -52,7 +53,7 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
     { to: '/meus-picks', label: 'Meus Picks',       Icon: ListChecks },
     { to: '/banca',      label: 'Minha Banca',      Icon: Wallet },
     { to: '/resultados', label: 'Resultados',       Icon: BarChart2 },
-    { to: '/fixtures',   label: 'Jogos',            Icon: Trophy },
+    { to: '/fixtures',   label: 'Jogos',            Icon: BolaDeFutebol },
     { to: '/agente',     label: 'Agente',           Icon: Bot },
     ...(!isAdmin && (user?.plan === 'vip' || user?.plan === 'trial')
       ? [{ to: '/planos', label: 'Meu Plano', Icon: Crown, highlight: 'yellow' as const }]

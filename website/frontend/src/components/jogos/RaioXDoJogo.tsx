@@ -3,7 +3,8 @@ import { Check, Flag, Minus, Plus, Shield, Users } from 'lucide-react'
 import api from '../../services/api'
 import { cn } from '../../lib/cn'
 import { ErrorState, Skeleton } from '../ui'
-import { LeagueLogo, PlayerPhoto, TeamLogo } from '../TeamLogo'
+import { LeagueLogo, PaisDaLigaTag, PlayerPhoto, TeamLogo } from '../TeamLogo'
+import { nomeDaLigaPt, rotuloDaRodada } from '../../lib/paisDaLiga'
 import {
   ambasMarcam, comPeriodo, ehGoleiro, ESTATS_DE_JOGADOR, fraseDoJogador, MERCADOS_DE_TIME, numero,
   resultadoDoJogo, ROTULO_PERIODO, rotuloDaLinha, taxa, taxaDoJogador, tomDaTaxa,
@@ -29,6 +30,8 @@ export interface JogoBase {
   home_team_id?: number
   away_team_id?: number
   league_id?: number
+  /** O nome gravado; vale só pra liga fora do mapa de nomes em português. */
+  league_name?: string
   home_team?: string
   away_team?: string
   match_datetime?: string | null
@@ -105,6 +108,7 @@ export default function RaioXDoJogo({ jogo }: { jogo: JogoBase }) {
 
 function Placar({ jogo, dados }: { jogo: JogoBase; dados: RaioX | null }) {
   const f = dados?.fixture
+  const ligaId = f?.league_id ?? jogo.league_id
   const quando = f?.match_datetime ?? jogo.match_datetime
   const hora = quando ? new Date(quando).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '--:--'
   const dia = quando ? new Date(quando).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }) : ''
@@ -123,9 +127,15 @@ function Placar({ jogo, dados }: { jogo: JogoBase; dados: RaioX | null }) {
     <div className="card p-4 mb-3 relative overflow-hidden">
       <div aria-hidden className="absolute inset-0 bg-data-grid bg-[length:24px_24px] opacity-60 [mask-image:radial-gradient(ellipse_at_top,black,transparent_70%)]" />
       <div className="relative">
-        <div className="flex items-center justify-center gap-2 text-[11px] text-ink-3 mb-3">
-          <LeagueLogo id={f?.league_id ?? jogo.league_id} size={14} />
-          <span className="truncate">{f?.round ?? ''}</span>
+        {/* LIGA E RODADA EM PORTUGUÊS (2026-10-07, pedido do usuário). Antes era
+            só o escudo e o texto cru do provedor, "Regular Season - 29". */}
+        <div className="flex flex-col items-center gap-0.5 mb-3 text-center">
+          <div className="flex items-center justify-center gap-1.5 min-w-0">
+            <LeagueLogo id={ligaId} size={16} />
+            <span className="text-xs font-bold text-ink-1 truncate">{nomeDaLigaPt(ligaId, jogo.league_name)}</span>
+            <PaisDaLigaTag id={ligaId} soBandeira />
+          </div>
+          {f?.round && <span className="text-[11px] text-ink-3">{rotuloDaRodada(f.round)}</span>}
         </div>
         <div className="flex items-start gap-2">
           <Time id={f?.home_team_id ?? jogo.home_team_id} nome={f?.home_team || jogo.home_team} forma={formaHome} />

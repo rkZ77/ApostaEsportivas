@@ -5,6 +5,7 @@ import api from '../services/api'
 import PageShell from '../components/PageShell'
 import { PAGE_WIDTH } from '../lib/pageWidth'
 import { capitalizarFrase } from '../utils/format'
+import { nomeDaLigaPt, paisDaLiga } from '../lib/paisDaLiga'
 import RaioXDoJogo, { FormaPontos } from '../components/jogos/RaioXDoJogo'
 import BandejaDoBilhete from '../components/jogos/BandejaDoBilhete'
 import { EstatisticasContent } from './Estatisticas'
@@ -241,6 +242,7 @@ export default function Fixtures() {
     if (f.home_team_id) q.set('home', String(f.home_team_id))
     if (f.away_team_id) q.set('away', String(f.away_team_id))
     q.set('league', String(f.league_id))
+    q.set('liga', f.league_name)
     q.set('casa', f.home_team); q.set('fora', f.away_team)
     if (f.match_datetime) q.set('quando', f.match_datetime)
     navigate(`/jogos/${f.fixture_id}?${q}`)
@@ -499,9 +501,11 @@ export default function Fixtures() {
                       onError={e => (e.currentTarget.style.display = 'none')}
                       />
                   )}
-                  <span className={`text-xs font-bold ${isCopa ? 'text-yellow-300' : 'text-ink-2'}`}>{league}</span>
-                  {country && (
-                    <span className={`text-xs font-normal ${isCopa ? 'text-yellow-700' : 'text-ink-4'}`}>{country}</span>
+                  {/* Nome e país em português quando a liga é conhecida
+                      (lib/paisDaLiga) · o provedor manda "Serie A" e "Brazil". */}
+                  <span className={`text-xs font-bold ${isCopa ? 'text-yellow-300' : 'text-ink-2'}`}>{nomeDaLigaPt(league_id, league)}</span>
+                  {(paisDaLiga(league_id)?.pais ?? country) && (
+                    <span className={`text-xs font-normal ${isCopa ? 'text-yellow-700' : 'text-ink-4'}`}>{paisDaLiga(league_id)?.pais ?? country}</span>
                   )}
                   {flag && (
                     <img src={flag} alt={country ?? ''} width={18} height={13}
