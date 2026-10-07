@@ -146,7 +146,8 @@ def _banco_raio_x(fixture_row, lineup=None):
         ("FROM player_match_stats", jogadores),
         ("FROM teams", [{"team_id": 10, "name": "Casa FC"}, {"team_id": 20, "name": "Fora FC"},
                         {"team_id": 77, "name": "Rival A"}, {"team_id": 66, "name": "Rival B"}]),
-        ("WHERE referee = %s", [_jogo(700, "2026-09-01", 1, 2, 0, 0)]),
+        # O arbitro casa pela chave do nome desde 07/10 (arbitro.py).
+        ("split_part(referee, ',', 1)", [_jogo(700, "2026-09-01", 1, 2, 0, 0)]),
     ]), kickoff
 
 

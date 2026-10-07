@@ -8,6 +8,7 @@ from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv())
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.arbitro import chave_do_arbitro, sql_chave
 from utils.db_utils import get_connection
 from utils.stat_sheet import folha_publicada, ler_valor, somar
 from utils.api_client import buscar
@@ -223,6 +224,21 @@ class MatchStatisticsSyncService:
         # arbitro estreante de arbitro com folha faltando.
         self.cur.execute(
             "ALTER TABLE referee_stats ADD COLUMN IF NOT EXISTS games_total INTEGER;")
+
+        # CHAVE DO ARBITRO (2026-10-07). Toda consulta de arbitro casa agora
+        # pela chave do nome (utils/arbitro.py), e uma expressao na coluna sem
+        # indice seria varredura da tabela inteira a cada jogo analisado.
+        # Em savepoint: indice e' desempenho, nao correcao -- se o banco
+        # recusar, a coleta segue sem ele.
+        self.cur.execute("SAVEPOINT indice_arbitro;")
+        try:
+            self.cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_ms_chave_arbitro ON match_statistics "
+                f"(({sql_chave('referee')}));")
+            self.cur.execute("RELEASE SAVEPOINT indice_arbitro;")
+        except Exception as e:
+            self.cur.execute("ROLLBACK TO SAVEPOINT indice_arbitro;")
+            print(f"[REFEREE] Indice da chave do arbitro nao criado: {e}")
 
         # FOLHA DO 1o TEMPO (2026-09-27). Ver CONTADORES_1T.
         #
@@ -776,8 +792,20 @@ class MatchStatisticsSyncService:
     # UPSERT ÁRBITRO → retorna referee_id (ou None se sem nome)
     # ---------------------------------------------------------
     def _upsert_referee(self, name: str) -> int | None:
-        if not name:
+        """Id do árbitro. Grafia nova de quem já existe reaproveita o id dele
+        (2026-10-07): sem isso "Raphael Claus" e "Raphael Claus, Brazil"
+        viravam dois árbitros com a amostra partida. Ver utils/arbitro.py."""
+        chave = chave_do_arbitro(name)
+        if not chave:
             return None
+        self.cur.execute(f"""
+            SELECT referee_id FROM referees
+             WHERE {sql_chave('name')} = %s
+             ORDER BY referee_id LIMIT 1
+        """, (chave,))
+        existente = self.cur.fetchone()
+        if existente:
+            return existente[0]
         self.cur.execute("""
             INSERT INTO referees (name, created_at, last_updated)
             VALUES (%s, NOW(), NOW())
@@ -790,7 +818,9 @@ class MatchStatisticsSyncService:
     # RECALCULA MÉDIAS DO ÁRBITRO PARA UMA TEMPORADA
     # ---------------------------------------------------------
     def _recalculate_referee_stats(self, referee_id: int, referee_name: str, season: int):
-        self.cur.execute("""
+        # Casa pela CHAVE do nome, nao pelo texto exato (2026-10-07): todas as
+        # grafias do mesmo arbitro entram na mesma media. Ver utils/arbitro.py.
+        self.cur.execute(f"""
             INSERT INTO referee_stats (
                 referee_id, season,
                 games, games_total,
@@ -818,7 +848,7 @@ class MatchStatisticsSyncService:
                 MIN(ms.total_yellow_cards),
                 NOW()
             FROM match_statistics ms
-            WHERE ms.referee = %s
+            WHERE {sql_chave('ms.referee')} = %s
               AND ms.season  = %s
               -- Status entra desde 2026-08-27. Sem ele, linha de jogo nao
               -- finalizado (adiado, interrompido) entrava na media do arbitro
@@ -837,7 +867,7 @@ class MatchStatisticsSyncService:
                 max_yellow   = EXCLUDED.max_yellow,
                 min_yellow   = EXCLUDED.min_yellow,
                 last_updated = NOW();
-        """, (referee_id, season, referee_name, season, _REFEREE_FINALIZADOS))
+        """, (referee_id, season, chave_do_arbitro(referee_name), season, _REFEREE_FINALIZADOS))
 
     # ---------------------------------------------------------
     # PROCESSA LOTE DE ÁRBITROS AO FINAL DO SYNC

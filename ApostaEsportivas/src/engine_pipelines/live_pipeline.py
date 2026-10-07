@@ -47,6 +47,7 @@ _SRC = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
+from utils.arbitro import chave_do_arbitro, sql_chave  # noqa: E402
 from utils.db_utils import get_connection  # noqa: E402
 from services.match_stats_service import MatchStatsService
 from services.standings_service import StandingsService
@@ -448,17 +449,18 @@ def baseline_do_arbitro(cur, estado: dict, config: LiveEngineConfig) -> dict:
     resto do motor ja' usa. Sem amostra, devolve vazio e a familia cai na
     constante, com o rastro dizendo qual das duas foi usada.
     """
-    arbitro = (estado.get("referee") or "").strip()
+    # Chave do nome, nao texto exato (2026-10-07) -- ver utils/arbitro.py.
+    arbitro = chave_do_arbitro(estado.get("referee"))
     league_id = estado.get("league_id")
     if not arbitro or not league_id:
         return {}
     try:
-        cur.execute("""
+        cur.execute(f"""
             SELECT AVG(COALESCE(total_yellow_cards, 0))::float AS amarelo,
                    AVG(COALESCE(total_red_cards, 0))::float    AS vermelho,
                    COUNT(*)                                    AS n
             FROM match_statistics
-            WHERE referee = %s
+            WHERE {sql_chave('referee')} = %s
               AND league_id = %s
               AND status IN ('FT', 'AET', 'PEN')
               AND total_yellow_cards IS NOT NULL

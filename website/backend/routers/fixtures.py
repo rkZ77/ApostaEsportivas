@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
 from database import get_connection
 from auth_utils import get_current_user
+from arbitro import chave_do_arbitro, sql_chave
 import api_quota
 import cache_publico
 
@@ -658,15 +659,19 @@ def _jogadores_dos_times(cur, jogos_por_time: dict, titulares: dict) -> dict:
 
 
 def _arbitro(cur, nome: str | None, n: int) -> dict | None:
-    if not nome:
+    # Pela chave do nome, nao pelo texto exato (2026-10-07): a API escreve o
+    # mesmo arbitro como "Raphael Claus" e "Raphael Claus, Brazil", e o Raio-X
+    # mostrava so' os jogos da grafia de hoje. Ver arbitro.py.
+    chave = chave_do_arbitro(nome)
+    if not chave:
         return None
-    cur.execute("""
+    cur.execute(f"""
         SELECT match_date, home_yellow_cards, away_yellow_cards,
                home_red_cards, away_red_cards, home_fouls, away_fouls
         FROM match_statistics
-        WHERE referee = %s AND status IN ('FT','AET','PEN')
+        WHERE {sql_chave('referee')} = %s AND status IN ('FT','AET','PEN')
         ORDER BY match_date DESC LIMIT %s
-    """, (nome, n))
+    """, (chave, n))
     jogos = [{
         "amarelos": (r["home_yellow_cards"] or 0) + (r["away_yellow_cards"] or 0),
         "vermelhos": (r["home_red_cards"] or 0) + (r["away_red_cards"] or 0),
