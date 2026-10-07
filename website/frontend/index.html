@@ -252,23 +252,42 @@
       rolagem, tecla) ou, sem nenhuma, 5 s depois do `load`. O page_view nao se
       perde: ele ja' esta' na fila desde a linha do `config`. So' quem fecha a
       aba antes de 5 s sem tocar em nada deixa de ser contado.
+
+      META PIXEL (2026-10-07) vai no mesmo trem. O snippet oficial do Meta
+      cria a fila `fbq` E injeta o fbevents.js na hora; aqui a fila continua
+      sincrona (o PageView fica enfileirado como o page_view do GA) e so' o
+      download espera junto com o gtag.js. A troca de rota do SPA o proprio
+      fbevents.js conta: ele escuta o pushState e dispara PageView sozinho.
+      O <noscript> do snippet ficou de fora: sem JS o app nao abre.
     -->
     <script>
       window.dataLayer = window.dataLayer || []
       function gtag() { dataLayer.push(arguments) }
       gtag('js', new Date())
       gtag('config', 'G-L801QMZ5ZS')
+      !function (f, n) {
+        if (f.fbq) return
+        n = f.fbq = function () { n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments) }
+        if (!f._fbq) f._fbq = n
+        n.push = n; n.loaded = !0; n.version = '2.0'; n.queue = []
+      }(window)
+      fbq('init', '1059298736832153')
+      fbq('track', 'PageView')
       ;(function () {
         var feito = false
         var eventos = ['pointerdown', 'keydown', 'scroll', 'touchstart']
+        function script(src) {
+          var s = document.createElement('script')
+          s.async = true
+          s.src = src
+          document.head.appendChild(s)
+        }
         function carregar() {
           if (feito) return
           feito = true
           eventos.forEach(function (e) { removeEventListener(e, carregar, true) })
-          var s = document.createElement('script')
-          s.async = true
-          s.src = 'https://www.googletagmanager.com/gtag/js?id=G-L801QMZ5ZS'
-          document.head.appendChild(s)
+          script('https://www.googletagmanager.com/gtag/js?id=G-L801QMZ5ZS')
+          script('https://connect.facebook.net/en_US/fbevents.js')
         }
         eventos.forEach(function (e) { addEventListener(e, carregar, { capture: true, passive: true, once: true }) })
         addEventListener('load', function () { setTimeout(carregar, 5000) })

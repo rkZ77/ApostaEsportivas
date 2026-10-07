@@ -1,41 +1,56 @@
 import psycopg2.extras
+from utils.arbitro import chave_do_arbitro, sql_chave
 from utils.db_utils import get_connection
 
 
 class RefereeStatsService:
 
     def get_stats(self, referee: str, season: int) -> dict | None:
-        """Retorna médias pré-calculadas do árbitro na temporada, ou None se não houver dados."""
-        if not referee:
+        """Médias do árbitro na temporada, ou None se não houver jogo dele.
+
+        AGREGA DIRETO DE match_statistics PELA CHAVE DO NOME (2026-10-07).
+        Antes lia `referee_stats` casando `referees.name` com o texto exato do
+        jogo de hoje. A API escreve o mesmo árbitro de mais de um jeito
+        ("Raphael Claus" / "Raphael Claus, Brazil"), cada grafia tinha a sua
+        linha em `referees`, e a amostra dele ficava partida: o motor achava só
+        o pedaço com a grafia de hoje e caía no fallback da liga. Ver
+        utils/arbitro.py.
+
+        Mesmas colunas e mesmo recorte do coletor
+        (`_recalculate_referee_stats`): temporada, jogo encerrado, e `games`
+        contando só jogo com folha de cartão, que é a amostra do gate.
+        """
+        chave = chave_do_arbitro(referee)
+        if not chave:
             return None
 
         conn = get_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
-        cur.execute("""
+        cur.execute(f"""
             SELECT
-                r.referee_id,
-                r.name        AS referee,
-                rs.season,
-                rs.games,
-                rs.avg_yellow,
-                rs.avg_red,
-                rs.avg_fouls,
-                rs.avg_corners,
-                rs.avg_goals,
-                rs.max_yellow,
-                rs.min_yellow
-            FROM referee_stats rs
-            JOIN referees r ON r.referee_id = rs.referee_id
-            WHERE r.name = %s
-              AND rs.season = %s
-        """, (referee, season))
+                %s                                                   AS referee,
+                %s                                                   AS season,
+                COUNT(*) FILTER (WHERE ms.total_yellow_cards IS NOT NULL) AS games,
+                COUNT(*)                                             AS games_total,
+                ROUND(AVG(ms.total_yellow_cards)::numeric, 2)        AS avg_yellow,
+                ROUND(AVG(ms.total_red_cards)::numeric, 2)           AS avg_red,
+                ROUND(AVG(ms.home_fouls + ms.away_fouls)::numeric, 2) AS avg_fouls,
+                ROUND(AVG(ms.total_corners)::numeric, 2)             AS avg_corners,
+                ROUND(AVG(ms.total_goals)::numeric, 2)               AS avg_goals,
+                MAX(ms.total_yellow_cards)                           AS max_yellow,
+                MIN(ms.total_yellow_cards)                           AS min_yellow
+            FROM match_statistics ms
+            WHERE {sql_chave('ms.referee')} = %s
+              AND ms.season = %s
+              AND ms.status IN ('FT', 'AET', 'PEN')
+        """, (referee, season, chave, season))
 
         row = cur.fetchone()
         cur.close()
         conn.close()
 
-        if not row:
+        if not row or not row["games_total"]:
             return None
 
         return dict(row)
@@ -63,6 +78,9 @@ class RefereeStatsService:
             FROM match_statistics
             WHERE league_id = %s AND season = %s
               AND home_yellow_cards IS NOT NULL
+              -- Mesmo recorte da media do arbitro (2026-10-07): jogo adiado
+              -- ou interrompido com placar parcial nao entra.
+              AND status IN ('FT', 'AET', 'PEN')
         """, (league_id, season))
 
         row = cur.fetchone()

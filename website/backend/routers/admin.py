@@ -6332,12 +6332,17 @@ def amostra_do_arbitro(
         if not linha:
             raise HTTPException(404, "Árbitro não cadastrado.")
         nome = linha["name"]
+        # Pela chave do nome (2026-10-07): as grafias do mesmo arbitro entram
+        # juntas, que e' como o coletor passou a calcular a media salva. Ver
+        # arbitro.py.
+        from arbitro import chave_do_arbitro, sql_chave
+        chave = chave_do_arbitro(nome)
 
-        cur.execute("""
+        cur.execute(f"""
             SELECT DISTINCT season FROM match_statistics
-             WHERE referee = %s AND status IN ('FT','AET','PEN')
+             WHERE {sql_chave('referee')} = %s AND status IN ('FT','AET','PEN')
              ORDER BY season DESC
-        """, (nome,))
+        """, (chave,))
         temporadas = [r["season"] for r in cur.fetchall()]
         if season is None:
             season = temporadas[0] if temporadas else None
@@ -6355,7 +6360,7 @@ def amostra_do_arbitro(
         salva = dict(salva) if salva else None
 
         # Os mesmos jogos que a média agrega · mesmo filtro, mesma tabela.
-        cur.execute("""
+        cur.execute(f"""
             SELECT ms.fixture_id,
                    ms.match_date::text AS data,
                    ms.status,
@@ -6372,10 +6377,10 @@ def amostra_do_arbitro(
                              ORDER BY season DESC LIMIT 1) casa ON TRUE
          LEFT JOIN LATERAL (SELECT name FROM teams WHERE team_id = ms.away_team_id
                              ORDER BY season DESC LIMIT 1) fora ON TRUE
-             WHERE ms.referee = %s AND ms.season = %s
+             WHERE {sql_chave('ms.referee')} = %s AND ms.season = %s
                AND ms.status IN ('FT','AET','PEN')
              ORDER BY ms.match_date DESC, ms.fixture_id DESC
-        """, (nome, season))
+        """, (chave, season))
         jogos = []
         com_buraco = 0
         for r in cur.fetchall():
