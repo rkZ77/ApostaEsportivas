@@ -341,6 +341,10 @@ def _candidate_summary(c: dict) -> dict:
         # Calculado mesmo quando nao entra na nota (MOTOR_DESFALQUES=shadow):
         # e' o que scripts/medir_desfalques.py le.
         "news_score_sombra": c.get("news_score_sombra"),
+        # Dixon-Coles em sombra (07/10) e o Poisson que ele disputa: os dois
+        # lado a lado e' o que scripts/medir_dixon_coles.py compara.
+        "poisson_probability": c.get("poisson_probability"),
+        "dixon_coles_sombra": c.get("dixon_coles_sombra"),
         "line_score": c.get("line_score"),
         "final_score": c.get("final_score"),
         "is_best_pick": c.get("is_best_pick", False),

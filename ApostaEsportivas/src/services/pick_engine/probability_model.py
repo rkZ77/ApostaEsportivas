@@ -257,6 +257,64 @@ def btts_probability(lambda_home: float | None, lambda_away: float | None) -> fl
     return round(p_home_scores * p_away_scores, 4)
 
 
+# ── DIXON-COLES, EM SOMBRA (2026-10-07) ──────────────────────────────────────
+#
+# O Poisson independente erra sistematicamente os placares BAIXOS: no futebol
+# 0-0 e 1-1 saem mais do que o produto de dois Poisson preve, e 1-0/0-1 menos.
+# E' o achado de Dixon & Coles (1997), e pesa justamente nos mercados que o
+# motor mais publica em gols: Under 1.5/2.5 e Ambas Marcam.
+#
+# A correcao multiplica as 4 celulas baixas por tau(rho). rho < 0 aumenta 0-0
+# e 1-1. O valor da literatura fica entre -0.05 e -0.15; o daqui NAO e' medido
+# ainda, entao a probabilidade corrigida so' e' CALCULADA e GRAVADA no rastro
+# (`dixon_coles_sombra`), sem mexer em pick nenhum. Quem decide se entra e'
+# scripts/medir_dixon_coles.py, que tambem estima o rho com os jogos do banco
+# (regra do projeto: sinal so' entra depois de medido).
+RHO_DIXON_COLES_SOMBRA = -0.10
+_MAX_GOLS = 10
+
+
+def _tau(i: int, j: int, lh: float, la: float, rho: float) -> float:
+    if i == 0 and j == 0:
+        return 1 - lh * la * rho
+    if i == 0 and j == 1:
+        return 1 + lh * rho
+    if i == 1 and j == 0:
+        return 1 + la * rho
+    if i == 1 and j == 1:
+        return 1 - rho
+    return 1.0
+
+
+def placares_dixon_coles(lh: float, la: float, rho: float = RHO_DIXON_COLES_SOMBRA) -> list:
+    """Matriz P[i][j] (gols casa i, fora j), normalizada. rho=0 e' Poisson."""
+    ph = [poisson_pmf(i, lh) for i in range(_MAX_GOLS + 1)]
+    pa = [poisson_pmf(j, la) for j in range(_MAX_GOLS + 1)]
+    m = [[max(0.0, ph[i] * pa[j] * _tau(i, j, lh, la, rho)) for j in range(_MAX_GOLS + 1)]
+         for i in range(_MAX_GOLS + 1)]
+    total = sum(sum(linha) for linha in m) or 1.0
+    return [[v / total for v in linha] for linha in m]
+
+
+def dixon_coles_prob(lh: float | None, la: float | None, mercado: str,
+                     line: float | None = None, direction: str | None = None,
+                     rho: float = RHO_DIXON_COLES_SOMBRA) -> float | None:
+    """P(hit) com Dixon-Coles · `mercado` 'total' (Over/Under de gols do jogo)
+    ou 'btts' (direction 'yes'/'no'). None sem lambdas validos."""
+    if lh is None or la is None or lh < 0 or la < 0:
+        return None
+    m = placares_dixon_coles(lh, la, rho)
+    d = (direction or "").strip().lower()
+    if mercado == "btts":
+        p = sum(m[i][j] for i in range(1, _MAX_GOLS + 1) for j in range(1, _MAX_GOLS + 1))
+        return round(p if d in ("yes", "sim") else 1 - p, 4)
+    if mercado == "total" and line is not None and d in ("over", "under", "mais de", "menos de"):
+        under = sum(m[i][j] for i in range(_MAX_GOLS + 1) for j in range(_MAX_GOLS + 1)
+                    if i + j <= math.floor(line))
+        return round(under if d in ("under", "menos de") else 1 - under, 4)
+    return None
+
+
 def model_fit(taxa_empirica: float | None, prob_poisson: float | None) -> float | None:
     """Convergencia entre a taxa empirica (stats_model, contagem direta
     nos ultimos jogos) e a probabilidade do modelo Poisson pra MESMA linha

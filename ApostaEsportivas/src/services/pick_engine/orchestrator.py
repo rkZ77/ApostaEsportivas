@@ -398,6 +398,29 @@ def analyze_fixture_markets(
             if home_conv and away_conv:
                 btts_sim = probability_model.btts_probability(
                     home_conv["expected_value"], away_conv["expected_value"])
+        # DIXON-COLES EM SOMBRA (2026-10-07): precisa do lambda de gol de CADA
+        # lado. Ambas marcam (jogo inteiro) ja' os tem; gols totais do jogo os
+        # calcula aqui. So' alimenta `dixon_coles_sombra` no rastro · nao entra
+        # em taxa, nota nem escolha (ver probability_model, bloco Dixon-Coles).
+        dc_lambdas = None
+        try:
+            if family == "btts" and btts_sim is not None:
+                dc_lambdas = (home_conv["expected_value"], away_conv["expected_value"])
+            elif family == "goals" and (scope or "total") == "total":
+                _hc = stats_model.expected_value_convergence(
+                    last10_home, last10_away, "goals", "home",
+                    home_team_id=home_team_id, away_team_id=away_team_id,
+                    team_stats_home=team_stats_home, team_stats_away=team_stats_away,
+                    league_baseline=league_baseline)
+                _ac = stats_model.expected_value_convergence(
+                    last10_home, last10_away, "goals", "away",
+                    home_team_id=home_team_id, away_team_id=away_team_id,
+                    team_stats_home=team_stats_home, team_stats_away=team_stats_away,
+                    league_baseline=league_baseline)
+                if _hc and _ac:
+                    dc_lambdas = (_hc["expected_value"], _ac["expected_value"])
+        except Exception:
+            dc_lambdas = None   # sombra nunca derruba o motor
         has_poisson_signal = is_poisson_fam or family in ("btts", "btts_1h")
         # Lambda do arbitro: so' cartoes, e so' quando ha sinal proprio dele
         # (ver referee_model.cards_lambda).
@@ -709,6 +732,11 @@ def analyze_fixture_markets(
                 # nenhuma rebaixou nada. Sem o numero no rastro nao da' pra
                 # medir depois se o sinal esta ajudando.
                 "poisson_probability": poisson_linha,
+                # SOMBRA: so' gravado, nunca usado na conta (ver dc_lambdas).
+                "dixon_coles_sombra": (probability_model.dixon_coles_prob(
+                    dc_lambdas[0], dc_lambdas[1],
+                    "btts" if family == "btts" else "total", line_val, direcao)
+                    if dc_lambdas else None),
                 "model_fit_diff":      fit_poisson,
                 "referee_probability": referee_linha,
                 "referee_fit_diff":    fit_referee,
