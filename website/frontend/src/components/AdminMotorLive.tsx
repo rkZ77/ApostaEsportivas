@@ -70,12 +70,14 @@ interface Stats {
   ev_medio: number | null; confianca_media: number | null; minuto_medio: number | null
   por_mercado?: { market_type: string; resolvidos: number; greens: number; profit: number }[]
 }
-/** Laço de rodadas sucessivas · liga e desliga no clique, nunca sozinho. */
+/** Laço de rodadas sucessivas · no clique, ou sozinho desde 08/10 (`origem`
+ *  'auto': o agendador liga com jogo das nossas ligas e desliga sem jogo). */
 interface Watch {
   ativo: boolean; iniciado_em: string | null; rodadas: number
   falhas_seguidas: number; ultima_rodada: string | null
   proxima_rodada_em: number | null; motivo_parada: string | null
   intervalo_min: number | null; dry_run: boolean | null
+  origem?: 'painel' | 'auto' | null
 }
 
 const POLL_MS = 3000
@@ -596,9 +598,15 @@ export default function AdminMotorLive() {
           </p>
         ) : null}
 
+        {emLaco && watch?.origem === 'auto' && (
+          <p className="mt-3 text-[11px] text-accent-ink leading-relaxed">
+            Ligado sozinho: tem jogo das nossas ligas em campo. Desliga sozinho quando não sobrar nenhum.
+          </p>
+        )}
         <p className="mt-3 text-[10px] text-ink-4 leading-relaxed">
-          O laço vive dentro do processo do site. Um deploy ou um restart do serviço derruba ele,
-          e o painel volta a mostrar &quot;Ligar&quot;. Fechar esta página não desliga nada.
+          Em produção ele liga sozinho quando começa um jogo de uma liga do site e desliga quando
+          não sobra jogo em campo. Desligar aqui vale até o fim do dia. Para tirar o automático
+          sem deploy: variável <code>LIVE_AUTO=off</code>. Fechar esta página não desliga nada.
         </p>
       </div>
       </Secao>
