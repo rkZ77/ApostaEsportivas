@@ -1326,7 +1326,7 @@ _STATUS_COM_PARECER = {"ok"}
 
 def _bucket() -> dict:
     return {"n": 0, "green": 0, "red": 0, "push": 0, "pendentes": 0,
-            "lucro": 0.0, "_clv": [], "_com_lucro": 0}
+            "lucro": 0.0, "_clv": [], "_com_lucro": 0, "_prob": [], "_impl": []}
 
 
 def _add(bucket: dict, row: dict) -> None:
@@ -1345,12 +1345,24 @@ def _add(bucket: dict, row: dict) -> None:
         bucket["_com_lucro"] += 1
     if row.get("clv") is not None:
         bucket["_clv"].append(float(row["clv"]))
+    # CALIBRACAO (2026-10-08): o que o motor prometeu e o que o preco dizia,
+    # so' nas pernas decididas -- as mesmas do acerto, senao os tres numeros
+    # falariam de amostras diferentes. Mesma leitura do
+    # src/scripts/medir_calibracao_dos_picks.py, agora sem precisar de acesso
+    # ao banco de producao.
+    if resultado in ("GREEN", "RED") and row.get("odd") and float(row["odd"]) > 1:
+        bucket["_impl"].append(1 / float(row["odd"]))
+        if row.get("probability") is not None:
+            p = float(row["probability"])
+            bucket["_prob"].append(p / 100 if p > 1 else p)
 
 
 def _fechar(bucket: dict) -> dict:
     resolvidos = bucket["green"] + bucket["red"]
     clvs = bucket.pop("_clv")
     com_lucro = bucket.pop("_com_lucro")
+    probs = bucket.pop("_prob")
+    impls = bucket.pop("_impl")
     return {
         **bucket,
         "resolvidos": resolvidos,
@@ -1361,6 +1373,12 @@ def _fechar(bucket: dict) -> dict:
         # entao unidade e' a unica base comparavel entre modelos.
         "roi": round(bucket["lucro"] / com_lucro * 100, 1) if com_lucro else None,
         "clv": round(sum(clvs) / len(clvs) * 100, 2) if clvs else None,
+        "n_clv": len(clvs),
+        # Em %: a chance media que o motor deu e a que a odd implicava. Acerto
+        # perto de `prometido` = calibrado; perto de `implicita` e abaixo do
+        # prometido = o motor ve valor que o mercado ja' tinha precificado.
+        "prometido": round(sum(probs) / len(probs) * 100, 1) if probs else None,
+        "implicita": round(sum(impls) / len(impls) * 100, 1) if impls else None,
     }
 
 
@@ -1408,7 +1426,7 @@ def ai_performance(days: int = 60, current_user: dict = Depends(require_admin)):
                    if cur.fetchone() else "NULL::numeric AS clv")
         cur.execute(f"""
             SELECT pick_type, ai_provider, ai_model, ai_decision, ai_status,
-                   market, market_type, odd,
+                   market, market_type, odd, probability,
                    result, profit, {clv_sql}, created_at::date AS dia
             FROM picks_ledger
             WHERE created_at >= NOW() - (%s * INTERVAL '1 day')
