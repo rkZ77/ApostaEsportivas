@@ -662,6 +662,11 @@ async def start_rate_store_cleanup():
     asyncio.create_task(_cleanup_rate_stores())
 
 
+# AGENDADOR DE VOLTA EM 2026-10-08, pedido do usuario, com as travas que faltaram
+# em 01/08: so' no ambiente "production" do Railway, teto de cota e uma execucao
+# por dia mesmo com varios workers. Ver agendador.py. O historico abaixo fica
+# porque explica as travas.
+#
 # O scheduler.py foi REMOVIDO em 2026-08-01, por decisao do usuario: nada mais
 # roda sozinho neste backend, em nenhum ambiente (prod, noprod, dev). Sairam
 # junto os 5 jobs que existiam -- pipeline diario 00:10, resolve_picks 5min,
@@ -692,6 +697,16 @@ def run_startup_migrations_hook():
         registrar(_conexao, logger)
     except Exception as e:
         logger.warning("[DEPLOY] %s", e)
+
+
+@app.on_event("startup")
+async def ligar_agendador():
+    """Depois das migrations (hook acima). Fora da producao nao sobe nada."""
+    try:
+        import agendador
+        agendador.iniciar()
+    except Exception as e:
+        logger.warning("[AGENDADOR] nao subiu: %s", e)
 
 
 @app.on_event("startup")

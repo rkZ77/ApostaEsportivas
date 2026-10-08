@@ -125,16 +125,30 @@ def media_faz_cede(historico, team_id, mercado, periodo):
     return sum(faz) / len(faz), sum(cede) / len(cede)
 
 
-def fracao_2t(jogos_antes, league_id):
-    """Fracao dos escanteios que sai no 2o tempo, na liga (ou geral)."""
-    def frac(lista):
-        tot = sum((j["home_corners"] or 0) + (j["away_corners"] or 0) for j in lista)
-        h1 = sum((j["home_corners_1h"] or 0) + (j["away_corners_1h"] or 0) for j in lista)
-        return (tot - h1) / tot if tot else None
-    com_folha = [j for j in jogos_antes if j["home_corners_1h"] is not None
-                 and j["away_corners_1h"] is not None and j["home_corners"] is not None]
-    da_liga = [j for j in com_folha if j["league_id"] == league_id]
-    return frac(da_liga) if len(da_liga) >= 30 else (frac(com_folha) if len(com_folha) >= 30 else 0.53)
+class FracaoDoSegundoTempo:
+    """Fracao dos escanteios que sai no 2o tempo, na liga (ou geral), so' com
+    jogos JA' vistos. Acumulada jogo a jogo: refazer a lista dos anteriores
+    pra cada jogo seria quadratico no banco inteiro."""
+
+    def __init__(self):
+        self.liga = defaultdict(lambda: [0, 0.0, 0.0])   # n, total, 1o tempo
+        self.geral = [0, 0.0, 0.0]
+
+    def somar(self, j):
+        if None in (j["home_corners_1h"], j["away_corners_1h"], j["home_corners"], j["away_corners"]):
+            return
+        tot = j["home_corners"] + j["away_corners"]
+        h1 = j["home_corners_1h"] + j["away_corners_1h"]
+        for acc in (self.liga[j["league_id"]], self.geral):
+            acc[0] += 1
+            acc[1] += tot
+            acc[2] += h1
+
+    def de(self, league_id):
+        for n, tot, h1 in (self.liga.get(league_id, [0, 0, 0]), self.geral):
+            if n >= 30 and tot:
+                return (tot - h1) / tot
+        return 0.53
 
 
 def main():
@@ -144,10 +158,21 @@ def main():
     por_time = defaultdict(list)    # team_id -> jogos (mais recente primeiro, montado no laco)
     apostas = defaultdict(list)     # bet_id -> [(prob, acertou, odd)]
     sem_odd = defaultdict(int)
+    fracao = FracaoDoSegundoTempo()
+    linhas_por_jogo = defaultdict(lambda: defaultdict(set))   # fixture -> bet -> nomes
+    for fid, mid, nome in odds:
+        linhas_por_jogo[fid][mid].add(nome)
+    pendentes_do_dia: list = []   # jogos do mesmo dia so' entram no historico no dia seguinte
+    dia_atual = None
 
-    for idx, j in enumerate(jogos):
+    for j in jogos:
+        if j["match_date"] != dia_atual:
+            for x in pendentes_do_dia:
+                fracao.somar(x)
+                for t in (x["home_team_id"], x["away_team_id"]):
+                    por_time[t].insert(0, x)
+            pendentes_do_dia, dia_atual = [], j["match_date"]
         if j["match_date"] >= desde:
-            antes = [x for x in jogos[:idx] if x["match_date"] < j["match_date"]]
             for mid, (_, mercado, periodo) in MERCADOS.items():
                 real_h = contagem(j, mercado, periodo, "home")
                 real_a = contagem(j, mercado, periodo, "away")
@@ -160,10 +185,10 @@ def main():
                     continue
                 lam = (h[0] + a[1]) / 2 + (a[0] + h[1]) / 2
                 if mercado == "escanteios" and periodo == "2t":
-                    lam *= fracao_2t(antes, j["league_id"])
+                    lam *= fracao.de(j["league_id"])
                 real = real_h + real_a
                 melhor = None
-                linhas = {k[2] for k in odds if k[0] == j["fixture_id"] and k[1] == mid}
+                linhas = linhas_por_jogo[j["fixture_id"]][mid]
                 if not linhas:
                     sem_odd[mid] += 1
                 for nome in linhas:
@@ -186,8 +211,7 @@ def main():
                             melhor = (ev, p, acertou, odd)
                 if melhor:
                     apostas[mid].append(melhor[1:])
-        for t in (j["home_team_id"], j["away_team_id"]):
-            por_time[t].insert(0, j)
+        pendentes_do_dia.append(j)
 
     print(f"Jogos encerrados desde {desde}: {sum(1 for j in jogos if j['match_date'] >= desde)}")
     print(f"Regra de aposta: chance x odd >= {1 + EV_MIN:.2f}, chance >= {PROB_MIN:.0%}, "
