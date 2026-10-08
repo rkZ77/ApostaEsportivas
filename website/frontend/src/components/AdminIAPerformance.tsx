@@ -30,6 +30,20 @@ import { Badge, EmptyState, Panel, PanelHead, PillGroup, SpinnerBlock, StatTile,
 interface Bucket {
   n: number; green: number; red: number; push: number; pendentes: number
   resolvidos: number; hit: number | null; lucro: number; roi: number | null; clv: number | null
+  n_clv?: number; prometido?: number | null; implicita?: number | null
+}
+
+/* Leitura da calibração, em uma palavra (08/10/2026). Mesma regra do
+   medir_calibracao_dos_picks.py: o acerto perto do que o motor prometeu é
+   calibração; perto do preço e abaixo do prometido, o motor vê valor que o
+   mercado já sabia. Só com amostra, porque com 15 pernas qualquer leitura é
+   ruído. */
+export function leituraDaCalibracao(b: Bucket, minimo = 30): { texto: string; tom: 'bom' | 'ruim' | 'neutro' } | null {
+  if (b.resolvidos < minimo || b.hit == null || b.prometido == null || b.implicita == null) return null
+  const folga = 2 * Math.sqrt((b.hit / 100) * (1 - b.hit / 100) / b.resolvidos) * 100
+  if (b.hit >= b.implicita + folga) return { texto: 'acerta acima do preço', tom: 'bom' }
+  if (b.hit < b.prometido - folga && b.hit <= b.implicita + folga / 2) return { texto: 'promete mais do que entrega', tom: 'ruim' }
+  return { texto: 'dentro do esperado', tom: 'neutro' }
 }
 interface Modelo {
   provider: string | null; model: string | null
@@ -329,6 +343,22 @@ export default function AdminIAPerformance({ status }: { status: AIReviewStatus 
                       {t.pendentes > 0 && `, ${t.pendentes} pend.`}
                       {!relevante && ', amostra pequena'}
                     </p>
+                    {/* Calibração: prometido x preço x acerto, e o CLV de
+                        fechamento perto do apito. */}
+                    {t.prometido != null && t.implicita != null && (
+                      <p className="text-[10px] text-ink-3 tabular-nums mt-0.5">
+                        motor {pct(t.prometido)}, preço {pct(t.implicita)}, acertou {pct(t.hit)}
+                        {t.clv != null && `, CLV ${sinal(t.clv, 1)}% (${t.n_clv})`}
+                        {(() => {
+                          const l = leituraDaCalibracao(t)
+                          return l ? (
+                            <span className={`ml-1.5 font-semibold ${l.tom === 'bom' ? 'text-green-400' : l.tom === 'ruim' ? 'text-red-400' : 'text-ink-2'}`}>
+                              · {l.texto}
+                            </span>
+                          ) : null
+                        })()}
+                      </p>
+                    )}
                   </div>
                   <div className="text-right shrink-0">
                     <p className={`font-mono text-sm font-black tabular-nums ${
