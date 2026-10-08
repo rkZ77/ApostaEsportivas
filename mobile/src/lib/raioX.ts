@@ -22,6 +22,11 @@ export interface JogoDoTime {
   vermelhos_pro: number | null; vermelhos_contra: number | null
   chutes_alvo_pro: number | null; chutes_alvo_contra: number | null
   faltas_pro: number | null; faltas_contra: number | null
+  /* Desde 07/10 · só jogo todo (o provedor não publica o 1º tempo deles).
+     `defesas_pro` = o goleiro DESTE time defendeu. */
+  chutes_pro?: number | null; chutes_contra?: number | null
+  impedimentos_pro?: number | null; impedimentos_contra?: number | null
+  defesas_pro?: number | null; defesas_contra?: number | null
   posse: number | null
   /* 1º tempo · null em jogo sem a folha do 1º tempo (coletada desde 27/09). */
   gols_pro_1t?: number | null; gols_contra_1t?: number | null
@@ -78,6 +83,7 @@ export type Quem = 'pro' | 'contra' | 'jogo'
 export const ROTULO_PERIODO: Record<Periodo, string> = { total: 'Jogo todo', '1t': '1º tempo', '2t': '2º tempo' }
 
 type Contador = 'gols' | 'escanteios' | 'amarelos' | 'chutes_alvo' | 'faltas'
+  | 'chutes' | 'impedimentos' | 'defesas'
 
 /**
  * O número de um jogo: de quem (pro/contra/jogo) e em que tempo.
@@ -88,7 +94,7 @@ type Contador = 'gols' | 'escanteios' | 'amarelos' | 'chutes_alvo' | 'faltas'
  */
 export function numero(j: JogoDoTime, c: Contador, quem: Quem, periodo: Periodo): number | null {
   const lado = (q: 'pro' | 'contra'): number | null => {
-    const total = j[`${c}_${q}` as keyof JogoDoTime] as number | null
+    const total = (j[`${c}_${q}` as keyof JogoDoTime] ?? null) as number | null
     if (periodo === 'total') return total
     const prim = (j[`${c}_${q}_1t` as keyof JogoDoTime] ?? null) as number | null
     if (periodo === '1t') return prim
@@ -126,6 +132,13 @@ export const MERCADOS_DE_TIME: MercadoDeTime[] = [
   { id: 'cartoes_time', rotulo: 'Cartões do time', frase: 'Cartões', contador: 'amarelos', escopo: 'time', linhaPadrao: 1.5, linhaPadraoTempo: 0.5 },
   { id: 'chutes_alvo_time', rotulo: 'Chutes no alvo do time', frase: 'Chutes no alvo', contador: 'chutes_alvo', escopo: 'time', linhaPadrao: 3.5, linhaPadraoTempo: 1.5 },
   { id: 'faltas_time', rotulo: 'Faltas do time', frase: 'Faltas', contador: 'faltas', escopo: 'time', linhaPadrao: 11.5, linhaPadraoTempo: 11.5, soTotal: true },
+  /* 07/10/2026, pedido do usuário. Só jogo todo, como faltas. */
+  { id: 'chutes', rotulo: 'Chutes', frase: 'Chutes no jogo', contador: 'chutes', escopo: 'jogo', linhaPadrao: 22.5, linhaPadraoTempo: 22.5, soTotal: true },
+  { id: 'chutes_time', rotulo: 'Chutes do time', frase: 'Chutes', contador: 'chutes', escopo: 'time', linhaPadrao: 10.5, linhaPadraoTempo: 10.5, soTotal: true },
+  { id: 'impedimentos', rotulo: 'Impedimentos', frase: 'Impedimentos no jogo', contador: 'impedimentos', escopo: 'jogo', linhaPadrao: 3.5, linhaPadraoTempo: 3.5, soTotal: true },
+  { id: 'impedimentos_time', rotulo: 'Impedimentos do time', frase: 'Impedimentos', contador: 'impedimentos', escopo: 'time', linhaPadrao: 1.5, linhaPadraoTempo: 1.5, soTotal: true },
+  { id: 'defesas', rotulo: 'Defesas do goleiro', frase: 'Defesas dos goleiros no jogo', contador: 'defesas', escopo: 'jogo', linhaPadrao: 5.5, linhaPadraoTempo: 5.5, soTotal: true },
+  { id: 'defesas_time', rotulo: 'Defesas do goleiro do time', frase: 'Defesas do goleiro', contador: 'defesas', escopo: 'time', linhaPadrao: 2.5, linhaPadraoTempo: 2.5, soTotal: true },
 ]
 
 /*
@@ -142,6 +155,9 @@ export const MERCADOS_PRINCIPAIS: Array<{ id: string; rotulo: string; jogo: stri
   { id: 'cartoes', rotulo: 'Cartões', jogo: 'cartoes', time: 'cartoes_time' },
   { id: 'chutes_alvo', rotulo: 'Chutes no alvo', jogo: 'chutes_alvo', time: 'chutes_alvo_time' },
   { id: 'faltas', rotulo: 'Faltas', jogo: 'faltas', time: 'faltas_time' },
+  { id: 'chutes', rotulo: 'Chutes', jogo: 'chutes', time: 'chutes_time' },
+  { id: 'impedimentos', rotulo: 'Impedimentos', jogo: 'impedimentos', time: 'impedimentos_time' },
+  { id: 'defesas', rotulo: 'Defesas', jogo: 'defesas', time: 'defesas_time' },
 ]
 
 /** "Escanteios no jogo · 1º tempo" · o tempo só entra no texto quando não é o jogo todo. */
@@ -195,7 +211,7 @@ export function rotuloDaLinha(linha: number, lado: Lado): string {
 
 export interface EstatDeJogador {
   id: keyof Pick<JogoDoJogador, 'chutes' | 'chutes_alvo' | 'gols' | 'assistencias' | 'faltas'
-    | 'faltas_sofridas' | 'desarmes' | 'defesas' | 'amarelos'>
+    | 'faltas_sofridas' | 'desarmes' | 'defesas' | 'amarelos' | 'passes' | 'dribles'>
   rotulo: string
   /** "1+ chute no alvo", no singular e no plural. */
   singular: string
@@ -215,6 +231,9 @@ export const ESTATS_DE_JOGADOR: EstatDeJogador[] = [
   { id: 'desarmes', rotulo: 'Desarmes', singular: 'desarme', plural: 'desarmes', minimoPadrao: 2 },
   { id: 'amarelos', rotulo: 'Cartão', singular: 'cartão', plural: 'cartões', minimoPadrao: 1 },
   { id: 'defesas', rotulo: 'Defesas', singular: 'defesa', plural: 'defesas', minimoPadrao: 3, soGoleiro: true },
+  /* 07/10 · já vinham na série do jogador, só não tinham botão. */
+  { id: 'passes', rotulo: 'Passes', singular: 'passe', plural: 'passes', minimoPadrao: 30 },
+  { id: 'dribles', rotulo: 'Dribles', singular: 'drible certo', plural: 'dribles certos', minimoPadrao: 1 },
 ]
 
 /** "X ou mais" em cada jogo DO JOGADOR · a linha de prop é sempre mínimo. */

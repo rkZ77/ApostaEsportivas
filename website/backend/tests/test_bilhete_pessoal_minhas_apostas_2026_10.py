@@ -28,6 +28,11 @@ def time(**k):
      ("Gols Casa 1º Tempo", "goals", "Over 1.5")),
     (time(mercado="btts"), ("Ambas Marcam", "btts", "Sim")),
     (time(mercado="faltas", linha=22), ("Faltas", "fouls", "Over 22")),
+    (time(mercado="chutes", linha=22.5), ("Chutes", "shots", "Over 22.5")),
+    (time(mercado="impedimentos_time", lado_time="home", linha=1.5),
+     ("Impedimentos Casa", "offsides", "Over 1.5")),
+    (time(mercado="defesas_time", lado_time="away", direcao="menos", linha=3.5),
+     ("Defesas do Goleiro Fora", "saves", "Under 3.5")),
 ])
 def test_mercado_ao_vivo(perna, esperado):
     assert bp.mercado_ao_vivo(perna) == esperado
@@ -39,6 +44,42 @@ def test_escopo_e_tempo_saem_certos_pro_motor_ao_vivo():
     assert market_form.e_mercado_de_primeiro_tempo(market, mtype)
     market, _, _ = bp.mercado_ao_vivo(time(mercado="chutes_alvo", periodo="2t"))
     assert market_form.e_mercado_de_segundo_tempo(market)
+
+
+def test_mercados_novos_liquidam_pelas_colunas_do_jogo():
+    jogo = {"status": "FT", "home_total_shots": 14, "away_total_shots": 9,
+            "home_offsides": 2, "away_offsides": 1,
+            "home_goalkeeper_saves": 3, "away_goalkeeper_saves": 5}
+    [chutes, imped, defesas] = bp.validar_pernas([
+        time(mercado="chutes", linha=22.5),
+        time(mercado="impedimentos_time", lado_time="home", direcao="menos", linha=1.5),
+        time(mercado="defesas_time", lado_time="away", linha=4.5),
+    ])
+    assert bp.liquidar_perna(chutes, jogo, None, False, False)[:2] == ("GREEN", 23)
+    assert bp.liquidar_perna(imped, jogo, None, False, False)[:2] == ("RED", 2)
+    assert bp.liquidar_perna(defesas, jogo, None, False, False)[:2] == ("GREEN", 5)
+
+
+def test_mercados_novos_so_no_jogo_todo():
+    with pytest.raises(bp.PernaInvalida):
+        bp.validar_pernas([time(mercado="chutes", periodo="1t")])
+
+
+def test_passes_e_dribles_de_jogador():
+    [p] = bp.validar_pernas([{**BASE, "tipo": "jogador", "estat": "passes", "minimo": 30,
+                              "player_id": 7}])
+    assert bp.liquidar_perna(p, {"status": "FT"}, {"minutes": 90, "passes_total": 41}, True, False)[0] == "GREEN"
+
+
+def test_mercados_novos_ao_vivo_caem_na_familia_certa():
+    from routers.live import _stat_for_market
+    for perna, rotulo in [
+        (time(mercado="chutes"), "Chutes"),
+        (time(mercado="impedimentos_time", lado_time="away"), "Impedimentos Fora"),
+        (time(mercado="defesas_time", lado_time="home"), "Defesas Casa"),
+    ]:
+        market, mtype, line = bp.mercado_ao_vivo(perna)
+        assert _stat_for_market(market, line, {}, {}, 0, 0, mtype)[1] == rotulo
 
 
 def test_perna_de_jogador_nao_tem_mercado_ao_vivo():

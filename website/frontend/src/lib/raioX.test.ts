@@ -32,6 +32,25 @@ describe('taxa', () => {
   })
 })
 
+describe('mercados novos (chutes, impedimentos, defesas)', () => {
+  const j = jogo({ chutes_pro: 14, chutes_contra: 9, impedimentos_pro: 2, impedimentos_contra: 1,
+                   defesas_pro: 3, defesas_contra: 5 })
+
+  it('somam no jogo e separam faz x cede', () => {
+    expect(numero(j, 'chutes', 'jogo', 'total')).toBe(23)
+    expect(numero(j, 'impedimentos', 'contra', 'total')).toBe(1)
+    expect(numero(j, 'defesas', 'pro', 'total')).toBe(3)
+  })
+
+  it('jogo antigo sem o campo vira sem dado, não zero', () => {
+    expect(numero(jogo({}), 'chutes', 'jogo', 'total')).toBeNull()
+  })
+
+  it('não existem por tempo', () => {
+    expect(numero(j, 'chutes', 'pro', '1t')).toBeNull()
+  })
+})
+
 describe('rótulos', () => {
   it('linha .5 e linha inteira', () => {
     expect(rotuloDaLinha(9.5, 'mais')).toBe('Mais de 9.5')

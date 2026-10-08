@@ -590,7 +590,7 @@ function AbaMercados({ dados, nomeJogo, odds }: { dados: RaioX; nomeJogo: string
             desabilitaMenos={linha <= 0.5} />
         </div>
         {mercado.soTotal && (
-          <p className="text-[11px] text-ink-3">Faltas só existem no jogo todo: o provedor não separa por tempo.</p>
+          <p className="text-[11px] text-ink-3">{par.rotulo} só existe no jogo todo: o provedor não separa por tempo.</p>
         )}
       </div>
 
