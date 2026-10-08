@@ -97,6 +97,29 @@ def test_segundo_tempo_e_total_menos_primeiro():
     assert media_faz_cede(hist[:3], 2, "gols", "2t") is None    # menos de 5 jogos
 
 
+def test_segundo_tempo_de_ponta_a_ponta(monkeypatch, capsys):
+    """Doze rodadas de dois times e odd so' no ultimo jogo: o script aposta
+    naquele jogo, com historico so' do passado, e imprime a tabela."""
+    from scripts import medir_segundo_tempo as m2
+    jogos = []
+    for i in range(12):
+        jogos.append({"fixture_id": i, "match_date": dt.date(2026, 9, 17 + i), "league_id": 71,
+                      "home_team_id": 1 if i % 2 else 2, "away_team_id": 2 if i % 2 else 1,
+                      "home_goals": 3, "away_goals": 2, "home_goals_ht": 1, "away_goals_ht": 0,
+                      "home_corners": 7, "away_corners": 6,
+                      "home_corners_1h": 3, "away_corners_1h": 3})
+    odds = {(11, 26, "over 1.5"): [1.90, 2.00], (11, 26, "under 1.5"): [1.85],
+            (11, 127, "over 5.5"): [1.80]}
+    monkeypatch.setattr(m2, "carregar", lambda desde: (jogos, odds))
+    monkeypatch.setattr(sys, "argv", ["x", "2026-09-28"])
+    m2.main()
+    saida = capsys.readouterr().out
+    linha_gols = next(l for l in saida.splitlines() if "Gols 2o tempo" in l)
+    # 2o tempo sempre 4 gols (3+2 - 1+0): Over 1.5 a ~1.95 e' valor, e bateu
+    assert linha_gols.split()[3] == "1"          # uma aposta
+    assert "+0.950" in linha_gols                # ganhou na odd mediana 1.95
+
+
 def test_scripts_sao_so_leitura():
     for nome in ("medir_primeiro_tempo.py", "medir_segundo_tempo.py", "medir_recalibracao.py"):
         fonte = open(os.path.join(RAIZ, "src", "scripts", nome), encoding="utf-8").read()

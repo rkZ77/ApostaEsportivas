@@ -1611,10 +1611,51 @@ def pipeline_status_public(current_user: dict = Depends(get_current_user)):
     }
 
 
+#: Botao manual -> tarefa do agendador que ele substitui no dia. Quem clicou
+#: "Rodar Tudo" de manha nao pode ganhar uma segunda geracao as 9h, nem um
+#: segundo laco de fechamento. Ver agendador.py.
+_TAREFA_DO_BOTAO = {"tudo": "tudo", "coleta_fechamento": "fechamento"}
+
+
+async def _rodar_reivindicando(command: str, corrida) -> None:
+    """Roda `corrida` e, se este clique ficou com a tarefa do dia, marca o fim
+    dela -- e' o que libera o fechamento depois de um Rodar Tudo manual."""
+    import agendador
+    dia = datetime.now(agendador.BR).date()
+    tarefa = _TAREFA_DO_BOTAO[command]
+    try:
+        meu = await asyncio.to_thread(agendador.reivindicar, tarefa, dia, "manual")
+    except Exception:
+        meu = False
+    await corrida
+    if meu:
+        st = _pipeline_status.get(command) or {}
+        try:
+            await asyncio.to_thread(agendador.concluir, tarefa, dia,
+                                    "ok" if st.get("status") == "ok" else "erro", st.get("error"))
+        except Exception:
+            pass
+
+
+@router.get("/agendador")
+def agendador_estado(current_user: dict = Depends(require_admin)):
+    """O que rodou sozinho hoje e a ultima saida de cada medicao do motor."""
+    import agendador
+    return agendador.estado()
+
+
+@router.post("/agendador/medicoes")
+async def agendador_medicoes_agora(current_user: dict = Depends(require_admin)):
+    """Roda as medicoes agora. Custo zero de API: os scripts so' leem o banco."""
+    import agendador
+    asyncio.create_task(agendador.rodar_medicoes(datetime.now(agendador.BR).date()))
+    return {"ok": True, "status": "iniciado"}
+
+
 @router.post("/run-pipeline")
 async def run_pipeline(body: PipelineCommandBody, current_user: dict = Depends(require_admin)):
     if body.command == "tudo":
-        asyncio.create_task(_run_tudo())
+        asyncio.create_task(_rodar_reivindicando("tudo", _run_tudo()))
         return {"ok": True, "status": "iniciado"}
 
     if body.command == "dev_tudo":
@@ -1628,8 +1669,10 @@ async def run_pipeline(body: PipelineCommandBody, current_user: dict = Depends(r
     if not os.path.exists(script):
         raise HTTPException(500, detail=f"Script não encontrado: {script}")
 
-    asyncio.create_task(_run_and_track(body.command, script,
-                                       args=_PIPELINE_ARGS.get(body.command)))
+    corrida = _run_and_track(body.command, script, args=_PIPELINE_ARGS.get(body.command))
+    if body.command in _TAREFA_DO_BOTAO:
+        corrida = _rodar_reivindicando(body.command, corrida)
+    asyncio.create_task(corrida)
     return {"ok": True, "status": "iniciado"}
 
 
