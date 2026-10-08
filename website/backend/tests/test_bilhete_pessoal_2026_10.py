@@ -35,7 +35,7 @@ def test_valida_e_limpa_campos_desconhecidos():
 
 
 @pytest.mark.parametrize("ruim", [
-    perna_time(mercado="impedimentos"),
+    perna_time(mercado="laterais"),   # impedimentos virou mercado em 07/10
     perna_time(direcao="talvez"),
     perna_time(linha="abc"),
     perna_time(fixture_id=None),

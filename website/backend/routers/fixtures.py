@@ -328,7 +328,9 @@ _COLUNAS_DO_JOGO = """fixture_id, match_date, league_id, home_team_id, away_team
                home_possession, away_possession,
                home_goals_ht, away_goals_ht, home_corners_1h, away_corners_1h,
                home_yellow_cards_1h, away_yellow_cards_1h,
-               home_shots_on_1h, away_shots_on_1h"""
+               home_shots_on_1h, away_shots_on_1h,
+               home_total_shots, away_total_shots, home_offsides, away_offsides,
+               home_goalkeeper_saves, away_goalkeeper_saves"""
 
 
 def _ultimos_jogos(cur, team_ids: list, antes_de, n: int) -> list:
@@ -530,6 +532,13 @@ def _serie_do_time(linhas: list, team_id: int) -> list:
             "vermelhos_pro": r[f"{lado}_red_cards"], "vermelhos_contra": r[f"{outro}_red_cards"],
             "chutes_alvo_pro": r[f"{lado}_shots_on"], "chutes_alvo_contra": r[f"{outro}_shots_on"],
             "faltas_pro": r[f"{lado}_fouls"], "faltas_contra": r[f"{outro}_fouls"],
+            # Chutes (todos, no alvo ou nao), impedimentos e defesas do
+            # goleiro (07/10). So' jogo inteiro: o provedor nao publica o 1o
+            # tempo deles. `defesas_pro` = o goleiro DESTE time defendeu.
+            "chutes_pro": r.get(f"{lado}_total_shots"), "chutes_contra": r.get(f"{outro}_total_shots"),
+            "impedimentos_pro": r.get(f"{lado}_offsides"), "impedimentos_contra": r.get(f"{outro}_offsides"),
+            "defesas_pro": r.get(f"{lado}_goalkeeper_saves"),
+            "defesas_contra": r.get(f"{outro}_goalkeeper_saves"),
             "posse": r[f"{lado}_possession"],
             # 1o TEMPO (folha do 1o tempo, coletada desde 27/09). O 2o tempo a
             # tela tira por conta (total - 1o). Null = jogo antigo, sem folha.

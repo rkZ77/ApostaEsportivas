@@ -39,6 +39,8 @@ _FIM = ("FT", "AET", "PEN")
 _COLUNA = {
     "gols": "goals", "escanteios": "corners", "cartoes": "yellow_cards",
     "chutes_alvo": "shots_on", "faltas": "fouls",
+    # 07/10: chutes (todos), impedimentos e defesas do goleiro · so' jogo todo.
+    "chutes": "total_shots", "impedimentos": "offsides", "defesas": "goalkeeper_saves",
 }
 _MERCADOS_TIME = {
     **{m: ("jogo", c) for m, c in _COLUNA.items()},
@@ -48,6 +50,9 @@ _MERCADOS_TIME = {
     # Desde 07/10 todo mercado tem o recorte "de quem" (os dois, casa, fora).
     "chutes_alvo_time": ("time", "shots_on"),
     "faltas_time": ("time", "fouls"),
+    "chutes_time": ("time", "total_shots"),
+    "impedimentos_time": ("time", "offsides"),
+    "defesas_time": ("time", "goalkeeper_saves"),
 }
 #: Coluna do 1o tempo de cada contador (folha do 1o tempo). Faltas nao tem: o
 #: provedor so' publica o total, entao mercado de faltas so' existe no jogo
@@ -61,6 +66,7 @@ _ESTAT_JOGADOR = {
     "chutes": "shots_total", "chutes_alvo": "shots_on", "gols": "goals_total",
     "assistencias": "assists", "faltas": "fouls_committed", "faltas_sofridas": "fouls_drawn",
     "desarmes": "tackles_total", "defesas": "saves", "amarelos": "cards_yellow",
+    "passes": "passes_total", "dribles": "dribbles_success",
 }
 
 
@@ -254,6 +260,9 @@ _FAMILIA_AO_VIVO = {
     "gols": ("Gols", "goals"), "escanteios": ("Escanteios", "corners"),
     "cartoes": ("Cartões", "cards"), "chutes_alvo": ("Chutes no Alvo", "shots_on_target"),
     "faltas": ("Faltas", "fouls"),
+    "chutes": ("Chutes", "shots"),
+    "impedimentos": ("Impedimentos", "offsides"),
+    "defesas": ("Defesas do Goleiro", "saves"),
 }
 
 
@@ -327,6 +336,8 @@ def liquidar_pendentes(cur, user_id: int, agora: datetime | None = None) -> int:
                home_goals, away_goals, home_corners, away_corners,
                home_yellow_cards, away_yellow_cards, home_shots_on, away_shots_on,
                home_fouls, away_fouls,
+               home_total_shots, away_total_shots, home_offsides, away_offsides,
+               home_goalkeeper_saves, away_goalkeeper_saves,
                home_goals_ht, away_goals_ht, home_corners_1h, away_corners_1h,
                home_yellow_cards_1h, away_yellow_cards_1h, home_shots_on_1h, away_shots_on_1h
         FROM match_statistics WHERE fixture_id = ANY(%s)
