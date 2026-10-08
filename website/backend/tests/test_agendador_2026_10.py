@@ -81,6 +81,11 @@ def _uma_volta(monkeypatch, hora, minuto=0, ja_tem=(), terminou=()):
     async def executar(t, d):
         disparadas.append(t.nome)
     monkeypatch.setattr(ag, "executar", executar)
+    from routers import live_picks
+
+    async def sem_ao_vivo():
+        return None
+    monkeypatch.setattr(live_picks, "supervisionar_automatico", sem_ao_vivo)
 
     async def rodar():
         nomes = await ag.uma_volta(datetime(2026, 10, 8, hora, minuto, tzinfo=BR))

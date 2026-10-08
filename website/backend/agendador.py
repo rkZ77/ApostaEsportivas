@@ -279,6 +279,14 @@ async def uma_volta(agora: datetime | None = None) -> list[str]:
             continue
         disparadas.append(t.nome)
         asyncio.create_task(executar(t, dia))
+    # Motor Ao Vivo: liga quando um jogo das nossas ligas esta' em campo e
+    # desliga sozinho quando nao sobra nenhum (ver live_picks.supervisionar_automatico).
+    try:
+        from routers import live_picks
+        if await live_picks.supervisionar_automatico():
+            disparadas.append("ao_vivo")
+    except Exception:
+        logger.exception("[AGENDADOR] supervisao do ao vivo falhou")
     return disparadas
 
 

@@ -1724,6 +1724,12 @@ def reconciliar_watch_no_boot() -> dict | None:
 
     if not linha or not linha["ativo"] or linha["boot_id"] == _BOOT_ID:
         return None
+    # Com mais de um worker, a linha pode ser de um laco VIVO em outro
+    # processo (ligado pelo automatico, 08/10). Sinal recente = dono vivo;
+    # declarar morto aqui abriria vaga pra um segundo laco gastar a cota.
+    agora_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    if linha["ultimo_sinal"] and linha["ultimo_sinal"] > agora_utc - timedelta(minutes=_LACO_MORTO_MIN):
+        return None
 
     quando = linha["ultimo_sinal"].strftime("%d/%m %H:%M") if linha["ultimo_sinal"] else "?"
     motivo = (f"o servico reiniciou · estava rodando ate' {quando}, "
@@ -1766,7 +1772,15 @@ _watch_state: dict = {
     # "aguardando o primeiro jogo do dia" e "alguem desligou o motor" viram a
     # mesma frase -- e sao situacoes opostas pra quem esta esperando pick.
     "hibernando": False,
+    # Quem ligou: 'painel' (clique) ou 'auto' (agendador, 08/10). O automatico
+    # so' desliga o laco que ELE ligou; o do painel continua hibernando como
+    # sempre fez.
+    "origem": None,
 }
+
+#: Dia (Brasilia) em que alguem desligou no painel. O automatico respeita ate'
+#: a virada do dia: religar um minuto depois de um "desliga" seria desobedecer.
+_desligado_no_painel_em: dict = {"dia": None}
 
 #: Referência forte pra tarefa. Sem isto o event loop pode coletar o laço no
 #: meio de uma espera (asyncio guarda só weakrefs das tasks).
@@ -1859,6 +1873,11 @@ async def _laco_de_acompanhamento(intervalo_min: int, dry_run: bool,
             # automaticamente" pedido: nao ha nada pra alguem religar.
             hibernando = not await run_in_threadpool(_ha_jogo_na_janela)
             _watch_state["hibernando"] = hibernando
+            if hibernando and _watch_state.get("origem") == "auto":
+                # Ligado pelo automatico: sem jogo em campo, DESLIGA (pedido do
+                # usuario). O agendador religa no proximo apito.
+                _watch_state["motivo_parada"] = "sem jogo das nossas ligas em campo (automatico)"
+                break
             if hibernando:
                 _watch_state["proxima_rodada_em"] = _INTERVALO_HIBERNANDO_MIN * 60
                 _salvar_watch()
@@ -1914,11 +1933,10 @@ async def _laco_de_acompanhamento(intervalo_min: int, dry_run: bool,
 @router.post("/watch")
 async def acompanhar_continuo(body: WatchBody, current_user: dict = Depends(require_admin)):
     """Liga/desliga o laço de rodadas sucessivas do Motor Live."""
-    global _watch_task
-
     if not body.ligar:
         _watch_state["ativo"] = False
         _watch_state["motivo_parada"] = "desligado no painel"
+        _desligado_no_painel_em["dia"] = _hoje_br()
         _salvar_watch()
         return {"ok": True, "ativo": False}
 
@@ -1927,21 +1945,38 @@ async def acompanhar_continuo(body: WatchBody, current_user: dict = Depends(requ
     if _watch_state["ativo"]:
         raise HTTPException(409, "O acompanhamento continuo ja esta ligado.")
 
+    _desligado_no_painel_em["dia"] = None
+    dry_run = _ligar_laco(body.intervalo_min, body.dry_run, body.max_partidas, origem="painel")
+    return {"ok": True, "ativo": True, "dry_run": dry_run,
+            "intervalo_min": _watch_state["intervalo_min"]}
+
+
+def _hoje_br():
+    from zoneinfo import ZoneInfo
+    return datetime.now(ZoneInfo("America/Sao_Paulo")).date()
+
+
+def _ligar_laco(intervalo_min: int, dry_run_pedido: bool | None,
+                max_partidas: int | None, origem: str) -> bool:
+    """Sobe o laco. Mesmo caminho pro clique e pro automatico. Devolve o dry
+    run resolvido."""
+    global _watch_task
     # Resolvido UMA vez, no clique: o laco pode durar horas, e reler a variavel
     # a cada rodada faria um deploy no meio da noite trocar o comportamento sem
     # ninguem ter pedido.
-    dry_run = _resolver_dry_run(body.dry_run)
+    dry_run = _resolver_dry_run(dry_run_pedido)
     _watch_state.update({
         "ativo": True,
         "iniciado_em": _relogio_do_watch(),
         "rodadas": 0, "falhas_seguidas": 0, "motivo_parada": None,
         "ultima_rodada": None, "proxima_rodada_em": None,
-        "intervalo_min": max(_INTERVALO_MIN_MINUTOS, int(body.intervalo_min)),
-        "dry_run": dry_run, "max_partidas": body.max_partidas,
+        "intervalo_min": max(_INTERVALO_MIN_MINUTOS, int(intervalo_min)),
+        "dry_run": dry_run, "max_partidas": max_partidas,
+        "origem": origem, "hibernando": False,
     })
     _salvar_watch()
     _watch_task = asyncio.create_task(_laco_de_acompanhamento(
-        body.intervalo_min, dry_run, body.max_partidas))
+        intervalo_min, dry_run, max_partidas))
 
     # Loga se a task morrer por exception nao tratada · sem isto o laco
     # simplesmente some e o painel continua dizendo "ligado" pra sempre.
@@ -1951,9 +1986,72 @@ async def acompanhar_continuo(body: WatchBody, current_user: dict = Depends(requ
             logger.error("[LIVE-WATCH] laco encerrou com excecao: %s", exc, exc_info=exc)
 
     _watch_task.add_done_callback(_ao_terminar)
+    return dry_run
 
-    return {"ok": True, "ativo": True, "dry_run": dry_run,
-            "intervalo_min": _watch_state["intervalo_min"]}
+
+# ─── Ligar sozinho (2026-10-08, pedido do usuario) ──────────────────────────
+#
+# "Liga quando tiver jogo de liga que o site gera pick, continua ligado
+# enquanto tiver jogo, e se nao tiver desliga." Quem chama e' o agendador
+# (agendador.py), uma vez por minuto e SO' no servico de producao.
+#
+# A checagem de jogo e' a mesma do laco (`_ha_jogo_na_janela`): banco, zero
+# requisicao. Ligado pelo automatico, o laco DESLIGA quando nao sobra jogo em
+# vez de hibernar (ver o laco); ligado pelo painel, segue como sempre.
+#
+# Varios workers: cada processo tem seu `_watch_state`, entao dois poderiam
+# subir dois lacos e gastar a cota em dobro. Quem sobe e' quem conseguir
+# marcar a linha do banco (`_reivindicar_laco`).
+
+#: Sem sinal do dono por mais que isto, o laco dele morreu.
+_LACO_MORTO_MIN = 20
+
+
+def auto_ligado() -> bool:
+    return os.getenv("LIVE_AUTO", "on").strip().lower() not in ("off", "0", "false", "no")
+
+
+def _reivindicar_laco() -> bool:
+    """True se ESTE processo ficou com o laco. Falha FECHADA: sem conseguir
+    conferir no banco, nao sobe (dois lacos custam cota; um minuto a mais sem
+    laco custa nada, a janela do motor comeca aos 15')."""
+    try:
+        conn = get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO live_watch_state (id, ativo, boot_id, iniciado_em, ultimo_sinal, rodadas)
+                VALUES (1, TRUE, %s, NOW(), NOW(), 0)
+                ON CONFLICT (id) DO UPDATE
+                   SET ativo = TRUE, boot_id = EXCLUDED.boot_id, ultimo_sinal = NOW()
+                 WHERE NOT live_watch_state.ativo
+                    OR live_watch_state.boot_id = EXCLUDED.boot_id
+                    OR live_watch_state.ultimo_sinal < NOW() - (%s * INTERVAL '1 minute')
+                RETURNING id
+            """, (_BOOT_ID, _LACO_MORTO_MIN))
+            ganhou = cur.fetchone() is not None
+            conn.commit()
+            return ganhou
+        finally:
+            conn.close()
+    except Exception as e:
+        logger.warning("[LIVE-AUTO] nao consegui reivindicar o laco: %s", e)
+        return False
+
+
+async def supervisionar_automatico() -> str | None:
+    """Uma checagem. Devolve o que fez ('ligou'), ou None."""
+    if not auto_ligado() or _watch_state["ativo"] or not _pipeline_dir():
+        return None
+    if _desligado_no_painel_em["dia"] == _hoje_br():
+        return None
+    if not await run_in_threadpool(_ha_jogo_na_janela):
+        return None
+    if not await run_in_threadpool(_reivindicar_laco):
+        return None
+    _ligar_laco(8, None, None, origem="auto")
+    logger.info("[LIVE-AUTO] jogo das nossas ligas em campo: motor ao vivo ligado")
+    return "ligou"
 
 
 @router.get("/watch-status")
