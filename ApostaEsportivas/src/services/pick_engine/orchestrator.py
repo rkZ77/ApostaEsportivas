@@ -7,9 +7,24 @@ from services.pick_engine import (
     context_model, team_profile_model, news_model, probability_model, variance_model,
     data_validation, bayesian_model, referee_model,
     market_anchor, selection_bias, context_gate, tie_effect, projection,
+    recalibracao,
 )
 
 _CARDS_FAMILIES = ("cards", "handicap_cards")
+
+
+def modo_1t() -> str:
+    """`MOTOR_1T`: on | off. Padrao `on` (2026-10-08).
+
+    Os mercados de 1o tempo entraram em 27/09 sem medicao (mesmo dia e mesmo
+    problema dos desfalques, que voltaram pra sombra em 02/10). O usuario viu
+    queda de acerto com muito pick de 1o tempo; `off` tira as familias de
+    FAMILIAS_1T do pool na hora, sem deploy. O padrao fica `on` ate'
+    scripts/medir_primeiro_tempo.py dizer se o 1o tempo perde dinheiro --
+    desligar sem numero seria repetir o erro ao contrario."""
+    import os
+    modo = os.getenv("MOTOR_1T", "on").strip().lower()
+    return modo if modo in ("on", "off") else "on"
 
 # Familias de mercado de RESULTADO -- excluidas do pool de candidatos por
 # decisao explicita do usuario (2026-07-24): 1X2 puro, dupla chance e empate
@@ -256,6 +271,11 @@ def analyze_fixture_markets(
     eliminated_markets = []
     if calibration_data is None:
         calibration_data = calibration.get_market_calibration()
+    # SOMBRA (2026-10-08): so' alimenta `prob_recalibrada_sombra` no rastro.
+    try:
+        curva_recal = recalibracao.curva_em_cache()
+    except Exception:
+        curva_recal = []
     ctx_score = (context_model.context_score(context_data, match_context)
                  if context_data else None)
     # `news_score_sombra` e' sempre gravado; so' entra na nota com
@@ -310,6 +330,16 @@ def analyze_fixture_markets(
         if family in _SEM_LIQUIDACAO_FAMILIES:
             motivo = ("cartao do 1o tempo sem contagem validada: o pick nao "
                       "teria como ser liquidado")
+            _rastrear(rastro, nivel="familia", market_type=family, scope=scope,
+                      status="eliminada", motivo=motivo)
+            if debug:
+                eliminated_markets.append({
+                    "family": family, "scope": scope, "market_type": family,
+                    "reason": motivo,
+                })
+            continue
+        if family in stats_model.FAMILIAS_1T and modo_1t() == "off":
+            motivo = "1o tempo desligado (MOTOR_1T=off)"
             _rastrear(rastro, nivel="familia", market_type=family, scope=scope,
                       status="eliminada", motivo=motivo)
             if debug:
@@ -737,6 +767,9 @@ def analyze_fixture_markets(
                     dc_lambdas[0], dc_lambdas[1],
                     "btts" if family == "btts" else "total", line_val, direcao)
                     if dc_lambdas else None),
+                # SOMBRA: a taxa corrigida pelo historico do proprio motor (ver
+                # recalibracao.py). Nunca entra na conta.
+                "prob_recalibrada_sombra": recalibracao.aplicar(taxa_ajustada, curva_recal),
                 "model_fit_diff":      fit_poisson,
                 "referee_probability": referee_linha,
                 "referee_fit_diff":    fit_referee,

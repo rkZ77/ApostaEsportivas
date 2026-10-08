@@ -345,6 +345,8 @@ def _candidate_summary(c: dict) -> dict:
         # lado a lado e' o que scripts/medir_dixon_coles.py compara.
         "poisson_probability": c.get("poisson_probability"),
         "dixon_coles_sombra": c.get("dixon_coles_sombra"),
+        # Recalibracao em sombra (08/10) · ver pick_engine/recalibracao.py.
+        "prob_recalibrada_sombra": c.get("prob_recalibrada_sombra"),
         "line_score": c.get("line_score"),
         "final_score": c.get("final_score"),
         "is_best_pick": c.get("is_best_pick", False),
