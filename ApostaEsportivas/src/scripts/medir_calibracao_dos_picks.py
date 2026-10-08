@@ -99,7 +99,10 @@ def main():
     por_familia = defaultdict(list)
     for p in pernas:
         por_produto[p["pick_type"]].append(p)
-        por_familia[(p["market_type"] or "?").replace("_1h", "")].append(p)
+        # 1o tempo SEPARADO (2026-10-08). Era `.replace("_1h", "")`, que
+        # escondia o 1o tempo dentro do jogo inteiro justo quando ele era a
+        # suspeita da queda de acerto. Ver medir_primeiro_tempo.py.
+        por_familia[p["market_type"] or "?"].append(p)
     for nome, ps in sorted(por_produto.items(), key=lambda kv: -len(kv[1])):
         if len(ps) >= MIN_N:
             imprimir(f"produto {nome}", ps)
