@@ -599,7 +599,10 @@
    * E' o que separa "leia isto" de "aja aqui" sem precisar de mais uma borda.
    */
   .pick-head {
-    @apply flex items-center justify-between gap-2 px-5 pt-4 pb-3 border-b border-line/60;
+    /* Altura mínima fixa: selo de resultado, Ao Vivo e Pendente têm alturas
+       diferentes, e sem piso o topo de cada card da grade ficava de um
+       tamanho (09/10/2026, "desalinhado" do usuário). */
+    @apply flex items-center justify-between gap-2 px-5 py-3 min-h-[3.5rem] border-b border-line/60;
   }
   /* A faixa dos numeros (odd, stake, lucro). `font-mono` vive aqui porque
      numero do site e' sempre mono e a faixa nunca tem outra coisa.
