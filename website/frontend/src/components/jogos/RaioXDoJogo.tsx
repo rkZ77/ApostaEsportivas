@@ -12,6 +12,8 @@ import {
 } from '../../lib/raioX'
 import { alternar, trocarNoGrupo, useBilheteMontado, type Selecao } from '../../lib/bilheteMontado'
 import { chanceDoResultado, oddDaSelecao, vantagem, type OddDaCasa } from '../../lib/oddsDoJogo'
+import { rotuloDoTempo } from '../../lib/picksAgora'
+import { aoVivo as estaAoVivo } from '../../lib/aoVivo'
 import Campinho from './Campinho'
 import Classificacao from './Classificacao'
 
@@ -79,11 +81,35 @@ export default function RaioXDoJogo({ jogo }: { jogo: JogoBase }) {
     return () => { vivo = false; clearTimeout(timer) }
   }, [jogo.fixture_id])
 
+  /* O JOGO ROLANDO NO PLACAR (09/10/2026, pedido do usuário: "parece que não
+     está ao vivo"). Lê o placar SÓ DO CACHE do servidor (`so_cache`), sem
+     gastar cota: no computador quem o mantém fresco é a lista de Jogos ao
+     lado, que já pergunta a cada 30s; no celular, a varredura dos picks.
+     Sem nada no cache, o placar fica com o horário, como antes. */
+  const [aoVivoAgora, setAoVivoAgora] = useState<PlacarAoVivo | null>(null)
+  useEffect(() => {
+    setAoVivoAgora(null)
+    let vivo = true
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const id = String(jogo.fixture_id)
+    const ler = () => api.get('/live/live-stats', { params: { fixture_ids: id, so_cache: true } })
+      .then(r => {
+        if (!vivo) return
+        const d = r.data?.[id] as PlacarAoVivo | undefined
+        const rolando = !!d && estaAoVivo(d.status)
+        setAoVivoAgora(rolando ? d! : null)
+        timer = setTimeout(ler, rolando ? 30_000 : 120_000)
+      })
+      .catch(() => { if (vivo) timer = setTimeout(ler, 120_000) })
+    ler()
+    return () => { vivo = false; clearTimeout(timer) }
+  }, [jogo.fixture_id])
+
   const nomeJogo = `${dados?.fixture.home_team || jogo.home_team || 'Casa'} x ${dados?.fixture.away_team || jogo.away_team || 'Fora'}`
 
   return (
     <div className="min-w-0">
-      <Placar jogo={jogo} dados={dados} />
+      <Placar jogo={jogo} dados={dados} aoVivo={aoVivoAgora} />
 
       {/* Abas fixas ao rolar · no celular a lista de jogadores é longa e a
           troca de aba não pode exigir voltar ao topo. */}
@@ -142,7 +168,17 @@ export default function RaioXDoJogo({ jogo }: { jogo: JogoBase }) {
 
 /* ── Placar ─────────────────────────────────────────────────────────────── */
 
-function Placar({ jogo, dados }: { jogo: JogoBase; dados: RaioX | null }) {
+/** O que /live/live-stats devolve de um jogo (ver live.py::_montar_live_stats). */
+interface PlacarAoVivo {
+  status: string; elapsed: number | null
+  home_goals: number | null; away_goals: number | null
+  home_corners: number; away_corners: number
+  home_shots_on: number; away_shots_on: number
+  home_yellow: number; away_yellow: number
+  home_possession: number; away_possession: number
+}
+
+function Placar({ jogo, dados, aoVivo }: { jogo: JogoBase; dados: RaioX | null; aoVivo: PlacarAoVivo | null }) {
   const f = dados?.fixture
   const ligaId = f?.league_id ?? jogo.league_id
   const quando = f?.match_datetime ?? jogo.match_datetime
@@ -175,12 +211,44 @@ function Placar({ jogo, dados }: { jogo: JogoBase; dados: RaioX | null }) {
         </div>
         <div className="flex items-start gap-2">
           <Time id={f?.home_team_id ?? jogo.home_team_id} nome={f?.home_team || jogo.home_team} forma={formaHome} />
-          <div className="shrink-0 pt-3 text-center">
-            <div className="font-mono text-2xl font-black text-ink-1 tabular-nums">{hora}</div>
-            <div className="text-[11px] text-ink-3 capitalize mt-0.5">{dia}</div>
-          </div>
+          {aoVivo ? (
+            /* Rolando: o placar no lugar do horário, e o tempo e o minuto
+               embaixo, no índigo do Ao Vivo do site. */
+            <div className="shrink-0 pt-2 text-center">
+              <div className="font-mono text-3xl font-black text-ink-1 tabular-nums">
+                {aoVivo.home_goals ?? 0}<span className="text-ink-4 mx-1.5">-</span>{aoVivo.away_goals ?? 0}
+              </div>
+              <div className="mt-1 inline-flex items-center gap-1.5 text-[11px] font-bold text-indigo-300 tabular-nums">
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" aria-hidden />
+                {rotuloDoTempo({ status: aoVivo.status, minuto: aoVivo.elapsed })}
+              </div>
+            </div>
+          ) : (
+            <div className="shrink-0 pt-3 text-center">
+              <div className="font-mono text-2xl font-black text-ink-1 tabular-nums">{hora}</div>
+              <div className="text-[11px] text-ink-3 capitalize mt-0.5">{dia}</div>
+            </div>
+          )}
           <Time id={f?.away_team_id ?? jogo.away_team_id} nome={f?.away_team || jogo.away_team} forma={formaAway} />
         </div>
+        {/* Quatro números do jogo, e só: o resto mora nas abas. */}
+        {aoVivo && (
+          <div className="mt-4 pt-3 border-t border-line grid grid-cols-4 text-center">
+            {([
+              ['Escanteios', aoVivo.home_corners, aoVivo.away_corners, ''],
+              ['No alvo', aoVivo.home_shots_on, aoVivo.away_shots_on, ''],
+              ['Cartões', aoVivo.home_yellow, aoVivo.away_yellow, ''],
+              ['Posse', aoVivo.home_possession, aoVivo.away_possession, '%'],
+            ] as const).map(([rotulo, c, fo, suf]) => (
+              <div key={rotulo} className="min-w-0">
+                <div className="text-[10px] text-ink-4">{rotulo}</div>
+                <div className="font-mono text-sm font-bold text-ink-1 tabular-nums">
+                  {c}{suf}<span className="text-ink-4 mx-1">-</span>{fo}{suf}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
