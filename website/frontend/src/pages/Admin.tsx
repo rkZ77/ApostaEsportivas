@@ -12,6 +12,7 @@ import AdminIAPerformance from '../components/AdminIAPerformance'
 import AdminMotorLive from '../components/AdminMotorLive'
 import AdminAgendador from '../components/AdminAgendador'
 import AdminReavaliacoes from '../components/AdminReavaliacoes'
+import LogAoVivo from '../components/LogAoVivo'
 import AdminDados from '../components/AdminDados'
 import AdminMotorDecisoes from '../components/AdminMotorDecisoes'
 import AdminAuditoriaMotores from '../components/AdminAuditoriaMotores'
@@ -1053,52 +1054,16 @@ export default function Admin() {
               )}
               <div id="log-ao-vivo">
           {logAberto && (
-            <div className="mt-4 border border-line rounded-md overflow-hidden">
-              <div className="flex items-center justify-between gap-3 px-3 py-2 bg-surface-2 border-b border-line">
-                <div className="flex items-center gap-2 min-w-0">
-                  {pipelineStatus[logCmd]?.status === 'running'
-                    ? <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse shrink-0" />
-                    : <span className="w-2 h-2 rounded-full bg-surface-3 shrink-0" />}
-                  <span className="text-[11px] font-semibold text-ink-2 truncate">
-                    {logCmd === 'tudo'
-                      ? 'Pipeline completo'
-                      : (PIPELINE_ACTIONS.find(a => a.command === logCmd)?.label ?? logCmd)}
-                  </span>
-                  <span className="text-[10px] text-ink-4 shrink-0">{logLinhas.length} linha(s)</span>
-                </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <label className="text-[10px] text-ink-4 flex items-center gap-1 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={logAutoScroll}
-                      onChange={e => setLogAutoScroll(e.target.checked)}
-                      className="accent-current w-3 h-3"
-                    />
-                    seguir
-                  </label>
-                  <button onClick={() => setLogAberto(false)}
-                          className={BOTAO_PEQUENO}>
-                    Fechar
-                  </button>
-                </div>
-              </div>
-              <div className="bg-surface-0 max-h-72 overflow-y-auto px-3 py-2">
-                {logLinhas.length === 0 ? (
-                  <p className="text-[11px] text-ink-4 py-2">
-                    {pipelineStatus[logCmd]?.status === 'running'
-                      ? 'Aguardando a primeira linha...'
-                      : 'Sem log. Rode a etapa para acompanhar aqui.'}
-                  </p>
-                ) : (
-                  <pre className="text-[10px] leading-relaxed text-ink-2 font-mono whitespace-pre-wrap break-all">
-                    {logLinhas.map((l, i) => (
-                      <div key={i} className={l.startsWith('!') ? 'text-red-400' : undefined}>{l}</div>
-                    ))}
-                  </pre>
-                )}
-                <div ref={logFimRef} />
-              </div>
-            </div>
+            <LogAoVivo
+              titulo={logCmd === 'tudo' ? 'Rodar Tudo'
+                : (PIPELINE_ACTIONS.find(a => a.command === logCmd)?.label ?? logCmd)}
+              rodando={pipelineStatus[logCmd]?.status === 'running'}
+              linhas={logLinhas}
+              seguir={logAutoScroll}
+              onSeguir={setLogAutoScroll}
+              onFechar={() => setLogAberto(false)}
+              fimRef={logFimRef}
+            />
           )}
               </div>
             </div>
