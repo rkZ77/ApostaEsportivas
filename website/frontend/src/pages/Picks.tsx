@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo, useRef, memo, lazy, Suspense } from 'react'
+import { useContext, useEffect, useState, useCallback, useMemo, useRef, memo, lazy, Suspense } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { AnimatePresence, m as motion } from 'framer-motion'
 import { toastUp, fadeInUp, staggerContainer, tabFade } from '../lib/motion'
@@ -24,11 +24,11 @@ import { Escada, LinhaCaminho,
          type AlavStep, type CaminhoEncerrado } from '../components/alavancagem/caminho'
 import AnalysisModal from '../components/AnalysisModal'
 import {
-  CampoAoVivo, CampoDoPick, PickCardFooter, PickExplainButton, PickProbability, SeloDeResultado,
+  CampoAoVivo, CampoDoPick, HoraOuMinuto, PernaDoBilhete, PickCardFooter, PickExplainButton, PickProbability, SeloDeResultado,
   SeloDoEstado, VsOuPlacar,
 } from '../components/PickCardParts'
 import {
-  PicksAgoraContext, useFonteDePicksAgora, usePickAgora, type ItemAoVivo,
+  PicksAgoraContext, chanceDoBilhete, chaveDaPerna, chaveDoPick, useFonteDePicksAgora, usePickAgora, type ItemAoVivo,
 } from '../lib/picksAgora'
 /*
  * As duas abas mais pesadas não entram no chunk desta página.
@@ -690,7 +690,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
 
   const isCopa = dica.league_id === 1
   /* O jogo com a bola rolando · ver lib/picksAgora. */
-  const agora = usePickAgora(!dica.result ? `free:${dica.id}` : null)
+  const agora = usePickAgora(!dica.result ? chaveDoPick('free', dica.id) : null)
   // Hora do jogo por slice de string: match_datetime e' horario de Brasilia
   // SEM fuso, e `new Date` sobre ele desloca o horario. Mesma leitura do VIP.
   const kickoff = dica.match_datetime ? String(dica.match_datetime).slice(11, 16) : null
@@ -731,12 +731,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
               {dica.league_name && <span className="text-[10px] text-ink-4 truncate max-w-[90px]">{dica.league_name}</span>}
             </div>
           )}
-          {kickoff && (
-            <span className="flex items-center gap-1 text-[10px] text-ink-4 shrink-0">
-              <Clock className="w-3 h-3" />
-              {kickoff}
-            </span>
-          )}
+          <HoraOuMinuto kickoff={kickoff} aoVivo={agora} />
         </div>
         <SeloDoEstado result={dica.result} aoVivo={agora} isLive={isLive} />
       </div>
@@ -1170,7 +1165,11 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
     }
   }
 
-  const resultStyle = getResultStyle(m.result)
+  /* O jogo de cada perna com a bola rolando · chave `tipo:id:perna`, a mesma
+     que a página monta em itensAoVivo. */
+  const mapaAgora = useContext(PicksAgoraContext)
+  const agoraDasPernas = legs.map((_: any, i: number) =>
+    m.result ? null : mapaAgora[chaveDaPerna(tipo, m.id, i)] ?? null)
 
   return (
   <>
@@ -1203,17 +1202,7 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
             </span>
           )}
         </div>
-        {resultStyle ? (
-          <span className={`text-xs font-black px-2.5 py-1 rounded-lg border ${resultStyle.bg} ${resultStyle.border} ${resultStyle.text}`}>
-            {resultStyle.label}
-          </span>
-        ) : isLive ? (
-          <span className="flex items-center gap-1 text-[10px] font-black text-indigo-300 bg-indigo-500/20 border border-indigo-400/40 px-2 py-1 rounded-lg animate-pulse">
-            <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" /> AO VIVO
-          </span>
-        ) : (
-          <span className="text-[10px] text-ink-3 border border-line px-2 py-1 rounded-lg">Pendente</span>
-        )}
+        <SeloDoEstado result={m.result} isLive={isLive || agoraDasPernas.some(Boolean)} />
       </div>
 
       {/* Odd hero + retorno */}
@@ -1320,95 +1309,30 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
 
       {/* Legs */}
       <div className="px-5 py-3 space-y-2">
-        {legs.map((leg: any, i: number) => {
-          /*
-           * A PERNA MOSTRA O RESULTADO DELA, não o do bilhete.
-           *
-           * Antes, bilhete RED pintava de vermelho toda perna que não tivesse
-           * um GREEN explícito · e como o resultado por perna nunca era gravado
-           * (o caminho de resolução automática só salvava o do bilhete, ver
-           * _gravar_resultado_das_pernas em routers/live.py), "sem GREEN
-           * explícito" era SEMPRE. Numa múltipla de duas em que uma bateu, o
-           * usuário via duas derrotas, uma delas inventada pela tela.
-           *
-           * Bilhete GREEN continua implicando todas as pernas GREEN · aí é
-           * dedução, não palpite: combinada só paga com todas as pernas de pé.
-           *
-           * Sem o dado da perna e bilhete RED, o estado é NEUTRO. Não sabemos
-           * qual delas caiu, e chutar vermelho em todas é pior do que admitir
-           * que não sabemos: o placar do bilhete já está no topo do card.
-           */
-          const lr = (
-            leg.result ?? (m.result === 'GREEN' ? 'GREEN' : undefined)
-          ) as 'GREEN' | 'RED' | undefined
-          const boxClass = lr === 'GREEN'
-            ? 'border-green-500/20 bg-green-500/5'
-            : lr === 'RED'
-            ? 'border-red-500/20 bg-red-500/5'
-            : 'border-line bg-surface-2/60'
-          const circleClass = lr === 'GREEN'
-            ? 'bg-green-500/20 text-green-400'
-            : lr === 'RED'
-            ? 'bg-red-500/20 text-red-400'
-            : estilo.pernaCirculo
-          return (
-          <div key={i} className={`rounded-md border px-3 py-2 ${boxClass}`}>
-            <div className="flex items-center gap-2">
-              <span className={`w-5 h-5 flex items-center justify-center rounded-full ${circleClass} text-[10px] font-black shrink-0`}>
-                {lr === 'GREEN' ? '✓' : lr === 'RED' ? '✗' : i + 1}
-              </span>
-              <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                <TeamLogo id={leg.home_team_id} name={leg.home ?? leg.home_team ?? ''} size={20} />
-                <span className="text-xs text-ink-2 font-semibold truncate">{leg.home ?? leg.home_team}</span>
-                <span className="text-ink-4 text-[10px] shrink-0">vs</span>
-                <span className="text-xs text-ink-2 font-semibold truncate">{leg.away ?? leg.away_team}</span>
-                <TeamLogo id={leg.away_team_id} name={leg.away ?? leg.away_team ?? ''} size={20} />
-              </div>
-              <span className={`font-mono font-black text-sm shrink-0 ${lr === 'GREEN' ? 'text-green-400' : lr === 'RED' ? 'text-red-400' : estilo.pernaOdd}`}>
-                {Number(leg.odd).toFixed(2)}
-              </span>
-            </div>
-            {/* A perna também é mercado e linha, rotulados · mesmo desenho
-                do card de mercado único. */}
-            <dl className="ml-7 mt-1 space-y-0.5">
-              <CampoDoPick rotulo="Mercado">
-                <dd className="text-xs text-ink-2 truncate">{translateMarket(leg.market)}</dd>
-              </CampoDoPick>
-              {leg.line && (
-                <CampoDoPick rotulo="Linha">
-                  <dd className="text-xs text-ink-2 truncate">{translateLine(leg.line)}</dd>
-                </CampoDoPick>
-              )}
-              {/* A CASA E A CHANCE DA PERNA (04/09) · o JSONB de `games` já
-                  guardava as duas (bet_house e prob_real, ver
-                  multipla_pipeline), e a múltipla era o único bilhete que não
-                  mostrava nem uma nem outra. Sem a casa, "1.36" é um preço sem
-                  lugar onde pegar; sem a chance, não dá pra ver qual das
-                  pernas está segurando o bilhete. */}
-              {leg.bet_house && (
-                <CampoDoPick rotulo="Casa">
-                  <dd className="text-xs text-ink-3 truncate">{leg.bet_house}</dd>
-                </CampoDoPick>
-              )}
-              {(leg.prob_real ?? leg.confidence) != null && (
-                <CampoDoPick rotulo="Chance">
-                  <dd className="text-xs text-ink-3">
-                    {Math.round(Number(leg.prob_real ?? leg.confidence) * 100)}% nesta perna
-                  </dd>
-                </CampoDoPick>
-              )}
-            </dl>
-          </div>
-          )
-        })}
+        {legs.map((leg: any, i: number) => (
+          /* A perna mostra o resultado DELA, não o do bilhete: bilhete GREEN
+             implica todas GREEN (dedução); bilhete RED sem o dado da perna
+             fica neutro, porque não se sabe qual caiu. Desenho e ao vivo em
+             PernaDoBilhete (PickCardParts). */
+          <PernaDoBilhete key={i} indice={i}
+            resultado={leg.result ?? (m.result === 'GREEN' ? 'GREEN' : undefined)}
+            casa={leg.home ?? leg.home_team} fora={leg.away ?? leg.away_team}
+            casaId={leg.home_team_id} foraId={leg.away_team_id}
+            odd={leg.odd != null ? Number(leg.odd) : null}
+            mercado={translateMarket(leg.market)} linha={leg.line ? translateLine(leg.line) : null}
+            casaDeAposta={leg.bet_house} chance={leg.prob_real ?? leg.confidence ?? null}
+            cor={{ circulo: estilo.pernaCirculo, texto: estilo.pernaOdd }}
+            aoVivo={agoraDasPernas[i]} Escudo={TeamLogo} />
+        ))}
       </div>
 
       <PickProbability
         confidence={m.confidence}
         probability={m.probability}
         label="Probabilidade combinada"
+        aoVivo={chanceDoBilhete(legs.map((leg: any, i: number) => ({
+          antes: leg.prob_real ?? leg.confidence ?? null, agora: agoraDasPernas[i] })))}
       />
-
 
       {/* O ESPAÇADOR QUE O "Fato" ERA.
         *
@@ -1578,7 +1502,11 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
     })
   }
 
-  const resultStyle = getResultStyle(pick.result)
+  /* Chave `alavancagem:id:perna` · as pernas são as colunas 1..3 que
+     existem, na ordem, igual à lista `legs` acima. */
+  const mapaAgora = useContext(PicksAgoraContext)
+  const agoraDasPernas = legs.map((_, i) =>
+    pick.result ? null : mapaAgora[chaveDaPerna('alavancagem', pick.id, i)] ?? null)
 
   return (
   <>
@@ -1602,17 +1530,7 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
           <span className="text-xs font-black text-orange-400">Alavancagem</span>
           {isCombo && <span className="text-[10px] text-blue-400 border border-blue-400/20 bg-blue-400/10 px-2 py-0.5 rounded-md font-bold">{comboLabel}</span>}
         </div>
-        {resultStyle ? (
-          <span className={`text-xs font-black px-2.5 py-1 rounded-lg border ${resultStyle.bg} ${resultStyle.border} ${resultStyle.text}`}>
-            {resultStyle.label}
-          </span>
-        ) : isLive ? (
-          <span className="flex items-center gap-1 text-[10px] font-black text-indigo-300 bg-indigo-500/20 border border-indigo-400/40 px-2 py-1 rounded-lg animate-pulse">
-            <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" /> AO VIVO
-          </span>
-        ) : (
-          <span className="text-[10px] text-yellow-500 border border-yellow-500/20 bg-yellow-500/10 px-2 py-1 rounded-lg font-bold">Pendente</span>
-        )}
+        <SeloDoEstado result={pick.result} isLive={isLive || agoraDasPernas.some(Boolean)} />
       </div>
 
       {/* Bankroll progression */}
@@ -1659,73 +1577,26 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
 
       {/* Legs */}
       <div className="px-5 py-3 space-y-2">
-        {legs.map((leg, i) => {
-          /* Mesma regra da múltipla: bilhete GREEN implica todas as pernas de
-             pé (dedução), mas bilhete RED NÃO diz qual perna caiu. Alavancagem
-             guarda as pernas em colunas numeradas e não tem coluna de resultado
-             por perna, então aqui o estado só pode ser verde ou neutro · pintar
-             as duas de vermelho seria inventar a que bateu. */
-          const lr: 'GREEN' | undefined = pick.result === 'GREEN' ? 'GREEN' : undefined
-          const boxClass = lr === 'GREEN'
-            ? 'border-green-500/20 bg-green-500/5'
-            : 'border-line bg-surface-2/60'
-          const circleClass = lr === 'GREEN'
-            ? 'bg-green-500/20 text-green-400'
-            : 'bg-orange-500/10 text-orange-400'
-          return (
-          <div key={i} className={`rounded-md border px-3 py-2 ${boxClass}`}>
-            <div className="flex items-center gap-2">
-              <span className={`w-5 h-5 flex items-center justify-center rounded-full ${circleClass} text-[10px] font-black shrink-0`}>
-                {lr === 'GREEN' ? '✓' : i + 1}
-              </span>
-              <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                <TeamLogo id={leg.homeId} name={leg.home ?? ''} size={20} />
-                <span className="text-xs text-ink-2 font-semibold truncate">{leg.home}</span>
-                <span className="text-ink-4 text-[10px] shrink-0">vs</span>
-                <span className="text-xs text-ink-2 font-semibold truncate">{leg.away}</span>
-                <TeamLogo id={leg.awayId} name={leg.away ?? ''} size={20} />
-              </div>
-              <span className={`font-mono font-black text-sm shrink-0 ${lr === 'GREEN' ? 'text-green-400' : 'text-orange-300'}`}>
-                {Number(leg.odd).toFixed(2)}
-              </span>
-            </div>
-            <dl className="ml-7 mt-1 space-y-0.5">
-              <CampoDoPick rotulo="Mercado">
-                <dd className="text-xs text-ink-2 truncate">{translateMarket(leg.market)}</dd>
-              </CampoDoPick>
-              {leg.line && (
-                <CampoDoPick rotulo="Linha">
-                  <dd className="text-xs text-ink-2 truncate">{translateLine(leg.line)}</dd>
-                </CampoDoPick>
-              )}
-              {leg.house && (
-                <CampoDoPick rotulo="Casa">
-                  <dd className="text-xs text-ink-3 truncate">{leg.house}</dd>
-                </CampoDoPick>
-              )}
-              {/* A chance da perna · `prob_real_N` é a probabilidade que o
-                  motor calculou pra aquele mercado, e `confidence_N` é a
-                  reserva pros picks antigos, gravados antes da coluna existir.
-                  Mesmo campo que a múltipla e o Boost mostram. */}
-              {leg.prob != null && (
-                <CampoDoPick rotulo="Chance">
-                  <dd className="text-xs text-ink-3">
-                    {Math.round(Number(leg.prob) * 100)}% nesta perna
-                  </dd>
-                </CampoDoPick>
-              )}
-            </dl>
-          </div>
-          )
-        })}
+        {legs.map((leg, i) => (
+          /* Alavancagem não grava resultado por perna: bilhete GREEN implica
+             todas de pé, e RED não diz qual caiu, então a perna fica neutra. */
+          <PernaDoBilhete key={i} indice={i}
+            resultado={pick.result === 'GREEN' ? 'GREEN' : undefined}
+            casa={leg.home} fora={leg.away} casaId={leg.homeId} foraId={leg.awayId}
+            odd={leg.odd != null ? Number(leg.odd) : null}
+            mercado={translateMarket(leg.market)} linha={leg.line ? translateLine(leg.line) : null}
+            casaDeAposta={leg.house} chance={leg.prob ?? null}
+            cor={{ circulo: 'bg-orange-500/10 text-orange-400', texto: 'text-orange-300' }}
+            aoVivo={agoraDasPernas[i]} Escudo={TeamLogo} />
+        ))}
       </div>
 
       {/* A alavancagem nao tem coluna de probabilidade: o que existe e' a
           media das confiancas das pernas. Passa como `confidence` pra
-          PickProbability marcar o numero como "estimada", igual ela ja faz
-          nos picks VIP antigos sem probabilidade. */}
-      <PickProbability confidence={pick.confidence_media} />
-
+          PickProbability marcar o numero como "estimada". Ao vivo, a chance
+          do bilhete e' o produto das pernas (lib/picksAgora). */}
+      <PickProbability confidence={pick.confidence_media}
+        aoVivo={chanceDoBilhete(legs.map((leg, i) => ({ antes: leg.prob ?? null, agora: agoraDasPernas[i] })))} />
 
       {/* O ESPAÇADOR QUE O "Fato" ERA.
         *
@@ -3319,9 +3190,43 @@ export default function Picks() {
         home, away, inicio: p.match_datetime ?? null,
       })
     }
-    for (const d of dicasDoDia(today)) simples(`free:${d.id}`, d, d.home_team, d.away_team)
-    for (const s of today.vip ?? []) simples(`${s.pick_type ?? 'vip'}:${s.id}`, s, s.home_team_name, s.away_team_name)
-    for (const p of today.faltas ?? []) simples(`faltas:${p.id}`, p, p.home_team, p.away_team)
+    for (const d of dicasDoDia(today)) simples(chaveDoPick('free', d.id), d, d.home_team, d.away_team)
+    for (const s of today.vip ?? []) simples(chaveDoPick(s.pick_type ?? 'vip', s.id), s, s.home_team_name, s.away_team_name)
+    for (const p of today.faltas ?? []) simples(chaveDoPick('faltas', p.id), p, p.home_team, p.away_team)
+
+    /* Pernas: chave `tipo:id:perna`, na ordem em que o card as desenha. */
+    const perna = (chave: string, fixture_id: any, market: any, line: any, market_type: any,
+                   prob: any, home?: string, away?: string) => {
+      if (!fixture_id || !market) return
+      itens.push({ chave, fixture_id: Number(fixture_id), market, line: line ?? null,
+                   market_type: market_type ?? null, prob: prob ?? null, home, away, inicio: null })
+    }
+    for (const tipo of ['multipla', 'bingo'] as const) {
+      for (const m of (tipo === 'multipla' ? today.multiplas : today.bingo) ?? []) {
+        if (m.result) continue
+        let legs: any[] = []
+        try { legs = typeof m.legs === 'string' ? JSON.parse(m.legs) : (m.legs ?? []) } catch { legs = [] }
+        legs.forEach((l: any, i: number) => {
+          if (!l.result) perna(chaveDaPerna(tipo, m.id, i), l.fixture_id, l.market, l.line, l.market_type,
+                               l.prob_real ?? l.confidence, l.home ?? l.home_team, l.away ?? l.away_team)
+        })
+      }
+    }
+    const alav = today.alavancagem
+    if (alav && !alav.result) {
+      const combo = ['dupla', 'tripla', 'combinacao'].includes(alav.tipo)
+      const ns = [1, ...(combo ? [2] : []), 3].filter(n => alav[`home_team_${n}`])
+      ns.forEach((n, i) => perna(chaveDaPerna('alavancagem', alav.id, i), alav[`fixture_id_${n}`], alav[`market_${n}`],
+        alav[`line_${n}`], alav[`market_type_${n}`], alav[`prob_real_${n}`] ?? alav[`confidence_${n}`],
+        alav[`home_team_${n}`], alav[`away_team_${n}`]))
+    }
+    for (const p of (today.boost ?? []) as MercadoPick[]) {
+      if (p.result) continue
+      ;(pernasDoBoost(p) ?? []).forEach((l, i) => {
+        if (!l.result) perna(chaveDaPerna('boost', p.id, i), p.fixture_id, l.market, l.line, 'goals',
+                             l.probability, p.home_team, p.away_team)
+      })
+    }
     return itens
   }, [today])
   const picksAgora = useFonteDePicksAgora(itensAoVivo)

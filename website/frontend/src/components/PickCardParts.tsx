@@ -1,7 +1,7 @@
-import { BrainCircuit, Check as CheckIcon, Loader2, Share2 } from 'lucide-react'
+import { BrainCircuit, Check as CheckIcon, Clock, Loader2, Share2 } from 'lucide-react'
 import { cn } from '../lib/cn'
 import { Badge, ResultBadge } from './ui'
-import { rotuloDoMinuto, type LeituraAoVivo } from '../lib/picksAgora'
+import { rotuloDoMinuto, rotuloDoTempo, type LeituraAoVivo } from '../lib/picksAgora'
 
 /*
  * Peças comuns dos cards de pick.
@@ -226,15 +226,15 @@ export function PickProbability({
         <span className="text-ink-4 flex items-center gap-1.5">
           {pctAoVivo != null ? (
             <>
-              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" aria-hidden />
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" aria-hidden />
               Chance agora
-              <span className="text-ink-4">· antes {nosso}%</span>
             </>
           ) : pctMercado != null ? 'Chance na odd de agora' : label}
           {aproximado && <span className="text-ink-4"> estimada</span>}
         </span>
         <span className={cn('font-mono', pct >= 75 ? 'text-accent-ink font-bold' : 'text-ink-3',
                             pctAoVivo != null && 'font-bold text-ink-1')}>
+          {pctAoVivo != null && <span className="font-normal text-ink-4 mr-1.5">antes {nosso}%</span>}
           {pct}%
         </span>
       </div>
@@ -244,7 +244,7 @@ export function PickProbability({
             /* A largura anda devagar · com o jogo rolando o número muda a cada
                leitura, e o salto seco parecia defeito. */
             'h-1 rounded-full transition-[width] duration-700 ease-out',
-            pct >= 75 ? 'bg-accent' : pct >= 60 ? 'bg-yellow-500' : pctAoVivo != null && pct < 35 ? 'bg-red-500' : 'bg-ink-4',
+            pct >= 75 ? 'bg-accent' : pct >= 60 ? 'bg-yellow-500' : 'bg-ink-4',
           )}
           style={{ width: `${pct}%` }}
         />
@@ -278,13 +278,29 @@ export function SeloDoEstado({ result, aoVivo, isLive }: {
   if (result) return <ResultBadge result={result} emDestaque />
   if (aoVivo || isLive) {
     return (
-      <Badge tone="red" className="tabular-nums">
-        <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" aria-hidden />
-        {aoVivo ? rotuloDoMinuto(aoVivo) : 'Ao vivo'}
+      <Badge tone="indigo">
+        <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" aria-hidden />
+        Ao vivo
       </Badge>
     )
   }
   return <Badge tone="neutral">Pendente</Badge>
+}
+
+/** O horário do jogo no topo, ou o tempo e o minuto quando ele está rolando. */
+export function HoraOuMinuto({ kickoff, aoVivo }: { kickoff?: string | null; aoVivo?: LeituraAoVivo | null }) {
+  if (aoVivo) {
+    return (
+      <span className="text-[10px] font-bold text-indigo-300 tabular-nums shrink-0">{rotuloDoTempo(aoVivo)}</span>
+    )
+  }
+  if (!kickoff) return null
+  return (
+    <span className="flex items-center gap-1 text-[10px] text-ink-4 shrink-0">
+      <Clock className="w-3 h-3" />
+      {kickoff}
+    </span>
+  )
 }
 
 /** O "vs" entre os times, ou o placar quando o jogo está rolando. */
@@ -425,7 +441,7 @@ export function PernaDoBilhete({
   const lr = resultado ?? undefined
   const caixa = lr === 'GREEN' ? 'border-green-500/20 bg-green-500/5'
     : lr === 'RED' ? 'border-red-500/20 bg-red-500/5'
-    : aoVivo ? 'border-red-500/25 bg-surface-2/60'
+    : aoVivo ? 'border-indigo-500/30 bg-surface-2/60'
     : 'border-line bg-surface-2/60'
   const pctAgora = aoVivo?.chance != null ? Math.round(aoVivo.chance * 100) : null
   return (
@@ -444,7 +460,7 @@ export function PernaDoBilhete({
           </div>
         )}
         {aoVivo && !lr && (
-          <span className="text-[10px] font-bold text-red-400 tabular-nums shrink-0">{rotuloDoMinuto(aoVivo)}</span>
+          <span className="text-[10px] font-bold text-indigo-300 tabular-nums shrink-0">{rotuloDoMinuto(aoVivo)}</span>
         )}
         {odd != null && Number.isFinite(Number(odd)) && (
           <span className={cn('font-mono font-black text-sm shrink-0',
@@ -472,9 +488,9 @@ export function PernaDoBilhete({
           <CampoDoPick rotulo="Chance">
             <dd className="text-xs text-ink-1 font-semibold">
               {pctAgora}% agora
-              <span className="text-ink-4 font-normal">
-                {chance != null ? ` · antes ${Math.round(Number(chance) * 100)}%` : ''}
-              </span>
+              {chance != null && (
+                <span className="text-ink-4 font-normal ml-1.5">antes {Math.round(Number(chance) * 100)}%</span>
+              )}
             </dd>
           </CampoDoPick>
         ) : chance != null && (

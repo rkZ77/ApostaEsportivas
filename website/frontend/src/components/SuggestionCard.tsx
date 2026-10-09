@@ -1,4 +1,4 @@
-import { useState, memo } from 'react'
+import { useContext, useState, memo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, m as motion } from 'framer-motion'
 import { toastUp, fadeInUp } from '../lib/motion'
@@ -13,10 +13,10 @@ import { PICK_TYPE_BORDER, cascaDoPick, caixaDoPick } from '../utils/resultStyle
 import AnalysisModal from './AnalysisModal'
 import { Badge, PickTypeBadge, ResultBadge } from './ui'
 import {
-  CampoAoVivo, CampoDoPick, PickCardFooter, PickExplainButton, PickProbability, SeloDeResultado,
+  CampoAoVivo, CampoDoPick, HoraOuMinuto, PernaDoBilhete, PickCardFooter, PickExplainButton, PickProbability, SeloDeResultado,
   SeloDoEstado, VsOuPlacar,
 } from './PickCardParts'
-import { usePickAgora } from '../lib/picksAgora'
+import { PicksAgoraContext, chanceDoBilhete, chaveDaPerna, chaveDoPick, usePickAgora } from '../lib/picksAgora'
 import { useShareStoryImage, useShareBilheteImage } from '../hooks/useShareStoryImage'
 import { useOddAtualizada } from '../hooks/useOddAtualizada'
 import { useBilhete } from '../lib/sincronia'
@@ -407,7 +407,16 @@ function SuggestionCard({
   /* O jogo com a bola rolando · ver lib/picksAgora. Pick de jogador e pick
      de pernas ficam de fora: o primeiro não tem contador ao vivo, e o segundo
      lê perna a perna. */
-  const agora = usePickAgora(!s.result && !s.player_name && !temPernas ? `:${s.id}` : null)
+  const agora = usePickAgora(!s.result && !s.player_name && !temPernas ? chaveDoPick(pickType, s.id) : null)
+  /* Pick de pernas (Boost) lê perna a perna, chave `tipo:id:perna`. O jogo é
+     um só, então o minuto e o placar do topo saem de qualquer perna. */
+  const mapaAgora = useContext(PicksAgoraContext)
+  const agoraDasPernas = (s.legs ?? []).map((_, i) =>
+    s.result ? null : mapaAgora[chaveDaPerna(pickType, s.id, i)] ?? null)
+  const agoraDoJogo = agora ?? agoraDasPernas.find(Boolean) ?? null
+  const chanceAgora = agora?.chance ?? (temPernas
+    ? chanceDoBilhete((s.legs ?? []).map((l, i) => ({ antes: l.probability, agora: agoraDasPernas[i] })))
+    : null)
 
   /*
    * Horário do jogo. O card mostrava só a data em outro lugar, e "hoje 16:00"
@@ -491,14 +500,9 @@ function SuggestionCard({
               {s.league_name && <span className="text-[10px] text-ink-4 truncate max-w-[90px]">{s.league_name}</span>}
             </div>
           )}
-          {kickoff && (
-            <span className="flex items-center gap-1 text-[10px] text-ink-4 shrink-0">
-              <Clock className="w-3 h-3" />
-              {kickoff}
-            </span>
-          )}
+          <HoraOuMinuto kickoff={kickoff} aoVivo={agoraDoJogo} />
         </div>
-        <SeloDoEstado result={s.result} aoVivo={agora} isLive={isLive} />
+        <SeloDoEstado result={s.result} aoVivo={agoraDoJogo} isLive={isLive} />
       </div>
 
       {/* Hero: Odd | Stake | EV */}
@@ -675,7 +679,7 @@ function SuggestionCard({
           <SeloDeResultado result={s.result} />
           <TeamLogo id={s.home_team_id} name={s.home_team_name} />
           <span className="text-sm font-bold text-ink-1 truncate">{s.home_team_name}</span>
-          <VsOuPlacar aoVivo={agora} />
+          <VsOuPlacar aoVivo={agoraDoJogo} />
           <span className="text-sm font-bold text-ink-1 truncate">{s.away_team_name}</span>
           <TeamLogo id={s.away_team_id} name={s.away_team_name} />
         </div>
@@ -706,71 +710,18 @@ function SuggestionCard({
            * por perna junto. Num Boost só a perna do 1º tempo pode cair, e o
            * card não tinha como mostrar isso. */
           <div className="space-y-2">
-            {s.legs.map((leg, i) => {
-              /* Mesma regra da múltipla: a perna mostra o resultado DELA.
-                 Bilhete GREEN implica todas GREEN (dedução, não palpite);
-                 bilhete RED sem o dado da perna fica neutro, porque não se sabe
-                 qual caiu e pintar as duas de vermelho inventa metade. */
-              const lr = (leg.result ?? (s.result === 'GREEN' ? 'GREEN' : undefined)) as
-                'GREEN' | 'RED' | undefined
-              const boxClass = caixaDoPick(lr)
-              const cor = COR_DA_PERNA[s.pick_type ?? ''] ?? COR_DA_PERNA_PADRAO
-              return (
-                <div key={i} className={`rounded-md border px-3 py-2 ${boxClass}`}>
-                  <div className="flex items-center gap-2">
-                    {/* Perna aberta mostra o numero dela; liquidada, o sinal
-                        · a cor do circulo neutro e' a do PRODUTO (azul na
-                        multipla, ciano no boost), dai o `className`. */}
-                    <SeloDeResultado result={lr} vazio={i + 1}
-                                     className={lr ? undefined : cor.circulo} />
-                    <span className="text-xs text-ink-2 font-semibold truncate">
-                      Seleção {i + 1}
-                    </span>
-                    {leg.odd != null && (
-                      <span className={`ml-auto font-mono font-black text-sm shrink-0 ${
-                        lr === 'GREEN' ? 'text-green-400'
-                        : lr === 'RED' ? 'text-red-400' : cor.texto}`}>
-                        {Number(leg.odd).toFixed(2)}
-                      </span>
-                    )}
-                  </div>
-                  {/* A PERNA TAMBÉM É MERCADO E LINHA, e também vem rotulada:
-                      é o mesmo desenho do card de mercado único, que é o
-                      desenho do site inteiro desde 02/09.
-
-                      Na linha entra o `label` quando existe ("Mais de 1.5
-                      gols"), porque é a aposta escrita como se lê no bilhete da
-                      casa · o nome técnico do mercado já está na linha de cima,
-                      então não se perde nada. */}
-                  <dl className="ml-7 mt-1 space-y-0.5">
-                    <CampoDoPick rotulo="Mercado">
-                      <dd className="text-xs text-ink-2 truncate">
-                        {translateMarket(leg.market)}
-                      </dd>
-                    </CampoDoPick>
-                    {(leg.label || leg.line) && (
-                      <CampoDoPick rotulo="Linha">
-                        <dd className="text-xs text-ink-2 truncate">
-                          {leg.label ?? translateLine(leg.line ?? undefined)}
-                        </dd>
-                      </CampoDoPick>
-                    )}
-                    {leg.house && (
-                      <CampoDoPick rotulo="Casa">
-                        <dd className="text-xs text-ink-3 truncate">{leg.house}</dd>
-                      </CampoDoPick>
-                    )}
-                    {leg.probability != null && (
-                      <CampoDoPick rotulo="Chance">
-                        <dd className="text-xs text-ink-3">
-                          {Math.round(Number(leg.probability) * 100)}% nesta perna
-                        </dd>
-                      </CampoDoPick>
-                    )}
-                  </dl>
-                </div>
-              )
-            })}
+            {s.legs.map((leg, i) => (
+              /* Mesma perna da múltipla (PernaDoBilhete). Bilhete GREEN
+                 implica todas GREEN; RED sem o dado da perna fica neutro. */
+              <PernaDoBilhete key={i} indice={i} semConfronto
+                resultado={leg.result ?? (s.result === 'GREEN' ? 'GREEN' : undefined)}
+                odd={leg.odd != null ? Number(leg.odd) : null}
+                mercado={translateMarket(leg.market)}
+                linha={leg.label ?? (leg.line ? translateLine(leg.line) : null)}
+                casaDeAposta={leg.house} chance={leg.probability ?? null}
+                cor={COR_DA_PERNA[s.pick_type ?? ''] ?? COR_DA_PERNA_PADRAO}
+                aoVivo={agoraDasPernas[i]} Escudo={TeamLogo} />
+            ))}
           </div>
         ) : s.player_name ? (
           /* PICK DE JOGADOR EM CAMPOS ROTULADOS.
@@ -929,7 +880,7 @@ function SuggestionCard({
         )}
       </div>
 
-      <PickProbability confidence={s.confidence} probability={s.probability} aoVivo={agora?.chance} />
+      <PickProbability confidence={s.confidence} probability={s.probability} aoVivo={chanceAgora} />
 
       {/* O "FATO" SAIU DE TODOS OS CARDS (02/09).
         *
