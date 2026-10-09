@@ -330,6 +330,29 @@ def _avaliar_fixture(fixture: dict, cur, match_stats: MatchStatsService,
         resultado["contexto_sombra"] = ctx_par
         if ctx_par["aplicado"]:
             resultado["amostra_efetiva"] = ctx_par["amostra_efetiva"]
+    # EFEITO TATICO (2026-10-08): so' registro. O par do Boost sai de
+    # decomposicao propria (FT x HT, frequencia historica), sem um lambda de
+    # Poisson unico pra trocar; fica o multiplicador medido dos gols de cada
+    # lado. O historico do Boost so' le' gols, entao a folha completa e' lida
+    # aqui -- e so' quando existe tabela medida.
+    try:
+        from services.pick_engine import efeito_tatico
+        if efeito_tatico.modo() != "off" and efeito_tatico.tabela_em_cache():
+            hc = match_stats.get_all_matches_full(fixture["home_team_id"], fixture["season"],
+                                                  fixture["league_id"])
+            hf = match_stats.get_all_matches_full(fixture["away_team_id"], fixture["season"],
+                                                  fixture["league_id"])
+            tat = efeito_tatico.preparar_partida(ctx_motor, hc, hf, fixture["home_team_id"],
+                                                 fixture["away_team_id"])
+            mg = ((tat or {}).get("multiplicadores") or {}).get("gols")
+            if mg:
+                resultado["tatico_sombra"] = {
+                    "estatistica": "gols", "aplicado": False,
+                    "multiplicadores": {l: mg[l]["multiplicador"] for l in ("home", "away")},
+                    "contribuicoes": {l: mg[l]["contribuicoes"] for l in ("home", "away")},
+                    "aprovado": bool(mg.get("aprovado"))}
+    except Exception:
+        pass
     amostra_classe = shrinkage.classe_de_amostra(
         min((confronto.get("consistencia") or {}).get("min_amostra_ft") or 0,
             (confronto.get("consistencia") or {}).get("min_amostra_ht") or 0))
@@ -454,6 +477,7 @@ def _engine_debug(c: dict) -> str:
         "contexto_atual": {"modo": c.get("modo_contexto"), "par": c.get("contexto_sombra"),
                            "partida": c.get("contexto_partida")},
         "revalidacao": c.get("revalidacao"),
+        "efeito_tatico": c.get("tatico_sombra"),
         "score": c.get("score"),
         "score_estatistico": ind.get("score_estatistico"),
         "parcelas": ind.get("parcelas"),

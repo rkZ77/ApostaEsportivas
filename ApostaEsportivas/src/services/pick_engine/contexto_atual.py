@@ -757,8 +757,10 @@ def tecnico_atual(cur, team_id: int, instante: datetime | None = None) -> tuple:
 
 
 def _escalacoes_longas(cur, team_id: int, antes_de, instante=None, limite: int = 40) -> list:
+    # `titulares` vai como 5o campo (2026-10-08, perfil tatico): regime_do_tecnico
+    # le' so' os 4 primeiros.
     cur.execute("""
-        SELECT match_date, coach_id, coach_name, formation
+        SELECT match_date, coach_id, coach_name, formation, titulares
           FROM team_lineups
          WHERE team_id = %s AND match_date < %s
            AND (%s::timestamp IS NULL OR coletado_em <= %s)
@@ -766,6 +768,85 @@ def _escalacoes_longas(cur, team_id: int, antes_de, instante=None, limite: int =
          LIMIT %s
     """, (team_id, antes_de, instante, instante, limite))
     return cur.fetchall()
+
+
+#: Colunas da folha que o perfil tatico le' (team_profile_model).
+_COLUNAS_TATICAS = (
+    "match_date", "league_id", "home_team_id", "away_team_id",
+    "home_goals", "away_goals", "home_goals_ht", "away_goals_ht",
+    "home_corners", "away_corners", "home_corners_1h", "away_corners_1h",
+    "home_fouls", "away_fouls", "home_offsides", "away_offsides",
+    "home_possession", "away_possession", "home_passes", "away_passes",
+    "home_passes_accuracy", "away_passes_accuracy",
+    "home_total_shots", "away_total_shots", "home_total_shots_1h", "away_total_shots_1h",
+    "home_shots_insidebox", "away_shots_insidebox",
+    "home_shots_outsidebox", "away_shots_outsidebox", "home_xg", "away_xg",
+)
+
+
+def _referencia_tatica(cur, league_id, season, antes_de) -> dict | None:
+    """Media das metricas taticas na competicao, so' com jogo ANTES da
+    partida -- o alvo do encolhimento do perfil."""
+    from services.pick_engine import team_profile_model as tpm
+    cur.execute(f"""
+        SELECT {', '.join(_COLUNAS_TATICAS)} FROM match_statistics
+         WHERE league_id = %s AND season = %s AND match_date < %s
+           AND status IN ('FT', 'AET', 'PEN')
+    """, (league_id, season, antes_de))
+    jogos = [dict(zip(_COLUNAS_TATICAS, r)) for r in cur.fetchall()]
+    return tpm.referencia_da_competicao(jogos) or None
+
+
+def _carreira_do_tecnico(cur, coach_id, antes_de, limite: int = 60) -> list:
+    """[(linha da folha, team_id)] dos jogos que o tecnico dirigiu, em
+    QUALQUER time da base, antes da partida (team_lineups.coach_id)."""
+    if coach_id is None:
+        return []
+    cols = ", ".join(f"ms.{c}" for c in _COLUNAS_TATICAS)
+    cur.execute(f"""
+        SELECT {cols}, tl.team_id
+          FROM team_lineups tl
+          JOIN match_statistics ms ON ms.fixture_id = tl.fixture_id
+         WHERE tl.coach_id = %s AND tl.match_date < %s
+           AND ms.status IN ('FT', 'AET', 'PEN')
+         ORDER BY tl.match_date DESC
+         LIMIT %s
+    """, (coach_id, antes_de, limite))
+    return [(dict(zip(_COLUNAS_TATICAS, r[:-1])), r[-1]) for r in cur.fetchall()]
+
+
+def _posicoes(cur, ids) -> dict:
+    """Posicao mais frequente de cada jogador (G/D/M/F)."""
+    if not ids:
+        return {}
+    cur.execute("""
+        SELECT player_id, position FROM (
+            SELECT player_id, position,
+                   ROW_NUMBER() OVER (PARTITION BY player_id ORDER BY COUNT(*) DESC) AS r
+              FROM player_match_stats
+             WHERE player_id = ANY(%s) AND position IS NOT NULL
+             GROUP BY player_id, position) x
+         WHERE r = 1
+    """, (list(ids),))
+    return dict(cur.fetchall())
+
+
+def ausentes_por_posicao(escal: list, ids_fora: set, posicoes: dict) -> dict | None:
+    """Titulares HABITUAIS (3+ inicios nos 5 ultimos jogos) entre os
+    desfalques, por setor -- a mesma definicao com que o efeito tatico foi
+    medido (scripts/medir_efeito_tatico._ausentes). Na medicao o "fora" e' o XI
+    real; aqui e' /injuries, que e' o que se sabe antes da escalacao sair."""
+    titulares = [set(e[4] or []) for e in (escal or [])[:5] if len(e) > 4 and e[4]]
+    if len(titulares) < 3:
+        return None
+    inicios: dict = {}
+    for t in titulares:
+        for p in t:
+            inicios[p] = inicios.get(p, 0) + 1
+    habituais_fora = [p for p, n in inicios.items() if n >= 3 and p in (ids_fora or set())]
+    return {"defesa": sum(1 for p in habituais_fora if posicoes.get(p) in ("D", "G")),
+            "ataque": sum(1 for p in habituais_fora if posicoes.get(p) in ("M", "F")),
+            "jogadores": habituais_fora}
 
 
 def _linhas_de_producao(cur, team_id: int, antes_de, jogos: int = 10) -> list:
@@ -837,7 +918,8 @@ def _viagem_do_visitante(cur, fixture_id, fora: int, quando: datetime) -> float 
 
 
 def coletar(cur, fixture_id: int, casa: int, fora: int, quando: datetime,
-            desfalques: dict, calendario: dict, instante: datetime | None = None) -> dict:
+            desfalques: dict, calendario: dict, instante: datetime | None = None,
+            league_id=None, season=None) -> dict:
     """Tudo que o motor precisa da partida, numa passada. Cada fonte falha
     sozinha: o que nao veio fica ausente e a falha vai em `falhas`.
 
@@ -885,10 +967,47 @@ def coletar(cur, fixture_id: int, casa: int, fora: int, quando: datetime,
         except Exception as e:
             cur.connection.rollback()
             saida["falhas"].append(f"calendario {lado}: {e}")
+        # PERFIL TATICO (2026-10-08): formacao recente, titular habitual fora
+        # por setor e a carreira do tecnico em qualquer time da base. Tudo do
+        # banco, so' com jogo antes do apito; falha de uma parte nao derruba as
+        # outras.
+        try:
+            from services.pick_engine import team_profile_model as tpm
+            forms = [tpm.linha_de_defesa(e[3]) for e in escal[:5] if e[3]]
+            if forms:
+                t["linha_de_tres"] = round(sum(1 for f in forms if f == 3) / len(forms), 2)
+                t["formacoes"] = tpm.formacoes(escal[:10])
+            pos = _posicoes(cur, ids | {p for e in escal[:5] if len(e) > 4 for p in (e[4] or [])})
+            aus = ausentes_por_posicao(escal, ids, pos)
+            if aus:
+                t["ausentes_por_posicao"] = aus
+            cid = (regime or {}).get("tecnico_id")
+            carreira = _carreira_do_tecnico(cur, cid, quando)
+            if carreira:
+                t["carreira_tecnico"] = tpm.perfil_da_carreira(carreira)
+        except Exception as e:
+            cur.connection.rollback()
+            saida["falhas"].append(f"perfil tatico {lado}: {str(e)[:120]}")
         saida[lado] = t
     km = _viagem_do_visitante(cur, fixture_id, fora, quando)
     if km is not None:
         saida["away"]["viagem_km"] = km
+    if league_id is not None and season is not None:
+        try:
+            ref = _referencia_tatica(cur, league_id, season, quando)
+            if ref:
+                saida["referencia_tatica"] = ref
+        except Exception as e:
+            cur.connection.rollback()
+            saida["falhas"].append(f"referencia tatica: {str(e)[:120]}")
+    try:
+        cur.execute("SELECT chuva_mm, vento_kmh, altitude_m FROM clima_partida "
+                    "WHERE fixture_id = %s", (fixture_id,))
+        cl = cur.fetchone()
+        if cl:
+            saida["clima"] = {"chuva_mm": cl[0], "vento_kmh": cl[1], "altitude_m": cl[2]}
+    except Exception:
+        cur.connection.rollback()
     return saida
 
 

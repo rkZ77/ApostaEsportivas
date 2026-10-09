@@ -511,6 +511,12 @@ class AIReviewGate:
             "Use para interpretar o que os numeros nao captam (ex.: tecnico estreando com esquema diferente num "
             "mercado que depende do estilo, desfalque que muda a funcao do time). Fonte que falhou e' ausencia de "
             "informacao, nao evidencia; nunca suponha noticia que nao esta' no JSON. "
+            "Em `dossie.leitura_tatica`: `observado` sao numeros da base com n (perfil encolhido, 2o tempo "
+            "conforme o placar do intervalo, mudancas sob o tecnico atual so' com |z|>=2, carreira do tecnico); "
+            "`modelo` sao cenarios e o efeito do confronto MEDIDO, com `validado_fora_da_amostra`; `limites` diz "
+            "o que cada proxy aproxima. Proxy de pressao nao e' PPDA. Use o efeito validado como evidencia; o nao "
+            "validado e qualquer leitura sua do estilo sao hipotese -- escreva 'Hipotese:' no motivo e nao vete "
+            "so' por hipotese. "
             "Responda somente JSON com decision (approve|reject), risk_level (low|medium|high), reasons e evidence_gaps."
         )
 

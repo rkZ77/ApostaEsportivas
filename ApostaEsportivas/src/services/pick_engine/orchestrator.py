@@ -7,7 +7,7 @@ from services.pick_engine import (
     context_model, team_profile_model, news_model, probability_model, variance_model,
     data_validation, bayesian_model, referee_model,
     market_anchor, selection_bias, context_gate, tie_effect, projection,
-    recalibracao, contexto_atual,
+    recalibracao, contexto_atual, efeito_tatico,
 )
 
 _CARDS_FAMILIES = ("cards", "handicap_cards")
@@ -366,6 +366,22 @@ def analyze_fixture_markets(
         # os dois de novo (tecnico_mudou + titulares fora) na nota final.
         if news_score is not None and {"tecnico", "desfalques"} & contexto_atual.fatores_ligados():
             news_score = None
+
+    # EFEITO TATICO MEDIDO (2026-10-08, ver efeito_tatico.py). Uma vez por
+    # partida: perfis dos dois times e o multiplicador do lambda de cada lado,
+    # por estatistica. None sem tabela medida, sem os ids dos times ou com
+    # MOTOR_TATICO=off -- e ai' nada abaixo muda. Desfalque sai das features
+    # quando o contexto atual ja' o conta (mesmo fato, uma vez so').
+    tatico = None
+    if home_team_id is not None and away_team_id is not None:
+        try:
+            tatico = efeito_tatico.preparar_partida(
+                contexto_partida, last10_home, last10_away, home_team_id, away_team_id,
+                excluir_desfalques=(modo_contexto == "on"
+                                    and "desfalques" in contexto_atual.fatores_ligados()))
+        except Exception:
+            tatico = None   # sombra nunca derruba o motor
+    modo_tatico = efeito_tatico.modo() if tatico else "off"
     referee_sig = referee_model.referee_signal(referee_stats, config, league_stats=league_stats)
     game_intensity = referee_model.game_intensity(context_data, matchup_data, referee_sig)
 
@@ -540,6 +556,40 @@ def analyze_fixture_markets(
                     dc_lambdas = (_hc["expected_value"], _ac["expected_value"])
         except Exception:
             dc_lambdas = None   # sombra nunca derruba o motor
+        # Lambda TATICO da familia (efeito_tatico): o mesmo lambda, com o
+        # multiplicador medido de cada lado. 1o tempo fica fora (nao modelado).
+        est_tatica = efeito_tatico.FAMILIA_PARA_ESTATISTICA.get(
+            "goals" if family == "btts" else family)
+        mult_familia = ((tatico or {}).get("multiplicadores") or {}).get(est_tatica)
+        lambda_tat, btts_tat = None, None
+        if mult_familia:
+            try:
+                if family in ("goals", "corners", "cards", "fouls") and lambda_familia is not None:
+                    lam_c = lam_f = None
+                    if (scope or "total") == "total":
+                        _c = stats_model.expected_value_convergence(
+                            last10_home, last10_away, family, "home",
+                            home_team_id=home_team_id, away_team_id=away_team_id,
+                            team_stats_home=team_stats_home, team_stats_away=team_stats_away,
+                            league_baseline=league_baseline)
+                        _f = stats_model.expected_value_convergence(
+                            last10_home, last10_away, family, "away",
+                            home_team_id=home_team_id, away_team_id=away_team_id,
+                            team_stats_home=team_stats_home, team_stats_away=team_stats_away,
+                            league_baseline=league_baseline)
+                        lam_c = _c["expected_value"] if _c else None
+                        lam_f = _f["expected_value"] if _f else None
+                    lambda_tat = efeito_tatico.lambda_tatico(
+                        lambda_familia, scope or "total", lam_c, lam_f, mult_familia)
+                elif family == "btts" and btts_sim is not None:
+                    btts_tat = probability_model.btts_probability(
+                        home_conv["expected_value"] * mult_familia["home"]["multiplicador"],
+                        away_conv["expected_value"] * mult_familia["away"]["multiplicador"])
+            except Exception:
+                lambda_tat, btts_tat = None, None
+        # Em `on`, so' mercado APROVADO fora da amostra troca a leitura do modelo.
+        aplica_tatico = bool(modo_tatico == "on" and mult_familia and mult_familia.get("aprovado")
+                             and (lambda_tat is not None or btts_tat is not None))
         has_poisson_signal = is_poisson_fam or family in ("btts", "btts_1h")
         # Lambda do arbitro: so' cartoes, e so' quando ha sinal proprio dele
         # (ver referee_model.cards_lambda).
@@ -727,6 +777,20 @@ def analyze_fixture_markets(
             # disagreement_on_raw_rate=False). A DETECCAO usa o fit escolhido; a
             # ACAO compara contra a taxa ajustada, porque a regra nunca pode
             # subir a probabilidade (ver test_desacordo_nunca_sobe_a_probabilidade).
+            # A MESMA linha lida pelo lambda tatico. Em `on` (mercado aprovado)
+            # ela substitui a leitura do modelo em toda a cadeia abaixo; em
+            # shadow so' fica registrada, com a probabilidade e o EV que daria.
+            poisson_tatico = None
+            if lambda_tat is not None and line_val is not None:
+                poisson_tatico = probability_model.poisson_prob_for_line(
+                    lambda_tat, line_val, direcao, family=family, scope=scope)
+            elif btts_tat is not None:
+                poisson_tatico = (btts_tat if direcao in ("yes", "sim")
+                                  else round(1 - btts_tat, 4))
+            poisson_modelo_original = poisson_linha
+            if aplica_tatico and poisson_tatico is not None:
+                poisson_linha = poisson_tatico
+
             historico = _probabilidade_da_linha(
                 taxa_bruta_raw, taxa["amostra"], prob_baseline["prob"],
                 poisson_linha, referee_linha, family, config)
@@ -791,6 +855,29 @@ def analyze_fixture_markets(
                         # ranking._valores_de_aprovacao).
                         "delta_regime": round(com_contexto["taxa"] - historico["taxa"], 4),
                     })
+            if poisson_tatico is not None:
+                # A cadeia inteira com a leitura tatica no lugar da do modelo:
+                # e' o par (com, sem) que medir_efeito_tatico.py cruza com o
+                # resultado dos picks.
+                tat = _probabilidade_da_linha(
+                    taxa_bruta_raw, taxa["amostra"], prob_baseline["prob"],
+                    poisson_tatico, referee_linha, family, config)
+                ev_tat = market_model.edge_and_ev(tat["taxa"], eval_odd, prob_baseline["prob"])
+                bloco_contexto["tatico_sombra"] = {
+                    "estatistica": est_tatica,
+                    "lambda": lambda_familia, "lambda_tatico": lambda_tat,
+                    "prob_modelo": poisson_modelo_original, "prob": poisson_tatico,
+                    "taxa_com_tatico": tat["taxa"], "ev_com_tatico": ev_tat["ev"],
+                    "edge_com_tatico": ev_tat["edge"],
+                    "multiplicadores": {l: mult_familia[l]["multiplicador"]
+                                        for l in ("home", "away")},
+                    "contribuicoes": {l: mult_familia[l]["contribuicoes"]
+                                      for l in ("home", "away")},
+                    "aprovado": bool(mult_familia.get("aprovado")),
+                    "aplicado": aplica_tatico,
+                    **({"redundante_com_contexto": mult_familia["redundante_com_contexto"]}
+                       if mult_familia.get("redundante_com_contexto") else {}),
+                }
             # Estabilidade da linha especifica ao longo do tempo (nao so a
             # media agregada) -- entra no line_score via ranking._stability_bonus.
             # So cobre mercados classicos (over/under/btts); None pros
@@ -1031,7 +1118,13 @@ def analyze_fixture_markets(
             # descreve a condicao dos times (descanso, tabela, mando), este
             # descreve o que a partida e' dentro da competicao.
             "match_context_raw": match_context,
-            "profile_score": team_profile_model.profile_score_for_market(matchup_data, market_type),
+            # O termo Perfil do Score Final (compare_matchup) le' o mesmo estilo
+            # -- posse, chutes, eficiencia -- com constantes nunca medidas. Com
+            # o efeito tatico MEDIDO dentro da probabilidade (MOTOR_TATICO=on,
+            # mercado aprovado), ele sai: o mesmo fato uma vez so'.
+            "profile_score": (None if aplica_tatico else
+                              team_profile_model.profile_score_for_market(matchup_data, market_type)),
+            "profile_score_removido": aplica_tatico or None,
             "matchup_raw": matchup_data.get(market_type) if matchup_data else None,
             "news_score": news_score,
             "news_score_sombra": news_score_sombra,

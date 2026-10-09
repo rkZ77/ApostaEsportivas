@@ -109,6 +109,7 @@ def build_score_breakdown_section(candidate: dict, data_quality_score: float | N
             "partida": candidate.get("contexto_partida"),
         } if candidate.get("modo_contexto") not in (None, "off") else None,
         "revalidacao": candidate.get("revalidacao"),
+        "efeito_tatico": candidate.get("tatico_sombra"),
         "avaliacao": candidate.get("avaliacao"),
         "edge": candidate.get("edge"),
         "ev": candidate.get("ev"),

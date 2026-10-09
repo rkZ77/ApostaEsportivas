@@ -424,6 +424,24 @@ def _avaliar_fixture(fixture: dict, cur, odds_service: OddsService,
     # com eles. Uma leitura por partida, do memo do dossie.
     ctx_motor = (dossie_da_partida.contexto_do_motor(fixture["fixture_id"])
                  if contexto_atual.modo() != "off" else None)
+    # EFEITO TATICO (2026-10-08): multiplicador MEDIDO dos chutes e das faltas
+    # de cada TIME. So' registro: a prop de jogador usa Binomial Negativa
+    # sobre o historico dele, e o efeito foi medido no time -- levar pro
+    # jogador supoe a participacao dele constante, e isso ainda nao foi medido.
+    # Historico do time so' e' lido quando ha' tabela medida (custo zero sem ela).
+    mult_time = {}
+    try:
+        from services.pick_engine import efeito_tatico
+        if efeito_tatico.modo() != "off" and efeito_tatico.tabela_em_cache():
+            hc = match_stats.get_all_matches_full(fixture["home_team_id"], fixture["season"],
+                                                  fixture["league_id"])
+            hf = match_stats.get_all_matches_full(fixture["away_team_id"], fixture["season"],
+                                                  fixture["league_id"])
+            tat = efeito_tatico.preparar_partida(ctx_motor, hc, hf, fixture["home_team_id"],
+                                                 fixture["away_team_id"])
+            mult_time = (tat or {}).get("multiplicadores") or {}
+    except Exception:
+        mult_time = {}
 
     candidatos = []
     motivos: dict = {}
@@ -569,6 +587,21 @@ def _avaliar_fixture(fixture: dict, cur, odds_service: OddsService,
                 analise.get("odd"),
                 {lado: [(a.get("match_date"), a.get("valor")) for a in ctx["atuacoes"]]},
                 DEFAULT_CONFIG)
+            # Defesas do goleiro dependem dos chutes do ADVERSARIO; chutes e
+            # faltas, dos do proprio time.
+            est_t = {"shots": "chutes", "shots_on": "chutes", "saves": "chutes",
+                     "fouls": "faltas"}.get(metodo.slug)
+            lado_t = ({"home": "away", "away": "home"}[lado] if metodo.slug == "saves" else lado)
+            m_t = (mult_time.get(est_t) or {}).get(lado_t) if est_t else None
+            if m_t and analise.get("esperado") is not None:
+                analise["tatico_sombra"] = {
+                    "estatistica": est_t, "lado_do_time": lado_t, "aplicado": False,
+                    "multiplicador_do_time": m_t["multiplicador"],
+                    "esperado": analise["esperado"],
+                    "esperado_tatico": round(analise["esperado"] * m_t["multiplicador"], 3),
+                    "contribuicoes": m_t["contribuicoes"],
+                    "aprovado": bool(mult_time[est_t].get("aprovado")),
+                    "suposicao": "participacao do jogador na contagem do time constante (nao medida)"}
             if ctx_linha:
                 analise["contexto_sombra"] = ctx_linha
                 odd_l = float(analise.get("odd") or 0)
@@ -831,6 +864,7 @@ def _engine_debug(c: dict) -> str:
         # Contexto atual e revalidacao da odd (2026-10-08).
         "contexto_atual": c["analise"].get("contexto_sombra"),
         "revalidacao": c.get("revalidacao"),
+        "efeito_tatico": c["analise"].get("tatico_sombra"),
     })
     return json.dumps(rastro, default=str, ensure_ascii=False)
 
