@@ -1986,7 +1986,7 @@ export default function LivePicksFeed({ isActive, banca }: {
         onClick={() => navigate('/meus-picks')}
         className="mt-6 w-full text-center text-xs text-ink-3 hover:text-ink-1 transition-colors py-3 border border-line rounded-md hover:border-line-strong"
       >
-        Ver os picks já encerrados em Minhas Apostas
+        Ver os picks já encerrados em Meus Bilhetes
       </button>
 
       <AnimatePresence>

@@ -333,7 +333,7 @@ function TabBar({ tab, setTab, canSeeVip, canSeePro, verAoVivo, verBingo, temFal
     {
       /* O que o usuário decidiu seguir. O contador pulsante continua aqui,
          porque é aqui que ele acompanha o dinheiro dele. */
-      key: 'minhas_apostas' as Tab, label: 'Minhas Apostas',
+      key: 'minhas_apostas' as Tab, label: 'Meus Bilhetes',
       badge: (liveCount ?? 0) > 0 ? String(liveCount) : undefined,
       /* Indigo, e nao vermelho: este contador diz "tem jogo rolando", nao
          "voce perdeu N". Mesma troca da faixa de aviso logo abaixo. */

@@ -159,7 +159,7 @@ function NotificationList({ onNavigate }: ListProps) {
                     que não tem mais aquele pick. */}
                 {oportunidadeEncerrada(n) && (
                   <span className="block text-[10px] text-ink-4 mt-1">
-                    Esta oportunidade já passou. O resultado fica em Minhas Apostas.
+                    Esta oportunidade já passou. O resultado fica em Meus Bilhetes.
                   </span>
                 )}
               </span>
