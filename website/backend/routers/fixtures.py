@@ -927,6 +927,19 @@ def _montar_raio_x(fixture_id: int, home, away, league, n: int) -> dict:
         """, (fixture_id,))
         fix = cur.fetchone()
         fix = dict(fix) if fix else {}
+        # PLACAR DO JOGO ENCERRADO (09/10/2026, pedido do usuario): o Raio-X de
+        # um jogo que ja' acabou mostrava o horario, como se nao tivesse
+        # comecado. O placar mora em match_statistics, que a coleta preenche ·
+        # banco, sem custo de API.
+        cur.execute("""
+            SELECT status, home_goals, away_goals FROM match_statistics
+             WHERE fixture_id = %s LIMIT 1
+        """, (fixture_id,))
+        ms = cur.fetchone()
+        placar_final = None
+        if ms and ms["status"] in ("FT", "AET", "PEN") \
+                and ms["home_goals"] is not None and ms["away_goals"] is not None:
+            placar_final = [int(ms["home_goals"]), int(ms["away_goals"])]
         # Jogo de data que a coleta ainda nao trouxe pro banco: a lista veio da
         # API, entao os ids dos times chegam por parametro.
         home_id = fix.get("home_team_id") or home
@@ -994,6 +1007,7 @@ def _montar_raio_x(fixture_id: int, home, away, league, n: int) -> dict:
             "match_datetime": antes_de.isoformat() if antes_de else None,
             "status": fix.get("status"),
             "round": fix.get("round"),
+            "placar_final": placar_final,
         },
         "times": {
             "home": {"team_id": home_id, "jogos": serie_home},
