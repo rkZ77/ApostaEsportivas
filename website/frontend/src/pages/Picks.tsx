@@ -926,7 +926,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
         * com "Entenda esta análise" em quatro alturas diferentes. */}
       <div className="flex-1" aria-hidden="true" />
       {/* Footer */}
-      {dica.reasoning && (
+      {(dica.reasoning || dica.probability != null || dica.ev != null) && (
         <PickExplainButton onClick={() => setShowAnalysis(true)}
           onIntencao={() => prefetchAnalise(dica.id, 'free')} />
       )}
@@ -1352,7 +1352,7 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
         * com "Entenda esta análise" em quatro alturas diferentes. */}
       <div className="flex-1" aria-hidden="true" />
       {/* Footer */}
-      {m.reasoning && (
+      {(m.reasoning || legs.length > 0) && (
         <PickExplainButton onClick={() => setShowAnalysis(true)}
           onIntencao={() => prefetchAnalise(m.id, tipo)} />
       )}
@@ -1371,7 +1371,10 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
         onClose={() => setShowAnalysis(false)}
         data={{
           market: estilo.rotulo,
-          line: `${m.games?.length ?? 0} seleções`,
+          /* As pernas vêm de `legs` (o JSON já lido no topo do card). `m.games`
+             não existe nesta lista, e o modal dizia "0 seleções" e abria sem
+             a regra de nenhuma perna (09/10/2026). */
+          line: `${legs.length} ${legs.length === 1 ? 'seleção' : 'seleções'}`,
           odd: Number(m.total_odd),
           confidence: m.confidence ?? null,
           probability: null,
@@ -1384,7 +1387,7 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
           pickType: tipo,
           // Regra perna a perna: e' o "igual aos outros pipelines" possivel
           // num bilhete de varios mercados.
-          legs: (m.games ?? []).map((g: any) => ({ market: g.market, line: g.line, odd: g.odd })),
+          legs: legs.map((g: any) => ({ market: g.market, line: g.line, odd: g.odd })),
         }}
       />
     )}
@@ -1616,7 +1619,7 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
         * com "Entenda esta análise" em quatro alturas diferentes. */}
       <div className="flex-1" aria-hidden="true" />
       {/* Footer */}
-      {pick.reasoning_1 && (
+      {(pick.reasoning_1 || legs.length > 0) && (
         <PickExplainButton onClick={() => setShowAnalysis(true)}
           onIntencao={() => prefetchAnalise(pick.id, 'alavancagem')} />
       )}
