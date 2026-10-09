@@ -723,6 +723,38 @@ async def _drenar(stream, buffers: list, prefixo: str = "") -> list:
     return coletadas
 
 
+#: CANCELAR (2026-10-09, pedido do usuario). O processo de cada etapa em
+#: andamento, pra o botao poder encerra-lo, e os comandos com cancelamento
+#: pedido. "tudo" no conjunto faz o laco do Rodar Tudo parar antes da proxima
+#: etapa. Etapa que ja' terminou nao e' desfeita: pick publicado continua
+#: publicado -- cancelar e' parar daqui pra frente.
+_processos: dict = {}
+_cancelamentos: set = set()
+
+#: Segundos entre o pedido educado (SIGTERM) e o forcado (SIGKILL).
+_ESPERA_PARA_MATAR = 10
+
+
+def _encerrar(proc) -> None:
+    """SIGTERM agora; SIGKILL se o processo ainda estiver vivo depois de
+    `_ESPERA_PARA_MATAR`. Nao espera aqui: quem aguarda o processo e' o
+    _run_and_track, que grava o status quando ele sair."""
+    if proc is None or proc.returncode is not None:
+        return
+    try:
+        proc.terminate()
+    except ProcessLookupError:
+        return
+
+    def _forcar():
+        if proc.returncode is None:
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                pass
+    asyncio.get_running_loop().call_later(_ESPERA_PARA_MATAR, _forcar)
+
+
 async def _run_and_track(command: str, script: str, args: list | None = None,
                          extra: dict | None = None, espelhar_em: str | None = None):
     """Roda o script e mantem _pipeline_status[command] atualizado.
@@ -762,6 +794,7 @@ async def _run_and_track(command: str, script: str, args: list | None = None,
             cwd=_PIPELINE_DIR,
             env=env,
         )
+        _processos[command] = proc
         tarefas = [
             asyncio.ensure_future(_drenar(proc.stdout, destinos)),
             asyncio.ensure_future(_drenar(proc.stderr, destinos, prefixo="! ")),
@@ -782,6 +815,15 @@ async def _run_and_track(command: str, script: str, args: list | None = None,
         linhas_err = tarefas[1].result() if tarefas[1].done() and not tarefas[1].cancelled() else []
         out = "\n".join(linhas_out)[-1500:]
         err = "\n".join(linhas_err)[-1500:]
+        if command in _cancelamentos:
+            _cancelamentos.discard(command)
+            for destino in destinos:
+                destino.append("! Etapa CANCELADA pelo admin")
+            _pipeline_status[command] = {
+                "status": "cancelado", "started_at": started, "finished_at": now(),
+                "returncode": returncode, "log": out, "error": "Cancelado pelo admin", **extra,
+            }
+            return
         _pipeline_status[command] = {
             "status": "ok" if returncode == 0 else "error",
             "started_at": started,
@@ -795,6 +837,8 @@ async def _run_and_track(command: str, script: str, args: list | None = None,
         for destino in destinos:
             destino.append(f"! {e}")
         _pipeline_status[command] = {"status": "error", "started_at": started, "finished_at": now(), "returncode": -1, "error": str(e), **extra}
+    finally:
+        _processos.pop(command, None)
 
 
 async def _run_tudo():
@@ -812,16 +856,40 @@ async def _run_tudo():
     # seguia adiante desde 02/08 pelo mesmo motivo; o botao do painel, que e'
     # o caminho que de fato roda em producao, tinha ficado de fora.
     falhas: list = []
+    executadas: list = []
+    # Pedido de cancelamento que sobrou de uma rodada anterior nao pode
+    # matar esta antes de comecar.
+    _cancelamentos.discard("tudo")
     for i, cmd in enumerate(_TUDO_STEPS, start=1):
+        if "tudo" in _cancelamentos:
+            break
         script = os.path.join(_PIPELINE_DIR, _PIPELINE_SCRIPTS[cmd])
         _pipeline_status["tudo"]["log"] = f"Rodando {cmd}..."
         _pipeline_logs["tudo"].append(
             f"─── [{i}/{total}] {_STEP_LABELS.get(cmd, cmd)} " + "─" * 20)
         await _run_and_track(cmd, script, args=_PIPELINE_ARGS.get(cmd),
                              espelhar_em="tudo")
+        if _pipeline_status[cmd]["status"] == "cancelado":
+            break
+        executadas.append(cmd)
         if _pipeline_status[cmd]["status"] == "error":
             falhas.append(cmd)
             _pipeline_logs["tudo"].append(f"! Etapa {cmd} FALHOU · seguindo para a próxima")
+    if "tudo" in _cancelamentos:
+        _cancelamentos.discard("tudo")
+        parou_em = next((c for c in _TUDO_STEPS if c not in executadas), None)
+        _pipeline_logs["tudo"].append(
+            f"! Rodar Tudo CANCELADO pelo admin"
+            + (f" em {_STEP_LABELS.get(parou_em, parou_em)}" if parou_em else ""))
+        _pipeline_status["tudo"] = {
+            "status": "cancelado", "started_at": started, "finished_at": now(), "returncode": -1,
+            "log": f"Cancelado depois de {len(executadas)} de {total} etapa(s)",
+            "error": "Cancelado pelo admin" + (f" em {_STEP_LABELS.get(parou_em, parou_em)}"
+                                               if parou_em else "")}
+        # O aviso de picks publicados vale pras etapas que terminaram.
+        if any(c.startswith("gerar_") and c not in falhas for c in executadas):
+            _notificar_picks_publicados()
+        return
     if falhas:
         _pipeline_status["tudo"] = {"status": "error", "started_at": started, "finished_at": now(), "returncode": -1,
                                     "log": f"Pipeline concluído com {len(falhas)} etapa(s) com falha",
@@ -1697,6 +1765,33 @@ async def agendador_medicoes_agora(current_user: dict = Depends(require_admin)):
     import agendador
     asyncio.create_task(agendador.rodar_medicoes(datetime.now(agendador.BR).date()))
     return {"ok": True, "status": "iniciado"}
+
+
+@router.post("/cancel-pipeline")
+async def cancel_pipeline(body: PipelineCommandBody, current_user: dict = Depends(require_admin)):
+    """Cancela o Rodar Tudo (ou uma etapa avulsa) em andamento.
+
+    No `tudo`: encerra a etapa que esta' rodando e o laco nao comeca a
+    proxima. O que ja' terminou fica -- pick publicado nao e' desfeito, e a
+    transacao aberta da etapa encerrada e' desfeita pelo proprio banco quando
+    a conexao cai. Funciona tambem pro Rodar Tudo que o agendador disparou."""
+    cmd = body.command
+    if cmd == "tudo":
+        if (_pipeline_status.get("tudo") or {}).get("status") != "running":
+            raise HTTPException(409, detail="O Rodar Tudo não está rodando.")
+        _cancelamentos.add("tudo")
+        alvos = [c for c in _TUDO_STEPS if c in _processos]
+    else:
+        if cmd not in _processos:
+            raise HTTPException(409, detail=f"A etapa {cmd} não está rodando.")
+        alvos = [cmd]
+    for c in alvos:
+        _cancelamentos.add(c)
+        _encerrar(_processos.get(c))
+    logging.getLogger(__name__).warning(
+        "[PIPELINE] %s cancelado por %s (etapas encerradas: %s)",
+        cmd, current_user.get("email"), alvos or "nenhuma em andamento")
+    return {"ok": True, "encerradas": alvos}
 
 
 @router.post("/run-pipeline")

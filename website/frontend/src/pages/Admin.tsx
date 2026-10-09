@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
-import { Play, AlertTriangle } from 'lucide-react'
+import { Play, AlertTriangle, XCircle } from 'lucide-react'
 import PageShell from '../components/PageShell'
 import { Button, Modal, Spinner, SpinnerBlock } from '../components/ui'
 import Pagination from '../components/ui/Pagination'
@@ -608,6 +608,7 @@ export default function Admin() {
           {s?.status === 'running' && <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />}
           {s?.status === 'ok'      && <span className="w-2 h-2 rounded-full bg-green-500" />}
           {s?.status === 'error'   && <span className="w-2 h-2 rounded-full bg-red-500" />}
+          {s?.status === 'cancelado' && <span className="w-2 h-2 rounded-full bg-orange-400" title="cancelado" />}
         </div>
         <p className="text-xs font-semibold text-ink-2 leading-tight">{label}</p>
         {/* O horário era o próprio botão do log (texto clicável, sublinhado
@@ -649,6 +650,22 @@ export default function Admin() {
         )}
       </div>
     )
+  }
+
+  const [cancelando, setCancelando] = useState(false)
+  const cancelarTudo = async () => {
+    if (!window.confirm('Cancelar o Rodar Tudo? A etapa em andamento é encerrada e as próximas não rodam. O que já foi publicado continua publicado.')) return
+    setCancelando(true)
+    try {
+      const r = await api.post('/admin/cancel-pipeline', { command: 'tudo' })
+      showToast(r.data?.encerradas?.length
+        ? 'Cancelando: a etapa em andamento está sendo encerrada.'
+        : 'Cancelado: nenhuma etapa nova vai começar.', true)
+    } catch (err: any) {
+      showToast(err.response?.data?.detail || 'Não foi possível cancelar', false)
+    } finally {
+      setCancelando(false)
+    }
   }
 
   const runPipeline = async (command: string) => {
@@ -1009,19 +1026,32 @@ export default function Admin() {
               const isTudoRunning = runningCmd === 'tudo' || s?.status === 'running'
               return (
                 <div className="flex flex-col items-end gap-1">
-                  <Button
-                    size="sm"
-                    Icon={Play}
-                    loading={isTudoRunning}
-                    disabled={runningCmd !== null}
-                    onClick={() => runPipeline('tudo')}
-                  >
-                    {isTudoRunning ? 'Rodando tudo...' : 'Rodar tudo'}
-                  </Button>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      size="sm"
+                      Icon={Play}
+                      loading={isTudoRunning}
+                      disabled={runningCmd !== null}
+                      onClick={() => runPipeline('tudo')}
+                    >
+                      {isTudoRunning ? 'Rodando tudo...' : 'Rodar tudo'}
+                    </Button>
+                    {/* CANCELAR (09/10): encerra a etapa em andamento e não
+                        começa a próxima. O que já terminou fica publicado. */}
+                    {s?.status === 'running' && (
+                      <button
+                        onClick={cancelarTudo}
+                        disabled={cancelando}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-md border border-red-500/50 text-red-400 hover:bg-red-500/10 disabled:opacity-50 flex items-center gap-1"
+                      >
+                        <XCircle className="w-3.5 h-3.5" /> {cancelando ? 'Cancelando…' : 'Cancelar'}
+                      </button>
+                    )}
+                  </div>
                   {s && (
-                    <span className={`text-[10px] ${s.status === 'error' ? 'text-red-400' : 'text-ink-4'}`}>
+                    <span className={`text-[10px] ${s.status === 'error' ? 'text-red-400' : s.status === 'cancelado' ? 'text-orange-400' : 'text-ink-4'}`}>
                       {s.status === 'running' ? 'rodando...'
-                        : `${s.status === 'error' ? 'falhou' : 'último'}: ${s.finished_at ?? 's/d'}`}
+                        : `${s.status === 'error' ? 'falhou' : s.status === 'cancelado' ? 'cancelado' : 'último'}: ${s.finished_at ?? 's/d'}`}
                     </span>
                   )}
                   {expandedLog === 'tudo' && (s?.error || s?.log) && (
