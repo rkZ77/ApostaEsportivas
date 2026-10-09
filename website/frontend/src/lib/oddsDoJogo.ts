@@ -53,6 +53,22 @@ export function oddDaSelecao(
 }
 
 /**
+ * Chance de vitória, empate e derrota pelas odds do resultado final (09/10).
+ *
+ * 1/odd de cada lado soma mais de 100% (é a margem da casa); dividir pelo
+ * total tira a margem e deixa os três somando 100. As odds são as MELHORES de
+ * cada lado, às vezes de casas diferentes, então a soma fica perto de 100 e a
+ * correção é pequena. null se faltar qualquer um dos três.
+ */
+export function chanceDoResultado(odds: OddDaCasa[] | null | undefined): { casa: number; empate: number; fora: number } | null {
+  const o = (escolha: string) => oddDaSelecao(odds, { mercado: 'resultado', quem: 'jogo', periodo: 'total', escolha })?.odd
+  const [c, e, f] = [o('1'), o('X'), o('2')]
+  if (!c || !e || !f) return null
+  const soma = 1 / c + 1 / e + 1 / f
+  return { casa: 1 / c / soma, empate: 1 / e / soma, fora: 1 / f / soma }
+}
+
+/**
  * Vantagem pela taxa histórica: chance × odd − 1. Só com amostra de 8 jogos
  * ou mais · com menos, 4/4 viraria "valor" em cima de quatro jogos.
  */
