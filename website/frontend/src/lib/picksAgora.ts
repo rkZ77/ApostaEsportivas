@@ -43,6 +43,12 @@ export interface ItemAoVivo {
 
 export const PicksAgoraContext = createContext<Record<string, LeituraAoVivo>>({})
 
+/* As chaves saem SÓ daqui: a página monta os itens com elas e o card procura
+   com elas. Escritas à mão nos dois lados, uma divergência deixava o card sem
+   leitura em silêncio (aconteceu na primeira versão, 09/10). */
+export const chaveDoPick = (tipo: string, id: number | string) => `${tipo}:${id}`
+export const chaveDaPerna = (tipo: string, id: number | string, perna: number) => `${tipo}:${id}:${perna}`
+
 /** A leitura de um pick (ou perna), se o jogo dele está rolando. */
 export function usePickAgora(chave: string | null | undefined): LeituraAoVivo | null {
   const mapa = useContext(PicksAgoraContext)
@@ -99,6 +105,15 @@ export function rotuloDoMinuto(l: Pick<LeituraAoVivo, 'status' | 'minuto'>): str
   if (l.status === 'P') return 'Pênaltis'
   if (l.minuto == null) return 'Ao vivo'
   return `${l.minuto}'`
+}
+
+/** "1º tempo 23'", "2º tempo 59'", "Intervalo" · o lugar do horário no topo do card. */
+export function rotuloDoTempo(l: Pick<LeituraAoVivo, 'status' | 'minuto'>): string {
+  const min = l.minuto != null ? ` ${l.minuto}'` : ''
+  if (l.status === '1H') return `1º tempo${min}`
+  if (l.status === '2H') return `2º tempo${min}`
+  if (l.status === 'ET') return `Prorrogação${min}`
+  return rotuloDoMinuto(l)
 }
 
 /**

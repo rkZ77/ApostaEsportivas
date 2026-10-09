@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { chanceDoBilhete, jaComecou, rotuloDoMinuto, type LeituraAoVivo } from './picksAgora'
+import { chanceDoBilhete, jaComecou, rotuloDoMinuto, rotuloDoTempo, type LeituraAoVivo } from './picksAgora'
 
 const leitura = (p: Partial<LeituraAoVivo>): LeituraAoVivo => ({
   status: '2H', minuto: 60, placar: [1, 0], rotulo: null, atual: 4, linha: 5.5, direcao: 'over',
@@ -18,6 +18,8 @@ describe('picks ao vivo', () => {
     expect(rotuloDoMinuto({ status: '2H', minuto: 59 })).toBe("59'")
     expect(rotuloDoMinuto({ status: 'HT', minuto: 45 })).toBe('Intervalo')
     expect(rotuloDoMinuto({ status: '1H', minuto: null })).toBe('Ao vivo')
+    expect(rotuloDoTempo({ status: '2H', minuto: 59 })).toBe("2º tempo 59'")
+    expect(rotuloDoTempo({ status: 'HT', minuto: 45 })).toBe('Intervalo')
   })
 
   it('chance do bilhete: ao vivo onde há, a de antes no resto', () => {
