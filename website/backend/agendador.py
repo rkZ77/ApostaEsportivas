@@ -85,6 +85,11 @@ MEDICOES = (
     # motor so' APLICA o que vier aprovado, e so' com MOTOR_TATICO=on.
     ("efeito_tatico", "Efeito tático do confronto (por mercado e competição)",
      "scripts/medir_efeito_tatico.py", ["--gravar"]),
+    # O COMPARADOR OBRIGATORIO (09/10): o motor atual contra cada variante nas
+    # mesmas partidas, so' com o que se sabia antes do apito. As 300 mais
+    # recentes pra caber nos 15 minutos de cada medicao.
+    ("comparar_motor", "Motor atual x variantes (mesmas partidas)",
+     "scripts/comparar_motor.py", ["--prod", "--ultimas", "300"]),
 )
 
 

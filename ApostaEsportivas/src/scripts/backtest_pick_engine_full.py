@@ -81,7 +81,12 @@ for _key in ("DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASS", "DB_SSLMODE"
     _val = os.getenv(f"{_key}{_SUFIXO}")
     if _val:
         os.environ[_key] = _val
-os.environ["DB_ENV"] = _AMBIENTE
+# --prod LE O DB_HOST (2026-10-09). Era DB_ENV=prod, que manda get_connection
+# procurar DB_HOST_PROD -- e no Railway de producao essa variavel nao existe
+# (o banco de la' e' o DB_HOST). Localmente o laco acima ja' copiou os _PROD
+# pro DB_HOST, entao o resultado e' o mesmo; dentro do servidor (o agendador
+# roda scripts/comparar_motor.py com --prod) passa a funcionar.
+os.environ["DB_ENV"] = "" if MODO_PROD else _AMBIENTE
 
 if MODO_PROD:
     print("=" * 70)
