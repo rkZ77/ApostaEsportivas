@@ -4,6 +4,7 @@ import json
 import time
 import logging
 import threading
+import contextvars
 import requests
 from decimal import Decimal
 from datetime import date, datetime, timedelta, timezone
@@ -45,6 +46,16 @@ _player_sheet_cache: dict[int, tuple[float, list]] = {}
 # nenhuma é removida automaticamente. Com muitos jogos ao vivo por dia o
 # processo eventualmente come memória até o Railway reiniciar.
 _CACHE_MAX = 500
+
+
+#: LEITURA SO' DO CACHE (09/10/2026). Ligado, `_fetch_fixture`,
+#: `_fetch_fixtures_bulk` e `_fetch_stats` devolvem o que esta' em memoria e
+#: NUNCA chamam a API, por mais velho que o dado esteja. E' o que deixa o card
+#: de pick mostrar o jogo ao vivo de graca: quem mantem esse cache quente e' a
+#: varredura de resultados (`maybe_resolve_pending`, a cada 3 min, so' pros
+#: jogos com pick pendente) e Meus Bilhetes. Decisao do usuario: tela nova nao
+#: gasta cota, reaproveita o que outra parte ja' busca.
+_SO_CACHE: contextvars.ContextVar[bool] = contextvars.ContextVar("_SO_CACHE", default=False)
 
 
 def _evict_cache(cache: dict) -> None:
@@ -118,6 +129,8 @@ def _recusa_da_api(corpo: dict) -> str | None:
 
 
 def _fetch_fixture(fid: int) -> dict:
+    if _SO_CACHE.get():
+        return _fix_cache.get(fid, (0, {}))[1]
     now = time.time()
     if fid in _fix_cache:
         ts, cached = _fix_cache[fid]
@@ -151,6 +164,8 @@ def _fetch_fixtures_bulk(fids: list[int]) -> None:
     vier na resposta em lote (erro, id inválido) cai no fallback individual
     de _fetch_fixture -- puramente aditivo, nunca piora o comportamento
     anterior."""
+    if _SO_CACHE.get():
+        return
     now = time.time()
     stale = []
     for fid in fids:
@@ -217,6 +232,8 @@ def _folha_e_do_jogo_em_andamento(status_na_captura, status_agora: str) -> bool:
 
 
 def _fetch_stats(fid: int, status: str) -> list:
+    if _SO_CACHE.get():
+        return _stats_cache.get(fid, (0, []))[1]
     now = time.time()
     if fid in _stats_cache:
         entrada = _stats_cache[fid]
@@ -2168,6 +2185,106 @@ def _montar_live_stats(fixture_id: int) -> dict:
         "home_possession":  home_s.get("Ball Possession", 0),
         "away_possession":  away_s.get("Ball Possession", 0),
     }
+
+
+#: Cache mais velho que isto nao vira "ao vivo" no card: a varredura passa a
+#: cada 3 min, e dois ciclos sem ela quer dizer que ninguem esta' alimentando.
+_IDADE_MAXIMA_DO_CACHE = 600
+_MAX_ITENS_AGORA = 120
+
+
+def _periodo_do_mercado(market: str | None, market_type: str | None) -> str:
+    if market_form.e_mercado_de_primeiro_tempo(market, market_type):
+        return "1t"
+    if market_form.e_mercado_de_segundo_tempo(market):
+        return "2t"
+    return "total"
+
+
+def leitura_ao_vivo_do_pick(item: dict, agora: float | None = None) -> dict | None:
+    """O jogo do pick agora, lido SO' do cache. None = nada a mostrar.
+
+    Mesmo `_enrich_leg` da varredura e de Meus Bilhetes (o contador, o lado,
+    o tempo do mercado e o "travado" saem de um lugar so'), rodando com
+    `_SO_CACHE` ligado: nenhuma chamada a API acontece aqui."""
+    from chance_ao_vivo import chance_agora
+    agora = agora or time.time()
+    try:
+        fid = int(item.get("fixture_id"))
+    except (TypeError, ValueError):
+        return None
+    entrada = _fix_cache.get(fid)
+    if not entrada or agora - entrada[0] > _IDADE_MAXIMA_DO_CACHE:
+        return None
+    status = (entrada[1].get("fixture", {}).get("status", {}) or {}).get("short")
+    if status not in LIVE_STATUSES:
+        return None   # nao comecou ou acabou: o card fica no normal
+    market, line = item.get("market") or "", item.get("line") or ""
+    market_type = item.get("market_type")
+    token = _SO_CACHE.set(True)
+    try:
+        leg = _enrich_leg(fid, market, line, item.get("home") or "", item.get("away") or "",
+                          None, None, 0.0, market_type=market_type)
+    except Exception:
+        logger.warning("[PICKS AGORA] leitura do fixture %s falhou", fid, exc_info=True)
+        return None
+    finally:
+        _SO_CACHE.reset(token)
+
+    periodo = _periodo_do_mercado(market, market_type)
+    direcao, _ = _extract_line(line)
+    atual = leg.get("current_val")
+    if periodo == "2t" and status == "1H":
+        atual = 0   # o 2o tempo ainda nao comecou
+    prob = item.get("prob")
+    if leg.get("is_locked") and leg.get("pick_status") in ("winning", "losing"):
+        chance = 1.0 if leg["pick_status"] == "winning" else 0.0
+    else:
+        chance = chance_agora(prob, direcao, leg.get("line_val"), atual,
+                              status, leg.get("elapsed"), periodo)
+    folha = _stats_cache.get(fid)
+    # O placar do JOGO, e nao o do recorte do mercado (o de 1o tempo e' outro).
+    gols = entrada[1].get("goals") or {}
+    return {
+        "status": status,
+        "minuto": leg.get("elapsed"),
+        "placar": [gols.get("home"), gols.get("away")],
+        "rotulo": leg.get("stat_label") or None,
+        "atual": atual,
+        "linha": leg.get("line_val"),
+        "direcao": direcao if direcao in ("over", "under") else None,
+        "situacao": leg.get("pick_status"),
+        "travado": bool(leg.get("is_locked")),
+        "chance": chance,
+        "periodo": periodo,
+        # Idade do dado mais velho usado (placar ou folha), em segundos.
+        "idade": int(agora - min(entrada[0], folha[0] if folha else entrada[0])),
+    }
+
+
+@router.post("/picks-agora")
+def get_picks_agora(corpo: dict, current_user: dict = Depends(get_current_user)):
+    """O jogo de cada pick da tela, com a bola rolando (09/10/2026).
+
+    Entra `{"itens": [{chave, fixture_id, market, market_type, line, prob,
+    home, away}]}` e sai `{chave: leitura}` so' pros que estao ao vivo · ver
+    `leitura_ao_vivo_do_pick`. CUSTO ZERO DE API: so' le' o cache. Quem o
+    mantem quente e' a varredura, que esta rota tambem cutuca (ela so' roda se
+    for a hora e houver pick pendente em jogo, como em qualquer leitura de
+    pick)."""
+    maybe_resolve_pending()
+    itens = (corpo or {}).get("itens") or []
+    if not isinstance(itens, list):
+        return {}
+    saida = {}
+    agora = time.time()
+    for item in itens[:_MAX_ITENS_AGORA]:
+        if not isinstance(item, dict) or not item.get("chave"):
+            continue
+        leitura = leitura_ao_vivo_do_pick(item, agora)
+        if leitura:
+            saida[str(item["chave"])] = leitura
+    return saida
 
 
 @router.get("/is-live")

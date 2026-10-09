@@ -1,5 +1,7 @@
 import { BrainCircuit, Check as CheckIcon, Loader2, Share2 } from 'lucide-react'
 import { cn } from '../lib/cn'
+import { Badge, ResultBadge } from './ui'
+import { rotuloDoMinuto, type LeituraAoVivo } from '../lib/picksAgora'
 
 /*
  * Peças comuns dos cards de pick.
@@ -166,7 +168,15 @@ export function PickProbability({
   label = 'Probabilidade',
   className,
   mercadoAgora,
+  aoVivo,
 }: {
+  /**
+   * A chance de AGORA, com o jogo rolando (09/10/2026, pedido do usuário):
+   * refeita a cada leitura a partir da de antes do jogo, do contador e do
+   * relógio (ver chance_ao_vivo.py). A barra anda com ela e, quando o jogo
+   * acaba, o card deixa de passar isto e a barra volta à de antes.
+   */
+  aoVivo?: number | null
   /** Fração 0..1. Só é usada quando não há probabilidade. */
   confidence?: number | null
   /** Fração 0..1. É esta que o rótulo promete. */
@@ -205,31 +215,126 @@ export function PickProbability({
      A nossa estimativa não sumiu: ela vive no "Entenda esta análise", ao lado
      da conta do valor, que é onde ela explica alguma coisa. Sem leitura ao
      vivo (pré-jogo, pick encerrado) a barra continua sendo a nossa. */
-  const pct = pctMercado ?? nosso
+  const pctAoVivo = aoVivo != null ? Math.round(Number(aoVivo) * 100) : null
+  const pct = pctAoVivo ?? pctMercado ?? nosso
   // Sem probabilidade real, o numero e' uma aproximacao: o rotulo avisa.
-  const aproximado = pctMercado == null && probability == null
+  const aproximado = pctAoVivo == null && pctMercado == null && probability == null
 
   return (
     <div className={cn('px-5 pb-3', className)}>
       <div className="flex justify-between items-baseline text-[10px] mb-1">
-        <span className="text-ink-4">
-          {pctMercado != null ? 'Chance na odd de agora' : label}
+        <span className="text-ink-4 flex items-center gap-1.5">
+          {pctAoVivo != null ? (
+            <>
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" aria-hidden />
+              Chance agora
+              <span className="text-ink-4">· antes {nosso}%</span>
+            </>
+          ) : pctMercado != null ? 'Chance na odd de agora' : label}
           {aproximado && <span className="text-ink-4"> estimada</span>}
         </span>
-        <span className={cn('font-mono', pct >= 75 ? 'text-accent-ink font-bold' : 'text-ink-3')}>
+        <span className={cn('font-mono', pct >= 75 ? 'text-accent-ink font-bold' : 'text-ink-3',
+                            pctAoVivo != null && 'font-bold text-ink-1')}>
           {pct}%
         </span>
       </div>
       <div className="bg-surface-2 rounded-full h-1 overflow-hidden">
         <div
           className={cn(
-            'h-1 rounded-full',
-            pct >= 75 ? 'bg-accent' : pct >= 60 ? 'bg-yellow-500' : 'bg-ink-4',
+            /* A largura anda devagar · com o jogo rolando o número muda a cada
+               leitura, e o salto seco parecia defeito. */
+            'h-1 rounded-full transition-[width] duration-700 ease-out',
+            pct >= 75 ? 'bg-accent' : pct >= 60 ? 'bg-yellow-500' : pctAoVivo != null && pct < 35 ? 'bg-red-500' : 'bg-ink-4',
           )}
           style={{ width: `${pct}%` }}
         />
       </div>
     </div>
+  )
+}
+
+/* ── Com a bola rolando (09/10/2026, pedido do usuário) ──────────────────── */
+
+/*
+ * TRÊS LUGARES, NENHUM A MAIS. O pedido foi mostrar minuto, placar e o número
+ * do mercado "sem poluir": nada de faixa nova no card. Cada informação ocupa
+ * um lugar que já existia e já dizia algo parecido:
+ *
+ *   · o selo do topo, que dizia "Ao vivo", passa a dizer o MINUTO;
+ *   · o "vs" entre os times vira o PLACAR;
+ *   · a lista de campos (Mercado, Linha, Casa) ganha a linha "Agora", com o
+ *     contador do mercado e uma barra fina até a linha.
+ *
+ * E a barra de probabilidade, que já existia, passa a ser a chance de agora.
+ * Acabou o jogo, as quatro voltam ao normal sozinhas (a rota deixa de mandar).
+ */
+
+/** Selo do canto do card: resultado, minuto ao vivo, "Ao vivo" ou "Pendente". */
+export function SeloDoEstado({ result, aoVivo, isLive }: {
+  result?: string | null
+  aoVivo?: LeituraAoVivo | null
+  isLive?: boolean
+}) {
+  if (result) return <ResultBadge result={result} emDestaque />
+  if (aoVivo || isLive) {
+    return (
+      <Badge tone="red" className="tabular-nums">
+        <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" aria-hidden />
+        {aoVivo ? rotuloDoMinuto(aoVivo) : 'Ao vivo'}
+      </Badge>
+    )
+  }
+  return <Badge tone="neutral">Pendente</Badge>
+}
+
+/** O "vs" entre os times, ou o placar quando o jogo está rolando. */
+export function VsOuPlacar({ aoVivo, pequeno }: { aoVivo?: LeituraAoVivo | null; pequeno?: boolean }) {
+  const [c, f] = aoVivo?.placar ?? [null, null]
+  if (c == null || f == null) {
+    return <span className={cn('text-ink-4 shrink-0', pequeno ? 'text-[10px]' : 'text-xs')}>vs</span>
+  }
+  return (
+    <span className={cn('shrink-0 font-mono font-black text-ink-1 tabular-nums px-1.5 rounded bg-surface-3/70',
+                        pequeno ? 'text-[11px]' : 'text-xs')}
+      aria-label={`Placar ${c} a ${f}`}>
+      {c}-{f}
+    </span>
+  )
+}
+
+/**
+ * A linha "Agora" da lista de campos: quanto o mercado tem, contra a linha.
+ * Barra fina que enche até a linha; verde se está dando certo, vermelha se já
+ * não tem volta. Sem contador (resultado, ambas marcam), a linha não aparece:
+ * o placar no lugar do "vs" já diz tudo.
+ */
+export function CampoAoVivo({ aoVivo }: { aoVivo?: LeituraAoVivo | null }) {
+  if (!aoVivo || aoVivo.atual == null || aoVivo.linha == null || !aoVivo.direcao) return null
+  const { atual, linha, direcao, situacao, travado } = aoVivo
+  const cheio = Math.min(1, atual / Math.max(linha, 0.5))
+  const ganhando = situacao === 'winning'
+  const perdido = travado && situacao === 'losing'
+  const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1))
+  return (
+    <CampoDoPick rotulo="Agora">
+      <dd className="flex items-center gap-2 min-w-0 flex-1">
+        <span className={cn('text-xs font-bold tabular-nums shrink-0',
+          ganhando ? 'text-green-400' : perdido ? 'text-red-400' : 'text-ink-1')}>
+          {fmt(atual)}
+          <span className="text-ink-4 font-normal"> de {fmt(linha)}</span>
+        </span>
+        <span className="relative flex-1 h-1 rounded-full bg-surface-3 overflow-hidden min-w-[32px]" aria-hidden>
+          <span className={cn('absolute inset-y-0 left-0 rounded-full transition-[width] duration-700 ease-out',
+            ganhando ? 'bg-green-500' : perdido ? 'bg-red-500' : direcao === 'under' ? 'bg-yellow-500' : 'bg-ink-3')}
+            style={{ width: `${cheio * 100}%` }} />
+        </span>
+        {travado && (
+          <span className={cn('text-[10px] font-bold shrink-0', ganhando ? 'text-green-400' : 'text-red-400')}>
+            {ganhando ? 'bateu' : 'estourou'}
+          </span>
+        )}
+      </dd>
+    </CampoDoPick>
   )
 }
 
@@ -276,6 +381,108 @@ export function CampoDoPick({ rotulo, children, className }: {
     <div className={cn('flex items-baseline gap-2', className)}>
       <dt className="w-[3.75rem] shrink-0 text-[10px] text-ink-4">{rotulo}</dt>
       {children}
+    </div>
+  )
+}
+
+/* ── A perna do bilhete ─────────────────────────────────────────────────── */
+
+/*
+ * UMA PERNA, UM DESENHO (09/10/2026, pedido do usuário: "padroniza todos os
+ * cards"). Múltipla, Bingo, alavancagem e Pick Boost desenhavam cada um a sua
+ * perna, quase iguais: a mesma caixa, o círculo numerado, a odd à direita e os
+ * campos rotulados, mas com três cópias do markup e pequenas diferenças (a
+ * alavancagem nunca mostrava RED, o Boost não tinha o jogo). Agora é esta.
+ *
+ * Com a bola rolando ela ganha o placar no lugar do "vs" e a linha "Agora",
+ * igual ao pick simples.
+ */
+export function PernaDoBilhete({
+  indice, resultado, casa, fora, casaId, foraId, odd, mercado, linha, casaDeAposta,
+  chance, cor, aoVivo, semConfronto, Escudo,
+}: {
+  indice: number
+  resultado?: string | null
+  casa?: string | null
+  fora?: string | null
+  casaId?: number | null
+  foraId?: number | null
+  odd?: number | null
+  /** Já traduzido. */
+  mercado: string
+  linha?: string | null
+  casaDeAposta?: string | null
+  /** 0..1, a chance da perna antes do jogo. */
+  chance?: number | null
+  /** Cor do produto no círculo e na odd enquanto a perna está aberta. */
+  cor: { circulo: string; texto: string }
+  aoVivo?: LeituraAoVivo | null
+  /** Pernas do mesmo jogo (Boost): o confronto já está no topo do card. */
+  semConfronto?: boolean
+  /** O escudo · cada tela já tem o seu componente, e ele entra por aqui. */
+  Escudo: React.ComponentType<{ id?: number; name: string; size?: number }>
+}) {
+  const lr = resultado ?? undefined
+  const caixa = lr === 'GREEN' ? 'border-green-500/20 bg-green-500/5'
+    : lr === 'RED' ? 'border-red-500/20 bg-red-500/5'
+    : aoVivo ? 'border-red-500/25 bg-surface-2/60'
+    : 'border-line bg-surface-2/60'
+  const pctAgora = aoVivo?.chance != null ? Math.round(aoVivo.chance * 100) : null
+  return (
+    <div className={cn('rounded-md border px-3 py-2 transition-colors', caixa)}>
+      <div className="flex items-center gap-2">
+        <SeloDeResultado result={lr} vazio={indice + 1} className={lr ? undefined : cor.circulo} />
+        {semConfronto ? (
+          <span className="text-xs text-ink-2 font-semibold truncate flex-1">Seleção {indice + 1}</span>
+        ) : (
+          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+            <Escudo id={casaId ?? undefined} name={casa ?? ''} size={20} />
+            <span className="text-xs text-ink-2 font-semibold truncate">{casa}</span>
+            <VsOuPlacar aoVivo={aoVivo} pequeno />
+            <span className="text-xs text-ink-2 font-semibold truncate">{fora}</span>
+            <Escudo id={foraId ?? undefined} name={fora ?? ''} size={20} />
+          </div>
+        )}
+        {aoVivo && !lr && (
+          <span className="text-[10px] font-bold text-red-400 tabular-nums shrink-0">{rotuloDoMinuto(aoVivo)}</span>
+        )}
+        {odd != null && Number.isFinite(Number(odd)) && (
+          <span className={cn('font-mono font-black text-sm shrink-0',
+            lr === 'GREEN' ? 'text-green-400' : lr === 'RED' ? 'text-red-400' : cor.texto)}>
+            {Number(odd).toFixed(2)}
+          </span>
+        )}
+      </div>
+      <dl className="ml-7 mt-1 space-y-0.5">
+        <CampoDoPick rotulo="Mercado">
+          <dd className="text-xs text-ink-2 truncate">{mercado}</dd>
+        </CampoDoPick>
+        {linha && (
+          <CampoDoPick rotulo="Linha">
+            <dd className="text-xs text-ink-2 truncate">{linha}</dd>
+          </CampoDoPick>
+        )}
+        {!lr && <CampoAoVivo aoVivo={aoVivo} />}
+        {casaDeAposta && (
+          <CampoDoPick rotulo="Casa">
+            <dd className="text-xs text-ink-3 truncate">{casaDeAposta}</dd>
+          </CampoDoPick>
+        )}
+        {(pctAgora != null && !lr) ? (
+          <CampoDoPick rotulo="Chance">
+            <dd className="text-xs text-ink-1 font-semibold">
+              {pctAgora}% agora
+              <span className="text-ink-4 font-normal">
+                {chance != null ? ` · antes ${Math.round(Number(chance) * 100)}%` : ''}
+              </span>
+            </dd>
+          </CampoDoPick>
+        ) : chance != null && (
+          <CampoDoPick rotulo="Chance">
+            <dd className="text-xs text-ink-3">{Math.round(Number(chance) * 100)}% nesta perna</dd>
+          </CampoDoPick>
+        )}
+      </dl>
     </div>
   )
 }
