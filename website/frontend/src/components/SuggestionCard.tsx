@@ -13,8 +13,10 @@ import { PICK_TYPE_BORDER, cascaDoPick, caixaDoPick } from '../utils/resultStyle
 import AnalysisModal from './AnalysisModal'
 import { Badge, PickTypeBadge, ResultBadge } from './ui'
 import {
-  CampoDoPick, PickCardFooter, PickExplainButton, PickProbability, SeloDeResultado,
+  CampoAoVivo, CampoDoPick, PickCardFooter, PickExplainButton, PickProbability, SeloDeResultado,
+  SeloDoEstado, VsOuPlacar,
 } from './PickCardParts'
+import { usePickAgora } from '../lib/picksAgora'
 import { useShareStoryImage, useShareBilheteImage } from '../hooks/useShareStoryImage'
 import { useOddAtualizada } from '../hooks/useOddAtualizada'
 import { useBilhete } from '../lib/sincronia'
@@ -402,6 +404,10 @@ function SuggestionCard({
 
   const isCopa = s.league_id === 1
   const pickType = s.pick_type ?? 'vip'
+  /* O jogo com a bola rolando · ver lib/picksAgora. Pick de jogador e pick
+     de pernas ficam de fora: o primeiro não tem contador ao vivo, e o segundo
+     lê perna a perna. */
+  const agora = usePickAgora(!s.result && !s.player_name && !temPernas ? `:${s.id}` : null)
 
   /*
    * Horário do jogo. O card mostrava só a data em outro lugar, e "hoje 16:00"
@@ -492,15 +498,7 @@ function SuggestionCard({
             </span>
           )}
         </div>
-        {s.result ? (
-          /* `emDestaque`: nos cards o selo do GREEN sai maior · em 10px ele
-             empatava com o horario do jogo ao lado. */
-          <ResultBadge result={s.result} emDestaque />
-        ) : isLive ? (
-          <Badge tone="red" className="animate-pulse">Ao vivo</Badge>
-        ) : (
-          <Badge tone="neutral">Pendente</Badge>
-        )}
+        <SeloDoEstado result={s.result} aoVivo={agora} isLive={isLive} />
       </div>
 
       {/* Hero: Odd | Stake | EV */}
@@ -677,7 +675,7 @@ function SuggestionCard({
           <SeloDeResultado result={s.result} />
           <TeamLogo id={s.home_team_id} name={s.home_team_name} />
           <span className="text-sm font-bold text-ink-1 truncate">{s.home_team_name}</span>
-          <span className="text-ink-4 text-xs shrink-0">vs</span>
+          <VsOuPlacar aoVivo={agora} />
           <span className="text-sm font-bold text-ink-1 truncate">{s.away_team_name}</span>
           <TeamLogo id={s.away_team_id} name={s.away_team_name} />
         </div>
@@ -861,6 +859,7 @@ function SuggestionCard({
                 <dd className="text-xs text-ink-2 truncate">{translateLine(s.line)}</dd>
               </CampoDoPick>
             )}
+            <CampoAoVivo aoVivo={agora} />
             {/* O QUE DEU NO JOGO, do lado da linha que foi apostada.
               *
               * É a conferência que faltava: com 12 escanteios contra uma linha
@@ -930,7 +929,7 @@ function SuggestionCard({
         )}
       </div>
 
-      <PickProbability confidence={s.confidence} probability={s.probability} />
+      <PickProbability confidence={s.confidence} probability={s.probability} aoVivo={agora?.chance} />
 
       {/* O "FATO" SAIU DE TODOS OS CARDS (02/09).
         *

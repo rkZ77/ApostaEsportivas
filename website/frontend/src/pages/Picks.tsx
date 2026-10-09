@@ -24,8 +24,12 @@ import { Escada, LinhaCaminho,
          type AlavStep, type CaminhoEncerrado } from '../components/alavancagem/caminho'
 import AnalysisModal from '../components/AnalysisModal'
 import {
-  CampoDoPick, PickCardFooter, PickExplainButton, PickProbability, SeloDeResultado,
+  CampoAoVivo, CampoDoPick, PickCardFooter, PickExplainButton, PickProbability, SeloDeResultado,
+  SeloDoEstado, VsOuPlacar,
 } from '../components/PickCardParts'
+import {
+  PicksAgoraContext, useFonteDePicksAgora, usePickAgora, type ItemAoVivo,
+} from '../lib/picksAgora'
 /*
  * As duas abas mais pesadas não entram no chunk desta página.
  *
@@ -685,6 +689,8 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
   }
 
   const isCopa = dica.league_id === 1
+  /* O jogo com a bola rolando · ver lib/picksAgora. */
+  const agora = usePickAgora(!dica.result ? `free:${dica.id}` : null)
   // Hora do jogo por slice de string: match_datetime e' horario de Brasilia
   // SEM fuso, e `new Date` sobre ele desloca o horario. Mesma leitura do VIP.
   const kickoff = dica.match_datetime ? String(dica.match_datetime).slice(11, 16) : null
@@ -732,13 +738,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
             </span>
           )}
         </div>
-        {dica.result ? (
-          <ResultBadge result={dica.result} emDestaque />
-        ) : isLive ? (
-          <Badge tone="red" className="animate-pulse">Ao vivo</Badge>
-        ) : (
-          <Badge tone="neutral">Pendente</Badge>
-        )}
+        <SeloDoEstado result={dica.result} aoVivo={agora} isLive={isLive} />
       </div>
 
       {/* Hero: Odd | Stake | Retorno */}
@@ -886,7 +886,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
           <SeloDeResultado result={dica.result} />
           <TeamLogo id={dica.home_team_id} name={dica.home_team ?? ''} size={22} />
           <span className="text-sm font-bold text-ink-1 truncate">{dica.home_team}</span>
-          <span className="text-ink-4 text-xs shrink-0">vs</span>
+          <VsOuPlacar aoVivo={agora} />
           <span className="text-sm font-bold text-ink-1 truncate">{dica.away_team}</span>
           <TeamLogo id={dica.away_team_id} name={dica.away_team ?? ''} size={22} />
         </div>
@@ -903,6 +903,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
               <dd className="text-xs text-ink-2 truncate">{translateLine(dica.line)}</dd>
             </CampoDoPick>
           )}
+          <CampoAoVivo aoVivo={agora} />
           {((seguido && casaSeguida) || dica.bet_house) && (
             <CampoDoPick rotulo="Casa">
               <dd className="text-xs text-ink-3 truncate">
@@ -914,7 +915,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
         </div>
       </div>
 
-      <PickProbability confidence={dica.confidence} probability={dica.probability} />
+      <PickProbability confidence={dica.confidence} probability={dica.probability} aoVivo={agora?.chance} />
 
 
       {/* O ESPAÇADOR QUE O "Fato" ERA.
@@ -3304,6 +3305,27 @@ export default function Picks() {
   const isMultiplaLive = (m: any) => (m.legs ?? []).some((leg: any) => isFixtureLive(leg.fixture_id))
   const isAlavLive     = (pick: any) => isFixtureLive(pick.fixture_id_1) || isFixtureLive(pick.fixture_id_2)
 
+  /* O JOGO AO VIVO EM CADA CARD (09/10/2026) · ver lib/picksAgora. A chave de
+     cada item é a mesma que o card procura: `tipo:id` no pick simples. Pick
+     de jogador e de pernas ficam pra outra leitura (perna a perna). */
+  const itensAoVivo = useMemo<ItemAoVivo[]>(() => {
+    if (!today) return []
+    const itens: ItemAoVivo[] = []
+    const simples = (chave: string, p: any, home?: string, away?: string) => {
+      if (p.result || !p.fixture_id || p.player_name) return
+      itens.push({
+        chave, fixture_id: p.fixture_id, market: p.market, market_type: p.market_type ?? null,
+        line: p.line ?? null, prob: p.probability ?? p.prob_real ?? null,
+        home, away, inicio: p.match_datetime ?? null,
+      })
+    }
+    for (const d of dicasDoDia(today)) simples(`free:${d.id}`, d, d.home_team, d.away_team)
+    for (const s of today.vip ?? []) simples(`${s.pick_type ?? 'vip'}:${s.id}`, s, s.home_team_name, s.away_team_name)
+    for (const p of today.faltas ?? []) simples(`faltas:${p.id}`, p, p.home_team, p.away_team)
+    return itens
+  }, [today])
+  const picksAgora = useFonteDePicksAgora(itensAoVivo)
+
   // Mesma razão do useMemo em MercadoSecao: `mercadoParaSuggestion` devolve um
   // objeto novo toda vez, e sem prender a identidade aqui o memo do
   // SuggestionCard não pega nada nesta aba.
@@ -3465,6 +3487,7 @@ export default function Picks() {
   }
 
   return (
+    <PicksAgoraContext.Provider value={picksAgora}>
     <PageShell
       title="Picks"
       description="Os picks da IA de hoje: Premium, free, múltiplas, alavancagem e mercados de faltas e defesas."
@@ -5033,6 +5056,7 @@ export default function Picks() {
 
 
     </PageShell>
+    </PicksAgoraContext.Provider>
   )
 }
 
