@@ -407,7 +407,7 @@ export function numeroDaLinha(linha?: string | null): number | null {
 }
 
 /**
- * "27 finalizações, 0.5 acima da linha" (09/10/2026, pedido do usuário: "deu
+ * "Final: 27 finalizações, 0.5 acima da linha" (09/10/2026, pedido do usuário: "deu
  * RED, mas por causa de 1"). O número sozinho já existia no card Premium; a
  * distância é o que mostra que a leitura passou perto, e o Free não tinha nem
  * o número.
@@ -417,7 +417,7 @@ export function CampoDeu({ texto, valor, linha }: { texto: string; valor: number
   const dist = l != null ? Math.abs(valor - l) : null
   const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1))
   return (
-    <CampoDoPick rotulo="Deu">
+    <CampoDoPick rotulo="Final">
       <dd className="text-xs font-semibold text-ink-1 truncate">
         {texto}
         {dist != null && dist > 0 && (
