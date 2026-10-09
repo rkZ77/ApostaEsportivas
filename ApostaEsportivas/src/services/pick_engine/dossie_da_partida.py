@@ -317,7 +317,8 @@ def _gols_por_faixa(cur, team_id, quando):
     return gols_por_faixa(cur, team_id, quando)
 
 
-def _contexto_do_motor(cur, fixture_id, casa, fora, quando, desfalques, extras) -> dict | None:
+def _contexto_do_motor(cur, fixture_id, casa, fora, quando, desfalques, extras,
+                       liga=None, temporada=None) -> dict | None:
     """contexto_atual.coletar com o que o dossie ja' tem em maos. So'
     "Missing Fixture" conta como fora; "Questionable" vira duvida (incerteza,
     nunca desconto -- ninguem sabe se joga)."""
@@ -340,10 +341,53 @@ def _contexto_do_motor(cur, fixture_id, casa, fora, quando, desfalques, extras) 
     calendario = {t: extras.get(("calendario", t)) for t in (casa, fora)
                   if extras.get(("calendario", t))}
     try:
-        return contexto_atual.coletar(cur, fixture_id, casa, fora, quando, por_lado, calendario)
+        return contexto_atual.coletar(cur, fixture_id, casa, fora, quando, por_lado, calendario,
+                                      league_id=liga, season=temporada)
     except Exception as e:
         cur.connection.rollback()
         print(f"[DOSSIE] contexto atual do fixture {fixture_id}: {e}")
+        return None
+
+
+def _leitura_tatica(ctx, hist_casa, hist_fora, casa, fora) -> dict | None:
+    """O que a IA le' sobre como os times jogam, em tres blocos que nao se
+    misturam: OBSERVADO (numeros da base, com n), MODELO (cenarios do
+    intervalo e o efeito medido do confronto, com o veredito da validacao) e
+    LIMITES (o que cada proxy aproxima e o que nao existe). Hipotese e' da IA,
+    e ela tem que dizer que e' hipotese."""
+    try:
+        from services.pick_engine import team_profile_model as tpm, efeito_tatico
+        ctx = ctx or {}
+        ref = ctx.get("referencia_tatica")
+        observado, perfis = {}, {}
+        for nome, lado, tid, hist in (("mandante", "home", casa, hist_casa),
+                                      ("visitante", "away", fora, hist_fora)):
+            t = ctx.get(lado) or {}
+            regime = t.get("regime") or {}
+            perfis[lado] = tpm.perfil_tatico(hist, tid, ref)
+            cmp = tpm.comparar_regimes(hist, tid, regime["inicio"]) if regime.get("inicio") else None
+            r = tpm.resumo_tatico_para_ia(perfis[lado], cmp, t.get("carreira_tecnico"),
+                                          t.get("formacoes"))
+            if r:
+                observado[nome] = r
+        if not observado:
+            return None
+        modelo = {}
+        cen = tpm.cenarios_do_intervalo(perfis["home"], perfis["away"])
+        if cen:
+            modelo["cenarios_do_intervalo"] = cen
+        tat = efeito_tatico.preparar_partida(ctx, hist_casa, hist_fora, casa, fora)
+        if tat:
+            modelo["efeito_medido_do_confronto"] = {
+                est: {"multiplicador_mandante": m["home"]["multiplicador"],
+                      "multiplicador_visitante": m["away"]["multiplicador"],
+                      "validado_fora_da_amostra": m.get("aprovado", False),
+                      "principais_contribuicoes": m["home"]["contribuicoes"]}
+                for est, m in tat["multiplicadores"].items()}
+        return {"observado": observado, **({"modelo": modelo} if modelo else {}),
+                "limites": list(tpm.LIMITES_DOS_PROXIES)}
+    except Exception as e:
+        print(f"[DOSSIE] leitura tatica: {e}")
         return None
 
 
@@ -434,7 +478,7 @@ def _montar(fixture_id: int) -> dict | None:
         desfalques = {casa: _desfalques(casa, fixture_id, escal_casa[0]),
                       fora: _desfalques(fora, fixture_id, escal_fora[0])}
         _CONTEXTO[fixture_id] = _contexto_do_motor(
-            cur, fixture_id, casa, fora, quando, desfalques, extras)
+            cur, fixture_id, casa, fora, quando, desfalques, extras, liga, temporada)
     finally:
         cur.close()
         conn.close()
@@ -471,6 +515,8 @@ def _montar(fixture_id: int) -> dict | None:
         # Tecnico e desde quando, producao dos desfalcados, viagem, fontes que
         # falharam -- o que o motor usou (ou mediu, em sombra) na conta.
         "contexto_atual": contexto_atual.resumo_para_ia(_CONTEXTO.get(fixture_id)),
+        "leitura_tatica": _leitura_tatica(_CONTEXTO.get(fixture_id), hist_casa, hist_fora,
+                                          casa, fora),
     }
     _SINAL[fixture_id] = sinal
     return {k: v for k, v in dossie.items() if v not in (None, {}, [])}

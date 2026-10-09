@@ -355,6 +355,9 @@ def _candidate_summary(c: dict) -> dict:
         "amostra_efetiva": c.get("amostra_efetiva"),
         "contexto_partida": c.get("contexto_partida"),
         "avaliacao": c.get("avaliacao"),
+        # Efeito tatico (2026-10-08): lambda original e ajustado, as duas
+        # probabilidades e o EV -- o que medir_efeito_tatico.py le' nos picks.
+        "tatico_sombra": c.get("tatico_sombra"),
         "line_score": c.get("line_score"),
         "final_score": c.get("final_score"),
         "is_best_pick": c.get("is_best_pick", False),

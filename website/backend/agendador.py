@@ -81,6 +81,10 @@ MEDICOES = (
     ("dixon_coles", "Dixon-Coles (gols em sombra)", "scripts/medir_dixon_coles.py", []),
     ("contexto_atual", "Contexto atual (técnico, forma, desfalques)",
      "scripts/medir_contexto_atual.py", []),
+    # --gravar: re-estima os coeficientes todo dia com o que entrou na base. O
+    # motor so' APLICA o que vier aprovado, e so' com MOTOR_TATICO=on.
+    ("efeito_tatico", "Efeito tático do confronto (por mercado e competição)",
+     "scripts/medir_efeito_tatico.py", ["--gravar"]),
 )
 
 

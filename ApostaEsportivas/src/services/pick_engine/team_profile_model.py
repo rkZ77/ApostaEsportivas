@@ -311,6 +311,329 @@ def build_profile(matches: list, team_id: int) -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# PERFIL TATICO MEDIDO (2026-10-08)
+# ---------------------------------------------------------------------------
+# O perfil acima rotula estilo com cortes escritos a mao ("posse >= 55 e
+# passes >= 450"). Ele continua existindo pro texto, mas nao e' com ele que o
+# motor mexe em probabilidade. O que segue e' o perfil NUMERICO: uma metrica
+# por jogo, do ponto de vista do time, com a coluna de onde sai e o que ela
+# aproxima -- e o que NAO existe na base fica de fora, nunca vira zero.
+#
+#   metrica                       coluna(s)                    aproxima
+#   posse                         possession                   construcao com a bola
+#   passes / precisao_passe       passes, passes_accuracy      construcao curta x longa
+#   chutes_por_100_passes         total_shots / passes         jogo direto, transicao
+#   fracao_chutes_fora_da_area    shots_outsidebox / chutes    chute de longe x infiltracao
+#   xg_por_chute                  xg / total_shots             qualidade da chance
+#   impedimentos_provocados       offsides DO ADVERSARIO       linha defensiva alta
+#   faltas                        fouls                        agressividade sem a bola
+#   escanteios(_cedidos)          corners                      bola parada a favor/contra
+#
+# FALTAM, e ficam faltando: largura e cruzamentos (a API nao publica), altura
+# da linha medida em metros, pressao por zona (PPDA de verdade precisa de
+# passes por terco do campo). Os proxies acima sao o que o dado sustenta.
+_METRICAS_TATICAS = (
+    "posse", "passes", "precisao_passe", "chutes", "chutes_por_100_passes",
+    "fracao_chutes_fora_da_area", "xg_por_chute", "impedimentos_provocados",
+    "faltas", "escanteios", "escanteios_cedidos", "gols", "gols_sofridos",
+)
+
+#: Forca do encolhimento do perfil: 5 jogos de pseudo-amostra na media de
+#: referencia. Escolhido, nao medido -- e' a mesma ordem de grandeza do
+#: `sample_moderate_n` do motor (4) e do piso de jogos do tecnico (5).
+K_PERFIL = 5
+
+
+def _f(v):
+    try:
+        return None if v is None else float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def metricas_taticas_do_jogo(m: dict, team_id: int) -> dict:
+    """As metricas de UM jogo, do lado do time. Campo ausente nao entra."""
+    eu, ele = ("home", "away") if m.get("home_team_id") == team_id else ("away", "home")
+    g = lambda lado, col: _f(m.get(f"{lado}_{col}"))
+    saida = {}
+    for nome, valor in (
+        ("posse", g(eu, "possession")), ("passes", g(eu, "passes")),
+        ("precisao_passe", g(eu, "passes_accuracy")), ("chutes", g(eu, "total_shots")),
+        ("impedimentos_provocados", g(ele, "offsides")), ("faltas", g(eu, "fouls")),
+        ("escanteios", g(eu, "corners")), ("escanteios_cedidos", g(ele, "corners")),
+        ("gols", g(eu, "goals")), ("gols_sofridos", g(ele, "goals")),
+    ):
+        if valor is not None:
+            saida[nome] = valor
+    # Posse 0 e passes 0 sao folha nao publicada, nunca um jogo real.
+    if saida.get("posse") == 0:
+        saida.pop("posse")
+    if saida.get("passes") == 0:
+        saida.pop("passes")
+    chutes, passes = saida.get("chutes"), saida.get("passes")
+    if chutes is not None and passes:
+        saida["chutes_por_100_passes"] = round(100 * chutes / passes, 3)
+    fora, dentro = g(eu, "shots_outsidebox"), g(eu, "shots_insidebox")
+    if fora is not None and dentro is not None and (fora + dentro) > 0:
+        saida["fracao_chutes_fora_da_area"] = round(fora / (fora + dentro), 4)
+    xg = g(eu, "xg")
+    if xg is not None and chutes:
+        saida["xg_por_chute"] = round(xg / chutes, 4)
+    return saida
+
+
+def estado_no_intervalo(m: dict, team_id: int) -> str | None:
+    eu, ele = ("home", "away") if m.get("home_team_id") == team_id else ("away", "home")
+    a, b = _f(m.get(f"{eu}_goals_ht")), _f(m.get(f"{ele}_goals_ht"))
+    if a is None or b is None:
+        return None
+    return "vencendo" if a > b else "perdendo" if a < b else "empatando"
+
+
+def segundo_tempo(m: dict, team_id: int) -> dict:
+    """Chutes e escanteios do 2o tempo (jogo inteiro menos o 1o tempo)."""
+    eu = "home" if m.get("home_team_id") == team_id else "away"
+    saida = {}
+    for nome, col in (("chutes", "total_shots"), ("escanteios", "corners")):
+        total, t1 = _f(m.get(f"{eu}_{col}")), _f(m.get(f"{eu}_{col}_1h"))
+        if total is not None and t1 is not None and total >= t1:
+            saida[nome] = total - t1
+    return saida
+
+
+def perfil_tatico(jogos: list, team_id: int, referencia: dict | None = None,
+                  k: int = K_PERFIL) -> dict:
+    """Media de cada metrica, com n, e a versao ENCOLHIDA pra `referencia`
+    (media da base, quando o chamador tem): (n*media + k*ref)/(n+k). Com
+    poucos jogos o perfil fica perto da media e nao vira estilo de time.
+
+    `por_placar`: quanto o 2o tempo do time muda quando ele vai pro intervalo
+    perdendo ou vencendo, contra o 2o tempo dele em geral -- o "comportamento
+    conforme o placar" que a base sustenta. Encolhido pra zero."""
+    por_metrica: dict = {}
+    for m in jogos or []:
+        for nome, v in metricas_taticas_do_jogo(m, team_id).items():
+            por_metrica.setdefault(nome, []).append(v)
+    metricas = {}
+    for nome, vals in por_metrica.items():
+        media = sum(vals) / len(vals)
+        ref = (referencia or {}).get(nome)
+        metricas[nome] = {
+            "media": round(media, 4), "n": len(vals),
+            "encolhida": round((len(vals) * media + k * ref) / (len(vals) + k), 4)
+            if ref is not None else round(media, 4),
+        }
+    segundo, por_estado = {}, {}
+    for m in jogos or []:
+        st = segundo_tempo(m, team_id)
+        est = estado_no_intervalo(m, team_id)
+        for nome, v in st.items():
+            segundo.setdefault(nome, []).append(v)
+            if est:
+                por_estado.setdefault((est, nome), []).append(v)
+    por_placar = {}
+    for (est, nome), vals in por_estado.items():
+        geral = segundo.get(nome) or []
+        if not geral or est == "empatando":
+            continue
+        dif = sum(vals) / len(vals) - sum(geral) / len(geral)
+        por_placar.setdefault(est, {})[nome] = {
+            "diferenca": round(dif * len(vals) / (len(vals) + k), 3), "n": len(vals)}
+    return {"team_id": team_id, "jogos": len(jogos or []), "metricas": metricas,
+            "por_placar": por_placar}
+
+
+def comparar_regimes(jogos: list, team_id: int, inicio, z_minimo: float = 2.0) -> dict | None:
+    """O time mudou de comportamento desde `inicio` (tecnico novo)? Por
+    metrica: media antes e depois, e o z da diferenca. So' `mudou` quando
+    |z| >= z_minimo -- e' evidencia OBSERVADA, nao hipotese."""
+    from services.pick_engine.contexto_atual import _dia, peso_por_media
+    inicio = _dia(inicio)
+    if not inicio:
+        return None
+    depois = [m for m in jogos or [] if (_dia(m.get("match_date")) or inicio) >= inicio]
+    antes = [m for m in jogos or [] if (_dia(m.get("match_date")) or inicio) < inicio]
+    if len(depois) < 2 or len(antes) < 2:
+        return {"jogos_depois": len(depois), "jogos_antes": len(antes), "metricas": {},
+                "aviso": "jogos insuficientes num dos regimes pra comparar"}
+    saida = {}
+    for nome in _METRICAS_TATICAS:
+        a = [metricas_taticas_do_jogo(m, team_id).get(nome) for m in depois]
+        b = [metricas_taticas_do_jogo(m, team_id).get(nome) for m in antes]
+        a, b = [v for v in a if v is not None], [v for v in b if v is not None]
+        if len(a) < 2 or len(b) < 2:
+            continue
+        _, z = peso_por_media(a, b)
+        if z is None:
+            continue
+        saida[nome] = {"antes": round(sum(b) / len(b), 3), "depois": round(sum(a) / len(a), 3),
+                       "z": z, "mudou": abs(z) >= z_minimo}
+    return {"jogos_depois": len(depois), "jogos_antes": len(antes), "metricas": saida}
+
+
+def referencia_da_competicao(jogos: list) -> dict:
+    """Media de cada metrica na competicao, pelos DOIS lados de cada jogo --
+    o alvo do encolhimento. `jogos`: linhas de match_statistics da liga,
+    TODAS anteriores a partida prevista (quem chama garante o corte)."""
+    por_metrica: dict = {}
+    for m in jogos or []:
+        for lado in ("home_team_id", "away_team_id"):
+            if m.get(lado) is None:
+                continue
+            for nome, v in metricas_taticas_do_jogo(m, m[lado]).items():
+                por_metrica.setdefault(nome, []).append(v)
+    return {nome: round(sum(v) / len(v), 4) for nome, v in por_metrica.items() if v}
+
+
+def tecnico_por_jogo(escalacoes: list) -> dict:
+    """{data: coach_id (ou nome)} a partir de team_lineups
+    [(data, coach_id, coach_name, formation)]."""
+    from services.pick_engine.contexto_atual import _dia
+    saida = {}
+    for e in escalacoes or []:
+        d = _dia(e[0])
+        chave = e[1] if e[1] is not None else (e[2] or None)
+        if d and chave is not None:
+            saida[d] = chave
+    return saida
+
+
+def perfil_por_tecnico(jogos: list, team_id: int, escalacoes: list,
+                       referencia: dict | None = None) -> dict | None:
+    """O perfil do time SOB O TECNICO ATUAL e sob os anteriores, separados
+    pelo coach_id de cada partida (team_lineups) -- nao pela data de corte, que
+    erra quando houve interino no meio. Jogo sem escalacao coletada nao e'
+    atribuido a ninguem (fica so' no perfil geral).
+
+    O tecnico atual e' o da escalacao mais recente."""
+    from services.pick_engine.contexto_atual import _dia
+    por_dia = tecnico_por_jogo(escalacoes)
+    if not por_dia:
+        return None
+    atual = por_dia[max(por_dia)]
+    do_atual = [m for m in jogos or [] if por_dia.get(_dia(m.get("match_date"))) == atual]
+    dos_outros = [m for m in jogos or []
+                  if _dia(m.get("match_date")) in por_dia
+                  and por_dia[_dia(m.get("match_date"))] != atual]
+    return {"tecnico_atual": atual,
+            "no_clube_com_o_atual": perfil_tatico(do_atual, team_id, referencia),
+            "no_clube_com_os_anteriores": perfil_tatico(dos_outros, team_id, referencia)
+            if dos_outros else None}
+
+
+def perfil_da_carreira(jogos_do_tecnico: list, referencia: dict | None = None) -> dict | None:
+    """Perfil do TECNICO em todos os times dele que estao na base.
+
+    `jogos_do_tecnico`: [(linha de match_statistics, team_id que ele dirigiu)].
+    Separado do perfil do clube de proposito: e' o que distingue "o estilo
+    dele" de "o que este elenco faz com ele"."""
+    if not jogos_do_tecnico:
+        return None
+    por_metrica: dict = {}
+    times = set()
+    for m, team_id in jogos_do_tecnico:
+        times.add(team_id)
+        for nome, v in metricas_taticas_do_jogo(m, team_id).items():
+            por_metrica.setdefault(nome, []).append(v)
+    metricas = {}
+    for nome, vals in por_metrica.items():
+        media = sum(vals) / len(vals)
+        ref = (referencia or {}).get(nome)
+        metricas[nome] = {"media": round(media, 4), "n": len(vals),
+                          "encolhida": round((len(vals) * media + K_PERFIL * ref)
+                                             / (len(vals) + K_PERFIL), 4)
+                          if ref is not None else round(media, 4)}
+    return {"jogos": len(jogos_do_tecnico), "times": sorted(times), "metricas": metricas}
+
+
+def linha_de_defesa(formacao: str | None) -> int | None:
+    """Quantos defensores a formacao declara ("3-4-3" -> 3)."""
+    try:
+        return int(str(formacao).split("-")[0])
+    except (ValueError, AttributeError):
+        return None
+
+
+def formacoes(escalacoes: list) -> dict | None:
+    """Distribuicao das formacoes [(data, coach_id, coach_name, formation)]."""
+    forms = [e[3] for e in escalacoes or [] if e[3]]
+    if not forms:
+        return None
+    contagem: dict = {}
+    for f in forms:
+        contagem[f] = contagem.get(f, 0) + 1
+    mais = max(contagem, key=contagem.get)
+    return {"mais_usada": mais, "fracao": round(contagem[mais] / len(forms), 2),
+            "variacoes": len(contagem), "jogos": len(forms),
+            "linha_de_tres": round(sum(1 for f in forms if linha_de_defesa(f) == 3) / len(forms), 2)}
+
+
+def cenarios_do_intervalo(perfil_casa: dict, perfil_fora: dict) -> dict | None:
+    """P(vencendo/empatando/perdendo no intervalo) pro mandante, por Poisson
+    com metade dos gols feitos/cedidos de cada lado. MODELO, nao observacao:
+    serve pra ler `por_placar` (o que o time faz em cada estado) com o peso
+    certo, nao entra em probabilidade de mercado."""
+    import math
+    mc, mf = perfil_casa.get("metricas") or {}, perfil_fora.get("metricas") or {}
+    try:
+        lc = (mc["gols"]["encolhida"] + mf["gols_sofridos"]["encolhida"]) / 4
+        lf = (mf["gols"]["encolhida"] + mc["gols_sofridos"]["encolhida"]) / 4
+    except KeyError:
+        return None
+    pmf = lambda k, l: math.exp(-l) * l ** k / math.factorial(k)
+    v = e = p = 0.0
+    for i in range(8):
+        for j in range(8):
+            q = pmf(i, lc) * pmf(j, lf)
+            if i > j:
+                v += q
+            elif i == j:
+                e += q
+            else:
+                p += q
+    return {"mandante_vencendo": round(v, 3), "empatando": round(e, 3),
+            "mandante_perdendo": round(p, 3), "fonte": "modelo (Poisson, metade dos gols)"}
+
+
+#: O que cada proxy aproxima, escrito pra IA nao ler proxy como medida.
+LIMITES_DOS_PROXIES = (
+    "impedimentos_provocados aproxima linha defensiva alta (nao e' altura medida)",
+    "chutes_por_100_passes aproxima jogo direto/transicao",
+    "faltas aproxima agressividade sem a bola -- NAO e' PPDA (nao ha' passes por terco do campo)",
+    "nao existem na base: largura, cruzamentos, altura da linha, pressao por zona, gramado",
+)
+
+
+def resumo_tatico_para_ia(perfil: dict | None, regimes: dict | None = None,
+                          carreira: dict | None = None, formacoes_rec: dict | None = None) -> dict | None:
+    """O perfil enxuto pro dossie: media encolhida e n de cada metrica, o 2o
+    tempo conforme o placar, as mudancas OBSERVADAS sob o tecnico atual
+    (so' |z| >= 2) e a carreira dele -- cada coisa no seu bloco."""
+    if not perfil or not perfil.get("metricas"):
+        return None
+    saida = {"jogos": perfil["jogos"],
+             "metricas": {k: f"{v['encolhida']:.2f} (n={v['n']})"
+                          for k, v in perfil["metricas"].items()}}
+    if perfil.get("por_placar"):
+        saida["segundo_tempo_conforme_o_intervalo"] = perfil["por_placar"]
+    if formacoes_rec:
+        saida["formacoes"] = formacoes_rec
+    mud = {k: v for k, v in ((regimes or {}).get("metricas") or {}).items() if v.get("mudou")}
+    if mud:
+        saida["mudancas_sob_o_tecnico_atual"] = mud
+    elif regimes and regimes.get("aviso"):
+        saida["mudancas_sob_o_tecnico_atual"] = regimes["aviso"]
+    if carreira and carreira.get("metricas"):
+        saida["carreira_do_tecnico"] = {
+            "jogos": carreira["jogos"], "times": len(carreira["times"]),
+            "metricas": {k: f"{v['encolhida']:.2f} (n={v['n']})"
+                         for k, v in carreira["metricas"].items()
+                         if k in ("posse", "chutes_por_100_passes", "impedimentos_provocados",
+                                  "faltas", "escanteios", "gols")}}
+    return saida
+
+
 _PRESSING_SCORE = {"Alta": 2, "Média-Alta": 1, "Média": 0, "Baixa": -1, "Desconhecida": 0}
 
 # Baseline de conversao (gols por chute no alvo) tipica do futebol

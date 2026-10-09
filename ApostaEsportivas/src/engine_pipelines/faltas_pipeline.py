@@ -522,6 +522,16 @@ def _avaliar_fixture(fixture: dict, match_stats: MatchStatsService,
         return None, bloqueio
     series_faltas = {"home": _serie_faltas(hist_casa, fixture["home_team_id"]),
                      "away": _serie_faltas(hist_fora, fixture["away_team_id"])}
+    # EFEITO TATICO (2026-10-08): so' registro. O fouls_model e' tabela
+    # empirica de faixas, nao Poisson -- nao ha' lambda pra trocar em `on`.
+    # Fica o multiplicador medido das faltas de cada lado, pra medicao.
+    try:
+        from services.pick_engine import efeito_tatico
+        tat = efeito_tatico.preparar_partida(
+            ctx_motor, hist_casa, hist_fora, fixture["home_team_id"], fixture["away_team_id"])
+        mult_faltas = ((tat or {}).get("multiplicadores") or {}).get("faltas")
+    except Exception:
+        mult_faltas = None
 
     arbitro = referee_service.get_stats(fixture.get("referee"), fixture["season"])
     media_arbitro = float(arbitro["avg_fouls"]) if arbitro and arbitro.get("avg_fouls") else None
@@ -682,6 +692,18 @@ def _avaliar_fixture(fixture: dict, match_stats: MatchStatsService,
         "match_context": contexto,
         "contexto_partida": ctx_partida,
         "modo_contexto": contexto_atual.modo() if ctx_motor else "off",
+        **({"tatico_sombra": {
+            "estatistica": "faltas", "aplicado": False,
+            "esperado": analise.get("expected_fouls"),
+            "esperado_tatico": (round(analise["expected_fouls"]
+                                      * (media_casa * mult_faltas["home"]["multiplicador"]
+                                         + media_fora * mult_faltas["away"]["multiplicador"])
+                                      / (media_casa + media_fora), 2)
+                                if analise.get("expected_fouls") and media_casa and media_fora
+                                else None),
+            "multiplicadores": {l: mult_faltas[l]["multiplicador"] for l in ("home", "away")},
+            "contribuicoes": {l: mult_faltas[l]["contribuicoes"] for l in ("home", "away")},
+            "aprovado": bool(mult_faltas.get("aprovado"))}} if mult_faltas else {}),
         # CONTRATO COM A REVISAO DE IA (2026-09-11). `build_review_payload` le
         # chaves com os nomes do motor generico (`value_label`, `taxa_real`,
         # `confidence`, `data_quality_score`...), e este pipeline nunca teve
@@ -808,6 +830,7 @@ def _salvar(cur, c: dict) -> None:
         "contexto_atual": {"modo": c.get("modo_contexto"), "linha": c.get("contexto_sombra"),
                            "partida": c.get("contexto_partida")},
         "revalidacao": c.get("revalidacao"),
+        "efeito_tatico": c.get("tatico_sombra"),
     }, default=str, ensure_ascii=False)
 
     cur.execute(f"""
