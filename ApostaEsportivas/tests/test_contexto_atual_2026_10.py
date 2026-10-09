@@ -479,6 +479,16 @@ def test_linha_sem_cotacao_no_fechamento_alerta():
     assert "sem cotacao" in r["alerta"]
 
 
+def test_segunda_passada_so_quando_o_xi_saiu_depois_e_o_jogo_nao_comecou():
+    cur = _Cur()
+    reavaliacao.esperando_escalacao(cur, {1, 2})
+    sql = cur.sqls[-1][0]
+    assert "fl.oficial" in sql and "f.status IN ('NS', 'TBD')" in sql
+    assert "fl.atualizado_em > MAX(r.reavaliado_em)" in sql
+    assert "xi_oficial" in sql
+    assert reavaliacao.esperando_escalacao(_Cur(), set()) == []
+
+
 # ---------------------------------------------------------------------------
 # 10. Nada de futuro
 # ---------------------------------------------------------------------------

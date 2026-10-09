@@ -11,6 +11,7 @@ import AdminShareResults from '../components/AdminShareResults'
 import AdminIAPerformance from '../components/AdminIAPerformance'
 import AdminMotorLive from '../components/AdminMotorLive'
 import AdminAgendador from '../components/AdminAgendador'
+import AdminReavaliacoes from '../components/AdminReavaliacoes'
 import AdminDados from '../components/AdminDados'
 import AdminMotorDecisoes from '../components/AdminMotorDecisoes'
 import AdminAuditoriaMotores from '../components/AdminAuditoriaMotores'
@@ -906,6 +907,10 @@ export default function Admin() {
         {/* O que roda sozinho (08/10): antes da cota porque e' a resposta a
             "o dia ja' rodou?", que e' a primeira pergunta desta aba. */}
         <AdminAgendador />
+        {/* Reavaliacao perto do apito (08/10): o alerta que o motor grava no
+            fechamento, pra decidir antes do jogo. Logo depois do agendador
+            porque e' o mesmo assunto: o que o motor fez sozinho hoje. */}
+        <AdminReavaliacoes />
         {/* Cota da API-Football. Primeiro bloco de proposito: e' o recurso
             que ja parou o site inteiro por estouro, e o unico numero aqui
             que vem de fora e nao da' pra descobrir olhando o banco. */}

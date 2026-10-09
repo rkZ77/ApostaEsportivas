@@ -236,6 +236,17 @@ def test_a_fila_so_pega_pick_pendente_perto_do_jogo():
     assert "pp.match_date BETWEEN" not in sql
 
 
+def test_fila_inclui_vip_e_free_para_a_reavaliacao():
+    """2026-10-08: a reavaliacao do motor le' o XI oficial desta tabela. Sem
+    VIP e Free na fila, a checagem de titular fora nunca tinha dado."""
+    sql = ls._SQL_FILA
+    assert "FROM picks_vip v WHERE v.result IS NULL" in sql
+    assert "FROM picks_free fr WHERE fr.result IS NULL" in sql
+    # Anular continua sendo so' de prop de jogador.
+    fonte = open(os.path.join(_BACKEND, "lineups_sweep.py"), encoding="utf-8").read()
+    assert "UPDATE picks_vip" not in fonte and "UPDATE picks_free" not in fonte
+
+
 def test_desiste_da_partida_que_o_provedor_nao_cobre():
     assert "tentativas" in ls._SQL_FILA
     assert ls._MAX_TENTATIVAS > 0

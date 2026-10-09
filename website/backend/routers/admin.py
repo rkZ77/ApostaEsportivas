@@ -1644,6 +1644,53 @@ def agendador_estado(current_user: dict = Depends(require_admin)):
     return agendador.estado()
 
 
+@router.get("/reavaliacoes")
+def reavaliacoes(dias: int = 1, current_user: dict = Depends(require_admin)):
+    """Reavaliacao dos picks perto do apito (motor, pick_engine/reavaliacao.py).
+
+    A ULTIMA reavaliacao de cada pick dos ultimos `dias`, alertas primeiro.
+    O motor so' grava -- nao cancela pick. E' aqui que o operador ve "a odd
+    caiu e o EV sumiu" ou "titular novo fora" antes do apito e decide.
+    """
+    dias = max(1, min(int(dias or 1), 30))
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        try:
+            cur.execute("""
+                WITH ultima AS (
+                    SELECT DISTINCT ON (pick_table, pick_id) *
+                      FROM reavaliacao_picks
+                     WHERE reavaliado_em >= CURRENT_DATE - (%s - 1)
+                     ORDER BY pick_table, pick_id, reavaliado_em DESC
+                )
+                SELECT u.pick_table, u.pick_id, u.fixture_id, u.reavaliado_em,
+                       u.odd_publicada, u.odd_agora, u.prob_publicada, u.prob_reavaliada,
+                       u.ev_publicado, u.ev_agora, u.ev_reavaliado, u.novos_ausentes,
+                       u.fracao_perdida, u.alerta, u.detalhe,
+                       COALESCE(v.home_team_name, fr.home_team) AS home_team,
+                       COALESCE(v.away_team_name, fr.away_team) AS away_team,
+                       COALESCE(v.market, fr.market) AS market,
+                       COALESCE(v.line, fr.line) AS line,
+                       COALESCE(v.result, fr.result) AS result
+                  FROM ultima u
+             LEFT JOIN picks_vip v  ON u.pick_table = 'picks_vip'  AND v.id = u.pick_id
+             LEFT JOIN picks_free fr ON u.pick_table = 'picks_free' AND fr.id = u.pick_id
+                 ORDER BY (u.alerta IS NULL), u.reavaliado_em DESC
+                 LIMIT 200
+            """, (dias,))
+            linhas = [dict(r) for r in cur.fetchall()]
+        except Exception:
+            conn.rollback()
+            # Tabela ainda nao criada: o fechamento ainda nao reavaliou nada.
+            linhas = []
+    finally:
+        cur.close()
+        conn.close()
+    return {"reavaliacoes": linhas,
+            "alertas": sum(1 for l in linhas if l.get("alerta"))}
+
+
 @router.post("/agendador/medicoes")
 async def agendador_medicoes_agora(current_user: dict = Depends(require_admin)):
     """Roda as medicoes agora. Custo zero de API: os scripts so' leem o banco."""

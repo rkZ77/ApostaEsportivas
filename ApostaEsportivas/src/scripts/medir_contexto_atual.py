@@ -227,7 +227,10 @@ def main():
         print(_linha("com alerta", grupo([x for x in reav if x["alerta"]])))
         print(_linha("sem alerta", grupo([x for x in reav if not x["alerta"]])))
 
-    print("\nVEREDITO: " + veredito(desc, conf))
+    # "=== Leitura ===" e' o marcador que o /admin (AdminAgendador.
+    # leituraDaMedicao) usa pra mostrar o veredito no cartao da medicao.
+    print("\n=== Leitura ===")
+    print(veredito(desc, conf))
 
 
 def reavaliados() -> list | None:
