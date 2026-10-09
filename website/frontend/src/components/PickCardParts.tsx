@@ -1,4 +1,4 @@
-import { BrainCircuit, Check as CheckIcon, Clock, Loader2, Share2 } from 'lucide-react'
+import { BrainCircuit, Check as CheckIcon, ChevronRight, Clock, Loader2, Share2 } from 'lucide-react'
 import { cn } from '../lib/cn'
 import { Badge, ResultBadge } from './ui'
 import { rotuloDoMinuto, rotuloDoTempo, type LeituraAoVivo } from '../lib/picksAgora'
@@ -133,14 +133,19 @@ export function PickExplainButton({
         onPointerDown={onIntencao}
         onFocus={onIntencao}
         onClick={e => { e.stopPropagation(); onClick(e) }}
-        /* Preenchido no hover, e nao no repouso: o rodape logo abaixo virou
-           bandeja escura (`.pick-tray`), e um botao escuro colado nela fazia
-           os dois lerem como um bloco so'. Em repouso ele fica no tom do corpo
-           do card e so' a borda o delimita. */
-        className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold text-ink-2 hover:text-ink-1 hover:bg-surface-2/60 border border-line hover:border-line-strong rounded-md py-2.5 min-h-[36px] transition-colors duration-1 ease-smooth"
+        /* REDESENHADO EM 09/10/2026 (pedido do usuário: "melhora o botão").
+           Era texto cinza de 11px numa borda neutra, e lia como rodapé, não
+           como convite. Agora: 44px de altura (o dedo, no celular, que é onde
+           o site é mais usado), o ícone numa caixinha, a seta dizendo que
+           abre, e o azul-claro da borda do card, que liga o botão ao card
+           sem competir com o verde do "Pegar bilhete" logo abaixo. */
+        className="group/explica w-full flex items-center gap-2.5 text-left rounded-lg border border-sky-400/25 bg-sky-400/5 hover:bg-sky-400/10 hover:border-sky-400/45 px-3 min-h-[44px] transition-colors duration-1 ease-smooth"
       >
-        <BrainCircuit className="w-3.5 h-3.5 shrink-0" />
-        Entenda esta análise
+        <span className="w-7 h-7 shrink-0 grid place-items-center rounded-md bg-sky-400/15 text-sky-300">
+          <BrainCircuit className="w-4 h-4" />
+        </span>
+        <span className="flex-1 min-w-0 text-xs font-bold text-ink-1">Entenda esta análise</span>
+        <ChevronRight className="w-4 h-4 shrink-0 text-sky-300 transition-transform group-hover/explica:translate-x-0.5" />
       </button>
     </div>
   )
