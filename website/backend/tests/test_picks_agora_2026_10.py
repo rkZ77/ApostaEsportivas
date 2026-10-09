@@ -76,6 +76,21 @@ def test_gols_nao_precisam_de_folha(sem_api):
     assert r["atual"] == 1 and r["chance"] is not None
 
 
+def test_time_sem_finalizacao_vem_null_e_conta_zero_na_tela(sem_api):
+    """Caso real (09/10, Gimnasia x Atletico Tucuman): 5 finalizacoes contra 0,
+    e o 0 vem null do provedor. O card sumia com o contador."""
+    agora = time.time()
+    live._fix_cache[10] = (agora, _fixture("2H", 80, 0, 0))
+    live._stats_cache[10] = (agora, [
+        {"team": {"id": 1}, "statistics": [{"type": "Total Shots", "value": 5}]},
+        {"team": {"id": 2}, "statistics": [{"type": "Total Shots", "value": None}]}], "2H")
+    r = live.get_picks_agora({"itens": [_item(market="Finalizações Mais/Menos", market_type=None,
+                                              line="Under 26.5", prob=0.65)]}, current_user={})["vip:1"]
+    assert r["atual"] == 5 and r["chance"] is not None
+    # A liquidacao nao muda: fora do modo tela, null continua "nao publicado".
+    assert live._stats_cache[10][1][1]["statistics"][0]["value"] is None
+
+
 def test_placar_do_raio_x_so_do_cache(sem_api):
     live._fix_cache[10] = (time.time(), _fixture("2H", 59, 0, 0))
     live._stats_cache[10] = (time.time(), _folha(5, 0), "2H")

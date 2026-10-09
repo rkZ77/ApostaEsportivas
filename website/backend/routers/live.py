@@ -231,9 +231,26 @@ def _folha_e_do_jogo_em_andamento(status_na_captura, status_agora: str) -> bool:
     return status_na_captura in LIVE_STATUSES and status_agora in FT_STATUSES
 
 
+def _zera_nulos(folha: list) -> list:
+    """Copia da folha com `null` virando 0, em cada time que TEM bloco de
+    estatistica. O provedor manda null quando o lance nao aconteceu ("0
+    chutes" vem null), e com a bola rolando isso e' zero mesmo."""
+    saida = []
+    for time_ in folha or []:
+        stats = [{**s, "value": 0 if s.get("value") is None else s.get("value")}
+                 for s in time_.get("statistics") or []]
+        saida.append({**time_, "statistics": stats})
+    return saida
+
+
 def _fetch_stats(fid: int, status: str) -> list:
     if _SO_CACHE.get():
-        return _stats_cache.get(fid, (0, []))[1]
+        # SO' TELA (09/10/2026): o modo cache serve o card e o Raio-X, nunca a
+        # liquidacao. Ali "null" e' zero, como a lista de Jogos sempre mostrou
+        # (_montar_live_stats); sem isso, um time com 0 finalizacoes apagava
+        # o contador inteiro do card ("Fin 5-0" na lista, nada no pick). A
+        # liquidacao continua tratando null como "nao publicado" (_stat_value).
+        return _zera_nulos(_stats_cache.get(fid, (0, []))[1])
     now = time.time()
     if fid in _stats_cache:
         entrada = _stats_cache[fid]
