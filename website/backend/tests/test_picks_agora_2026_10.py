@@ -76,6 +76,15 @@ def test_gols_nao_precisam_de_folha(sem_api):
     assert r["atual"] == 1 and r["chance"] is not None
 
 
+def test_placar_do_raio_x_so_do_cache(sem_api):
+    live._fix_cache[10] = (time.time(), _fixture("2H", 59, 0, 0))
+    live._stats_cache[10] = (time.time(), _folha(5, 0), "2H")
+    r = live.get_live_stats_bulk("10,11", so_cache=True, current_user={})
+    assert r["10"]["status"] == "2H" and r["10"]["elapsed"] == 59 and r["10"]["home_corners"] == 5
+    assert r["11"] == {}      # sem cache: nada, e nenhuma chamada
+    assert live._SO_CACHE.get() is False
+
+
 def test_cache_so_fica_ligado_dentro_da_leitura(sem_api):
     live._fix_cache[10] = (time.time(), _fixture("1H", 30, 1, 0))
     live.get_picks_agora({"itens": [_item()]}, current_user={})

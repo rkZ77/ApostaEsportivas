@@ -2116,7 +2116,8 @@ def get_fixture_live_stats(fixture_id: int, current_user: dict = Depends(get_cur
 
 
 @router.get("/live-stats")
-def get_live_stats_bulk(fixture_ids: str, current_user: dict = Depends(get_current_user)):
+def get_live_stats_bulk(fixture_ids: str, so_cache: bool = False,
+                        current_user: dict = Depends(get_current_user)):
     """Mesma coisa que a rota acima, para varios jogos de uma vez.
 
     A tela de Jogos abria UMA requisicao por partida ao vivo, a cada 30
@@ -2135,8 +2136,15 @@ def get_live_stats_bulk(fixture_ids: str, current_user: dict = Depends(get_curre
     fids = fids[:50]
     if not fids:
         return {}
-    _fetch_fixtures_bulk(fids)
-    return {str(fid): _montar_live_stats(fid) for fid in fids}
+    # `so_cache` (09/10/2026): o Raio-X aberto sozinho no celular le' o placar
+    # sem gastar cota, do cache que a lista de Jogos e a varredura ja' mantem.
+    token = _SO_CACHE.set(True) if so_cache else None
+    try:
+        _fetch_fixtures_bulk(fids)
+        return {str(fid): _montar_live_stats(fid) for fid in fids}
+    finally:
+        if token is not None:
+            _SO_CACHE.reset(token)
 
 
 def _montar_live_stats(fixture_id: int) -> dict:
