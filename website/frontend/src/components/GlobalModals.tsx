@@ -25,7 +25,7 @@ import AccessEndedModal, { FimDeAcesso } from './AccessEndedModal'
 // o modal por cima da página de vendas. /checkout fica de fora de propósito:
 // não se interrompe um pagamento em andamento.
 const MONTHLY_CLOSE_ROUTES = [
-  '/picks', '/banca', '/meus-picks', '/fixtures', '/estatisticas', '/agente', '/profile', '/admin',
+  '/picks', '/banca', '/meus-picks', '/jogos', '/estatisticas', '/agente', '/profile', '/admin',
 ]
 
 export default function GlobalModals() {

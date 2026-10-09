@@ -86,7 +86,7 @@ const Ctx = createContext<OnboardingCtx | null>(null)
  * espera ela chegar em /picks. /admin também fica fora: conta de admin não
  * precisa aprender a plataforma.
  */
-const ROTAS_DE_APP = ['/picks', '/banca', '/meus-picks', '/fixtures', '/estatisticas', '/agente', '/profile']
+const ROTAS_DE_APP = ['/picks', '/banca', '/meus-picks', '/jogos', '/estatisticas', '/agente', '/profile']
 
 const CONTEXTO_VAZIO: ContextoTour = { emailPendente: false, trialNaMesa: false, semTelefone: false }
 

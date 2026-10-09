@@ -20,7 +20,9 @@ interface Perna {
   fixture_id: number; home: string; away: string
   home_team_id?: number; away_team_id?: number
   tipo: 'time' | 'jogador'; descricao: string; odd?: number
-  resultado?: 'GREEN' | 'RED' | 'VOID' | null; valor?: number | null; motivo?: string
+  resultado?: 'GREEN' | 'RED' | 'VOID' | null
+  /** Número da estatística, ou o placar ("2-1") no resultado final / chance dupla. */
+  valor?: number | string | null; motivo?: string
   status_jogo?: string | null; inicio?: string | null
 }
 

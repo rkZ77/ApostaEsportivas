@@ -25,11 +25,22 @@ const BASE: Record<string, string> = {
 
 const fmtLinha = (l: number) => (Number.isInteger(l) ? l.toFixed(1) : String(l))
 
+/** Resultado final (Match Winner, 1) e chance dupla (Double Chance, 12) · [mercado, valor]. */
+const RESULTADO_DA_API: Record<string, [number, string]> = {
+  '1': [1, 'home'], X: [1, 'draw'], '2': [1, 'away'],
+  '1X': [12, 'home/draw'], '12': [12, 'home/away'], X2: [12, 'draw/away'],
+}
+
 export function oddDaSelecao(
   odds: OddDaCasa[] | null | undefined,
-  sel: { mercado: string; quem: 'jogo' | 'home' | 'away'; periodo: Periodo; lado?: Lado; linha?: number },
+  sel: { mercado: string; quem: 'jogo' | 'home' | 'away'; periodo: Periodo; lado?: Lado; linha?: number; escolha?: string },
 ): OddDaCasa | null {
   if (!odds?.length) return null
+  if (sel.mercado === 'resultado') {
+    const alvo = sel.escolha ? RESULTADO_DA_API[sel.escolha] : undefined
+    if (!alvo) return null
+    return odds.find(o => o.market_id === alvo[0] && o.valor.replace(/\s/g, '').toLowerCase() === alvo[1]) ?? null
+  }
   if (sel.mercado === 'btts') {
     const id = sel.periodo === '1t' ? 34 : sel.periodo === '2t' ? 35 : 8
     return odds.find(o => o.market_id === id && o.valor.toLowerCase() === 'yes') ?? null

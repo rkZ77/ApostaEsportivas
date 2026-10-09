@@ -53,7 +53,7 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
     { to: '/meus-picks', label: 'Meus Picks',       Icon: ListChecks },
     { to: '/banca',      label: 'Minha Banca',      Icon: Wallet },
     { to: '/resultados', label: 'Resultados',       Icon: BarChart2 },
-    { to: '/fixtures',   label: 'Jogos',            Icon: BolaDeFutebol },
+    { to: '/jogos',      label: 'Jogos',            Icon: BolaDeFutebol },
     { to: '/agente',     label: 'Agente',           Icon: Bot },
     ...(!isAdmin && (user?.plan === 'vip' || user?.plan === 'trial')
       ? [{ to: '/planos', label: 'Meu Plano', Icon: Crown, highlight: 'yellow' as const }]
@@ -136,7 +136,7 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
                    link de verdade. Só o de desktop leva marcação · no celular
                    este menu vive dentro da gaveta fechada, e o tour não abre
                    gaveta. Ver components/onboarding/stepsVip.tsx. */
-                data-tour={to === '/fixtures' ? 'nav-jogos' : undefined}
+                data-tour={to === '/jogos' ? 'nav-jogos' : undefined}
                 className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm whitespace-nowrap transition-colors ${
                   highlight === 'yellow'
                     ? pathname === to ? 'text-yellow-400 font-semibold' : 'text-yellow-400 hover:text-yellow-300'

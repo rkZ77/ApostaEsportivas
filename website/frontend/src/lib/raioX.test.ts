@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest'
-import { ambasMarcam, fraseDoJogador, ESTATS_DE_JOGADOR, numero, resultadoDoJogo, rotuloDaLinha, taxa,
-         taxaDoJogador, type Jogador, type JogoDoTime } from './raioX'
+import { ambasMarcam, fraseDoJogador, ESTATS_DE_JOGADOR, numero, resultadoDoJogo, RESULTADOS_ACEITOS, rotuloDaLinha,
+         serieDeResultado, taxa, taxaDoJogador, type Jogador, type JogoDoTime } from './raioX'
 import { adicionar, chanceCombinada, limpar, remover, textoDoBilhete, type Selecao } from './bilheteMontado'
 
 const jogo = (p: Partial<JogoDoTime>): JogoDoTime => ({
@@ -75,6 +75,20 @@ describe('jogo', () => {
   it('"2+ chutes no alvo" é valor >= 2 em cada jogo do jogador', () => {
     const j = { jogos: [{ chutes_alvo: 2 }, { chutes_alvo: 1 }, { chutes_alvo: 3 }, { chutes_alvo: null }] } as unknown as Jogador
     expect(taxaDoJogador(j, 'chutes_alvo', 2)).toMatchObject({ bateu: 2, n: 3 })
+  })
+})
+
+describe('resultado e chance dupla', () => {
+  const jogos = [jogo({ gols_pro: 2, gols_contra: 0 }), jogo({ gols_pro: 1, gols_contra: 1 }),
+                 jogo({ gols_pro: 0, gols_contra: 3 }), jogo({ gols_pro: null })]
+
+  it('mandante vence: vitória dele, derrota do visitante', () => {
+    expect(serieDeResultado(jogos, RESULTADOS_ACEITOS['1'].home)).toEqual([1, 0, 0, null])
+    expect(serieDeResultado(jogos, RESULTADOS_ACEITOS['1'].away)).toEqual([0, 0, 1, null])
+  })
+
+  it('1X conta vitória e empate do mandante', () => {
+    expect(serieDeResultado(jogos, RESULTADOS_ACEITOS['1X'].home)).toEqual([1, 1, 0, null])
   })
 })
 
