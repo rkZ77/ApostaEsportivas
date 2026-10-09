@@ -935,9 +935,8 @@ export default function Admin() {
         {aba === 'pipeline' && (<>
         {/* HOJE (09/10, reorganização pedida pelo usuário). Um comando só no
             topo: Rodar tudo / Cancelar, o progresso da rodada etapa a etapa e
-            cota e coleta numa linha. Rodar etapa sozinha, cota e coleta
-            detalhadas continuam aqui embaixo, recolhidas -- nada saiu, só
-            deixou de disputar o topo com o botão que se usa todo dia. */}
+            cota e coleta numa linha. Embaixo, o que o motor fez sozinho, as
+            etapas avulsas e cota e coleta detalhadas. */}
         {(() => {
           const s = pipelineStatus['tudo']
           const isTudoRunning = runningCmd === 'tudo' || s?.status === 'running'
@@ -1070,14 +1069,15 @@ export default function Admin() {
           )
         })()}
 
-        {/* Reavaliação perto do apito (08/10): o alerta que o motor grava no
-            fechamento, pra decidir antes do jogo. */}
-        <AdminReavaliacoes />
-        {/* O que roda sozinho (08/10): agendador e medições do motor. */}
-        <AdminAgendador />
+        {/* O que o motor fez sozinho hoje, lado a lado na tela larga: a
+            reavaliação perto do apito e o agendador com as medições. */}
+        <div className="grid gap-4 lg:grid-cols-2 items-start mb-6">
+          <AdminReavaliacoes />
+          <AdminAgendador />
+        </div>
 
-        {/* Etapas avulsas: o mesmo cartão de sempre, recolhido. É pra quando
-            uma etapa precisa rodar de novo sozinha. */}
+        {/* Etapas avulsas: o mesmo cartão de sempre. É pra quando uma etapa
+            precisa rodar de novo sozinha. */}
         <Secao id="pipeline-rodar"
           titulo="Rodar uma etapa sozinha"
           oQueE="Cada etapa do Rodar tudo, com botão próprio, e as que só rodam no clique. Use para refazer uma etapa que falhou sem rodar o dia inteiro de novo."
@@ -1108,6 +1108,8 @@ export default function Admin() {
         </div>
         </Secao>
 
+        {/* Cota e coleta detalhadas, lado a lado. */}
+        <div className="grid gap-x-4 lg:grid-cols-2 items-start">
         <Secao id="pipeline-cota"
           titulo="Quanto da API de futebol ainda dá pra usar hoje?"
           oQueE="Toda coleta gasta requisições da API-Football. Se chegar no limite, nada mais atualiza até o dia seguinte."
@@ -1187,6 +1189,7 @@ export default function Admin() {
           </div>
         )}
         </Secao>
+        </div>
         </>)}
 
         {aba === 'disparos' && <AdminDisparos />}
