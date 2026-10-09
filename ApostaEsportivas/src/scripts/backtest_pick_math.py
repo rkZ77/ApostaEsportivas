@@ -66,10 +66,12 @@ def _matches_before(cur, team_id, league_id, season, before_date, is_home):
             ms.match_date, ms.total_goals,
             ls.rank AS opponent_rank
         FROM match_statistics ms
-        LEFT JOIN league_standings ls
-            ON ls.team_id = ms.{opp_col}
-           AND ls.league_id = ms.league_id
-           AND ls.season = ms.season
+        LEFT JOIN LATERAL (
+            SELECT x.team_name, x.rank FROM league_standings x
+             WHERE x.team_id = ms.{opp_col} AND x.league_id = ms.league_id
+               AND x.season = ms.season
+             ORDER BY x.played DESC NULLS LAST, x.updated_at DESC NULLS LAST
+             LIMIT 1) ls ON TRUE  -- uma linha por time (2026-10-09)
         WHERE ms.{team_col} = %s
           AND ms.league_id = %s
           AND ms.season = %s
