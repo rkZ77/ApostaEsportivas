@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest'
-import { ambasMarcam, fraseDoJogador, ESTATS_DE_JOGADOR, numero, resultadoDoJogo, RESULTADOS_ACEITOS, rotuloDaLinha,
-         serieDeResultado, taxa, taxaDoJogador, type Jogador, type JogoDoTime } from './raioX'
+import { ambasMarcam, filtrarPorMando, fraseDoJogador, ESTATS_DE_JOGADOR, numero, resultadoDoJogo, RESULTADOS_ACEITOS, rotuloDaLinha,
+         serieDeResultado, taxa, taxaDoJogador, type Jogador, type JogoDoTime, type RaioX } from './raioX'
 import { adicionar, chanceCombinada, limpar, remover, textoDoBilhete, trocarNoGrupo, type Selecao } from './bilheteMontado'
 
 const noBilhete = (): Selecao[] => JSON.parse(localStorage.getItem('pickia_bilhete_montado') ?? '[]')
@@ -95,6 +95,33 @@ describe('um resultado por jogo no bilhete', () => {
     trocarNoGrupo(sel('7:resultado:1'), '7:resultado:')
     trocarNoGrupo(sel('7:resultado:1'), '7:resultado:')
     expect(noBilhete()).toEqual([])
+  })
+})
+
+describe('casa / fora', () => {
+  const dados = {
+    fixture: {} as any,
+    times: {
+      home: { team_id: 1, jogos: [jogo({ fixture_id: 1, em_casa: true }), jogo({ fixture_id: 2, em_casa: false })] },
+      away: { team_id: 2, jogos: [jogo({ fixture_id: 3, em_casa: true }), jogo({ fixture_id: 4, em_casa: false })] },
+    },
+    h2h: [], arbitro: null,
+    jogadores: {
+      home: { fonte_titulares: '', lista: [{ player_id: 9, jogos: [{ fixture_id: 1 }, { fixture_id: 2 }, { fixture_id: 99 }] }] },
+      away: { fonte_titulares: '', lista: [{ player_id: 8, jogos: [{ fixture_id: 3 }, { fixture_id: 4 }] }] },
+    },
+  } as unknown as RaioX
+
+  it('mandante só em casa, visitante só fora, jogador junto do time', () => {
+    const d = filtrarPorMando(dados, 'mando')
+    expect(d.times.home.jogos.map(j => j.fixture_id)).toEqual([1])
+    expect(d.times.away.jogos.map(j => j.fixture_id)).toEqual([4])
+    expect(d.jogadores.home.lista[0].jogos.map(g => g.fixture_id)).toEqual([1])
+    expect(d.jogadores.away.lista[0].jogos.map(g => g.fixture_id)).toEqual([4])
+  })
+
+  it('todos devolve o mesmo objeto', () => {
+    expect(filtrarPorMando(dados, 'todos')).toBe(dados)
   })
 })
 
