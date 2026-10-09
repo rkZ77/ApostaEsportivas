@@ -2,7 +2,9 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { ambasMarcam, fraseDoJogador, ESTATS_DE_JOGADOR, numero, resultadoDoJogo, RESULTADOS_ACEITOS, rotuloDaLinha,
          serieDeResultado, taxa, taxaDoJogador, type Jogador, type JogoDoTime } from './raioX'
-import { adicionar, chanceCombinada, limpar, remover, textoDoBilhete, type Selecao } from './bilheteMontado'
+import { adicionar, chanceCombinada, limpar, remover, textoDoBilhete, trocarNoGrupo, type Selecao } from './bilheteMontado'
+
+const noBilhete = (): Selecao[] => JSON.parse(localStorage.getItem('pickia_bilhete_montado') ?? '[]')
 
 const jogo = (p: Partial<JogoDoTime>): JogoDoTime => ({
   fixture_id: 1, data: null, em_casa: true, adversario_id: 2,
@@ -75,6 +77,24 @@ describe('jogo', () => {
   it('"2+ chutes no alvo" é valor >= 2 em cada jogo do jogador', () => {
     const j = { jogos: [{ chutes_alvo: 2 }, { chutes_alvo: 1 }, { chutes_alvo: 3 }, { chutes_alvo: null }] } as unknown as Jogador
     expect(taxaDoJogador(j, 'chutes_alvo', 2)).toMatchObject({ bateu: 2, n: 3 })
+  })
+})
+
+describe('um resultado por jogo no bilhete', () => {
+  beforeEach(() => limpar())
+  const sel = (id: string): Selecao => ({ id, fixture_id: 7, jogo: 'A x B', descricao: id, bateu: 1, n: 2 })
+
+  it('escolher outro resultado do mesmo jogo troca, e o resto fica', () => {
+    adicionar(sel('7:gols:total:mais:2.5'))
+    trocarNoGrupo(sel('7:resultado:1'), '7:resultado:')
+    trocarNoGrupo(sel('7:resultado:X2'), '7:resultado:')
+    expect(noBilhete().map(s => s.id)).toEqual(['7:gols:total:mais:2.5', '7:resultado:X2'])
+  })
+
+  it('tocar no que já está dentro tira', () => {
+    trocarNoGrupo(sel('7:resultado:1'), '7:resultado:')
+    trocarNoGrupo(sel('7:resultado:1'), '7:resultado:')
+    expect(noBilhete()).toEqual([])
   })
 })
 

@@ -169,6 +169,13 @@ def validar_pernas(pernas) -> list[dict]:
         chave = json.dumps({k: v for k, v in perna.items() if k != "descricao"}, sort_keys=True)
         if chave in vistas:
             continue   # a mesma selecao duas vezes nao e' bilhete melhor
+        if perna.get("mercado") == "resultado":
+            # Um resultado por jogo, como na casa (09/10): "1" + "X" + "2" no
+            # mesmo bilhete perde sempre, e 1X2 + chance dupla a casa nao combina.
+            grupo = f"resultado:{perna['fixture_id']}"
+            if grupo in vistas:
+                raise PernaInvalida("so' um resultado por jogo no bilhete")
+            vistas.add(grupo)
         vistas.add(chave)
         limpas.append(perna)
     return limpas

@@ -10,7 +10,7 @@ import {
   resultadoDoJogo, RESULTADOS_ACEITOS, ROTULO_PERIODO, rotuloDaLinha, serieDeResultado, taxa, taxaDoJogador, tomDaTaxa,
   type EscolhaDeResultado, type EstatDeJogador, type Jogador, type JogoDoTime, type Lado, type Periodo, type RaioX, type Taxa,
 } from '../../lib/raioX'
-import { alternar, useBilheteMontado, type Selecao } from '../../lib/bilheteMontado'
+import { alternar, trocarNoGrupo, useBilheteMontado, type Selecao } from '../../lib/bilheteMontado'
 import { chanceDoResultado, oddDaSelecao, vantagem, type OddDaCasa } from '../../lib/oddsDoJogo'
 import Campinho from './Campinho'
 import Classificacao from './Classificacao'
@@ -789,7 +789,7 @@ function BotaoDeResultado({ f, home, away, nomeJogo, odds, escolha, prefixo, rot
   const legenda = `${rotulo}${odd ? ` · odd ${odd.odd.toFixed(2)}${odd.casa ? ` (${odd.casa})` : ''}` : ''} · bateu ${t.bateu} de ${t.n}`
 
   return (
-    <button onClick={() => alternar(selecao)} aria-pressed={dentro} title={legenda}
+    <button onClick={() => trocarNoGrupo(selecao, `${f.fixture_id}:resultado:`)} aria-pressed={dentro} title={legenda}
       aria-label={`${dentro ? 'Tirar do bilhete' : 'Pôr no bilhete'}: ${legenda}`}
       className={cn(
         'relative min-w-0 rounded-lg border px-1.5 pt-2.5 pb-2 flex flex-col items-center gap-1 text-center transition active:scale-95',

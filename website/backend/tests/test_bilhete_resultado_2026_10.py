@@ -22,6 +22,15 @@ def test_escolha_desconhecida_e_recusada():
         bp.validar_pernas([resultado("3")])
 
 
+def test_um_resultado_por_jogo():
+    with pytest.raises(bp.PernaInvalida):
+        bp.validar_pernas([resultado("1"), resultado("X")])
+    with pytest.raises(bp.PernaInvalida):
+        bp.validar_pernas([resultado("1"), resultado("1X")])
+    # Jogos diferentes, um resultado em cada: pode.
+    assert len(bp.validar_pernas([resultado("1"), {**resultado("2"), "fixture_id": 11}])) == 2
+
+
 def test_escolha_minuscula_vira_maiuscula():
     [p] = bp.validar_pernas([resultado("x2")])
     assert p["escolha"] == "X2"

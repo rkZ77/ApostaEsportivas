@@ -89,6 +89,16 @@ export function alternar(s: Selecao) {
   else adicionar(s)
 }
 
+/**
+ * Põe `s` tirando antes as seleções do mesmo grupo (ids que começam com
+ * `grupo`). É o "um resultado por jogo" da casa (09/10): Lens vence, empate e
+ * Lyon vence no mesmo bilhete é aposta que perde sempre. Já dentro, tira.
+ */
+export function trocarNoGrupo(s: Selecao, grupo: string) {
+  if (selecoes.some(x => x.id === s.id)) return remover(s.id)
+  gravar([...selecoes.filter(x => !x.id.startsWith(grupo)), s].slice(-MAXIMO))
+}
+
 export function limpar() {
   gravar([])
 }
