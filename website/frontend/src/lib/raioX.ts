@@ -247,6 +247,41 @@ export function fraseDoJogador(estat: EstatDeJogador, minimo: number): string {
 
 export const ehGoleiro = (j: Jogador) => (j.posicao ?? '').toUpperCase().startsWith('G')
 
+/* ── Casa / Fora (09/10/2026, pedido do usuário) ────────────────────────── */
+
+/*
+ * "RESPEITANDO O MANDANTE". Com 'mando', a amostra de cada time é só a do lado
+ * em que ele joga ESTE jogo: o mandante nos jogos em casa, o visitante nos
+ * jogos fora. É a leitura de quem diz "em casa ele é outro time".
+ *
+ * Jogador segue o time dele: fica só com os jogos que o time jogou daquele
+ * lado. Jogo do jogador que não está na lista do time (mais antigo que ela)
+ * sai também · sem saber o mando dele, contar seria chutar.
+ */
+export type Mando = 'todos' | 'mando'
+
+export function filtrarPorMando(dados: RaioX, mando: Mando): RaioX {
+  if (mando === 'todos') return dados
+  const home = dados.times.home.jogos.filter(j => j.em_casa)
+  const away = dados.times.away.jogos.filter(j => !j.em_casa)
+  const doLado = (jogos: JogoDoTime[]) => new Set(jogos.map(j => j.fixture_id))
+  const ladoHome = doLado(home)
+  const ladoAway = doLado(away)
+  const soDoLado = (lista: Jogador[], lado: Set<number>) =>
+    lista.map(p => ({ ...p, jogos: p.jogos.filter(g => lado.has(g.fixture_id)) }))
+  return {
+    ...dados,
+    times: {
+      home: { ...dados.times.home, jogos: home },
+      away: { ...dados.times.away, jogos: away },
+    },
+    jogadores: {
+      home: { ...dados.jogadores.home, lista: soDoLado(dados.jogadores.home.lista, ladoHome) },
+      away: { ...dados.jogadores.away, lista: soDoLado(dados.jogadores.away.lista, ladoAway) },
+    },
+  }
+}
+
 /* ── Forma ──────────────────────────────────────────────────────────────── */
 
 export type Resultado = 'V' | 'E' | 'D'

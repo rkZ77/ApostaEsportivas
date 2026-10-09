@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Check, ChevronLeft, ChevronRight, Flag, Minus, Plus, Shield, Users } from 'lucide-react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Check, Flag, Minus, Plus, Shield, Users } from 'lucide-react'
 import api from '../../services/api'
 import { cn } from '../../lib/cn'
 import { ErrorState, Skeleton } from '../ui'
@@ -8,12 +8,13 @@ import { nomeDaLigaPt, rotuloDaRodada } from '../../lib/paisDaLiga'
 import {
   ambasMarcam, comPeriodo, ehGoleiro, ESTATS_DE_JOGADOR, fraseDoJogador, MERCADOS_DE_TIME, MERCADOS_PRINCIPAIS, numero,
   resultadoDoJogo, RESULTADOS_ACEITOS, ROTULO_PERIODO, rotuloDaLinha, serieDeResultado, taxa, taxaDoJogador, tomDaTaxa,
-  type EscolhaDeResultado, type EstatDeJogador, type Jogador, type JogoDoTime, type Lado, type Periodo, type RaioX, type Taxa,
+  filtrarPorMando, type EscolhaDeResultado, type EstatDeJogador, type Mando, type Jogador, type JogoDoTime, type Lado, type Periodo, type RaioX, type Taxa,
 } from '../../lib/raioX'
 import { alternar, trocarNoGrupo, useBilheteMontado, type Selecao } from '../../lib/bilheteMontado'
 import { chanceDoResultado, oddDaSelecao, vantagem, type OddDaCasa } from '../../lib/oddsDoJogo'
 import { rotuloDoTempo } from '../../lib/picksAgora'
 import { aoVivo as estaAoVivo } from '../../lib/aoVivo'
+import SelectMenu from '../ui/SelectMenu'
 import Campinho from './Campinho'
 import Classificacao from './Classificacao'
 
@@ -105,6 +106,11 @@ export default function RaioXDoJogo({ jogo }: { jogo: JogoBase }) {
     return () => { vivo = false; clearTimeout(timer) }
   }, [jogo.fixture_id])
 
+  /* Casa / Fora vale pras duas abas de taxa (Mercados e Jogadores) e fica
+     escolhido ao trocar de uma pra outra · ver filtrarPorMando. */
+  const [mando, setMando] = useState<Mando>('todos')
+  const vistos = useMemo(() => (dados ? filtrarPorMando(dados, mando) : null), [dados, mando])
+
   const nomeJogo = `${dados?.fixture.home_team || jogo.home_team || 'Casa'} x ${dados?.fixture.away_team || jogo.away_team || 'Fora'}`
 
   return (
@@ -144,9 +150,9 @@ export default function RaioXDoJogo({ jogo }: { jogo: JogoBase }) {
             <Skeleton className="h-36 w-full" />
           </div>
         ) : aba === 'mercados' ? (
-          <AbaMercados dados={dados} nomeJogo={nomeJogo} odds={odds} oddsAoVivo={oddsAoVivo} />
+          <AbaMercados dados={vistos!} nomeJogo={nomeJogo} odds={odds} oddsAoVivo={oddsAoVivo} mando={mando} setMando={setMando} />
         ) : aba === 'jogadores' ? (
-          <AbaJogadores dados={dados} nomeJogo={nomeJogo} />
+          <AbaJogadores dados={vistos!} nomeJogo={nomeJogo} mando={mando} setMando={setMando} />
         ) : aba === 'escalacao' ? (
           /* Pedida só ao abrir a aba: é a parte do Raio-X que fala com a
              API-Football, e quem não olha a escalação não gasta cota. */
@@ -278,73 +284,31 @@ export function FormaPontos({ forma, tamanho = 'md' }: { forma: string[]; tamanh
 /* ── Peças comuns ───────────────────────────────────────────────────────── */
 
 /*
- * Fileira de opções (2026-10-07, pedido do usuário: "fica ruim de ver, não tem
- * botão pra ir pro lado").
+ * LISTA SUSPENSA NO LUGAR DA FILEIRA DE BOTÕES (09/10/2026, pedido do usuário).
  *
- * COMPUTADOR: quebra em linhas, tudo à vista · lá não se arrasta com o dedo,
- * e uma fileira cortada escondia "Cartões do time" sem aviso nenhum.
- * CELULAR: continua deslizando (uma linha só poupa a altura da tela), mas com
- * seta e esmaecido na ponta que ainda tem opção escondida, e a opção escolhida
- * rola pra dentro da tela sozinha.
+ * Nove mercados e onze estatísticas de jogador em botões quebravam em duas
+ * linhas e empurravam o conteúdo pra baixo. Agora é o mesmo menu do filtro de
+ * ligas (SelectMenu): uma linha, a escolha à vista, o resto a um toque.
+ *
+ * Ao lado, o recorte de jogos: todos, ou "Casa / Fora", em que cada time conta
+ * só os jogos do lado em que joga ESTE jogo (ver filtrarPorMando).
  */
-function Chips<T extends string>({ opcoes, valor, onChange }: {
-  opcoes: Array<{ id: T; rotulo: string }>; valor: T; onChange: (v: T) => void
+function SeletoresDoRaioX({ opcoes, valor, onChange, rotulo, mando, setMando }: {
+  opcoes: Array<{ id: string; rotulo: string }>; valor: string; onChange: (v: string) => void
+  rotulo: string; mando: Mando; setMando: (m: Mando) => void
 }) {
-  const trilho = useRef<HTMLDivElement>(null)
-  const [sobra, setSobra] = useState({ esq: false, dir: false })
-
-  const medir = () => {
-    const el = trilho.current
-    if (!el) return
-    setSobra({ esq: el.scrollLeft > 4, dir: el.scrollLeft + el.clientWidth < el.scrollWidth - 4 })
-  }
-  useEffect(() => {
-    medir()
-    window.addEventListener('resize', medir)
-    return () => window.removeEventListener('resize', medir)
-  }, [opcoes.length])
-  useEffect(() => {
-    trilho.current?.querySelector<HTMLElement>('[aria-pressed="true"]')
-      ?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
-  }, [valor])
-
-  const rolar = (dir: 1 | -1) =>
-    trilho.current?.scrollBy({ left: dir * trilho.current.clientWidth * 0.7, behavior: 'smooth' })
-
-  const seta = 'md:hidden absolute top-0 z-10 h-10 w-10 grid place-items-center rounded-full bg-surface-2 border border-line-strong text-ink-1 shadow-elev-sm'
   return (
-    <div className="relative">
-      <div ref={trilho} onScroll={medir}
-        className="-mx-4 pl-4 pr-14 sm:mx-0 sm:pl-0 sm:pr-12 md:pr-0 flex gap-2 overflow-x-auto scrollbar-none pb-1
-                   md:flex-wrap md:overflow-visible">
-        {opcoes.map(o => (
-          <button key={o.id} onClick={() => onChange(o.id)} aria-pressed={valor === o.id}
-            className={cn(
-              'shrink-0 h-10 px-4 rounded-full text-sm font-semibold border transition-colors',
-              valor === o.id
-                ? 'bg-accent text-on-fill border-accent'
-                : 'bg-surface-1 text-ink-2 border-line hover:border-line-strong',
-            )}>
-            {o.rotulo}
-          </button>
-        ))}
-      </div>
-      {sobra.esq && (
-        <>
-          <div aria-hidden className="md:hidden pointer-events-none -left-4 sm:left-0 absolute top-0 h-10 w-20 bg-gradient-to-r from-surface-0 from-60% to-transparent" />
-          <button className={cn(seta, 'left-0')} onClick={() => rolar(-1)} aria-label="Ver opções anteriores"><ChevronLeft size={18} /></button>
-        </>
-      )}
-      {sobra.dir && (
-        <>
-          <div aria-hidden className="md:hidden pointer-events-none -right-4 sm:right-0 absolute top-0 h-10 w-20 bg-gradient-to-l from-surface-0 from-60% to-transparent" />
-          <button className={cn(seta, 'right-0')} onClick={() => rolar(1)} aria-label="Ver mais opções"><ChevronRight size={18} /></button>
-        </>
-      )}
+    <div className="flex flex-wrap items-center gap-2">
+      <SelectMenu ariaLabel={rotulo} value={valor} onChange={onChange}
+        options={opcoes.map(o => ({ value: o.id, label: o.rotulo }))} />
+      <SelectMenu ariaLabel="Jogos" value={mando} onChange={v => setMando(v as Mando)}
+        options={[
+          { value: 'todos', label: 'Todos os jogos' },
+          { value: 'mando', label: 'Casa / Fora', meta: 'mando' },
+        ]} />
     </div>
   )
 }
-
 function Passo({ rotulo, onMenos, onMais, desabilitaMenos }: {
   rotulo: string; onMenos: () => void; onMais: () => void; desabilitaMenos?: boolean
 }) {
@@ -461,7 +425,9 @@ function LinhaDaOdd({ odd, bateu, n }: { odd: OddDaCasa | null; bateu: number; n
 
 /* ── Mercados ───────────────────────────────────────────────────────────── */
 
-function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo }: { dados: RaioX; nomeJogo: string; odds: OddDaCasa[]; oddsAoVivo: boolean }) {
+function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
+  dados: RaioX; nomeJogo: string; odds: OddDaCasa[]; oddsAoVivo: boolean; mando: Mando; setMando: (m: Mando) => void
+}) {
   /* Mercado + DE QUEM (os dois somados, ou um time só) · ver MERCADOS_PRINCIPAIS. */
   /* Abre no Resultado: é a primeira pergunta de quem olha um jogo. */
   const [principal, setPrincipal] = useState('resultado')
@@ -637,7 +603,8 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo }: { dados: RaioX; nome
   if (ehResultado) {
     return (
       <div className="space-y-3">
-        <Chips opcoes={chips} valor={principal} onChange={setPrincipal} />
+        <SeletoresDoRaioX opcoes={chips} valor={principal} onChange={setPrincipal} rotulo="Mercado"
+          mando={mando} setMando={setMando} />
         <QuadrosDeResultado dados={dados} nomeJogo={nomeJogo} odds={odds} oddsAoVivo={oddsAoVivo} />
       </div>
     )
@@ -645,7 +612,8 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo }: { dados: RaioX; nome
 
   return (
     <div className="space-y-3">
-      <Chips opcoes={chips} valor={principal} onChange={setPrincipal} />
+      <SeletoresDoRaioX opcoes={chips} valor={principal} onChange={setPrincipal} rotulo="Mercado"
+        mando={mando} setMando={setMando} />
 
       <div className="card p-3 space-y-3">
         {/* DE QUEM: os dois times somados, ou um só (faz x cede). */}
@@ -932,7 +900,9 @@ const FONTE_TITULARES: Record<string, string> = {
   'ultima escalacao': 'última escalação do time',
 }
 
-function AbaJogadores({ dados, nomeJogo }: { dados: RaioX; nomeJogo: string }) {
+function AbaJogadores({ dados, nomeJogo, mando, setMando }: {
+  dados: RaioX; nomeJogo: string; mando: Mando; setMando: (m: Mando) => void
+}) {
   const [time, setTime] = useState<'home' | 'away'>('home')
   const [estatId, setEstatId] = useState<EstatDeJogador['id']>('chutes_alvo')
   const estat = ESTATS_DE_JOGADOR.find(e => e.id === estatId)!
@@ -972,7 +942,8 @@ function AbaJogadores({ dados, nomeJogo }: { dados: RaioX; nomeJogo: string }) {
         })}
       </div>
 
-      <Chips opcoes={ESTATS_DE_JOGADOR.map(e => ({ id: e.id, rotulo: e.rotulo }))} valor={estatId} onChange={setEstatId} />
+      <SeletoresDoRaioX opcoes={ESTATS_DE_JOGADOR.map(e => ({ id: e.id, rotulo: e.rotulo }))} valor={estatId}
+        onChange={v => setEstatId(v as EstatDeJogador['id'])} rotulo="Estatística" mando={mando} setMando={setMando} />
 
       <div className="card p-3 flex items-center justify-between gap-3">
         <span className="text-sm text-ink-2">Em cada jogo</span>
