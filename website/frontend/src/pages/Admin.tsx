@@ -430,6 +430,13 @@ export default function Admin() {
   const USERS_PER_PAGE = 15
   const PAYMENTS_PER_PAGE = 10
 
+  /** "HH:MM:SS" em UTC (como o servidor grava o status) -> "HH:MM" de Brasília. */
+  const horaBR = (hms?: string | null) => {
+    const m = /^(\d{1,2}):(\d{2})/.exec(hms ?? '')
+    if (!m) return hms ?? 's/d'
+    return `${String((Number(m[1]) + 21) % 24).padStart(2, '0')}:${m[2]}`
+  }
+
   const showToast = (msg: string, ok = true) => {
     setToast({ msg, ok })
     setTimeout(() => setToast(null), 3000)
@@ -550,6 +557,10 @@ export default function Admin() {
     setLogLinhas([])
     setLogCmd(command)
     setLogAberto(true)
+    // O log mora no cartão "Picks do dia", no topo; quem clicou numa etapa lá
+    // embaixo precisa ser levado até ele.
+    setTimeout(() => document.getElementById('log-ao-vivo')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50)
   }
 
   useEffect(() => {
@@ -921,192 +932,126 @@ export default function Admin() {
 
 
         {aba === 'pipeline' && (<>
-        {/* O que roda sozinho (08/10): antes da cota porque e' a resposta a
-            "o dia ja' rodou?", que e' a primeira pergunta desta aba. */}
-        <AdminAgendador />
-        {/* Reavaliacao perto do apito (08/10): o alerta que o motor grava no
-            fechamento, pra decidir antes do jogo. Logo depois do agendador
-            porque e' o mesmo assunto: o que o motor fez sozinho hoje. */}
-        <AdminReavaliacoes />
-        {/* Cota da API-Football. Primeiro bloco de proposito: e' o recurso
-            que ja parou o site inteiro por estouro, e o unico numero aqui
-            que vem de fora e nao da' pra descobrir olhando o banco. */}
-        <Secao id="pipeline-cota" abertaPorPadrao
-          titulo="Quanto da API de futebol ainda dá pra usar hoje?"
-          oQueE="Toda coleta gasta requisições da API-Football. Se chegar no limite, nada mais atualiza até o dia seguinte."
-          tecnico="Cota da API-Football">
-        {!overview?.api_football && (
-          <p className="text-xs text-ink-4 px-1">Não foi possível ler a cota agora.</p>
-        )}
-        {overview?.api_football && (
-          <div className="card p-4">
-            <div className="flex items-center justify-between mb-2 gap-3">
-              <h2 className="text-xs font-semibold text-ink-3">Cota da API-Football</h2>
-              <span className={`text-[10px] font-black border px-1.5 py-0.5 rounded ${
-                overview.api_football.ativo
-                  ? 'text-green-400 bg-green-500/10 border-green-500/30'
-                  : 'text-red-400 bg-red-500/10 border-red-500/30'
-              }`}>
-                {overview.api_football.plano ?? 'desconhecido'}
-              </span>
-            </div>
-            <div className="flex items-baseline gap-2 font-mono">
-              <span className={`text-3xl font-black ${
-                (overview.api_football.pct ?? 0) >= 90 ? 'text-red-400'
-                  : (overview.api_football.pct ?? 0) >= 70 ? 'text-orange-400' : 'text-green-400'
-              }`}>{overview.api_football.usado ?? '-'}</span>
-              <span className="text-ink-4 text-sm">/ {overview.api_football.limite ?? '-'} hoje</span>
-            </div>
-            <div className="mt-2 h-1.5 bg-surface-2 rounded-full overflow-hidden">
-              <div className={`h-full rounded-full ${
-                (overview.api_football.pct ?? 0) >= 90 ? 'bg-red-500'
-                  : (overview.api_football.pct ?? 0) >= 70 ? 'bg-orange-500' : 'bg-green-500'
-              }`} style={{ width: `${Math.min(100, overview.api_football.pct ?? 0)}%` }} />
-            </div>
-            {overview.api_football.expira_em && (
-              <p className="text-[11px] text-ink-4 mt-2">
-                Plano válido até {new Date(overview.api_football.expira_em).toLocaleDateString('pt-BR')}
-              </p>
-            )}
-          </div>
-        )}
-        </Secao>
-
-        {/* Saúde da coleta. Sem isso, "não saiu pick hoje" fica
-            indistinguível de "a coleta nem rodou". */}
-        <Secao id="pipeline-coleta" abertaPorPadrao
-          titulo="Os jogos de hoje foram coletados?"
-          oQueE="Quantos jogos, odds e estatísticas estão no banco. Zero aqui explica por que não saiu pick."
-          tecnico="Coleta">
-        {!overview?.coleta && (
-          <p className="text-xs text-ink-4 px-1">Sem dados da coleta agora.</p>
-        )}
-        {overview?.coleta && (
-          <div className="card p-4">
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-              {[
-                { label: 'Jogos hoje',      value: overview.coleta.jogos_hoje },
-                { label: 'Por começar',     value: overview.coleta.jogos_por_comecar },
-                { label: 'Jogos com odds',  value: overview.coleta.jogos_com_odds },
-                { label: 'Ligas',           value: overview.coleta.ligas },
-                { label: 'Times',           value: overview.coleta.times },
-                { label: 'Stats jogador',   value: overview.coleta.estatisticas_jogador },
-              ].map(({ label, value }) => (
-                <div key={label} className="bg-surface-1 rounded-md px-3 py-2.5 text-center">
-                  <div className={`font-mono text-xl font-black ${value > 0 ? 'text-ink-1' : 'text-ink-4'}`}>{value}</div>
-                  <div className="text-[10px] text-ink-3 mt-0.5">{label}</div>
+        {/* HOJE (09/10, reorganização pedida pelo usuário). Um comando só no
+            topo: Rodar tudo / Cancelar, o progresso da rodada etapa a etapa e
+            cota e coleta numa linha. Rodar etapa sozinha, cota e coleta
+            detalhadas continuam aqui embaixo, recolhidas -- nada saiu, só
+            deixou de disputar o topo com o botão que se usa todo dia. */}
+        {(() => {
+          const s = pipelineStatus['tudo']
+          const isTudoRunning = runningCmd === 'tudo' || s?.status === 'running'
+          const total = pipelineEtapas.length
+          const idxAtual = pipelineEtapas.findIndex(e => pipelineStatus[e.command]?.status === 'running')
+          const pct = isTudoRunning && total ? Math.round(100 * Math.max(idxAtual, 0) / total) : 0
+          const falhas = pipelineEtapas.filter(e => pipelineStatus[e.command]?.status === 'error')
+          const apiF = overview?.api_football
+          const col = overview?.coleta
+          const resumo = isTudoRunning
+            ? (idxAtual >= 0 ? `Etapa ${idxAtual + 1} de ${total} · ${pipelineEtapas[idxAtual].label}` : 'Iniciando…')
+            : !s ? 'Ainda não rodou desde a última atualização do servidor'
+            : s.status === 'ok' ? `Concluído às ${horaBR(s.finished_at)}`
+            : s.status === 'cancelado' ? `Cancelado às ${horaBR(s.finished_at)}`
+            : `Terminou às ${horaBR(s.finished_at)} com ${falhas.length || 'alguma'} etapa(s) com falha`
+          const corResumo = isTudoRunning ? 'text-yellow-400'
+            : s?.status === 'ok' ? 'text-green-400'
+            : s?.status === 'cancelado' ? 'text-orange-400'
+            : s?.status === 'error' ? 'text-red-400' : 'text-ink-4'
+          const corChip = (st?: string) =>
+            st === 'running' ? 'bg-yellow-400 animate-pulse'
+            : st === 'ok' ? 'bg-green-500'
+            : st === 'error' ? 'bg-red-500'
+            : st === 'cancelado' ? 'bg-orange-400' : 'bg-surface-3'
+          return (
+            <div className="card p-4 mb-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-ink-1">Picks do dia</p>
+                  <p className={`text-xs mt-0.5 font-semibold ${corResumo}`}>{resumo}</p>
                 </div>
-              ))}
-            </div>
-            {overview.coleta.ultimo_jogo_coletado && (
-              <p className="text-[11px] text-ink-4 mt-3">
-                Último jogo com estatística coletada:{' '}
-                {new Date(overview.coleta.ultimo_jogo_coletado).toLocaleDateString('pt-BR')}
-              </p>
-            )}
-            {overview.coleta.estatisticas_jogador === 0 && (
-              <p className="text-[11px] text-orange-400 mt-1">
-                Sem estatística por jogador, o pipeline de defesas de goleiro não gera pick até rodar a coleta.
-              </p>
-            )}
-          </div>
-        )}
-        </Secao>
-
-        {/* Pipeline */}
-        <Secao id="pipeline-rodar" abertaPorPadrao
-          titulo="Gerar os picks do dia"
-          oQueE={'"Rodar tudo" faz as etapas na ordem: buscar jogos, odds e estatísticas, depois gerar os picks. Cada etapa também roda sozinha, e o log mostra o que está acontecendo.'}
-          tecnico="Pipeline">
-        <div className="card p-4">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xs font-semibold text-ink-3">Etapas</h2>
-            {(() => {
-              const s = pipelineStatus['tudo']
-              const isTudoRunning = runningCmd === 'tudo' || s?.status === 'running'
-              return (
-                <div className="flex flex-col items-end gap-1">
-                  <div className="flex items-center gap-1.5">
-                    <Button
-                      size="sm"
-                      Icon={Play}
-                      loading={isTudoRunning}
-                      disabled={runningCmd !== null}
-                      onClick={() => runPipeline('tudo')}
-                    >
-                      {isTudoRunning ? 'Rodando tudo...' : 'Rodar tudo'}
-                    </Button>
-                    {/* CANCELAR (09/10): encerra a etapa em andamento e não
-                        começa a próxima. O que já terminou fica publicado. */}
-                    {s?.status === 'running' && (
-                      <button
-                        onClick={cancelarTudo}
-                        disabled={cancelando}
-                        className="text-xs font-semibold px-3 py-1.5 rounded-md border border-red-500/50 text-red-400 hover:bg-red-500/10 disabled:opacity-50 flex items-center gap-1"
-                      >
-                        <XCircle className="w-3.5 h-3.5" /> {cancelando ? 'Cancelando…' : 'Cancelar'}
-                      </button>
-                    )}
-                  </div>
-                  {s && (
-                    <span className={`text-[10px] ${s.status === 'error' ? 'text-red-400' : s.status === 'cancelado' ? 'text-orange-400' : 'text-ink-4'}`}>
-                      {s.status === 'running' ? 'rodando...'
-                        : `${s.status === 'error' ? 'falhou' : s.status === 'cancelado' ? 'cancelado' : 'último'}: ${s.finished_at ?? 's/d'}`}
-                    </span>
-                  )}
-                  {expandedLog === 'tudo' && (s?.error || s?.log) && (
-                    <pre className={`text-[10px] bg-surface-1 rounded p-2 max-w-sm whitespace-pre-wrap break-all overflow-y-auto max-h-40 ${s.status === 'error' ? 'text-red-400' : 'text-ink-2'}`}>
-                      {s.error || s.log}
-                    </pre>
-                  )}
-                  <div className="flex gap-1.5">
-                    {s && s.status !== 'running' && (s.error || s.log) && (
-                      <button
-                        onClick={() => setExpandedLog(expandedLog === 'tudo' ? null : 'tudo')}
-                        className={BOTAO_PEQUENO}
-                      >
-                        {expandedLog === 'tudo' ? 'Esconder resultado' : 'Ver resultado'}
-                      </button>
-                    )}
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    size="sm"
+                    Icon={Play}
+                    loading={isTudoRunning}
+                    disabled={runningCmd !== null || isTudoRunning}
+                    onClick={() => runPipeline('tudo')}
+                  >
+                    {isTudoRunning ? 'Rodando…' : 'Rodar tudo'}
+                  </Button>
+                  {/* CANCELAR (09/10): encerra a etapa em andamento e não
+                      começa a próxima. O que já terminou fica publicado. */}
+                  {s?.status === 'running' && (
                     <button
-                      onClick={() => abrirLog('tudo')}
-                      className={BOTAO_PEQUENO}
+                      onClick={cancelarTudo}
+                      disabled={cancelando}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-md border border-red-500/50 text-red-400 hover:bg-red-500/10 disabled:opacity-50 flex items-center gap-1"
                     >
-                      {logAberto && logCmd === 'tudo' ? 'Esconder log ao vivo' : 'Log ao vivo'}
+                      <XCircle className="w-3.5 h-3.5" /> {cancelando ? 'Cancelando…' : 'Cancelar'}
                     </button>
-                  </div>
+                  )}
                 </div>
-              )
-            })()}
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
-            {pipelineEtapas.map(({ command, label }, idx) =>
-              cartaoDoPasso(command, label, idx + 1))}
-          </div>
-
-          {/* FORA DA SEQUÊNCIA · botão próprio, e o "Rodar tudo" não os chama.
-              Ficam separados e rotulados porque, misturados no grid numerado,
-              eles pareciam etapas que rodam junto · e não rodam. O critério é
-              o do motor: pipeline sem histórico medido não vira custo fixo da
-              rodada diária. */}
-          {pipelineAvulsos.length > 0 && (
-            <div className="mt-3 pt-3 border-t border-line/60">
-              <p className="text-[10px] text-ink-4 mb-2">
-                Fora do "Rodar tudo", rodam só no clique
-              </p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
-                {pipelineAvulsos.map(({ command, label }) =>
-                  cartaoDoPasso(command, label))}
               </div>
-            </div>
-          )}
 
-          {/* ── Log ao vivo ──────────────────────────────────────────────
-              Só admin: a saída crua dos scripts carrega host de banco, liga em
-              coleta, contagem de requisição de API e traceback inteiro quando
-              quebra. A tela de espera do assinante continua em
-              /pipeline-status-public, que mostra só o rótulo da etapa. */}
+              {isTudoRunning && (
+                <div className="mt-3 h-1.5 bg-surface-2 rounded-full overflow-hidden">
+                  <div className="h-full bg-yellow-400 rounded-full transition-all duration-500"
+                       style={{ width: `${Math.max(pct, 3)}%` }} />
+                </div>
+              )}
+
+              {/* Uma bolinha por etapa, na ordem do Rodar Tudo. Clicar abre o
+                  log daquela etapa. */}
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {pipelineEtapas.map((e, i) => {
+                  const st = pipelineStatus[e.command]?.status
+                  return (
+                    <button key={e.command} type="button" onClick={() => abrirLog(e.command)}
+                      title={`${i + 1}. ${e.label}${st ? ` · ${st}` : ''}`}
+                      className={`flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-full border transition-colors ${
+                        st === 'error' ? 'border-red-500/40 text-red-300'
+                        : st === 'running' ? 'border-yellow-500/50 text-ink-1'
+                        : 'border-line text-ink-3 hover:text-ink-1'}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${corChip(st)}`} />
+                      {e.label}
+                    </button>
+                  )
+                })}
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-ink-3">
+                {apiF && (
+                  <span>
+                    API{' '}
+                    <b className={(apiF.pct ?? 0) >= 90 ? 'text-red-400' : (apiF.pct ?? 0) >= 70 ? 'text-orange-400' : 'text-ink-1'}>
+                      {apiF.usado ?? '-'}/{apiF.limite ?? '-'}
+                    </b>{' '}hoje
+                  </span>
+                )}
+                {col && (
+                  <span>
+                    Jogos hoje <b className="text-ink-1">{col.jogos_hoje}</b> · com odds{' '}
+                    <b className={col.jogos_com_odds ? 'text-ink-1' : 'text-red-400'}>{col.jogos_com_odds}</b> · por começar{' '}
+                    <b className="text-ink-1">{col.jogos_por_comecar}</b>
+                  </span>
+                )}
+                <span className="flex gap-1.5 ml-auto">
+                  {s && s.status !== 'running' && (s.error || s.log) && (
+                    <button onClick={() => setExpandedLog(expandedLog === 'tudo' ? null : 'tudo')}
+                            className={BOTAO_PEQUENO}>
+                      {expandedLog === 'tudo' ? 'Esconder resultado' : 'Ver resultado'}
+                    </button>
+                  )}
+                  <button onClick={() => abrirLog('tudo')} className={BOTAO_PEQUENO}>
+                    {logAberto && logCmd === 'tudo' ? 'Esconder log ao vivo' : 'Log ao vivo'}
+                  </button>
+                </span>
+              </div>
+              {expandedLog === 'tudo' && (s?.error || s?.log) && (
+                <pre className={`mt-2 text-[10px] bg-surface-1 rounded p-2 whitespace-pre-wrap break-all overflow-y-auto max-h-40 ${s.status === 'error' ? 'text-red-400' : 'text-ink-2'}`}>
+                  {s.error || s.log}
+                </pre>
+              )}
+              <div id="log-ao-vivo">
           {logAberto && (
             <div className="mt-4 border border-line rounded-md overflow-hidden">
               <div className="flex items-center justify-between gap-3 px-3 py-2 bg-surface-2 border-b border-line">
@@ -1155,7 +1100,127 @@ export default function Admin() {
               </div>
             </div>
           )}
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* Reavaliação perto do apito (08/10): o alerta que o motor grava no
+            fechamento, pra decidir antes do jogo. */}
+        <AdminReavaliacoes />
+        {/* O que roda sozinho (08/10): agendador e medições do motor. */}
+        <AdminAgendador />
+
+        {/* Etapas avulsas: o mesmo cartão de sempre, recolhido. É pra quando
+            uma etapa precisa rodar de novo sozinha. */}
+        <Secao id="pipeline-rodar"
+          titulo="Rodar uma etapa sozinha"
+          oQueE="Cada etapa do Rodar tudo, com botão próprio, e as que só rodam no clique. Use para refazer uma etapa que falhou sem rodar o dia inteiro de novo."
+          tecnico="Pipeline">
+        <div className="card p-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+            {pipelineEtapas.map(({ command, label }, idx) =>
+              cartaoDoPasso(command, label, idx + 1))}
+          </div>
+
+          {/* FORA DA SEQUÊNCIA · botão próprio, e o "Rodar tudo" não os chama.
+              Ficam separados e rotulados porque, misturados no grid numerado,
+              eles pareciam etapas que rodam junto · e não rodam. O critério é
+              o do motor: pipeline sem histórico medido não vira custo fixo da
+              rodada diária. */}
+          {pipelineAvulsos.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-line/60">
+              <p className="text-[10px] text-ink-4 mb-2">
+                Fora do "Rodar tudo", rodam só no clique
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+                {pipelineAvulsos.map(({ command, label }) =>
+                  cartaoDoPasso(command, label))}
+              </div>
+            </div>
+          )}
+
         </div>
+        </Secao>
+
+        <Secao id="pipeline-cota"
+          titulo="Quanto da API de futebol ainda dá pra usar hoje?"
+          oQueE="Toda coleta gasta requisições da API-Football. Se chegar no limite, nada mais atualiza até o dia seguinte."
+          tecnico="Cota da API-Football">
+        {!overview?.api_football && (
+          <p className="text-xs text-ink-4 px-1">Não foi possível ler a cota agora.</p>
+        )}
+        {overview?.api_football && (
+          <div className="card p-4">
+            <div className="flex items-center justify-between mb-2 gap-3">
+              <h2 className="text-xs font-semibold text-ink-3">Cota da API-Football</h2>
+              <span className={`text-[10px] font-black border px-1.5 py-0.5 rounded ${
+                overview.api_football.ativo
+                  ? 'text-green-400 bg-green-500/10 border-green-500/30'
+                  : 'text-red-400 bg-red-500/10 border-red-500/30'
+              }`}>
+                {overview.api_football.plano ?? 'desconhecido'}
+              </span>
+            </div>
+            <div className="flex items-baseline gap-2 font-mono">
+              <span className={`text-3xl font-black ${
+                (overview.api_football.pct ?? 0) >= 90 ? 'text-red-400'
+                  : (overview.api_football.pct ?? 0) >= 70 ? 'text-orange-400' : 'text-green-400'
+              }`}>{overview.api_football.usado ?? '-'}</span>
+              <span className="text-ink-4 text-sm">/ {overview.api_football.limite ?? '-'} hoje</span>
+            </div>
+            <div className="mt-2 h-1.5 bg-surface-2 rounded-full overflow-hidden">
+              <div className={`h-full rounded-full ${
+                (overview.api_football.pct ?? 0) >= 90 ? 'bg-red-500'
+                  : (overview.api_football.pct ?? 0) >= 70 ? 'bg-orange-500' : 'bg-green-500'
+              }`} style={{ width: `${Math.min(100, overview.api_football.pct ?? 0)}%` }} />
+            </div>
+            {overview.api_football.expira_em && (
+              <p className="text-[11px] text-ink-4 mt-2">
+                Plano válido até {new Date(overview.api_football.expira_em).toLocaleDateString('pt-BR')}
+              </p>
+            )}
+          </div>
+        )}
+        </Secao>
+
+        <Secao id="pipeline-coleta"
+          titulo="Os jogos de hoje foram coletados?"
+          oQueE="Quantos jogos, odds e estatísticas estão no banco. Zero aqui explica por que não saiu pick."
+          tecnico="Coleta">
+        {!overview?.coleta && (
+          <p className="text-xs text-ink-4 px-1">Sem dados da coleta agora.</p>
+        )}
+        {overview?.coleta && (
+          <div className="card p-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              {[
+                { label: 'Jogos hoje',      value: overview.coleta.jogos_hoje },
+                { label: 'Por começar',     value: overview.coleta.jogos_por_comecar },
+                { label: 'Jogos com odds',  value: overview.coleta.jogos_com_odds },
+                { label: 'Ligas',           value: overview.coleta.ligas },
+                { label: 'Times',           value: overview.coleta.times },
+                { label: 'Stats jogador',   value: overview.coleta.estatisticas_jogador },
+              ].map(({ label, value }) => (
+                <div key={label} className="bg-surface-1 rounded-md px-3 py-2.5 text-center">
+                  <div className={`font-mono text-xl font-black ${value > 0 ? 'text-ink-1' : 'text-ink-4'}`}>{value}</div>
+                  <div className="text-[10px] text-ink-3 mt-0.5">{label}</div>
+                </div>
+              ))}
+            </div>
+            {overview.coleta.ultimo_jogo_coletado && (
+              <p className="text-[11px] text-ink-4 mt-3">
+                Último jogo com estatística coletada:{' '}
+                {new Date(overview.coleta.ultimo_jogo_coletado).toLocaleDateString('pt-BR')}
+              </p>
+            )}
+            {overview.coleta.estatisticas_jogador === 0 && (
+              <p className="text-[11px] text-orange-400 mt-1">
+                Sem estatística por jogador, o pipeline de defesas de goleiro não gera pick até rodar a coleta.
+              </p>
+            )}
+          </div>
+        )}
         </Secao>
         </>)}
 
