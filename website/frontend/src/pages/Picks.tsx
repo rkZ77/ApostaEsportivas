@@ -1205,16 +1205,10 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
       {/* Header */}
       <div className="pick-head">
         <div className="flex items-center gap-2">
+          {/* Só a etiqueta (09/10/2026, pedido do usuário): a data e os dois
+              primeiros times repetiam, cortados, o que as pernas logo abaixo
+              já mostram inteiro. */}
           <PickTypeBadge type={tipo} />
-          <span className="text-[10px] text-ink-4">
-            {new Date(m.match_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
-            {', '}{legs.length} seleções
-          </span>
-          {legs.length >= 2 && legs[0]?.home && legs[1]?.home && (
-            <span className="text-[9px] text-ink-3 truncate max-w-[140px]">
-              {legs[0].home}, {legs[1].home}
-            </span>
-          )}
         </div>
         <SeloDoEstado result={m.result} isLive={isLive || agoraDasPernas.some(Boolean)} />
       </div>
@@ -1321,8 +1315,9 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
         )}
       </div>
 
-      {/* Legs */}
-      <div className="px-5 py-3 space-y-2">
+      {/* Legs · o card de cartela é largo (duas colunas da grade), então as
+          pernas vão lado a lado. */}
+      <div className="px-5 py-3 grid gap-2 md:grid-cols-2">
         {legs.map((leg: any, i: number) => (
           /* A perna mostra o resultado DELA, não o do bilhete: bilhete GREEN
              implica todas GREEN (dedução); bilhete RED sem o dado da perna
@@ -3721,7 +3716,13 @@ export default function Picks() {
                         variants={staggerContainer} initial="hidden" animate="visible"
                         className={GRADE_DE_PICKS}
                       >
-                        {multiplas.map((m: any) => <MultiplaCard key={m.id} m={m} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isMultiplaLive(m)} />)}
+                        {/* Múltipla larga, como o Bingo: são 2 ou 3 por dia, cada
+                            uma com várias pernas (09/10/2026, pedido do usuário). */}
+                        {multiplas.map((m: any) => (
+                          <div key={m.id} className="md:col-span-2">
+                            <MultiplaCard m={m} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isMultiplaLive(m)} />
+                          </div>
+                        ))}
                       </motion.div>
                     )}
                   </section>
@@ -3744,7 +3745,15 @@ export default function Picks() {
                         variants={staggerContainer} initial="hidden" animate="visible"
                         className={GRADE_DE_PICKS}
                       >
-                        {cartelas.map((b: any) => <BingoCard key={b.id} m={b} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isMultiplaLive(b)} />)}
+                        {/* O Bingo é UMA cartela por dia, com quatro pernas: ocupa duas colunas
+                            da grade (continua alinhado com o resto) e as pernas
+                            vão em 2x2 em vez de uma torre (09/10/2026, pedido
+                            do usuário). */}
+                        {cartelas.map((b: any) => (
+                          <div key={b.id} className="md:col-span-2">
+                            <BingoCard m={b} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isMultiplaLive(b)} />
+                          </div>
+                        ))}
                       </motion.div>
                     )}
                   </section>
@@ -4142,8 +4151,12 @@ export default function Picks() {
               {!canSeeVip ? <VipLockOverlay color="blue" resumo={today?.bloqueados?.multipla} rotulo="múltiplas" tipoBilhete="multipla" resolvidos={today?.bloqueados?.resolvidos_cartelas} /> : todayLoading ? <PickLoading /> : (
                 today?.multiplas?.length > 0 ? (
                   <>
-                    <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-4 mt-4">
-                      {multiplasDaAba.map((m: any) => <MultiplaCard key={m.id} m={m} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isMultiplaLive(m)} />)}
+                    <motion.div variants={staggerContainer} initial="hidden" animate="visible" className={`${GRADE_DE_PICKS} mt-4`}>
+                      {multiplasDaAba.map((m: any) => (
+                        <div key={m.id} className="md:col-span-2">
+                          <MultiplaCard m={m} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isMultiplaLive(m)} />
+                        </div>
+                      ))}
                     </motion.div>
                   </>
                 ) : (
@@ -4209,8 +4222,12 @@ export default function Picks() {
               </div>
               {!canSeeVip ? <VipLockOverlay color="rose" resumo={today?.bloqueados?.bingo} rotulo="cartelas" tipoBilhete="bingo" resolvidos={today?.bloqueados?.resolvidos_cartelas} /> : todayLoading ? <PickLoading /> : (
                 today?.bingo?.length > 0 ? (
-                  <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-4 mt-4">
-                    {bingoDaAba.map((b: any) => <BingoCard key={b.id} m={b} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isMultiplaLive(b)} />)}
+                  <motion.div variants={staggerContainer} initial="hidden" animate="visible" className={`${GRADE_DE_PICKS} mt-4`}>
+                    {bingoDaAba.map((b: any) => (
+                      <div key={b.id} className="md:col-span-2">
+                        <BingoCard m={b} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isMultiplaLive(b)} />
+                      </div>
+                    ))}
                   </motion.div>
                 ) : (
                   /* SEM HORÁRIO NO VAZIO · não há hora fixa de publicação, e
