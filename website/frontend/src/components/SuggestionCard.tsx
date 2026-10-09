@@ -154,13 +154,10 @@ const MAX_UNITS_POR_TIPO: Record<string, number> = {
  * cores de produto no site · aqui ficam as classes equivalentes, porque
  * Tailwind não monta nome de classe a partir de variável.
  */
-const COR_DA_PERNA: Record<string, { circulo: string; texto: string }> = {
-  boost:       { circulo: 'bg-cyan-500/10 text-cyan-400',   texto: 'text-cyan-300' },
-  multipla:    { circulo: 'bg-blue-500/10 text-blue-400',   texto: 'text-blue-300' },
-  multiplas:   { circulo: 'bg-blue-500/10 text-blue-400',   texto: 'text-blue-300' },
-  alavancagem: { circulo: 'bg-orange-500/10 text-orange-400', texto: 'text-orange-300' },
-}
-const COR_DA_PERNA_PADRAO = { circulo: 'bg-surface-3 text-ink-3', texto: 'text-ink-2' }
+/* Desde 09/10 a perna é neutra em todo produto (a cor do produto ficou só na
+   etiqueta do topo · ver BORDA_DO_CARD em utils/resultStyle). */
+const COR_DA_PERNA: Record<string, { circulo: string; texto: string }> = {}
+const COR_DA_PERNA_PADRAO = { circulo: 'bg-surface-3 text-ink-3', texto: 'text-ink-1' }
 
 /* Memoizado no fim do arquivo · este é o card mais repetido do site (lista VIP,
    aba Mercados, histórico), e a tela de Picks repinta a árvore inteira a cada

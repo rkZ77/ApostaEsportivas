@@ -1024,16 +1024,16 @@ const CARTELA = {
     rotulo: 'Múltipla',
     // Azul: a cor que a múltipla já tem em resultStyle.ts e na aba.
     accent: 'via-blue-500', texto: 'text-blue-400',
-    numero: 'text-blue-400', pernaCirculo: 'bg-blue-500/10 text-blue-400',
-    pernaOdd: 'text-blue-300', borda: PICK_TYPE_BORDER.multipla,
+    numero: 'text-green-400', pernaCirculo: 'bg-surface-3 text-ink-3',
+    pernaOdd: 'text-ink-1', borda: PICK_TYPE_BORDER.multipla,
   },
   bingo: {
     rotulo: 'Bingo do Dia',
     // Rosa: as duas cartelas convivem na mesma tela e precisam ser
     // distinguíveis de relance. Ver o comentário em resultStyle.ts.
     accent: 'via-rose-500', texto: 'text-rose-400',
-    numero: 'text-rose-400', pernaCirculo: 'bg-rose-500/10 text-rose-400',
-    pernaOdd: 'text-rose-300', borda: PICK_TYPE_BORDER.bingo,
+    numero: 'text-green-400', pernaCirculo: 'bg-surface-3 text-ink-3',
+    pernaOdd: 'text-ink-1', borda: PICK_TYPE_BORDER.bingo,
   },
 } as const
 
@@ -1200,12 +1200,12 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
       onClick={onClick}
     >
       {/* Accent bar */}
-      <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent ${estilo.accent} to-transparent`} />
+
 
       {/* Header */}
       <div className="pick-head">
         <div className="flex items-center gap-2">
-          <span className={`text-xs font-black ${estilo.texto}`}>{estilo.rotulo}</span>
+          <PickTypeBadge type={tipo} />
           <span className="text-[10px] text-ink-4">
             {new Date(m.match_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
             {', '}{legs.length} seleções
@@ -1536,12 +1536,12 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
       className={`pick-card hover-elev group ${onClick ? 'cursor-pointer' : ''} ${PICK_TYPE_BORDER.alavancagem}`}
       onClick={onClick}
     >
-      <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-orange-500 to-transparent" />
+
 
       {/* Header */}
       <div className="pick-head">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-black text-orange-400">Alavancagem</span>
+          <PickTypeBadge type="alavancagem" />
           {isCombo && <span className="text-[10px] text-blue-400 border border-blue-400/20 bg-blue-400/10 px-2 py-0.5 rounded-md font-bold">{comboLabel}</span>}
         </div>
         <SeloDoEstado result={pick.result} isLive={isLive || agoraDasPernas.some(Boolean)} />
@@ -1554,7 +1554,7 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
             <div className="flex-1">
               <div className="text-[10px] text-ink-3 mb-1">Sua banca alavancagem</div>
               <div className="flex items-center gap-2">
-                <span className="text-2xl font-black text-orange-400">R${stake.toFixed(2)}</span>
+                <span className="text-2xl font-black text-green-400">R${stake.toFixed(2)}</span>
                 {!pick.result && (
                   <>
                     <span className="text-ink-4 text-sm">,</span>
@@ -1600,7 +1600,7 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
             odd={leg.odd != null ? Number(leg.odd) : null}
             mercado={translateMarket(leg.market)} linha={leg.line ? translateLine(leg.line) : null}
             casaDeAposta={leg.house} chance={leg.prob ?? null}
-            cor={{ circulo: 'bg-orange-500/10 text-orange-400', texto: 'text-orange-300' }}
+            cor={{ circulo: 'bg-surface-3 text-ink-3', texto: 'text-ink-1' }}
             aoVivo={agoraDasPernas[i]} Escudo={TeamLogo} />
         ))}
       </div>
