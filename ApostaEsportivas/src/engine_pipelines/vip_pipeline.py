@@ -20,7 +20,8 @@ from services.pick_engine import revalidacao
 from services.pick_engine import analyze_fixture_markets, rank_market_candidates, explain, homologation
 from services.pick_engine.ai_review import review_gate
 from services.pick_engine.config import VIP_CONFIG
-from services.pick_engine.staking import calculate_stake
+from services.pick_engine.staking import calculate_stake, calculate_stake_por_probabilidade
+from services.pick_engine import ranking
 from services.pick_engine import team_profile_model as tpm
 from services.pick_engine import context_model as ctx
 from services.pick_engine import team_strength as ts
@@ -69,6 +70,21 @@ def _picks_free_de_hoje(cur) -> set:
     )
     return {(fid, mt, (line or "").strip().lower())
             for fid, mt, line in cur.fetchall()}
+
+
+def ranking_sombra(aprovados: list, publicado: dict) -> dict | None:
+    """O que o seletor por valor (ranking.escolher_por_valor) teria publicado
+    neste jogo, ao lado do que saiu. So' registro -- ver ranking."""
+    alt = ranking.escolher_por_valor(aprovados)
+    if not alt:
+        return None
+    chave = lambda c: (c.get("market_type"), c.get("value_label"))
+    resumo = lambda c: {"market_type": c.get("market_type"), "market_name": c.get("market_name"),
+                        "value_label": c.get("value_label"), "odd": c.get("odd"),
+                        "taxa_real": c.get("taxa_real"), "ev": c.get("ev"),
+                        "ev_limite_inferior": ranking.ev_limite_inferior(c)}
+    return {"mesmo_pick": chave(alt) == chave(publicado), "seletor_por_valor": resumo(alt),
+            "publicado": resumo(publicado)}
 
 
 def _escolher_pick(picks: list, fixture_id: int, picks_free: set) -> dict | None:
@@ -130,6 +146,16 @@ def _save_pick(cur, fixture: dict, pick: dict, data_quality_score: float | None)
     # antes de contar contra a calibracao (services/pick_engine/calibration.py).
     engine_debug_data = homologation.build_score_breakdown_section(pick, data_quality_score)
     engine_debug_data["ai_review"] = pick.get("ai_review")
+    # SOMBRA (2026-10-09): a stake com o Kelly lendo a probabilidade, e o pick
+    # que o seletor por valor teria escolhido no jogo. Nao mudam nada
+    # publicado -- e' o que scripts/comparar_motor.py e o acompanhamento
+    # diario comparam com o que saiu.
+    sp, su = calculate_stake_por_probabilidade(
+        pick["taxa_real"], pick["confidence"], pick["odd"], pick["ev"], pick_type="vip")
+    engine_debug_data["stake_sombra"] = {"stake_pct": sp, "stake_units": su,
+                                         "publicada": {"stake_pct": stake_pct,
+                                                       "stake_units": stake_units}}
+    engine_debug_data["selecao_sombra"] = pick.get("selecao_sombra")
     # A AMOSTRA (2026-08-27): quais jogos o motor leu, ate' 10 por time, com o
     # contexto do confronto (classico, jogo de volta, placar da ida). Puramente
     # ADITIVO -- nenhum calculo le esta chave; ela existe pra o "Entenda esta
@@ -329,6 +355,7 @@ def run_vip_engine():
                       f"que a Free ja publicou neste jogo.")
                 continue
             best = {**best, "data_quality_score": quality["score"],
+                    "selecao_sombra": ranking_sombra(picks, best),
                     # O BLOCO da amostra mora em `amostra_exibida`, NUNCA em `amostra`
                     # (2026-09-24). `amostra` e' o CONTADOR de jogos que saiu de
                     # stats_model e passou no gate de `min_amostra`; sobrescrever ele

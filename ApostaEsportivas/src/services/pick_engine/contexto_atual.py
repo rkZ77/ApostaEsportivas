@@ -919,7 +919,7 @@ def _viagem_do_visitante(cur, fixture_id, fora: int, quando: datetime) -> float 
 
 def coletar(cur, fixture_id: int, casa: int, fora: int, quando: datetime,
             desfalques: dict, calendario: dict, instante: datetime | None = None,
-            league_id=None, season=None) -> dict:
+            league_id=None, season=None, replay: bool = False) -> dict:
     """Tudo que o motor precisa da partida, numa passada. Cada fonte falha
     sozinha: o que nao veio fica ausente e a falha vai em `falhas`.
 
@@ -939,7 +939,10 @@ def coletar(cur, fixture_id: int, casa: int, fora: int, quando: datetime,
             escal = []
             saida["falhas"].append(f"escalacoes {lado}: {e}")
         api, falha = (None, None)
-        if "tecnico" in fatores_ligados():
+        # REPLAY (scripts/comparar_motor.py): o tecnico sai SO' das escalacoes
+        # anteriores ao jogo. O cache e a /coachs sabem o tecnico de HOJE, que
+        # num jogo de semanas atras e' informacao do futuro.
+        if "tecnico" in fatores_ligados() and not replay:
             api, falha = tecnico_atual(cur, team_id, instante)
         if falha:
             saida["falhas"].append(falha)

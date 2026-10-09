@@ -36,6 +36,45 @@ o guard aqui passa a ser obrigatorio.
 """
 
 
+def calculate_stake_por_probabilidade(probabilidade: float, confidence: float, odd: float,
+                                      ev: float = 0.0, pick_type: str = "vip") -> tuple[float, int]:
+    """A MESMA regua de calculate_stake, com o Kelly lendo a PROBABILIDADE.
+
+    O ACHADO (2026-10-09). VIP e Free chamam calculate_stake com
+    `confidence=pick["confidence"]`, e e' esse numero que entra no Kelly como
+    `p`. So' que `confidence` nao e' chance de acerto: e' a nota composta do
+    motor (0.45*taxa + 0.25*qualidade da amostra + 0.30*confirmacoes, mais
+    ajustes), e costuma ficar ACIMA da taxa_real. Kelly com p inflado aposta
+    mais do que a vantagem justifica. Faltas, Jogadores e Multipla ja' passam
+    a probabilidade.
+
+    Aqui os tiers do VIP continuam lendo `confidence` (sao regra de produto:
+    quanto o motor confia), e so' o Kelly troca de `p`. NAO E' USADO NA
+    PUBLICACAO: os pipelines gravam o resultado como `stake_sombra`, e
+    scripts/comparar_motor.py mede retorno e drawdown das duas reguas nas mesmas
+    partidas. Trocar exige mexer nas tres copias da formula (ver o cabecalho)."""
+    if ev <= 0 and pick_type != "multipla":
+        return 0.01, 1
+    b, p = float(odd) - 1.0, float(probabilidade)
+    if b <= 0 or p <= 0 or p >= 1:
+        return 0.01, 1
+    kelly = (b * p - (1.0 - p)) / b
+    if kelly <= 0:
+        return 0.01, 1
+    if pick_type == "vip":
+        if confidence >= 0.80 and ev > 0.10:
+            cap, max_units = 0.05, 10
+        elif confidence >= 0.72 and ev > 0.05:
+            cap, max_units = 0.04, 7
+        else:
+            cap, max_units = 0.03, 5
+        stake_pct = round(max(0.01, min(cap, kelly * 0.50)), 4)
+    else:
+        cap, kelly_frac, max_units = {"free": (0.02, 0.50, 6)}.get(pick_type, (0.03, 0.50, 5))
+        stake_pct = round(max(0.005, min(cap, kelly * kelly_frac)), 4)
+    return stake_pct, max(1, min(max_units, round(stake_pct / 0.01)))
+
+
 def calculate_stake(confidence: float, odd: float, ev: float = 0.0,
                     stat_strong: bool = False, pick_type: str = "vip") -> tuple[float, int]:
     if stat_strong or (ev <= 0 and pick_type != "multipla"):

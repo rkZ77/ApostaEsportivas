@@ -160,10 +160,16 @@ class MatchStatsService:
                 ls.team_name AS opponent_name,
                 ls.rank AS opponent_rank
             FROM match_statistics ms
-            LEFT JOIN league_standings ls
-                ON ls.team_id = ms.away_team_id
-               AND ls.league_id = ms.league_id
-               AND ls.season = ms.season
+            -- UMA linha de classificacao por adversario (2026-10-09). A tabela
+            -- guarda uma linha por GRUPO, e liga com mais de uma tabela na
+            -- temporada (Argentina: torneio + anual) repetia cada jogo no
+            -- historico -- taxa e amostra infladas. Fica a de mais jogos (a geral).
+            LEFT JOIN LATERAL (
+                SELECT x.team_name, x.rank FROM league_standings x
+                 WHERE x.team_id = ms.away_team_id
+                   AND x.league_id = ms.league_id AND x.season = ms.season
+                 ORDER BY x.played DESC NULLS LAST, x.updated_at DESC NULLS LAST
+                 LIMIT 1) ls ON TRUE
             WHERE ms.home_team_id = %s
               AND ms.season = %s
               AND ms.league_id = %s
@@ -210,10 +216,16 @@ class MatchStatsService:
                 ls.team_name AS opponent_name,
                 ls.rank AS opponent_rank
             FROM match_statistics ms
-            LEFT JOIN league_standings ls
-                ON ls.team_id = ms.home_team_id
-               AND ls.league_id = ms.league_id
-               AND ls.season = ms.season
+            -- UMA linha de classificacao por adversario (2026-10-09). A tabela
+            -- guarda uma linha por GRUPO, e liga com mais de uma tabela na
+            -- temporada (Argentina: torneio + anual) repetia cada jogo no
+            -- historico -- taxa e amostra infladas. Fica a de mais jogos (a geral).
+            LEFT JOIN LATERAL (
+                SELECT x.team_name, x.rank FROM league_standings x
+                 WHERE x.team_id = ms.home_team_id
+                   AND x.league_id = ms.league_id AND x.season = ms.season
+                 ORDER BY x.played DESC NULLS LAST, x.updated_at DESC NULLS LAST
+                 LIMIT 1) ls ON TRUE
             WHERE ms.away_team_id = %s
               AND ms.season = %s
               AND ms.league_id = %s
@@ -319,13 +331,16 @@ class MatchStatsService:
                 ls.team_name AS opponent_name,
                 ls.rank AS opponent_rank
             FROM match_statistics ms
-            LEFT JOIN league_standings ls
-                ON ls.team_id = CASE
-                    WHEN ms.home_team_id = %s THEN ms.away_team_id
-                    ELSE ms.home_team_id
-                END
-               AND ls.league_id = ms.league_id
-               AND ls.season = ms.season
+            -- UMA linha de classificacao por adversario (2026-10-09). A tabela
+            -- guarda uma linha por GRUPO, e liga com mais de uma tabela na
+            -- temporada (Argentina: torneio + anual) repetia cada jogo no
+            -- historico -- taxa e amostra infladas. Fica a de mais jogos (a geral).
+            LEFT JOIN LATERAL (
+                SELECT x.team_name, x.rank FROM league_standings x
+                 WHERE x.team_id = CASE WHEN ms.home_team_id = %s THEN ms.away_team_id ELSE ms.home_team_id END
+                   AND x.league_id = ms.league_id AND x.season = ms.season
+                 ORDER BY x.played DESC NULLS LAST, x.updated_at DESC NULLS LAST
+                 LIMIT 1) ls ON TRUE
             WHERE (ms.home_team_id = %s OR ms.away_team_id = %s)
               {season_filter}
               AND ms.league_id = %s
@@ -441,13 +456,16 @@ class MatchStatsService:
                 ls.team_name AS opponent_name,
                 ls.rank      AS opponent_rank
             FROM match_statistics ms
-            LEFT JOIN league_standings ls
-                ON ls.team_id = CASE
-                    WHEN ms.home_team_id = %s THEN ms.away_team_id
-                    ELSE ms.home_team_id
-                END
-               AND ls.league_id = ms.league_id
-               AND ls.season = ms.season
+            -- UMA linha de classificacao por adversario (2026-10-09). A tabela
+            -- guarda uma linha por GRUPO, e liga com mais de uma tabela na
+            -- temporada (Argentina: torneio + anual) repetia cada jogo no
+            -- historico -- taxa e amostra infladas. Fica a de mais jogos (a geral).
+            LEFT JOIN LATERAL (
+                SELECT x.team_name, x.rank FROM league_standings x
+                 WHERE x.team_id = CASE WHEN ms.home_team_id = %s THEN ms.away_team_id ELSE ms.home_team_id END
+                   AND x.league_id = ms.league_id AND x.season = ms.season
+                 ORDER BY x.played DESC NULLS LAST, x.updated_at DESC NULLS LAST
+                 LIMIT 1) ls ON TRUE
             WHERE (ms.home_team_id = %s OR ms.away_team_id = %s)
               AND ms.status IN {FIM_DE_JOGO}
               {date_filter}

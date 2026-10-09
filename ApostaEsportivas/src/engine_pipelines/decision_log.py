@@ -318,6 +318,14 @@ def _gravar_arquivo(entry: dict) -> bool:
         return False
 
 
+def _ev_inf(c: dict):
+    try:
+        from services.pick_engine.ranking import ev_limite_inferior
+        return ev_limite_inferior(c) if c.get("taxa_real") is not None else None
+    except Exception:
+        return None
+
+
 def _candidate_summary(c: dict) -> dict:
     # faltas/goleiros nao passam pelo caminho generico do motor: os candidatos
     # deles vem de fouls_model/goalkeeper_model, com outro formato (`line` e
@@ -358,6 +366,11 @@ def _candidate_summary(c: dict) -> dict:
         # Efeito tatico (2026-10-08): lambda original e ajustado, as duas
         # probabilidades e o EV -- o que medir_efeito_tatico.py le' nos picks.
         "tatico_sombra": c.get("tatico_sombra"),
+        # Seletor por valor (2026-10-09): o EV no limite inferior da
+        # probabilidade, que e' por onde ele ordenaria -- ver ranking.
+        "ev_limite_inferior": _ev_inf(c),
+        "market_name": c.get("market_name"),
+        "scope": c.get("scope"),
         "line_score": c.get("line_score"),
         "final_score": c.get("final_score"),
         "is_best_pick": c.get("is_best_pick", False),
