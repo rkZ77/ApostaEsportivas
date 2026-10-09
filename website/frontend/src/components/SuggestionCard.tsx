@@ -13,7 +13,7 @@ import { PICK_TYPE_BORDER, cascaDoPick, caixaDoPick } from '../utils/resultStyle
 import AnalysisModal from './AnalysisModal'
 import { Badge, PickTypeBadge, ResultBadge } from './ui'
 import {
-  CampoAoVivo, CampoDoPick, HoraOuMinuto, PernaDoBilhete, PickCardFooter, PickExplainButton, PickProbability, SeloDeResultado,
+  CampoAoVivo, CampoDeu, CampoDoPick, HoraOuMinuto, PernaDoBilhete, PickCardFooter, PickExplainButton, PickProbability, SeloDeResultado,
   SeloDoEstado, VsOuPlacar,
 } from './PickCardParts'
 import { PicksAgoraContext, chanceDoBilhete, chaveDaPerna, chaveDoPick, usePickAgora } from '../lib/picksAgora'
@@ -788,11 +788,8 @@ function SuggestionCard({
                 </CampoDoPick>
               )}
               {mostraDeu && (
-                <CampoDoPick rotulo="Deu">
-                  <dd className="text-xs font-semibold text-ink-1 truncate">
-                    {valorLiquidado(s.market, s.settled_value!)}
-                  </dd>
-                </CampoDoPick>
+                <CampoDeu texto={valorLiquidado(s.market, s.settled_value!)} valor={s.settled_value!}
+                  linha={s.line_value != null ? String(s.line_value) : s.line} />
               )}
             </dl>
           </div>
@@ -823,11 +820,7 @@ function SuggestionCard({
               </CampoDoPick>
             )}
             {mostraDeu && (
-              <CampoDoPick rotulo="Deu">
-                <dd className="text-xs font-semibold text-ink-1 truncate">
-                  {valorLiquidado(s.market, s.settled_value!)}
-                </dd>
-              </CampoDoPick>
+              <CampoDeu texto={valorLiquidado(s.market, s.settled_value!)} valor={s.settled_value!} linha={s.line} />
             )}
           </dl>
         )}

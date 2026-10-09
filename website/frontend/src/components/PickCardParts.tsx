@@ -226,7 +226,7 @@ export function PickProbability({
         <span className="text-ink-4 flex items-center gap-1.5">
           {pctAoVivo != null ? (
             <>
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" aria-hidden />
+              <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" aria-hidden />
               Chance agora
             </>
           ) : pctMercado != null ? 'Chance na odd de agora' : label}
@@ -278,8 +278,8 @@ export function SeloDoEstado({ result, aoVivo, isLive }: {
   if (result) return <ResultBadge result={result} emDestaque />
   if (aoVivo || isLive) {
     return (
-      <Badge tone="indigo" className="tabular-nums">
-        <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" aria-hidden />
+      <Badge tone="sky" className="tabular-nums">
+        <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" aria-hidden />
         {aoVivo ? rotuloDoTempo(aoVivo) : 'Ao vivo'}
       </Badge>
     )
@@ -398,6 +398,38 @@ export function CampoDoPick({ rotulo, children, className }: {
   )
 }
 
+/* ── O que deu no jogo ──────────────────────────────────────────────────── */
+
+/** "Over 26.5" / "Menos de 26.5" -> 26.5. */
+export function numeroDaLinha(linha?: string | null): number | null {
+  const m = String(linha ?? '').replace(',', '.').match(/(\d+(?:\.\d+)?)/)
+  return m ? Number(m[1]) : null
+}
+
+/**
+ * "27 finalizações, 0.5 acima da linha" (09/10/2026, pedido do usuário: "deu
+ * RED, mas por causa de 1"). O número sozinho já existia no card Premium; a
+ * distância é o que mostra que a leitura passou perto, e o Free não tinha nem
+ * o número.
+ */
+export function CampoDeu({ texto, valor, linha }: { texto: string; valor: number; linha?: string | null }) {
+  const l = numeroDaLinha(linha)
+  const dist = l != null ? Math.abs(valor - l) : null
+  const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1))
+  return (
+    <CampoDoPick rotulo="Deu">
+      <dd className="text-xs font-semibold text-ink-1 truncate">
+        {texto}
+        {dist != null && dist > 0 && (
+          <span className="text-ink-4 font-normal ml-1.5">
+            {fmt(dist)} {valor > l! ? 'acima' : 'abaixo'} da linha
+          </span>
+        )}
+      </dd>
+    </CampoDoPick>
+  )
+}
+
 /* ── A perna do bilhete ─────────────────────────────────────────────────── */
 
 /*
@@ -438,7 +470,7 @@ export function PernaDoBilhete({
   const lr = resultado ?? undefined
   const caixa = lr === 'GREEN' ? 'border-green-500/20 bg-green-500/5'
     : lr === 'RED' ? 'border-red-500/20 bg-red-500/5'
-    : aoVivo ? 'border-indigo-500/30 bg-surface-2/60'
+    : aoVivo ? 'border-sky-500/30 bg-surface-2/60'
     : 'border-line bg-surface-2/60'
   const pctAgora = aoVivo?.chance != null ? Math.round(aoVivo.chance * 100) : null
   return (
@@ -457,7 +489,7 @@ export function PernaDoBilhete({
           </div>
         )}
         {aoVivo && !lr && (
-          <span className="text-[10px] font-bold text-indigo-300 tabular-nums shrink-0">{rotuloDoMinuto(aoVivo)}</span>
+          <span className="text-[10px] font-bold text-sky-300 tabular-nums shrink-0">{rotuloDoMinuto(aoVivo)}</span>
         )}
         {odd != null && Number.isFinite(Number(odd)) && (
           <span className={cn('font-mono font-black text-sm shrink-0',
