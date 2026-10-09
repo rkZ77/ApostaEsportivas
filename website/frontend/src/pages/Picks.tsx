@@ -24,7 +24,7 @@ import { Escada, LinhaCaminho,
          type AlavStep, type CaminhoEncerrado } from '../components/alavancagem/caminho'
 import AnalysisModal from '../components/AnalysisModal'
 import {
-  CampoAoVivo, CampoDoPick, HoraOuMinuto, PernaDoBilhete, PickCardFooter, PickExplainButton, PickProbability, SeloDeResultado,
+  CampoAoVivo, CampoDeu, CampoDoPick, HoraOuMinuto, PernaDoBilhete, PickCardFooter, PickExplainButton, PickProbability, SeloDeResultado,
   SeloDoEstado, VsOuPlacar,
 } from '../components/PickCardParts'
 import {
@@ -58,7 +58,7 @@ import { useShareStoryImage, useShareAlavancagemImage, useShareBilheteImage } fr
 import { useOddAtualizada } from '../hooks/useOddAtualizada'
 import { useBilhete, useRecarregarQuandoMudar } from '../lib/sincronia'
 import { useOddAgora } from '../hooks/useOddsAgora'
-import { translateMarket, translateLine, translateTeamName } from '../utils/marketTranslate'
+import { translateMarket, translateLine, translateTeamName, valorLiquidado } from '../utils/marketTranslate'
 // Copa do Mundo 2026 · fase pelo match_date
 function wcPhase(dateStr?: string): string | null {
   if (!dateStr) return null
@@ -905,6 +905,10 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
                 {(seguido && casaSeguida) ? casaSeguida : dica.bet_house}
               </dd>
             </CampoDoPick>
+          )}
+          {dica.result && dica.settled_value != null && (
+            <CampoDeu texto={valorLiquidado(dica.market, Number(dica.settled_value))}
+              valor={Number(dica.settled_value)} linha={dica.line} />
           )}
         </dl>
         </div>

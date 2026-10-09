@@ -219,13 +219,13 @@ function Placar({ jogo, dados, aoVivo }: { jogo: JogoBase; dados: RaioX | null; 
           <Time id={f?.home_team_id ?? jogo.home_team_id} nome={f?.home_team || jogo.home_team} forma={formaHome} />
           {aoVivo ? (
             /* Rolando: o placar no lugar do horário, e o tempo e o minuto
-               embaixo, no índigo do Ao Vivo do site. */
+               embaixo, no azul do Ao Vivo do site. */
             <div className="shrink-0 pt-2 text-center">
               <div className="font-mono text-3xl font-black text-ink-1 tabular-nums">
                 {aoVivo.home_goals ?? 0}<span className="text-ink-4 mx-1.5">-</span>{aoVivo.away_goals ?? 0}
               </div>
-              <div className="mt-1 inline-flex items-center gap-1.5 text-[11px] font-bold text-indigo-300 tabular-nums">
-                <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" aria-hidden />
+              <div className="mt-1 inline-flex items-center gap-1.5 text-[11px] font-bold text-sky-300 tabular-nums">
+                <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" aria-hidden />
                 {rotuloDoTempo({ status: aoVivo.status, minuto: aoVivo.elapsed })}
               </div>
             </div>

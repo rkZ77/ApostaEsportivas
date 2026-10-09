@@ -97,6 +97,10 @@ def test_a_tela_mostra_o_numero_com_a_unidade_do_mercado():
     assert "unidadeDoMercado" in corpo and "sujeitoDoMercado" in corpo
 
     card = _ler(_FRONT, "components", "SuggestionCard.tsx")
-    assert 'rotulo="Deu"' in card
+    # Desde 09/10 o campo e' CampoDeu (PickCardParts), que tambem diz a que
+    # distancia da linha o jogo fechou · e o card Free usa o mesmo.
+    assert "<CampoDeu" in card
+    assert 'rotulo="Deu"' in _ler(_FRONT, "components", "PickCardParts.tsx")
+    assert "<CampoDeu" in _ler(_FRONT, "pages", "Picks.tsx")
     # Só com o pick liquidado: antes disso o número ainda está mudando.
     assert "s.result && s.settled_value != null" in card

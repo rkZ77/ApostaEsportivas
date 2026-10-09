@@ -1290,6 +1290,20 @@ def get_today_suggestions(
                 "mercados": teaser_mercados,
             }
 
+        # ── O QUE DEU NO JOGO, em todo pick liquidado (09/10/2026) ──────────
+        #
+        # Pedido do usuario: "deu RED, mas por causa de 1". A liquidacao ja'
+        # grava o contador que decidiu (`settled_value`) em todas estas
+        # tabelas, e o card ja' sabe mostrar ("Deu"); so' o Ao Vivo e o Player
+        # Stats recebiam o numero. Uma consulta por tabela, e so' com pick
+        # liquidado na lista.
+        for _chave, _tabela in (("dicas_do_dia", "picks_free"), ("vip", "picks_vip"),
+                                ("faltas", "picks_faltas"), ("goleiros", "picks_goleiros"),
+                                ("boost", "picks_boost")):
+            _lista = [p for p in (result.get(_chave) or []) if isinstance(p, dict) and p.get("result")]
+            if _lista:
+                _juntar_auditoria(cur, _lista, _tabela)
+
         # ── is_followed de TODOS os tipos, numa consulta so' ────────────────
         #
         # Eram SEIS idas ao banco: uma por tipo de pick (vip, faltas, goleiros,
