@@ -447,8 +447,13 @@ function SuggestionCard({
    * em relação à linha. Repetir o número liquidado no meio dos campos fazia o
    * card ao vivo ter um campo a mais que todos os outros, e logo abaixo da
    * linha apostada · lia como se a aposta fosse aquele número.
+   *
+   * VOLTOU EM 09/10/2026 (pedido do usuário: "o Ao Vivo não está padronizado").
+   * O motivo acima era o contador correndo no próprio card; hoje, com o pick
+   * liquidado, o card do Ao Vivo não mostra contador nenhum, e sem o "Final"
+   * ele era o único que não dizia quanto o jogo deu.
    */
-  const mostraDeu = !!s.result && s.settled_value != null && pickType !== 'live'
+  const mostraDeu = !!s.result && s.settled_value != null
 
   // Sugestão nunca pode nascer acima do teto: em mercado com teto baixo
   // (faltas/goleiros) o Kelly do calcVipStake chegava a pedir mais unidades

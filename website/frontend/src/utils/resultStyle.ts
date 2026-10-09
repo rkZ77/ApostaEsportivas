@@ -142,7 +142,7 @@ const BORDA_DO_CARD = 'border-sky-400/20 hover:border-sky-400/40'
 export const PICK_TYPE_BORDER: Record<string, string> = {
   vip: BORDA_DO_CARD, free: BORDA_DO_CARD, multipla: BORDA_DO_CARD, multiplas: BORDA_DO_CARD,
   bingo: BORDA_DO_CARD, alavancagem: BORDA_DO_CARD, faltas: BORDA_DO_CARD, goleiros: BORDA_DO_CARD,
-  player_stats: BORDA_DO_CARD, boost: BORDA_DO_CARD, live: 'border-accent/25 hover:border-accent/50',
+  player_stats: BORDA_DO_CARD, boost: BORDA_DO_CARD, live: BORDA_DO_CARD,
 }
 
 /** Classes Tailwind pro badge de tipo de pick (VIP/Free/Múltipla/Alavancagem). */

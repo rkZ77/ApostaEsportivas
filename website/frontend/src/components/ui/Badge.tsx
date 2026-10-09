@@ -177,7 +177,12 @@ export function ResultBadge({
         'inline-flex items-center text-[10px] font-bold tracking-wide',
         'px-1.5 py-0.5 rounded-sm border shrink-0',
         rs.bg, rs.border, rs.text,
-        emDestaque && result === 'GREEN' && 'text-xs px-2 py-1 border-green-500/60',
+        /* Todo resultado no MESMO tamanho no card (09/10/2026): só o GREEN
+           crescia, e o topo de um card com PUSH ou RED ficava mais baixo que o
+           do vizinho · a grade inteira saía desalinhada. O GREEN segue com a
+           borda mais forte, que é o destaque de verdade. */
+        emDestaque && 'text-xs px-2 py-1',
+        emDestaque && result === 'GREEN' && 'border-green-500/60',
         className,
       )}
     >
