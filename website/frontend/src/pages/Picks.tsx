@@ -1035,6 +1035,16 @@ const CARTELA = {
 
 type TipoDeCartela = keyof typeof CARTELA
 
+/*
+ * UMA LARGURA DE CARD NO SITE INTEIRO (09/10/2026, pedido do usuário: "deixa
+ * igual ao Premium"). Free, múltipla, Bingo e alavancagem tinham grades
+ * próprias: a múltipla sozinha esticava até max-w-2xl, a alavancagem ocupava a
+ * linha toda, o Free parava em três colunas. Lado a lado, o mesmo card mudava
+ * de tamanho de uma seção pra outra. Agora todos seguem a grade do Premium; a
+ * perna do bilhete (PernaDoBilhete) já trunca nome comprido sem quebrar.
+ */
+const GRADE_DE_PICKS = 'grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4'
+
 // Card de cartela (múltipla e Bingo do Dia)
 function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla' }: { m: any; onClick?: () => void; banca?: { bankroll_current: number; unit_value: number } | null; isLive?: boolean; tipo?: TipoDeCartela }) {
   const estilo = CARTELA[tipo]
@@ -3647,7 +3657,7 @@ export default function Picks() {
                   {/* GRADE, COMO O PREMIUM (2026-10-07, pedido do usuário). Desde
                       que o Free passou a ter até 3 por dia, um embaixo do outro
                       na largura toda virava uma parede no computador. */}
-                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  <div className={GRADE_DE_PICKS}>
                     {dicasDoDia(today).map((d: any) => (
                       <PickSeguroCard key={d.id} dica={d} compact banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(d.fixture_id)} />
                     ))}
@@ -3705,11 +3715,7 @@ export default function Picks() {
                          o max-w impede que vire uma faixa gigante no ultrawide. */
                       <motion.div
                         variants={staggerContainer} initial="hidden" animate="visible"
-                        className={`grid gap-4 ${
-                          multiplas.length === 1 ? 'max-w-2xl'
-                          : multiplas.length === 2 ? 'md:grid-cols-2'
-                          : 'md:grid-cols-2 xl:grid-cols-3'
-                        }`}
+                        className={GRADE_DE_PICKS}
                       >
                         {multiplas.map((m: any) => <MultiplaCard key={m.id} m={m} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isMultiplaLive(m)} />)}
                       </motion.div>
@@ -3732,7 +3738,7 @@ export default function Picks() {
                          ele é ainda mais forte: são quatro pernas empilhadas. */
                       <motion.div
                         variants={staggerContainer} initial="hidden" animate="visible"
-                        className={`grid gap-4 ${cartelas.length === 1 ? 'max-w-2xl' : 'md:grid-cols-2'}`}
+                        className={GRADE_DE_PICKS}
                       >
                         {cartelas.map((b: any) => <BingoCard key={b.id} m={b} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isMultiplaLive(b)} />)}
                       </motion.div>
@@ -3756,6 +3762,7 @@ export default function Picks() {
                           e reinveste o lucro a cada GREEN. Reset automático no RED. Odds alvo 1.50.
                         </p>
                       </div>
+                      <div className={GRADE_DE_PICKS}>
                       <AlavancagemCard
                         pick={today.alavancagem}
                         userBankroll={userAlavSerie?.configured ? userAlavSerie.current_bankroll : undefined}
@@ -3764,6 +3771,7 @@ export default function Picks() {
                         degrau={degrauDoPick(today.alavancagem?.id)}
                         meta={userAlavSerie?.meta ?? null}
                       />
+                      </div>
                       <button onClick={() => setTab('alavancagem')}
                         className="mt-3 w-full text-center text-xs text-orange-400 hover:text-orange-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong">
                         Ver histórico da série
@@ -3953,7 +3961,7 @@ export default function Picks() {
                 {dicasDoDia(today).length > 0
                   ? (
                     /* Mesma grade da aba Hoje e do Premium · ver a nota lá. */
-                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    <div className={GRADE_DE_PICKS}>
                       {dicasDoDia(today).map((d: any) => (
                         <PickSeguroCard key={d.id} dica={d} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(d.fixture_id)} />
                       ))}
@@ -4299,6 +4307,7 @@ export default function Picks() {
                   <div>
                     <SectionHeader color="bg-orange-400" label="Alavancagem do Dia" />
                     {today?.alavancagem ? (
+                      <div className={GRADE_DE_PICKS}>
                       <AlavancagemCard
                         pick={today.alavancagem}
                         userBankroll={userAlavSerie?.configured ? userAlavSerie.current_bankroll : undefined}
@@ -4307,6 +4316,7 @@ export default function Picks() {
                         degrau={degrauDoPick(today.alavancagem?.id)}
                         meta={userAlavSerie?.meta ?? null}
                       />
+                      </div>
                     ) : (
                       <div className="card p-8 text-center border-dashed border-orange-500/20">
                         <p className="text-ink-3 text-sm font-semibold">Pick de alavancagem não gerado para hoje.</p>

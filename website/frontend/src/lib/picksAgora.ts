@@ -107,12 +107,12 @@ export function rotuloDoMinuto(l: Pick<LeituraAoVivo, 'status' | 'minuto'>): str
   return `${l.minuto}'`
 }
 
-/** "1º tempo 23'", "2º tempo 59'", "Intervalo" · o lugar do horário no topo do card. */
+/** "1ºT 23'", "2ºT 59'", "Intervalo" · curto, cabe no selo do topo do card junto do ponto do Ao Vivo. */
 export function rotuloDoTempo(l: Pick<LeituraAoVivo, 'status' | 'minuto'>): string {
   const min = l.minuto != null ? ` ${l.minuto}'` : ''
-  if (l.status === '1H') return `1º tempo${min}`
-  if (l.status === '2H') return `2º tempo${min}`
-  if (l.status === 'ET') return `Prorrogação${min}`
+  if (l.status === '1H') return `1ºT${min}`
+  if (l.status === '2H') return `2ºT${min}`
+  if (l.status === 'ET') return `Prorrog.${min}`
   return rotuloDoMinuto(l)
 }
 

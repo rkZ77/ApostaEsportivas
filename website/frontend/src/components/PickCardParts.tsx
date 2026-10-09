@@ -278,9 +278,9 @@ export function SeloDoEstado({ result, aoVivo, isLive }: {
   if (result) return <ResultBadge result={result} emDestaque />
   if (aoVivo || isLive) {
     return (
-      <Badge tone="indigo">
+      <Badge tone="indigo" className="tabular-nums">
         <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" aria-hidden />
-        Ao vivo
+        {aoVivo ? rotuloDoTempo(aoVivo) : 'Ao vivo'}
       </Badge>
     )
   }
@@ -289,12 +289,9 @@ export function SeloDoEstado({ result, aoVivo, isLive }: {
 
 /** O horário do jogo no topo, ou o tempo e o minuto quando ele está rolando. */
 export function HoraOuMinuto({ kickoff, aoVivo }: { kickoff?: string | null; aoVivo?: LeituraAoVivo | null }) {
-  if (aoVivo) {
-    return (
-      <span className="text-[10px] font-bold text-indigo-300 tabular-nums shrink-0">{rotuloDoTempo(aoVivo)}</span>
-    )
-  }
-  if (!kickoff) return null
+  /* Rolando, o tempo e o minuto vão no selo da direita ("● 2ºT 81'"), junto
+     do Ao Vivo · repetir aqui era a mesma informação duas vezes na linha. */
+  if (aoVivo || !kickoff) return null
   return (
     <span className="flex items-center gap-1 text-[10px] text-ink-4 shrink-0">
       <Clock className="w-3 h-3" />
