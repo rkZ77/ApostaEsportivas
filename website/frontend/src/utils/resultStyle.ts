@@ -129,18 +129,20 @@ export const PICK_TYPE_HEX: Record<string, string> = {
  * defesas) usem a casca `.pick-card` e se diferenciem só pela cor da borda,
  * em vez de cada um trazer a sua própria casca.
  */
+/*
+ * UMA BORDA SÓ (09/10/2026, decisão do usuário: "cada produto com sua cor não
+ * combina"). Borda, faixa e números do card eram da cor do produto, e cinco
+ * produtos lado a lado viravam um arco-íris disputando com o verde do GREEN e
+ * o azul do Ao Vivo. Agora todo card tem a mesma borda, no azul-claro que o
+ * usuário escolheu; a cor do produto
+ * fica SÓ na etiqueta do topo (PICK_TYPE_CLS, logo abaixo), que é o que diz
+ * de relance de qual produto ele é.
+ */
+const BORDA_DO_CARD = 'border-sky-400/20 hover:border-sky-400/40'
 export const PICK_TYPE_BORDER: Record<string, string> = {
-  vip:         'border-green-500/20 hover:border-green-500/40',
-  free:        'border-green-500/20 hover:border-green-500/40',
-  multipla:    'border-blue-400/20 hover:border-blue-400/40',
-  multiplas:   'border-blue-400/20 hover:border-blue-400/40',
-  bingo:       'border-rose-400/20 hover:border-rose-400/40',
-  alavancagem: 'border-orange-400/20 hover:border-orange-400/40',
-  faltas:      'border-purple-400/20 hover:border-purple-400/40',
-  goleiros:    'border-sky-400/20 hover:border-sky-400/40',
-  player_stats:'border-amber-400/20 hover:border-amber-400/40',
-  boost:       'border-cyan-400/20 hover:border-cyan-400/40',
-  live:        'border-accent/25 hover:border-accent/50',
+  vip: BORDA_DO_CARD, free: BORDA_DO_CARD, multipla: BORDA_DO_CARD, multiplas: BORDA_DO_CARD,
+  bingo: BORDA_DO_CARD, alavancagem: BORDA_DO_CARD, faltas: BORDA_DO_CARD, goleiros: BORDA_DO_CARD,
+  player_stats: BORDA_DO_CARD, boost: BORDA_DO_CARD, live: 'border-accent/25 hover:border-accent/50',
 }
 
 /** Classes Tailwind pro badge de tipo de pick (VIP/Free/Múltipla/Alavancagem). */
