@@ -256,6 +256,32 @@ export function resultadoDoJogo(j: JogoDoTime): Resultado | null {
   return j.gols_pro > j.gols_contra ? 'V' : j.gols_pro === j.gols_contra ? 'E' : 'D'
 }
 
+/*
+ * Resultado final e chance dupla (2026-10-09, pedido do usuário).
+ *
+ * Mesma leitura de "faz x cede" dos mercados de time: "mandante vence" é o
+ * mandante vencendo nos jogos dele E o visitante perdendo nos dele. Cada
+ * escolha diz que resultado conta em cada lado.
+ */
+export type EscolhaDeResultado = '1' | 'X' | '2' | '1X' | '12' | 'X2'
+
+export const RESULTADOS_ACEITOS: Record<EscolhaDeResultado, { home: Resultado[]; away: Resultado[] }> = {
+  '1': { home: ['V'], away: ['D'] },
+  X: { home: ['E'], away: ['E'] },
+  '2': { home: ['D'], away: ['V'] },
+  '1X': { home: ['V', 'E'], away: ['E', 'D'] },
+  '12': { home: ['V', 'D'], away: ['V', 'D'] },
+  X2: { home: ['E', 'D'], away: ['V', 'E'] },
+}
+
+/** 1 = o jogo terminou do jeito da escolha, 0 = não, null = sem placar. */
+export function serieDeResultado(jogos: JogoDoTime[], aceitos: Resultado[]): Array<number | null> {
+  return jogos.map(j => {
+    const r = resultadoDoJogo(j)
+    return r == null ? null : aceitos.includes(r) ? 1 : 0
+  })
+}
+
 /** Cor do número de taxa: verde quando bate com folga, âmbar no meio. */
 export function tomDaTaxa(pct: number | null): 'bom' | 'medio' | 'ruim' | 'nenhum' {
   if (pct == null) return 'nenhum'

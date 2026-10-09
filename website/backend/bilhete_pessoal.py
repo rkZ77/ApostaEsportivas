@@ -61,6 +61,13 @@ _COLUNA_1T = {"goals": "goals_ht", "corners": "corners_1h",
               "yellow_cards": "yellow_cards_1h", "shots_on": "shots_on_1h"}
 PERIODOS = ("total", "1t", "2t")
 
+#: Resultado final (1X2) e chance dupla (09/10, pedido do usuario). Escolha ->
+#: desfechos que dao GREEN, pelo placar dos 90 minutos.
+_ESCOLHAS_RESULTADO = {
+    "1": {"1"}, "X": {"X"}, "2": {"2"},
+    "1X": {"1", "X"}, "12": {"1", "2"}, "X2": {"X", "2"},
+}
+
 #: Estatistica de jogador -> coluna de player_match_stats.
 _ESTAT_JOGADOR = {
     "chutes": "shots_total", "chutes_alvo": "shots_on", "gols": "goals_total",
@@ -121,6 +128,11 @@ def validar_pernas(pernas) -> list[dict]:
             mercado = p.get("mercado")
             if mercado == "btts":
                 perna = {**base, "tipo": "time", "mercado": "btts"}
+            elif mercado == "resultado":
+                escolha = str(p.get("escolha") or "").upper()
+                if escolha not in _ESCOLHAS_RESULTADO:
+                    raise PernaInvalida("resultado invalido")
+                perna = {**base, "tipo": "time", "mercado": "resultado", "escolha": escolha}
             elif mercado in _MERCADOS_TIME:
                 direcao = p.get("direcao")
                 if direcao not in ("mais", "menos"):
@@ -169,6 +181,10 @@ def _valor_do_time(perna: dict, jogo: dict):
     if perna["mercado"] == "btts":
         hg, ag = jogo.get("home_goals"), jogo.get("away_goals")
         return None if hg is None or ag is None else (1 if hg > 0 and ag > 0 else 0)
+    if perna["mercado"] == "resultado":
+        # O placar, que e' o que a tela mostra ("Saiu 2-1").
+        hg, ag = jogo.get("home_goals"), jogo.get("away_goals")
+        return None if hg is None or ag is None else f"{hg}-{ag}"
     escopo, col = _MERCADOS_TIME[perna["mercado"]]
     periodo = perna.get("periodo") or "total"
 
@@ -214,6 +230,10 @@ def liquidar_perna(perna: dict, jogo: dict | None, jogador: dict | None,
             return ("VOID", None, "sem estatistica do jogo") if vencido else (None, None, None)
         if perna["mercado"] == "btts":
             return ("GREEN" if valor else "RED"), valor, None
+        if perna["mercado"] == "resultado":
+            hg, ag = jogo["home_goals"], jogo["away_goals"]
+            saiu = "1" if hg > ag else "2" if hg < ag else "X"
+            return ("GREEN" if saiu in _ESCOLHAS_RESULTADO[perna["escolha"]] else "RED"), valor, None
         return _decide(valor, perna["direcao"], perna["linha"]), valor, None
 
     # jogador
@@ -278,6 +298,10 @@ def mercado_ao_vivo(perna: dict) -> tuple[str, str | None, str] | None:
         return None
     if perna["mercado"] == "btts":
         return "Ambas Marcam", "btts", "Sim"
+    if perna["mercado"] == "resultado":
+        # settlement.settle_outcome le "1", "X", "2", "1X", "12", "X2".
+        nome = "Resultado Final" if len(perna["escolha"]) == 1 else "Dupla Chance"
+        return nome, "result", perna["escolha"]
     base = perna["mercado"].removesuffix("_time")
     nome, mtype = _FAMILIA_AO_VIVO[base]
     if perna["mercado"].endswith("_time"):

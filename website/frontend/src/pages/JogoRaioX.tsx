@@ -34,7 +34,7 @@ export default function JogoRaioX() {
 
   return (
     <PageShell title={titulo} noindex width="narrow" footer={false}
-      bar={{ back: '/fixtures', title: 'Raio-X do jogo' }}>
+      bar={{ back: '/jogos', title: 'Raio-X do jogo' }}>
       {pode ? (
         <>
           <RaioXDoJogo jogo={jogo} />

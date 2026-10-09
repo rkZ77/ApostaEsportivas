@@ -272,7 +272,9 @@ export default function App() {
                 <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
                 <Route path="/picks" element={<PrivateRoute><Picks /></PrivateRoute>} />
                 <Route path="/results" element={<Navigate to="/resultados" replace />} />
-                <Route path="/fixtures" element={<PrivateRoute><Fixtures /></PrivateRoute>} />
+                <Route path="/jogos" element={<PrivateRoute><Fixtures /></PrivateRoute>} />
+                {/* Endereço antigo (até 09/10/2026) · link salvo e favorito seguem funcionando. */}
+                <Route path="/fixtures" element={<Navigate to="/jogos" replace />} />
                 {/* Raio-X de um jogo em página própria · é o que o celular abre
                     ao tocar no jogo (no computador ele vive ao lado da lista). */}
                 <Route path="/jogos/:fixtureId" element={<PrivateRoute><JogoRaioX /></PrivateRoute>} />

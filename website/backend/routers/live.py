@@ -2598,7 +2598,9 @@ def _perna_pessoal_ao_vivo(perna: dict) -> dict:
         leg["resultado"] = resultado
         leg["pick_status"] = _STATUS_DA_PERNA[resultado]
         leg["is_locked"] = True
-        if perna.get("valor") is not None:
+        # Resultado/chance dupla gravam o placar ("2-1"), que nao e' contador:
+        # a tela ao vivo ja' mostra o placar do jogo.
+        if isinstance(perna.get("valor"), (int, float)):
             leg["current_val"] = perna["valor"]
         if perna.get("motivo"):
             leg["motivo"] = perna["motivo"]

@@ -7,8 +7,8 @@ import { LeagueLogo, PaisDaLigaTag, PlayerPhoto, TeamLogo } from '../TeamLogo'
 import { nomeDaLigaPt, rotuloDaRodada } from '../../lib/paisDaLiga'
 import {
   ambasMarcam, comPeriodo, ehGoleiro, ESTATS_DE_JOGADOR, fraseDoJogador, MERCADOS_DE_TIME, MERCADOS_PRINCIPAIS, numero,
-  resultadoDoJogo, ROTULO_PERIODO, rotuloDaLinha, taxa, taxaDoJogador, tomDaTaxa,
-  type EstatDeJogador, type Jogador, type JogoDoTime, type Lado, type Periodo, type RaioX, type Taxa,
+  resultadoDoJogo, RESULTADOS_ACEITOS, ROTULO_PERIODO, rotuloDaLinha, serieDeResultado, taxa, taxaDoJogador, tomDaTaxa,
+  type EscolhaDeResultado, type EstatDeJogador, type Jogador, type JogoDoTime, type Lado, type Periodo, type RaioX, type Taxa,
 } from '../../lib/raioX'
 import { alternar, useBilheteMontado, type Selecao } from '../../lib/bilheteMontado'
 import { oddDaSelecao, vantagem, type OddDaCasa } from '../../lib/oddsDoJogo'
@@ -384,7 +384,10 @@ function AbaMercados({ dados, nomeJogo, odds }: { dados: RaioX; nomeJogo: string
   /* Mercado + DE QUEM (os dois somados, ou um time só) · ver MERCADOS_PRINCIPAIS. */
   const [principal, setPrincipal] = useState(MERCADOS_PRINCIPAIS[0].id)
   const [quem, setQuem] = useState<'jogo' | 'home' | 'away'>('jogo')
-  const par = MERCADOS_PRINCIPAIS.find(p => p.id === principal)!
+  /* "Resultado" não é mercado de linha e tem quadro próprio (QuadrosDeResultado);
+     o par de cima continua valendo pra os hooks não mudarem de ordem. */
+  const ehResultado = principal === 'resultado'
+  const par = MERCADOS_PRINCIPAIS.find(p => p.id === principal) ?? MERCADOS_PRINCIPAIS[0]
   const id = quem === 'jogo' ? par.jogo : par.time
   const mercado = MERCADOS_DE_TIME.find(m => m.id === id)!
   const [periodoEscolhido, setPeriodo] = useState<Periodo>('total')
@@ -546,9 +549,22 @@ function AbaMercados({ dados, nomeJogo, odds }: { dados: RaioX; nomeJogo: string
     )
   }
 
+  /* Resultado entra logo depois de Gols: é o mercado mais apostado. */
+  const chips = MERCADOS_PRINCIPAIS.map(m => ({ id: m.id, rotulo: m.rotulo }))
+  chips.splice(1, 0, { id: 'resultado', rotulo: 'Resultado' })
+
+  if (ehResultado) {
+    return (
+      <div className="space-y-3">
+        <Chips opcoes={chips} valor={principal} onChange={setPrincipal} />
+        <QuadrosDeResultado dados={dados} nomeJogo={nomeJogo} odds={odds} />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-3">
-      <Chips opcoes={MERCADOS_PRINCIPAIS.map(m => ({ id: m.id, rotulo: m.rotulo }))} valor={principal} onChange={setPrincipal} />
+      <Chips opcoes={chips} valor={principal} onChange={setPrincipal} />
 
       <div className="card p-3 space-y-3">
         {/* DE QUEM: os dois times somados, ou um só (faz x cede). */}
@@ -618,6 +634,83 @@ function AbaMercados({ dados, nomeJogo, odds }: { dados: RaioX; nomeJogo: string
         </div>
       )}
     </div>
+  )
+}
+
+/*
+ * Resultado final e chance dupla (2026-10-09, pedido do usuário).
+ *
+ * Sem linha nem tempo: só o jogo todo, pelo placar dos 90 minutos, que é como
+ * a casa liquida e como bilhete_pessoal.py confere. A taxa soma os dois lados
+ * (o mandante vencendo nos jogos dele + o visitante perdendo nos dele), e a
+ * linha de baixo mostra cada metade.
+ */
+function QuadrosDeResultado({ dados, nomeJogo, odds }: { dados: RaioX; nomeJogo: string; odds: OddDaCasa[] }) {
+  const f = dados.fixture
+  const { home, away } = dados.times
+  const base = {
+    fixture_id: f.fixture_id, home_team_id: f.home_team_id, away_team_id: f.away_team_id,
+    home: f.home_team, away: f.away_team,
+  }
+  const curto = (t: ReturnType<typeof taxa>) => (t.n ? `${t.bateu}/${t.n}` : '—')
+
+  /* O que cada metade conta, na voz de quem lê: "Dortmund venceu 6/10". */
+  const VERBO: Record<string, string> = { V: 'venceu', E: 'empatou', D: 'perdeu', VE: 'não perdeu', ED: 'não venceu', VD: 'não empatou' }
+  const verbo = (aceitos: string[]) => VERBO[aceitos.join('')] ?? ''
+
+  const Linha = ({ escolha, rotulo, prefixo }: { escolha: EscolhaDeResultado; rotulo: string; prefixo: string }) => {
+    const aceitos = RESULTADOS_ACEITOS[escolha]
+    const sHome = serieDeResultado(home.jogos, aceitos.home)
+    const sAway = serieDeResultado(away.jogos, aceitos.away)
+    const t = taxa([...sHome, ...sAway], 0.5, 'mais')
+    const tHome = taxa(sHome, 0.5, 'mais')
+    const tAway = taxa(sAway, 0.5, 'mais')
+    const odd = oddDaSelecao(odds, { mercado: 'resultado', quem: 'jogo', periodo: 'total', escolha })
+    const descricao = `${prefixo} · ${rotulo}`
+    const selecao: Selecao = {
+      id: `${f.fixture_id}:resultado:${escolha}`, fixture_id: f.fixture_id, jogo: nomeJogo,
+      descricao, bateu: t.bateu, n: t.n,
+      ...(odd ? { odd: odd.odd, casa: odd.casa } : {}),
+      perna: { ...base, descricao, tipo: 'time', mercado: 'resultado', escolha, ...(odd ? { odd: odd.odd } : {}) },
+    }
+    return (
+      <div className="p-4">
+        <div className="flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-bold text-ink-1 truncate">{rotulo}</div>
+            <div className="text-[11px] text-ink-3 mt-0.5 truncate">
+              {f.home_team} {verbo(aceitos.home)} {curto(tHome)} · {f.away_team} {verbo(aceitos.away)} {curto(tAway)}
+            </div>
+          </div>
+          <NumeroDaTaxa t={t} />
+          <BotaoBilhete selecao={selecao} />
+        </div>
+        <LinhaDaOdd odd={odd} bateu={t.bateu} n={t.n} />
+      </div>
+    )
+  }
+
+  const Bloco = ({ titulo, linhas }: { titulo: string; linhas: Array<[EscolhaDeResultado, string]> }) => (
+    <div className="card overflow-hidden">
+      <div className="px-4 pt-3 text-[11px] font-semibold uppercase tracking-wider text-ink-3">{titulo}</div>
+      <div className="divide-y divide-line/60">
+        {linhas.map(([e, r]) => <Linha key={e} escolha={e} rotulo={r} prefixo={titulo} />)}
+      </div>
+    </div>
+  )
+
+  return (
+    <>
+      <Bloco titulo="Resultado final" linhas={[
+        ['1', `${f.home_team} vence`], ['X', 'Empate'], ['2', `${f.away_team} vence`],
+      ]} />
+      <Bloco titulo="Chance dupla" linhas={[
+        ['1X', `${f.home_team} ou empate`], ['12', `${f.home_team} ou ${f.away_team}`], ['X2', `Empate ou ${f.away_team}`],
+      ]} />
+      <p className="text-[11px] text-ink-3 px-1">
+        Últimos jogos de cada time, pelo placar dos 90 minutos. Só existe no jogo todo.
+      </p>
+    </>
   )
 }
 

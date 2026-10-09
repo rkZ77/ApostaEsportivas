@@ -15,6 +15,7 @@ Disallow: /banca
 Disallow: /checkout
 Disallow: /estatisticas
 Disallow: /fixtures
+Disallow: /jogos
 Disallow: /meus-picks
 Disallow: /picks
 Disallow: /profile
