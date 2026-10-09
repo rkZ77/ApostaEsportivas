@@ -13,7 +13,7 @@ from collections import defaultdict
 
 import httpx
 from dotenv import find_dotenv, load_dotenv
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.concurrency import run_in_threadpool
@@ -957,52 +957,57 @@ def _resposta_de_arquivo(request: Request, arquivo: pathlib.Path, cache: dict,
 #: entao nao casa e continua sendo tratado como rota.
 _EXTENSAO_DE_ARQUIVO = re.compile(r"^\.[A-Za-z0-9]{1,6}$")
 
-if _dist.exists():
-
-    @app.get("/{full_path:path}", include_in_schema=False)
-    async def serve_spa(request: Request, full_path: str):
-        # Resolve e confirma que o resultado fica dentro de _dist -- sem isso,
-        # full_path com ".." (ex: /../../../../etc/passwd) escapa do diretorio
-        # do build e serve qualquer arquivo legivel pelo processo.
-        candidate = (_dist / full_path).resolve()
-        # Pedido direto a um .br/.gz cai no index.html: eles existem so' como
-        # variante do arquivo real e serviria bytes comprimidos sem o cabecalho
-        # que diz isso.
-        pedido_comprimido = candidate.suffix in (".br", ".gz")
-        if candidate.is_relative_to(_dist) and candidate.is_file() and not pedido_comprimido:
-            if full_path.startswith("assets/") and candidate.suffix != ".html":
-                cache = _ASSET_CACHE          # nome assinado por hash pelo Vite
-            elif candidate.name in _SEM_CACHE:
-                cache = _HTML_CACHE
-            elif candidate.suffix.lower() in _EXT_ESTATICA:
-                cache = _ESTATICO_CACHE
-            else:
-                cache = {}
-            return _resposta_de_arquivo(request, candidate, cache)
-        # SOFT 404: QUEM PEDE ARQUIVO E NAO ACHA RECEBE 404 DE VERDADE.
-        #
-        # Tudo o que nao e' arquivo real cai aqui e recebia o index.html com
-        # status 200, inclusive /wp-login.php e /.env -- a tela dizia "pagina
-        # nao encontrada" pro humano enquanto o servidor dizia "200 OK" pro
-        # Google. E' o soft 404 classico.
-        #
-        # A regra so' afirma 404 onde da' pra ter certeza: caminho terminado em
-        # extensao curta de arquivo (.php, .env, .sql, .zip) NUNCA e' rota do
-        # SPA, porque as rotas do React nao tem ponto (/picks, /blog/slug,
-        # /p/vip/12). O resto -- inclusive um /pickss digitado errado --
-        # continua 200, porque distinguir rota valida de typo exigiria repetir
-        # aqui a tabela de rotas do App.tsx, e duas copias da mesma regra e'
-        # como elas comecam a divergir. Pra esse caso o `noindex` da pagina ja'
-        # segura a indexacao.
-        #
-        # O corpo continua sendo o index.html: quem chegou por um link velho
-        # ve a pagina de erro do site, com o caminho de volta, em vez de um
-        # texto cru do servidor.
-        # `.env` e `.htaccess` entram pelo nome, e nao pelo sufixo: pathlib
-        # trata nome iniciado por ponto como arquivo oculto SEM extensao, entao
-        # `.suffix` volta vazio e eles escapariam da regra. Rota do SPA nenhuma
-        # comeca com ponto.
-        parece_arquivo = (candidate.name.startswith(".")
-                          or bool(_EXTENSAO_DE_ARQUIVO.match(candidate.suffix)))
-        return _resposta_de_arquivo(request, _dist / "index.html", _HTML_CACHE,
-                                    status=404 if parece_arquivo else 200)
+# A ROTA EXISTE SEMPRE, e a pasta e' conferida no PEDIDO (09/10/2026). Antes
+# ela so' era registrada se `dist/` existisse na subida, e os testes que
+# trocam `_dist` por uma pasta de mentira encontravam a rota ausente (404).
+# Em producao nada muda: o build esta' la' desde a subida.
+@app.get("/{full_path:path}", include_in_schema=False)
+async def serve_spa(request: Request, full_path: str):
+    if not _dist.exists():
+        # Dev sem build: quem serve o front e' o Vite.
+        raise HTTPException(status_code=404, detail="Not Found")
+    # Resolve e confirma que o resultado fica dentro de _dist -- sem isso,
+    # full_path com ".." (ex: /../../../../etc/passwd) escapa do diretorio
+    # do build e serve qualquer arquivo legivel pelo processo.
+    candidate = (_dist / full_path).resolve()
+    # Pedido direto a um .br/.gz cai no index.html: eles existem so' como
+    # variante do arquivo real e serviria bytes comprimidos sem o cabecalho
+    # que diz isso.
+    pedido_comprimido = candidate.suffix in (".br", ".gz")
+    if candidate.is_relative_to(_dist) and candidate.is_file() and not pedido_comprimido:
+        if full_path.startswith("assets/") and candidate.suffix != ".html":
+            cache = _ASSET_CACHE          # nome assinado por hash pelo Vite
+        elif candidate.name in _SEM_CACHE:
+            cache = _HTML_CACHE
+        elif candidate.suffix.lower() in _EXT_ESTATICA:
+            cache = _ESTATICO_CACHE
+        else:
+            cache = {}
+        return _resposta_de_arquivo(request, candidate, cache)
+    # SOFT 404: QUEM PEDE ARQUIVO E NAO ACHA RECEBE 404 DE VERDADE.
+    #
+    # Tudo o que nao e' arquivo real cai aqui e recebia o index.html com
+    # status 200, inclusive /wp-login.php e /.env -- a tela dizia "pagina
+    # nao encontrada" pro humano enquanto o servidor dizia "200 OK" pro
+    # Google. E' o soft 404 classico.
+    #
+    # A regra so' afirma 404 onde da' pra ter certeza: caminho terminado em
+    # extensao curta de arquivo (.php, .env, .sql, .zip) NUNCA e' rota do
+    # SPA, porque as rotas do React nao tem ponto (/picks, /blog/slug,
+    # /p/vip/12). O resto -- inclusive um /pickss digitado errado --
+    # continua 200, porque distinguir rota valida de typo exigiria repetir
+    # aqui a tabela de rotas do App.tsx, e duas copias da mesma regra e'
+    # como elas comecam a divergir. Pra esse caso o `noindex` da pagina ja'
+    # segura a indexacao.
+    #
+    # O corpo continua sendo o index.html: quem chegou por um link velho
+    # ve a pagina de erro do site, com o caminho de volta, em vez de um
+    # texto cru do servidor.
+    # `.env` e `.htaccess` entram pelo nome, e nao pelo sufixo: pathlib
+    # trata nome iniciado por ponto como arquivo oculto SEM extensao, entao
+    # `.suffix` volta vazio e eles escapariam da regra. Rota do SPA nenhuma
+    # comeca com ponto.
+    parece_arquivo = (candidate.name.startswith(".")
+                      or bool(_EXTENSAO_DE_ARQUIVO.match(candidate.suffix)))
+    return _resposta_de_arquivo(request, _dist / "index.html", _HTML_CACHE,
+                                status=404 if parece_arquivo else 200)
