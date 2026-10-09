@@ -61,9 +61,22 @@ export default function RaioXDoJogo({ jogo }: { jogo: JogoBase }) {
   /* Odds das casas · pedido à parte e sem travar a tela: sem odd o Raio-X
      funciona igual, só sem o preço ao lado da taxa. */
   const [odds, setOdds] = useState<OddDaCasa[]>([])
+  /* Jogo rolando (09/10): a rota devolve a odd ao vivo, e ela é relida a cada
+     3 minutos · o mesmo passo do cache do servidor, então não gasta a mais. */
+  const [oddsAoVivo, setOddsAoVivo] = useState(false)
   useEffect(() => {
     setOdds([])
-    api.get(`/fixtures/${jogo.fixture_id}/odds`).then(r => setOdds(r.data?.odds ?? [])).catch(() => {})
+    setOddsAoVivo(false)
+    let vivo = true
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const ler = () => api.get(`/fixtures/${jogo.fixture_id}/odds`).then(r => {
+      if (!vivo) return
+      setOdds(r.data?.odds ?? [])
+      setOddsAoVivo(!!r.data?.ao_vivo)
+      if (r.data?.ao_vivo) timer = setTimeout(ler, 180_000)
+    }).catch(() => {})
+    ler()
+    return () => { vivo = false; clearTimeout(timer) }
   }, [jogo.fixture_id])
 
   const nomeJogo = `${dados?.fixture.home_team || jogo.home_team || 'Casa'} x ${dados?.fixture.away_team || jogo.away_team || 'Fora'}`
@@ -105,7 +118,7 @@ export default function RaioXDoJogo({ jogo }: { jogo: JogoBase }) {
             <Skeleton className="h-36 w-full" />
           </div>
         ) : aba === 'mercados' ? (
-          <AbaMercados dados={dados} nomeJogo={nomeJogo} odds={odds} />
+          <AbaMercados dados={dados} nomeJogo={nomeJogo} odds={odds} oddsAoVivo={oddsAoVivo} />
         ) : aba === 'jogadores' ? (
           <AbaJogadores dados={dados} nomeJogo={nomeJogo} />
         ) : aba === 'escalacao' ? (
@@ -380,7 +393,7 @@ function LinhaDaOdd({ odd, bateu, n }: { odd: OddDaCasa | null; bateu: number; n
 
 /* ── Mercados ───────────────────────────────────────────────────────────── */
 
-function AbaMercados({ dados, nomeJogo, odds }: { dados: RaioX; nomeJogo: string; odds: OddDaCasa[] }) {
+function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo }: { dados: RaioX; nomeJogo: string; odds: OddDaCasa[]; oddsAoVivo: boolean }) {
   /* Mercado + DE QUEM (os dois somados, ou um time só) · ver MERCADOS_PRINCIPAIS. */
   /* Abre no Resultado: é a primeira pergunta de quem olha um jogo. */
   const [principal, setPrincipal] = useState('resultado')
@@ -557,7 +570,7 @@ function AbaMercados({ dados, nomeJogo, odds }: { dados: RaioX; nomeJogo: string
     return (
       <div className="space-y-3">
         <Chips opcoes={chips} valor={principal} onChange={setPrincipal} />
-        <QuadrosDeResultado dados={dados} nomeJogo={nomeJogo} odds={odds} />
+        <QuadrosDeResultado dados={dados} nomeJogo={nomeJogo} odds={odds} oddsAoVivo={oddsAoVivo} />
       </div>
     )
   }
@@ -648,7 +661,9 @@ function AbaMercados({ dados, nomeJogo, odds }: { dados: RaioX; nomeJogo: string
  * a casa liquida e como bilhete_pessoal.py confere. A taxa soma os dois lados
  * (o mandante vencendo nos jogos dele + o visitante perdendo nos dele).
  */
-function QuadrosDeResultado({ dados, nomeJogo, odds }: { dados: RaioX; nomeJogo: string; odds: OddDaCasa[] }) {
+function QuadrosDeResultado({ dados, nomeJogo, odds, oddsAoVivo }: {
+  dados: RaioX; nomeJogo: string; odds: OddDaCasa[]; oddsAoVivo: boolean
+}) {
   const f = dados.fixture
   const { home, away } = dados.times
   const escudoCasa = <TeamLogo id={f.home_team_id} name={f.home_team} size={24} />
@@ -677,7 +692,13 @@ function QuadrosDeResultado({ dados, nomeJogo, odds }: { dados: RaioX; nomeJogo:
         <div className="card p-4">
           <div className="flex items-baseline justify-between gap-2 mb-3">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">Chance de vitória</span>
-            <span className="text-[11px] text-ink-4">{pelasOdds ? 'pelas odds das casas' : 'pelos últimos jogos'}</span>
+            {pelasOdds && oddsAoVivo ? (
+              <span className="flex items-center gap-1.5 text-[11px] font-bold text-red-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" /> odds ao vivo
+              </span>
+            ) : (
+              <span className="text-[11px] text-ink-4">{pelasOdds ? 'pelas odds das casas' : 'pelos últimos jogos'}</span>
+            )}
           </div>
           <div className="grid grid-cols-3 items-end text-center mb-2">
             {([

@@ -787,6 +787,78 @@ def get_classificacao(
     return cache_publico.obter(f"classificacao:{fixture_id}:{league}", 600, montar)
 
 
+def _jogo_no_ar(cur, fixture_id: int) -> bool:
+    """Comecou e nao acabou. Pela HORA, e nao so' pelo status gravado: o status
+    do banco anda na velocidade da sincronizacao e pode estar "NS" com a bola
+    rolando. 150 minutos cobrem jogo com intervalo e acrescimos; o feed ao vivo
+    decide no fim (jogo que ja' acabou nao tem cotacao la')."""
+    cur.execute("""
+        SELECT status,
+               match_datetime <= (NOW() AT TIME ZONE 'America/Sao_Paulo') + INTERVAL '5 minutes'
+           AND match_datetime >= (NOW() AT TIME ZONE 'America/Sao_Paulo') - INTERVAL '150 minutes' AS na_janela
+          FROM fixtures WHERE fixture_id = %s
+    """, (fixture_id,))
+    r = cur.fetchone()
+    return bool(r and r["na_janela"] and r["status"] not in ("FT", "AET", "PEN", "PST", "CANC", "ABD"))
+
+
+#: Nome do mercado em /odds/live -> codigo do mercado pre-jogo que o Raio-X
+#: entende (lib/oddsDoJogo.ts). Os nomes ao vivo NAO sao os do pre-jogo (ver
+#: pick_engine_live/live_odds.py); os de over/under vem de la'.
+_AO_VIVO_PARA_PRE_JOGO = {
+    **{n: 5 for n in ("match goals", "over/under line", "goals over/under", "over/under")},
+    **{n: 45 for n in ("total corners", "match corners", "corners over/under", "corners")},
+    **{n: 80 for n in ("total cards", "match cards", "cards over/under", "cards")},
+    "fulltime result": 1, "match winner": 1, "1x2": 1,
+    "double chance": 12,
+    "both teams to score": 8, "both teams score": 8,
+}
+#: Escrita da chance dupla ao vivo -> a do pre-jogo.
+_DUPLA = {"1x": "Home/Draw", "homedraw": "Home/Draw", "12": "Home/Away", "homeaway": "Home/Away",
+          "x2": "Draw/Away", "drawaway": "Draw/Away"}
+_RESULTADO = {"1": "Home", "home": "Home", "x": "Draw", "draw": "Draw", "2": "Away", "away": "Away"}
+
+
+def odds_ao_vivo_no_formato_do_raio_x(mercados: list) -> list[dict]:
+    """Os mercados de /odds/live no mesmo formato da leitura pre-jogo
+    ({market_id, valor, odd, casa}). Cotacao suspensa fica de fora: a casa
+    nao aceita aposta nela. Mercado sem par no pre-jogo e' ignorado."""
+    saida = []
+    for m in mercados or []:
+        mid = _AO_VIVO_PARA_PRE_JOGO.get((m.get("name") or "").strip().lower())
+        if mid is None:
+            continue
+        for v in m.get("values") or []:
+            if v.get("suspended"):
+                continue
+            try:
+                odd = float(v.get("odd"))
+            except (TypeError, ValueError):
+                continue
+            if odd <= 1:
+                continue
+            bruto = str(v.get("value") or "").strip()
+            chave = bruto.lower().replace(" ", "").replace("/", "")
+            if mid in (5, 45, 80):
+                lado = bruto.split()[0].capitalize() if bruto else ""
+                linha = v.get("handicap")
+                if lado not in ("Over", "Under") or linha in (None, ""):
+                    continue
+                try:
+                    valor = f"{lado} {float(linha):.1f}"
+                except (TypeError, ValueError):
+                    continue
+            elif mid == 1:
+                valor = _RESULTADO.get(chave)
+            elif mid == 12:
+                valor = _DUPLA.get(chave)
+            else:   # 8, ambas marcam
+                valor = {"yes": "Yes", "no": "No"}.get(chave)
+            if valor:
+                saida.append({"market_id": mid, "valor": valor, "odd": odd, "casa": "ao vivo"})
+    return saida
+
+
 @router.get("/{fixture_id}/odds")
 def get_odds_do_jogo(fixture_id: int, current_user: dict = Depends(get_current_user)):
     """Melhor odd de cada mercado/linha do jogo, entre as casas ATIVAS (2026-10-07).
@@ -803,6 +875,22 @@ def get_odds_do_jogo(fixture_id: int, current_user: dict = Depends(get_current_u
         conn = get_connection()
         cur = conn.cursor()
         try:
+            # JOGO ROLANDO (09/10, pedido do usuario): a odd de antes do jogo
+            # ja' nao existe na casa, vale a de /odds/live.
+            #
+            # CUSTO ZERO (decisao do usuario, 09/10): esta rota NUNCA chama a
+            # API. So' reaproveita o feed GLOBAL de /odds/live que o
+            # acompanhamento dos picks ao vivo ja' busca (live._odds_mundo_cache).
+            # Se ninguem buscou ha' pouco, ou o jogo nao esta' la', fica o
+            # pre-jogo. Cotacao com mais de 2 ciclos do feed (6 min) e' velha
+            # demais pra chamar de "ao vivo".
+            if _jogo_no_ar(cur, fixture_id):
+                from routers import live as _live
+                ts, mundo = _live._odds_mundo_cache
+                if time.time() - ts < 2 * _live._TTL_ODDS_MUNDO:
+                    vivas = odds_ao_vivo_no_formato_do_raio_x(mundo.get(fixture_id) or [])
+                    if vivas:
+                        return {"odds": vivas, "ao_vivo": True}
             cur.execute("""
                 SELECT DISTINCT ON (ov.market_id, ov.value_name)
                        ov.market_id, ov.value_name, ov.odd_value, ov.bookmaker_name
@@ -815,7 +903,7 @@ def get_odds_do_jogo(fixture_id: int, current_user: dict = Depends(get_current_u
             """, (fixture_id,))
             return {"odds": [{"market_id": r["market_id"], "valor": r["value_name"],
                               "odd": float(r["odd_value"]), "casa": r["bookmaker_name"]}
-                             for r in cur.fetchall()]}
+                             for r in cur.fetchall()], "ao_vivo": False}
         except Exception:
             # Sem odd o Raio-X funciona igual, so' sem o preco ao lado.
             logger.warning("[ODDS] leitura do jogo %s falhou", fixture_id, exc_info=True)
@@ -823,7 +911,8 @@ def get_odds_do_jogo(fixture_id: int, current_user: dict = Depends(get_current_u
         finally:
             cur.close(); conn.close()
 
-    return cache_publico.obter(f"odds-jogo:{fixture_id}", 120, montar)
+    # 3 minutos: o mesmo passo do feed ao vivo (live._TTL_ODDS_MUNDO).
+    return cache_publico.obter(f"odds-jogo:{fixture_id}", 180, montar)
 
 
 def _montar_raio_x(fixture_id: int, home, away, league, n: int) -> dict:
