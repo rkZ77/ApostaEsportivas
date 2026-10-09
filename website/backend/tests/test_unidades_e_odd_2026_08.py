@@ -1007,7 +1007,9 @@ def test_perna_nao_herda_o_vermelho_do_bilhete():
     assert "leg.result ?? (m.result === 'GREEN' ? 'GREEN' : undefined)" in tela
 
     # Alavancagem nao tem coluna de resultado por perna: verde ou neutro.
-    assert "const lr: 'GREEN' | undefined = pick.result === 'GREEN'" in tela
+    # Desde 09/10 a perna e' PernaDoBilhete (PickCardParts) e o resultado
+    # entra por prop.
+    assert "resultado={pick.result === 'GREEN' ? 'GREEN' : undefined}" in tela
 
 
 def test_todo_card_de_pick_usa_a_mesma_anatomia():

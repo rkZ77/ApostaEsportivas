@@ -18,7 +18,7 @@ describe('picks ao vivo', () => {
     expect(rotuloDoMinuto({ status: '2H', minuto: 59 })).toBe("59'")
     expect(rotuloDoMinuto({ status: 'HT', minuto: 45 })).toBe('Intervalo')
     expect(rotuloDoMinuto({ status: '1H', minuto: null })).toBe('Ao vivo')
-    expect(rotuloDoTempo({ status: '2H', minuto: 59 })).toBe("2º tempo 59'")
+    expect(rotuloDoTempo({ status: '2H', minuto: 59 })).toBe("2ºT 59'")
     expect(rotuloDoTempo({ status: 'HT', minuto: 45 })).toBe('Intervalo')
   })
 
