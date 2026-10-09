@@ -138,6 +138,41 @@ def _mediana_no_retrato(cur, fixture_id: int, market_id, value_name: str) -> flo
     return round(median(odds), 3) if odds else None
 
 
+def _tem_xi_oficial(cur, fixture_id: int) -> bool:
+    try:
+        cur.execute("SELECT 1 FROM fixture_lineups WHERE fixture_id = %s AND oficial",
+                    (fixture_id,))
+        return cur.fetchone() is not None
+    except Exception:
+        cur.connection.rollback()
+        return False
+
+
+def esperando_escalacao(cur, fixture_ids) -> list:
+    """Jogos ja' reavaliados SEM o XI oficial, cuja escalacao saiu depois, e
+    que ainda nao comecaram. O fechamento tira o retrato a ~30 min do apito e
+    a escalacao sai de 20 a 40 min antes -- na maioria dos jogos a primeira
+    reavaliacao chega antes dela. Esta e' a segunda passada."""
+    if not fixture_ids:
+        return []
+    try:
+        cur.execute("""
+            SELECT r.fixture_id
+              FROM reavaliacao_picks r
+              JOIN fixture_lineups fl ON fl.fixture_id = r.fixture_id AND fl.oficial
+              JOIN fixtures f ON f.fixture_id = r.fixture_id
+             WHERE r.fixture_id = ANY(%s)
+               AND f.status IN ('NS', 'TBD')
+             GROUP BY r.fixture_id, fl.atualizado_em
+            HAVING BOOL_AND(NOT COALESCE((r.detalhe->>'xi_oficial')::boolean, FALSE))
+               AND fl.atualizado_em > MAX(r.reavaliado_em)
+        """, (list(fixture_ids),))
+        return [r[0] for r in cur.fetchall()]
+    except Exception:
+        cur.connection.rollback()
+        return []
+
+
 def _odd_de_agora(cur, fixture_id: int, market_id, linha: str) -> tuple:
     """(mediana da linha, probabilidade justa sem margem ou None). A justa sai
     do par (Over/Under, Sim/Nao) no mesmo retrato; sem o par, None -- e quem
@@ -225,6 +260,7 @@ def reavaliar_fixture(cur, fixture_id: int) -> list:
         return []
 
     agora_fora, falha = _injuries_da_partida(fixture_id)
+    xi_oficial = _tem_xi_oficial(cur, fixture_id)
     resultados = []
     producao_cache: dict = {}
     for tabela, pid, mt, market_id, linha, odd, prob, ev, debug in picks:
@@ -262,6 +298,9 @@ def reavaliar_fixture(cur, fixture_id: int) -> list:
             odd_agora, novos, producao, prob_justa=justa)
         if falha:
             r.setdefault("detalhe", {})["falha_injuries"] = falha
+        # Se a escalacao oficial ja' estava na conta. Sem ela, o fechamento
+        # reavalia de novo quando ela sair (esperando_escalacao).
+        r.setdefault("detalhe", {})["xi_oficial"] = xi_oficial
         cur.execute("""
             INSERT INTO reavaliacao_picks (pick_table, pick_id, fixture_id, odd_publicada,
                 odd_agora, prob_publicada, prob_reavaliada, ev_publicado, ev_agora,

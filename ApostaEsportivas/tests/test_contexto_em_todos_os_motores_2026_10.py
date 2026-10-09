@@ -74,7 +74,16 @@ def test_ao_vivo_grava_o_contexto_de_antes_do_apito():
 
 
 def test_fechamento_reavalia_os_picks():
-    assert "_reavaliar(fixture_id)" in _fonte("capturar_fechamento.py")
+    fonte = _fonte("capturar_fechamento.py")
+    assert "_reavaliar(fixture_id)" in fonte
+    # E de novo quando a escalacao oficial sai depois da primeira passada.
+    assert "_esperando_escalacao(ids)" in fonte
+
+
+def test_medicao_imprime_o_marcador_que_o_admin_le():
+    """AdminAgendador.leituraDaMedicao procura '=== Leitura ==='; sem ele o
+    cartao mostra 'sem veredito no texto'."""
+    assert 'print("\\n=== Leitura ===")' in _fonte("scripts/medir_contexto_atual.py")
 
 
 @pytest.mark.parametrize("modulo", [

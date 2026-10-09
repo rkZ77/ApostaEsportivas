@@ -118,13 +118,21 @@ def _headers() -> dict:
 #: `match_datetime` é horário de Brasília sem fuso (ver a nota do projeto sobre
 #: fusos), então a comparação é com NOW() já convertido para o mesmo fuso -- e
 #: nunca com `match_date`, que é DATE pura e não tem hora nenhuma.
+#:
+#: VIP E FREE ENTRARAM NA FILA EM 2026-10-08. A reavaliacao perto do apito
+#: (motor, pick_engine/reavaliacao.py) le' o XI oficial desta tabela pra saber
+#: se um titular habitual ficou fora -- e ate' aqui so' jogo com pick de
+#: jogador tinha escalacao gravada, entao pra VIP e Free a checagem nunca tinha
+#: dado. A ANULACAO continua so' de prop de jogador (_anular_fora_do_xi):
+#: pick de time nao depende de um jogador entrar em campo.
 _SQL_FILA = """
-    SELECT DISTINCT pp.fixture_id, f.match_datetime
-      FROM picks_player_stats pp
-      JOIN fixtures f ON f.fixture_id = pp.fixture_id
- LEFT JOIN fixture_lineups fl ON fl.fixture_id = pp.fixture_id
-     WHERE pp.result IS NULL
-       AND pp.fixture_id IS NOT NULL
+    SELECT DISTINCT pend.fixture_id, f.match_datetime
+      FROM (SELECT pp.fixture_id FROM picks_player_stats pp WHERE pp.result IS NULL
+            UNION SELECT v.fixture_id FROM picks_vip v WHERE v.result IS NULL
+            UNION SELECT fr.fixture_id FROM picks_free fr WHERE fr.result IS NULL) pend
+      JOIN fixtures f ON f.fixture_id = pend.fixture_id
+ LEFT JOIN fixture_lineups fl ON fl.fixture_id = pend.fixture_id
+     WHERE pend.fixture_id IS NOT NULL
        AND COALESCE(fl.oficial, FALSE) = FALSE
        AND COALESCE(fl.tentativas, 0) < %s
        AND f.match_datetime BETWEEN

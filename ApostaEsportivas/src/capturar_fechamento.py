@@ -123,7 +123,26 @@ def rodada(coletor: OddsCollectorService) -> int:
         n = coletor.save_snapshot_only(fixture_id, data["bookmakers"])
         print(f"[FECHAMENTO] fixture {fixture_id}: {n} cotacao(oes) no retrato.")
         _reavaliar(fixture_id)
+    # Segunda passada: a escalacao oficial saiu depois da primeira reavaliacao.
+    for fixture_id in _esperando_escalacao(ids):
+        print(f"[FECHAMENTO] fixture {fixture_id}: escalacao oficial saiu, reavaliando.")
+        _reavaliar(fixture_id)
     return por_comecar
+
+
+def _esperando_escalacao(ids: set) -> list:
+    try:
+        from services.pick_engine import reavaliacao
+        conn = get_connection()
+        cur = conn.cursor()
+        try:
+            return reavaliacao.esperando_escalacao(cur, ids)
+        finally:
+            cur.close()
+            conn.close()
+    except Exception as e:
+        print(f"[FECHAMENTO] fila de reavaliacao com escalacao falhou: {e}")
+        return []
 
 
 def _reavaliar(fixture_id: int) -> None:
