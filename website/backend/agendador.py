@@ -79,6 +79,8 @@ MEDICOES = (
     ("recalibracao", "Recalibração (fora da amostra)", "scripts/medir_recalibracao.py", []),
     ("segundo_tempo", "2º tempo (backtest)", "scripts/medir_segundo_tempo.py", []),
     ("dixon_coles", "Dixon-Coles (gols em sombra)", "scripts/medir_dixon_coles.py", []),
+    ("contexto_atual", "Contexto atual (técnico, forma, desfalques)",
+     "scripts/medir_contexto_atual.py", []),
 )
 
 

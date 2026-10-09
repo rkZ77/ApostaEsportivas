@@ -46,6 +46,8 @@ from services.team_stats_service import TeamStatsService
 from services.referee_stats_service import RefereeStatsService
 from services.standings_service import StandingsService
 from services.pick_engine import dossie_da_partida
+from services.pick_engine import revalidacao
+from services.pick_engine.config import DEFAULT_CONFIG
 from services.pick_engine import analyze_fixture_markets, explain
 from services.pick_engine.ai_review import review_gate
 from services.pick_engine.staking import calculate_stake
@@ -349,6 +351,9 @@ def _gather_leg_candidates(fixtures: list, used_pairs: set) -> list:
                 # DESFALQUES E TECNICO NOVO (2026-09-27): derrubam o Score Final
                 # via news_score. Mesmo dado do dossie da IA -- ver dossie_da_partida.
                 news_data=dossie_da_partida.sinal_de_desfalques(fixture["fixture_id"]),
+                # CONTEXTO ATUAL (2026-10-08): tecnico, desfalques por producao,
+                # calendario e historico atrasado -- ver contexto_atual.
+                contexto_partida=dossie_da_partida.contexto_do_motor(fixture["fixture_id"]),
                 team_stats_home=team_stats_home, team_stats_away=team_stats_away,
             league_baseline=league_baseline,
             rastro=rastro,
@@ -651,6 +656,14 @@ def run_multipla_engine():
         # A IA SO' VETA, nunca monta nem reordena (regra do gate de IA). Ela
         # roda por ultimo, sobre o bilhete ja' escolhido: falha aberto, entao
         # "indisponivel" nunca vira "aprovado".
+        # Toda perna ainda cotada e com valor na odd de agora (2026-10-08).
+        # DEFAULT_CONFIG: e' com ela que as pernas passaram no motor (ver
+        # rank_all_candidates acima).
+        pernas_vivas = revalidacao.pernas_ok(list(bilhete["pernas"]), DEFAULT_CONFIG,
+                                             rotulo="MULTIPLA_ENGINE")
+        if pernas_vivas is None:
+            continue
+        bilhete = {**bilhete, "pernas": pernas_vivas}
         reviewed = review_gate("multipla").apply(list(bilhete["pernas"]), "multipla")
         if not reviewed:
             print(f"[MULTIPLA_ENGINE] Bilhete {i} vetado pela revisão de IA.")

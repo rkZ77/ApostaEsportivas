@@ -53,11 +53,19 @@ class OddsService:
     ##########################################################################
     # Carrega odds brutas da fixture
     ##########################################################################
-    def load_odds_by_fixture(self, fixture_id):
+    def load_odds_by_fixture(self, fixture_id, max_idade_seg: int | None = None):
+        """`max_idade_seg`: so' cotacoes atualizadas ha' no maximo isso. A
+        coleta faz upsert, entao a linha que a casa TIROU do ar continua no
+        banco com o carimbo antigo -- o filtro e' como a revalidacao antes de
+        publicar (pick_engine.revalidacao) separa "ainda cotada" de "foi
+        cotada um dia". None = todas, o comportamento de sempre."""
         conn = self._conexao()
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        filtro_idade = ("AND v.updated_at >= NOW() - (%s * INTERVAL '1 second')"
+                        if max_idade_seg is not None else "")
+        params = (fixture_id,) + ((max_idade_seg,) if max_idade_seg is not None else ())
 
-        cur.execute("""
+        cur.execute(f"""
             SELECT
                 v.market_row_id,
                 v.odd_value,
@@ -85,9 +93,9 @@ class OddsService:
                 -- atras chamando aquilo de preco atual.
                 EXTRACT(EPOCH FROM (NOW() - v.updated_at))::int AS odd_idade_seg
             FROM odds_values v
-            WHERE v.fixture_id = %s
+            WHERE v.fixture_id = %s {filtro_idade}
             ORDER BY v.market_row_id, v.bookmaker_id;
-        """, (fixture_id,))
+        """, params)
 
         rows = cur.fetchall()
         cur.close()
@@ -116,7 +124,7 @@ class OddsService:
     ##########################################################################
     # Agrega odds por mercado+linha+side · retorna melhor odd entre bookmakers
     ##########################################################################
-    def load_odds_structured(self, fixture_id) -> list[dict]:
+    def load_odds_structured(self, fixture_id, max_idade_seg: int | None = None) -> list[dict]:
         """Agrupa odds por (market_id, line_value, value_name) e devolve DOIS
         preços por linha, com papéis diferentes:
 
@@ -143,7 +151,10 @@ class OddsService:
         """
         import re as _re
 
-        raw = self.load_odds_by_fixture(fixture_id)
+        # O argumento so' vai quando usado: SnapshotOddsService (backtest)
+        # sobrescreve load_odds_by_fixture com a assinatura antiga.
+        raw = (self.load_odds_by_fixture(fixture_id, max_idade_seg=max_idade_seg)
+               if max_idade_seg is not None else self.load_odds_by_fixture(fixture_id))
         if not raw:
             return []
 

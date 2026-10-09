@@ -370,9 +370,29 @@ def _valores_de_aprovacao(c: dict) -> tuple:
     """
     ef = c.get("tie_effect") or {}
     delta = ef.get("delta_prob") or 0.0
+    taxa, ev = c["taxa_real"], c["ev"]
     if delta > 0 and c.get("taxa_real_sem_contexto") is not None:
-        return c["taxa_real_sem_contexto"], c.get("ev_sem_contexto", c["ev"])
-    return c["taxa_real"], c["ev"]
+        taxa, ev = c["taxa_real_sem_contexto"], c.get("ev_sem_contexto", c["ev"])
+    # CONTEXTO ATUAL (2026-10-08), mesma regra: o trecho do tecnico novo pode
+    # estar ACIMA do historico inteiro, e isso nao pode ser o que aprova. O
+    # deslocamento positivo do regime sai do numero FINAL (depois de gate,
+    # agregado e camada probabilistica), e o EV e' refeito com ele.
+    delta = c.get("delta_regime") or 0.0
+    if delta > 0 and c.get("odd"):
+        taxa = min(taxa, round(c["taxa_real"] - delta, 4))
+        ev = min(ev, round(taxa * c["odd"] - 1, 4))
+    return taxa, ev
+
+
+def _amostra_de_aprovacao(c: dict):
+    """A amostra que passa pelo piso. Com MOTOR_CONTEXTO=on, a EFETIVA: 15
+    jogos dos quais 12 sao do tecnico anterior e destoam do trecho atual nao
+    sao 15 jogos de evidencia sobre o time de hoje -- e o piso de 8 foi medido
+    justamente como "abaixo disto a taxa nao estima"."""
+    efetiva = c.get("amostra_efetiva")
+    if efetiva is None:
+        return c["amostra"]
+    return min(c["amostra"], efetiva)
 
 
 def _lado_vetado(c: dict, config: PickEngineConfig) -> bool:
@@ -424,7 +444,7 @@ def rank_all_candidates(candidates: list, config: PickEngineConfig = DEFAULT_CON
         if (not _lado_vetado(c, config)
                 and taxa_aprov >= config.min_taxa
                 and (config.max_taxa is None or taxa_aprov <= config.max_taxa)
-                and c["amostra"] >= config.min_amostra
+                and _amostra_de_aprovacao(c) >= config.min_amostra
                 and _mando_suficiente(c, config)
                 and c["confidence"] >= config.min_confidence
                 and ev_aprov > config.min_ev
@@ -459,8 +479,13 @@ def rank_all_candidates_debug(candidates: list, config: PickEngineConfig = DEFAU
             # -13,57u contra 79,7% e +21,98u do Under.
             reasons.append(f"{c.get('market_type')} so' entra em UNDER "
                            f"(Over da familia mede negativo em todo recorte)")
-        if c["amostra"] < config.min_amostra:
-            reasons.append(f"amostra insuficiente ({c['amostra']} < {config.min_amostra})")
+        if _amostra_de_aprovacao(c) < config.min_amostra:
+            if c.get("amostra_efetiva") is not None and c["amostra"] >= config.min_amostra:
+                reasons.append(f"amostra efetiva insuficiente depois do contexto atual "
+                               f"({c['amostra_efetiva']:.1f} de {c['amostra']} jogos < "
+                               f"{config.min_amostra})")
+            else:
+                reasons.append(f"amostra insuficiente ({c['amostra']} < {config.min_amostra})")
         if not _mando_suficiente(c, config):
             reasons.append(f"menos de {config.min_jogos_mando_por_lado} jogos no mando de algum "
                            f"lado ({c.get('amostra_mando_min_lado')})")

@@ -35,6 +35,8 @@ from services.match_stats_service import MatchStatsService
 from services.standings_service import StandingsService
 from services.odds_service import OddsService
 from services.pick_engine import context_gate, tie_effect
+from services.pick_engine import contexto_atual, dossie_da_partida, revalidacao
+from services.pick_engine.config import DEFAULT_CONFIG
 from services.pick_engine.ai_review import review_gate
 from services.pick_engine.staking import calculate_stake
 from services.pick_engine_boost import config as cfg
@@ -185,6 +187,17 @@ def _avaliar_fixture(fixture: dict, cur, match_stats: MatchStatsService,
                                f"({len(ht_home)} x {len(ht_away)} jogos com HT)")
         return resultado
 
+    # Contexto atual da partida (2026-10-08): historico atrasado barra em
+    # MOTOR_CONTEXTO=on, como nos outros motores.
+    ctx_motor = (dossie_da_partida.contexto_do_motor(fixture["fixture_id"])
+                 if contexto_atual.modo() != "off" else None)
+    resultado["contexto_partida"], bloqueio = contexto_atual.bloqueio_da_partida(
+        ctx_motor, hist_home, hist_away, DEFAULT_CONFIG)
+    resultado["modo_contexto"] = contexto_atual.modo() if ctx_motor else "off"
+    if bloqueio:
+        resultado["motivo"] = bloqueio
+        return resultado
+
     # -- indicadores ---------------------------------------------------------
     perfil_home = stats_model.perfil_do_time(hist_home, fixture["home_team_id"], "home")
     perfil_away = stats_model.perfil_do_time(hist_away, fixture["away_team_id"], "away")
@@ -304,6 +317,19 @@ def _avaliar_fixture(fixture: dict, cur, match_stats: MatchStatsService,
     prob_par = confronto.get("prob_combinada")
     calibrada = calibration.calibrar(prob_par)
     prob_final = calibrada.get("prob")
+    # CONTEXTO ATUAL (2026-10-08, ver contexto_atual): tecnico novo, forma e
+    # desfalques testados sobre os GOLS dos jogos de cada time. Em `on` a
+    # probabilidade do par vira a de contexto antes de EV/edge e das portas.
+    prob_final, ctx_par = contexto_atual.probabilidade_para_modelo_proprio(
+        ctx_motor, "goals", "total", prob_final, min(len(hist_home), len(hist_away)),
+        odd_combinada,
+        {"home": [(j.get("match_date"), j.get("total_goals")) for j in hist_home],
+         "away": [(j.get("match_date"), j.get("total_goals")) for j in hist_away]},
+        DEFAULT_CONFIG)
+    if ctx_par:
+        resultado["contexto_sombra"] = ctx_par
+        if ctx_par["aplicado"]:
+            resultado["amostra_efetiva"] = ctx_par["amostra_efetiva"]
     amostra_classe = shrinkage.classe_de_amostra(
         min((confronto.get("consistencia") or {}).get("min_amostra_ft") or 0,
             (confronto.get("consistencia") or {}).get("min_amostra_ht") or 0))
@@ -368,6 +394,43 @@ def _avaliar_fixture(fixture: dict, cur, match_stats: MatchStatsService,
     return resultado
 
 
+def _revalidar_pernas(c: dict, odds_service: OddsService) -> dict | None:
+    """As duas pernas do par ainda estao cotadas, e o par ainda tem EV, na hora
+    de publicar? Mesma regra de pick_engine.revalidacao, lendo as odds cruas
+    como _avaliar_fixture. Atualiza odd do par, EV e edge pros de agora."""
+    if revalidacao.modo() == "off":
+        return c
+    fid = c["fixture"]["fixture_id"]
+    janela, falha = (None, None)
+    if revalidacao.modo() == "api":
+        janela, falha = revalidacao._atualizar_na_api(fid)
+    fonte = "api" if janela is not None else "banco"
+    if janela is None:
+        janela = DEFAULT_CONFIG.max_idade_odd_publicacao_seg
+    try:
+        cruas = odds_service.load_odds_by_fixture(fid, max_idade_seg=janela)
+    except Exception as e:
+        print(f"[PICK_BOOST] Fixture {fid}: revalidacao falhou ({e}).")
+        return None
+    ft = _melhor_odd(cruas, cfg.NOMES_MERCADO_FT, _OVER_RE, cfg.LINHA_OVER_FT)
+    ht = _melhor_odd(cruas, cfg.NOMES_MERCADO_HT, _UNDER_RE, cfg.LINHA_UNDER_HT)
+    if not ft or not ht:
+        print(f"[PICK_BOOST] Fixture {fid}: perna {'FT' if not ft else 'HT'} nao esta' mais "
+              f"cotada (fonte {fonte}).")
+        return None
+    odd = round(ft["odd"] * ht["odd"], 3)
+    p = c.get("probabilidade")
+    if (p is None or not (cfg.ODD_MIN_COMBINADA <= odd <= cfg.ODD_MAX_COMBINADA)
+            or p * odd - 1 <= 0):
+        print(f"[PICK_BOOST] Fixture {fid}: par a {odd} sem valor ou fora da faixa agora.")
+        return None
+    return {**c, "odd": odd, "pernas": {"ft": ft, "ht": ht},
+            "ev": round(p * odd - 1, 4), "edge": round(p - 1 / odd, 4),
+            "fair_odd": round(1 / p, 3),
+            "revalidacao": {"ok": True, "fonte": fonte, "odd_antes": c.get("odd"),
+                            "odd_agora": odd, **({"falha_api": falha} if falha else {})}}
+
+
 def _engine_debug(c: dict) -> str:
     """O rastro. Os blocos novos da V2 ficam no MESMO nivel dos antigos.
 
@@ -387,6 +450,10 @@ def _engine_debug(c: dict) -> str:
     tail = ind.get("tail_risk") or {}
     return json.dumps({
         "modelo": "pick_engine_boost/v2_poisson_decomposto",
+        # Contexto atual e revalidacao da odd (2026-10-08).
+        "contexto_atual": {"modo": c.get("modo_contexto"), "par": c.get("contexto_sombra"),
+                           "partida": c.get("contexto_partida")},
+        "revalidacao": c.get("revalidacao"),
         "score": c.get("score"),
         "score_estatistico": ind.get("score_estatistico"),
         "parcelas": ind.get("parcelas"),
@@ -639,6 +706,15 @@ def run_pick_boost_engine():
         gate = review_gate("boost")
         salvos = 0
         for c in publicaveis:
+            # As duas pernas ainda cotadas, e o par ainda com valor (2026-10-08).
+            revalidado = _revalidar_pernas(c, odds_service)
+            if revalidado is None:
+                run.analisado(c["fixture"], selecionado=False, score=c["score"],
+                              probabilidade=c.get("probabilidade"), odd=c.get("odd"),
+                              motivo="linha saiu do ar ou perdeu valor na revalidacao",
+                              dados=_dados_da_auditoria(c))
+                continue
+            c = revalidado
             # AI review antes de salvar -- mesmo padrao do faltas_pipeline.
             aprovado = gate.apply([c], "boost", c["fixture"])
             if not aprovado:

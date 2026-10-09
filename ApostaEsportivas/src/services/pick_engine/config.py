@@ -504,6 +504,34 @@ class PickEngineConfig:
     # em context_gate.pressao_contraria).
     use_tie_effect: bool = True
 
+    # CONTEXTO ATUAL (2026-10-08, ver contexto_atual.py). Liga/desliga por
+    # MOTOR_CONTEXTO (padrao shadow); estes sao so' os parametros.
+    #
+    # O peso do historico antigo sai da DIVERGENCIA medida na propria linha --
+    # nenhum numero abaixo decide isso. Os dois de tecnico cobrem o caso em que
+    # o teste ainda nao tem poder: com 0-4 jogos do tecnico novo, "nao achei
+    # diferenca" nao quer dizer "nao ha' diferenca".
+    #
+    # ESCOLHIDOS, NAO MEDIDOS (regra do projeto: dizer qual e' qual). 0.5 =
+    # o jogo do tecnico anterior vale meio jogo enquanto o novo nao jogou;
+    # 5 = `sample_moderate_n` + 1, o ponto em que o trecho novo sozinho ja'
+    # sai da faixa ESCASSA. scripts/medir_contexto_atual.py mede o residuo das
+    # pernas com tecnico novo e diz se o desconto esta' certo.
+    contexto_peso_tecnico_sem_jogos: float = 0.5
+    contexto_min_jogos_tecnico: int = 5
+    # Trecho "atual" de quem nao trocou de tecnico: os ultimos N jogos. 5 e' a
+    # mesma janela de forma do dossie e do rodizio (dossie_da_partida).
+    contexto_janela_recente: int = 5
+    # Historico com 2+ jogos ja' disputados fora da folha nao descreve o time
+    # de hoje: o mais recente falta. Com 1, o jogo pode so' nao ter sincronizado
+    # ainda (coleta da madrugada) -- vira fator de incerteza, nao bloqueio.
+    contexto_max_jogos_faltando: int = 2
+    # Revalidacao antes de publicar (revalidacao.py): quando a API nao responde
+    # e a linha e' conferida so' no banco, cotacao mais velha que isto nao
+    # vale. A rotina coleta odd e roda o motor na mesma passada, entao odd de
+    # 6h ja' e' de outra rodada.
+    max_idade_odd_publicacao_seg: int = 6 * 3600
+
 
 DEFAULT_CONFIG = PickEngineConfig()
 

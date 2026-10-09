@@ -347,6 +347,14 @@ def _candidate_summary(c: dict) -> dict:
         "dixon_coles_sombra": c.get("dixon_coles_sombra"),
         # Recalibracao em sombra (08/10) · ver pick_engine/recalibracao.py.
         "prob_recalibrada_sombra": c.get("prob_recalibrada_sombra"),
+        # CONTEXTO ATUAL (2026-10-08): a probabilidade com e sem o contexto,
+        # a amostra efetiva e os fatores, gravados ligado ou nao -- e' o que
+        # scripts/medir_contexto_atual.py cruza com o resultado.
+        "modo_contexto": c.get("modo_contexto"),
+        "contexto_sombra": c.get("contexto_sombra"),
+        "amostra_efetiva": c.get("amostra_efetiva"),
+        "contexto_partida": c.get("contexto_partida"),
+        "avaliacao": c.get("avaliacao"),
         "line_score": c.get("line_score"),
         "final_score": c.get("final_score"),
         "is_best_pick": c.get("is_best_pick", False),

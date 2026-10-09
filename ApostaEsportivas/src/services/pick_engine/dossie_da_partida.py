@@ -46,6 +46,8 @@ _MEMO: dict = {}
 #: Sinal de desfalque/tecnico por fixture, no formato de news_model.injury_signal.
 #: Sai do mesmo memo do dossie: nenhuma consulta nem requisicao a mais.
 _SINAL: dict = {}
+#: Contexto atual do motor por fixture (contexto_atual.coletar), mesmo memo.
+_CONTEXTO: dict = {}
 
 #: Titular recente = comecou jogando em pelo menos isto dos ultimos 5 jogos.
 TITULAR_RECENTE = 2
@@ -228,12 +230,16 @@ def _escalacoes_recentes(cur, team_id: int, antes_de, limite: int = 5) -> tuple:
 
 def _desfalques(team_id: int, fixture_id: int, escalacoes: list) -> list | None:
     """Desfalques da partida, cada um com quantas vezes COMECOU JOGANDO nos
-    ultimos jogos (cruzado por id em team_lineups/player_match_stats)."""
+    ultimos jogos (cruzado por id em team_lineups/player_match_stats).
+
+    None = nao se sabe (desligado ou a API falhou); [] = a API respondeu e
+    ninguem esta' fora. A diferenca importa desde 2026-10-08: o contexto atual
+    registra a falha em vez de ler "sem desfalque"."""
     if os.getenv("AI_DOSSIE_DESFALQUES", "on").strip().lower() == "off":
         return None
     try:
         from services.pick_engine.news_model import fetch_injuries
-        lista = fetch_injuries(team_id, fixture_id=fixture_id)
+        lista = fetch_injuries(team_id, fixture_id=fixture_id, levantar=True)
     except Exception:
         return None
     inicios: dict = {}
@@ -311,6 +317,45 @@ def _gols_por_faixa(cur, team_id, quando):
     return gols_por_faixa(cur, team_id, quando)
 
 
+def _contexto_do_motor(cur, fixture_id, casa, fora, quando, desfalques, extras) -> dict | None:
+    """contexto_atual.coletar com o que o dossie ja' tem em maos. So'
+    "Missing Fixture" conta como fora; "Questionable" vira duvida (incerteza,
+    nunca desconto -- ninguem sabe se joga)."""
+    from services.pick_engine import contexto_atual
+    if contexto_atual.modo() == "off":
+        return None
+    por_lado = {}
+    for lado, team_id in (("home", casa), ("away", fora)):
+        lista = desfalques.get(team_id)
+        if lista is None:
+            por_lado[lado] = {"falhou": os.getenv("AI_DOSSIE_DESFALQUES", "on")
+                              .strip().lower() != "off"}
+            continue
+        por_lado[lado] = {
+            "fora": {d["_id"] for d in lista
+                     if d.get("_id") and (d.get("tipo") or "").lower() == "missing fixture"},
+            "duvidas": [d["jogador"] for d in lista
+                        if (d.get("tipo") or "").lower() == "questionable"],
+        }
+    calendario = {t: extras.get(("calendario", t)) for t in (casa, fora)
+                  if extras.get(("calendario", t))}
+    try:
+        return contexto_atual.coletar(cur, fixture_id, casa, fora, quando, por_lado, calendario)
+    except Exception as e:
+        cur.connection.rollback()
+        print(f"[DOSSIE] contexto atual do fixture {fixture_id}: {e}")
+        return None
+
+
+def contexto_do_motor(fixture_id: int) -> dict | None:
+    """Contexto atual da partida pro motor (contexto_partida de
+    orchestrator.analyze_fixture_markets). Sai do mesmo memo do dossie."""
+    if not fixture_id:
+        return None
+    _obter(fixture_id)
+    return _CONTEXTO.get(fixture_id)
+
+
 def sinal_de_desfalques(fixture_id: int) -> dict | None:
     """Sinal de desfalques e troca de tecnico pro Score Final do motor
     (news_data de orchestrator.analyze_fixture_markets). None sem dado.
@@ -384,6 +429,12 @@ def _montar(fixture_id: int) -> dict | None:
         escal_casa = _escalacoes_recentes(cur, casa, quando)
         escal_fora = _escalacoes_recentes(cur, fora, quando)
         extras = _contexto_extra(cur, fixture_id, casa, fora, quando)
+        # Uma consulta de /injuries por time, usada por TRES leitores: o dossie
+        # da IA, o news_score e o contexto atual do motor.
+        desfalques = {casa: _desfalques(casa, fixture_id, escal_casa[0]),
+                      fora: _desfalques(fora, fixture_id, escal_fora[0])}
+        _CONTEXTO[fixture_id] = _contexto_do_motor(
+            cur, fixture_id, casa, fora, quando, desfalques, extras)
     finally:
         cur.close()
         conn.close()
@@ -392,7 +443,7 @@ def _montar(fixture_id: int) -> dict | None:
 
     def time(team_id, nome, hist, mando, escal):
         rod = rodizio(*escal)
-        desf = _desfalques(team_id, fixture_id, escal[0])
+        desf = desfalques.get(team_id)
         sinal[mando] = _sinal_do_lado(desf, rod)
         # Pra IA: titular recente primeiro, e sem o id interno.
         desf_ia = sorted(({k: v for k, v in d.items() if k != "_id"} for d in desf or []),
@@ -409,6 +460,7 @@ def _montar(fixture_id: int) -> dict | None:
         }
         return {k: v for k, v in bloco.items() if v not in (None, {}, [])}
 
+    from services.pick_engine import contexto_atual
     dossie = {
         "rodada": rodada,
         "mandante": time(casa, nome_casa, hist_casa, "home", escal_casa),
@@ -416,6 +468,9 @@ def _montar(fixture_id: int) -> dict | None:
         "confronto_direto": confronto_direto(h2h, casa),
         "pressao_de_tabela": competitive_pressure.descrever(pressao) or None,
         "clima_e_altitude": extras.get("clima"),
+        # Tecnico e desde quando, producao dos desfalcados, viagem, fontes que
+        # falharam -- o que o motor usou (ou mediu, em sombra) na conta.
+        "contexto_atual": contexto_atual.resumo_para_ia(_CONTEXTO.get(fixture_id)),
     }
     _SINAL[fixture_id] = sinal
     return {k: v for k, v in dossie.items() if v not in (None, {}, [])}

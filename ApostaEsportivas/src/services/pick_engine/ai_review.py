@@ -228,6 +228,25 @@ def build_review_payload(picks: list[dict], pipeline: str, fixture: dict | None 
             # muda o cache_key dos outros seis pipelines, que e' a mesma
             # precaucao que `league_profile` toma logo acima.
             **({"player": pick["player_stats"]} if pick.get("player_stats") else {}),
+            # CONTEXTO ATUAL (2026-10-08): quanto do historico o motor deixou
+            # de considerar representativo NESTA linha (tecnico novo, forma que
+            # destoou, producao dos desfalcados), os fatores de incerteza da
+            # partida e a odd conferida na hora de publicar. So' quando existe.
+            **({"contexto_atual": {
+                "incerteza": ((pick.get("avaliacao") or {}).get("incerteza_contextual")
+                              or {"indice": (pick.get("contexto_sombra") or {}).get(
+                                  "incerteza_contextual"),
+                                  "fatores": [f.get("fator") for f in
+                                              (pick.get("contexto_sombra") or {}).get("fatores") or []]}),
+                "aplicado_na_probabilidade": pick.get("modo_contexto") == "on",
+                "probabilidade_sem_contexto": (pick.get("contexto_sombra") or {}).get(
+                    "taxa_sem_contexto"),
+                "probabilidade_com_contexto": (pick.get("contexto_sombra") or {}).get("taxa"),
+            }} if pick.get("contexto_sombra") or (pick.get("contexto_partida") or {}).get(
+                "fatores_de_incerteza") else {}),
+            **({"revalidacao_da_odd": {k: pick["revalidacao"].get(k) for k in
+                                       ("fonte", "odd_antes", "odd_agora", "ev_agora")}}
+               if pick.get("revalidacao") else {}),
         } for pick in picks],
         # BILHETE (2026-09-11). Os campos acima descrevem PERNAS soltas, e era
         # so' isso que a revisao da alavancagem recebia: nenhuma informacao de
@@ -486,6 +505,12 @@ class AIReviewGate:
             "tabela e pressao de pontos corridos, rodizio de titulares e desfalques. Vete quando o dossie contradiz "
             "o pick de forma objetiva (ex.: desfalque de titular que sustenta o mercado, rodizio forte, forma recente "
             "oposta a media, time que precisa do resultado num Under que depende de jogo travado). "
+            "Em `dossie.contexto_atual` e em `contexto_atual` de cada pick estao o tecnico atual e desde quando, "
+            "quantos jogos ele tem, a producao (gols, chutes, cartoes, faltas, minutos) dos jogadores fora, "
+            "duvidas de escalacao, viagem e fontes que falharam; o motor ja' converteu isso em amostra efetiva. "
+            "Use para interpretar o que os numeros nao captam (ex.: tecnico estreando com esquema diferente num "
+            "mercado que depende do estilo, desfalque que muda a funcao do time). Fonte que falhou e' ausencia de "
+            "informacao, nao evidencia; nunca suponha noticia que nao esta' no JSON. "
             "Responda somente JSON com decision (approve|reject), risk_level (low|medium|high), reasons e evidence_gaps."
         )
 

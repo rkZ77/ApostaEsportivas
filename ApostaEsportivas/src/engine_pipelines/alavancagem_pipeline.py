@@ -31,6 +31,7 @@ from services.team_stats_service import TeamStatsService
 from services.referee_stats_service import RefereeStatsService
 from services.standings_service import StandingsService
 from services.pick_engine import dossie_da_partida
+from services.pick_engine import revalidacao
 from services.pick_engine import analyze_fixture_markets, rank_market_candidates, explain
 from services.pick_engine.ai_review import review_gate
 from services.pick_engine.config import ALAVANCAGEM_CONFIG
@@ -348,6 +349,9 @@ def _gather_leg_candidates(fixtures: list, used_pairs: set) -> list:
                 # DESFALQUES E TECNICO NOVO (2026-09-27): derrubam o Score Final
                 # via news_score. Mesmo dado do dossie da IA -- ver dossie_da_partida.
                 news_data=dossie_da_partida.sinal_de_desfalques(fixture["fixture_id"]),
+                # CONTEXTO ATUAL (2026-10-08): tecnico, desfalques por producao,
+                # calendario e historico atrasado -- ver contexto_atual.
+                contexto_partida=dossie_da_partida.contexto_do_motor(fixture["fixture_id"]),
                 team_stats_home=team_stats_home, team_stats_away=team_stats_away,
             league_baseline=league_baseline,
             rastro=rastro,
@@ -693,6 +697,12 @@ def run_alavancagem_engine():
         # `league_profile` em ai_review.build_review_payload).
         for _p in combo:
             _p["bilhete"] = avaliacao
+        # Toda perna ainda cotada e com valor na odd de agora (2026-10-08).
+        vivas = revalidacao.pernas_ok(list(combo), ALAVANCAGEM_CONFIG,
+                                      rotulo="ALAVANCAGEM_ENGINE")
+        if vivas is None:
+            continue
+        combo = tuple(vivas)
         reviewed = review_gate("alavancagem").apply(list(combo), "alavancagem")
         if not reviewed:
             print("[ALAVANCAGEM_ENGINE] Combinacao vetada pela revisao de IA.")

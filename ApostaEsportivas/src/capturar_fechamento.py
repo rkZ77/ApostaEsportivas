@@ -122,7 +122,29 @@ def rodada(coletor: OddsCollectorService) -> int:
             continue
         n = coletor.save_snapshot_only(fixture_id, data["bookmakers"])
         print(f"[FECHAMENTO] fixture {fixture_id}: {n} cotacao(oes) no retrato.")
+        _reavaliar(fixture_id)
     return por_comecar
+
+
+def _reavaliar(fixture_id: int) -> None:
+    """Reavaliacao dos picks do jogo com o retrato que acabou de sair (ver
+    pick_engine/reavaliacao.py). Nunca derruba o fechamento: o CLV e' o
+    trabalho principal desta passada."""
+    try:
+        from services.pick_engine import reavaliacao
+        conn = get_connection()
+        cur = conn.cursor()
+        try:
+            r = reavaliacao.reavaliar_fixture(cur, fixture_id)
+            if r:
+                alertas = sum(1 for x in r if x.get("alerta"))
+                print(f"[FECHAMENTO] fixture {fixture_id}: {len(r)} pick(s) reavaliado(s), "
+                      f"{alertas} com alerta.")
+        finally:
+            cur.close()
+            conn.close()
+    except Exception as e:
+        print(f"[FECHAMENTO] reavaliacao do fixture {fixture_id} falhou: {e}")
 
 
 def run(loop: bool = False) -> None:

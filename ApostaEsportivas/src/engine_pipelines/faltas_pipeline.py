@@ -36,6 +36,7 @@ from services.standings_service import StandingsService
 from services.pick_engine import competition_profile as cp
 from services.pick_engine import context_gate, tie_effect
 from services.pick_engine import stats_model
+from services.pick_engine import contexto_atual, dossie_da_partida, revalidacao
 from services.pick_engine.config import DEFAULT_CONFIG
 from services.pick_engine.fouls_model import (
     LINHAS_SUPORTADAS,
@@ -303,6 +304,63 @@ def _media_faltas(historico: list, team_id: int,
     return round(sum(valores) / len(valores), 3), len(valores)
 
 
+def _revalidar_linha(c: dict, odds_service: OddsService) -> dict | None:
+    """A linha de faltas ainda esta' cotada, e ainda vale, na hora de publicar?
+
+    Mesma regra de pick_engine.revalidacao, mas lendo as odds CRUAS (faltas
+    tem a linha no texto do value_name e load_odds_structured a descarta --
+    ver _avaliar_fixture). Atualiza na API, rele so' o que foi cotado agora,
+    exige a linha na faixa e margem acima de EDGE_MIN com a odd de agora.
+    """
+    if revalidacao.modo() == "off":
+        return c
+    fid = c["fixture"]["fixture_id"]
+    janela, falha = (None, None)
+    if revalidacao.modo() == "api":
+        janela, falha = revalidacao._atualizar_na_api(fid)
+    fonte = "api" if janela is not None else "banco"
+    if janela is None:
+        janela = DEFAULT_CONFIG.max_idade_odd_publicacao_seg
+    try:
+        ofertas = _odds_over_faltas(odds_service.load_odds_by_fixture(fid, max_idade_seg=janela))
+    except Exception as e:
+        print(f"[FALTAS_ENGINE] Fixture {fid}: revalidacao falhou ({e}) -- pick nao publicado.")
+        return None
+    oferta = ofertas.get(c["line"])
+    p = c["probability"]
+    if not oferta:
+        print(f"[FALTAS_ENGINE] Fixture {fid}: Over {c['line']} faltas nao esta' mais cotado "
+              f"(fonte {fonte}) -- pick nao publicado.")
+        return None
+    edge = round(p - 1 / oferta["odd"], 4)
+    if edge < EDGE_MIN:
+        print(f"[FALTAS_ENGINE] Fixture {fid}: margem caiu pra {edge:+.1%} com a odd de agora "
+              f"{oferta['odd']} -- pick nao publicado.")
+        return None
+    reval = {"ok": True, "fonte": fonte, "odd_antes": c["odd"], "odd_agora": oferta["odd"],
+             **({"falha_api": falha} if falha else {})}
+    return {**c, "odd": oferta["odd"], "bookmaker": oferta["bookmaker"],
+            "market_id": oferta["market_id"], "edge": edge,
+            "ev": round(p * (oferta["odd"] - 1) - (1 - p), 4),
+            "fair_odd": round(1 / p, 3), "revalidacao": reval}
+
+
+def _serie_faltas(historico: list, team_id: int) -> list:
+    """[(data, faltas do time)] jogo a jogo -- a serie em que o contexto
+    atual testa se o tecnico novo / a forma recente destoam do historico."""
+    serie = []
+    for jogo in historico:
+        if jogo.get("home_team_id") == team_id:
+            v = jogo.get("home_fouls")
+        elif jogo.get("away_team_id") == team_id:
+            v = jogo.get("away_fouls")
+        else:
+            continue
+        if v is not None and v > 0:
+            serie.append((jogo.get("match_date"), float(v)))
+    return serie
+
+
 _OVER_RE = re.compile(r"^over\s+([\d.,]+)$", re.IGNORECASE)
 
 
@@ -452,6 +510,19 @@ def _avaliar_fixture(fixture: dict, match_stats: MatchStatsService,
     contexto = context_gate.build_for_fixture(
         match_stats, fixture, conv_cartoes, league_table=league_table)
 
+    # CONTEXTO ATUAL (2026-10-08): o mesmo do motor generico (ver
+    # contexto_atual). Historico atrasado barra a partida em MOTOR_CONTEXTO=on;
+    # tecnico novo, forma e desfalques entram na probabilidade calibrada de
+    # cada linha la' embaixo, testados sobre as FALTAS de cada time.
+    ctx_motor = (dossie_da_partida.contexto_do_motor(fixture["fixture_id"])
+                 if contexto_atual.modo() != "off" else None)
+    ctx_partida, bloqueio = contexto_atual.bloqueio_da_partida(
+        ctx_motor, hist_casa, hist_fora, DEFAULT_CONFIG)
+    if bloqueio:
+        return None, bloqueio
+    series_faltas = {"home": _serie_faltas(hist_casa, fixture["home_team_id"]),
+                     "away": _serie_faltas(hist_fora, fixture["away_team_id"])}
+
     arbitro = referee_service.get_stats(fixture.get("referee"), fixture["season"])
     media_arbitro = float(arbitro["avg_fouls"]) if arbitro and arbitro.get("avg_fouls") else None
     n_arbitro = int(arbitro["games"]) if arbitro and arbitro.get("games") else None
@@ -531,6 +602,19 @@ def _avaliar_fixture(fixture: dict, match_stats: MatchStatsService,
             motivos_vistos.add(PROB_BAIXA)
             continue
 
+        # Contexto atual: em `on` a calibrada vira a de contexto e passa de
+        # novo pelo piso; em `shadow` so' o registro.
+        calibrada, ctx_linha = contexto_atual.probabilidade_para_modelo_proprio(
+            ctx_motor, "fouls", "total", calibrada, n_time, oferta["odd"],
+            series_faltas, DEFAULT_CONFIG)
+        if ctx_linha:
+            analise["contexto_sombra"] = ctx_linha
+            if ctx_linha["aplicado"]:
+                analise["amostra_efetiva"] = ctx_linha["amostra_efetiva"]
+                if calibrada < PROB_MIN:
+                    motivos_vistos.add(PROB_BAIXA)
+                    continue
+
         qualidade = data_quality_score(
             n_casa, n_fora, analise.get("faixa_amostra") or 0,
             analise.get("usou_arbitro", False), n_arbitro)
@@ -596,6 +680,8 @@ def _avaliar_fixture(fixture: dict, match_stats: MatchStatsService,
             home_team=fixture.get("home_team"), away_team=fixture.get("away_team"),
             match_context=contexto),
         "match_context": contexto,
+        "contexto_partida": ctx_partida,
+        "modo_contexto": contexto_atual.modo() if ctx_motor else "off",
         # CONTRATO COM A REVISAO DE IA (2026-09-11). `build_review_payload` le
         # chaves com os nomes do motor generico (`value_label`, `taxa_real`,
         # `confidence`, `data_quality_score`...), e este pipeline nunca teve
@@ -718,6 +804,10 @@ def _salvar(cur, c: dict) -> None:
         # A tela le' `engine_debug.amostra`, entao a CHAVE GRAVADA nao muda.
         "amostra": c.get("amostra_exibida"),
         "ai_review": c.get("ai_review"),
+        # Contexto atual e revalidacao da odd (2026-10-08).
+        "contexto_atual": {"modo": c.get("modo_contexto"), "linha": c.get("contexto_sombra"),
+                           "partida": c.get("contexto_partida")},
+        "revalidacao": c.get("revalidacao"),
     }, default=str, ensure_ascii=False)
 
     cur.execute(f"""
@@ -834,6 +924,9 @@ def run_faltas_engine():
         # candidato unico e ja' escolhido: marca explicitamente pro resumo do
         # decision_log sinalizar "<== ESCOLHIDO" como nos outros pipelines.
         log_decision("FALTAS_ENGINE", c["fixture"], [{**c, "is_best_pick": True}], [c])
+        c = _revalidar_linha(c, odds_service)
+        if c is None:
+            continue
         aprovado = gate.apply([c], "faltas", c["fixture"])
         if not aprovado:
             print(f"[FALTAS_ENGINE] Fixture {c['fixture']['fixture_id']} vetado pela revisao de IA.")

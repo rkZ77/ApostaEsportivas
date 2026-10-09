@@ -65,6 +65,7 @@ from services.team_stats_service import TeamStatsService
 from services.referee_stats_service import RefereeStatsService
 from services.standings_service import StandingsService
 from services.pick_engine import dossie_da_partida
+from services.pick_engine import revalidacao
 from services.pick_engine import analyze_fixture_markets, explain, homologation
 from services.pick_engine.ai_review import review_gate
 from services.pick_engine.config import BINGO_CONFIG
@@ -294,6 +295,9 @@ def _gather_leg_candidates(fixtures: list, used_pairs: set) -> list:
                 # DESFALQUES E TECNICO NOVO (2026-09-27): derrubam o Score Final
                 # via news_score. Mesmo dado do dossie da IA -- ver dossie_da_partida.
                 news_data=dossie_da_partida.sinal_de_desfalques(fixture["fixture_id"]),
+                # CONTEXTO ATUAL (2026-10-08): tecnico, desfalques por producao,
+                # calendario e historico atrasado -- ver contexto_atual.
+                contexto_partida=dossie_da_partida.contexto_do_motor(fixture["fixture_id"]),
                 team_stats_home=team_stats_home, team_stats_away=team_stats_away,
                 league_baseline=league_baseline,
                 config=BINGO_CONFIG,
@@ -559,6 +563,14 @@ def run_bingo_engine():
         return
 
     combo, score_combo, odd_total = result
+
+    # Toda perna ainda cotada e com valor na odd de agora (2026-10-08).
+    vivas = revalidacao.pernas_ok(list(combo), BINGO_CONFIG, rotulo="BINGO_ENGINE")
+    if vivas is None:
+        cur.close()
+        conn.close()
+        return
+    combo = tuple(vivas)
 
     # A IA revisa a CARTELA INTEIRA numa chamada -- ela veta, nunca escolhe
     # (ver services/pick_engine/ai_review.py). Falha do provedor mantem o

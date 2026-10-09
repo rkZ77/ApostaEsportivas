@@ -444,13 +444,23 @@ def convergencia_da_perna(leg: dict) -> dict:
 CRITICA, GRAVE = "critica", "grave"
 
 
+def amostra_da_perna(leg: dict):
+    """Jogos que a perna pode alegar. Com MOTOR_CONTEXTO=on, a amostra
+    EFETIVA (contexto_atual): o bilhete nao pode aprovar a perna pelo numero
+    que o pick simples ja' deixou de aceitar. Inteira pra caber nas faixas."""
+    n, efetiva = leg.get("amostra"), leg.get("amostra_efetiva")
+    if efetiva is None or n is None:
+        return n
+    return int(min(n, efetiva))
+
+
 def detectar_contradicoes(leg: dict, cfg: ComboConfig = DEFAULT_COMBO_CONFIG) -> list:
     """Contradicoes DENTRO de uma perna -- §32. Sao pares de sinais que, cada
     um sozinho, passariam nos gates, e que juntos dizem que o numero nao
     merece o credito que ele esta' pedindo."""
     achados = []
     conf = float(leg.get("confidence") or 0)
-    amostra = int(leg.get("amostra") or 0)
+    amostra = int(amostra_da_perna(leg) or 0)
     prob = float(leg.get("taxa_real") or 0)
     ev = float(leg.get("ev") or 0)
     dq = leg.get("data_quality_score")
@@ -510,7 +520,7 @@ def perfil_da_perna(leg: dict, cfg: ComboConfig = DEFAULT_COMBO_CONFIG) -> dict:
       probability_model       Poisson/Binomial Negativa pra mesma linha
       probability_calibrated  a que passou pelos gates e vira edge/EV/odd justa
     """
-    amostra = classificar_amostra(leg.get("amostra"))
+    amostra = classificar_amostra(amostra_da_perna(leg))
     conv = convergencia_da_perna(leg)
     prob = float(leg.get("taxa_real") or 0)
     dq = leg.get("data_quality_score")

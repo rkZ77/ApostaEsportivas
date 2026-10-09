@@ -253,6 +253,32 @@ def build_explanation(candidate: dict) -> dict:
                     + " · cruzamento entre a lista de lesões/suspensões e as escalações recentes"
                 )
 
+    # CONTEXTO ATUAL (2026-10-08). So' quando entrou na conta (MOTOR_CONTEXTO=
+    # on): em sombra o numero nao mudou nada, e escrever sobre ele seria
+    # explicar uma decisao que nao aconteceu.
+    sombra = candidate.get("contexto_sombra") or {}
+    if candidate.get("modo_contexto") == "on" and sombra.get("fatores"):
+        _NOMES_PRODUCAO = {"gols": "dos gols", "chutes": "dos chutes",
+                           "chutes_no_alvo": "dos chutes no alvo", "cartoes": "dos cartões",
+                           "faltas": "das faltas", "minutos": "dos minutos"}
+        for f in sombra["fatores"]:
+            if f.get("fator") == "tecnico":
+                desde = next((c.get("desde") for c in (f.get("cortes") or {}).values()
+                              if c.get("desde")), None)
+                risks.append(
+                    "Técnico novo" + (f" desde {desde[8:10]}/{desde[5:7]}" if desde else "")
+                    + f": os jogos do comando anterior passam a valer {f['a0'] * 100:.0f}% "
+                    f"neste mercado")
+            elif f.get("fator") == "forma":
+                risks.append(f"A forma recente destoa da temporada neste mercado: os jogos "
+                             f"mais antigos passam a valer {f['a0'] * 100:.0f}%")
+            elif f.get("fator") == "desfalques":
+                risks.append(f"Os desfalques respondem por {f['fracao'] * 100:.0f}% "
+                             f"{_NOMES_PRODUCAO.get(f.get('producao'), 'da produção')} "
+                             f"dos últimos jogos")
+        risks.append(f"Amostra efetiva de {sombra['amostra_efetiva']:.1f} jogos depois do "
+                     f"contexto atual (de {candidate.get('amostra')})")
+
     # Projecao x linha em texto. Os dois lados aparecem: folga confortavel e'
     # argumento a favor, projecao colada na linha (ou apontando pro lado
     # contrario) e' risco declarado. Sem isso o usuario lia a probabilidade e

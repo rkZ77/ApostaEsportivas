@@ -1340,6 +1340,12 @@ def montar_engine_debug(analise: dict, candidato: dict, config: LiveEngineConfig
         "data_quality": candidato["debug"].get("data_quality"),
         "adjusted_ev": candidato["debug"].get("ev_ajustado"),
         "current_state": {k: v for k, v in estado.items() if not k.startswith("_")},
+        # Contexto atual de antes do apito (tecnico, desfalques, calendario --
+        # ver pick_engine/contexto_atual). SO' RASTRO, de proposito: ao vivo a
+        # evidencia do modelo e' o proprio jogo, com a escalacao oficial e o
+        # mercado ao vivo ja' sabendo de tudo isso. Por na conta contaria o
+        # mesmo fato duas vezes. A IA o le' pelo dossie.
+        "contexto_pre_jogo": candidato.get("contexto_pre_jogo"),
         "folha_bruta": {"home": estado.get("_folha_home"), "away": estado.get("_folha_away")},
         "freshness": analise.get("freshness"),
         "pressure": analise.get("pressao"),
@@ -2160,6 +2166,12 @@ def _processar_partida(indice: int, bruto: dict, cur, conn, feed: LiveFeed,
         resumo.update({"decisao": "NO PICK", "motivo": "vetado pela revisao de IA"})
         return resumo
     melhor = {**melhor, "ai_review": revisados[0].get("ai_review")}
+    try:
+        from services.pick_engine import contexto_atual, dossie_da_partida
+        melhor["contexto_pre_jogo"] = contexto_atual.resumo_para_ia(
+            dossie_da_partida.contexto_do_motor(fid))
+    except Exception:
+        melhor["contexto_pre_jogo"] = None   # rastro nunca derruba o pick
 
     try:
         pick_id = salvar_pick(cur, analise, melhor, config, _data_br_do_jogo(bruto))

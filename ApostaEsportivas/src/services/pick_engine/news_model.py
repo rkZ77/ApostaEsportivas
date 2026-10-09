@@ -22,10 +22,14 @@ BASE = "https://v3.football.api-sports.io"
 
 
 def fetch_injuries(team_id: int, fixture_id: int = None, season: int = None,
-                    league_id: int = None) -> list:
+                    league_id: int = None, levantar: bool = False) -> list:
     """Retorna lesionados/suspensos do time. Usa fixture_id para precisao
     maxima; cai em nivel de temporada se nao fornecido. Formato:
-    [{"name": "Player", "type": "Injured", "reason": "Hamstring"}, ...]"""
+    [{"name": "Player", "type": "Injured", "reason": "Hamstring"}, ...]
+
+    `levantar=True` repassa a falha em vez de devolver []: quem precisa
+    separar "ninguem fora" de "nao consegui perguntar" (o contexto atual do
+    motor) pede assim."""
     try:
         if fixture_id:
             params = {"fixture": fixture_id, "team": team_id}
@@ -58,6 +62,8 @@ def fetch_injuries(team_id: int, fixture_id: int = None, season: int = None,
 
     except Exception as e:
         print(f"[NEWS_MODEL] Erro ao buscar lesionados/suspensos team {team_id}: {e}")
+        if levantar:
+            raise
         return []
 
 
