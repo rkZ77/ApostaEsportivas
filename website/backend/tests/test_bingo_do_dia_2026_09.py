@@ -270,8 +270,12 @@ class TestUmaPorDia:
         """A cartela não liquida sozinha: alguém precisa pedir a folha das
         quatro partidas. Sem esta varredura ela ficaria esperando outro produto
         pedir a mesma fixture por acaso."""
-        from collectors import match_statistics_sync_service as sync
-        fonte = open(sync.__file__, encoding="utf-8").read()
+        # Pelo CAMINHO, e nao importando: o modulo exige API_FOOTBALL_KEY na
+        # subida, e o teste so' precisa ler o texto.
+        import pathlib
+        caminho = (pathlib.Path(__file__).resolve().parents[3] / "ApostaEsportivas" / "src"
+                   / "collectors" / "match_statistics_sync_service.py")
+        fonte = caminho.read_text(encoding="utf-8")
         assert '("picks_multiplas", "picks_bingo")' in fonte
 
 
