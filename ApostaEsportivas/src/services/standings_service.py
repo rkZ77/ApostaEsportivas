@@ -23,6 +23,11 @@ class StandingsService:
         WHERE team_id = %s
         AND league_id = %s
         AND season = %s
+        -- Liga com mais de uma tabela na temporada (Argentina: torneio +
+        -- anual) tem uma linha por tabela; sem ordem, o fetchone pegava uma
+        -- qualquer. Fica a de mais jogos, a geral (2026-10-09).
+        ORDER BY played DESC NULLS LAST, updated_at DESC NULLS LAST
+        LIMIT 1
 
         """, (team_id, league_id, season))
 
@@ -68,11 +73,19 @@ class StandingsService:
         try:
             conn = get_connection()
             cur = conn.cursor()
+            # UM time, UMA linha (2026-10-09): com torneio e tabela anual
+            # gravados juntos, a tabela repetia o time com duas posicoes e a
+            # pressao competitiva media distancia contra uma mistura das duas.
+            # Fica, por time, a tabela de mais jogos -- a geral.
             cur.execute("""
                 SELECT team_id, team_name, rank, points, goals_diff, form,
                        played, win, draw, lose, description
-                FROM league_standings
-                WHERE league_id = %s AND season = %s
+                FROM (
+                    SELECT DISTINCT ON (team_id) *
+                      FROM league_standings
+                     WHERE league_id = %s AND season = %s
+                     ORDER BY team_id, played DESC NULLS LAST, updated_at DESC NULLS LAST
+                ) t
                 ORDER BY rank
             """, (league_id, season))
             linhas = [

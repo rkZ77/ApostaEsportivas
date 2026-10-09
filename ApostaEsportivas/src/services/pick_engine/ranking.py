@@ -3,6 +3,8 @@ Final. Fase 5: mercado (qual familia vence) e escolhido 100% por
 estatistica (final_score, sem EV); odd so entra depois, na escolha da
 LINHA dentro do mercado ja vencedor (select_smart_safe_line/line_score),
 preferindo uma faixa conservadora de odd sem travar nela."""
+import math
+
 from services.pick_engine.config import PickEngineConfig, DEFAULT_CONFIG
 
 # Grupo de correlacao (familia raiz) por market_type -- mercados do mesmo
@@ -568,6 +570,60 @@ def select_final_picks_debug(ranked_eligible: list, max_picks: int = 3) -> tuple
         c["is_best_pick"] = c is best
 
     return picked, excluded
+
+
+# ---------------------------------------------------------------------------
+# SELETOR POR VALOR AJUSTADO A INCERTEZA (2026-10-09) -- AINDA NAO DECIDE.
+# ---------------------------------------------------------------------------
+# O "melhor do jogo" sai do final_score, que nao olha EV nem incerteza: entre
+# dois aprovados, ganha o de maior confidence, mesmo que o outro pague mais
+# pela mesma chance. A alternativa abaixo ordena pelo EV no LIMITE INFERIOR da
+# probabilidade -- p menos z erros-padrao da posterior Beta que o proprio
+# encolhimento do motor implica (amostra efetiva n, forca do prior k=10):
+#
+#     ep(p) = sqrt(p(1-p) / (n + k + 1))      EV_inf = (p - z*ep) * odd - 1
+#
+# EV alto sustentado por amostra curta perde pra EV um pouco menor sustentado
+# por amostra longa. Os mesmos gates de rank_all_candidates continuam valendo:
+# isto so' reordena quem ja' passou.
+#
+# NAO E' USADO NA PUBLICACAO. scripts/comparar_motor.py roda o seletor atual e
+# este nas MESMAS partidas, com o que se sabia antes do apito, e so' ele diz se
+# troca. Os pipelines gravam a escolha que este seletor faria (selecao_sombra).
+_K_PRIOR = 10
+
+
+def erro_padrao_da_probabilidade(c: dict) -> float | None:
+    p = c.get("taxa_real")
+    n = c.get("amostra_efetiva", c.get("amostra"))
+    if p is None or n is None:
+        return None
+    p, n = float(p), float(n)
+    if not 0 < p < 1:
+        return 0.0
+    return math.sqrt(p * (1 - p) / (n + _K_PRIOR + 1))
+
+
+def ev_limite_inferior(c: dict, z: float = 1.0) -> float | None:
+    """EV por unidade no limite inferior da probabilidade. A formula do EV e'
+    a mesma de sempre, p*(odd-1) - (1-p) = p*odd - 1, com a odd de avaliacao
+    (a que o pick publica)."""
+    ep = erro_padrao_da_probabilidade(c)
+    odd = c.get("odd")
+    if ep is None or not odd:
+        return None
+    p_inf = max(0.0, float(c["taxa_real"]) - z * ep)
+    return round(p_inf * float(odd) - 1, 4)
+
+
+def escolher_por_valor(aprovados: list, z: float = 1.0) -> dict | None:
+    """O candidato que o seletor por valor publicaria entre os APROVADOS.
+    Empate (raro) desempata pelo final_score, que e' o criterio de hoje."""
+    com_valor = [(ev_limite_inferior(c, z), c) for c in aprovados or []]
+    com_valor = [(v, c) for v, c in com_valor if v is not None]
+    if not com_valor:
+        return None
+    return max(com_valor, key=lambda vc: (vc[0], vc[1].get("final_score") or 0))[1]
 
 
 def rank_market_candidates(candidates: list, config: PickEngineConfig = DEFAULT_CONFIG) -> list:

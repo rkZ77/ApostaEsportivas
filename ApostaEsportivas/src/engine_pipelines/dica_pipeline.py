@@ -18,7 +18,7 @@ from services.pick_engine import revalidacao
 from services.pick_engine import analyze_fixture_markets, rank_market_candidates, explain, homologation
 from services.pick_engine.ai_review import review_gate
 from services.pick_engine.config import DICA_CONFIG
-from services.pick_engine.staking import calculate_stake
+from services.pick_engine.staking import calculate_stake, calculate_stake_por_probabilidade
 from services.pick_engine import team_profile_model as tpm
 from services.pick_engine import context_model as ctx
 from services.pick_engine import team_strength as ts
@@ -349,8 +349,10 @@ def _melhores_por_jogo(fixtures: list, picks_vip: set | None = None) -> list:
                 continue
             aceitos += 1
             if melhor is None or p["final_score"] > melhor[0]:
+                from engine_pipelines.vip_pipeline import ranking_sombra
                 melhor = (p["final_score"], fixture,
                           {**p, "data_quality_score": quality["score"],
+                                           "selecao_sombra": ranking_sombra(picks, p),
                                            # Ver a nota em vip_pipeline: o BLOCO
                                            # nunca ocupa a chave do CONTADOR.
                                            "amostra_exibida": amostra.build(
@@ -383,6 +385,14 @@ def _save_pick(cur, fixture: dict, pick: dict, data_quality_score: float | None)
     # services/pick_engine/red_analysis.py + calibration.py.
     engine_debug_data = homologation.build_score_breakdown_section(pick, data_quality_score)
     engine_debug_data["ai_review"] = pick.get("ai_review")
+    # SOMBRA (2026-10-09): stake com o Kelly lendo a probabilidade e o pick do
+    # seletor por valor -- ver o mesmo bloco em vip_pipeline._save_pick.
+    sp, su = calculate_stake_por_probabilidade(
+        pick["taxa_real"], pick["confidence"], pick["odd"], pick["ev"], pick_type="free")
+    engine_debug_data["stake_sombra"] = {"stake_pct": sp, "stake_units": su,
+                                         "publicada": {"stake_pct": stake_pct,
+                                                       "stake_units": stake_units}}
+    engine_debug_data["selecao_sombra"] = pick.get("selecao_sombra")
     # A AMOSTRA (2026-08-27): quais jogos o motor leu, ate' 10 por time, com o
     # contexto do confronto (classico, jogo de volta, placar da ida). Puramente
     # ADITIVO -- nenhum calculo le esta chave; ela existe pra o "Entenda esta
