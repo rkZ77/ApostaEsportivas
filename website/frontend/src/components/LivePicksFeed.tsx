@@ -1905,7 +1905,7 @@ export default function LivePicksFeed({ isActive, banca }: {
               : ''}
             Estes já foram liquidados e não aceitam mais entrada.
           </p>
-          <div className="mb-3">
+          <div className="mb-4">
             <FiltrosDePicks
               picks={encerrados as any[]} liga={liveLiga} setLiga={setLiveLiga}
               resultado={liveResultado} setResultado={setLiveResultado}

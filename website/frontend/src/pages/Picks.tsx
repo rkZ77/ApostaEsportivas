@@ -4063,7 +4063,7 @@ export default function Picks() {
                         filtros por um titulo -- dois blocos de controle na
                         mesma tela, com o recorte de dia longe do recorte de
                         lista. Agora e' uma linha: dia, resultado e ordem. */}
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2 mb-4">
                       <BarraDoDia offset={selectedOffset} setOffset={setSelectedOffset}
                                   diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
                                   rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />
@@ -4744,7 +4744,7 @@ export default function Picks() {
             </ComoFunciona>
 
             {/* Dia e filtros na mesma linha · ver o comentario na aba VIP. */}
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 mb-4">
               <BarraDoDia offset={selectedOffset} setOffset={setSelectedOffset}
                           diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
                           rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />
@@ -4837,7 +4837,7 @@ export default function Picks() {
             ) : (
               <>
                 {/* Dia e filtros na mesma linha · ver o comentario na aba VIP. */}
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 mb-4">
                   <BarraDoDia offset={selectedOffset} setOffset={setSelectedOffset}
                               diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
                               rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />
@@ -4914,7 +4914,7 @@ export default function Picks() {
                 </ComoFunciona>
 
                 {/* Dia e filtros na mesma linha · ver o comentario na aba VIP. */}
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 mb-4">
                   <BarraDoDia offset={selectedOffset} setOffset={setSelectedOffset}
                               diasComPick={diasComPick} isoDoOffset={getBrasiliaDateIso}
                               rotuloLongo={todayLabel} dataPorExtenso={todayDateStr} />

@@ -46,13 +46,19 @@ export default function FiltrosDePicks({
   const ativo = Boolean(liga || resultado || bilhete)
 
   return (
-    /* O RESPIRO E' DAQUI, e nao de cada aba (10/09/2026).
+    /* O RESPIRO SAIU DAQUI (09/10/2026). A barra divide a linha com o botao
+     * do dia ("Hoje") numa fila `items-center`, e a margem de baixo entrava
+     * na conta da centralizacao: os filtros subiam meio passo em relacao ao
+     * "Hoje" -- o desalinhamento que o usuario viu em toda aba. Quem poe o
+     * respiro agora e' a linha que contem a barra.
+     *
+     * (historico) O RESPIRO ERA DAQUI, e nao de cada aba (10/09/2026).
      *
      * A barra aparece em sete telas e em nenhuma delas tinha margem embaixo:
      * os cards comecavam colados nos seletores, e o filtro parecia parte do
      * primeiro card em vez de um controle da lista. Corrigir em sete lugares
      * seria sete chances de esquecer o oitavo. */
-    <div className="flex flex-wrap items-center gap-2 mb-4">
+    <div className="flex flex-wrap items-center gap-2">
       {ligas.length > 1 && (
         <SelectMenu
           ariaLabel="Liga"
