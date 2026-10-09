@@ -39,6 +39,8 @@ from services.match_stats_service import MatchStatsService
 from services.standings_service import StandingsService
 from services.odds_service import OddsService
 from services.pick_engine import context_gate, tie_effect
+from services.pick_engine import contexto_atual, dossie_da_partida, revalidacao
+from services.pick_engine.config import DEFAULT_CONFIG
 from services.pick_engine.ai_review import review_gate
 from services.pick_engine.goalkeeper_model import analyze_saves_market
 from services.pick_engine.market_pick_score import pick_score
@@ -417,6 +419,11 @@ def _avaliar_fixture(fixture: dict, cur, odds_service: OddsService,
         fixture["league_id"], fixture["season"]) if standings_service else None)
     contexto = context_gate.build_for_fixture(
         match_stats, fixture, league_table=league_table)
+    # CONTEXTO ATUAL (2026-10-08, ver contexto_atual): tecnico do time do
+    # jogador e desde quando, quem esta' fora (/injuries) e quanto do time sai
+    # com eles. Uma leitura por partida, do memo do dossie.
+    ctx_motor = (dossie_da_partida.contexto_do_motor(fixture["fixture_id"])
+                 if contexto_atual.modo() != "off" else None)
 
     candidatos = []
     motivos: dict = {}
@@ -547,6 +554,32 @@ def _avaliar_fixture(fixture: dict, cur, odds_service: OddsService,
                 analise, penalidade_variancia=ctx["penalidade_variancia"],
                 desconto_contradicao=contradiction.desconto(achados))
 
+            # CONTEXTO ATUAL (2026-10-08).
+            lado = "home" if jogador.get("team_id") == fixture["home_team_id"] else "away"
+            fora = set(((ctx_motor or {}).get(lado) or {}).get("desfalques_ids") or ())
+            if jogador["player_id"] in fora:
+                # Listado FORA DA PARTIDA pela API. A varredura de escalacao ja'
+                # anulava esse pick -- depois de publicado. E' dado, nao sinal
+                # estatistico: vale em shadow tambem.
+                print(f"[PLAYER_STATS] {metodo.slug}: {jogador.get('player_name')} esta' fora "
+                      f"da partida (/injuries) -- sem pick.")
+                continue
+            p_ctx, ctx_linha = contexto_atual.probabilidade_para_modelo_proprio(
+                ctx_motor, "jogador", lado, analise.get("probability"), len(ctx["serie"]),
+                analise.get("odd"),
+                {lado: [(a.get("match_date"), a.get("valor")) for a in ctx["atuacoes"]]},
+                DEFAULT_CONFIG)
+            if ctx_linha:
+                analise["contexto_sombra"] = ctx_linha
+                odd_l = float(analise.get("odd") or 0)
+                if ctx_linha["aplicado"] and p_ctx and odd_l > 1:
+                    analise.update({
+                        "probability": p_ctx, "probability_calibrada": p_ctx,
+                        "fair_odd": round(1 / p_ctx, 3),
+                        "edge": round(p_ctx - 1 / odd_l, 4),
+                        "ev": round(p_ctx * odd_l - 1, 4),
+                        "amostra_efetiva": ctx_linha["amostra_efetiva"]})
+
             escolha = selection.score_de_selecao(
                 probabilidade=analise.get("probability") or 0,
                 amostra=analise.get("amostra"),
@@ -601,6 +634,49 @@ def _avaliar_fixture(fixture: dict, cur, odds_service: OddsService,
         candidatos.extend(do_metodo)
 
     return (candidatos, motivos)
+
+
+def _revalidar_oferta(c: dict, odds_service: OddsService) -> dict | None:
+    """A linha do jogador ainda esta' cotada, e a margem ainda passa, na hora
+    de publicar? Mesma regra de pick_engine.revalidacao, lendo as odds cruas
+    (mercado de jogador nao passa por load_odds_structured). Prefere a mesma
+    casa; se ela tirou a linha, vale a melhor odd de quem ainda cota."""
+    if revalidacao.modo() == "off":
+        return c
+    fid = c["fixture"]["fixture_id"]
+    janela, falha = (None, None)
+    if revalidacao.modo() == "api":
+        janela, falha = revalidacao._atualizar_na_api(fid)
+    fonte = "api" if janela is not None else "banco"
+    if janela is None:
+        janela = DEFAULT_CONFIG.max_idade_odd_publicacao_seg
+    try:
+        cruas = odds_service.load_odds_by_fixture(fid, max_idade_seg=janela)
+    except Exception as e:
+        print(f"[PLAYER_STATS] Fixture {fid}: revalidacao falhou ({e}).")
+        return None
+    antiga = c["oferta"]
+    iguais = [o for o in _ofertas_do_metodo(cruas, c["metodo"])
+              if o["nome_ofertado"] == antiga["nome_ofertado"] and o["n"] == antiga["n"]
+              and o.get("lado") == antiga.get("lado")]
+    if not iguais:
+        print(f"[PLAYER_STATS] {c['jogador'].get('player_name')}: linha {antiga['n']} nao esta' "
+              f"mais cotada (fonte {fonte}).")
+        return None
+    nova = next((o for o in iguais if o.get("bookmaker") == antiga.get("bookmaker")),
+                max(iguais, key=lambda o: o["odd"]))
+    p = c["analise"].get("probability") or 0
+    edge = round(p - 1 / nova["odd"], 4)
+    if edge < cfg.EDGE_MINIMO:
+        print(f"[PLAYER_STATS] {c['jogador'].get('player_name')}: margem {edge:+.1%} com a odd "
+              f"de agora {nova['odd']}.")
+        return None
+    analise = {**c["analise"], "odd": nova["odd"], "edge": edge,
+               "ev": round(p * nova["odd"] - 1, 4),
+               "implied_probability": round(1 / nova["odd"], 4)}
+    return {**c, "oferta": nova, "analise": analise,
+            "revalidacao": {"ok": True, "fonte": fonte, "odd_antes": antiga["odd"],
+                            "odd_agora": nova["odd"], **({"falha_api": falha} if falha else {})}}
 
 
 def _aprovado(c: dict) -> tuple:
@@ -682,6 +758,10 @@ def _pick_para_ia(c: dict) -> dict:
         "poisson_probability": analise.get("probability_modelo"),
         "model_fit_diff": analise.get("abatimento"),
         "matchup_raw": (c.get("matchup") or {}).get("motivo"),
+        # Contexto atual e revalidacao (2026-10-08), nos nomes que o payload le'.
+        "contexto_sombra": analise.get("contexto_sombra"),
+        "modo_contexto": contexto_atual.modo(),
+        "revalidacao": c.get("revalidacao"),
         # E o que so' existe em prop de jogador. Bloco proprio porque o payload
         # generico descreve mercado de TIME e nao tem onde pendurar minutos,
         # titularidade e funcao -- os campos em ingles sao os nomes do §35, que
@@ -748,6 +828,9 @@ def _engine_debug(c: dict) -> str:
         # diferentes ficariam inexplicaveis.
         "calibragem": c.get("calibragem"),
         "ai_review": c.get("ai_review"),
+        # Contexto atual e revalidacao da odd (2026-10-08).
+        "contexto_atual": c["analise"].get("contexto_sombra"),
+        "revalidacao": c.get("revalidacao"),
     })
     return json.dumps(rastro, default=str, ensure_ascii=False)
 
@@ -984,6 +1067,18 @@ def run_player_stats_engine(metodos: tuple | None = None):
             gate = review_gate("player_stats")
             salvos = 0
             for c in publicaveis:
+                # A oferta do jogador ainda existe, e ainda paga? (2026-10-08)
+                revalidado = _revalidar_oferta(c, odds_service)
+                if revalidado is None:
+                    run.analisado(c["fixture"], selecionado=False,
+                                  score=c.get("pick_score"),
+                                  probabilidade=c["analise"].get("probability"),
+                                  odd=c["analise"].get("odd"),
+                                  motivo="oferta saiu do ar ou perdeu margem na revalidacao",
+                                  dados=_dados_da_auditoria(
+                                      c, "oferta saiu do ar ou perdeu margem na revalidacao"))
+                    continue
+                c = revalidado
                 revisados = gate.apply([_pick_para_ia(c)], "player_stats", c["fixture"])
                 if not revisados:
                     print(f"[PLAYER_STATS/{metodo.slug}] "

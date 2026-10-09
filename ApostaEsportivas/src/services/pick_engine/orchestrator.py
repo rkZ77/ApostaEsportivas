@@ -7,7 +7,7 @@ from services.pick_engine import (
     context_model, team_profile_model, news_model, probability_model, variance_model,
     data_validation, bayesian_model, referee_model,
     market_anchor, selection_bias, context_gate, tie_effect, projection,
-    recalibracao,
+    recalibracao, contexto_atual,
 )
 
 _CARDS_FAMILIES = ("cards", "handicap_cards")
@@ -141,13 +141,69 @@ def _risco_do_candidato(c: dict, config: PickEngineConfig,
     nunca divirjam -- ate' 2026-09-11 os dois chamavam risco_from_confidence
     e bastava um esquecer o outro pra um pick publicar um risco que a
     confianca ja' nao sustentava."""
+    amostra = c.get("amostra")
+    if c.get("amostra_efetiva") is not None and amostra is not None:
+        # Com MOTOR_CONTEXTO=on o risco le' a amostra que de fato descreve o
+        # time de hoje (contexto_atual).
+        amostra = int(min(amostra, c["amostra_efetiva"]))
     return confidence.classify_risk(
         c["confidence"], config,
         data_quality=data_quality_score,
-        amostra=c.get("amostra"),
+        amostra=amostra,
         coeficiente_variacao=(c.get("variance") or {}).get("coefficient_of_variation"),
         projecao=c.get("projecao"),
     )
+
+
+def _probabilidade_da_linha(taxa_base: float, amostra: float, prior: float | None,
+                            poisson_linha: float | None, referee_linha: float | None,
+                            family: str, config: PickEngineConfig) -> dict:
+    """Encolhimento pro mercado -> modelo por causa -> desacordo, nesta ordem.
+
+    Funcao (e nao trecho do laco) desde 2026-10-08 porque a MESMA cadeia roda
+    duas vezes quando ha' contexto atual: uma com o historico inteiro e outra
+    com a taxa do trecho atual e a amostra efetiva (contexto_atual). Duas
+    copias da cadeia divergiriam na primeira mudanca de uma delas.
+
+    `taxa_base` e' a taxa empirica que entra no encolhimento; `amostra`, com
+    quantos jogos ela pesa contra o prior. Os comentarios de cada passo estao
+    no laco de linhas de analyze_fixture_markets, onde a cadeia morava.
+    """
+    taxa_ajustada = bayesian_model.shrink_taxa(taxa_base, amostra, prior)
+    # MODELO POR CAUSA NA PROBABILIDADE (2026-09-27): ver
+    # config.peso_modelo_na_taxa. O desacordo continua comparando com a taxa
+    # SEM o modelo -- misturar antes de medir faria as duas concordarem por
+    # construcao.
+    taxa_sem_modelo = taxa_ajustada
+    if (config.peso_modelo_na_taxa and poisson_linha is not None
+            and family in ("goals", "corners", "cards")):
+        w = config.peso_modelo_na_taxa
+        taxa_ajustada = bayesian_model.shrink_taxa(
+            (1 - w) * taxa_base + w * poisson_linha, amostra, prior)
+
+    fit_poisson = probability_model.model_fit(taxa_sem_modelo, poisson_linha)
+    fit_referee = probability_model.model_fit(taxa_sem_modelo, referee_linha)
+    fit_poisson_bruta = probability_model.model_fit(taxa_base, poisson_linha)
+    fit_referee_bruta = probability_model.model_fit(taxa_base, referee_linha)
+    fits_de_decisao = (
+        ((poisson_linha, fit_poisson_bruta), (referee_linha, fit_referee_bruta))
+        if config.disagreement_on_raw_rate
+        else ((poisson_linha, fit_poisson), (referee_linha, fit_referee))
+    )
+    taxa_pre_desacordo = None
+    menores = [
+        p for p, d in fits_de_decisao
+        if p is not None and d is not None
+        and config.model_disagreement_threshold is not None
+        and d > config.model_disagreement_threshold
+        and p < taxa_ajustada
+    ]
+    if menores:
+        taxa_pre_desacordo = taxa_ajustada
+        taxa_ajustada = min(menores)
+    return {"taxa": taxa_ajustada, "taxa_pre_desacordo": taxa_pre_desacordo,
+            "fit_poisson": fit_poisson, "fit_referee": fit_referee,
+            "fit_poisson_bruta": fit_poisson_bruta, "fit_referee_bruta": fit_referee_bruta}
 
 
 def analyze_fixture_markets(
@@ -199,6 +255,12 @@ def analyze_fixture_markets(
     # por linha, familia por familia, com o motivo de cada morte. Nao muda o
     # retorno nem nenhuma decisao; ver _rastrear() logo acima.
     rastro: list | None = None,
+    # Contexto ATUAL da partida (2026-10-08): saida de contexto_atual.coletar,
+    # pelo dossie (dossie_da_partida.contexto_do_motor). Tecnico e desde
+    # quando, producao dos desfalcados, calendario, jogos ja' disputados.
+    # Ausente -> motor identico ao de antes. Presente -> o que ele faz depende
+    # de MOTOR_CONTEXTO (ver contexto_atual.py).
+    contexto_partida: dict | None = None,
     debug: bool = False,
 ) -> list | dict:
     """Calcula taxa/confidence/edge/EV para cada mercado suportado
@@ -282,6 +344,28 @@ def analyze_fixture_markets(
     # MOTOR_DESFALQUES=on (ver news_model.modo_desfalques).
     news_score_sombra = news_model.news_score(news_data) if news_data else None
     news_score = news_score_sombra if news_model.modo_desfalques() == "on" else None
+
+    modo_contexto = contexto_atual.modo() if contexto_partida else "off"
+    avaliacao_partida = (contexto_atual.avaliar_partida(
+        contexto_partida, last10_home, last10_away, config)
+        if modo_contexto != "off" else None)
+    if modo_contexto == "on":
+        if avaliacao_partida and avaliacao_partida.get("bloqueio"):
+            # Dado atrasado nao se corrige com peso: o jogo mais recente do
+            # time nao esta' na conta. Nenhum mercado da partida sai.
+            _rastrear(rastro, nivel="familia", market_type="(todas)", scope=None,
+                      status="eliminada", motivo=avaliacao_partida["bloqueio"])
+            if debug:
+                return {"candidates": [], "entries_dropped": [],
+                        "eliminated_markets": [{"family": "(todas)", "scope": None,
+                                                "market_type": "(todas)",
+                                                "reason": avaliacao_partida["bloqueio"]}]}
+            return []
+        # O MESMO FATO NAO PUNE DUAS VEZES: tecnico novo e desfalque ja'
+        # entraram na probabilidade, pela amostra efetiva. O news_score conta
+        # os dois de novo (tecnico_mudou + titulares fora) na nota final.
+        if news_score is not None and {"tecnico", "desfalques"} & contexto_atual.fatores_ligados():
+            news_score = None
     referee_sig = referee_model.referee_signal(referee_stats, config, league_stats=league_stats)
     game_intensity = referee_model.game_intensity(context_data, matchup_data, referee_sig)
 
@@ -396,6 +480,11 @@ def analyze_fixture_markets(
         # lado a estatistica contada era a do ADVERSARIO (ver
         # stats_model.resolve_side -- metade da amostra vinha do time errado).
         side_team_id = stats_model.scope_team_id(scope, home_team_id, away_team_id)
+        # Recorte do trecho atual e fracao perdida por desfalque desta
+        # familia/escopo -- iguais pra todas as linhas dela.
+        prep_contexto = (contexto_atual.preparar_familia(
+            contexto_partida, family, scope, last10_home, last10_away, config)
+            if modo_contexto != "off" else None)
 
         # Lambdas da familia -- nao dependem da LINHA, so' do jogo, entao saem
         # uma vez so' aqui fora e cada linha candidata pergunta a sua
@@ -590,10 +679,9 @@ def analyze_fixture_markets(
             # Medido contra os 43 picks resolvidos com rastro (2026-08-08):
             # os que sobrevivem a esta regra acertaram 80.0% (n=25) contra
             # 55.6% (n=18) dos que ela corta.
+            # (O encolhimento em si roda em _probabilidade_da_linha, depois das
+            # outras leituras da linha logo abaixo.)
             taxa_bruta_raw = taxa["taxa_ponderada"]
-            taxa_ajustada = bayesian_model.shrink_taxa(
-                taxa_bruta_raw, taxa["amostra"], prob_baseline["prob"]
-            )
             try:
                 line_val = float(m.get("line")) if family not in ("btts", "btts_1h") else None
             except (TypeError, ValueError):
@@ -632,60 +720,77 @@ def analyze_fixture_markets(
                     # e' quase o dobro da de um lado so'.
                     family="cards", scope="total")
 
-            # MODELO POR CAUSA NA PROBABILIDADE (2026-09-27): ver
-            # config.peso_modelo_na_taxa. Entra ANTES do encolhimento pro
-            # mercado, so' nas familias medidas. O desacordo (termo M, logo
-            # abaixo) continua comparando com a taxa SEM o modelo -- misturar
-            # antes de medir o desacordo faria as duas estimativas concordarem
-            # por construcao e o confidence subiria sem evidencia nova.
-            taxa_sem_modelo = taxa_ajustada
-            if (config.peso_modelo_na_taxa and poisson_linha is not None
-                    and family in ("goals", "corners", "cards")):
-                w = config.peso_modelo_na_taxa
-                taxa_ajustada = bayesian_model.shrink_taxa(
-                    (1 - w) * taxa_bruta_raw + w * poisson_linha,
-                    taxa["amostra"], prob_baseline["prob"])
+            # Encolhimento -> modelo por causa -> desacordo. Ver
+            # _probabilidade_da_linha (a cadeia morava aqui ate' 2026-10-08).
+            # O MESMO desacordo medido contra a taxa BRUTA e' sempre calculado e
+            # gravado -- inclusive quando nao decide nada (config.
+            # disagreement_on_raw_rate=False). A DETECCAO usa o fit escolhido; a
+            # ACAO compara contra a taxa ajustada, porque a regra nunca pode
+            # subir a probabilidade (ver test_desacordo_nunca_sobe_a_probabilidade).
+            historico = _probabilidade_da_linha(
+                taxa_bruta_raw, taxa["amostra"], prob_baseline["prob"],
+                poisson_linha, referee_linha, family, config)
 
-            fit_poisson = probability_model.model_fit(taxa_sem_modelo, poisson_linha)
-            fit_referee = probability_model.model_fit(taxa_sem_modelo, referee_linha)
-            # O MESMO desacordo medido contra a taxa BRUTA, sempre calculado e
-            # sempre gravado -- inclusive quando nao decide nada (config.
-            # disagreement_on_raw_rate=False). Sem o par de numeros no rastro nao
-            # da' pra medir depois quanto o encolhimento estava escondendo, que e'
-            # exatamente a pergunta que a flag existe pra responder.
-            fit_poisson_bruta = probability_model.model_fit(taxa_bruta_raw, poisson_linha)
-            fit_referee_bruta = probability_model.model_fit(taxa_bruta_raw, referee_linha)
+            # CONTEXTO ATUAL (2026-10-08, ver contexto_atual.py): quanto do
+            # historico ainda descreve o time de hoje, NESTA linha. A mesma
+            # cadeia roda de novo com a taxa do trecho atual e a amostra
+            # efetiva; o modo decide qual das duas vira o pick.
+            ctx_linha = (contexto_atual.avaliar_linha(
+                prep_contexto, taxa, family, scope, m.get("value", ""), m.get("line", ""),
+                reference_date, config, team_id=side_team_id,
+                home_team_id=home_team_id, away_team_id=away_team_id)
+                if prep_contexto else None)
+            com_contexto = (_probabilidade_da_linha(
+                ctx_linha["taxa_base"], ctx_linha["amostra_efetiva"], prob_baseline["prob"],
+                poisson_linha, referee_linha, family, config) if ctx_linha else None)
+            usa_contexto = com_contexto is not None and modo_contexto == "on"
+            escolhida_prob = com_contexto if usa_contexto else historico
 
-            # QUAL dos dois pares dispara a regra. Ver config.disagreement_on_raw_rate
-            # pro porque: o encolhimento puxa a taxa pro mercado, o Poisson esta' do
-            # mesmo lado, e ai o encolhimento apaga a distancia que a regra procura.
-            fits_de_decisao = (
-                ((poisson_linha, fit_poisson_bruta), (referee_linha, fit_referee_bruta))
-                if config.disagreement_on_raw_rate
-                else ((poisson_linha, fit_poisson), (referee_linha, fit_referee))
-            )
-            taxa_pre_desacordo = None
-            # A DETECCAO usa o fit escolhido acima; a ACAO continua comparando
-            # contra taxa_ajustada. Os dois papeis sao diferentes de proposito:
-            # detectar e' "a evidencia discorda do modelo?", agir e' "a outra
-            # estimativa e' mais pessimista do que eu publicaria?". Trocar o
-            # segundo por taxa_bruta_raw deixaria a regra SUBIR a probabilidade
-            # num caso em que o encolhimento ja tinha corrigido pra baixo, e a
-            # regra nunca pode subir (ver test_desacordo_nunca_sobe_a_probabilidade).
-            menores = [
-                p for p, d in fits_de_decisao
-                if p is not None and d is not None
-                and config.model_disagreement_threshold is not None
-                and d > config.model_disagreement_threshold
-                and p < taxa_ajustada
-            ]
-            if menores:
-                taxa_pre_desacordo = taxa_ajustada
-                taxa_ajustada = min(menores)
+            taxa_ajustada = escolhida_prob["taxa"]
+            taxa_pre_desacordo = escolhida_prob["taxa_pre_desacordo"]
+            fit_poisson = escolhida_prob["fit_poisson"]
+            fit_referee = escolhida_prob["fit_referee"]
+            fit_poisson_bruta = escolhida_prob["fit_poisson_bruta"]
+            fit_referee_bruta = escolhida_prob["fit_referee_bruta"]
 
             ev_edge = market_model.edge_and_ev(
                 taxa_ajustada, eval_odd, prob_baseline["prob"]
             )
+            bloco_contexto = {}
+            if ctx_linha:
+                ev_edge_ctx = market_model.edge_and_ev(
+                    com_contexto["taxa"], eval_odd, prob_baseline["prob"])
+                # Sempre gravado, ligado ou nao: e' o par (com, sem) que
+                # scripts/medir_contexto_atual.py compara nas pernas liquidadas.
+                bloco_contexto["contexto_sombra"] = {
+                    "taxa": com_contexto["taxa"], **ev_edge_ctx,
+                    "taxa_sem_contexto": historico["taxa"],
+                    "amostra_efetiva": ctx_linha["amostra_efetiva"],
+                    "incerteza_contextual": ctx_linha["incerteza_contextual"],
+                    "fatores": ctx_linha["fatores"],
+                }
+                if usa_contexto:
+                    ev_hist = market_model.edge_and_ev(
+                        historico["taxa"], eval_odd, prob_baseline["prob"])
+                    efetiva = ctx_linha["amostra_efetiva"]
+                    bloco_contexto.update({
+                        "amostra_efetiva": efetiva,
+                        # A qualidade Q passa a ser a da amostra EFETIVA: e' o
+                        # caminho pelo qual o contexto reduz a confianca, pela
+                        # mesma escala que o motor ja' usa pra amostra curta.
+                        "Q": stats_model.sample_quality(int(round(efetiva)), config)["Q"],
+                        "amostra_label": stats_model.sample_quality(
+                            int(round(efetiva)), config)["label"],
+                        "taxa_real_sem_regime": historico["taxa"],
+                        "ev_sem_regime": ev_hist["ev"],
+                        "edge_sem_regime": ev_hist["edge"],
+                        # O DESLOCAMENTO, e nao so' o nivel: gate, efeito do
+                        # agregado e camada probabilistica ainda mexem em
+                        # taxa_real depois daqui, e a aprovacao tem que
+                        # descontar o regime do numero FINAL (ver
+                        # ranking._valores_de_aprovacao).
+                        "delta_regime": round(com_contexto["taxa"] - historico["taxa"], 4),
+                    })
             # Estabilidade da linha especifica ao longo do tempo (nao so a
             # media agregada) -- entra no line_score via ranking._stability_bonus.
             # So cobre mercados classicos (over/under/btts); None pros
@@ -784,6 +889,9 @@ def analyze_fixture_markets(
                 "_direction":       direcao,
                 "_line_val":        line_val,
                 **ev_edge,
+                # Por ultimo de proposito: com MOTOR_CONTEXTO=on, Q e o rotulo
+                # da amostra passam a ser os da amostra efetiva.
+                **bloco_contexto,
             })
 
         best_line = ranking.select_smart_safe_line(line_candidates, config, data_quality_score=data_quality_score)
@@ -931,6 +1039,10 @@ def analyze_fixture_markets(
             "team_strength": team_strength_data,
             "referee_signal": referee_sig if family in _CARDS_FAMILIES else None,
             "game_intensity": game_intensity if family in _CARDS_FAMILIES else None,
+            # Fatores da partida inteira (dados atrasados, calendario, viagem)
+            # e o modo em que o contexto atual rodou -- ver contexto_atual.
+            "contexto_partida": avaliacao_partida,
+            "modo_contexto": modo_contexto,
         }
         # Depois do dict e nao dentro dele: o risco le "variance"/"amostra"/
         # "projecao" do proprio candidato, que so' existem quando ele esta'
@@ -1014,10 +1126,50 @@ def analyze_fixture_markets(
     candidates = apply_probability_layer(
         candidates, config, calibrators=calibrators, clv_by_market=clv_by_market,
     )
+    for c in candidates:
+        c["avaliacao"] = avaliacao_separada(c, data_quality_score)
 
     if debug:
         return {"candidates": candidates, "eliminated_markets": eliminated_markets, "entries_dropped": entries_dropped}
     return candidates
+
+
+def avaliacao_separada(c: dict, data_quality_score: float | None = None) -> dict:
+    """As quatro respostas que o candidato da', cada uma no seu lugar.
+
+    Antes as quatro moravam espalhadas no mesmo nivel do dict, e o
+    `confidence` misturava duas delas (probabilidade e qualidade da amostra)
+    num numero so'. Separadas, da' pra perguntar a cada uma o que so' ela
+    responde: "quanto acho que bate", "quanto confio nessa estimativa",
+    "quanto paga" e "quanto o historico deixou de descrever o jogo".
+    Nada aqui decide -- e' leitura dos numeros finais do candidato.
+    """
+    sombra = c.get("contexto_sombra") or {}
+    partida = c.get("contexto_partida") or {}
+    var = c.get("variance") or {}
+    return {
+        "probabilidade": {
+            "estimada": c.get("taxa_real"),
+            "mercado_no_vig": c.get("prob_baseline_value"),
+            "fonte_do_mercado": c.get("prob_baseline_source"),
+        },
+        "qualidade_da_estimativa": {
+            "amostra": c.get("amostra"),
+            "amostra_efetiva": c.get("amostra_efetiva", sombra.get("amostra_efetiva")),
+            "Q": c.get("Q"),
+            "qualidade_dos_dados": data_quality_score,
+            "coeficiente_de_variacao": var.get("coefficient_of_variation"),
+            "desacordo_com_o_modelo": c.get("model_fit_diff"),
+            "confidence": c.get("confidence"),
+        },
+        "valor": {"odd": c.get("odd"), "ev": c.get("ev"), "edge": c.get("edge")},
+        "incerteza_contextual": {
+            "indice": sombra.get("incerteza_contextual", 0.0),
+            "fatores": [f.get("fator") for f in sombra.get("fatores") or []],
+            "fatores_da_partida": partida.get("fatores_de_incerteza") or [],
+            "aplicada_na_conta": c.get("modo_contexto") == "on" and bool(sombra),
+        },
+    }
 
 
 def apply_probability_layer(

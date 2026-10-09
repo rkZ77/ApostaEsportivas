@@ -16,6 +16,7 @@ from services.team_stats_service import TeamStatsService
 from services.standings_service import StandingsService
 from services.referee_stats_service import RefereeStatsService
 from services.pick_engine import dossie_da_partida
+from services.pick_engine import revalidacao
 from services.pick_engine import analyze_fixture_markets, rank_market_candidates, explain, homologation
 from services.pick_engine.ai_review import review_gate
 from services.pick_engine.config import VIP_CONFIG
@@ -307,6 +308,9 @@ def run_vip_engine():
                 # DESFALQUES E TECNICO NOVO (2026-09-27): derrubam o Score Final
                 # via news_score. Mesmo dado do dossie da IA -- ver dossie_da_partida.
                 news_data=dossie_da_partida.sinal_de_desfalques(fixture["fixture_id"]),
+                # CONTEXTO ATUAL (2026-10-08): tecnico, desfalques por producao,
+                # calendario e historico atrasado -- ver contexto_atual.
+                contexto_partida=dossie_da_partida.contexto_do_motor(fixture["fixture_id"]),
                 team_stats_home=team_stats_home, team_stats_away=team_stats_away,
             league_baseline=league_baseline,
             config=VIP_CONFIG,
@@ -338,6 +342,12 @@ def run_vip_engine():
                         home_team=fixture.get("home_team"),
                         away_team=fixture.get("away_team"),
                         match_context=match_context)}
+            # A LINHA AINDA EXISTE, E AINDA VALE? (2026-10-08) Odd de agora na
+            # API, antes da IA (nao se paga parecer de linha que saiu do ar).
+            best = revalidacao.aplicar(best, fixture["fixture_id"], VIP_CONFIG,
+                                       rotulo="VIP_ENGINE")
+            if best is None:
+                continue
             reviewed = review_gate("vip").apply([best], "vip", fixture)
             if not reviewed:
                 continue

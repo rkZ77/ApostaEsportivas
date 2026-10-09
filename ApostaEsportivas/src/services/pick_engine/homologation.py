@@ -83,6 +83,9 @@ def build_score_breakdown_section(candidate: dict, data_quality_score: float | N
     return {
         "market_type": candidate.get("market_type"),
         "value_label": candidate.get("value_label"),
+        # O lado que o mercado le' (home/away/total) -- a reavaliacao perto do
+        # apito precisa dele pra saber de qual time um desfalque novo pesa.
+        "scope": candidate.get("scope"),
         "probabilidade": {
             "taxa_real_ajustada": taxa_real,
             "taxa_bruta_pre_bayes": taxa_bruta,
@@ -96,6 +99,17 @@ def build_score_breakdown_section(candidate: dict, data_quality_score: float | N
         # pos-filtro de mando e pos-remocao de push, nunca o historico bruto.
         "amostra": candidate.get("amostra"),
         "amostra_label": candidate.get("amostra_label"),
+        # CONTEXTO ATUAL (2026-10-08): o que o contexto calculou pra esta
+        # linha (sombra ou aplicado), a revalidacao da odd antes de publicar e
+        # as quatro respostas separadas (avaliacao). Verbatim, como o resto.
+        "contexto_atual": {
+            "modo": candidate.get("modo_contexto"),
+            "linha": candidate.get("contexto_sombra"),
+            "amostra_efetiva": candidate.get("amostra_efetiva"),
+            "partida": candidate.get("contexto_partida"),
+        } if candidate.get("modo_contexto") not in (None, "off") else None,
+        "revalidacao": candidate.get("revalidacao"),
+        "avaliacao": candidate.get("avaliacao"),
         "edge": candidate.get("edge"),
         "ev": candidate.get("ev"),
         "odd": candidate.get("odd"),
