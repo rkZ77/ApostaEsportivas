@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Check, ChevronLeft, ChevronRight, Flag, Minus, Plus, Shield, Users } from 'lucide-react'
 import api from '../../services/api'
 import { cn } from '../../lib/cn'
@@ -11,7 +11,7 @@ import {
   type EscolhaDeResultado, type EstatDeJogador, type Jogador, type JogoDoTime, type Lado, type Periodo, type RaioX, type Taxa,
 } from '../../lib/raioX'
 import { alternar, useBilheteMontado, type Selecao } from '../../lib/bilheteMontado'
-import { oddDaSelecao, vantagem, type OddDaCasa } from '../../lib/oddsDoJogo'
+import { chanceDoResultado, oddDaSelecao, vantagem, type OddDaCasa } from '../../lib/oddsDoJogo'
 import Campinho from './Campinho'
 import Classificacao from './Classificacao'
 
@@ -382,7 +382,8 @@ function LinhaDaOdd({ odd, bateu, n }: { odd: OddDaCasa | null; bateu: number; n
 
 function AbaMercados({ dados, nomeJogo, odds }: { dados: RaioX; nomeJogo: string; odds: OddDaCasa[] }) {
   /* Mercado + DE QUEM (os dois somados, ou um time só) · ver MERCADOS_PRINCIPAIS. */
-  const [principal, setPrincipal] = useState(MERCADOS_PRINCIPAIS[0].id)
+  /* Abre no Resultado: é a primeira pergunta de quem olha um jogo. */
+  const [principal, setPrincipal] = useState('resultado')
   const [quem, setQuem] = useState<'jogo' | 'home' | 'away'>('jogo')
   /* "Resultado" não é mercado de linha e tem quadro próprio (QuadrosDeResultado);
      o par de cima continua valendo pra os hooks não mudarem de ordem. */
@@ -549,9 +550,8 @@ function AbaMercados({ dados, nomeJogo, odds }: { dados: RaioX; nomeJogo: string
     )
   }
 
-  /* Resultado entra logo depois de Gols: é o mercado mais apostado. */
-  const chips = MERCADOS_PRINCIPAIS.map(m => ({ id: m.id, rotulo: m.rotulo }))
-  chips.splice(1, 0, { id: 'resultado', rotulo: 'Resultado' })
+  /* Resultado primeiro, depois Gols: a ordem de qualquer casa de aposta. */
+  const chips = [{ id: 'resultado', rotulo: 'Resultado' }, ...MERCADOS_PRINCIPAIS.map(m => ({ id: m.id, rotulo: m.rotulo }))]
 
   if (ehResultado) {
     return (
@@ -640,77 +640,176 @@ function AbaMercados({ dados, nomeJogo, odds }: { dados: RaioX; nomeJogo: string
 /*
  * Resultado final e chance dupla (2026-10-09, pedido do usuário).
  *
+ * NO JEITO DA CASA DE APOSTA: três botões lado a lado, mandante · empate ·
+ * visitante, cada um com a odd e a taxa dos últimos jogos, e o toque põe ou
+ * tira do bilhete. Embaixo, a forma dos dois, que é de onde a taxa sai.
+ *
  * Sem linha nem tempo: só o jogo todo, pelo placar dos 90 minutos, que é como
  * a casa liquida e como bilhete_pessoal.py confere. A taxa soma os dois lados
- * (o mandante vencendo nos jogos dele + o visitante perdendo nos dele), e a
- * linha de baixo mostra cada metade.
+ * (o mandante vencendo nos jogos dele + o visitante perdendo nos dele).
  */
 function QuadrosDeResultado({ dados, nomeJogo, odds }: { dados: RaioX; nomeJogo: string; odds: OddDaCasa[] }) {
   const f = dados.fixture
   const { home, away } = dados.times
-  const base = {
-    fixture_id: f.fixture_id, home_team_id: f.home_team_id, away_team_id: f.away_team_id,
-    home: f.home_team, away: f.away_team,
-  }
-  const curto = (t: ReturnType<typeof taxa>) => (t.n ? `${t.bateu}/${t.n}` : '—')
-
-  /* O que cada metade conta, na voz de quem lê: "Dortmund venceu 6/10". */
-  const VERBO: Record<string, string> = { V: 'venceu', E: 'empatou', D: 'perdeu', VE: 'não perdeu', ED: 'não venceu', VD: 'não empatou' }
-  const verbo = (aceitos: string[]) => VERBO[aceitos.join('')] ?? ''
-
-  const Linha = ({ escolha, rotulo, prefixo }: { escolha: EscolhaDeResultado; rotulo: string; prefixo: string }) => {
-    const aceitos = RESULTADOS_ACEITOS[escolha]
-    const sHome = serieDeResultado(home.jogos, aceitos.home)
-    const sAway = serieDeResultado(away.jogos, aceitos.away)
-    const t = taxa([...sHome, ...sAway], 0.5, 'mais')
-    const tHome = taxa(sHome, 0.5, 'mais')
-    const tAway = taxa(sAway, 0.5, 'mais')
-    const odd = oddDaSelecao(odds, { mercado: 'resultado', quem: 'jogo', periodo: 'total', escolha })
-    const descricao = `${prefixo} · ${rotulo}`
-    const selecao: Selecao = {
-      id: `${f.fixture_id}:resultado:${escolha}`, fixture_id: f.fixture_id, jogo: nomeJogo,
-      descricao, bateu: t.bateu, n: t.n,
-      ...(odd ? { odd: odd.odd, casa: odd.casa } : {}),
-      perna: { ...base, descricao, tipo: 'time', mercado: 'resultado', escolha, ...(odd ? { odd: odd.odd } : {}) },
-    }
-    return (
-      <div className="p-4">
-        <div className="flex items-center gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-bold text-ink-1 truncate">{rotulo}</div>
-            <div className="text-[11px] text-ink-3 mt-0.5 truncate">
-              {f.home_team} {verbo(aceitos.home)} {curto(tHome)} · {f.away_team} {verbo(aceitos.away)} {curto(tAway)}
-            </div>
-          </div>
-          <NumeroDaTaxa t={t} />
-          <BotaoBilhete selecao={selecao} />
-        </div>
-        <LinhaDaOdd odd={odd} bateu={t.bateu} n={t.n} />
-      </div>
-    )
-  }
-
-  const Bloco = ({ titulo, linhas }: { titulo: string; linhas: Array<[EscolhaDeResultado, string]> }) => (
-    <div className="card overflow-hidden">
-      <div className="px-4 pt-3 text-[11px] font-semibold uppercase tracking-wider text-ink-3">{titulo}</div>
-      <div className="divide-y divide-line/60">
-        {linhas.map(([e, r]) => <Linha key={e} escolha={e} rotulo={r} prefixo={titulo} />)}
-      </div>
-    </div>
+  const escudoCasa = <TeamLogo id={f.home_team_id} name={f.home_team} size={24} />
+  const escudoFora = <TeamLogo id={f.away_team_id} name={f.away_team} size={24} />
+  const xis = (
+    <span className="w-6 h-6 grid place-items-center rounded-full bg-surface-3 text-ink-2 text-[11px] font-black">X</span>
   )
+  const props = { f, home: home.jogos, away: away.jogos, nomeJogo, odds }
+
+  /* Chance de cada lado: pelas odds (sem a margem da casa) quando as três
+     existem; senão pelos últimos jogos, normalizado pra somar 100. */
+  const pelasOdds = chanceDoResultado(odds)
+  const pelaForma = (() => {
+    const pct = (e: EscolhaDeResultado) => taxa([
+      ...serieDeResultado(home.jogos, RESULTADOS_ACEITOS[e].home),
+      ...serieDeResultado(away.jogos, RESULTADOS_ACEITOS[e].away)], 0.5, 'mais').pct ?? 0
+    const [c, e, fo] = [pct('1'), pct('X'), pct('2')]
+    const soma = c + e + fo
+    return soma ? { casa: c / soma, empate: e / soma, fora: fo / soma } : null
+  })()
+  const chance = pelasOdds ?? pelaForma
 
   return (
     <>
-      <Bloco titulo="Resultado final" linhas={[
-        ['1', `${f.home_team} vence`], ['X', 'Empate'], ['2', `${f.away_team} vence`],
-      ]} />
-      <Bloco titulo="Chance dupla" linhas={[
-        ['1X', `${f.home_team} ou empate`], ['12', `${f.home_team} ou ${f.away_team}`], ['X2', `Empate ou ${f.away_team}`],
-      ]} />
-      <p className="text-[11px] text-ink-3 px-1">
-        Últimos jogos de cada time, pelo placar dos 90 minutos. Só existe no jogo todo.
-      </p>
+      {chance && (
+        <div className="card p-4">
+          <div className="flex items-baseline justify-between gap-2 mb-3">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">Chance de vitória</span>
+            <span className="text-[11px] text-ink-4">{pelasOdds ? 'pelas odds das casas' : 'pelos últimos jogos'}</span>
+          </div>
+          <div className="grid grid-cols-3 items-end text-center mb-2">
+            {([
+              [f.home_team_id, f.home_team, chance.casa, 'text-accent-ink'],
+              [null, 'Empate', chance.empate, 'text-ink-2'],
+              [f.away_team_id, f.away_team, chance.fora, 'text-sky-400'],
+            ] as const).map(([id, nome, p, cor]) => (
+              <div key={nome} className="min-w-0 flex flex-col items-center gap-1">
+                {id != null ? <TeamLogo id={id} name={nome} size={28} /> : xis}
+                <span className={cn('font-mono text-2xl font-black tabular-nums leading-none', cor)}>{Math.round(p * 100)}%</span>
+                <span className="w-full text-[11px] text-ink-3 truncate px-1">{nome}</span>
+              </div>
+            ))}
+          </div>
+          <div className="flex h-2 rounded-full overflow-hidden gap-0.5" aria-hidden>
+            <div className="bg-accent" style={{ width: `${chance.casa * 100}%` }} />
+            <div className="bg-surface-3" style={{ width: `${chance.empate * 100}%` }} />
+            <div className="bg-sky-400" style={{ width: `${chance.fora * 100}%` }} />
+          </div>
+        </div>
+      )}
+
+      <div className="card p-4">
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-3 mb-3">Resultado final</div>
+        <div className="grid grid-cols-3 gap-2">
+          <BotaoDeResultado {...props} escolha="1" prefixo="Resultado final" rotulo={`${f.home_team} vence`}
+            curto={f.home_team} escudo={escudoCasa} />
+          <BotaoDeResultado {...props} escolha="X" prefixo="Resultado final" rotulo="Empate"
+            curto="Empate" escudo={xis} />
+          <BotaoDeResultado {...props} escolha="2" prefixo="Resultado final" rotulo={`${f.away_team} vence`}
+            curto={f.away_team} escudo={escudoFora} />
+        </div>
+      </div>
+
+      <div className="card p-4">
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-3 mb-3">Chance dupla</div>
+        <div className="grid grid-cols-3 gap-2">
+          <BotaoDeResultado {...props} escolha="1X" prefixo="Chance dupla" rotulo={`${f.home_team} ou empate`}
+            curto="Casa ou empate" escudo={<span className="flex -space-x-1.5">{escudoCasa}{xis}</span>} />
+          <BotaoDeResultado {...props} escolha="12" prefixo="Chance dupla" rotulo={`${f.home_team} ou ${f.away_team}`}
+            curto="Casa ou fora" escudo={<span className="flex -space-x-1.5">{escudoCasa}{escudoFora}</span>} />
+          <BotaoDeResultado {...props} escolha="X2" prefixo="Chance dupla" rotulo={`Empate ou ${f.away_team}`}
+            curto="Empate ou fora" escudo={<span className="flex -space-x-1.5">{xis}{escudoFora}</span>} />
+        </div>
+      </div>
+
+      {/* De onde a taxa sai: a forma dos dois, do jogo mais antigo pro mais recente. */}
+      <div className="card p-4 space-y-3">
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">Últimos jogos</div>
+        {([['home', f.home_team_id, f.home_team, home.jogos], ['away', f.away_team_id, f.away_team, away.jogos]] as const)
+          .map(([lado, id, nome, jogos]) => {
+            const conta = { V: 0, E: 0, D: 0 }
+            for (const j of jogos) { const r = resultadoDoJogo(j); if (r) conta[r]++ }
+            return (
+              <div key={lado} className="min-w-0">
+                <div className="flex items-center gap-1.5 mb-1.5 min-w-0">
+                  <TeamLogo id={id} name={nome} size={16} />
+                  <span className="text-xs font-semibold text-ink-1 truncate flex-1">{nome}</span>
+                  <span className="text-[11px] text-ink-3 tabular-nums shrink-0">{conta.V}V · {conta.E}E · {conta.D}D</span>
+                </div>
+                <div className="flex gap-[3px]">
+                  {[...jogos].reverse().map(j => {
+                    const r = resultadoDoJogo(j)
+                    const legenda = `${j.em_casa ? 'vs' : '@'} ${j.adversario || 'adversário'} · ${dataCurta(j.data)} · ${j.gols_pro ?? '-'}-${j.gols_contra ?? '-'}`
+                    return (
+                      <span key={j.fixture_id} title={legenda} aria-label={legenda}
+                        className={cn('flex-1 h-6 max-w-[28px] grid place-items-center rounded-sm text-[10px] font-black',
+                          r === 'V' ? 'bg-green-500 text-on-fill' : r === 'D' ? 'bg-red-500 text-on-fill'
+                            : r === 'E' ? 'bg-surface-3 text-ink-2' : 'border border-line')}>
+                        {r ?? ''}
+                      </span>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
+        <p className="text-[11px] text-ink-3">
+          Pelo placar dos 90 minutos, só no jogo todo. A taxa de cada botão soma os dois lados: "{f.home_team} vence"
+          conta as vitórias dele e as derrotas do {f.away_team}.
+        </p>
+      </div>
     </>
+  )
+}
+
+/** Um botão do jeito da casa: escudo, nome, odd grande e a taxa embaixo. O toque põe/tira do bilhete. */
+function BotaoDeResultado({ f, home, away, nomeJogo, odds, escolha, prefixo, rotulo, curto, escudo }: {
+  f: RaioX['fixture']; home: JogoDoTime[]; away: JogoDoTime[]; nomeJogo: string; odds: OddDaCasa[]
+  escolha: EscolhaDeResultado; prefixo: string; rotulo: string; curto: string; escudo: ReactNode
+}) {
+  const bilhete = useBilheteMontado()
+  const aceitos = RESULTADOS_ACEITOS[escolha]
+  const t = taxa([...serieDeResultado(home, aceitos.home), ...serieDeResultado(away, aceitos.away)], 0.5, 'mais')
+  const odd = oddDaSelecao(odds, { mercado: 'resultado', quem: 'jogo', periodo: 'total', escolha })
+  const v = vantagem(t.bateu, t.n, odd?.odd)
+  const descricao = `${prefixo} · ${rotulo}`
+  const selecao: Selecao = {
+    id: `${f.fixture_id}:resultado:${escolha}`, fixture_id: f.fixture_id, jogo: nomeJogo,
+    descricao, bateu: t.bateu, n: t.n,
+    ...(odd ? { odd: odd.odd, casa: odd.casa } : {}),
+    perna: {
+      fixture_id: f.fixture_id, home_team_id: f.home_team_id, away_team_id: f.away_team_id,
+      home: f.home_team, away: f.away_team,
+      descricao, tipo: 'time', mercado: 'resultado', escolha, ...(odd ? { odd: odd.odd } : {}),
+    },
+  }
+  const dentro = bilhete.some(s => s.id === selecao.id)
+  const legenda = `${rotulo}${odd ? ` · odd ${odd.odd.toFixed(2)}${odd.casa ? ` (${odd.casa})` : ''}` : ''} · bateu ${t.bateu} de ${t.n}`
+
+  return (
+    <button onClick={() => alternar(selecao)} aria-pressed={dentro} title={legenda}
+      aria-label={`${dentro ? 'Tirar do bilhete' : 'Pôr no bilhete'}: ${legenda}`}
+      className={cn(
+        'relative min-w-0 rounded-lg border px-1.5 pt-2.5 pb-2 flex flex-col items-center gap-1 text-center transition active:scale-95',
+        dentro ? 'bg-accent/15 border-accent' : 'bg-surface-1 border-line hover:border-line-strong',
+      )}>
+      {dentro && <Check size={14} className="absolute top-1.5 right-1.5 text-accent-ink" />}
+      <span className="h-6 flex items-center">{escudo}</span>
+      <span className="w-full text-[11px] font-semibold text-ink-2 truncate">{curto}</span>
+      <span className={cn('font-mono text-lg font-black tabular-nums leading-none', dentro ? 'text-accent-ink' : 'text-ink-1')}>
+        {odd ? odd.odd.toFixed(2) : '—'}
+      </span>
+      <span className={cn('text-[11px] font-bold tabular-nums', TOM[tomDaTaxa(t.pct)])}>
+        {t.n ? `${t.bateu}/${t.n} · ${Math.round((t.pct ?? 0) * 100)}%` : 'sem dado'}
+      </span>
+      {v != null && v >= 0.05 && (
+        <span className="text-[10px] font-bold px-1.5 rounded bg-accent/15 text-accent-ink border border-accent/40">
+          Valor +{Math.round(v * 100)}%
+        </span>
+      )}
+    </button>
   )
 }
 
