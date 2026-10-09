@@ -90,13 +90,6 @@ MEDICOES = (
     # recentes pra caber nos 15 minutos de cada medicao.
     ("comparar_motor", "Motor atual x variantes (mesmas partidas)",
      "scripts/comparar_motor.py", ["--prod", "--ultimas", "300"]),
-    # Engenharia reversa do preco (09/10): margem de cada casa e "casa fora da
-    # curva" contra o fechamento justo. Duas reguas: 30 min (so' jogos com
-    # pick, juiz afiado) e 3h (quase todo jogo, ja' que a coleta e' a cada ~3h).
-    ("erro_das_casas", "Erro das casas (fechamento até 30 min)",
-     "scripts/medir_erro_das_casas.py", []),
-    ("erro_das_casas_3h", "Erro das casas (fechamento até 3h)",
-     "scripts/medir_erro_das_casas.py", ["--fechamento", "180"]),
 )
 
 
