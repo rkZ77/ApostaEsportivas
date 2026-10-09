@@ -1,4 +1,4 @@
-import { BookOpen, Percent, Target, TrendingUp, Scale } from 'lucide-react'
+import { BookOpen, Target } from 'lucide-react'
 import Modal from './ui/Modal'
 import { plural } from '../utils/format'
 import { Badge } from './ui'
@@ -165,24 +165,21 @@ function impliedProb(odd: number): number {
   return odd > 1 ? (1 / odd) * 100 : 0
 }
 
-function Metric({
-  Icon, label, value, tone = 'default', hint,
-}: {
-  Icon: React.ComponentType<{ className?: string }>
-  label: string
-  value: string
-  tone?: 'default' | 'good' | 'muted'
-  hint?: string
+/** Uma linha da comparação: rótulo, número e a barra na régua de 0 a 100. */
+export function BarraDeChance({ rotulo, pct, cor, destaque }: {
+  rotulo: string; pct: number; cor: string; destaque?: boolean
 }) {
-  const color = { default: 'text-ink-1', good: 'text-accent-ink', muted: 'text-ink-3' }[tone]
   return (
-    <div className="bg-surface-0 border border-line rounded-lg p-3">
-      <div className="flex items-center gap-1.5 mb-1.5">
-        <Icon className="w-3 h-3 text-ink-4" />
-        <span className="stat-label !mt-0">{label}</span>
+    <div>
+      <div className="flex items-baseline justify-between gap-2 mb-1">
+        <span className={`text-xs ${destaque ? 'font-semibold text-ink-1' : 'text-ink-3'}`}>{rotulo}</span>
+        <span className={`font-mono tabular-nums ${destaque ? 'text-base font-black text-accent-ink' : 'text-sm font-bold text-ink-3'}`}>
+          {pct.toFixed(1)}%
+        </span>
       </div>
-      <div className={`font-mono text-lg font-bold tabular-nums ${color}`}>{value}</div>
-      {hint && <div className="text-[10px] text-ink-4 mt-0.5 leading-snug">{hint}</div>}
+      <div className="h-2 rounded-full bg-surface-2 overflow-hidden">
+        <div className={`h-full rounded-full ${cor}`} style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
+      </div>
     </div>
   )
 }
@@ -336,63 +333,48 @@ export default function AnalysisModal({
           * probability no banco). Dois valores concorrentes pra mesma pergunta
           * so' confundem: fica o que o rotulo promete, a probabilidade.
           */}
-        <div className="grid grid-cols-2 gap-3">
-          {mostraProb != null && (
-            <Metric
-              Icon={Percent}
-              label={`Probabilidade${probAproximada ? ' estimada' : ''}`}
-              value={`${mostraProb.toFixed(1)}%`}
-              tone={mostraProb >= 70 ? 'good' : 'default'}
-              hint="chance calculada pelo modelo"
-            />
-          )}
-          <Metric
-            Icon={Scale}
-            label="Prob. da casa"
-            value={`${implied.toFixed(1)}%`}
-            tone="muted"
-            hint={`implícita na odd ${odd.toFixed(2)}`}
-          />
-          {ev != null && (
-            <Metric
-              Icon={TrendingUp}
-              label="Valor esperado"
-              value={`${ev > 0 ? '+' : ''}${ev.toFixed(1)}%`}
-              tone={ev > 0 ? 'good' : 'muted'}
-              hint="retorno esperado por unidade"
-            />
-          )}
-        </div>
-
-        {/* A CONTA, SEM REPETIR OS CARTOES (10/09/2026).
+        {/* NOSSA CHANCE x A DA CASA, NUM BLOCO SÓ (09/10/2026, pedido do
+          * usuário: melhorar o que tem dentro do modal).
           *
-          * A frase daqui reescrevia em prosa os mesmos dois numeros que estao
-          * logo acima em corpo 18 -- "o modelo estima 71,2% e a odd paga como
-          * se fosse 62,5%" com os dois ladrilhos "Probabilidade 71,2%" e
-          * "Prob. da casa 62,5%" a dois centimetros. Ler duas vezes o mesmo
-          * par nao explica melhor, so' empurra o resto pra baixo.
-          *
-          * O que os cartoes NAO dizem e' a subtracao entre eles, que e' a
-          * unica razao de o pick existir. Sobrou isso. */}
-        {edge != null && (
-          <div className="bg-surface-0 border border-line rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-2">
+          * Eram três ladrilhos (probabilidade, prob. da casa, valor esperado) e
+          * logo abaixo uma caixa "Por que virou pick" com a subtração entre os
+          * dois primeiros. Quatro caixas pra uma ideia só, e no celular elas
+          * empilhavam e empurravam o gráfico pra fora da tela. Agora são duas
+          * barras na mesma régua · o olho vê a diferença antes de ler o número
+          * · e a diferença vem escrita embaixo, que é a razão do pick existir. */}
+        <div className="bg-surface-0 border border-line rounded-lg p-4">
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2">
               <Target className="w-3.5 h-3.5 text-ink-4" />
               <span className="panel-label">Por que virou pick</span>
             </div>
-            <p className="text-xs text-ink-2 leading-relaxed">
+            <span className="font-mono text-[11px] text-ink-3">odd {odd.toFixed(2)}</span>
+          </div>
+          <div className="space-y-2.5">
+            {mostraProb != null && (
+              <BarraDeChance rotulo={`Nossa análise${probAproximada ? ' (estimada)' : ''}`}
+                pct={mostraProb} cor="bg-accent" destaque />
+            )}
+            <BarraDeChance rotulo="A casa, pela odd" pct={implied} cor="bg-ink-4" />
+          </div>
+          {edge != null && (
+            <p className="text-xs text-ink-2 leading-relaxed mt-3 pt-3 border-t border-line">
               {edge > 0 ? (
                 <>
-                  Damos <span className="font-mono text-accent-ink">{edge.toFixed(1)} pontos</span>{' '}
-                  a mais de chance do que a odd está pagando. Essa diferença é o valor
-                  que o pick busca capturar.
+                  <span className="font-mono font-bold text-accent-ink">+{edge.toFixed(1)} pontos</span>{' '}
+                  a nosso favor: damos mais chance do que a odd está pagando, e é essa
+                  diferença que o pick busca.
+                  {ev != null && ev > 0 && (
+                    <span className="text-ink-3"> Retorno esperado de{' '}
+                      <span className="font-mono text-accent-ink">+{ev.toFixed(1)}%</span> por unidade.</span>
+                  )}
                 </>
               ) : (
                 <>Sem diferença a nosso favor, o pick não seria publicado.</>
               )}
             </p>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Bilhete de várias seleções: uma regra por perna. */}
         {(data.legs?.length ?? 0) > 0 && (
@@ -412,7 +394,7 @@ export default function AnalysisModal({
                 return (
                   <li key={i} className="flex gap-2.5">
                     <span className="font-mono text-[10px] font-bold text-ink-4 pt-0.5 shrink-0">{i + 1}</span>
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="text-[11px] font-semibold text-ink-1">
                         {/* Mesmo texto do card: a aposta, não o nome técnico.
                             Ler "Menos de 2.5 gols · 1º tempo" aqui e
@@ -428,6 +410,12 @@ export default function AnalysisModal({
                         {r ? r.green : txt}
                       </p>
                     </div>
+                    {/* A odd da perna, como no bilhete da casa (09/10/2026). */}
+                    {leg.odd != null && Number.isFinite(Number(leg.odd)) && (
+                      <span className="font-mono text-xs font-bold text-ink-1 shrink-0 pt-0.5">
+                        {Number(leg.odd).toFixed(2)}
+                      </span>
+                    )}
                   </li>
                 )
               })}

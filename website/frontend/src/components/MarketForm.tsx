@@ -190,7 +190,8 @@ function Grafico({
           <div
             aria-hidden="true"
             className="pointer-events-none absolute inset-x-0 border-t border-dashed border-ink-3/70 z-10"
-            style={{ bottom: `${alturaLinha}%` }}
+            /* Mesma escala das barras (85%, o resto é do número em cima). */
+            style={{ bottom: `${alturaLinha * 0.85}%` }}
           >
             <span className="absolute right-0 -top-4 font-mono text-[9px] text-ink-3 bg-surface-0 px-1">
               {serie.line}
@@ -205,15 +206,20 @@ function Grafico({
           const titulo = m.value == null
             ? `${quando}${contra}, sem estatística publicada`
             : `${quando}${contra}, ${m.value}`
+          /* LARGURA COM TETO E O NÚMERO EM CIMA (09/10/2026). Com 2 ou 3
+             jogos na amostra, `flex-1` sozinho fazia cada barra ocupar metade
+             do modal: dois blocos verdes gigantes que não liam como gráfico.
+             E o valor de cada jogo só aparecia no toque; agora vai escrito. */
           return (
-            <div key={m.fixture_id} className="flex-1 h-full flex items-end" title={titulo}>
+            <div key={m.fixture_id} className="flex-1 max-w-[28px] h-full flex flex-col justify-end items-center gap-0.5" title={titulo}>
+              <span className="font-mono text-[9px] leading-none text-ink-3 tabular-nums">{m.value ?? ''}</span>
               <div
                 className={`w-full rounded-sm transition-[height] ${
                   m.value == null
                     ? 'border border-dashed border-line-strong bg-transparent'
                     : COR[m.result ?? ''] ?? 'bg-ink-4'
                 }`}
-                style={{ height: `${altura}%` }}
+                style={{ height: `${altura * 0.85}%` }}
               />
             </div>
           )

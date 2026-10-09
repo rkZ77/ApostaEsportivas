@@ -1,7 +1,8 @@
-import { Activity, BookOpen, Clock, Gauge, Percent, Scale, Target, TrendingUp } from 'lucide-react'
+import { Activity, BookOpen, Clock, Gauge, Target } from 'lucide-react'
 import Modal from './ui/Modal'
 import { Badge } from './ui'
 import MarketForm from './MarketForm'
+import { BarraDeChance } from './AnalysisModal'
 import { explainMarket, regraDoMercado, translateLine, translateMarket } from '../utils/marketTranslate'
 
 /*
@@ -96,30 +97,6 @@ function nivelPressao(score?: number | null): string | null {
 
 function impliedProb(odd: number): number {
   return odd > 1 ? (1 / odd) * 100 : 0
-}
-
-function Metric({
-  Icon, label, value, tone = 'default', hint,
-}: {
-  Icon: React.ComponentType<{ className?: string }>
-  label: string
-  value: string
-  tone?: 'default' | 'good' | 'muted' | 'bad'
-  hint?: string
-}) {
-  const color = {
-    default: 'text-ink-1', good: 'text-accent-ink', muted: 'text-ink-3', bad: 'text-red-400',
-  }[tone]
-  return (
-    <div className="bg-surface-0 border border-line rounded-lg p-3">
-      <div className="flex items-center gap-1.5 mb-1.5">
-        <Icon className="w-3 h-3 text-ink-4" />
-        <span className="stat-label !mt-0">{label}</span>
-      </div>
-      <div className={`font-mono text-lg font-bold tabular-nums ${color}`}>{value}</div>
-      {hint && <div className="text-[10px] text-ink-4 mt-0.5 leading-snug">{hint}</div>}
-    </div>
-  )
 }
 
 /** Uma coluna do "antes e agora". */
@@ -253,7 +230,7 @@ export default function LiveAnalysisModal({
         <div>
           <div className="flex items-center justify-between gap-2 mb-2">
             <span className="panel-label">O jogo, antes e agora</span>
-            {data.isLive && <Badge tone="red">Em andamento</Badge>}
+            {data.isLive && <Badge tone="sky">Em andamento</Badge>}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <Instante
@@ -287,70 +264,53 @@ export default function LiveAnalysisModal({
           )}
         </div>
 
-        {/* Os números do valor · mesma leitura do pré-jogo. */}
-        <div className="grid grid-cols-2 gap-3">
-          {mostraProb != null && (
-            <Metric
-              Icon={Percent}
-              label={`Probabilidade${probAproximada ? ' estimada' : ''}`}
-              value={`${mostraProb.toFixed(1)}%`}
-              tone={mostraProb >= 70 ? 'good' : 'default'}
-              hint="calculada com o jogo em andamento"
-            />
-          )}
-          <Metric
-            Icon={Scale}
-            label="Prob. da casa"
-            value={`${implied.toFixed(1)}%`}
-            tone="muted"
-            hint={`implícita na odd ${odd.toFixed(2)}`}
-          />
-          {ev != null && (
-            <Metric
-              Icon={TrendingUp}
-              label="Valor esperado"
-              value={`${ev > 0 ? '+' : ''}${ev.toFixed(1)}%`}
-              tone={ev > 0 ? 'good' : 'muted'}
-              hint="retorno esperado por unidade"
-            />
-          )}
-          {data.projectedTotal != null && (
-            <Metric
-              Icon={Target}
-              label="Projeção do motor"
-              value={Number(data.projectedTotal).toFixed(1)}
-              hint={`${rotuloStat} até o apito final`}
-            />
-          )}
-        </div>
-
-        {/* A conta, em uma linha · com o recorte do tempo restante, que é o
-            que separa a versão ao vivo da de pré-jogo. */}
-        {edge != null && (
-          <div className="bg-surface-0 border border-line rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-2">
+        {/* NOSSA CHANCE x A DA CASA · o mesmo bloco do modal de pré-jogo
+            (09/10/2026, "padroniza"): duas barras na mesma régua e a
+            diferença escrita embaixo, com o minuto e o tempo que restava, que
+            é o que separa a versão ao vivo. */}
+        <div className="bg-surface-0 border border-line rounded-lg p-4">
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2">
               <Target className="w-3.5 h-3.5 text-ink-4" />
               <span className="panel-label">Por que virou pick neste minuto</span>
             </div>
-            {/* Sem repetir os dois numeros dos cartoes logo acima · mesma
-                limpeza do modal de pre-jogo. O que sobra e' o que so' esta
-                aqui: a subtracao, e o tempo que restava pra ela acontecer. */}
-            <p className="text-xs text-ink-2 leading-relaxed">
+            <span className="font-mono text-[11px] text-ink-3">odd {odd.toFixed(2)}</span>
+          </div>
+          <div className="space-y-2.5">
+            {mostraProb != null && (
+              <BarraDeChance rotulo={`Nossa análise${probAproximada ? ' (estimada)' : ''}`}
+                pct={mostraProb} cor="bg-accent" destaque />
+            )}
+            <BarraDeChance rotulo="A casa, pela odd" pct={implied} cor="bg-ink-4" />
+          </div>
+          {edge != null && (
+            <p className="text-xs text-ink-2 leading-relaxed mt-3 pt-3 border-t border-line">
               {edge > 0 ? (
                 <>
-                  Com o jogo no {data.minuteAtCreation != null ? `${data.minuteAtCreation}'` : 'minuto da leitura'},
-                  demos <span className="font-mono text-accent-ink">{edge.toFixed(1)} pontos</span>{' '}
-                  a mais de chance do que a odd pagava
+                  Com o jogo no {data.minuteAtCreation != null ? `${data.minuteAtCreation}'` : 'minuto da leitura'},{' '}
+                  <span className="font-mono font-bold text-accent-ink">+{edge.toFixed(1)} pontos</span>{' '}
+                  a nosso favor
                   {data.remainingMinutes != null && (
                     <>, com <span className="font-mono text-ink-1">{data.remainingMinutes} min</span> ainda por jogar</>
                   )}.
+                  {ev != null && ev > 0 && (
+                    <span className="text-ink-3"> Retorno esperado de{' '}
+                      <span className="font-mono text-accent-ink">+{ev.toFixed(1)}%</span> por unidade.</span>
+                  )}
                 </>
               ) : (
                 <>Sem diferença a nosso favor, o pick não seria publicado.</>
               )}
             </p>
-          </div>
-        )}
+          )}
+          {data.projectedTotal != null && (
+            <p className="text-[11px] text-ink-3 mt-2">
+              Projeção do motor:{' '}
+              <span className="font-mono font-bold text-ink-1">{Number(data.projectedTotal).toFixed(1)}</span>{' '}
+              {rotuloStat} até o apito final.
+            </p>
+          )}
+        </div>
 
         {/* Leitura de campo · ritmo, sinais e pressão. */}
         {(data.rhythmLevel || data.liveSignalScore != null || pressaoCasa != null) && (
