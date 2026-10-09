@@ -61,6 +61,8 @@ export interface RaioX {
     home_team_id: number; away_team_id: number
     home_team: string; away_team: string
     match_datetime: string | null; status: string | null; round: string | null
+    /** [casa, fora] do jogo encerrado (match_statistics); null antes do fim. */
+    placar_final?: [number, number] | null
   }
   times: { home: { team_id: number; jogos: JogoDoTime[] }; away: { team_id: number; jogos: JogoDoTime[] } }
   h2h: Array<{ data: string | null; home_team_id: number; away_team_id: number

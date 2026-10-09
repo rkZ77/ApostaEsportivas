@@ -229,6 +229,15 @@ function Placar({ jogo, dados, aoVivo }: { jogo: JogoBase; dados: RaioX | null; 
                 {rotuloDoTempo({ status: aoVivo.status, minuto: aoVivo.elapsed })}
               </div>
             </div>
+          ) : f?.placar_final ? (
+            /* Encerrado: o placar final, e não o horário de um jogo que já
+               acabou (09/10/2026, pedido do usuário). */
+            <div className="shrink-0 pt-2 text-center">
+              <div className="font-mono text-3xl font-black text-ink-1 tabular-nums">
+                {f.placar_final[0]}<span className="text-ink-4 mx-1.5">-</span>{f.placar_final[1]}
+              </div>
+              <div className="mt-1 text-[11px] font-semibold text-ink-3">Encerrado</div>
+            </div>
           ) : (
             <div className="shrink-0 pt-3 text-center">
               <div className="font-mono text-2xl font-black text-ink-1 tabular-nums">{hora}</div>
