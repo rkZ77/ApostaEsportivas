@@ -322,6 +322,38 @@ def mercado_ao_vivo(perna: dict) -> tuple[str, str | None, str] | None:
     return nome, mtype, linha
 
 
+#: Vocabulario do settlement -> do bilhete pessoal (linha empatada e' VOID aqui).
+_DO_SETTLEMENT = {"GREEN": "GREEN", "RED": "RED", "PUSH": "VOID"}
+
+
+def veredito_ao_vivo(perna: dict) -> str | None:
+    """A perna de TIME ja' decidida, sem esperar `match_statistics` (11/10/2026).
+
+    Antes o bilhete so' fechava quando a coleta gravava a estatistica do jogo
+    encerrado -- minutos depois do apito, e nunca no intervalo nem quando a
+    linha ja' tinha batido. Agora vale a MESMA regra dos picks
+    (routers/live.veredito_do_cache), lida so' do cache: nenhuma chamada a API.
+    Sem cache, devolve None e o caminho por `match_statistics` decide como
+    sempre.
+
+    Cartao fica de fora: o bilhete conta so' amarelo (ver `_so_amarelos` em
+    routers/live.py) e a regra dos picks soma vermelho como 2.
+    """
+    if perna.get("tipo") != "time" or str(perna.get("mercado", "")).startswith("cartoes"):
+        return None
+    try:
+        mercado = mercado_ao_vivo(perna)
+        if not mercado:
+            return None
+        from routers import live
+        market, mtype, line = mercado
+        r = live.veredito_do_cache(perna["fixture_id"], market, mtype, line, perna.get("odd") or 1)
+    except Exception:
+        logger.warning("[BILHETE] veredito ao vivo falhou", exc_info=True)
+        return None
+    return _DO_SETTLEMENT.get(r) if r else None
+
+
 # ── banco ─────────────────────────────────────────────────────────────────
 
 
@@ -402,6 +434,8 @@ def liquidar_pendentes(cur, user_id: int, agora: datetime | None = None) -> int:
             res, valor, motivo = liquidar_perna(
                 p, jogo, fichas.get((p["fixture_id"], p.get("player_id"))),
                 p["fixture_id"] in com_ficha, vencido)
+            if res is None:
+                res = veredito_ao_vivo(p)
             p["resultado"], p["valor"] = res, valor
             if motivo:
                 p["motivo"] = motivo

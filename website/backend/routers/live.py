@@ -57,6 +57,17 @@ _CACHE_MAX = 500
 #: gasta cota, reaproveita o que outra parte ja' busca.
 _SO_CACHE: contextvars.ContextVar[bool] = contextvars.ContextVar("_SO_CACHE", default=False)
 
+#: O MESMO CACHE, MAS PRA LIQUIDAR (11/10/2026). Ligado junto com `_SO_CACHE`
+#: pelo bilhete pessoal (ver `veredito_do_cache`). A diferenca e' a regra da
+#: folha de estatistica: a tela troca null por zero, e liquidar assim ja'
+#: gravou RED em pick GREEN (invariante 1 de services/settlement.py). Aqui a
+#: folha vai crua, e so' se foi tirada no MESMO status do jogo de agora e ha'
+#: pouco tempo -- folha do minuto 90 lida depois do apito e' o furo de
+#: `_folha_e_do_jogo_em_andamento`.
+_LIQUIDANDO_DO_CACHE: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "_LIQUIDANDO_DO_CACHE", default=False)
+_IDADE_MAXIMA_DA_FOLHA_PRA_LIQUIDAR = 180
+
 
 def _evict_cache(cache: dict) -> None:
     """Remove as entradas mais velhas quando o cache passa de _CACHE_MAX.
@@ -244,6 +255,14 @@ def _zera_nulos(folha: list) -> list:
 
 
 def _fetch_stats(fid: int, status: str) -> list:
+    if _SO_CACHE.get() and _LIQUIDANDO_DO_CACHE.get():
+        entrada = _stats_cache.get(fid)
+        if not entrada or len(entrada) < 3:
+            return []
+        ts, folha, status_na_captura = entrada[0], entrada[1], entrada[2]
+        if status_na_captura != status or time.time() - ts > _IDADE_MAXIMA_DA_FOLHA_PRA_LIQUIDAR:
+            return []   # sem folha confiavel: a perna espera, nunca vira zero
+        return folha
     if _SO_CACHE.get():
         # SO' TELA (09/10/2026): o modo cache serve o card e o Raio-X, nunca a
         # liquidacao. Ali "null" e' zero, como a lista de Jogos sempre mostrou
@@ -2248,6 +2267,43 @@ def _periodo_do_mercado(market: str | None, market_type: str | None) -> str:
     if market_form.e_mercado_de_segundo_tempo(market):
         return "2t"
     return "total"
+
+
+def veredito_do_cache(fid: int, market: str, market_type: str | None, line: str,
+                      odd: float = 1.0) -> str | None:
+    """GREEN/RED/PUSH de uma perna ja' decidida, lido SO' do cache. None = espera.
+
+    Existe pro bilhete pessoal (bilhete_pessoal.liquidar_pendentes), que
+    liquidava so' por `match_statistics` -- tabela que a coleta enche minutos
+    depois do apito, e so' no fim do jogo. Aqui a perna fecha pela MESMA regra
+    dos picks (`_locked_leg_result`: fim do jogo, 1o tempo no intervalo, linha
+    ja' batida), sem nenhuma chamada a API: quem mantem o cache quente e'
+    Meus Bilhetes e a varredura. Cache frio devolve None e o caminho antigo
+    continua valendo.
+
+    Meio-green/meio-red ficam de fora (None): o bilhete pessoal nao tem esse
+    vocabulario, e o caminho por `match_statistics` decide igual depois.
+    """
+    entrada = _fix_cache.get(int(fid))
+    if not entrada or time.time() - entrada[0] > _IDADE_MAXIMA_DO_CACHE:
+        return None
+    t1, t2 = _SO_CACHE.set(True), _LIQUIDANDO_DO_CACHE.set(True)
+    try:
+        leg = _enrich_leg(int(fid), market, line, "", "", None, None, float(odd or 1),
+                          market_type=market_type)
+        resultado = _locked_leg_result(leg)
+    except Exception:
+        logger.warning("[BILHETE] veredito do cache falhou (fixture %s)", fid, exc_info=True)
+        return None
+    finally:
+        _LIQUIDANDO_DO_CACHE.reset(t2)
+        _SO_CACHE.reset(t1)
+    # PUSH sem contador (ou com prorrogacao) e' ANULACAO por falta de folha,
+    # nao linha empatada · essa decisao fica com o caminho completo.
+    if resultado == settlement.PUSH and (
+            leg.get("current_val") is None or leg.get("went_to_extra_time")):
+        return None
+    return resultado if resultado in (settlement.GREEN, settlement.RED, settlement.PUSH) else None
 
 
 def leitura_ao_vivo_do_pick(item: dict, agora: float | None = None) -> dict | None:
