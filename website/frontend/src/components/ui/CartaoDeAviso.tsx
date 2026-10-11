@@ -25,7 +25,9 @@ export type TomDoAviso = 'ao_vivo' | 'green' | 'red' | 'neutro'
 
 const TOM: Record<TomDoAviso, { borda: string; selo: string; barra: string; icone: string }> = {
   // `icone` é o selinho sobre a logo: preenchido, pra ler a 20px.
-  ao_vivo: { borda: 'border-accent/50',   selo: 'bg-red-500/15 text-red-400',     barra: 'bg-accent',   icone: 'bg-red-600 text-white' },
+  // Ao vivo SEM vermelho (11/10/2026, pedido do usuário): vermelho aqui é RED
+  // de pick, e oportunidade chegando não pode ter cara de derrota.
+  ao_vivo: { borda: 'border-accent/50',   selo: 'bg-accent/15 text-accent-ink',   barra: 'bg-accent',   icone: 'bg-accent text-on-fill' },
   green:   { borda: 'border-accent/60',   selo: 'bg-accent/15 text-accent-ink',   barra: 'bg-accent',   icone: 'bg-accent text-on-fill' },
   red:     { borda: 'border-red-500/50',  selo: 'bg-red-500/15 text-red-400',     barra: 'bg-red-500',  icone: 'bg-red-600 text-white' },
   neutro:  { borda: 'border-line-strong', selo: 'bg-surface-3 text-ink-2',        barra: 'bg-ink-3',    icone: 'bg-surface-3 text-ink-1' },

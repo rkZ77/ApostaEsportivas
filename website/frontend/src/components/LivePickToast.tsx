@@ -30,8 +30,8 @@ import CartaoDeAviso, { timesDoAviso } from './ui/CartaoDeAviso'
  * botão de fechar grande e arrastar pro lado no celular.
  *
  * VERDE, E NÃO VERMELHO (2026-09-12, pedido do usuário): vermelho neste site
- * é RED de pick. Só o ponto pulsante do selo continua vermelho · ele é a
- * convenção universal de "ao vivo".
+ * é RED de pick. Em 11/10/2026 saiu o vermelho que sobrava (o ponto pulsante
+ * e o selinho sobre a logo): o aviso do ao vivo é todo verde.
  */
 
 /** Quanto tempo o aviso fica. A odd ao vivo dura minutos; o convite, menos. */
@@ -92,7 +92,7 @@ export default function LivePickToast() {
           key={livePickNovo.id}
           tom="ao_vivo"
           urgente
-          selo={<><LiveDot tone="red" className="w-1.5 h-1.5" /> Pick ao vivo</>}
+          selo={<><LiveDot tone="green" className="w-1.5 h-1.5" /> Pick ao vivo</>}
           /* `Activity` e não `Radio`: o que o aviso anuncia é uma partida em
              andamento · a linha de batimento diz jogo correndo. */
           icone={<Activity className="w-3 h-3" strokeWidth={3} aria-hidden="true" />}
