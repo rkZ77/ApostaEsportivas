@@ -6,6 +6,7 @@ import { NotificationProvider } from './context/NotificationContext'
 import { OnboardingProvider, useOnboarding } from './context/OnboardingContext'
 import TopProgressBar from './components/TopProgressBar'
 import PilhaDeAvisos from './components/ui/PilhaDeAvisos'
+import CantoDeAvisos from './components/ui/CantoDeAvisos'
 import { useWebMCP } from './hooks/useWebMCP'
 import { prefetchOcioso, ouvirLinksParaPrefetch } from './lib/prefetch'
 
@@ -251,13 +252,15 @@ export default function App() {
               <PushPromptBanner />
               <VerifyEmailBanner />
               <PlanUpsellToast />
-              {/* Pick ao vivo publicado agora · precisa estar fora do <Routes>
-                  pelo mesmo motivo dos outros avisos: o evento chega pelo poll
-                  do sino, que roda em qualquer página, e a pessoa quase nunca
-                  está na aba Ao Vivo quando ele acontece. */}
-              <LivePickToast />
               <ErrorToast />
             </PilhaDeAvisos>
+            {/* O CANTO · eventos de jogo, em cartão quadrado no canto de cima.
+                Fora do <Routes> pelo mesmo motivo da pilha: o evento chega pelo
+                poll do sino, que roda em qualquer página, e a pessoa quase
+                nunca está na aba Ao Vivo quando ele acontece. */}
+            <CantoDeAvisos>
+              <LivePickToast />
+            </CantoDeAvisos>
             <GlobalModals />
             {/* Precisa ficar fora do <Routes>: o tour troca de rota entre os
                 passos (banca, picks, banca de novo) e ali dentro ele seria

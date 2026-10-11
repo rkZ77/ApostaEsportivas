@@ -40,6 +40,13 @@ export const toastUp: Variants = {
   exit: { opacity: 0, y: 12, scale: 0.98, transition: { duration: 0.15 } },
 }
 
+/** Cartão do canto (entra pela direita) · CartaoDeAviso: ao vivo e resultado */
+export const cantoIn: Variants = {
+  hidden: { opacity: 0, x: 32, scale: 0.97 },
+  visible: { opacity: 1, x: 0, scale: 1, transition: SPRING },
+  exit: { opacity: 0, x: 32, scale: 0.97, transition: { duration: 0.16 } },
+}
+
 /** Tooltip pequeno (InfoTip) */
 export const popIn: Variants = {
   hidden: { opacity: 0, scale: 0.9, y: 4 },
