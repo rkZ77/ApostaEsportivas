@@ -164,7 +164,7 @@ def _um_confronto(fid):
 
 
 @pytest.fixture
-def api(monkeypatch):
+def api(monkeypatch, tmp_path):
     """Substitui a rede e registra CADA recurso chamado, que e' o que estes
     testes medem -- o numero de requisicoes, nao o conteudo delas.
 
@@ -189,8 +189,44 @@ def api(monkeypatch):
     monkeypatch.setattr(h2h_api_fetcher, "buscar", _buscar)
     monkeypatch.setattr(h2h_api_fetcher, "_API_KEY", "chave-de-teste")
     monkeypatch.setattr(h2h_api_fetcher, "_cache", {})
+    # Pasta propria por teste: o cache em disco (11/10/2026) nao pode vazar
+    # de um teste pro outro e mudar a contagem de requisicoes.
+    monkeypatch.setattr(h2h_api_fetcher, "_PASTA_DO_CACHE", str(tmp_path))
     h2h_api_fetcher.zerar_contador()
     return chamadas
+
+
+def test_rodada_nova_do_motor_nao_compra_o_mesmo_par_de_novo(api, monkeypatch):
+    """Cada rodada do Motor Ao Vivo e' um processo novo: o cache de memoria
+    nasce vazio. O par comprado na rodada anterior sai do disco."""
+    from services import h2h_api_fetcher
+
+    primeira = h2h_api_fetcher.get_h2h(1, 2, com_estatisticas=True)
+    assert h2h_api_fetcher.requisicoes_feitas() == 7
+
+    monkeypatch.setattr(h2h_api_fetcher, "_cache", {})   # "processo novo"
+    segunda = h2h_api_fetcher.get_h2h(2, 1, com_estatisticas=True)
+    assert segunda == primeira
+    assert h2h_api_fetcher.requisicoes_feitas() == 7
+
+
+def test_cache_em_disco_vencido_busca_de_novo(api, monkeypatch):
+    from services import h2h_api_fetcher
+
+    h2h_api_fetcher.get_h2h(1, 2, com_estatisticas=False)
+    monkeypatch.setattr(h2h_api_fetcher, "_cache", {})
+    real = h2h_api_fetcher.time.time
+    monkeypatch.setattr(h2h_api_fetcher.time, "time",
+                        lambda: real() + h2h_api_fetcher._CACHE_TTL_SEGUNDOS + 1)
+    h2h_api_fetcher.get_h2h(1, 2, com_estatisticas=False)
+    assert h2h_api_fetcher.requisicoes_feitas() == 2
+
+
+def test_disco_quebrado_nao_derruba_o_h2h(api, monkeypatch):
+    from services import h2h_api_fetcher
+
+    monkeypatch.setattr(h2h_api_fetcher, "_PASTA_DO_CACHE", "\0invalido")
+    assert len(h2h_api_fetcher.get_h2h(1, 2, com_estatisticas=False)) == 6
 
 
 def test_sem_folha_o_h2h_custa_uma_requisicao(api):

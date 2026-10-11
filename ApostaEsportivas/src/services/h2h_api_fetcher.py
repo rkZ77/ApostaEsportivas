@@ -56,7 +56,9 @@ Ausência de dado nunca vira evidência de calma.
 """
 from __future__ import annotations
 
+import json
 import os
+import tempfile
 import time
 
 from dotenv import find_dotenv, load_dotenv
@@ -86,6 +88,42 @@ _CACHE_TTL_SEGUNDOS = 6 * 3600
 #: propósito: persistir isto era o que a decisão de não criar tabela recusou,
 #: e o problema que existia era repetição dentro da mesma execução.
 _cache: dict[tuple, tuple] = {}
+
+#: O CACHE TAMBEM VAI PRO DISCO (11/10/2026). O de memoria nao sobrevivia ao
+#: Motor Ao Vivo: cada rodada e' um SUBPROCESSO novo (routers/live_picks.py::
+#: _rodar), a cada 8 minutos, entao o mesmo par era comprado de novo em toda
+#: rodada -- com folha, ate' 7 requisicoes por par (1 do confronto + 1 por
+#: jogo), umas 10 vezes por partida. Arquivo em pasta temporaria, nao tabela:
+#: a decisao de nao criar tabela pra isto continua de pe'. Falha de disco so'
+#: volta ao comportamento antigo (buscar na API).
+_PASTA_DO_CACHE = os.getenv("H2H_CACHE_DIR") or os.path.join(
+    tempfile.gettempdir(), "pickia_h2h")
+
+
+def _arquivo(chave: tuple) -> str:
+    a, b, antes, limite = chave
+    return os.path.join(_PASTA_DO_CACHE, f"{a}_{b}_{antes or 'tudo'}_{limite}.json")
+
+
+def _ler_do_disco(chave: tuple):
+    try:
+        with open(_arquivo(chave), encoding="utf-8") as f:
+            d = json.load(f)
+        return float(d["ts"]), bool(d["com_estatisticas"]), list(d["matches"])
+    except Exception:
+        return None
+
+
+def _gravar_no_disco(chave: tuple, valor: tuple) -> None:
+    try:
+        os.makedirs(_PASTA_DO_CACHE, exist_ok=True)
+        destino = _arquivo(chave)
+        provisorio = f"{destino}.{os.getpid()}.tmp"
+        with open(provisorio, "w", encoding="utf-8") as f:
+            json.dump({"ts": valor[0], "com_estatisticas": valor[1], "matches": valor[2]}, f)
+        os.replace(provisorio, destino)   # atomico: outra rodada nunca le meio arquivo
+    except Exception as e:
+        print(f"[H2H_API] cache em disco indisponivel: {e}")
 
 #: Requisições que ESTE módulo fez à API-Football. Existe porque o teto do
 #: motor ao vivo não enxerga nada daqui, e um consumo invisível é um consumo
@@ -130,8 +168,9 @@ def get_h2h(team_a: int, team_b: int,
     global _requisicoes
     agora = time.time()
     chave = (min(team_a, team_b), max(team_a, team_b), before_date, limit)
-    guardado = _cache.get(chave)
+    guardado = _cache.get(chave) or _ler_do_disco(chave)
     if guardado and agora - guardado[0] < _CACHE_TTL_SEGUNDOS:
+        _cache[chave] = guardado
         # Só serve se tiver pelo menos tanto quanto está sendo pedido.
         if guardado[1] or not com_estatisticas:
             return guardado[2]
@@ -237,4 +276,5 @@ def get_h2h(team_a: int, team_b: int,
     # Guarda com a marca de o que foi comprado: uma lista sem folha não pode
     # servir depois a quem precisa dela.
     _cache[chave] = (agora, com_estatisticas, matches)
+    _gravar_no_disco(chave, _cache[chave])
     return matches
