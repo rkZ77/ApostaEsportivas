@@ -143,6 +143,24 @@ def test_cota_estourada_nao_dispara(monkeypatch):
     assert disparos == []
 
 
+def test_recusa_do_teto_nao_trava_a_varredura_da_visita(monkeypatch):
+    """O caso de PROD de 11/10: cota em 94%, o agendador recusava a cada 60s
+    e zerava o relogio · a visita nunca mais varria e o GREEN nao saia."""
+    disparos = _varredura_ligada(monkeypatch)
+    assert live.maybe_resolve_pending(pode_gastar=lambda: False) is False
+    assert live._sweep_state["last"] == 0.0
+    assert live.maybe_resolve_pending() is True          # a visita logo depois varre
+    assert disparos == [1]
+
+
+def test_teto_dos_resultados_e_mais_alto_que_o_das_tarefas(monkeypatch):
+    import agendador as ag
+    monkeypatch.delenv("AGENDADOR_TETO_RESULTADOS", raising=False)
+    monkeypatch.delenv("AGENDADOR_TETO_COTA", raising=False)
+    assert ag.teto_dos_resultados() == 0.97 > ag.teto_de_cota()
+    assert ag.cota_permite({"usado": 7050, "limite": 7500}, ag.teto_dos_resultados())[0]
+
+
 def test_cota_so_e_consultada_quando_ha_pendente(monkeypatch):
     _varredura_ligada(monkeypatch, pendente=False)
     consultas = []

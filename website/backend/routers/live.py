@@ -4382,10 +4382,19 @@ def maybe_resolve_pending(pode_gastar=None) -> bool:
         _sweep_state["running"] = True
 
     try:
-        if not _ha_pendente_em_jogo() or (pode_gastar is not None and not pode_gastar()):
+        if not _ha_pendente_em_jogo():
             with _sweep_lock:
                 _sweep_state["running"] = False
                 _sweep_state["last"] = agora  # não repergunta ao banco a cada request
+            return False
+        if pode_gastar is not None and not pode_gastar():
+            # RECUSA DO TETO NÃO REINICIA O RELÓGIO (corrigido em 11/10/2026).
+            # Reiniciar aqui travou a liquidação inteira em produção: o
+            # agendador pergunta a cada 60s, o teto recusava e zerava o relógio
+            # de 3 min, e a varredura puxada por VISITA nunca mais encontrava a
+            # janela aberta. O teto vale só pro caminho de quem passou o teto.
+            with _sweep_lock:
+                _sweep_state["running"] = False
             return False
     except Exception:
         with _sweep_lock:

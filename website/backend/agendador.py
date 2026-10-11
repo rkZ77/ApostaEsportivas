@@ -282,9 +282,21 @@ _INTERVALO_BILHETES = 180
 _ultima_dos_bilhetes = {"ts": 0.0}
 
 
+def teto_dos_resultados() -> float:
+    """Teto PROPRIO da varredura de resultados, mais alto que o das tarefas.
+
+    Liquidar pick e' o uso mais importante da cota: com 80% (o teto do Rodar
+    Tudo) o resultado parou de sair numa noite de cota em 94% (11/10/2026),
+    com pick ja' decidido na tela. A reserva de 3% fica pro resto do dia."""
+    try:
+        return min(max(float(os.getenv("AGENDADOR_TETO_RESULTADOS", "0.97")), 0.1), 1.0)
+    except ValueError:
+        return 0.97
+
+
 def _cota_permite_agora() -> bool:
     from routers import admin
-    pode, motivo = cota_permite(admin._api_football_status(), teto_de_cota())
+    pode, motivo = cota_permite(admin._api_football_status(), teto_dos_resultados())
     if not pode:
         logger.warning("[AGENDADOR] varredura de resultados pulada: %s", motivo)
     return pode
