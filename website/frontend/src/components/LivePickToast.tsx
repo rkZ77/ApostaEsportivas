@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { AnimatePresence, m as motion } from 'framer-motion'
-import { Activity, X } from 'lucide-react'
+import { AnimatePresence } from 'framer-motion'
+import { Activity } from 'lucide-react'
 import { useNotifications } from '../context/NotificationContext'
 import { LiveDot } from './ui'
-import { toastUp } from '../lib/motion'
+import CartaoDeAviso from './ui/CartaoDeAviso'
 
 /*
  * "O motor achou um pick ao vivo agora" · aviso EM TELA.
@@ -20,15 +20,18 @@ import { toastUp } from '../lib/motion'
  * várias plataformas nem entregam. O resultado era um pick de janela curta
  * publicado enquanto a pessoa navegava na Banca, sem nada na tela dela.
  *
- * DISPENSAR NÃO MARCA COMO LIDO. O item continua no sino: fechar o toast é
+ * DISPENSAR NÃO MARCA COMO LIDO. O item continua no sino: fechar o aviso é
  * "vi", não "resolvi". Quem clicar em "Ver pick" vai pra aba, que é onde a
  * decisão acontece.
  *
- * Mesma família visual do PlanUpsellToast e do PushPromptBanner · o site tem
- * um formato só de aviso. O que muda é a urgência: aqui não há atraso de
- * entrada (a odd vence em minutos, 1,4s de espera é 1,4s a menos) e o aviso
- * se retira sozinho, porque um pick que já venceu não deve continuar
- * chamando.
+ * CARTÃO NO CANTO (11/10/2026, pedido do usuário). Era uma faixa fina no
+ * rodapé, com o jogo e o mercado truncados numa linha e um "x" pequeno demais
+ * pro dedo. Virou o CartaoDeAviso: quadrado no canto, jogo em destaque,
+ * botão de fechar grande e arrastar pro lado no celular.
+ *
+ * VERDE, E NÃO VERMELHO (2026-09-12, pedido do usuário): vermelho neste site
+ * é RED de pick. Só o ponto pulsante do selo continua vermelho · ele é a
+ * convenção universal de "ao vivo".
  */
 
 /** Quanto tempo o aviso fica. A odd ao vivo dura minutos; o convite, menos. */
@@ -36,6 +39,25 @@ const TEMPO_EM_TELA = 25_000
 
 /** Onde ele não entra · na própria aba o pick já aparece na lista. */
 const FORA_DE = ['/checkout', '/login']
+
+/** "Pick ao vivo: Flamengo x Palmeiras" → "Flamengo x Palmeiras". O selo do
+ *  cartão já diz que é ao vivo; repetir no título gastava a linha mais lida. */
+export function jogoDoTitulo(titulo: string): string {
+  return titulo.replace(/^pick ao vivo:\s*/i, '').trim() || titulo
+}
+
+/** O corpo do aviso vem pronto do servidor (notificar_pick_live_novo):
+ *  "Escanteios Over 9.5 @ 1.85 (criado aos 34')". Separado em partes, a odd
+ *  vira o número grande do cartão · é ela que vence em minutos. Formato que
+ *  não casa volta inteiro em `mercado`, sem odd. */
+export function partesDoCorpo(corpo: string | null | undefined): {
+  mercado: string | null; odd: string | null; minuto: string | null
+} {
+  if (!corpo) return { mercado: null, odd: null, minuto: null }
+  const m = corpo.match(/^(.*?)\s*@\s*([\d.,]+)\s*(?:\(criado aos (\d+)'\))?\s*$/i)
+  if (!m) return { mercado: corpo, odd: null, minuto: null }
+  return { mercado: m[1].trim() || null, odd: m[2], minuto: m[3] ?? null }
+}
 
 export default function LivePickToast() {
   const { livePickNovo, dismissLivePickNovo } = useNotifications()
@@ -47,11 +69,8 @@ export default function LivePickToast() {
   const bloqueado = FORA_DE.some(r => pathname.startsWith(r)) || naAbaAoVivo
 
   useEffect(() => {
-    if (!livePickNovo || bloqueado) { setVisivel(false); return }
-    setVisivel(true)
-    const t = setTimeout(() => { setVisivel(false); dismissLivePickNovo() }, TEMPO_EM_TELA)
-    return () => clearTimeout(t)
-  }, [livePickNovo?.id, bloqueado, dismissLivePickNovo])
+    setVisivel(!!livePickNovo && !bloqueado)
+  }, [livePickNovo?.id, bloqueado])
 
   const fechar = () => { setVisivel(false); dismissLivePickNovo() }
 
@@ -64,66 +83,36 @@ export default function LivePickToast() {
     navigate(livePickNovo?.url || '/picks#ao_vivo')
   }
 
+  const partes = partesDoCorpo(livePickNovo?.body)
+
   return (
     <AnimatePresence>
       {visivel && livePickNovo && (
-        <motion.div
-          variants={toastUp}
-          initial="hidden"
-          animate="visible"
-          exit="exit"
-          /* Posição e empilhamento são da PilhaDeAvisos · ver o cabeçalho
-             dela. Aqui sobra só o cartão. Quem ainda cede o lugar é o convite
-             de plano, que se esconde enquanto este estiver na tela (ver
-             PlanUpsellToast): oportunidade com prazo ganha de convite
-             permanente, e são dois cartões grandes para uma tela de celular. */
-          className="w-full max-w-md pointer-events-auto"
-        >
-          {/* VERDE, E NAO VERMELHO (2026-09-12, pedido do usuario).
-          
-              O cartao inteiro era vermelho -- borda, circulo do icone e botao
-              -- e vermelho neste site significa RED de pick. Um aviso de
-              OPORTUNIDADE chegando com a cor da derrota lia como erro, e era o
-              unico aviso da pilha que gritava. Pior: nem era a cor do proprio
-              produto, que e' verde em PICK_TYPE_HEX.live e no selo do card.
-          
-              O ponto pulsante continua vermelho, sozinho: ele e' a convencao
-              universal de "ao vivo" e cabe num ponto de 6px, sem pintar o
-              cartao de alerta. */}
-          <div className="w-full bg-surface-1 border border-accent/40 rounded-lg shadow-2xl px-4 py-4 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-accent/10">
-              {/* `Activity` e nao `Radio`: a antena de transmissao e' o simbolo
-                  de "estamos no ar", e o que este aviso anuncia e' uma partida
-                  em andamento. A linha de batimento diz jogo correndo. */}
-              <Activity className="w-4 h-4 text-accent-ink" aria-hidden="true" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="flex items-center gap-1.5 text-sm font-black text-ink-1 leading-snug">
-                <LiveDot tone="red" className="w-1.5 h-1.5 shrink-0" />
-                <span className="truncate">{livePickNovo.title}</span>
-              </p>
-              {livePickNovo.body && (
-                <p className="text-xs text-ink-3 leading-snug truncate">{livePickNovo.body}</p>
+        <CartaoDeAviso
+          key={livePickNovo.id}
+          tom="ao_vivo"
+          urgente
+          selo={<><LiveDot tone="red" className="w-1.5 h-1.5" /> Pick ao vivo</>}
+          /* `Activity` e não `Radio`: o que o aviso anuncia é uma partida em
+             andamento · a linha de batimento diz jogo correndo. */
+          icone={<Activity className="w-5 h-5" aria-hidden="true" />}
+          titulo={jogoDoTitulo(livePickNovo.title)}
+          texto={partes.mercado}
+          destaque={partes.odd && (
+            <div className="flex items-end gap-3">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wide text-ink-3">Odd</p>
+                <p className="text-3xl font-black text-accent-ink leading-none tabular-nums">{partes.odd}</p>
+              </div>
+              {partes.minuto && (
+                <p className="text-xs text-ink-3 pb-0.5">criado aos {partes.minuto}'</p>
               )}
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                onClick={abrir}
-                className="px-3 py-1.5 rounded-lg text-xs font-black bg-accent hover:bg-accent-hover
-                           active:bg-accent-press text-black transition-colors"
-              >
-                Ver pick
-              </button>
-              <button
-                onClick={fechar}
-                aria-label="Dispensar aviso"
-                className="w-7 h-7 flex items-center justify-center text-ink-3 hover:text-ink-1 transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </motion.div>
+          )}
+          acao={{ rotulo: 'Ver pick', onClick: abrir }}
+          onFechar={fechar}
+          duracaoMs={TEMPO_EM_TELA}
+        />
       )}
     </AnimatePresence>
   )

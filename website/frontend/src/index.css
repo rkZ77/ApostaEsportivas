@@ -358,6 +358,12 @@
     to   { opacity: 1; transform: none; }
   }
 
+  /* Barra de tempo do CartaoDeAviso · encolhe ate' o aviso sair sozinho. */
+  @keyframes aviso-encolher {
+    from { transform: scaleX(1); }
+    to   { transform: scaleX(0); }
+  }
+
   .scrollbar-none {
     scrollbar-width: none;
     -ms-overflow-style: none;
