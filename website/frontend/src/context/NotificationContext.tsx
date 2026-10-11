@@ -54,34 +54,36 @@ export interface AppNotification {
  * correr atrás dela é pior que não avisar. */
 const LIVE_NOVO_JANELA_SEG = 25 * 60
 
-/* GREEN NA TELA (11/10/2026, pedido do usuário).
+/* RESULTADO NA TELA (11/10/2026, pedido do usuário).
  *
  * O resultado do pick seguido já virava item no sino, push e WhatsApp. Faltava
- * o óbvio pra quem está com o site aberto: o cartão aparecer na hora. Só
- * GREEN e meio-green · o RED continua só no sino, que é onde ele tem que estar.
+ * o óbvio pra quem está com o site aberto: o cartão aparecer na hora. Começou
+ * só com GREEN; no mesmo dia o usuário pediu TODOS ("todos os resultados se o
+ * cara estiver no site aparece"): green, red, meio a meio e devolvido.
  *
  * Janela de 2h pela mesma razão do ao vivo: quem abre o site no dia seguinte
- * não precisa de um "deu green agora" de ontem · ele está no sino. E o que já
+ * não precisa de um "saiu agora" de ontem · ele está no sino. E o que já
  * apareceu fica guardado neste navegador, pra recarregar a página não
- * mostrar o mesmo GREEN de novo. */
-const GREEN_JANELA_SEG = 2 * 60 * 60
-const LS_GREENS = 'greensAvisados'
-const RESULTADOS_QUE_AVISAM = new Set(['GREEN', 'HALF-WIN'])
+ * mostrar o mesmo resultado de novo. */
+const RESULTADO_JANELA_SEG = 2 * 60 * 60
+// Chave antiga mantida: quem já viu um GREEN pela primeira versão não o vê de novo.
+const LS_RESULTADOS = 'greensAvisados'
+const RESULTADOS_QUE_AVISAM = new Set(['GREEN', 'HALF-WIN', 'RED', 'HALF-LOSS', 'PUSH'])
 
-function greensJaAvisados(): Set<number> {
-  try { return new Set(JSON.parse(localStorage.getItem(LS_GREENS) || '[]')) } catch { return new Set() }
+function resultadosJaAvisados(): Set<number> {
+  try { return new Set(JSON.parse(localStorage.getItem(LS_RESULTADOS) || '[]')) } catch { return new Set() }
 }
 
-function guardarGreensAvisados(ids: Set<number>) {
-  try { localStorage.setItem(LS_GREENS, JSON.stringify([...ids].slice(-60))) } catch { /* modo privado */ }
+function guardarResultadosAvisados(ids: Set<number>) {
+  try { localStorage.setItem(LS_RESULTADOS, JSON.stringify([...ids].slice(-60))) } catch { /* modo privado */ }
 }
 
-/** Os GREENs que ainda merecem cartão, do mais novo pro mais velho. */
-export function greensParaAvisar(itens: AppNotification[], jaAvisados: Set<number>): AppNotification[] {
+/** Os resultados que ainda merecem cartão, do mais novo pro mais velho. */
+export function resultadosParaAvisar(itens: AppNotification[], jaAvisados: Set<number>): AppNotification[] {
   return itens
     .filter(n => n.type === 'pick_result' && !n.read && !jaAvisados.has(n.id)
       && RESULTADOS_QUE_AVISAM.has(String(n.payload?.result ?? '').toUpperCase())
-      && n.idade_seg != null && n.idade_seg <= GREEN_JANELA_SEG)
+      && n.idade_seg != null && n.idade_seg <= RESULTADO_JANELA_SEG)
     .sort((a, b) => (a.idade_seg ?? 0) - (b.idade_seg ?? 0))
 }
 
@@ -104,12 +106,12 @@ interface NotificationCtx {
       nada novo ou depois de dispensado. Ver components/LivePickToast. */
   livePickNovo: AppNotification | null
   dismissLivePickNovo: () => void
-  /** GREEN de pick seguido que acabou de sair, pro cartão em tela
-      (components/GreenToast). `greensJuntos` conta os que chegaram juntos com
+  /** Resultado de pick seguido que acabou de sair, pro cartão em tela
+      (components/ResultadoToast). `resultadosJuntos` conta os que chegaram juntos com
       ele · o cartão mostra o mais novo e diz quantos mais. */
-  greenNovo: AppNotification | null
-  greensJuntos: number
-  dismissGreenNovo: () => void
+  resultadoNovo: AppNotification | null
+  resultadosJuntos: number
+  dismissResultadoNovo: () => void
   /** Abertura do fechamento mensal · usada pelo sino e pelo card da Banca. */
   monthlyCloseOpen: boolean
   openMonthlyClose: () => void
@@ -134,9 +136,9 @@ const NotificationContext = createContext<NotificationCtx>({
   pendingAccessEnded: null,
   livePickNovo: null,
   dismissLivePickNovo: () => {},
-  greenNovo: null,
-  greensJuntos: 0,
-  dismissGreenNovo: () => {},
+  resultadoNovo: null,
+  resultadosJuntos: 0,
+  dismissResultadoNovo: () => {},
   monthlyCloseOpen: false,
   openMonthlyClose: () => {},
   closeMonthlyClose: () => {},
@@ -206,8 +208,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
    * saber de um pick que vence em minutos, enquanto olhava outra aba do
    * próprio site. Este estado é o mesmo evento, entregue por dentro. */
   const [livePickNovo, setLivePickNovo] = useState<AppNotification | null>(null)
-  const [greenNovo, setGreenNovo] = useState<AppNotification | null>(null)
-  const [greensJuntos, setGreensJuntos] = useState(0)
+  const [resultadoNovo, setResultadoNovo] = useState<AppNotification | null>(null)
+  const [resultadosJuntos, setResultadosJuntos] = useState(0)
 
   // Lista do sino
   const refresh = useCallback(async () => {
@@ -250,15 +252,15 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         setLivePickNovo(n)
       }
 
-      // GREEN na tela · mesmo poll, nenhuma requisição a mais. Marcado como
+      // Resultado na tela · mesmo poll, nenhuma requisição a mais. Marcado como
       // avisado no instante em que aparece: fechar ou não, ele não volta.
-      const avisados = greensJaAvisados()
-      const greens = greensParaAvisar(novos, avisados)
-      if (greens.length) {
-        greens.forEach(g => avisados.add(g.id))
-        guardarGreensAvisados(avisados)
-        setGreenNovo(greens[0])
-        setGreensJuntos(greens.length - 1)
+      const avisados = resultadosJaAvisados()
+      const resultados = resultadosParaAvisar(novos, avisados)
+      if (resultados.length) {
+        resultados.forEach(g => avisados.add(g.id))
+        guardarResultadosAvisados(avisados)
+        setResultadoNovo(resultados[0])
+        setResultadosJuntos(resultados.length - 1)
       }
 
       setItems(novos)
@@ -315,7 +317,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       setLiveCount(0)
       setHasLive(false)
       setLivePickNovo(null)
-      setGreenNovo(null)
+      setResultadoNovo(null)
       seenLiveIds.current = new Set()
       return
     }
@@ -413,7 +415,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
      no sino, que é o outro pedido. Fechar o toast é "vi o aviso", não "resolvi
      o assunto". */
   const dismissLivePickNovo = useCallback(() => setLivePickNovo(null), [])
-  const dismissGreenNovo = useCallback(() => setGreenNovo(null), [])
+  const dismissResultadoNovo = useCallback(() => setResultadoNovo(null), [])
 
   const pendingMonthlyClose = items.find(n => n.type === 'monthly_close' && !n.read) ?? null
   /* Os dois finais concorrem pelo mesmo popup, mas nunca coexistem numa conta
@@ -435,7 +437,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       monthlyCloseOpen, openMonthlyClose, closeMonthlyClose,
       hasNew, markSeen, liveCount, hasLive, clearLive,
       livePickNovo, dismissLivePickNovo,
-      greenNovo, greensJuntos, dismissGreenNovo,
+      resultadoNovo, resultadosJuntos, dismissResultadoNovo,
     }}>
       {children}
     </NotificationContext.Provider>
