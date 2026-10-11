@@ -4,7 +4,7 @@ import { AnimatePresence } from 'framer-motion'
 import { Activity } from 'lucide-react'
 import { useNotifications } from '../context/NotificationContext'
 import { LiveDot } from './ui'
-import CartaoDeAviso from './ui/CartaoDeAviso'
+import CartaoDeAviso, { timesDoAviso } from './ui/CartaoDeAviso'
 
 /*
  * "O motor achou um pick ao vivo agora" · aviso EM TELA.
@@ -95,8 +95,9 @@ export default function LivePickToast() {
           selo={<><LiveDot tone="red" className="w-1.5 h-1.5" /> Pick ao vivo</>}
           /* `Activity` e não `Radio`: o que o aviso anuncia é uma partida em
              andamento · a linha de batimento diz jogo correndo. */
-          icone={<Activity className="w-5 h-5" aria-hidden="true" />}
+          icone={<Activity className="w-3 h-3" strokeWidth={3} aria-hidden="true" />}
           titulo={jogoDoTitulo(livePickNovo.title)}
+          times={timesDoAviso(jogoDoTitulo(livePickNovo.title), livePickNovo.payload)}
           texto={partes.mercado}
           destaque={partes.odd && (
             <div className="flex items-end gap-3">

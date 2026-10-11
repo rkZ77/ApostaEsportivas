@@ -1,10 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
-import { CheckCircle2, RotateCcw, Trophy, XCircle } from 'lucide-react'
+import { Check, CheckCircle2, RotateCcw, X } from 'lucide-react'
 import { useNotifications } from '../context/NotificationContext'
 import { fmtBRL } from '../utils/format'
-import CartaoDeAviso, { type TomDoAviso } from './ui/CartaoDeAviso'
+import CartaoDeAviso, { timesDoAviso, type TomDoAviso } from './ui/CartaoDeAviso'
 
 /*
  * Resultado do pick seguido · aviso EM TELA (11/10/2026, pedido do usuário).
@@ -29,11 +29,12 @@ const FORA_DE = ['/checkout', '/login']
 interface Visual { tom: TomDoAviso; selo: string; icone: ReactNode; legenda: string }
 
 const VISUAL: Record<string, Visual> = {
-  'GREEN':     { tom: 'green',  selo: 'Green',     icone: <Trophy className="w-5 h-5" aria-hidden="true" />,    legenda: 'Você ganhou' },
-  'HALF-WIN':  { tom: 'green',  selo: 'Meio green', icone: <Trophy className="w-5 h-5" aria-hidden="true" />,   legenda: 'Você ganhou' },
-  'RED':       { tom: 'red',    selo: 'Red',       icone: <XCircle className="w-5 h-5" aria-hidden="true" />,   legenda: 'Resultado' },
-  'HALF-LOSS': { tom: 'red',    selo: 'Meio red',  icone: <XCircle className="w-5 h-5" aria-hidden="true" />,   legenda: 'Resultado' },
-  'PUSH':      { tom: 'neutro', selo: 'Devolvido', icone: <RotateCcw className="w-5 h-5" aria-hidden="true" />, legenda: 'Entrada devolvida' },
+  // O ícone vai no selinho de 20px sobre a logo da PickIA (ver CartaoDeAviso).
+  'GREEN':     { tom: 'green',  selo: 'Green',     icone: <Check className="w-3 h-3" strokeWidth={4} aria-hidden="true" />,     legenda: 'Você ganhou' },
+  'HALF-WIN':  { tom: 'green',  selo: 'Meio green', icone: <Check className="w-3 h-3" strokeWidth={4} aria-hidden="true" />,    legenda: 'Você ganhou' },
+  'RED':       { tom: 'red',    selo: 'Red',       icone: <X className="w-3 h-3" strokeWidth={4} aria-hidden="true" />,         legenda: 'Resultado' },
+  'HALF-LOSS': { tom: 'red',    selo: 'Meio red',  icone: <X className="w-3 h-3" strokeWidth={4} aria-hidden="true" />,         legenda: 'Resultado' },
+  'PUSH':      { tom: 'neutro', selo: 'Devolvido', icone: <RotateCcw className="w-3 h-3" strokeWidth={3} aria-hidden="true" />, legenda: 'Entrada devolvida' },
 }
 
 /** O visual de cada resultado. Desconhecido cai no neutro, nunca no verde. */
@@ -94,6 +95,7 @@ export default function ResultadoToast() {
           </>}
           icone={visual.icone}
           titulo={jogoDoResultado(resultadoNovo.title)}
+          times={timesDoAviso(jogoDoResultado(resultadoNovo.title), resultadoNovo.payload)}
           texto={resultadosJuntos > 0
             ? `${mercado ? `${mercado} · ` : ''}e mais ${resultadosJuntos} ${resultadosJuntos === 1 ? 'resultado' : 'resultados'}`
             : mercado}
