@@ -3,6 +3,7 @@ import { m as motion, type PanInfo } from 'framer-motion'
 import { X } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import { cantoIn } from '../../lib/motion'
+import { escudoDoTime } from '../../lib/aoVivo'
 
 /*
  * O CARTÃO QUADRADO DOS AVISOS DE JOGO (11/10/2026, pedido do usuário).
@@ -23,10 +24,60 @@ import { cantoIn } from '../../lib/motion'
 export type TomDoAviso = 'ao_vivo' | 'green' | 'red' | 'neutro'
 
 const TOM: Record<TomDoAviso, { borda: string; selo: string; barra: string; icone: string }> = {
-  ao_vivo: { borda: 'border-accent/50',   selo: 'bg-red-500/15 text-red-400',     barra: 'bg-accent',   icone: 'bg-accent/10 text-accent-ink' },
-  green:   { borda: 'border-accent/60',   selo: 'bg-accent/15 text-accent-ink',   barra: 'bg-accent',   icone: 'bg-accent/15 text-accent-ink' },
-  red:     { borda: 'border-red-500/50',  selo: 'bg-red-500/15 text-red-400',     barra: 'bg-red-500',  icone: 'bg-red-500/10 text-red-400' },
-  neutro:  { borda: 'border-line-strong', selo: 'bg-surface-3 text-ink-2',        barra: 'bg-ink-3',    icone: 'bg-surface-3 text-ink-2' },
+  // `icone` é o selinho sobre a logo: preenchido, pra ler a 20px.
+  ao_vivo: { borda: 'border-accent/50',   selo: 'bg-red-500/15 text-red-400',     barra: 'bg-accent',   icone: 'bg-red-600 text-white' },
+  green:   { borda: 'border-accent/60',   selo: 'bg-accent/15 text-accent-ink',   barra: 'bg-accent',   icone: 'bg-accent text-on-fill' },
+  red:     { borda: 'border-red-500/50',  selo: 'bg-red-500/15 text-red-400',     barra: 'bg-red-500',  icone: 'bg-red-600 text-white' },
+  neutro:  { borda: 'border-line-strong', selo: 'bg-surface-3 text-ink-2',        barra: 'bg-ink-3',    icone: 'bg-surface-3 text-ink-1' },
+}
+
+export interface TimesDoAviso { casa: string; fora: string; casaId?: number | null; foraId?: number | null }
+
+/** Escudo com as iniciais por baixo: sem id, ou com o escudo falhando, o
+ *  lugar não fica vazio (mesma ideia do PlayerPhoto). */
+function EscudoDoAviso({ id, nome }: { id?: number | null; nome: string }) {
+  const [falhou, setFalhou] = useState(false)
+  const src = escudoDoTime(id ?? undefined)
+  const iniciais = nome.trim().split(/\s+/).map(p => p[0]).join('').slice(0, 2).toUpperCase() || '?'
+  return (
+    <span className="relative w-9 h-9 shrink-0 grid place-items-center">
+      {(!src || falhou) && (
+        <span className="w-9 h-9 rounded-full bg-surface-3 grid place-items-center text-[11px] font-black text-ink-3">
+          {iniciais}
+        </span>
+      )}
+      {src && !falhou && (
+        <img src={src} alt="" width={36} height={36} className="w-9 h-9 object-contain"
+          onError={() => setFalhou(true)} />
+      )}
+    </span>
+  )
+}
+
+/** "Flamengo  x  Fluminense" com o escudo em cima de cada nome. */
+function LinhaDosTimes({ casa, fora, casaId, foraId }: TimesDoAviso) {
+  return (
+    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2" aria-label={`${casa} x ${fora}`}>
+      {[{ nome: casa, id: casaId }, null, { nome: fora, id: foraId }].map((t, i) => t ? (
+        <span key={i} className="flex flex-col items-center gap-1 min-w-0">
+          <EscudoDoAviso id={t.id} nome={t.nome} />
+          <span className="w-full text-center text-[13px] font-black text-ink-1 leading-tight truncate">{t.nome}</span>
+        </span>
+      ) : (
+        <span key={i} className="text-sm font-black text-ink-4 pb-5">x</span>
+      ))}
+    </div>
+  )
+}
+
+/** "Flamengo x Fluminense" + ids do payload → times do cartão, ou null quando
+ *  o título não é um jogo (múltipla, bilhete). */
+export function timesDoAviso(jogo: string, payload?: Record<string, any> | null): TimesDoAviso | null {
+  const partes = jogo.split(/\s+x\s+/i)
+  if (partes.length !== 2 || !partes[0].trim() || !partes[1].trim()) return null
+  const id = (v: unknown) => (typeof v === 'number' && v > 0 ? v : null)
+  return { casa: partes[0].trim(), fora: partes[1].trim(),
+           casaId: id(payload?.home_team_id), foraId: id(payload?.away_team_id) }
 }
 
 /** Arrasto lateral que fecha o cartão no celular, em px. */
@@ -38,6 +89,8 @@ export interface CartaoDeAvisoProps {
   selo: ReactNode
   icone: ReactNode
   titulo: string
+  /** Os dois times com escudo, no lugar do título (ver timesDoAviso). */
+  times?: TimesDoAviso | null
   /** Linha de apoio logo abaixo do título (mercado, linha, odd). */
   texto?: string | null
   /** Destaque grande opcional (o lucro do GREEN). */
@@ -51,7 +104,7 @@ export interface CartaoDeAvisoProps {
 }
 
 export default function CartaoDeAviso({
-  tom, selo, icone, titulo, texto, destaque, acao, onFechar, duracaoMs = 0, urgente = false,
+  tom, selo, icone, titulo, times, texto, destaque, acao, onFechar, duracaoMs = 0, urgente = false,
 }: CartaoDeAvisoProps) {
   const cores = TOM[tom]
   const [pausado, setPausado] = useState(false)
@@ -102,10 +155,26 @@ export default function CartaoDeAviso({
         cores.borda,
       )}
     >
-      <div className="flex items-start justify-between gap-2 pl-4 pr-2 pt-3">
-        <span className={cn('inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[11px] font-black uppercase tracking-wide', cores.selo)}>
-          {selo}
-        </span>
+      <div className="flex items-center justify-between gap-2 pl-3 pr-2 pt-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          {/* A MARCA COM O SELINHO (11/10/2026, pedido do usuário): a logo da
+              PickIA no lugar do ícone genérico, e o status (✓, ✗, ao vivo)
+              num selinho por cima dela · o aviso diz de quem é e o que foi. */}
+          <span className="relative shrink-0 w-10 h-10">
+            <img src="/logo-64.webp" alt="PickIA" width={40} height={40}
+              className="w-10 h-10 rounded-full object-cover" />
+            <span className={cn('absolute -bottom-1 -right-1 w-5 h-5 rounded-full ring-2 ring-surface-1',
+                                'flex items-center justify-center', cores.icone)}>
+              {icone}
+            </span>
+          </span>
+          <span className="flex flex-col items-start gap-1 min-w-0">
+            <span className="text-[13px] font-black text-ink-1 leading-none">PickIA</span>
+            <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wide', cores.selo)}>
+              {selo}
+            </span>
+          </span>
+        </div>
         <button
           type="button"
           onClick={onFechar}
@@ -117,15 +186,16 @@ export default function CartaoDeAviso({
         </button>
       </div>
 
-      <div className="flex-1 flex flex-col px-4 pt-1 pb-4 gap-3 min-h-0">
-        <div className="flex items-start gap-3 min-w-0">
-          <div className={cn('w-10 h-10 rounded-xl shrink-0 flex items-center justify-center', cores.icone)}>
-            {icone}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-[15px] font-black text-ink-1 leading-snug line-clamp-2 break-words">{titulo}</p>
-            {texto && <p className="mt-0.5 text-[13px] text-ink-2 leading-snug line-clamp-2 break-words">{texto}</p>}
-          </div>
+      <div className="flex-1 flex flex-col px-4 pt-3 pb-4 gap-2.5 min-h-0">
+        <div className="min-w-0">
+          {times
+            ? <LinhaDosTimes {...times} />
+            : <p className="text-[15px] font-black text-ink-1 leading-snug line-clamp-2 break-words">{titulo}</p>}
+          {texto && (
+            <p className={cn('mt-1 text-[13px] text-ink-2 leading-snug line-clamp-2 break-words', times && 'text-center')}>
+              {texto}
+            </p>
+          )}
         </div>
 
         {destaque && <div className="sm:flex-1 flex items-center">{destaque}</div>}
@@ -136,7 +206,7 @@ export default function CartaoDeAviso({
             onClick={acao.onClick}
             className={cn(
               'mt-auto w-full min-h-[44px] rounded-xl text-sm font-black transition-colors',
-              tom === 'red'
+              tom === 'red' || tom === 'neutro'
                 ? 'bg-surface-3 hover:bg-surface-2 text-ink-1'
                 : 'bg-accent hover:bg-accent-hover active:bg-accent-press text-on-fill',
             )}

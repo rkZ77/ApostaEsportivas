@@ -551,6 +551,10 @@ def notify_pick_result(cur, pick_id: int, pick_type: str, result: str) -> None:
                     "result":       label,
                     "profit_units": round(profit_u, 4) if profit_u is not None else None,
                     "pnl":          round(pnl_r, 2) if pnl_r is not None else None,
+                    # Escudos no cartao em tela (11/10/2026). Bilhete combinado
+                    # vem sem time, e o cartao mostra so' a marca.
+                    "home_team_id": pick.get("home_team_id"),
+                    "away_team_id": pick.get("away_team_id"),
                 },
             )
             # E no celular (2026-10-07). Pessoal, do pick que ELA seguiu, com o
@@ -664,7 +668,11 @@ def notificar_pick_live_novo(picks: list) -> int:
                   f"{p.get('odd')}"
                   + (f" (criado aos {minuto}')" if minuto is not None else "")).strip(),
             url="/picks#ao_vivo",
-            payload={"pick_id": pick_id, "pick_type": "live"},
+            # Os ids dos times vao junto pro cartao em tela desenhar os escudos
+            # (11/10/2026) · sem eles o cartao cai no icone, nao quebra.
+            payload={"pick_id": pick_id, "pick_type": "live",
+                     "home_team_id": p.get("home_team_id"),
+                     "away_team_id": p.get("away_team_id")},
         )
         # O MESMO AVISO NO WHATSAPP, pra quem ligou (2026-09-14).
         #
@@ -937,8 +945,8 @@ def sync_live_pick_notifications() -> int:
             return 0
 
         cur.execute(f"""
-            SELECT id, home_team_name, away_team_name, market, line, odd,
-                   minute_at_creation
+            SELECT id, home_team_name, away_team_name, home_team_id, away_team_id,
+                   market, line, odd, minute_at_creation
             FROM picks_live
             WHERE result IS NULL
               AND status = 'ACTIVE'
