@@ -457,3 +457,29 @@ def liquidar_sem_quebrar(conn, cur, user_id: int) -> None:
             conn.rollback()
         except Exception:
             pass
+
+
+def liquidar_de_todos(conn) -> int:
+    """Liquida os bilhetes pendentes de TODO usuario. Devolve quantos fecharam.
+
+    Chamada pelo agendador (11/10/2026): antes o bilhete so' fechava quando o
+    dono abria a banca, entao o aviso de GREEN chegava quando ele ja' tinha
+    entrado pra olhar. So' banco -- quem traz o numero do jogo e' a coleta de
+    estatistica --, entao rodar de minuto em minuto nao gasta cota.
+    """
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT DISTINCT user_id FROM bilhetes_pessoais WHERE result IS NULL")
+        usuarios = [r["user_id"] for r in cur.fetchall()]
+    except Exception:
+        conn.rollback()
+        return 0   # tabela ainda nao migrada
+    fechados = 0
+    for user_id in usuarios:
+        try:
+            fechados += liquidar_pendentes(cur, user_id)
+            conn.commit()
+        except Exception:
+            logger.warning("[BILHETE] liquidacao do usuario %s falhou", user_id, exc_info=True)
+            conn.rollback()
+    return fechados

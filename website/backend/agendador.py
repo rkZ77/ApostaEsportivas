@@ -276,6 +276,59 @@ async def executar(t: Tarefa, dia: date) -> None:
             pass
 
 
+#: Bilhete pessoal e' so' banco, mas reescreve cada pendente a cada passada ·
+#: no mesmo ritmo da varredura de picks, e nao a cada volta de 60s.
+_INTERVALO_BILHETES = 180
+_ultima_dos_bilhetes = {"ts": 0.0}
+
+
+def _cota_permite_agora() -> bool:
+    from routers import admin
+    pode, motivo = cota_permite(admin._api_football_status(), teto_de_cota())
+    if not pode:
+        logger.warning("[AGENDADOR] varredura de resultados pulada: %s", motivo)
+    return pode
+
+
+def varrer_resultados(agora_ts: float | None = None) -> list[str]:
+    """RESULTADO NA HORA, NAO NA VISITA (11/10/2026, pedido do usuario).
+
+    A liquidacao dos picks e a coleta de estatistica eram puxadas por visita:
+    o GREEN so' aparecia quando alguem abria o site. Aqui o agendador puxa as
+    mesmas varreduras a cada volta, com os freios DELAS (relogio, banco e so'
+    entao a API) -- nada e' reimplementado, e sem jogo pendente nao ha' chamada.
+    O teto de cota do agendador entra so' quando a varredura de picks iria
+    mesmo pra API. Roda numa thread (to_thread): os freios consultam o banco.
+    """
+    import time as _t
+    agora_ts = agora_ts or _t.time()
+    feitas = []
+    try:
+        from routers import live
+        if live.maybe_resolve_pending(pode_gastar=_cota_permite_agora):
+            feitas.append("picks")
+    except Exception:
+        logger.exception("[AGENDADOR] varredura de picks falhou")
+    try:
+        import stats_sweep
+        stats_sweep.maybe_sync_finished_stats()
+    except Exception:
+        logger.exception("[AGENDADOR] coleta de estatistica falhou")
+    if agora_ts - _ultima_dos_bilhetes["ts"] >= _INTERVALO_BILHETES:
+        _ultima_dos_bilhetes["ts"] = agora_ts
+        try:
+            import bilhete_pessoal
+            conn = _conexao()
+            try:
+                if bilhete_pessoal.liquidar_de_todos(conn):
+                    feitas.append("bilhetes")
+            finally:
+                conn.close()
+        except Exception:
+            logger.exception("[AGENDADOR] bilhetes pessoais falharam")
+    return feitas
+
+
 async def uma_volta(agora: datetime | None = None) -> list[str]:
     """Dispara o que esta' na hora. Devolve o nome do que disparou (teste)."""
     agora = agora or datetime.now(BR)
@@ -290,6 +343,10 @@ async def uma_volta(agora: datetime | None = None) -> list[str]:
             continue
         disparadas.append(t.nome)
         asyncio.create_task(executar(t, dia))
+    try:
+        disparadas += await asyncio.to_thread(varrer_resultados)
+    except Exception:
+        logger.exception("[AGENDADOR] varredura de resultados falhou")
     # Motor Ao Vivo: liga quando um jogo das nossas ligas esta' em campo e
     # desliga sozinho quando nao sobra nenhum (ver live_picks.supervisionar_automatico).
     try:

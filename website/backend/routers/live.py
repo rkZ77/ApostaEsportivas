@@ -1526,7 +1526,7 @@ def _locked_leg_result(leg: dict) -> str | None:
           pode mudar. Nunca `_calc_result` com a bola rolando -- ver a nota em
           `_travado_antes_do_apito`.
     """
-    if leg["is_ft"]:
+    if leg["is_ft"] or leg.get("periodo_encerrado"):
         return _calc_result(
             leg["market"], leg["line"],
             leg["current_val"], leg["home_goals"], leg["away_goals"],
@@ -1963,6 +1963,12 @@ def _cartoes_elegiveis(fixture_id: int, escopo: str):
     return hy + 2 * hr + ay + 2 * ar, True
 
 
+#: Status em que o 1o tempo ja' acabou. A folha (escanteio, chute) so' e'
+#: confiavel com o 2o tempo em andamento -- ver `periodo_encerrado`.
+_1T_ENCERRADO = frozenset({"HT", "2H", "ET", "BT", "P", "FT", "AET", "PEN"})
+_1T_ENCERRADO_FOLHA = _1T_ENCERRADO - {"HT"}
+
+
 def _enrich_leg(fid: int, market: str, line: str,
                 home_team: str, away_team: str,
                 home_team_id: int | None, away_team_id: int | None,
@@ -2071,8 +2077,25 @@ def _enrich_leg(fid: int, market: str, line: str,
         # numero pra ser julgado, e o do jogo inteiro nao serve. Fica como
         # partida em andamento ate' o provedor publicar.
         is_ft, cur_val, pst = False, None, "neutral"
-    is_locked = is_ft
-    if not is_ft and cur_val is not None:
+    # O 1o TEMPO FECHA NO INTERVALO (11/10/2026). Ate' aqui o pick de 1o tempo
+    # so' era liquidado no apito FINAL (`is_ft`), mesmo com o numero dele
+    # congelado desde o intervalo -- o usuario via "Under 4.5 1T" pendente o
+    # segundo tempo inteiro. Do intervalo em diante o placar do 1o tempo e'
+    # `score.halftime`, que nao muda mais.
+    #
+    # Mercado de FOLHA (escanteio, chute...) espera o 2o tempo comecar: no
+    # apito do intervalo o provedor ainda pode estar publicando o escanteio
+    # dos acrescimos, e um a menos vira RED em PUSH -- o mesmo furo de
+    # `_folha_e_do_jogo_em_andamento`. Cartao de 1o tempo fica de fora: ele
+    # espera a validacao (ver `cartoes_pendentes` acima), que nao existe antes
+    # do fim do jogo.
+    periodo_encerrado = (
+        primeiro_tempo and not is_ft and not sem_dado_1t
+        and status in (_1T_ENCERRADO_FOLHA if precisa_stats else _1T_ENCERRADO)
+        and not market_form.e_mercado_de_cartoes(market, market_type)
+    )
+    is_locked = is_ft or periodo_encerrado
+    if not is_locked and cur_val is not None:
         # BTTS: uma vez que ambas marcaram (cur_val=1) não tem como voltar
         is_btts_market = "btts" in (market_type or "").lower() or \
                          any(k in (market or "").lower() for k in ("ambas", "btts"))
@@ -2110,6 +2133,7 @@ def _enrich_leg(fid: int, market: str, line: str,
         "pick_status":  pst,
         "is_live":      status in LIVE_STATUSES,
         "is_ft":        is_ft,
+        "periodo_encerrado": periodo_encerrado,
         "is_locked":    is_locked,
         "home_stats":   home_stats,
         "away_stats":   away_stats,
@@ -4324,12 +4348,20 @@ def _sweep_now() -> None:
             _sweep_state["last"] = time.time()
 
 
-def maybe_resolve_pending() -> bool:
+def maybe_resolve_pending(pode_gastar=None) -> bool:
     """Dispara a varredura em segundo plano se for a hora. Devolve se disparou.
 
-    Chamada dos endpoints de leitura de picks/resultados. Nunca levanta, nunca
-    bloqueia a resposta: a varredura roda numa thread própria, então a página
-    do usuário não espera pela API-Football.
+    Chamada dos endpoints de leitura de picks/resultados e, desde 11/10/2026,
+    do agendador a cada minuto (agendador.varrer_resultados): o resultado sai
+    quando o jogo decide, e não quando alguém abre o site. Os freios são os
+    mesmos nos dois caminhos -- o relógio de 3 min e o banco vêm antes de
+    qualquer chamada, então madrugada sem jogo continua custando zero.
+
+    `pode_gastar` (opcional) é o teto de cota do agendador, consultado só
+    depois do freio de banco, quando a varredura de fato iria pra API.
+
+    Nunca levanta, nunca bloqueia a resposta: a varredura roda numa thread
+    própria, então a página do usuário não espera pela API-Football.
 
     O relógio só é reiniciado quando a varredura TERMINA (ver `_sweep_now`), e
     não quando começa -- uma varredura lenta não vira gatilho pra próxima
@@ -4350,7 +4382,7 @@ def maybe_resolve_pending() -> bool:
         _sweep_state["running"] = True
 
     try:
-        if not _ha_pendente_em_jogo():
+        if not _ha_pendente_em_jogo() or (pode_gastar is not None and not pode_gastar()):
             with _sweep_lock:
                 _sweep_state["running"] = False
                 _sweep_state["last"] = agora  # não repergunta ao banco a cada request
