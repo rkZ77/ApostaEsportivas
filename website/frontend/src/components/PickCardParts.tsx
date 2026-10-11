@@ -1,4 +1,4 @@
-import { BrainCircuit, Check as CheckIcon, Clock, Loader2, Share2 } from 'lucide-react'
+import { BrainCircuit, Check as CheckIcon, Clock, Loader2, Share2, X as XIcon } from 'lucide-react'
 import { cn } from '../lib/cn'
 import { Badge, ResultBadge } from './ui'
 import { rotuloDoMinuto, rotuloDoTempo, type LeituraAoVivo } from '../lib/picksAgora'
@@ -343,11 +343,11 @@ export function CampoAoVivo({ aoVivo }: { aoVivo?: LeituraAoVivo | null }) {
             ganhando ? 'bg-green-500' : perdido ? 'bg-red-500' : direcao === 'under' ? 'bg-yellow-500' : 'bg-ink-3')}
             style={{ width: `${cheio * 100}%` }} />
         </span>
-        {travado && (
-          <span className={cn('text-[10px] font-bold shrink-0', ganhando ? 'text-green-400' : 'text-red-400')}>
-            {ganhando ? 'bateu' : 'estourou'}
-          </span>
-        )}
+        {/* Só o sinal (11/10/2026, pedido do usuário): ✓ quando já bateu,
+            ✗ quando já estourou. O texto disputava espaço com a barra. */}
+        {travado && (ganhando
+          ? <CheckIcon className="w-4 h-4 shrink-0 text-green-400" strokeWidth={3} role="img" aria-label="Já bateu" />
+          : <XIcon className="w-4 h-4 shrink-0 text-red-400" strokeWidth={3} role="img" aria-label="Já estourou" />)}
       </dd>
     </CampoDoPick>
   )
