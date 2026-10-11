@@ -1022,6 +1022,14 @@ def db_pool(current_user: dict = Depends(require_admin)):
 _ORIGENS_AO_VIVO = ("motor_live", "live")
 
 
+def _e_do_ao_vivo(origem) -> bool:
+    """`live` virou `live:placar`, `live:estatistica`, `live:odds-mundo`...
+    em 11/10/2026, pra o painel geral mostrar QUAL chamada do site gasta. O
+    total do ao vivo continua o mesmo: soma o rotulo antigo e os novos."""
+    o = str(origem or "")
+    return o in _ORIGENS_AO_VIVO or o.startswith("live:")
+
+
 def _quota_por_origem(dias: int) -> list[dict]:
     """Quantas chamadas cada parte fez, por dia.
 
@@ -1065,7 +1073,7 @@ def api_quota_ao_vivo(dias: int = 7, current_user: dict = Depends(require_admin)
         chave = str(r["dia"])
         alvo = por_dia.setdefault(chave, {"dia": chave, "ao_vivo": 0, "total": 0})
         alvo["total"] += int(r["chamadas"] or 0)
-        if r["origem"] in _ORIGENS_AO_VIVO:
+        if _e_do_ao_vivo(r["origem"]):
             alvo["ao_vivo"] += int(r["chamadas"] or 0)
 
     dias_ord = sorted(por_dia.values(), key=lambda d: d["dia"], reverse=True)
@@ -1100,7 +1108,7 @@ def api_quota_ao_vivo(dias: int = 7, current_user: dict = Depends(require_admin)
         # "posso aumentar a frequência?".
         "pct_da_cota": (round(100.0 * de_hoje["ao_vivo"] / limite, 1)
                         if de_hoje and limite else None),
-        "origens_contadas": list(_ORIGENS_AO_VIVO),
+        "origens_contadas": [*_ORIGENS_AO_VIVO, "live:*"],
     }
 
 
