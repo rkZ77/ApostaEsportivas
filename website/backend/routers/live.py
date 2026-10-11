@@ -140,7 +140,7 @@ def _fetch_fixture(fid: int) -> dict:
     try:
         r = requests.get(f"{API_BASE}/fixtures", headers=_headers(),
                          params={"id": fid, "timezone": "America/Sao_Paulo"}, timeout=10)
-        api_quota.registrar(getattr(r, "headers", None), "live")
+        api_quota.registrar(getattr(r, "headers", None), "live:placar")
         corpo = r.json() or {}
         if motivo := _recusa_da_api(corpo):
             # Recusa nao vira fixture vazia em cache: `status: NS` fabricado
@@ -186,7 +186,7 @@ def _fetch_fixtures_bulk(fids: list[int]) -> None:
             r = requests.get(f"{API_BASE}/fixtures", headers=_headers(),
                              params={"ids": "-".join(str(f) for f in batch),
                                      "timezone": "America/Sao_Paulo"}, timeout=10)
-            api_quota.registrar(getattr(r, "headers", None), "live")
+            api_quota.registrar(getattr(r, "headers", None), "live:placar-lote")
             corpo = r.json() or {}
             if motivo := _recusa_da_api(corpo):
                 logger.error("[LIVE] bulk fixtures %s: %s", batch, motivo)
@@ -266,7 +266,7 @@ def _fetch_stats(fid: int, status: str) -> list:
                          # mais: e' de la' que o mercado de 1o tempo liquida
                          # depois do intervalo. A folha cheia nao muda.
                          params={"fixture": fid, "half": "true"}, timeout=10)
-        api_quota.registrar(getattr(r, "headers", None), "live")
+        api_quota.registrar(getattr(r, "headers", None), "live:estatistica")
         corpo = r.json() or {}
         if motivo := _recusa_da_api(corpo):
             # RECUSA NAO E' FOLHA VAZIA, e a diferenca vale um resultado: a
@@ -388,7 +388,7 @@ def _fetch_live_odds(fid: int) -> list:
     try:
         r = requests.get(f"{API_BASE}/odds/live", headers=_headers(),
                          params={"fixture": fid}, timeout=10)
-        api_quota.registrar(getattr(r, "headers", None), "live")
+        api_quota.registrar(getattr(r, "headers", None), "live:odds-jogo")
         items = r.json().get("response", [])
         data = items[0].get("odds", []) if items else []
     except Exception as e:
@@ -445,7 +445,7 @@ def _fetch_live_odds_mundo(max_paginas: int = 3) -> dict:
             params = {"page": pagina} if pagina > 1 else {}
             r = requests.get(f"{API_BASE}/odds/live", headers=_headers(),
                              params=params, timeout=12)
-            api_quota.registrar(getattr(r, "headers", None), "live")
+            api_quota.registrar(getattr(r, "headers", None), "live:odds-mundo")
             corpo = r.json() or {}
             for item in corpo.get("response") or []:
                 fid = (item.get("fixture") or {}).get("id")
@@ -637,7 +637,7 @@ def _fetch_prematch_odds(fid: int) -> list:
     try:
         r = requests.get(f"{API_BASE}/odds", headers=_headers(),
                          params={"fixture": fid}, timeout=10)
-        api_quota.registrar(getattr(r, "headers", None), "live")
+        api_quota.registrar(getattr(r, "headers", None), "live:odds-pre")
         items = r.json().get("response", [])
         data = items[0].get("bookmakers", []) if items else []
     except Exception as e:
