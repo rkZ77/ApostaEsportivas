@@ -42,3 +42,12 @@ def _sem_banco_no_teste(monkeypatch):
             continue
         if getattr(modulo, "get_connection", None) is not None:
             monkeypatch.setattr(modulo, "get_connection", _recusa, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _cache_de_h2h_isolado(monkeypatch, tmp_path):
+    """O cache do H2H vai pro disco desde 11/10/2026. Na suite, cada teste usa
+    uma pasta propria: um par gravado por outra execucao nao pode responder no
+    lugar do duble."""
+    from services import h2h_api_fetcher
+    monkeypatch.setattr(h2h_api_fetcher, "_PASTA_DO_CACHE", str(tmp_path / "h2h"))
