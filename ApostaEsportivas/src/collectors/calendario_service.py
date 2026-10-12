@@ -106,8 +106,9 @@ def gravar_temporada(cur, response: list, league_id: int, season) -> int:
     linhas = linhas_da_temporada(response, league_id, season)
     if not linhas:
         return 0
-    for sql in DDL:
-        cur.execute(sql)
+    # So' o DDL que falta, sem travar o site (ver utils/esquema.py).
+    from utils import esquema
+    esquema.garantir(cur, DDL)
     from psycopg2.extras import execute_values
     execute_values(cur, """
         INSERT INTO calendario_jogos (fixture_id, league_id, season, round, match_datetime,

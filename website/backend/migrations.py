@@ -17,6 +17,14 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
 
     cur = conn.cursor()
     try:
+        # A SUBIDA NAO PODE CONGELAR O SITE (11/10/2026). Cada deploy roda
+        # dezenas de ALTER TABLE ... IF NOT EXISTS, e cada um PEDE lock
+        # exclusivo da tabela mesmo quando nao muda nada -- com a versao antiga
+        # ainda atendendo, isso deu "deadlock detected" as 00:36 de 12/10 e
+        # derrubou consultas da Banca. Sem trava em 5s, a migracao desiste
+        # (rollback, como qualquer erro daqui) e tenta de novo na proxima
+        # subida, em vez de enfileirar o site atras dela.
+        cur.execute("SET lock_timeout = '5s'")
         # A liga ainda e' coletada? FALSE = so' historico.
         #
         # Existe porque REMOVER a linha quebra o nome em todo lugar que faz
@@ -1343,8 +1351,6 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         """)
 
         conn.commit()
-        _migrar_arquivo_de_fixtures(logger)
-        _migrar_pernas_final(logger)
         return True
     except Exception as e:
         logger.error("[MIGRATION] Erro: %s", e)
@@ -1353,6 +1359,10 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
     finally:
         cur.close()
         conn.close()
+        # Passos independentes, com conexao propria: rodam mesmo quando o bloco
+        # de cima desiste (lock_timeout, deadlock).
+        _migrar_arquivo_de_fixtures(logger)
+        _migrar_pernas_final(logger)
 
 
 def _migrar_pernas_final(logger: logging.Logger) -> None:
@@ -1368,6 +1378,7 @@ def _migrar_pernas_final(logger: logging.Logger) -> None:
         return
     cur = conn.cursor()
     try:
+        cur.execute("SET lock_timeout = '5s'")   # ver run_startup_migrations
         for tabela in ("picks_alavancagem", "picks_boost"):
             cur.execute("SELECT to_regclass(%s) IS NOT NULL AS existe", (f"public.{tabela}",))
             linha = cur.fetchone()
@@ -1435,6 +1446,7 @@ def _migrar_arquivo_de_fixtures(logger: logging.Logger) -> None:
         return
     cur = conn.cursor()
     try:
+        cur.execute("SET lock_timeout = '5s'")   # ver run_startup_migrations
         cur.execute(_SQL_FIXTURES_ARQUIVO)
         cur.execute(_SQL_FIXTURES_TODAS)
         conn.commit()

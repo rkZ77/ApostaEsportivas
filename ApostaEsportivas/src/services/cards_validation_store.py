@@ -61,12 +61,14 @@ def garantir_colunas(cur) -> None:
     sozinha depois do merge, e o liquidador nao pode quebrar com
     ProgrammingError por causa de uma coluna que ainda nao existe.
     """
-    for coluna in ("valid_yellow_home", "valid_yellow_away",
-                   "valid_red_home", "valid_red_away", "cards_excluded"):
-        cur.execute(
-            f"ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS {coluna} INTEGER;")
-    cur.execute(
-        "ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS cards_validation TEXT;")
+    # So' o que falta, sem travar o site (11/10/2026, ver utils/esquema.py):
+    # ALTER TABLE em match_statistics pede lock exclusivo mesmo com IF NOT EXISTS.
+    from utils import esquema
+    ddl = [f"ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS {coluna} INTEGER;"
+           for coluna in ("valid_yellow_home", "valid_yellow_away",
+                          "valid_red_home", "valid_red_away", "cards_excluded")]
+    ddl.append("ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS cards_validation TEXT;")
+    esquema.garantir(cur, ddl)
 
 
 def _buscar(endpoint: str, fixture_id: int, headers: dict, origem: str) -> list:

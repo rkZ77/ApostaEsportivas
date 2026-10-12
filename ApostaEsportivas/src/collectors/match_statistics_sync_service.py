@@ -10,6 +10,7 @@ load_dotenv(find_dotenv())
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.arbitro import chave_do_arbitro, sql_chave
 from utils.db_utils import get_connection
+from utils import esquema
 from utils.stat_sheet import folha_publicada, ler_valor, somar
 from utils.api_client import buscar
 
@@ -200,8 +201,13 @@ class MatchStatisticsSyncService:
         services/picks_ledger_sync_service.py::_create_table_if_needed) porque
         migracao em PROD nao roda sozinha depois do merge.
         """
+        # SO' O QUE FALTA, E SEM TRAVAR O SITE (11/10/2026). Eram ~25 ALTER
+        # TABLE em `match_statistics` a cada abertura, todos pedindo ACCESS
+        # EXCLUSIVE na tabela que o site mais le' -- era isso que derrubava o
+        # site quando o "Atualizar Jogos" rodava. Ver utils/esquema.py.
+        ddl = []
         for coluna in ("home_goals_90", "away_goals_90"):
-            self.cur.execute(
+            ddl.append(
                 f"ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS {coluna} INTEGER;")
 
         # RODADA (2026-08-11). `fixtures.round` sempre existiu, mas
@@ -212,7 +218,7 @@ class MatchStatisticsSyncService:
         # Sem ela nao da' pra dizer de que fase foi um jogo passado: a
         # inferencia de ida/volta precisou virar heuristica de data, e a tela de
         # estatistica nao consegue recortar por rodada.
-        self.cur.execute(
+        ddl.append(
             "ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS round TEXT;")
 
         # JOGOS APITADOS, ao lado dos jogos que sustentam a media (2026-08-27).
@@ -222,23 +228,8 @@ class MatchStatisticsSyncService:
         # apitado nao podia sumir junto: a distancia entre os dois e' o quanto
         # de coleta falta pra aquele arbitro, e sem ela "3 jogos" nao distingue
         # arbitro estreante de arbitro com folha faltando.
-        self.cur.execute(
+        ddl.append(
             "ALTER TABLE referee_stats ADD COLUMN IF NOT EXISTS games_total INTEGER;")
-
-        # CHAVE DO ARBITRO (2026-10-07). Toda consulta de arbitro casa agora
-        # pela chave do nome (utils/arbitro.py), e uma expressao na coluna sem
-        # indice seria varredura da tabela inteira a cada jogo analisado.
-        # Em savepoint: indice e' desempenho, nao correcao -- se o banco
-        # recusar, a coleta segue sem ele.
-        self.cur.execute("SAVEPOINT indice_arbitro;")
-        try:
-            self.cur.execute(
-                "CREATE INDEX IF NOT EXISTS idx_ms_chave_arbitro ON match_statistics "
-                f"(({sql_chave('referee')}));")
-            self.cur.execute("RELEASE SAVEPOINT indice_arbitro;")
-        except Exception as e:
-            self.cur.execute("ROLLBACK TO SAVEPOINT indice_arbitro;")
-            print(f"[REFEREE] Indice da chave do arbitro nao criado: {e}")
 
         # FOLHA DO 1o TEMPO (2026-09-27). Ver CONTADORES_1T.
         #
@@ -247,19 +238,35 @@ class MatchStatisticsSyncService:
         # "ainda nao busquei" de "a API nao cobre o 1o tempo desta liga", e
         # pagaria de novo, todo dia, pelas partidas que nunca vao ter o dado.
         for coluna in COLUNAS_1T:
-            self.cur.execute(
+            ddl.append(
                 f"ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS {coluna} INTEGER;")
-        self.cur.execute(
+        ddl.append(
             "ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS stats_1h_checked_at TIMESTAMP;")
         for _, sufixo, tipo in CONTADORES_FINALIZACAO:
             for lado in ("home", "away"):
-                self.cur.execute(f"ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS "
-                                 f"{lado}_{sufixo} {tipo};")
+                ddl.append(f"ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS "
+                           f"{lado}_{sufixo} {tipo};")
         # Marca que a folha ja' foi lida COM estes campos -- a do 1o tempo
         # nao serve de marca, porque 543 partidas de PROD tiveram o 1o tempo
         # coletado antes destes campos existirem.
-        self.cur.execute(
+        ddl.append(
             "ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS finalizacao_checked_at TIMESTAMP;")
+        esquema.garantir(self.cur, ddl)
+
+        # CHAVE DO ARBITRO (2026-10-07). Toda consulta de arbitro casa agora
+        # pela chave do nome (utils/arbitro.py), e uma expressao na coluna sem
+        # indice seria varredura da tabela inteira a cada jogo analisado.
+        # Em savepoint: indice e' desempenho, nao correcao -- se o banco
+        # recusar, a coleta segue sem ele.
+        self.cur.execute("SAVEPOINT indice_arbitro;")
+        try:
+            esquema.garantir(self.cur, [
+                "CREATE INDEX IF NOT EXISTS idx_ms_chave_arbitro ON match_statistics "
+                f"(({sql_chave('referee')}));"])
+            self.cur.execute("RELEASE SAVEPOINT indice_arbitro;")
+        except Exception as e:
+            self.cur.execute("ROLLBACK TO SAVEPOINT indice_arbitro;")
+            print(f"[REFEREE] Indice da chave do arbitro nao criado: {e}")
         self.conn.commit()
 
     def _close(self):
