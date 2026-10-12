@@ -109,7 +109,13 @@ def _pct(jogos: list, cond) -> int | None:
 
 
 def _media(valores: list) -> float | None:
-    v = [x for x in valores if x is not None]
+    v = []
+    for x in valores:
+        try:
+            v.append(float(str(x).rstrip("%")) if x is not None else None)
+        except ValueError:
+            v.append(None)
+    v = [x for x in v if x is not None]
     return round(sum(v) / len(v), 2) if v else None
 
 
@@ -125,7 +131,13 @@ def _acima(j, a, b, linha):
 
 
 def numeros_do_time(jogos: list) -> dict | None:
-    """Taxas das linhas que o Raio-X mostra, sobre a serie jogo a jogo."""
+    """Taxas sobre a serie jogo a jogo, do ponto de vista do time.
+
+    Dois blocos (12/10/2026, pedido do usuario: "mostrando por time,
+    respeitando mandante"): as linhas do JOGO (total dos dois) e as do proprio
+    TIME (o que ele faz e o que cede), que e' o que diz se ele domina, ataca
+    ou se defende.
+    """
     if not jogos:
         return None
     forma = "".join(
@@ -134,28 +146,77 @@ def numeros_do_time(jogos: list) -> dict | None:
     gp, gc = "gols_pro", "gols_contra"
     ep, ec = "escanteios_pro", "escanteios_contra"
     ap, ac = "amarelos_pro", "amarelos_contra"
+
+    def time_acima(col, linha):
+        return lambda j: None if j.get(col) is None else j[col] > linha
+
     return {
         "jogos": len(jogos),
         "forma_recente_primeiro": forma,
-        "gols_pro_media": _media([j.get(gp) for j in jogos]),
-        "gols_contra_media": _media([j.get(gc) for j in jogos]),
-        "pct_over_1_5_gols": _pct(jogos, lambda j: _acima(j, gp, gc, 1.5)),
-        "pct_over_2_5_gols": _pct(jogos, lambda j: _acima(j, gp, gc, 2.5)),
-        "pct_over_3_5_gols": _pct(jogos, lambda j: _acima(j, gp, gc, 3.5)),
-        "pct_ambas_marcam": _pct(jogos, lambda j: None if j.get(gp) is None or j.get(gc) is None
-                                 else j[gp] > 0 and j[gc] > 0),
-        "pct_gol_no_1t": _pct(jogos, lambda j: _acima(j, "gols_pro_1t", "gols_contra_1t", 0.5)),
-        "escanteios_total_media": _media([_soma(j, ep, ec) for j in jogos]),
-        "escanteios_pro_media": _media([j.get(ep) for j in jogos]),
-        "pct_over_8_5_escanteios": _pct(jogos, lambda j: _acima(j, ep, ec, 8.5)),
-        "pct_over_9_5_escanteios": _pct(jogos, lambda j: _acima(j, ep, ec, 9.5)),
-        "pct_over_10_5_escanteios": _pct(jogos, lambda j: _acima(j, ep, ec, 10.5)),
-        "amarelos_total_media": _media([_soma(j, ap, ac) for j in jogos]),
-        "pct_over_3_5_amarelos": _pct(jogos, lambda j: _acima(j, ap, ac, 3.5)),
-        "pct_over_4_5_amarelos": _pct(jogos, lambda j: _acima(j, ap, ac, 4.5)),
-        "chutes_no_alvo_pro_media": _media([j.get("chutes_alvo_pro") for j in jogos]),
+        "time": {
+            "gols_pro_media": _media([j.get(gp) for j in jogos]),
+            "gols_contra_media": _media([j.get(gc) for j in jogos]),
+            "pct_marcou": _pct(jogos, time_acima(gp, 0)),
+            "pct_marcou_2_ou_mais": _pct(jogos, time_acima(gp, 1)),
+            "pct_sofreu": _pct(jogos, time_acima(gc, 0)),
+            "pct_marcou_no_1t": _pct(jogos, time_acima("gols_pro_1t", 0)),
+            "escanteios_pro_media": _media([j.get(ep) for j in jogos]),
+            "escanteios_contra_media": _media([j.get(ec) for j in jogos]),
+            "pct_escanteios_pro_over_3_5": _pct(jogos, time_acima(ep, 3.5)),
+            "pct_escanteios_pro_over_4_5": _pct(jogos, time_acima(ep, 4.5)),
+            "pct_escanteios_pro_over_5_5": _pct(jogos, time_acima(ep, 5.5)),
+            "amarelos_pro_media": _media([j.get(ap) for j in jogos]),
+            "pct_amarelos_pro_over_1_5": _pct(jogos, time_acima(ap, 1.5)),
+            "pct_amarelos_pro_over_2_5": _pct(jogos, time_acima(ap, 2.5)),
+            "chutes_no_alvo_pro_media": _media([j.get("chutes_alvo_pro") for j in jogos]),
+            "chutes_no_alvo_contra_media": _media([j.get("chutes_alvo_contra") for j in jogos]),
+            "posse_media": _media([j.get("posse") for j in jogos]),
+        },
+        "jogo": {
+            "pct_over_1_5_gols": _pct(jogos, lambda j: _acima(j, gp, gc, 1.5)),
+            "pct_over_2_5_gols": _pct(jogos, lambda j: _acima(j, gp, gc, 2.5)),
+            "pct_over_3_5_gols": _pct(jogos, lambda j: _acima(j, gp, gc, 3.5)),
+            "pct_ambas_marcam": _pct(jogos, lambda j: None if j.get(gp) is None or j.get(gc) is None
+                                     else j[gp] > 0 and j[gc] > 0),
+            "pct_gol_no_1t": _pct(jogos, lambda j: _acima(j, "gols_pro_1t", "gols_contra_1t", 0.5)),
+            "escanteios_total_media": _media([_soma(j, ep, ec) for j in jogos]),
+            "pct_over_8_5_escanteios": _pct(jogos, lambda j: _acima(j, ep, ec, 8.5)),
+            "pct_over_9_5_escanteios": _pct(jogos, lambda j: _acima(j, ep, ec, 9.5)),
+            "pct_over_10_5_escanteios": _pct(jogos, lambda j: _acima(j, ep, ec, 10.5)),
+            "amarelos_total_media": _media([_soma(j, ap, ac) for j in jogos]),
+            "pct_over_3_5_amarelos": _pct(jogos, lambda j: _acima(j, ap, ac, 3.5)),
+            "pct_over_4_5_amarelos": _pct(jogos, lambda j: _acima(j, ap, ac, 4.5)),
+        },
     }
 
+
+def serie_por_mando(cur, team_id: int, em_casa: bool, season, league_id,
+                    so_na_liga: bool, antes_de, n: int = 10) -> list[dict]:
+    """Os ultimos `n` jogos do time SO' NO MANDO DESTA PARTIDA, na temporada:
+    o mandante em casa, o visitante fora. A serie geral do Raio-X tem 10 jogos
+    misturando os dois, e a leitura saia com "4 jogos em casa" achando que
+    eram 10. Mesmo formato de routers/fixtures._serie_do_time."""
+    lado, outro = ("home", "away") if em_casa else ("away", "home")
+    cur.execute(f"""
+        SELECT home_goals, away_goals, home_goals_ht, away_goals_ht,
+               home_corners, away_corners, home_yellow_cards, away_yellow_cards,
+               home_shots_on, away_shots_on, home_possession, away_possession
+          FROM match_statistics
+         WHERE {lado}_team_id = %s AND season = %s
+           AND status IN ('FT','AET','PEN')
+           AND (NOT %s OR league_id = %s)
+           AND (%s::timestamp IS NULL OR match_date < %s::timestamp)
+         ORDER BY match_date DESC LIMIT %s
+    """, (team_id, season, so_na_liga, league_id, antes_de, antes_de, n))
+    return [{
+        "em_casa": em_casa,
+        "gols_pro": r[f"{lado}_goals"], "gols_contra": r[f"{outro}_goals"],
+        "gols_pro_1t": r[f"{lado}_goals_ht"], "gols_contra_1t": r[f"{outro}_goals_ht"],
+        "escanteios_pro": r[f"{lado}_corners"], "escanteios_contra": r[f"{outro}_corners"],
+        "amarelos_pro": r[f"{lado}_yellow_cards"], "amarelos_contra": r[f"{outro}_yellow_cards"],
+        "chutes_alvo_pro": r[f"{lado}_shots_on"], "chutes_alvo_contra": r[f"{outro}_shots_on"],
+        "posse": r[f"{lado}_possession"],
+    } for r in cur.fetchall()]
 
 def _sem_vazios(d):
     if isinstance(d, dict):
@@ -166,12 +227,21 @@ def _sem_vazios(d):
 
 
 def montar_fatos(dados: dict, liga: str | None, formato: str, tabela: dict,
-                 tecnicos: dict, amostra: dict) -> dict:
-    """Tudo que o modelo pode usar, ja' contado · ele interpreta, nao calcula."""
+                 tecnicos: dict, amostra: dict,
+                 casa_em_casa: list | None = None, fora_fora: list | None = None) -> dict:
+    """Tudo que o modelo pode usar, ja' contado · ele interpreta, nao calcula.
+
+    `casa_em_casa`/`fora_fora`: a serie do mando desta partida na temporada
+    (serie_por_mando). Sem ela, o recorte de mando sai dos ultimos 10 gerais.
+    """
     f = dados["fixture"]
     times = dados["times"]
     casa = times["home"]["jogos"]
     fora = times["away"]["jogos"]
+    if casa_em_casa is None:
+        casa_em_casa = [j for j in casa if j["em_casa"]]
+    if fora_fora is None:
+        fora_fora = [j for j in fora if not j["em_casa"]]
     hid, aid = f["home_team_id"], f["away_team_id"]
     h2h = [{
         "data": (j.get("data") or "")[:10],
@@ -189,14 +259,16 @@ def montar_fatos(dados: dict, liga: str | None, formato: str, tabela: dict,
         },
         "amostra_na_temporada": amostra,
         "mandante": {
-            "ultimos_jogos": numeros_do_time(casa),
-            "jogando_em_casa": numeros_do_time([j for j in casa if j["em_casa"]]),
+            "nome": f["home_team"],
+            "EM_CASA_na_temporada": numeros_do_time(casa_em_casa),
+            "ultimos_10_geral": numeros_do_time(casa),
             "tabela": tabela.get(hid),
             "tecnico": tecnicos.get(hid),
         },
         "visitante": {
-            "ultimos_jogos": numeros_do_time(fora),
-            "jogando_fora": numeros_do_time([j for j in fora if not j["em_casa"]]),
+            "nome": f["away_team"],
+            "FORA_na_temporada": numeros_do_time(fora_fora),
+            "ultimos_10_geral": numeros_do_time(fora),
             "tabela": tabela.get(aid),
             "tecnico": tecnicos.get(aid),
         },
@@ -299,42 +371,67 @@ def tecnicos_dos_times(cur, ids: list) -> dict:
 # ─────────────────────────────────────────────────────────────────────────────
 # A chamada
 # ─────────────────────────────────────────────────────────────────────────────
-SYSTEM = """Voce escreve o resumo de pre-jogo do Raio-X do PickIA, um site brasileiro de analise de apostas esportivas. Quem le esta no celular, decidindo se aposta, e quer saber em segundos o que os numeros do jogo apontam.
+#: Formato da leitura. Sobe quando o formato muda: leitura guardada de versao
+#: antiga e' gerada de novo na proxima abertura (ver _vale).
+VERSAO = 2
 
-Regras:
-- Use SOMENTE os numeros do JSON recebido. Nao invente lesao, escalacao, noticia, odd, motivacao ou historia que nao esteja nele. Se um dado nao veio, nao fale dele.
-- Escreva em portugues do Brasil, direto, sem jargao tecnico de estatistica. Percentuais como "7 de 10 jogos" ou "70%".
-- Nada de certeza nem promessa ("vai sair", "garantido", "aposta certa"). Fale em tendencia.
-- O formato importa: em "liga", posicao na tabela e mando pesam; em mata-mata, o jogo e decidido no placar (e na ida e volta, a 2a partida depende da 1a), entao times costumam se fechar; em "grupos" e "copa", diga que a amostra mistura competicoes quando for o caso.
-- Tecnico com poucos jogos seguidos (3 ou menos) e contexto: diga que a amostra do trabalho dele e curta.
-- Mercados: aponte ate 4 linhas de over/under (gols, escanteios, cartoes, gol no 1o tempo, ambas marcam) em que mandante em casa e visitante fora concordam. Se os dois discordam, diga que a linha fica dividida em vez de escolher um lado.
-- "alerta" e para o que deixa a leitura fraca (amostra curta, numeros que se contradizem, mata-mata). Vazio se nao houver.
-- Curto: "resumo" com no maximo 3 frases; cada "leitura" com uma frase."""
+SYSTEM = """Voce escreve a leitura de pre-jogo do Raio-X do PickIA, um site brasileiro de analise de apostas esportivas. Quem le esta no celular, decidindo se aposta, e quer saber em segundos como cada time joga e quais mercados os numeros sustentam.
+
+Fonte:
+- Use SOMENTE os numeros do JSON. Nao invente lesao, escalacao, noticia, odd, motivacao ou historia. Dado que nao veio, nao existe.
+- RESPEITE O MANDO. Do mandante, leia "EM_CASA_na_temporada"; do visitante, "FORA_na_temporada". "ultimos_10_geral" so para confirmar ou contrastar, e quando usar diga que e o geral. Sempre diga a amostra do jeito certo ("em 7 jogos em casa", "em 6 de 9 fora"). Nunca chame de "10 jogos em casa" uma serie que tem 4.
+- "time" sao os numeros do proprio time (o que ele faz e o que cede); "jogo" sao totais das partidas dele.
+
+O que escrever:
+- "resumo": no maximo 2 frases sobre o confronto (quem chega melhor no mando e o que os numeros apontam).
+- "times": um item para o mandante e um para o visitante, nessa ordem.
+  - "perfil": dominante (posse alta, mais chutes e escanteios a favor que contra), ofensivo (marca muito, mas tambem sofre), equilibrado, defensivo (sofre pouco e marca pouco), reativo (pouca posse, cede escanteios e chutes, joga no contra-ataque). Escolha pelo mando desta partida.
+  - "leitura": 1 ou 2 frases sobre como o time joga NESTE mando, com numeros.
+  - "mercados": ate 3 mercados DO PROPRIO TIME que os numeros sustentam (ex.: "Bragantino marca", "Bragantino over 4.5 escanteios", "Cruzeiro over 1.5 cartoes", "Cruzeiro sofre gol"). So o que tiver 60% ou mais, ou 40% ou menos para "under".
+- "mercados_do_jogo": ate 3 linhas do JOGO (gols, escanteios, cartoes, ambas marcam, gol no 1o tempo) em que os numeros do mandante em casa E do visitante fora apontam para o mesmo lado. Se discordam, nao entra, ou entra como "dividido".
+- "tendencia" TEM que bater com a "leitura": se a frase diz que a linha esta dividida, a tendencia e "dividido"; "over" so quando os numeros citados sustentam over; "under" quando sustentam under.
+- "contexto": tabela, tecnico e formato. Formato importa: em "liga" posicao e mando pesam; em mata-mata o jogo e decidido no placar e times se fecham (na ida e volta, a 2a partida depende da 1a); em "grupos" e "copa" a amostra mistura competicoes. Tecnico so se tiver 3 ou menos jogos seguidos.
+- "alerta": o que deixa a leitura fraca (amostra curta, numeros que se contradizem, mata-mata). Vazio se nao houver.
+
+Estilo: portugues do Brasil, direto, sem jargao estatistico, sem certeza nem promessa ("vai sair", "garantido"). Fale em tendencia."""
+
+_MERCADO = {
+    "type": "object",
+    "properties": {
+        "mercado": {"type": "string"},
+        "tendencia": {"type": "string", "enum": ["over", "under", "dividido"]},
+        "leitura": {"type": "string"},
+    },
+    "required": ["mercado", "tendencia", "leitura"],
+    "additionalProperties": False,
+}
 
 _SCHEMA = {
     "type": "object",
     "properties": {
         "resumo": {"type": "string"},
-        "mercados": {
+        "times": {
             "type": "array",
             "items": {
                 "type": "object",
                 "properties": {
-                    "mercado": {"type": "string"},
-                    "tendencia": {"type": "string", "enum": ["over", "under", "dividido"]},
+                    "lado": {"type": "string", "enum": ["mandante", "visitante"]},
+                    "perfil": {"type": "string",
+                               "enum": ["dominante", "ofensivo", "equilibrado", "defensivo", "reativo"]},
                     "leitura": {"type": "string"},
+                    "mercados": {"type": "array", "items": _MERCADO},
                 },
-                "required": ["mercado", "tendencia", "leitura"],
+                "required": ["lado", "perfil", "leitura", "mercados"],
                 "additionalProperties": False,
             },
         },
+        "mercados_do_jogo": {"type": "array", "items": _MERCADO},
         "contexto": {"type": "string"},
         "alerta": {"type": "string"},
     },
-    "required": ["resumo", "mercados", "contexto", "alerta"],
+    "required": ["resumo", "times", "mercados_do_jogo", "contexto", "alerta"],
     "additionalProperties": False,
 }
-
 
 #: US$ por milhao de tokens do Haiku 5.5 (entrada, saida). So' pra estimar o
 #: custo no /admin · a fatura de verdade e' a do console da Anthropic.
@@ -371,7 +468,7 @@ def chamar_modelo(fatos: dict) -> tuple[dict, int, int]:
     """(conteudo, tokens de entrada, tokens de saida). Levanta em falha."""
     resposta = _get_client().messages.create(
         model=MODELO,
-        max_tokens=2000,
+        max_tokens=3500,
         system=[{"type": "text", "text": SYSTEM, "cache_control": {"type": "ephemeral"}}],
         output_config={"effort": "low",
                        "format": {"type": "json_schema", "schema": _SCHEMA}},
@@ -382,7 +479,10 @@ def chamar_modelo(fatos: dict) -> tuple[dict, int, int]:
         raise RuntimeError(f"resposta incompleta: {resposta.stop_reason}")
     texto = next(b.text for b in resposta.content if b.type == "text")
     conteudo = json.loads(texto)
-    conteudo["mercados"] = (conteudo.get("mercados") or [])[:4]
+    conteudo["times"] = (conteudo.get("times") or [])[:2]
+    for t in conteudo["times"]:
+        t["mercados"] = (t.get("mercados") or [])[:3]
+    conteudo["mercados_do_jogo"] = (conteudo.get("mercados_do_jogo") or [])[:3]
     u = resposta.usage
     return conteudo, int(u.input_tokens or 0), int(u.output_tokens or 0)
 
@@ -416,6 +516,24 @@ def _gravar(cur, fixture_id, dia, status, conteudo=None, motivo=None,
     cur.connection.commit()
 
 
+def _vale(linha) -> bool:
+    """A linha guardada ainda serve? Falha velha nao; leitura de formato
+    antigo tambem nao (VERSAO) · ela e' gerada de novo, uma vez."""
+    if not linha:
+        return False
+    if linha["status"] == "falhou":
+        return not linha["velho"]
+    if linha["status"] == "ok":
+        c = linha["conteudo"]
+        if isinstance(c, str):
+            try:
+                c = json.loads(c)
+            except ValueError:
+                return False
+        return (c or {}).get("versao", 1) >= VERSAO
+    return True
+
+
 def _resposta(linha: dict) -> dict:
     if linha["status"] == "ok":
         conteudo = linha["conteudo"]
@@ -434,22 +552,22 @@ def resumo_do_jogo(cur, fixture_id: int, montar_raio_x) -> dict:
     """
     dia = _hoje()
     linha = _guardado(cur, fixture_id, dia)
-    if linha and not (linha["status"] == "falhou" and linha["velho"]):
+    if _vale(linha):
         return _resposta(linha)
     if not ligado():
         return {"status": "desligado"}
 
     with _lock(fixture_id):
         linha = _guardado(cur, fixture_id, dia)
-        if linha and not (linha["status"] == "falhou" and linha["velho"]):
+        if _vale(linha):
             return _resposta(linha)
 
-        cur.execute("SELECT league_id, season, round, status, home_team_id, away_team_id "
+        cur.execute("SELECT league_id, season, round, status, home_team_id, away_team_id, match_datetime "
                     "FROM fixtures WHERE fixture_id = %s", (fixture_id,))
         fix = cur.fetchone()
         if not fix:
             return {"status": "inelegivel", "motivo": "jogo fora da agenda"}
-        if fix["status"] in _ENCERRADO:
+        if fix.get("status") in _ENCERRADO:
             return {"status": "inelegivel", "motivo": "jogo encerrado"}
 
         tabela = tabela_dos_times(cur, fix["league_id"],
@@ -475,15 +593,21 @@ def resumo_do_jogo(cur, fixture_id: int, montar_raio_x) -> dict:
             cur.execute("SELECT name FROM leagues WHERE league_id = %s LIMIT 1",
                         (fix["league_id"],))
             liga = (cur.fetchone() or {}).get("name")
+            na_liga = formato == "liga"
+            casa_em_casa = serie_por_mando(cur, fix["home_team_id"], True, fix["season"],
+                                           fix["league_id"], na_liga, fix.get("match_datetime"))
+            fora_fora = serie_por_mando(cur, fix["away_team_id"], False, fix["season"],
+                                        fix["league_id"], na_liga, fix.get("match_datetime"))
             fatos = montar_fatos(dados, liga, formato, tabela,
                                  tecnicos_dos_times(cur, [fix["home_team_id"], fix["away_team_id"]]),
-                                 amostra)
+                                 amostra, casa_em_casa, fora_fora)
             conteudo, t_in, t_out = chamar_modelo(fatos)
         except Exception as e:
             cur.connection.rollback()
             logger.warning("[RESUMO IA] jogo %s falhou: %s", fixture_id, e)
             _gravar(cur, fixture_id, dia, "falhou", motivo=str(e)[:300])
             return {"status": "falhou"}
+        conteudo["versao"] = VERSAO
         _gravar(cur, fixture_id, dia, "ok", conteudo=conteudo, tokens_in=t_in, tokens_out=t_out)
         logger.info("[RESUMO IA] jogo %s gerado (%s in / %s out)", fixture_id, t_in, t_out)
         return {"status": "ok", **conteudo}
