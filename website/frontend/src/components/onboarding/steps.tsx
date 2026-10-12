@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
-  ArrowDown, BarChart2, ClipboardCheck, ClipboardList, CircleCheck, ExternalLink,
+  ArrowDown, BarChart2, Bot, ClipboardCheck, ClipboardList, CircleCheck, ExternalLink,
   Mail, MessageCircle, Radio, Search, ShieldCheck, Sparkles, Ticket, TrendingUp,
   Wallet, Zap,
 } from 'lucide-react'
+import BolaDeFutebol from '../icones/BolaDeFutebol'
 import { useAuth } from '../../context/AuthContext'
 import { useOnboarding } from '../../context/OnboardingContext'
 import api from '../../services/api'
@@ -434,6 +435,36 @@ const TOUR_STEPS: TourStep[] = [
     ),
   },
   {
+    /* RAIO-X DE CADA JOGO (12/10/2026, pedido do usuario). A aba Jogos era o
+       lugar mais completo do site e o tutorial nao passava por ela. */
+    id: 'jogos',
+    titulo: 'Raio-X de cada jogo',
+    Icon: BolaDeFutebol,
+    rota: '/picks',
+    alvos: ['[data-tour="nav-jogos"]'],
+    resumo: 'Na aba Jogos, tocar numa partida abre o Raio-X: os números dela para você pesquisar antes de apostar, com ou sem pick da IA.',
+    corpo: (
+      <div className="space-y-3">
+        <Etiqueta>O que tem no Raio-X</Etiqueta>
+        <Lista
+          itens={[
+            [BarChart2, 'Mercados: quantas vezes cada linha bateu'],
+            [Search, 'Jogadores: chutes, faltas, cartões'],
+            [ClipboardList, 'Escalação, tabela e forma'],
+            [TrendingUp, 'Confronto direto e odds das casas'],
+          ]}
+        />
+        <p className="text-xs text-ink-2 leading-relaxed">
+          Tocando numa linha você monta o seu próprio bilhete, e ele fecha sozinho quando os
+          jogos acabam, igual aos picks.
+        </p>
+        <p className="text-[11px] text-ink-3 leading-relaxed">
+          O Raio-X completo é do Pro; no plano gratuito você vê os jogos do dia.
+        </p>
+      </div>
+    ),
+  },
+  {
     /* O TELEFONE, PEDIDO NA HORA CERTA.
        Ele nunca foi opcional na prática: é o contato do aviso de pick
        publicado e de pick ao vivo, e o ao vivo é o que mais depende disso ·
@@ -543,6 +574,32 @@ const TOUR_STEPS: TourStep[] = [
         <p className="text-[11px] text-ink-3 leading-relaxed">
           Você não precisa conferir nada: o resultado fecha sozinho assim que o jogo decide
           (o de 1º tempo, já no intervalo) e aparece um aviso na tela com o seu green ou red.
+        </p>
+      </div>
+    ),
+  },
+  {
+    /* AGENTE IA (12/10/2026, pedido do usuario) · o botao fica em toda tela,
+       mas so' o tour do VIP falava dele. */
+    id: 'agente',
+    titulo: 'Agente IA',
+    Icon: Bot,
+    alvos: ['[data-tour="agente"]'],
+    resumo: 'O botão do Agente fica em qualquer tela. É uma IA de futebol que responde com os dados do próprio sistema.',
+    corpo: (
+      <div className="space-y-3">
+        <Etiqueta>Do que dá para perguntar</Etiqueta>
+        <Lista
+          itens={[
+            [Zap, 'Por que um pick saiu'],
+            [BarChart2, 'Como está o desempenho da IA'],
+            [Search, 'O que os números de um jogo dizem'],
+            [CircleCheck, 'O que significa um mercado'],
+          ]}
+        />
+        <p className="text-[11px] text-ink-3 leading-relaxed">
+          No plano gratuito ele tira dúvidas sobre o site; com o Pro, responde também sobre os
+          picks e os jogos.
         </p>
       </div>
     ),

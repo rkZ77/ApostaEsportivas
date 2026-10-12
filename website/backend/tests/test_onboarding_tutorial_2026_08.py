@@ -307,7 +307,10 @@ def test_o_front_e_o_back_contam_os_mesmos_passos():
     # 7 desde 02/09/2026 -- saiu o passo de produto ("Ao Vivo e Boost"). Toda
     # conta ganha periodo de teste e acaba vendo o tour do VIP, que e' quem
     # apresenta produto; este roteiro apresenta o site.
-    assert "PASSOS_FIXOS = 7" in constantes
+    # 9 desde 12/10/2026 -- entraram "Raio-X de cada jogo" e "Agente IA" (pedido
+    # do usuario): sao lugares do site que quem pulava o tour do VIP nao via.
+    assert "PASSOS_FIXOS = 9" in constantes
+    assert TUTORIAL_TOTAL_STEPS == 11
 
 
 def test_o_passo_do_email_so_entra_pra_quem_tem_trial_esperando():

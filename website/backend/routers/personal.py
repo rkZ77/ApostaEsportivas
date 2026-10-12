@@ -303,7 +303,11 @@ def list_achievements(current_user: dict = Depends(get_current_user)):
 # 9 desde 02/09/2026, era 10: saiu o passo de produto ("Ao Vivo e Boost"). Toda
 # conta ganha periodo de teste, entao toda conta acaba vendo o tour do VIP --
 # quem apresenta PRODUTO e' ele; este aqui apresenta o SITE.
-TUTORIAL_TOTAL_STEPS = 9
+#
+# 11 desde 12/10/2026 (pedido do usuario): entraram "Raio-X de cada jogo" e
+# "Agente IA" -- sao lugares do SITE que todo mundo ve, e quem pulava o tour do
+# VIP nunca descobria os dois. Varia entre 9 e 11.
+TUTORIAL_TOTAL_STEPS = 11
 # Roteiro do VIP: o que a assinatura abriu.
 #
 # 10 desde 02/09/2026: entraram "Registre a aposta" e "Acompanhe sua evolucao",
