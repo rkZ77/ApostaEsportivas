@@ -212,3 +212,12 @@ def test_serie_por_mando_le_so_o_lado_do_mando():
     assert "away_team_id = %s" in c.sql and c.params[0] == 7
     assert fora[0]["gols_pro"] == 1 and fora[0]["escanteios_pro"] == 3 and fora[0]["posse"] == "42%"
     assert resumo_ia.numeros_do_time(fora)["time"]["posse_media"] == 42
+
+def test_numeros_da_tela_saem_da_conta_e_nao_da_ia(modelo):
+    serie = [_jogo(2, 1, ep=6), _jogo(0, 0, ep=4), _jogo(1, 2, ep=5)]
+    fatos = resumo_ia.montar_fatos(_dados(), "Serie A", "liga", {}, {}, {}, serie, serie)
+    n = resumo_ia.numeros_da_tela(fatos)
+    assert n["mandante"]["jogos"] == 3 and n["mandante"]["gols_pro"] == 1
+    assert n["mandante"]["pct_marcou"] == 67 and n["visitante"]["escanteios_pro"] == 5
+    r = resumo_ia.resumo_do_jogo(_Cur(), 10, _dados)
+    assert set(r["numeros"]) == {"mandante", "visitante"}
