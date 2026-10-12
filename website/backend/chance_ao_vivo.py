@@ -38,6 +38,10 @@ _DEPOIS_DOS_90 = {"ET", "BT", "P", "AET", "PEN", "FT"}
 #: minimo que se assume ate' o apito, pra a chance nao cravar 0/100 cedo demais.
 _MINIMO_RESTANTE = 2.0
 
+#: Limites da chance de pick ainda em aberto · ver o fim de `chance_agora`.
+_TETO_EM_ABERTO_MIN = 0.01
+_TETO_EM_ABERTO_MAX = 0.99
+
 
 def _poisson_ate(k: int, lam: float) -> float:
     """P(X <= k) para X ~ Poisson(lam)."""
@@ -133,4 +137,12 @@ def chance_agora(prob, direcao: str | None, linha, atual, status: str | None,
         p = 1 - _poisson_ate(k - 1, resto)
     else:
         p = _poisson_ate(k, resto)
-    return round(max(0.0, min(1.0, p)), 3)
+    # 100% E 0% SAO DO PLACAR, NAO DA CONTA (12/10/2026). "Menos de 3.5" com 1
+    # gol aos 79' da' ~99,5%, e a tela arredondava pra 100% com o pick ainda em
+    # aberto (visto pelo usuario em Bahia x Mirassol). Enquanto a bola rola o
+    # numero fica entre 1% e 99%; os extremos ficam pro que ja' esta' decidido
+    # (o retorno de cima, pelo contador). Periodo ja' encerrado (f == 0) esta'
+    # decidido de verdade: ali o 0/100 e' o resultado, nao arredondamento.
+    if f <= 0:
+        return round(max(0.0, min(1.0, p)), 3)
+    return round(max(_TETO_EM_ABERTO_MIN, min(_TETO_EM_ABERTO_MAX, p)), 3)
