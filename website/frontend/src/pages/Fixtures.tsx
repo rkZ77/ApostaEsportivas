@@ -469,7 +469,7 @@ export default function Fixtures() {
               className="mt-3 h-11 px-4 rounded-lg border border-line text-sm font-semibold text-ink-2">Limpar filtro</button>
           </div>
         ) : fixtures.length === 0 ? (
-          <div className="card p-12 text-center border-dashed">
+          <div data-tour="jogos-lista" className="card p-12 text-center border-dashed">
             <p className="text-ink-4 text-sm">Nenhum jogo encontrado para esta data.</p>
             <p className="text-ink-4 text-xs mt-2">As ligas monitoradas não têm jogos programados neste dia.</p>
           </div>
@@ -485,10 +485,12 @@ export default function Fixtures() {
           */
           <div className="lg:flex lg:gap-5 lg:items-start">
           <div className="grid gap-5 items-start lg:w-[420px] xl:w-[460px] lg:shrink-0">
-            {grouped.map(({ key: league, league_id, logo, flag, country, games }) => {
+            {grouped.map(({ key: league, league_id, logo, flag, country, games }, i) => {
               const isCopa = league_id === 1
               return (
-              <div key={league} className={`card overflow-hidden ${isCopa ? 'border border-yellow-500/20' : ''}`}>
+              /* A primeira liga e' a ancora do passo "Raio-X de cada jogo"
+                 do tutorial (onboarding/steps.tsx). */
+              <div key={league} data-tour={i === 0 ? 'jogos-lista' : undefined} className={`card overflow-hidden ${isCopa ? 'border border-yellow-500/20' : ''}`}>
 
                 {/* Cabeçalho da liga com logo + bandeira (clicável para recolher) */}
                 <div

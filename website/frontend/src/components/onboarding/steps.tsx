@@ -436,12 +436,16 @@ const TOUR_STEPS: TourStep[] = [
   },
   {
     /* RAIO-X DE CADA JOGO (12/10/2026, pedido do usuario). A aba Jogos era o
-       lugar mais completo do site e o tutorial nao passava por ela. */
+       lugar mais completo do site e o tutorial nao passava por ela.
+       LEVA ATE' A PAGINA (12/10, pedido do usuario): destacar o link do menu
+       nao funcionava no celular, onde o menu vive na gaveta fechada, e o
+       passo caia no "ainda nao tem nada". A lista de jogos aparece em
+       qualquer plano. */
     id: 'jogos',
     titulo: 'Raio-X de cada jogo',
     Icon: BolaDeFutebol,
-    rota: '/picks',
-    alvos: ['[data-tour="nav-jogos"]'],
+    rota: '/jogos',
+    alvos: ['[data-tour="jogos-lista"]', '[data-tour="nav-jogos"]'],
     resumo: 'Na aba Jogos, tocar numa partida abre o Raio-X: os números dela para você pesquisar antes de apostar, com ou sem pick da IA.',
     corpo: (
       <div className="space-y-3">
