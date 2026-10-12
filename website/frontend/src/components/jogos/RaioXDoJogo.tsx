@@ -1047,7 +1047,7 @@ function AbaConfronto({ dados }: { dados: RaioX }) {
   const f = dados.fixture
   const jogos = dados.h2h
   if (!jogos.length) {
-    return <div className="card p-8 text-center text-sm text-ink-2">Os dois ainda não se enfrentaram no nosso histórico.</div>
+    return <div className="card p-8 text-center text-sm text-ink-2">Não achamos confrontos anteriores entre os dois.</div>
   }
   let vHome = 0, empates = 0, vAway = 0
   for (const j of jogos) {
@@ -1085,10 +1085,17 @@ function AbaConfronto({ dados }: { dados: RaioX }) {
             <TeamLogo id={j.home_team_id} name="" size={18} />
             <span className="font-mono font-black text-ink-1 tabular-nums">{j.home_goals ?? '-'} - {j.away_goals ?? '-'}</span>
             <TeamLogo id={j.away_team_id} name="" size={18} />
-            <span className="ml-auto text-[11px] text-ink-3 tabular-nums">{j.escanteios ?? '—'} esc · {j.amarelos} cart</span>
+            {(j.escanteios != null || j.amarelos != null) && (
+              <span className="ml-auto text-[11px] text-ink-3 tabular-nums">{j.escanteios ?? '—'} esc · {j.amarelos ?? '—'} cart</span>
+            )}
           </div>
         ))}
       </div>
+      {dados.h2h_fonte === 'api' && (
+        <p className="text-[11px] text-ink-4 leading-relaxed px-1">
+          Confrontos de fora da nossa base: só o placar, sem escanteios e cartões.
+        </p>
+      )}
     </div>
   )
 }
