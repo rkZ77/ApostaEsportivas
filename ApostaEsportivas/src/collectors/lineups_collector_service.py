@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from utils.api_client import buscar
 from utils.db_utils import get_connection
+from utils import esquema
 
 FINALIZADOS = ("FT", "AET", "PEN")
 
@@ -74,8 +75,8 @@ class LineupsCollectorService:
     def _open(self):
         self.conn = get_connection()
         self.cur = self.conn.cursor()
-        for sql in DDL:
-            self.cur.execute(sql)
+        # So' o DDL que falta, sem travar o site (ver utils/esquema.py).
+        esquema.garantir(self.cur, DDL)
         self.conn.commit()
 
     def _close(self):

@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from utils.api_client import buscar
 from utils.db_utils import get_connection
+from utils import esquema
 
 FINALIZADOS = ("FT", "AET", "PEN")
 
@@ -61,8 +62,8 @@ def backfill(teto_requisicoes: int = 100, temporada_minima: int = 2025) -> dict:
     cur = conn.cursor()
     com = sem = 0
     try:
-        for sql in DDL:
-            cur.execute(sql)
+        # So' o DDL que falta, sem travar o site (ver utils/esquema.py).
+        esquema.garantir(cur, DDL)
         conn.commit()
         cur.execute("""
             SELECT fixture_id FROM match_statistics
