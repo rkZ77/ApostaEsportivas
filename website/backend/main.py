@@ -974,7 +974,11 @@ async def serve_spa(request: Request, full_path: str):
     # variante do arquivo real e serviria bytes comprimidos sem o cabecalho
     # que diz isso.
     pedido_comprimido = candidate.suffix in (".br", ".gz")
-    if candidate.is_relative_to(_dist) and candidate.is_file() and not pedido_comprimido:
+    # `_dist.resolve()` e nao `_dist` (12/10/2026): o candidato ja' vem
+    # resolvido, e um `_dist` com ".." no caminho (main importado como
+    # tests/../main.py) nunca "contem" o proprio arquivo -- todo arquivo real
+    # do build respondia 404. Em PROD o caminho e' limpo; quebrava o CI.
+    if candidate.is_relative_to(_dist.resolve()) and candidate.is_file() and not pedido_comprimido:
         if full_path.startswith("assets/") and candidate.suffix != ".html":
             cache = _ASSET_CACHE          # nome assinado por hash pelo Vite
         elif candidate.name in _SEM_CACHE:
