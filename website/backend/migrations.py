@@ -1443,7 +1443,9 @@ def _migrar_pernas_final(logger: logging.Logger) -> None:
     except Exception as e:
         logger.error("[MIGRATION] pernas_final: banco indisponivel: %s", e)
         return
-    cur = conn.cursor()
+    # Mesmo cursor da migracao principal: com a coluna ja' criada, o ALTER nem
+    # e' enviado (antes ele pedia lock e desistia quando o noprod subia junto).
+    cur = _CursorQueSoMudaOQueFalta(conn.cursor())
     try:
         cur.execute("SET lock_timeout = '5s'")   # ver run_startup_migrations
         for tabela in ("picks_alavancagem", "picks_boost"):
