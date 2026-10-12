@@ -9,6 +9,7 @@ import { Button, Modal, Spinner, SpinnerBlock } from '../components/ui'
 import Pagination from '../components/ui/Pagination'
 import AdminShareResults from '../components/AdminShareResults'
 import AdminIAPerformance from '../components/AdminIAPerformance'
+import AdminLeiturasIA from '../components/AdminLeiturasIA'
 import AdminMotorLive from '../components/AdminMotorLive'
 import AdminAgendador from '../components/AdminAgendador'
 import AdminReavaliacoes from '../components/AdminReavaliacoes'
@@ -1288,6 +1289,12 @@ export default function Admin() {
               oQueE="Resultado por mercado e, para cada pick vetado, o que teria acontecido se ele tivesse saído. Veto que barra mais green do que red está atrapalhando."
               tecnico="Mercados e revisão da IA">
               <AdminIAPerformance status={aiReviewStatus} />
+            </Secao>
+            <Secao id="ia-leituras"
+              titulo="Quanto a Leitura da IA do Raio-X está gastando?"
+              oQueE="Leituras geradas por dia, jogos que o filtro de amostra barrou (sem custo), falhas, tokens e o custo estimado."
+              tecnico="Leitura da IA">
+              <AdminLeiturasIA />
             </Secao>
           </div>
         )}

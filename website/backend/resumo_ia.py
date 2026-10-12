@@ -336,6 +336,37 @@ _SCHEMA = {
 }
 
 
+#: US$ por milhao de tokens do Haiku 5.5 (entrada, saida). So' pra estimar o
+#: custo no /admin · a fatura de verdade e' a do console da Anthropic.
+PRECO_POR_MTOK = (0.10, 0.50)
+
+
+def uso_por_dia(cur, dias: int = 14) -> list[dict]:
+    """Leituras por dia no /admin (12/10/2026): quantas sairam, quantas o
+    filtro barrou, falhas, tokens e o custo estimado."""
+    cur.execute("""
+        SELECT dia,
+               COUNT(*) FILTER (WHERE status = 'ok')         AS geradas,
+               COUNT(*) FILTER (WHERE status = 'inelegivel') AS sem_amostra,
+               COUNT(*) FILTER (WHERE status = 'falhou')     AS falhas,
+               COALESCE(SUM(tokens_in), 0)  AS tokens_in,
+               COALESCE(SUM(tokens_out), 0) AS tokens_out
+          FROM raio_x_resumo_ia
+         WHERE dia > CURRENT_DATE - make_interval(days => %s)
+         GROUP BY dia ORDER BY dia DESC
+    """, (dias,))
+    saida = []
+    for r in cur.fetchall():
+        t_in, t_out = int(r["tokens_in"]), int(r["tokens_out"])
+        saida.append({
+            "dia": r["dia"].isoformat(), "geradas": r["geradas"],
+            "sem_amostra": r["sem_amostra"], "falhas": r["falhas"],
+            "tokens_in": t_in, "tokens_out": t_out,
+            "custo_usd": round((t_in * PRECO_POR_MTOK[0] + t_out * PRECO_POR_MTOK[1]) / 1e6, 4),
+        })
+    return saida
+
+
 def chamar_modelo(fatos: dict) -> tuple[dict, int, int]:
     """(conteudo, tokens de entrada, tokens de saida). Levanta em falha."""
     resposta = _get_client().messages.create(
