@@ -186,6 +186,24 @@ class CreateUserBody(BaseModel):
         return v
 
 
+@router.get("/leituras-ia")
+def leituras_ia(current_user: dict = Depends(require_admin)):
+    """Uso da Leitura da IA do Raio-X por dia · ver resumo_ia.uso_por_dia."""
+    import resumo_ia
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        return {"dias": resumo_ia.uso_por_dia(cur), "modelo": resumo_ia.MODELO,
+                "teto_dia": resumo_ia.max_por_dia(), "ligado": resumo_ia.ligado()}
+    except Exception:
+        conn.rollback()
+        logging.getLogger(__name__).warning("[ADMIN] leituras-ia", exc_info=True)
+        return {"dias": [], "modelo": resumo_ia.MODELO,
+                "teto_dia": resumo_ia.max_por_dia(), "ligado": resumo_ia.ligado()}
+    finally:
+        cur.close(); conn.close()
+
+
 @router.get("/users")
 def list_users(current_user: dict = Depends(require_admin)):
     conn = get_connection()
