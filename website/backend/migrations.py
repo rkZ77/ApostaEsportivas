@@ -1,6 +1,45 @@
 import logging
 
 
+class _CursorQueSoMudaOQueFalta:
+    """O cursor da migracao, com o DDL perguntando ao catalogo antes (12/10/2026).
+
+    Esta funcao roda ~130 ALTER TABLE / CREATE INDEX a CADA subida, e cada um
+    PEDE lock exclusivo da tabela mesmo quando nao muda nada -- com a versao
+    antiga ainda atendendo, isso deu deadlock as 00:36 de 12/10. Com o cursor
+    envolvido, o comando de estrutura que ja' esta' aplicado nem e' enviado:
+    numa subida comum nenhum lock e' pedido. E' a mesma regra dos coletores do
+    motor (utils/esquema.py), pelo mesmo modulo -- nao uma copia.
+
+    So' DDL sem parametro passa pela checagem; o resto vai direto. Sem o modulo
+    do motor no caminho, o cursor se comporta como o de sempre.
+    """
+
+    def __init__(self, cur):
+        self._cur = cur
+        try:
+            import settlement_bridge  # noqa: F401 · poe o motor no sys.path
+            from utils import esquema
+            self._esquema = esquema
+        except Exception:
+            self._esquema = None
+
+    def execute(self, sql, args=None):
+        if args is None and self._esquema is not None:
+            texto = " ".join(str(sql).split()).upper()
+            # Um comando so': com dois IF EXISTS / IF NOT EXISTS ou com outro
+            # comando depois do `;`, a checagem veria so' o primeiro.
+            um_so = texto.count(" IF ") == 1 and ";" not in texto.rstrip(" ;")
+            if um_so and texto.startswith(("ALTER TABLE", "CREATE INDEX", "CREATE UNIQUE INDEX",
+                                           "DROP INDEX")):
+                if not self._esquema.faltando(self._cur, [sql]):
+                    return None
+        return self._cur.execute(sql) if args is None else self._cur.execute(sql, args)
+
+    def __getattr__(self, nome):
+        return getattr(self._cur, nome)
+
+
 def run_startup_migrations(logger: logging.Logger) -> bool:
     """Run legacy startup migrations.
 
@@ -15,7 +54,7 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         logger.error("[MIGRATION] DB indisponivel no startup: %s - pulando migration", e)
         return False
 
-    cur = conn.cursor()
+    cur = _CursorQueSoMudaOQueFalta(conn.cursor())
     try:
         # A SUBIDA NAO PODE CONGELAR O SITE (11/10/2026). Cada deploy roda
         # dezenas de ALTER TABLE ... IF NOT EXISTS, e cada um PEDE lock
