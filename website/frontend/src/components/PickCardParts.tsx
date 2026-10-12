@@ -2,6 +2,7 @@ import { BrainCircuit, Check as CheckIcon, Clock, Loader2, Share2, X as XIcon } 
 import { cn } from '../lib/cn'
 import { Badge, ResultBadge } from './ui'
 import { rotuloDoMinuto, rotuloDoTempo, type LeituraAoVivo } from '../lib/picksAgora'
+import { valorLiquidado } from '../utils/marketTranslate'
 
 /*
  * Peças comuns dos cards de pick.
@@ -477,8 +478,12 @@ export function ProbabilidadeDaPerna({ antes, agora }: { antes: number | null; a
  */
 export function PernaDoBilhete({
   indice, resultado, casa, fora, casaId, foraId, odd, mercado, linha, casaDeAposta,
-  chance, cor, aoVivo, semConfronto, Escudo,
+  chance, cor, aoVivo, semConfronto, Escudo, valorFinal, mercadoBruto,
 }: {
+  /** O número que decidiu a perna, gravado na liquidação (11/10/2026). */
+  valorFinal?: number | null
+  /** O mercado ainda sem tradução · é dele que sai a unidade ("escanteios"). */
+  mercadoBruto?: string | null
   indice: number
   resultado?: string | null
   casa?: string | null
@@ -541,6 +546,12 @@ export function PernaDoBilhete({
           </CampoDoPick>
         )}
         {!lr && <CampoAoVivo aoVivo={aoVivo} />}
+        {/* "Final" em toda perna resolvida, igual ao pick simples (11/10/2026,
+            pedido do usuário: "padroniza todos"). */}
+        {lr && valorFinal != null && Number.isFinite(Number(valorFinal)) && (
+          <CampoDeu texto={valorLiquidado(mercadoBruto ?? mercado, Number(valorFinal))}
+            valor={Number(valorFinal)} linha={linha} />
+        )}
         {casaDeAposta && (
           <CampoDoPick rotulo="Casa">
             <dd className="text-xs text-ink-3 truncate">{casaDeAposta}</dd>

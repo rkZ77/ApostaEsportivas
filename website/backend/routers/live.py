@@ -1817,7 +1817,8 @@ def _perna_sem_veredito(perna, nao_iniciados: set | frozenset | None = None) -> 
 
 
 def _gravar_resultado_das_pernas(cur, tabela: str, pick_id: int,
-                                 legs_results: list[str | None]) -> str | None:
+                                 legs_results: list[str | None],
+                                 legs_valores: list | None = None) -> str | None:
     """Anota o resultado de CADA perna dentro do JSONB `games`.
 
     POR QUE ISTO EXISTE: este caminho gravava só o resultado do BILHETE, e a
@@ -1847,7 +1848,8 @@ def _gravar_resultado_das_pernas(cur, tabela: str, pick_id: int,
         # Ordem/tamanho divergentes: anotar pelo índice colocaria o resultado de
         # uma perna em cima de outra. Melhor não anotar nada.
         return None
-    for perna, r in zip(pernas, legs_results):
+    valores = legs_valores if legs_valores and len(legs_valores) == len(pernas) else [None] * len(pernas)
+    for perna, r, v in zip(pernas, legs_results, valores):
         if not isinstance(perna, dict):
             continue
         # `None` nao apaga veredito: o bilhete pode fechar com perna em aberto
@@ -1856,7 +1858,21 @@ def _gravar_resultado_das_pernas(cur, tabela: str, pick_id: int,
         if r is None and perna.get("result") in settlement.RESULT_LABELS:
             continue
         perna["result"] = r
+        # O NUMERO QUE DECIDIU A PERNA (11/10/2026): o card do bilhete mostra
+        # "Final: 18 escanteios", igual ao pick simples (`settled_value`).
+        if r is not None and v is not None:
+            perna["settled_value"] = v
     return json.dumps(pernas, default=str)
+
+
+def _pernas_final(legs: list[tuple]) -> str:
+    """[(numero_da_perna, resultado, valor)] -> JSON da coluna `pernas_final`.
+
+    Alavancagem e Boost guardam as pernas em COLUNAS, nao num JSON de pernas, e
+    nenhuma coluna dizia qual perna caiu: o card so' sabia pintar de verde
+    quando o bilhete inteiro dava GREEN (11/10/2026)."""
+    return json.dumps([{"perna": n, "result": r, "settled_value": v}
+                       for n, r, v in legs], default=str)
 
 
 #: As duas cartelas, e a tabela de cada uma. Múltipla e Bingo do Dia guardam
@@ -1868,7 +1884,8 @@ _TABELA_DA_CARTELA = {"multipla": "picks_multiplas", "bingo": "picks_bingo"}
 def _save_multipla_result(pick_id: int, legs_results: list[str | None],
                           total_odd: float, conn, legs_odds: list | None = None,
                           forced_result: str | None = None,
-                          pick_type: str = "multipla") -> None:
+                          pick_type: str = "multipla",
+                          legs_valores: list | None = None) -> None:
     """`forced_result` fecha o BILHETE sem exigir todas as pernas encerradas ·
     uma perna RED já mata a múltipla. As pernas continuam guardando o resultado
     DELAS, incluindo `None` pra quem ainda não jogou. Ver _leg_result_do_bilhete."""
@@ -1884,7 +1901,7 @@ def _save_multipla_result(pick_id: int, legs_results: list[str | None],
         profit = _combined_profit(legs_results, legs_odds, total_odd, result)
     tabela = _TABELA_DA_CARTELA[pick_type]
     c = conn.cursor()
-    games_json = _gravar_resultado_das_pernas(c, tabela, pick_id, legs_results)
+    games_json = _gravar_resultado_das_pernas(c, tabela, pick_id, legs_results, legs_valores)
     if games_json is not None:
         c.execute(f"UPDATE {tabela} SET result=%s, profit=%s, games=%s "
                   "WHERE id=%s AND result IS NULL",
@@ -1901,8 +1918,12 @@ def _save_multipla_result(pick_id: int, legs_results: list[str | None],
 def _save_alavancagem_result(pick_id: int, legs_results: list[str | None],
                              odd_combined: float, conn,
                              legs_odds: list | None = None,
-                             forced_result: str | None = None) -> None:
-    """Mesmo contrato de `_save_multipla_result` · ver a nota de forced_result lá."""
+                             forced_result: str | None = None,
+                             pernas: list | None = None) -> None:
+    """Mesmo contrato de `_save_multipla_result` · ver a nota de forced_result lá.
+
+    `pernas`: [(numero_da_perna 1..3, valor)] na ordem de `legs_results`, pra
+    gravar `pernas_final`. Instancia sem a coluna grava so' o resultado."""
     result = forced_result or _multipla_combined_result(legs_results, legs_odds, odd_combined)
     if result is None:
         return
@@ -1911,8 +1932,19 @@ def _save_alavancagem_result(pick_id: int, legs_results: list[str | None],
     else:
         profit = _combined_profit(legs_results, legs_odds, odd_combined, result)
     c = conn.cursor()
-    c.execute("UPDATE picks_alavancagem SET result=%s, profit=%s WHERE id=%s AND result IS NULL",
-              (result, profit, pick_id))
+    try:
+        if not pernas or len(pernas) != len(legs_results):
+            raise ValueError("sem o mapa das pernas")
+        c.execute("UPDATE picks_alavancagem SET result=%s, profit=%s, pernas_final=%s "
+                  "WHERE id=%s AND result IS NULL",
+                  (result, profit,
+                   _pernas_final([(n, r, v) for (n, v), r in zip(pernas, legs_results)]),
+                   pick_id))
+    except Exception:
+        conn.rollback()
+        c = conn.cursor()
+        c.execute("UPDATE picks_alavancagem SET result=%s, profit=%s WHERE id=%s AND result IS NULL",
+                  (result, profit, pick_id))
     _sync_followed_result(pick_id, "alavancagem", result, c)
     conn.commit()
     c.close()
@@ -3735,13 +3767,15 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
                         total_odd   = float(p["total_odd"] or 1)
                         leg_results = [_locked_leg_result(l) for l in legs_out]
                         leg_odds    = [l.get("odd") for l in legs_out]
+                        leg_valores = [l.get("current_val") for l in legs_out]
                         if _bilhete_morto(leg_results):
                             _save_multipla_result(p["id"], leg_results, total_odd, conn, leg_odds,
-                                                  forced_result="RED", pick_type=_pt)
+                                                  forced_result="RED", pick_type=_pt,
+                                                  legs_valores=leg_valores)
                             resolved[_pt] += 1
                         elif all(r is not None for r in leg_results):
                             _save_multipla_result(p["id"], leg_results, total_odd, conn, leg_odds,
-                                              pick_type=_pt)
+                                              pick_type=_pt, legs_valores=leg_valores)
                             resolved[_pt] += 1
                     except Exception as e:
                         logger.error("[AUTO-RESULT] %s #%s erro: %s", _pt, p["id"], e)
@@ -3805,6 +3839,8 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
                             if r is None:
                                 continue  # o jogo ainda nao respondeu · segue pendente
                             g["result"] = r
+                            if leg.get("current_val") is not None:
+                                g["settled_value"] = leg["current_val"]
                             mudou = True
                             resolved["pernas"] += 1
                         if not mudou:
@@ -3848,10 +3884,12 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
             for p in alavancagens:
                 try:
                     legs_out = []
+                    numeros = []   # qual coluna (1..3) e' cada perna de legs_out
                     for i in (1, 2, 3):
                         fid = p.get(f"fixture_id_{i}")
                         if not fid:
                             continue
+                        numeros.append(i)
                         if fid in nao_iniciados:
                             legs_out.append(_leg_nao_iniciada(
                                 fid, p.get(f"market_{i}", "") or "",
@@ -3889,12 +3927,14 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
                     odd_combined = float(p["odd_combined"] or 1)
                     leg_results  = [_locked_leg_result(l) for l in legs_out]
                     leg_odds     = [l.get("odd") for l in legs_out]
+                    pernas_mapa  = [(n, l.get("current_val")) for n, l in zip(numeros, legs_out)]
                     if _bilhete_morto(leg_results):
                         _save_alavancagem_result(p["id"], leg_results, odd_combined, conn, leg_odds,
-                                                 forced_result="RED")
+                                                 forced_result="RED", pernas=pernas_mapa)
                         resolved["alavancagem"] += 1
                     elif all(r is not None for r in leg_results):
-                        _save_alavancagem_result(p["id"], leg_results, odd_combined, conn, leg_odds)
+                        _save_alavancagem_result(p["id"], leg_results, odd_combined, conn, leg_odds,
+                                                 pernas=pernas_mapa)
                         resolved["alavancagem"] += 1
                 except Exception as e:
                     logger.error("[AUTO-RESULT] alavancagem #%s erro: %s", p["id"], e)
@@ -4136,12 +4176,23 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
         # com "current transaction is aborted". Um JOIN derrubou tres blocos.
         _janela_pb = _janela.replace("match_date", "pb.match_date") if _janela else ""
 
-        def _fecha_boost(pid, odd, res_ft, res_ht):
+        def _fecha_boost(pid, odd, res_ft, res_ht, gols_ft=None, gols_ht=None):
             res = "GREEN" if (res_ft == "GREEN" and res_ht == "GREEN") else "RED"
             c = conn.cursor()
             c.execute("""UPDATE picks_boost
                             SET result_ft = %s, result_ht = %s
                           WHERE id = %s AND result IS NULL""", (res_ft, res_ht, pid))
+            # Os gols que decidiram cada perna, pro "Final" do card (11/10/2026).
+            # Num SAVEPOINT: instancia sem a coluna perde so' isto, nao o UPDATE
+            # de cima nem a transacao.
+            try:
+                c.execute("SAVEPOINT pernas_final")
+                c.execute("UPDATE picks_boost SET pernas_final = %s WHERE id = %s AND result IS NULL",
+                          (_pernas_final([(1, res_ft, gols_ft if res_ft else None),
+                                          (2, res_ht, gols_ht if res_ht else None)]), pid))
+                c.execute("RELEASE SAVEPOINT pernas_final")
+            except Exception:
+                c.execute("ROLLBACK TO SAVEPOINT pernas_final")
             c.close()
             _save_market_pick_result("picks_boost", pid, "boost", res, float(odd or 1), conn)
             resolved["boost"] += 1
@@ -4228,7 +4279,7 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
                     else:
                         continue          # ainda ha' jogo pra virar
 
-                    _fecha_boost(p["id"], p["odd"], res_ft, res_ht)
+                    _fecha_boost(p["id"], p["odd"], res_ft, res_ht, gols_agora, gols_1t)
                 except Exception as e:
                     logger.error("[AUTO-RESULT] boost #%s erro: %s", p["id"], e)
         except Exception as e:

@@ -850,6 +850,7 @@ def get_today_suggestions(
                        pa.confidence_3, pa.prob_real_3, pa.reasoning_3,
                        pa.odd_combined, pa.confidence_media,
                        pa.result, pa.profit, pa.created_at,
+                       to_jsonb(pa) -> 'pernas_final' AS pernas_final,
                        {_sql_escudos_alav(3)}
                 FROM picks_alavancagem pa
                 LEFT JOIN fixtures_todas f1 ON f1.fixture_id = pa.fixture_id_1
@@ -965,6 +966,7 @@ def get_today_suggestions(
                        pb.prob_ft, pb.prob_ht, pb.edge, pb.ev, pb.score,
                        pb.reasoning, pb.stake_pct, pb.stake_units,
                        pb.result, pb.result_ft, pb.result_ht, pb.profit, pb.created_at,
+                       to_jsonb(pb) -> 'pernas_final' AS pernas_final,
                        f.match_datetime, l.name AS league_name
                 FROM picks_boost pb
                 LEFT JOIN fixtures_todas f ON f.fixture_id = pb.fixture_id
@@ -1017,6 +1019,7 @@ def get_today_suggestions(
                        pb.prob_ft, pb.prob_ht, pb.edge, pb.ev, pb.score,
                        pb.reasoning, pb.stake_pct, pb.stake_units,
                        pb.result, pb.result_ft, pb.result_ht, pb.profit, pb.created_at,
+                       to_jsonb(pb) -> 'pernas_final' AS pernas_final,
                        f.match_datetime, l.name AS league_name
                 FROM picks_boost pb
                 LEFT JOIN fixtures_todas f ON f.fixture_id = pb.fixture_id
@@ -3039,6 +3042,7 @@ def get_alavancagem(
                    pa.confidence_2, pa.prob_real_2, pa.reasoning_2,
                    pa.odd_combined, pa.confidence_media,
                    pa.result, pa.profit, pa.created_at,
+                       to_jsonb(pa) -> 'pernas_final' AS pernas_final,
                    {_sql_escudos_alav(2)}
             FROM picks_alavancagem pa
             LEFT JOIN fixtures f1 ON f1.fixture_id = pa.fixture_id_1
@@ -3100,6 +3104,7 @@ def get_alavancagem_today(current_user: dict = Depends(require_vip)):
                    pa.confidence_2, pa.prob_real_2, pa.reasoning_2,
                    pa.odd_combined, pa.confidence_media,
                    pa.result, pa.profit, pa.created_at,
+                       to_jsonb(pa) -> 'pernas_final' AS pernas_final,
                    {_sql_escudos_alav(2)}
             FROM picks_alavancagem pa
             LEFT JOIN fixtures f1 ON f1.fixture_id = pa.fixture_id_1
