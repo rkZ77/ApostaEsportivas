@@ -1343,11 +1343,85 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         """)
 
         conn.commit()
+        _migrar_arquivo_de_fixtures(logger)
         return True
     except Exception as e:
         logger.error("[MIGRATION] Erro: %s", e)
         conn.rollback()
         return True
+    finally:
+        cur.close()
+        conn.close()
+
+
+#: Mesma DDL de collectors/fixture_status_sync_service.SQL_TABELA_DE_ARQUIVO.
+_SQL_FIXTURES_ARQUIVO = """
+    CREATE TABLE IF NOT EXISTS fixtures_arquivo (
+        fixture_id     INTEGER PRIMARY KEY,
+        league_id      INTEGER,
+        season         INTEGER,
+        home_team_id   INTEGER,
+        away_team_id   INTEGER,
+        home_team      TEXT,
+        away_team      TEXT,
+        match_datetime TIMESTAMP,
+        status         TEXT,
+        referee        TEXT,
+        round          TEXT,
+        arquivado_em   TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+"""
+
+#: O jogo de AGORA vem de `fixtures`; o encerrado, do arquivo. O NOT EXISTS
+#: garante uma linha por jogo mesmo se o coletor recriar um fixture arquivado.
+_SQL_FIXTURES_TODAS = """
+    CREATE OR REPLACE VIEW fixtures_todas AS
+    SELECT fixture_id::bigint AS fixture_id, league_id::bigint AS league_id,
+           season::int AS season, home_team_id::bigint AS home_team_id,
+           away_team_id::bigint AS away_team_id,
+           match_datetime::timestamp AS match_datetime,
+           status::text AS status, referee::text AS referee
+      FROM fixtures
+    UNION ALL
+    SELECT a.fixture_id::bigint, a.league_id::bigint, a.season::int,
+           a.home_team_id::bigint, a.away_team_id::bigint,
+           a.match_datetime::timestamp, a.status::text, a.referee::text
+      FROM fixtures_arquivo a
+     WHERE NOT EXISTS (SELECT 1 FROM fixtures f WHERE f.fixture_id = a.fixture_id)
+"""
+
+
+def _migrar_arquivo_de_fixtures(logger: logging.Logger) -> None:
+    """JOGO ENCERRADO NAO SOME DO CARD (11/10/2026).
+
+    O motor apaga de `fixtures` o jogo que terminou, e o card de pick tira dali
+    a liga e o horario. Agora ele arquiva antes (ver o coletor), e a listagem
+    de picks le' a view `fixtures_todas`. Passo SEPARADO das outras migracoes,
+    com conexao propria: elas rodam numa transacao so', e um erro aqui nao pode
+    desfazer as outras."""
+    from database import get_connection
+    try:
+        conn = get_connection()
+    except Exception as e:
+        logger.error("[MIGRATION] arquivo de fixtures: banco indisponivel: %s", e)
+        return
+    cur = conn.cursor()
+    try:
+        cur.execute(_SQL_FIXTURES_ARQUIVO)
+        cur.execute(_SQL_FIXTURES_TODAS)
+        conn.commit()
+    except Exception as e:
+        logger.error("[MIGRATION] arquivo de fixtures: %s", e)
+        conn.rollback()
+        # A listagem de picks le' `fixtures_todas`: o nome tem que existir
+        # sempre. Sem o arquivo, ela e' so' a `fixtures` -- o comportamento de
+        # antes, nunca uma lista vazia.
+        try:
+            cur.execute(_SQL_FIXTURES_TODAS.split("UNION ALL")[0])
+            conn.commit()
+        except Exception as e2:
+            logger.error("[MIGRATION] view minima de fixtures: %s", e2)
+            conn.rollback()
     finally:
         cur.close()
         conn.close()
