@@ -1330,6 +1330,7 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
             odd={leg.odd != null ? Number(leg.odd) : null}
             mercado={translateMarket(leg.market)} linha={leg.line ? translateLine(leg.line) : null}
             casaDeAposta={leg.bet_house} chance={leg.prob_real ?? leg.confidence ?? null}
+            valorFinal={leg.settled_value ?? null} mercadoBruto={leg.market}
             cor={{ circulo: estilo.pernaCirculo, texto: estilo.pernaOdd }}
             aoVivo={agoraDasPernas[i]} Escudo={TeamLogo} />
         ))}
@@ -1481,9 +1482,15 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
   }
 
   const legs: any[] = []
-  if (pick.home_team_1) legs.push({ home: pick.home_team_1, away: pick.away_team_1, homeId: pick.home_team_id_1, awayId: pick.away_team_id_1, market: pick.market_1, line: pick.line_1, odd: pick.odd_1, house: pick.bet_house_1, prob: pick.prob_real_1 ?? pick.confidence_1 })
-  if (isCombo && pick.home_team_2) legs.push({ home: pick.home_team_2, away: pick.away_team_2, homeId: pick.home_team_id_2, awayId: pick.away_team_id_2, market: pick.market_2, line: pick.line_2, odd: pick.odd_2, house: pick.bet_house_2, prob: pick.prob_real_2 ?? pick.confidence_2 })
-  if (pick.home_team_3) legs.push({ home: pick.home_team_3, away: pick.away_team_3, homeId: pick.home_team_id_3, awayId: pick.away_team_id_3, market: pick.market_3, line: pick.line_3, odd: pick.odd_3, house: pick.bet_house_3, prob: pick.prob_real_3 ?? pick.confidence_3 })
+  /* O resultado e o número final de cada perna (11/10/2026). Antes não havia
+     dado por perna: o card só sabia pintar de verde quando o bilhete inteiro
+     dava GREEN, e a perna que derrubou um RED ficava neutra. */
+  const finalDaPerna = (n: number): { result?: string | null; settled_value?: number | null } | null =>
+    (Array.isArray(pick.pernas_final) ? pick.pernas_final : [])
+      .find((p: any) => p && Number(p.perna) === n) ?? null
+  if (pick.home_team_1) legs.push({ n: 1, home: pick.home_team_1, away: pick.away_team_1, homeId: pick.home_team_id_1, awayId: pick.away_team_id_1, market: pick.market_1, line: pick.line_1, odd: pick.odd_1, house: pick.bet_house_1, prob: pick.prob_real_1 ?? pick.confidence_1 })
+  if (isCombo && pick.home_team_2) legs.push({ n: 2, home: pick.home_team_2, away: pick.away_team_2, homeId: pick.home_team_id_2, awayId: pick.away_team_id_2, market: pick.market_2, line: pick.line_2, odd: pick.odd_2, house: pick.bet_house_2, prob: pick.prob_real_2 ?? pick.confidence_2 })
+  if (pick.home_team_3) legs.push({ n: 3, home: pick.home_team_3, away: pick.away_team_3, homeId: pick.home_team_id_3, awayId: pick.away_team_id_3, market: pick.market_3, line: pick.line_3, odd: pick.odd_3, house: pick.bet_house_3, prob: pick.prob_real_3 ?? pick.confidence_3 })
 
   const handleShare = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -1590,10 +1597,11 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
       {/* Legs */}
       <div className="px-5 py-3 space-y-2">
         {legs.map((leg, i) => (
-          /* Alavancagem não grava resultado por perna: bilhete GREEN implica
-             todas de pé, e RED não diz qual caiu, então a perna fica neutra. */
+          /* Resultado da PERNA quando a liquidação gravou (`pernas_final`);
+             sem ele, bilhete GREEN implica todas de pé e RED fica neutro. */
           <PernaDoBilhete key={i} indice={i}
-            resultado={pick.result === 'GREEN' ? 'GREEN' : undefined}
+            resultado={finalDaPerna(leg.n)?.result ?? (pick.result === 'GREEN' ? 'GREEN' : undefined)}
+            valorFinal={finalDaPerna(leg.n)?.settled_value ?? null} mercadoBruto={leg.market}
             casa={leg.home} fora={leg.away} casaId={leg.homeId} foraId={leg.awayId}
             odd={leg.odd != null ? Number(leg.odd) : null}
             mercado={translateMarket(leg.market)} linha={leg.line ? translateLine(leg.line) : null}
@@ -1770,6 +1778,14 @@ interface MercadoPick {
   bet_house_ft?: string | null; bet_house_ht?: string | null
   prob_ft?: number | null; prob_ht?: number | null
   result_ft?: string | null; result_ht?: string | null
+  /** [{perna, result, settled_value}] gravado na liquidação (11/10/2026). */
+  pernas_final?: Array<{ perna: number; result?: string | null; settled_value?: number | null }> | null
+}
+
+/** Número final da perna `n` do Boost (1 = jogo inteiro, 2 = 1º tempo). */
+function finalDoBoost(p: MercadoPick, n: number): number | null {
+  const achada = (Array.isArray(p.pernas_final) ? p.pernas_final : []).find(x => x && Number(x.perna) === n)
+  return achada?.settled_value != null ? Number(achada.settled_value) : null
 }
 
 /* As duas pernas do Pick Boost, no formato genérico que o SuggestionCard
@@ -1792,6 +1808,7 @@ function pernasDoBoost(p: MercadoPick) {
       odd: p.odd_ft != null ? Number(p.odd_ft) : null,
       probability: p.prob_ft != null ? Number(p.prob_ft) : null,
       result: p.result_ft ?? null,
+      settled_value: finalDoBoost(p, 1),
     },
     {
       market: 'Gols Mais/Menos - 1º Tempo',
@@ -1802,6 +1819,7 @@ function pernasDoBoost(p: MercadoPick) {
       odd: p.odd_ht != null ? Number(p.odd_ht) : null,
       probability: p.prob_ht != null ? Number(p.prob_ht) : null,
       result: p.result_ht ?? null,
+      settled_value: finalDoBoost(p, 2),
     },
   ]
 }

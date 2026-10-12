@@ -123,6 +123,8 @@ interface Suggestion {
     odd?: number | null
     probability?: number | null
     result?: string | null
+    /** O número que decidiu a perna · "Final" no card (11/10/2026). */
+    settled_value?: number | null
   }>
 }
 
@@ -721,6 +723,7 @@ function SuggestionCard({
                 mercado={translateMarket(leg.market)}
                 linha={leg.label ?? (leg.line ? translateLine(leg.line) : null)}
                 casaDeAposta={leg.house} chance={leg.probability ?? null}
+                valorFinal={leg.settled_value ?? null} mercadoBruto={leg.market}
                 cor={COR_DA_PERNA[s.pick_type ?? ''] ?? COR_DA_PERNA_PADRAO}
                 aoVivo={agoraDasPernas[i]} Escudo={TeamLogo} />
             ))}

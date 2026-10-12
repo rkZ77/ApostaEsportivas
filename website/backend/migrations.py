@@ -1344,11 +1344,39 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
 
         conn.commit()
         _migrar_arquivo_de_fixtures(logger)
+        _migrar_pernas_final(logger)
         return True
     except Exception as e:
         logger.error("[MIGRATION] Erro: %s", e)
         conn.rollback()
         return True
+    finally:
+        cur.close()
+        conn.close()
+
+
+def _migrar_pernas_final(logger: logging.Logger) -> None:
+    """`pernas_final` em Alavancagem e Boost (11/10/2026): resultado e numero
+    final de cada perna, pro card mostrar qual caiu e "Final: X". As duas
+    guardam as pernas em colunas; Multipla e Bingo ja' tem o JSON `games`.
+    Passo separado: a alavancagem nasce do motor e pode nao existir."""
+    from database import get_connection
+    try:
+        conn = get_connection()
+    except Exception as e:
+        logger.error("[MIGRATION] pernas_final: banco indisponivel: %s", e)
+        return
+    cur = conn.cursor()
+    try:
+        for tabela in ("picks_alavancagem", "picks_boost"):
+            cur.execute("SELECT to_regclass(%s) IS NOT NULL AS existe", (f"public.{tabela}",))
+            linha = cur.fetchone()
+            if linha and (linha["existe"] if isinstance(linha, dict) else linha[0]):
+                cur.execute(f"ALTER TABLE {tabela} ADD COLUMN IF NOT EXISTS pernas_final JSONB")
+        conn.commit()
+    except Exception as e:
+        logger.error("[MIGRATION] pernas_final: %s", e)
+        conn.rollback()
     finally:
         cur.close()
         conn.close()
