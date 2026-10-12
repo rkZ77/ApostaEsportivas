@@ -180,7 +180,9 @@ export default function RaioXDoJogo({ jogo, trancado = false }: { jogo: JogoBase
         ) : aba === 'ia' ? (
           /* Pedida só ao abrir a aba: na primeira vez do dia é ela que faz o
              servidor gerar, então quem não olha não gasta IA. */
-          <ResumoDaIA fixtureId={dados.fixture.fixture_id} />
+          <ResumoDaIA fixtureId={dados.fixture.fixture_id}
+            homeId={dados.fixture.home_team_id} awayId={dados.fixture.away_team_id}
+            homeNome={dados.fixture.home_team} awayNome={dados.fixture.away_team} />
         ) : aba === 'jogadores' ? (
           <AbaJogadores dados={vistos!} nomeJogo={nomeJogo} mando={mando} setMando={setMando} />
         ) : aba === 'escalacao' ? (

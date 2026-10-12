@@ -33,10 +33,12 @@ def test_numeros_do_time_conta_as_linhas():
     n = resumo_ia.numeros_do_time(jogos)
     assert n["jogos"] == 4
     assert n["forma_recente_primeiro"] == "VEVE"
-    assert n["pct_over_2_5_gols"] == 50          # 3 e 5 gols
-    assert n["pct_ambas_marcam"] == 75
-    assert n["pct_gol_no_1t"] == 100             # so' o jogo com folha do 1T conta
-    assert n["escanteios_total_media"] == 9
+    assert n["jogo"]["pct_over_2_5_gols"] == 50          # 3 e 5 gols
+    assert n["jogo"]["pct_ambas_marcam"] == 75
+    assert n["jogo"]["pct_gol_no_1t"] == 100             # so' o jogo com folha do 1T conta
+    assert n["jogo"]["escanteios_total_media"] == 9
+    assert n["time"]["pct_marcou"] == 75 and n["time"]["pct_sofreu"] == 75
+    assert n["time"]["escanteios_pro_media"] == 5 and n["time"]["pct_escanteios_pro_over_4_5"] == 100
     assert resumo_ia.numeros_do_time([]) is None
 
 
@@ -56,8 +58,11 @@ def _dados():
 def test_montar_fatos_separa_mando_e_tira_vazios():
     fatos = resumo_ia.montar_fatos(_dados(), "Serie A", "liga", {}, {}, {"mandante_em_casa": 5})
     assert fatos["jogo"]["formato"] == "liga"
-    assert fatos["mandante"]["jogando_em_casa"]["jogos"] == 1
-    assert fatos["visitante"]["jogando_fora"]["jogos"] == 1
+    assert fatos["mandante"]["EM_CASA_na_temporada"]["jogos"] == 1
+    assert fatos["visitante"]["FORA_na_temporada"]["jogos"] == 1
+    serie = [_jogo(1, 0), _jogo(2, 0), _jogo(0, 0)]
+    com_mando = resumo_ia.montar_fatos(_dados(), "Serie A", "liga", {}, {}, {}, serie, serie)
+    assert com_mando["mandante"]["EM_CASA_na_temporada"]["jogos"] == 3
     assert fatos["confronto_direto"][0]["mandante"] == "Fora"
     assert "arbitro" not in fatos and "tabela" not in fatos["mandante"]
     json.dumps(fatos)                            # vai pro modelo como JSON
@@ -154,8 +159,9 @@ def test_desligado_sem_chave(monkeypatch):
 def test_chamada_usa_modelo_barato_json_e_corta_em_4(monkeypatch):
     from types import SimpleNamespace as NS
     pedido = {}
-    saida = {"resumo": "r", "contexto": "c", "alerta": "",
-             "mercados": [{"mercado": f"m{i}", "tendencia": "over", "leitura": "l"} for i in range(6)]}
+    m = [{"mercado": f"m{i}", "tendencia": "over", "leitura": "l"} for i in range(6)]
+    saida = {"resumo": "r", "contexto": "c", "alerta": "", "mercados_do_jogo": m,
+             "times": [{"lado": "mandante", "perfil": "dominante", "leitura": "l", "mercados": m}] * 3}
 
     class _Msgs:
         def create(self, **kw):
@@ -168,7 +174,8 @@ def test_chamada_usa_modelo_barato_json_e_corta_em_4(monkeypatch):
     assert pedido["model"] == "claude-haiku-5-5"
     assert pedido["output_config"]["effort"] == "low"
     assert pedido["output_config"]["format"]["type"] == "json_schema"
-    assert len(conteudo["mercados"]) == 4 and (t_in, t_out) == (1500, 300)
+    assert len(conteudo["mercados_do_jogo"]) == 3 and len(conteudo["times"]) == 2
+    assert len(conteudo["times"][0]["mercados"]) == 3 and (t_in, t_out) == (1500, 300)
 
 
 def test_falha_do_modelo_fica_gravada_e_nao_levanta(monkeypatch):
@@ -180,3 +187,28 @@ def test_falha_do_modelo_fica_gravada_e_nao_levanta(monkeypatch):
     cur = _Cur()
     assert resumo_ia.resumo_do_jogo(cur, 10, _dados) == {"status": "falhou"}
     assert cur.guardado["status"] == "falhou"
+
+
+def test_leitura_de_formato_antigo_e_gerada_de_novo_uma_vez(modelo):
+    cur = _Cur()
+    cur.guardado = {"status": "ok", "conteudo": json.dumps({"resumo": "velha", "mercados": []}),
+                    "motivo": None, "velho": False}
+    r = resumo_ia.resumo_do_jogo(cur, 10, _dados)
+    assert r["resumo"] == "Jogo de gols." and r["versao"] == resumo_ia.VERSAO
+    resumo_ia.resumo_do_jogo(cur, 10, _dados)
+    assert len(modelo) == 1
+
+
+def test_serie_por_mando_le_so_o_lado_do_mando():
+    class C:
+        def execute(self, sql, params):
+            self.sql, self.params = sql, params
+        def fetchall(self):
+            return [{"home_goals": 2, "away_goals": 1, "home_goals_ht": 1, "away_goals_ht": 0,
+                     "home_corners": 6, "away_corners": 3, "home_yellow_cards": 1, "away_yellow_cards": 3,
+                     "home_shots_on": 5, "away_shots_on": 2, "home_possession": "58%", "away_possession": "42%"}]
+    c = C()
+    fora = resumo_ia.serie_por_mando(c, 7, False, 2026, 71, True, None)
+    assert "away_team_id = %s" in c.sql and c.params[0] == 7
+    assert fora[0]["gols_pro"] == 1 and fora[0]["escanteios_pro"] == 3 and fora[0]["posse"] == "42%"
+    assert resumo_ia.numeros_do_time(fora)["time"]["posse_media"] == 42

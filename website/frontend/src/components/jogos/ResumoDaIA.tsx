@@ -3,6 +3,7 @@ import { Sparkles } from 'lucide-react'
 import api from '../../services/api'
 import { cn } from '../../lib/cn'
 import { Skeleton } from '../ui'
+import { TeamLogo } from '../TeamLogo'
 
 /*
  * Aba "Leitura IA" do Raio-X (12/10/2026, pedido do usuário).
@@ -11,22 +12,38 @@ import { Skeleton } from '../ui'
  * quem abre depois recebe pronto. Na primeira vez ele espera o modelo, por
  * isso o prazo maior.
  *
- * Era um bloco acima das abas que SUMIA quando o jogo não tinha resumo · a
- * pessoa não sabia se era defeito. Dentro da aba, todo caso diz o porquê.
+ * POR TIME, RESPEITANDO O MANDO (mesmo dia, pedido do usuário): um bloco do
+ * mandante lido nos jogos em CASA e um do visitante lido nos jogos FORA, cada
+ * um com o perfil (dominante, ofensivo...) e os mercados do próprio time.
+ * Depois, as linhas do jogo em que os dois concordam.
+ *
+ * Todo caso sem leitura diz o porquê: um bloco que sumia parecia defeito.
  */
 
-interface Mercado { mercado: string; tendencia: 'over' | 'under' | 'dividido'; leitura: string }
+type Tendencia = 'over' | 'under' | 'dividido'
+interface Mercado { mercado: string; tendencia: Tendencia; leitura: string }
+type Perfil = 'dominante' | 'ofensivo' | 'equilibrado' | 'defensivo' | 'reativo'
+interface LeituraDoTime { lado: 'mandante' | 'visitante'; perfil: Perfil; leitura: string; mercados: Mercado[] }
 interface Resumo {
   status: 'ok' | 'inelegivel' | 'bloqueado' | 'limite' | 'falhou' | 'desligado'
-  motivo?: string; resumo?: string; mercados?: Mercado[]; contexto?: string; alerta?: string
+  motivo?: string; resumo?: string; times?: LeituraDoTime[]; mercados_do_jogo?: Mercado[]
+  contexto?: string; alerta?: string
+}
+interface Props {
+  fixtureId: number
+  homeId?: number; awayId?: number; homeNome?: string; awayNome?: string
 }
 
-const TOM: Record<Mercado['tendencia'], string> = {
+const TOM: Record<Tendencia, string> = {
   over: 'bg-accent/10 text-accent-ink border-accent/25',
   under: 'bg-sky-500/10 text-sky-300 border-sky-500/25',
   dividido: 'bg-surface-3 text-ink-3 border-line-strong',
 }
-const ROTULO: Record<Mercado['tendencia'], string> = { over: 'Over', under: 'Under', dividido: 'Dividido' }
+const ROTULO: Record<Tendencia, string> = { over: 'Over', under: 'Under', dividido: 'Dividido' }
+const PERFIL: Record<Perfil, string> = {
+  dominante: 'Dominante', ofensivo: 'Ofensivo', equilibrado: 'Equilibrado',
+  defensivo: 'Defensivo', reativo: 'Reativo',
+}
 
 function semLeitura(r: Resumo | null): string {
   switch (r?.status) {
@@ -42,7 +59,7 @@ function semLeitura(r: Resumo | null): string {
   }
 }
 
-export default function ResumoDaIA({ fixtureId }: { fixtureId: number }) {
+export default function ResumoDaIA({ fixtureId, homeId, awayId, homeNome, awayNome }: Props) {
   const [r, setR] = useState<Resumo | null>(null)
   const [carregando, setCarregando] = useState(true)
 
@@ -64,8 +81,8 @@ export default function ResumoDaIA({ fixtureId }: { fixtureId: number }) {
         <p className="text-xs text-ink-3 mb-3">A IA está lendo os números do jogo…</p>
         <Skeleton className="h-3 w-full mb-2" />
         <Skeleton className="h-3 w-5/6 mb-4" />
-        <Skeleton className="h-8 w-full mb-2" />
-        <Skeleton className="h-8 w-full" />
+        <Skeleton className="h-24 w-full mb-2" />
+        <Skeleton className="h-24 w-full" />
       </div>
     )
   }
@@ -78,6 +95,8 @@ export default function ResumoDaIA({ fixtureId }: { fixtureId: number }) {
     )
   }
 
+  const time = (lado: 'mandante' | 'visitante') => r.times?.find(t => t.lado === lado)
+
   return (
     <div className="space-y-3">
       <div className="card p-4">
@@ -85,19 +104,34 @@ export default function ResumoDaIA({ fixtureId }: { fixtureId: number }) {
         <p className="text-sm text-ink-1 leading-relaxed">{r.resumo}</p>
       </div>
 
-      {!!r.mercados?.length && (
-        <div className="card divide-y divide-line/60">
-          {r.mercados.map(m => (
-            <div key={m.mercado} className="px-4 py-3 flex items-start gap-3">
-              <span className={cn('shrink-0 mt-0.5 w-[68px] text-center py-0.5 rounded border text-[10px] font-bold uppercase tracking-wide', TOM[m.tendencia] ?? TOM.dividido)}>
-                {ROTULO[m.tendencia] ?? m.tendencia}
-              </span>
-              <div className="min-w-0">
-                <div className="text-sm font-bold text-ink-1">{m.mercado}</div>
-                <div className="text-xs text-ink-3 leading-snug mt-0.5">{m.leitura}</div>
+      {([
+        ['mandante', homeId, homeNome, 'em casa'],
+        ['visitante', awayId, awayNome, 'fora'],
+      ] as const).map(([lado, id, nome, mando]) => {
+        const t = time(lado)
+        if (!t) return null
+        return (
+          <div key={lado} className="card overflow-hidden">
+            <div className="px-4 pt-4 pb-3 flex items-center gap-3">
+              <TeamLogo id={id} name={nome ?? ''} size={32} />
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-bold text-ink-1 truncate">{nome}</div>
+                <div className="text-[11px] text-ink-3">Jogando {mando}</div>
               </div>
+              <span className="shrink-0 px-2 py-0.5 rounded-full border border-line-strong bg-surface-2 text-[11px] font-bold text-ink-1">
+                {PERFIL[t.perfil] ?? t.perfil}
+              </span>
             </div>
-          ))}
+            <p className="px-4 pb-3 text-sm text-ink-2 leading-relaxed">{t.leitura}</p>
+            {!!t.mercados.length && <ListaDeMercados mercados={t.mercados} />}
+          </div>
+        )
+      })}
+
+      {!!r.mercados_do_jogo?.length && (
+        <div className="card overflow-hidden">
+          <div className="px-4 pt-3 pb-2 text-[11px] font-bold uppercase tracking-wide text-ink-3">Mercados do jogo</div>
+          <ListaDeMercados mercados={r.mercados_do_jogo} />
         </div>
       )}
 
@@ -120,6 +154,24 @@ export default function ResumoDaIA({ fixtureId }: { fixtureId: number }) {
       <p className="text-[10px] text-ink-4 leading-relaxed px-1">
         Leitura automática dos números deste Raio-X. Não é pick nem garantia.
       </p>
+    </div>
+  )
+}
+
+function ListaDeMercados({ mercados }: { mercados: Mercado[] }) {
+  return (
+    <div className="divide-y divide-line/60 border-t border-line/60">
+      {mercados.map(m => (
+        <div key={m.mercado} className="px-4 py-3 flex items-start gap-3">
+          <span className={cn('shrink-0 mt-0.5 w-[68px] text-center py-0.5 rounded border text-[10px] font-bold uppercase tracking-wide', TOM[m.tendencia] ?? TOM.dividido)}>
+            {ROTULO[m.tendencia] ?? m.tendencia}
+          </span>
+          <div className="min-w-0">
+            <div className="text-sm font-bold text-ink-1">{m.mercado}</div>
+            <div className="text-xs text-ink-3 leading-snug mt-0.5">{m.leitura}</div>
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
