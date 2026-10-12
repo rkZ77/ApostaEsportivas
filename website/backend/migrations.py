@@ -412,6 +412,34 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         # geral la embaixo faz rollback de TODAS as migrations deste arquivo.
         # O cadastro ja checa duplicata em query separada, entao sem o indice
         # o que se perde e' so' a protecao contra corrida.
+        # TELEFONE REPETIDO RESOLVIDO (12/10/2026, pedido do usuario: "tira o
+        # telefone repetido"). Havia 1 numero em duas contas e, por isso, o
+        # indice unico nunca nascia -- o aviso abaixo aparecia em todo deploy.
+        # O numero FICA na conta que o verificou; senao na de plano pago;
+        # senao na mais antiga. Nas outras ele sai (e o opt-in de WhatsApp,
+        # que sem numero nao tem pra onde ir). O login por e-mail nao muda.
+        # No log vai so' o id das contas, nunca o numero.
+        cur.execute("""
+            WITH repetidos AS (
+                SELECT id, ROW_NUMBER() OVER (
+                           PARTITION BY phone
+                           ORDER BY COALESCE(phone_verified, FALSE) DESC,
+                                    (COALESCE(plan, 'free') <> 'free') DESC,
+                                    id ASC) AS ordem
+                  FROM users
+                 WHERE phone IN (SELECT phone FROM users WHERE phone IS NOT NULL
+                                  GROUP BY phone HAVING COUNT(*) > 1)
+            )
+            UPDATE users u
+               SET phone = NULL, phone_verified = FALSE, whatsapp_opt_in = FALSE
+              FROM repetidos r
+             WHERE u.id = r.id AND r.ordem > 1
+         RETURNING u.id
+        """)
+        _sem_numero = [(r["id"] if isinstance(r, dict) else r[0]) for r in cur.fetchall()]
+        if _sem_numero:
+            logger.warning("[MIGRATION] telefone repetido tirado das contas %s "
+                           "(ficou na que verificou / pagou / e' mais antiga)", _sem_numero)
         cur.execute("""
             SELECT COUNT(*) AS n FROM (
                 SELECT phone FROM users
