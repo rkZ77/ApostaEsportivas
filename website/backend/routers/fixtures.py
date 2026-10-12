@@ -727,6 +727,35 @@ def get_raio_x(
     return dados
 
 
+@router.get("/{fixture_id}/resumo-ia")
+def get_resumo_ia(fixture_id: int, current_user: dict = Depends(get_current_user)):
+    """Resumo de IA do Raio-X · ver resumo_ia.py.
+
+    Rota separada do Raio-X: na primeira abertura do dia ela espera o modelo
+    (alguns segundos), e o Raio-X nao pode esperar junto. So' quem tem o
+    Raio-X completo (Pro, teste, admin) faz gerar · o gratuito nao gasta IA.
+    """
+    import resumo_ia
+    from auth_utils import is_vip_active
+    if not is_vip_active(current_user):
+        return {"status": "bloqueado"}
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        return resumo_ia.resumo_do_jogo(
+            cur, fixture_id,
+            lambda: cache_publico.obter(
+                f"raio-x:{fixture_id}:None:None:{_JOGOS_RAIO_X}", _RAIO_X_TTL,
+                lambda: _montar_raio_x(fixture_id, None, None, None, _JOGOS_RAIO_X)))
+    except Exception:
+        # Tabela ainda nao criada, banco ocupado: o Raio-X segue sem o bloco.
+        conn.rollback()
+        logger.warning("[RESUMO IA] jogo %s", fixture_id, exc_info=True)
+        return {"status": "falhou"}
+    finally:
+        cur.close(); conn.close()
+
+
 #: Entregue por main.py no carregamento (ver main.aquecer_imagens). None em
 #: teste ou fora do app: o Raio-X funciona igual, so' sem o aquecimento.
 aquecer_imagens = None

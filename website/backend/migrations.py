@@ -1417,6 +1417,23 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
             ON whatsapp_envios (user_id, enviado_em DESC)
         """)
 
+        # RESUMO DE IA DO RAIO-X (12/10/2026) · uma linha por jogo por dia,
+        # gerada na primeira abertura. Ver resumo_ia.py.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS raio_x_resumo_ia (
+                fixture_id  INTEGER NOT NULL,
+                dia         DATE NOT NULL,
+                status      VARCHAR(12) NOT NULL,
+                conteudo    JSONB,
+                motivo      TEXT,
+                modelo      VARCHAR(40),
+                tokens_in   INTEGER,
+                tokens_out  INTEGER,
+                criado_em   TIMESTAMP NOT NULL DEFAULT NOW(),
+                PRIMARY KEY (fixture_id, dia)
+            )
+        """)
+
         conn.commit()
         return True
     except Exception as e:
