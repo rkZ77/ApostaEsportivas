@@ -666,13 +666,19 @@ export default function Fixtures() {
             Painel do jogo selecionado. Só em tela larga · no celular o mesmo
             componente abre como folha sobreposta, logo abaixo.
           */}
-          <div className="hidden lg:block flex-1 min-w-0">
+          {/* O PAINEL ACOMPANHA A ROLAGEM (12/10/2026, pedido do usuario). O
+              `sticky` ja' existia e nao fazia nada: com `items-start` na linha,
+              esta coluna tinha so' a altura do proprio painel, e sticky so'
+              gruda dentro do espaco da coluna. `self-stretch` a estica ate' a
+              altura da lista. `top-20` deixa o painel abaixo do cabecalho fixo
+              (h-16), que cobria o topo dele com o `top-4` de antes. */}
+          <div className="hidden lg:block lg:self-stretch flex-1 min-w-0">
             {statsFixture ? (
-              <div className="sticky top-4 max-h-[calc(100dvh-2rem)] overflow-y-auto pr-1 scrollbar-none">
+              <div className="sticky top-20 max-h-[calc(100dvh-6rem)] overflow-y-auto pr-1 scrollbar-none">
                 <RaioXDoJogo key={statsFixture.fixture_id} jogo={statsFixture} />
               </div>
             ) : (
-              <div className="card border-dashed p-12 text-center sticky top-4">
+              <div className="card border-dashed p-12 text-center sticky top-20">
                 <p className="text-sm text-ink-3">Clique em um jogo para abrir o Raio-X.</p>
                 <p className="text-xs text-ink-4 mt-1.5">
                   Taxa de acerto por linha, jogadores com foto, confronto e árbitro.
