@@ -127,7 +127,13 @@ const features = [
     badgeColor: '',
     title: 'Minha Banca',
     desc: 'Registre suas apostas e acompanhe a evolução real da sua banca. A IA sugere o stake ideal para cada pick baseado no seu saldo atual.',
-    items: ['Stake sugerido pelo Kelly Criterion', 'Evolução da banca em tempo real', 'Win rate e ROI calculados'],
+    items: [
+      'Stake sugerido pelo Kelly Criterion',
+      'Resultado fecha sozinho quando o jogo decide, sem você abrir o site',
+      'Aviso na tela quando sai o seu green ou red',
+      'Evolução da banca em tempo real',
+      'Win rate e ROI calculados',
+    ],
   },
   {
     icon: Bot,
