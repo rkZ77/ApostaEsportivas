@@ -1466,7 +1466,24 @@ _SQL_FIXTURES_TODAS = """
            a.match_datetime::timestamp, a.status::text, a.referee::text
       FROM fixtures_arquivo a
      WHERE NOT EXISTS (SELECT 1 FROM fixtures f WHERE f.fixture_id = a.fixture_id)
+    UNION ALL
+    SELECT c.fixture_id::bigint, c.league_id::bigint, c.season::int,
+           c.home_team_id::bigint, c.away_team_id::bigint,
+           c.match_datetime::timestamp, c.status::text, NULL::text
+      FROM calendario_jogos c
+     WHERE NOT EXISTS (SELECT 1 FROM fixtures f WHERE f.fixture_id = c.fixture_id)
+       AND NOT EXISTS (SELECT 1 FROM fixtures_arquivo a WHERE a.fixture_id = c.fixture_id)
 """
+# A TERCEIRA FONTE (12/10/2026): `calendario_jogos` guarda a temporada inteira
+# das ligas acompanhadas, passado incluido, com data e hora. E' o que devolve o
+# horario aos cards de jogo que saiu de `fixtures` ANTES de o arquivo existir.
+
+#: As versoes da view, da mais completa pra minima · ver _migrar_arquivo_de_fixtures.
+_VERSOES_DA_VIEW = (
+    _SQL_FIXTURES_TODAS,
+    "UNION ALL".join(_SQL_FIXTURES_TODAS.split("UNION ALL")[:2]),
+    _SQL_FIXTURES_TODAS.split("UNION ALL")[0],
+)
 
 
 def _migrar_arquivo_de_fixtures(logger: logging.Logger) -> None:
@@ -1485,22 +1502,27 @@ def _migrar_arquivo_de_fixtures(logger: logging.Logger) -> None:
         return
     cur = conn.cursor()
     try:
-        cur.execute("SET lock_timeout = '5s'")   # ver run_startup_migrations
-        cur.execute(_SQL_FIXTURES_ARQUIVO)
-        cur.execute(_SQL_FIXTURES_TODAS)
-        conn.commit()
-    except Exception as e:
-        logger.error("[MIGRATION] arquivo de fixtures: %s", e)
-        conn.rollback()
-        # A listagem de picks le' `fixtures_todas`: o nome tem que existir
-        # sempre. Sem o arquivo, ela e' so' a `fixtures` -- o comportamento de
-        # antes, nunca uma lista vazia.
         try:
-            cur.execute(_SQL_FIXTURES_TODAS.split("UNION ALL")[0])
+            cur.execute("SET lock_timeout = '5s'")   # ver run_startup_migrations
+            cur.execute(_SQL_FIXTURES_ARQUIVO)
             conn.commit()
-        except Exception as e2:
-            logger.error("[MIGRATION] view minima de fixtures: %s", e2)
+        except Exception as e:
+            logger.error("[MIGRATION] arquivo de fixtures: %s", e)
             conn.rollback()
+        # A listagem de picks le' `fixtures_todas`: o nome tem que existir
+        # sempre. Tenta da versao mais completa pra minima (sem calendario,
+        # sem arquivo); a minima e' so' a `fixtures` -- o comportamento de
+        # antes, nunca uma lista vazia.
+        for versao in _VERSOES_DA_VIEW:
+            try:
+                cur.execute("SET lock_timeout = '5s'")
+                cur.execute(versao)
+                conn.commit()
+                break
+            except Exception as e:
+                logger.error("[MIGRATION] view fixtures_todas (%s fontes): %s",
+                             versao.count("UNION ALL") + 1, e)
+                conn.rollback()
     finally:
         cur.close()
         conn.close()
