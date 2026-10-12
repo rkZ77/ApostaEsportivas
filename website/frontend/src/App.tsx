@@ -36,6 +36,7 @@ const VerifyEmailBanner = lazy(() => import('./components/VerifyEmailBanner'))
 const PlanUpsellToast  = lazy(() => import('./components/PlanUpsellToast'))
 const LivePickToast    = lazy(() => import('./components/LivePickToast'))
 const ResultadoToast   = lazy(() => import('./components/ResultadoToast'))
+const JogoComecandoToast = lazy(() => import('./components/JogoComecandoToast'))
 const GlobalModals     = lazy(() => import('./components/GlobalModals'))
 /*
  * Mesmo motivo dos de cima, e mais um: o tour é visto UMA vez na vida da conta.
@@ -262,6 +263,7 @@ export default function App() {
             <CantoDeAvisos>
               <LivePickToast />
               <ResultadoToast />
+              <JogoComecandoToast />
             </CantoDeAvisos>
             <GlobalModals />
             {/* Precisa ficar fora do <Routes>: o tour troca de rota entre os

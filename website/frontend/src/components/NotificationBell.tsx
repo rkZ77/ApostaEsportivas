@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, m as motion } from 'framer-motion'
 import {
-  Activity, Bell, BellOff, CalendarCheck, CheckCheck, CheckCircle2, Crown, Gift, Lock, MinusCircle,
+  Activity, Bell, BellOff, CalendarCheck, CheckCheck, CheckCircle2, Clock, Crown, Gift, Lock, MinusCircle,
   PlayCircle, TimerReset, X, XCircle, Zap,
 } from 'lucide-react'
 import { useNotifications, type AppNotification } from '../context/NotificationContext'
@@ -58,6 +58,9 @@ function NotificationIcon({ n }: { n: AppNotification }) {
      simbolo que ja' significa "comecou" sem legenda, e cinza porque nao pede
      nada de ninguem. */
   if (n.type === 'pick_live')     return <PlayCircle className={`${base} text-ink-2`} />
+  /* Jogo do bilhete pessoal começando (12/10/2026): lembrete, cinza como o
+     de cima, e o relógio porque é "daqui a pouco", não "começou". */
+  if (n.type === 'jogo_comecando') return <Clock className={`${base} text-ink-2`} />
   /* `Activity` no verde do produto (PICK_TYPE_HEX.live e' verde, nao
      vermelho): a linha de batimento e' partida em andamento, e a cor e' a
      mesma do selo do card e do aviso em tela (LivePickToast). */

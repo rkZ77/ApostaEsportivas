@@ -369,6 +369,17 @@ def varrer_resultados(agora_ts: float | None = None) -> list[str]:
                 conn.close()
         except Exception:
             logger.exception("[AGENDADOR] bilhetes pessoais falharam")
+    # Aviso de jogo de bilhete comecando (12/10/2026) · so' banco, toda volta.
+    try:
+        import bilhete_pessoal
+        conn = _conexao()
+        try:
+            if bilhete_pessoal.avisar_jogos_comecando(conn):
+                feitas.append("avisos_de_jogo")
+        finally:
+            conn.close()
+    except Exception:
+        logger.exception("[AGENDADOR] aviso de jogo comecando falhou")
     return feitas
 
 

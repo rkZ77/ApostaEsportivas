@@ -23,6 +23,8 @@ export type NotificationType =
   | 'trial_ended' | 'vip_ended'
   /* Pagamento aprovado e crédito de indicação (2026-10-07). */
   | 'payment_ok' | 'referral_credit'
+  /* Jogo de bilhete pessoal começando (2026-10-12). */
+  | 'jogo_comecando'
   /* Único tipo que NÃO vem do servidor. O convite de plano é um estado
      permanente da conta ("você está no free"), não um evento, então não existe
      linha em `notifications` para ele · criar uma por usuário seria inventar um
@@ -87,6 +89,27 @@ export function resultadosParaAvisar(itens: AppNotification[], jaAvisados: Set<n
     .sort((a, b) => (a.idade_seg ?? 0) - (b.idade_seg ?? 0))
 }
 
+/* JOGO DO BILHETE COMEÇANDO (12/10/2026). Criado no servidor pelo agendador
+ * (bilhete_pessoal.avisar_jogos_comecando) até 20 min antes do apito. Cartão
+ * só enquanto ainda faz sentido: 25 min de idade, depois fica só no sino. */
+const COMECANDO_JANELA_SEG = 25 * 60
+const LS_COMECANDO = 'jogosComecandoAvisados'
+
+export function jogosComecandoParaAvisar(itens: AppNotification[], jaAvisados: Set<number>): AppNotification[] {
+  return itens
+    .filter(n => n.type === 'jogo_comecando' && !n.read && !jaAvisados.has(n.id)
+      && n.idade_seg != null && n.idade_seg <= COMECANDO_JANELA_SEG)
+    .sort((a, b) => (a.idade_seg ?? 0) - (b.idade_seg ?? 0))
+}
+
+function lerAvisados(chave: string): Set<number> {
+  try { return new Set(JSON.parse(localStorage.getItem(chave) || '[]')) } catch { return new Set() }
+}
+
+function guardarAvisados(chave: string, ids: Set<number>) {
+  try { localStorage.setItem(chave, JSON.stringify([...ids].slice(-60))) } catch { /* modo privado */ }
+}
+
 interface NotificationCtx {
   // Sino
   items: AppNotification[]
@@ -112,6 +135,9 @@ interface NotificationCtx {
   resultadoNovo: AppNotification | null
   resultadosJuntos: number
   dismissResultadoNovo: () => void
+  /** Jogo de bilhete pessoal começando (components/JogoComecandoToast). */
+  jogoComecando: AppNotification | null
+  dismissJogoComecando: () => void
   /** Abertura do fechamento mensal · usada pelo sino e pelo card da Banca. */
   monthlyCloseOpen: boolean
   openMonthlyClose: () => void
@@ -139,6 +165,8 @@ const NotificationContext = createContext<NotificationCtx>({
   resultadoNovo: null,
   resultadosJuntos: 0,
   dismissResultadoNovo: () => {},
+  jogoComecando: null,
+  dismissJogoComecando: () => {},
   monthlyCloseOpen: false,
   openMonthlyClose: () => {},
   closeMonthlyClose: () => {},
@@ -210,6 +238,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const [livePickNovo, setLivePickNovo] = useState<AppNotification | null>(null)
   const [resultadoNovo, setResultadoNovo] = useState<AppNotification | null>(null)
   const [resultadosJuntos, setResultadosJuntos] = useState(0)
+  const [jogoComecando, setJogoComecando] = useState<AppNotification | null>(null)
 
   // Lista do sino
   const refresh = useCallback(async () => {
@@ -261,6 +290,14 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         guardarResultadosAvisados(avisados)
         setResultadoNovo(resultados[0])
         setResultadosJuntos(resultados.length - 1)
+      }
+
+      const avisadosJogo = lerAvisados(LS_COMECANDO)
+      const comecando = jogosComecandoParaAvisar(novos, avisadosJogo)
+      if (comecando.length) {
+        comecando.forEach(n => avisadosJogo.add(n.id))
+        guardarAvisados(LS_COMECANDO, avisadosJogo)
+        setJogoComecando(comecando[0])
       }
 
       setItems(novos)
@@ -416,6 +453,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
      o assunto". */
   const dismissLivePickNovo = useCallback(() => setLivePickNovo(null), [])
   const dismissResultadoNovo = useCallback(() => setResultadoNovo(null), [])
+  const dismissJogoComecando = useCallback(() => setJogoComecando(null), [])
 
   const pendingMonthlyClose = items.find(n => n.type === 'monthly_close' && !n.read) ?? null
   /* Os dois finais concorrem pelo mesmo popup, mas nunca coexistem numa conta
@@ -438,6 +476,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       hasNew, markSeen, liveCount, hasLive, clearLive,
       livePickNovo, dismissLivePickNovo,
       resultadoNovo, resultadosJuntos, dismissResultadoNovo,
+      jogoComecando, dismissJogoComecando,
     }}>
       {children}
     </NotificationContext.Provider>
