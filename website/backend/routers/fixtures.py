@@ -652,7 +652,15 @@ def _jogadores_dos_times(cur, jogos_por_time: dict, titulares: dict) -> dict:
             "minutos": r["minutes"],
             "titular": not r["is_substitute"],
             "nota": float(r["rating"]) if r["rating"] is not None else None,
-            **{k: r[col] for k, col in _CAMPOS_JOGADOR.items()},
+            # QUEM ENTROU EM CAMPO, COM CONTADOR EM BRANCO, FEZ ZERO (11/10/2026).
+            # A API escreve null quando o lance nao aconteceu, e a coleta so'
+            # converte parte dos contadores -- gol e passe ficam null. O "bateu
+            # X de N" tirava esse jogo da conta (null e' "sem dado"), entao so'
+            # entravam os jogos em que ele MARCOU: quem sai do banco e nao faz
+            # gol simplesmente sumia da serie, e a taxa inflava. Aqui a folha
+            # existe (minutes > 0 acima) -- a regra do coletor
+            # (_ZERO_QUANDO_HA_FOLHA), aplicada a todo contador da tela.
+            **{k: (0 if r[col] is None else r[col]) for k, col in _CAMPOS_JOGADOR.items()},
         })
 
     for j in por_jogador.values():
