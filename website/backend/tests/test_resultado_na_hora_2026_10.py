@@ -161,6 +161,20 @@ def test_teto_dos_resultados_e_mais_alto_que_o_das_tarefas(monkeypatch):
     assert ag.cota_permite({"usado": 7050, "limite": 7500}, ag.teto_dos_resultados())[0]
 
 
+@pytest.mark.parametrize("status, pode", [
+    (None, True),                                   # /status fora do ar: segue
+    ({"usado": 0, "limite": None}, True),
+    ({"usado": 7400, "limite": 7500}, False),       # acima de 97%: para
+    ({"usado": 7000, "limite": 7500}, True),
+])
+def test_teto_dos_resultados_com_cota_desconhecida(monkeypatch, status, pode):
+    import agendador as ag
+    from routers import admin
+    monkeypatch.delenv("AGENDADOR_TETO_RESULTADOS", raising=False)
+    monkeypatch.setattr(admin, "_api_football_status", lambda: status)
+    assert ag._cota_permite_agora() is pode
+
+
 def test_cota_so_e_consultada_quando_ha_pendente(monkeypatch):
     _varredura_ligada(monkeypatch, pendente=False)
     consultas = []
