@@ -42,6 +42,14 @@ def test_acabou_o_tempo_apostado():
     assert cav.chance_agora(0.6, "over", 0.5, 0, "1H", 30, "2t") == pytest.approx(0.6, abs=0.01)
 
 
+def test_pick_em_aberto_nunca_mostra_100_nem_0():
+    """Bahia x Mirassol (12/10): Menos de 3.5 com 1 gol aos 79' dava ~99,5% e a
+    tela arredondava pra 100% com o jogo rolando. Extremo e' do placar."""
+    p = cav.chance_agora(0.71, "under", 3.5, 1, "2H", 79)
+    assert 0.9 < p <= 0.99
+    assert cav.chance_agora(0.2, "over", 5.5, 0, "2H", 88) >= 0.01
+
+
 def test_sem_dado_nao_inventa():
     assert cav.chance_agora(None, "over", 2.5, 1, "1H", 10) is None
     assert cav.chance_agora(0.6, "result", None, None, "1H", 10) is None
