@@ -90,6 +90,10 @@ MEDICOES = (
     # recentes pra caber nos 15 minutos de cada medicao.
     ("comparar_motor", "Motor atual x variantes (mesmas partidas)",
      "scripts/comparar_motor.py", ["--prod", "--ultimas", "300"]),
+    # 11/10: toda participacao do jogador com peso pelos minutos, contra o
+    # historico so' de 60+ minutos. So' le; a decisao de ligar e' do usuario.
+    ("minutos_do_jogador", "Jogador: 60+ min x toda participação (peso por minutos)",
+     "scripts/medir_minutos_do_jogador.py", []),
 )
 
 
