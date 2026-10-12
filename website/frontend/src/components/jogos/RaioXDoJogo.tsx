@@ -17,6 +17,7 @@ import { aoVivo as estaAoVivo } from '../../lib/aoVivo'
 import SelectMenu from '../ui/SelectMenu'
 import Campinho from './Campinho'
 import Classificacao from './Classificacao'
+import ResumoDaIA from './ResumoDaIA'
 
 /*
  * Raio-X do jogo (2026-10-06) · o lugar de pesquisar antes de montar bilhete.
@@ -124,6 +125,7 @@ export default function RaioXDoJogo({ jogo }: { jogo: JogoBase }) {
   return (
     <div className="min-w-0">
       <Placar jogo={jogo} dados={dados} aoVivo={aoVivoAgora} />
+      <ResumoDaIA fixtureId={jogo.fixture_id} />
 
       {/* Abas fixas ao rolar · no celular a lista de jogadores é longa e a
           troca de aba não pode exigir voltar ao topo. */}
