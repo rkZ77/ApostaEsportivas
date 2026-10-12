@@ -295,8 +295,19 @@ def teto_dos_resultados() -> float:
 
 
 def _cota_permite_agora() -> bool:
+    """Teto da varredura de resultados. COTA DESCONHECIDA PERMITE (11/10/2026).
+
+    As tarefas grandes (Rodar Tudo) nao rodam sem saber a cota -- foi gastar
+    sem saber que estourou 01/08. A varredura de resultados e' diferente: a
+    visita ao site ja' a dispara SEM teto nenhum, entao travar so' o agendador
+    quando o /status da API nao responde nao economiza nada, so' atrasa o
+    resultado de quem nao esta' com o site aberto."""
     from routers import admin
-    pode, motivo = cota_permite(admin._api_football_status(), teto_dos_resultados())
+    status = admin._api_football_status()
+    if not status or not status.get("limite"):
+        logger.info("[AGENDADOR] cota indisponivel pra conferir · varredura de resultados segue")
+        return True
+    pode, motivo = cota_permite(status, teto_dos_resultados())
     if not pode:
         logger.warning("[AGENDADOR] varredura de resultados pulada: %s", motivo)
     return pode
