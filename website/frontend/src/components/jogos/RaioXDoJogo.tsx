@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Check, Flag, Minus, Plus, Shield, Users } from 'lucide-react'
+import { Check, Flag, Lock, Minus, Plus, Shield, Users } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import api from '../../services/api'
 import { cn } from '../../lib/cn'
 import { ErrorState, Skeleton } from '../ui'
@@ -44,9 +45,19 @@ export interface JogoBase {
   match_datetime?: string | null
   forma_home?: string[]
   forma_away?: string[]
+  /** Da lista de jogos · o placar do Raio-X trancado, que não pede dados. */
+  status?: string
+  home_goals?: number | null
+  away_goals?: number | null
 }
 
-export default function RaioXDoJogo({ jogo }: { jogo: JogoBase }) {
+/*
+ * TRANCADO (12/10/2026, pedido do usuário): o plano gratuito abre o Raio-X e
+ * vê o placar do jogo e todas as abas, cada uma com cadeado · "pro pessoal ver
+ * e ficar curioso". Tocar numa aba mostra o que ela tem e o convite. Nenhum
+ * dado é pedido: o servidor recusa (fixtures._assinante) e a tela nem tenta.
+ */
+export default function RaioXDoJogo({ jogo, trancado = false }: { jogo: JogoBase; trancado?: boolean }) {
   const [dados, setDados] = useState<RaioX | null>(null)
   const [erro, setErro] = useState(false)
   const [aba, setAba] = useState<Aba>('mercados')
@@ -54,6 +65,7 @@ export default function RaioXDoJogo({ jogo }: { jogo: JogoBase }) {
   const carregar = () => {
     setErro(false)
     setDados(null)
+    if (trancado) return
     api.get(`/fixtures/${jogo.fixture_id}/raio-x`, {
       params: { home: jogo.home_team_id, away: jogo.away_team_id, league: jogo.league_id },
     })
@@ -81,6 +93,7 @@ export default function RaioXDoJogo({ jogo }: { jogo: JogoBase }) {
     setOddsAoVivo(false)
     let vivo = true
     let timer: ReturnType<typeof setTimeout> | undefined
+    if (trancado) return
     const ler = () => api.get(`/fixtures/${jogo.fixture_id}/odds`).then(r => {
       if (!vivo) return
       setOdds(r.data?.odds ?? [])
@@ -89,7 +102,7 @@ export default function RaioXDoJogo({ jogo }: { jogo: JogoBase }) {
     }).catch(() => {})
     ler()
     return () => { vivo = false; clearTimeout(timer) }
-  }, [jogo.fixture_id])
+  }, [jogo.fixture_id, trancado])
 
   /* O JOGO ROLANDO NO PLACAR (09/10/2026, pedido do usuário: "parece que não
      está ao vivo"). Lê o placar SÓ DO CACHE do servidor (`so_cache`), sem
@@ -144,6 +157,7 @@ export default function RaioXDoJogo({ jogo }: { jogo: JogoBase }) {
                 aba === k ? 'text-ink-1' : 'text-ink-3 hover:text-ink-2',
               )}>
               {rotulo}
+              {trancado && <Lock className="inline w-3 h-3 ml-1 -mt-0.5 text-ink-4" aria-label="trancada" />}
               {aba === k && <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-accent" />}
             </button>
           ))}
@@ -151,7 +165,9 @@ export default function RaioXDoJogo({ jogo }: { jogo: JogoBase }) {
       </div>
 
       <div className="pt-4 pb-28 md:pb-6">
-        {erro ? (
+        {trancado ? (
+          <AbaTrancada aba={aba} />
+        ) : erro ? (
           <div className="card"><ErrorState title="Não deu pra carregar o Raio-X" onRetry={carregar} /></div>
         ) : !dados ? (
           <div className="space-y-3">
@@ -186,6 +202,54 @@ export default function RaioXDoJogo({ jogo }: { jogo: JogoBase }) {
   )
 }
 
+/* ── Aba trancada (plano gratuito) ───────────────────────────────────────── */
+
+const O_QUE_TEM: Record<Aba, [string, string[]]> = {
+  mercados: ['Quantas vezes cada linha bateu', ['Gols, escanteios, cartões e chutes, linha a linha', 'Mandante em casa e visitante fora separados', 'A odd das casas ao lado da taxa']],
+  ia: ['A leitura da IA sobre este jogo', ['Os mercados de over e under em que os dois times concordam', 'Tabela, técnico e o peso de liga ou mata-mata', 'O alerta quando a amostra é curta']],
+  jogadores: ['Cada jogador, jogo a jogo', ['Chutes, chutes no alvo, faltas e cartões', 'Quem começa jogando hoje', 'Monte bilhete de jogador com um toque']],
+  escalacao: ['O campinho do jogo', ['Escalação oficial ou provável', 'Desfalques e suspensos', 'Técnico e formação']],
+  tabela: ['A tabela da liga', ['Posição, pontos e saldo', 'Campanha em casa e fora', 'Zona de classificação e rebaixamento']],
+  confronto: ['O confronto direto', ['Vitórias de cada lado e empates', 'Gols e escanteios por jogo', 'Os últimos jogos entre os dois']],
+  forma: ['Como os dois chegam', ['Os últimos 10 jogos de cada time', 'Placar, escanteios e cartões de cada partida', 'Mandante e visitante lado a lado']],
+}
+
+function AbaTrancada({ aba }: { aba: Aba }) {
+  const [titulo, itens] = O_QUE_TEM[aba]
+  return (
+    <div className="card p-6 text-center relative overflow-hidden">
+      {/* Linhas de mentira, borradas: dá a forma do que está atrás do
+          cadeado sem entregar nenhum número de verdade. */}
+      <div aria-hidden className="absolute inset-x-6 top-6 space-y-3 blur-[3px] opacity-40 select-none pointer-events-none">
+        {[78, 64, 88, 52, 70].map((w, i) => (
+          <div key={i} className="flex items-center gap-3">
+            <div className="h-3 rounded bg-surface-3" style={{ width: `${w}%` }} />
+            <div className="h-3 w-10 rounded bg-accent/40" />
+          </div>
+        ))}
+      </div>
+      <div className="relative pt-28">
+        <div className="w-11 h-11 rounded-full bg-yellow-400/10 border border-yellow-400/25 flex items-center justify-center mx-auto mb-3">
+          <Lock className="w-5 h-5 text-yellow-400" aria-hidden />
+        </div>
+        <h3 className="text-base font-bold text-ink-1">{titulo}</h3>
+        <ul className="mt-3 space-y-1.5 text-sm text-ink-2 inline-block text-left">
+          {itens.map(i => (
+            <li key={i} className="flex items-start gap-2">
+              <Check className="w-4 h-4 text-accent-ink shrink-0 mt-0.5" aria-hidden />{i}
+            </li>
+          ))}
+        </ul>
+        <p className="text-xs text-ink-3 mt-4">Todas as abas do Raio-X são do plano Pro.</p>
+        <Link to="/checkout"
+          className="mt-3 inline-flex h-11 items-center px-6 rounded-lg bg-yellow-400 hover:bg-yellow-300 text-on-fill font-black text-sm transition-colors">
+          Desbloquear o Raio-X
+        </Link>
+      </div>
+    </div>
+  )
+}
+
 /* ── Placar ─────────────────────────────────────────────────────────────── */
 
 /** O que /live/live-stats devolve de um jogo (ver live.py::_montar_live_stats). */
@@ -204,6 +268,8 @@ function Placar({ jogo, dados, aoVivo }: { jogo: JogoBase; dados: RaioX | null; 
   const quando = f?.match_datetime ?? jogo.match_datetime
   const hora = quando ? new Date(quando).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '--:--'
   const dia = quando ? new Date(quando).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }) : ''
+  const placarFinal = f?.placar_final ?? (jogo.status && ['FT', 'AET', 'PEN'].includes(jogo.status)
+    && jogo.home_goals != null && jogo.away_goals != null ? [jogo.home_goals, jogo.away_goals] : null)
   const formaHome = jogo.forma_home ?? dados?.times.home.jogos.slice(0, 5).map(resultadoDoJogo).filter(Boolean) as string[] ?? []
   const formaAway = jogo.forma_away ?? dados?.times.away.jogos.slice(0, 5).map(resultadoDoJogo).filter(Boolean) as string[] ?? []
 
@@ -243,12 +309,12 @@ function Placar({ jogo, dados, aoVivo }: { jogo: JogoBase; dados: RaioX | null; 
                 {rotuloDoTempo({ status: aoVivo.status, minuto: aoVivo.elapsed })}
               </div>
             </div>
-          ) : f?.placar_final ? (
+          ) : placarFinal ? (
             /* Encerrado: o placar final, e não o horário de um jogo que já
                acabou (09/10/2026, pedido do usuário). */
             <div className="shrink-0 pt-2 text-center">
               <div className="font-mono text-3xl font-black text-ink-1 tabular-nums">
-                {f.placar_final[0]}<span className="text-ink-4 mx-1.5">-</span>{f.placar_final[1]}
+                {placarFinal[0]}<span className="text-ink-4 mx-1.5">-</span>{placarFinal[1]}
               </div>
               <div className="mt-1 text-[11px] font-semibold text-ink-3">Encerrado</div>
             </div>

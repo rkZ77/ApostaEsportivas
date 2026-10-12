@@ -25,6 +25,16 @@ _cache: dict[str, tuple[float, list]] = {}
 CACHE_TTL = 600  # 10 minutos
 
 
+def _assinante(current_user: dict = Depends(get_current_user)) -> dict:
+    """Os dados do Raio-X sao do plano pago (12/10/2026, pedido do usuario).
+    O Free ve a lista de jogos e o Raio-X com as abas trancadas · a tela ja'
+    nao pedia os dados, e agora o servidor tambem nao entrega."""
+    from auth_utils import is_vip_active
+    if not is_vip_active(current_user):
+        raise HTTPException(403, "Raio-X e' para assinantes")
+    return current_user
+
+
 def _api_headers():
     return {"x-apisports-key": os.getenv("API_FOOTBALL_KEY", "")}
 
@@ -709,7 +719,7 @@ _RAIO_X_TTL = 180
 @router.get("/{fixture_id}/raio-x")
 def get_raio_x(
     fixture_id: int,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(_assinante),
     home: Optional[int] = Query(None, description="time da casa, se o jogo ainda nao estiver em `fixtures`"),
     away: Optional[int] = Query(None),
     league: Optional[int] = Query(None),
@@ -785,7 +795,7 @@ def _aquecer_imagens_do_raio_x(dados: dict) -> None:
 @router.get("/{fixture_id}/escalacao")
 def get_escalacao(
     fixture_id: int,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(_assinante),
     home: Optional[int] = Query(None),
     away: Optional[int] = Query(None),
 ):
@@ -814,7 +824,7 @@ def get_escalacao(
 @router.get("/{fixture_id}/classificacao")
 def get_classificacao(
     fixture_id: int,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(_assinante),
     league: Optional[int] = Query(None),
 ):
     """A tabela da liga do jogo (2026-10-07, pedido do usuario).
@@ -925,7 +935,7 @@ def odds_ao_vivo_no_formato_do_raio_x(mercados: list) -> list[dict]:
 
 
 @router.get("/{fixture_id}/odds")
-def get_odds_do_jogo(fixture_id: int, current_user: dict = Depends(get_current_user)):
+def get_odds_do_jogo(fixture_id: int, current_user: dict = Depends(_assinante)):
     """Melhor odd de cada mercado/linha do jogo, entre as casas ATIVAS (2026-10-07).
 
     O Raio-X cruza com isto a selecao que a pessoa montou ("escanteios do
