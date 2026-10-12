@@ -736,7 +736,7 @@ function QuadrosDeResultado({ dados, nomeJogo, odds, oddsAoVivo }: {
       {chance && (
         <div className="card p-4">
           <div className="flex items-baseline justify-between gap-2 mb-3">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">Chance de vitória</span>
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">Probabilidade de vitória</span>
             {pelasOdds && oddsAoVivo ? (
               <span className="flex items-center gap-1.5 text-[11px] font-bold text-red-400">
                 <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" /> odds ao vivo

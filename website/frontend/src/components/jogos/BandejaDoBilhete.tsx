@@ -123,7 +123,7 @@ export default function BandejaDoBilhete() {
 
               <div className="px-4 py-3 border-t border-line space-y-3">
                 <div className="flex items-baseline justify-between">
-                  <span className="text-sm text-ink-2">Chance de todas baterem</span>
+                  <span className="text-sm text-ink-2">Probabilidade de todas baterem</span>
                   <span className="font-mono text-2xl font-black text-ink-1 tabular-nums">
                     {chance != null ? `${Math.round(chance * 100)}%` : '—'}
                   </span>
