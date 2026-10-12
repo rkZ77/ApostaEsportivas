@@ -719,10 +719,38 @@ def get_raio_x(
 
     O dado nao depende de quem pede, entao a chave do cache e' so' o jogo.
     """
-    return cache_publico.obter(
+    dados = cache_publico.obter(
         f"raio-x:{fixture_id}:{home}:{away}:{n}", _RAIO_X_TTL,
         lambda: _montar_raio_x(fixture_id, home, away, league, n),
     )
+    _aquecer_imagens_do_raio_x(dados)
+    return dados
+
+
+#: Entregue por main.py no carregamento (ver main.aquecer_imagens). None em
+#: teste ou fora do app: o Raio-X funciona igual, so' sem o aquecimento.
+aquecer_imagens = None
+
+
+def _aquecer_imagens_do_raio_x(dados: dict) -> None:
+    """Fotos dos jogadores e escudos do Raio-X baixadas ANTES do clique
+    (12/10/2026): a aba de jogadores carregava as fotos uma a uma quando a
+    pessoa abria. Segundo plano, nunca atrasa a resposta, nunca levanta."""
+    if aquecer_imagens is None or not isinstance(dados, dict):
+        return
+    try:
+        itens = []
+        for lado in ("home", "away"):
+            for j in ((dados.get("jogadores") or {}).get(lado) or {}).get("lista") or []:
+                if j.get("player_id"):
+                    itens.append(("player", int(j["player_id"])))
+        f = dados.get("fixture") or {}
+        for tid in (f.get("home_team_id"), f.get("away_team_id")):
+            if tid:
+                itens.append(("team", int(tid)))
+        aquecer_imagens(itens)
+    except Exception:
+        logger.warning("[RAIO-X] aquecimento de imagens falhou", exc_info=True)
 
 
 @router.get("/{fixture_id}/escalacao")
