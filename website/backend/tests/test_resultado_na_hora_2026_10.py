@@ -211,6 +211,8 @@ def test_agendador_puxa_as_varreduras(monkeypatch):
         return 1
     monkeypatch.setattr(bilhete_pessoal, "liquidar_de_todos", _bilhetes)
     monkeypatch.setattr(ag, "_ultima_dos_bilhetes", {"ts": 0.0})
+    # O "Final" das pernas antigas tem teste proprio (test_finais_antigos).
+    monkeypatch.setattr(ag, "_ultima_dos_finais", {"ts": 10**12})
 
     assert ag.varrer_resultados(agora_ts=10_000) == ["picks", "bilhetes"]
     assert chamadas["picks"] == [ag._cota_permite_agora]   # o teto de cota vai junto

@@ -284,6 +284,8 @@ async def executar(t: Tarefa, dia: date) -> None:
 #: no mesmo ritmo da varredura de picks, e nao a cada volta de 60s.
 _INTERVALO_BILHETES = 180
 _ultima_dos_bilhetes = {"ts": 0.0}
+_INTERVALO_FINAIS = 3600
+_ultima_dos_finais = {"ts": 0.0}
 
 
 def teto_dos_resultados() -> float:
@@ -341,6 +343,20 @@ def varrer_resultados(agora_ts: float | None = None) -> list[str]:
         stats_sweep.maybe_sync_finished_stats()
     except Exception:
         logger.exception("[AGENDADOR] coleta de estatistica falhou")
+    # "Final" das pernas que fecharam antes de ele ser gravado (12/10/2026).
+    # So' banco, de hora em hora · ver finais_antigos.py.
+    if agora_ts - _ultima_dos_finais["ts"] >= _INTERVALO_FINAIS:
+        _ultima_dos_finais["ts"] = agora_ts
+        try:
+            import finais_antigos
+            conn = _conexao()
+            try:
+                if any((finais_antigos.preencher(conn) or {}).values()):
+                    feitas.append("finais")
+            finally:
+                conn.close()
+        except Exception:
+            logger.exception("[AGENDADOR] finais das pernas falharam")
     if agora_ts - _ultima_dos_bilhetes["ts"] >= _INTERVALO_BILHETES:
         _ultima_dos_bilhetes["ts"] = agora_ts
         try:
