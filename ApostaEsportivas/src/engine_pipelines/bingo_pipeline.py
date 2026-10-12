@@ -57,6 +57,7 @@ import traceback
 import itertools
 
 from utils.db_utils import get_connection
+from utils import esquema
 from utils.data_br import HOJE_BR
 from services.fixtures_service import FixturesService
 from services.match_stats_service import MatchStatsService
@@ -135,11 +136,11 @@ def _create_table_if_needed(cur):
     # PARCIAL como o da multipla, so' por simetria de manutencao: se um dia
     # existir um segundo `bingo_name` (uma cartela de teste, um formato
     # sazonal), o indice nao precisa ser recriado pra caber.
-    cur.execute("""
+    esquema.ddl(cur, """
         CREATE UNIQUE INDEX IF NOT EXISTS idx_picks_bingo_match_date_unique
         ON picks_bingo (match_date) WHERE bingo_name = 'BINGO_ENGINE';
     """)
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_bingo_date ON picks_bingo(match_date DESC);")
+    esquema.ddl(cur, "CREATE INDEX IF NOT EXISTS idx_picks_bingo_date ON picks_bingo(match_date DESC);")
 
 
 def _bingo_de_hoje(cur) -> int:

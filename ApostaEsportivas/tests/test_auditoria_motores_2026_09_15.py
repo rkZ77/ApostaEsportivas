@@ -151,8 +151,16 @@ def test_a_alavancagem_solta_o_unique_de_match_date():
     comandos = []
 
     class CursorFalso:
+        """Desde 11/10 o DDL pergunta ao catalogo antes (utils/esquema): aqui
+        a restricao antiga EXISTE e nenhuma coluna nova ainda, entao tudo roda."""
         def execute(self, sql, params=None):
             comandos.append(" ".join(sql.split()))
+
+        def fetchone(self):
+            return (1,)
+
+        def fetchall(self):
+            return []
 
     ap._create_table_if_needed(CursorFalso())
     criacao = next(c for c in comandos if "CREATE TABLE" in c)

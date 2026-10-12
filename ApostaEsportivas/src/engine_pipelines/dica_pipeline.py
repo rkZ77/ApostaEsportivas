@@ -8,6 +8,7 @@ pipeline ao de IA)."""
 import json
 
 from utils.db_utils import get_connection
+from utils import esquema
 from utils.data_br import HOJE_BR, APITO_FUTURO
 from services.fixtures_service import FixturesService
 from services.match_stats_service import MatchStatsService
@@ -106,7 +107,7 @@ def _garantir_esquema(cur):
             END LOOP;
         END $$;
     """)
-    cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS picks_free_dia_jogo "
+    esquema.ddl(cur, "CREATE UNIQUE INDEX IF NOT EXISTS picks_free_dia_jogo "
                 "ON picks_free (match_date, fixture_id)")
 
 

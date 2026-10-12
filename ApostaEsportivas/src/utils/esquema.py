@@ -34,6 +34,15 @@ _ADD_COLUMN = re.compile(
     re.I)
 _CREATE_INDEX = re.compile(r"CREATE\s+(?:UNIQUE\s+)?INDEX\s+IF\s+NOT\s+EXISTS\s+(?P<nome>\w+)", re.I)
 _CREATE_TABLE = re.compile(r"CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+(?P<nome>\w+)", re.I)
+_DROP_INDEX = re.compile(r"DROP\s+INDEX\s+IF\s+EXISTS\s+(?P<nome>\w+)", re.I)
+_DROP_CONSTRAINT = re.compile(
+    r"ALTER\s+TABLE\s+(?P<tabela>\w+)\s+DROP\s+CONSTRAINT\s+IF\s+EXISTS\s+(?P<nome>\w+)", re.I)
+
+
+def _existe_restricao(cur, tabela: str, nome: str) -> bool:
+    cur.execute("""SELECT 1 FROM pg_constraint c JOIN pg_class t ON t.oid = c.conrelid
+                    WHERE t.relname = %s AND c.conname = %s""", (tabela, nome))
+    return cur.fetchone() is not None
 
 
 def _valor(linha):
@@ -66,6 +75,16 @@ def faltando(cur, comandos) -> list[str]:
             if m["coluna"].lower() not in {c.lower() for c in _colunas(cur, m["tabela"], cache)}:
                 pendentes.append(sql)
             continue
+        m = _DROP_CONSTRAINT.search(texto)
+        if m:
+            if _existe_restricao(cur, m["tabela"], m["nome"]):
+                pendentes.append(sql)
+            continue
+        m = _DROP_INDEX.search(texto)
+        if m:
+            if _existe_relacao(cur, m["nome"]):
+                pendentes.append(sql)
+            continue
         m = _CREATE_INDEX.search(texto) or _CREATE_TABLE.search(texto)
         if m:
             if not _existe_relacao(cur, m["nome"]):
@@ -87,3 +106,8 @@ def garantir(cur, comandos) -> int:
         for sql in pendentes:
             cur.execute(sql)
     return len(pendentes)
+
+
+def ddl(cur, sql: str) -> int:
+    """Um comando so' · troca direta de `cur.execute(<DDL>)` nos setups."""
+    return garantir(cur, [sql])

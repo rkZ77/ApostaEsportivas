@@ -48,6 +48,7 @@ if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
 from utils.arbitro import chave_do_arbitro, sql_chave  # noqa: E402
+from utils import esquema
 from utils.db_utils import get_connection  # noqa: E402
 from services.match_stats_service import MatchStatsService
 from services.standings_service import StandingsService
@@ -118,9 +119,9 @@ def _reparar_id_de_picks_live(cur) -> None:
         cur.execute("UPDATE picks_live SET id = nextval('picks_live_id_seq') WHERE id IS NULL;")
         cur.execute("SELECT setval('picks_live_id_seq', "
                     "COALESCE((SELECT MAX(id) FROM picks_live), 1));")
-        cur.execute("ALTER TABLE picks_live ALTER COLUMN id "
+        esquema.ddl(cur, "ALTER TABLE picks_live ALTER COLUMN id "
                     "SET DEFAULT nextval('picks_live_id_seq');")
-        cur.execute("ALTER TABLE picks_live ALTER COLUMN id SET NOT NULL;")
+        esquema.ddl(cur, "ALTER TABLE picks_live ALTER COLUMN id SET NOT NULL;")
         cur.execute("""
             DO $do$ BEGIN
                 IF NOT EXISTS (SELECT 1 FROM pg_constraint
@@ -229,23 +230,23 @@ def criar_tabelas(cur) -> None:
         ("data_freshness", "VARCHAR(10)"), ("projected_total", "NUMERIC"),
         ("odd_timestamp", "TIMESTAMP"),
     ):
-        cur.execute(f"ALTER TABLE picks_live ADD COLUMN IF NOT EXISTS {coluna} {tipo};")
+        esquema.ddl(cur, f"ALTER TABLE picks_live ADD COLUMN IF NOT EXISTS {coluna} {tipo};")
 
     # Trava de duplicata no BANCO, nao em Python. O check "ja existe pick deste
     # jogo?" em Python e' select-then-insert e nao pega duas execucoes
     # concorrentes -- foi exatamente assim que a multipla duplicou em
     # 2026-07-25. Duas rodadas no mesmo minuto de jogo produzem a mesma chave e
     # a segunda e' absorvida pelo ON CONFLICT.
-    cur.execute("""
+    esquema.ddl(cur, """
         CREATE UNIQUE INDEX IF NOT EXISTS idx_picks_live_unico
         ON picks_live (fixture_id, market_type, line, minute_at_creation);
     """)
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_live_fixture ON picks_live (fixture_id);")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_live_data ON picks_live (match_date DESC);")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_live_criacao ON picks_live (created_at DESC);")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_live_status ON picks_live (status);")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_live_mercado ON picks_live (market_type);")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_live_pendentes "
+    esquema.ddl(cur, "CREATE INDEX IF NOT EXISTS idx_picks_live_fixture ON picks_live (fixture_id);")
+    esquema.ddl(cur, "CREATE INDEX IF NOT EXISTS idx_picks_live_data ON picks_live (match_date DESC);")
+    esquema.ddl(cur, "CREATE INDEX IF NOT EXISTS idx_picks_live_criacao ON picks_live (created_at DESC);")
+    esquema.ddl(cur, "CREATE INDEX IF NOT EXISTS idx_picks_live_status ON picks_live (status);")
+    esquema.ddl(cur, "CREATE INDEX IF NOT EXISTS idx_picks_live_mercado ON picks_live (market_type);")
+    esquema.ddl(cur, "CREATE INDEX IF NOT EXISTS idx_picks_live_pendentes "
                 "ON picks_live (match_date) WHERE result IS NULL;")
 
     _reparar_id_de_picks_live(cur)
@@ -279,9 +280,9 @@ def criar_tabelas(cur) -> None:
         ("red_cards_observado", "INTEGER"),
         ("epoch", "DOUBLE PRECISION"),
     ):
-        cur.execute(f"ALTER TABLE live_match_observations "
+        esquema.ddl(cur, f"ALTER TABLE live_match_observations "
                     f"ADD COLUMN IF NOT EXISTS {coluna} {tipo};")
-    cur.execute("""
+    esquema.ddl(cur, """
         CREATE INDEX IF NOT EXISTS idx_live_obs_fixture
         ON live_match_observations (fixture_id, observed_at DESC);
     """)

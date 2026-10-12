@@ -34,6 +34,7 @@ from datetime import date, datetime, timedelta
 import requests
 
 from utils.db_utils import get_connection
+from utils import esquema
 
 GEOCODE = "https://geocoding-api.open-meteo.com/v1/search"
 ARCHIVE = "https://archive-api.open-meteo.com/v1/archive"
@@ -142,7 +143,7 @@ def coletar(teto: int = 500, dias_a_frente: int = 3) -> dict:
     feitas = sem = 0
     try:
         for sql in DDL:
-            cur.execute(sql)
+            esquema.ddl(cur, sql)
         conn.commit()
         cur.execute("""
             SELECT c.fixture_id, c.venue_city, c.match_datetime, c.pais

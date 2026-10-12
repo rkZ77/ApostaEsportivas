@@ -38,6 +38,7 @@ import traceback
 from datetime import datetime, timezone
 
 from utils.db_utils import get_connection
+from utils import esquema
 from utils.data_br import HOJE_BR, data_br_de
 from services.fixtures_service import FixturesService
 from services.match_stats_service import MatchStatsService
@@ -154,8 +155,8 @@ def _create_table_if_needed(cur):
     #
     # O DROP e' obrigatorio e nao pode ser IF NOT EXISTS de um indice novo: o
     # indice velho, se ficar, continua valendo sozinho.
-    cur.execute("DROP INDEX IF EXISTS idx_picks_multiplas_match_date_unique;")
-    cur.execute("""
+    esquema.ddl(cur, "DROP INDEX IF EXISTS idx_picks_multiplas_match_date_unique;")
+    esquema.ddl(cur, """
         CREATE UNIQUE INDEX IF NOT EXISTS idx_picks_multiplas_slot_unique
         ON picks_multiplas (match_date, multipla_name)
         WHERE multipla_name LIKE 'MULTIPLA_ENGINE%';
@@ -165,8 +166,8 @@ def _create_table_if_needed(cur):
     # antes, entao o ALTER e' obrigatorio aqui. Ver run_migrations()/o gap de
     # migracao ja' conhecido: sem isto o INSERT quebraria em PROD no primeiro
     # jogo, e o pipeline inteiro cairia no except.
-    cur.execute("ALTER TABLE picks_multiplas ADD COLUMN IF NOT EXISTS prob_combinada NUMERIC;")
-    cur.execute("ALTER TABLE picks_multiplas ADD COLUMN IF NOT EXISTS ev_combined NUMERIC;")
+    esquema.ddl(cur, "ALTER TABLE picks_multiplas ADD COLUMN IF NOT EXISTS prob_combinada NUMERIC;")
+    esquema.ddl(cur, "ALTER TABLE picks_multiplas ADD COLUMN IF NOT EXISTS ev_combined NUMERIC;")
     # V2 (2026-09-11), mesmo gap de migracao das duas de cima.
     #
     # engine_debug: o documento inteiro da decisao do bilhete -- cada perna com
@@ -177,12 +178,12 @@ def _create_table_if_needed(cur):
     # saiu, e medir ROI por ESTRUTURA (gols+escanteio, mesma liga, faixa de
     # odd) sem reconstruir a decisao a partir do resultado. Mesma coluna e
     # mesmo papel de picks_vip.engine_debug e picks_alavancagem.engine_debug.
-    cur.execute("ALTER TABLE picks_multiplas ADD COLUMN IF NOT EXISTS engine_debug JSONB;")
+    esquema.ddl(cur, "ALTER TABLE picks_multiplas ADD COLUMN IF NOT EXISTS engine_debug JSONB;")
     # ai_review: o parecer do gate de IA sobre o bilhete. Ate' agora ele era
     # calculado e jogado fora aqui -- no painel de desempenho por modelo a
     # multipla aparecia como "sem revisao", como se o gate nem rodasse nela
     # (mesmo defeito ja' corrigido na alavancagem).
-    cur.execute("ALTER TABLE picks_multiplas ADD COLUMN IF NOT EXISTS ai_review JSONB;")
+    esquema.ddl(cur, "ALTER TABLE picks_multiplas ADD COLUMN IF NOT EXISTS ai_review JSONB;")
 
 
 def _multiplas_de_hoje(cur) -> list:

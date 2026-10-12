@@ -45,6 +45,7 @@ from contextvars import ContextVar
 from datetime import datetime
 
 from utils.data_br import HOJE_BR
+from utils import esquema
 from utils.db_utils import get_connection, get_log_connection
 
 from services.engine_audit import registry
@@ -127,9 +128,9 @@ def _ensure_tables() -> None:
             -- jogo tem linha propria em engine_decisions.
             resumo          JSONB
         )""")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_engine_runs_recentes "
+        esquema.ddl(cur, "CREATE INDEX IF NOT EXISTS idx_engine_runs_recentes "
                     "ON engine_runs (started_at DESC)")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_engine_runs_motor "
+        esquema.ddl(cur, "CREATE INDEX IF NOT EXISTS idx_engine_runs_motor "
                     "ON engine_runs (engine, method, match_date DESC)")
 
         cur.execute("""CREATE TABLE IF NOT EXISTS engine_errors (
@@ -143,7 +144,7 @@ def _ensure_tables() -> None:
             traceback   TEXT,
             created_at  TIMESTAMP NOT NULL DEFAULT NOW()
         )""")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_engine_errors_run "
+        esquema.ddl(cur, "CREATE INDEX IF NOT EXISTS idx_engine_errors_run "
                     "ON engine_errors (run_id, created_at DESC)")
 
         # engine_decisions pode nao existir ainda num banco que nunca rodou
@@ -172,9 +173,9 @@ def _ensure_tables() -> None:
             ("probability", "NUMERIC"), ("odd", "NUMERIC"),
             ("pick_table", "TEXT"), ("pick_id", "BIGINT"),
         ):
-            cur.execute(f"ALTER TABLE engine_decisions "
+            esquema.ddl(cur, f"ALTER TABLE engine_decisions "
                         f"ADD COLUMN IF NOT EXISTS {coluna} {tipo}")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_engine_decisions_run "
+        esquema.ddl(cur, "CREATE INDEX IF NOT EXISTS idx_engine_decisions_run "
                     "ON engine_decisions (run_id)")
         conn.commit()
         _tabelas_prontas = True

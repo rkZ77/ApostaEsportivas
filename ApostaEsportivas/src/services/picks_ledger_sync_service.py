@@ -20,6 +20,7 @@ import json
 
 import psycopg2.extras
 from utils.db_utils import get_connection
+from utils import esquema
 from services.pick_legs_extractor import fetch_all_legs, fixture_context
 from services.ai_result_checker_service import AIResultCheckerService
 from services.pick_engine import attribution, competition_profile, match_context_model
@@ -137,7 +138,7 @@ def _create_table_if_needed(cur):
         ("ai_status",        "TEXT"),      # ok | unavailable | invalid_response | disabled | ...
         ("ai_risk",          "TEXT"),      # low | medium | high
     ):
-        cur.execute(f"ALTER TABLE picks_ledger ADD COLUMN IF NOT EXISTS {coluna} {tipo};")
+        esquema.ddl(cur, f"ALTER TABLE picks_ledger ADD COLUMN IF NOT EXISTS {coluna} {tipo};")
 
     # Indices dos recortes mais consultados pelo dashboard. Sem eles, cada
     # corte varre a tabela inteira -- barato agora, caro depois de uma
@@ -150,7 +151,7 @@ def _create_table_if_needed(cur):
         ("idx_picks_ledger_result",  "result"),
         ("idx_picks_ledger_ai",      "ai_model, ai_decision"),
     ):
-        cur.execute(f"CREATE INDEX IF NOT EXISTS {nome} ON picks_ledger ({colunas});")
+        esquema.ddl(cur, f"CREATE INDEX IF NOT EXISTS {nome} ON picks_ledger ({colunas});")
 
 
 def _detect_source_system(reasoning: str | None) -> str:
