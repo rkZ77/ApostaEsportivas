@@ -229,9 +229,9 @@ export function PickProbability({
           {pctAoVivo != null ? (
             <>
               <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" aria-hidden />
-              Chance agora
+              Probabilidade agora
             </>
-          ) : pctMercado != null ? 'Chance na odd de agora' : label}
+          ) : pctMercado != null ? 'Probabilidade na odd de agora' : label}
           {aproximado && <span className="text-ink-4"> estimada</span>}
         </span>
         <span className={cn('font-mono', pct >= 75 ? 'text-accent-ink font-bold' : 'text-ink-3',
@@ -246,7 +246,7 @@ export function PickProbability({
             /* A largura anda devagar · com o jogo rolando o número muda a cada
                leitura, e o salto seco parecia defeito. */
             'h-1 rounded-full transition-[width] duration-700 ease-out',
-            pct >= 75 ? 'bg-accent' : pct >= 60 ? 'bg-yellow-500' : 'bg-ink-4',
+            corDaProbabilidade(pct),
           )}
           style={{ width: `${pct}%` }}
         />
@@ -432,6 +432,37 @@ export function CampoDeu({ texto, valor, linha }: { texto: string; valor: number
   )
 }
 
+/** Cor da barra de probabilidade · os mesmos cortes da barra grande do card. */
+const corDaProbabilidade = (pct: number) =>
+  pct >= 75 ? 'bg-accent' : pct >= 60 ? 'bg-yellow-500' : 'bg-ink-4'
+
+/*
+ * PROBABILIDADE DA PERNA EM BARRINHA (11/10/2026, pedido do usuário). Era a
+ * linha "Chance 78% nesta perna". Vira a barra da "Probabilidade combinada" em
+ * miniatura: o rótulo diz probabilidade (e não chance, que é o que o site usa
+ * em todo lugar), e a barra deixa comparar as pernas de relance.
+ */
+export function ProbabilidadeDaPerna({ antes, agora }: { antes: number | null; agora?: number | null }) {
+  const pct = agora ?? antes
+  if (pct == null) return null
+  return (
+    <div className="ml-7 mt-1.5 flex items-center gap-2">
+      <span className="text-[10px] text-ink-4 shrink-0">
+        Probabilidade{agora != null && ' agora'}
+      </span>
+      <span className="relative flex-1 h-[3px] rounded-full bg-surface-3 overflow-hidden min-w-[32px]" aria-hidden>
+        <span className={cn('absolute inset-y-0 left-0 rounded-full transition-[width] duration-700 ease-out',
+                            corDaProbabilidade(pct))}
+          style={{ width: `${pct}%` }} />
+      </span>
+      <span className="text-[10px] font-mono tabular-nums shrink-0">
+        {agora != null && antes != null && <span className="text-ink-4 mr-1">antes {antes}%</span>}
+        <span className={pct >= 75 ? 'text-accent-ink font-bold' : 'text-ink-3'}>{pct}%</span>
+      </span>
+    </div>
+  )
+}
+
 /* ── A perna do bilhete ─────────────────────────────────────────────────── */
 
 /*
@@ -515,21 +546,11 @@ export function PernaDoBilhete({
             <dd className="text-xs text-ink-3 truncate">{casaDeAposta}</dd>
           </CampoDoPick>
         )}
-        {(pctAgora != null && !lr) ? (
-          <CampoDoPick rotulo="Chance">
-            <dd className="text-xs text-ink-1 font-semibold">
-              {pctAgora}% agora
-              {chance != null && (
-                <span className="text-ink-4 font-normal ml-1.5">antes {Math.round(Number(chance) * 100)}%</span>
-              )}
-            </dd>
-          </CampoDoPick>
-        ) : chance != null && (
-          <CampoDoPick rotulo="Chance">
-            <dd className="text-xs text-ink-3">{Math.round(Number(chance) * 100)}% nesta perna</dd>
-          </CampoDoPick>
-        )}
       </dl>
+      <ProbabilidadeDaPerna
+        antes={chance != null ? Math.round(Number(chance) * 100) : null}
+        agora={!lr ? pctAgora : null}
+      />
     </div>
   )
 }
