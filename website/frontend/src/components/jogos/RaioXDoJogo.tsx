@@ -3,7 +3,7 @@ import { Check, Flag, Minus, Plus, Shield, Users } from 'lucide-react'
 import api from '../../services/api'
 import { cn } from '../../lib/cn'
 import { ErrorState, Skeleton } from '../ui'
-import { LeagueLogo, PaisDaLigaTag, PlayerPhoto, TeamLogo } from '../TeamLogo'
+import { LeagueLogo, PaisDaLigaTag, PlayerPhoto, preCarregarFotos, TeamLogo } from '../TeamLogo'
 import { nomeDaLigaPt, rotuloDaRodada } from '../../lib/paisDaLiga'
 import {
   ambasMarcam, comPeriodo, ehGoleiro, ESTATS_DE_JOGADOR, fraseDoJogador, MERCADOS_DE_TIME, MERCADOS_PRINCIPAIS, numero,
@@ -60,6 +60,14 @@ export default function RaioXDoJogo({ jogo }: { jogo: JogoBase }) {
       .catch(() => setErro(true))
   }
   useEffect(carregar, [jogo.fixture_id])
+
+  /* As fotos dos jogadores ANTES da aba abrir (12/10/2026): elas so' eram
+     pedidas quando a pessoa clicava em Jogadores, e chegavam uma a uma. */
+  useEffect(() => {
+    if (!dados) return
+    preCarregarFotos([...dados.jogadores.home.lista, ...dados.jogadores.away.lista]
+      .map(j => j.player_id).filter(Boolean))
+  }, [dados])
 
   /* Odds das casas · pedido à parte e sem travar a tela: sem odd o Raio-X
      funciona igual, só sem o preço ao lado da taxa. */

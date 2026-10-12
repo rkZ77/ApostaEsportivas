@@ -5,7 +5,7 @@
  * redefinia o `TeamLogo` por cima. As cópias não tinham `loading="lazy"`,
  * então a versão duplicada era pior que a original.
  */
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Globe } from 'lucide-react'
 import { cn } from '../lib/cn'
 import { paisDaLiga } from '../lib/paisDaLiga'
@@ -18,12 +18,29 @@ import { escudoDoTime } from '../lib/aoVivo'
    qualquer outra liga. Uma exceção a menos para lembrar. */
 const LEAGUE_LOGO = (id?: number) => id ? `/api/proxy/league/${id}.png` : null
 
+/** Imagem que ja' chegou antes do React montar (HTML pre-renderizado, cache)
+ *  nao dispara `onLoad` · sem isto o fade a deixaria invisivel pra sempre. */
+function useJaCarregada(marcar: (v: boolean) => void) {
+  const ref = useRef<HTMLImageElement>(null)
+  useEffect(() => {
+    if (ref.current?.complete && ref.current.naturalWidth > 0) marcar(true)
+  }, [marcar])
+  return ref
+}
+
 export function TeamLogo({ id, name, size = 22 }: { id?: number; name: string; size?: number }) {
   const src = escudoDoTime(id)
+  /* Entra suave em vez de pular (12/10/2026) · o tamanho ja' e' reservado pelo
+     width/height, entao nada na linha se mexe enquanto ele chega. */
+  const [carregou, setCarregou] = useState(false)
+  const ref = useJaCarregada(setCarregou)
   if (!src) return null
   return (
-    <img src={src} alt={name} width={size} height={size} loading="lazy"
-      className="object-contain shrink-0" style={{ width: size, height: size }}
+    <img ref={ref} src={src} alt={name} width={size} height={size} loading="lazy" decoding="async"
+      className={cn('object-contain shrink-0 transition-opacity duration-300',
+                    carregou ? 'opacity-100' : 'opacity-0')}
+      style={{ width: size, height: size }}
+      onLoad={() => setCarregou(true)}
       onError={e => (e.currentTarget.style.display = 'none')} />
   )
 }
@@ -164,6 +181,28 @@ export function PaisDaLigaTag({ id, className, soBandeira = false }: {
   )
 }
 
+/** URL da foto · a mesma no <img> e no pre-carregamento, pra o navegador
+ *  reaproveitar o cache. */
+export const fotoDoJogador = (id: number, fonte: 'player' | 'referee' = 'player') =>
+  `/api/proxy/${fonte}/${id}.png`
+
+/** Baixa as fotos ANTES de a lista aparecer (12/10/2026): a aba de jogadores do
+ *  Raio-X so' pedia a foto quando era aberta, e elas chegavam uma a uma. Em
+ *  tempo ocioso, pra nao competir com o resto da tela. */
+export function preCarregarFotos(ids: number[]) {
+  if (typeof window === 'undefined' || !ids.length) return
+  const carregar = () => {
+    for (const id of ids) {
+      const img = new Image()
+      img.decoding = 'async'
+      img.src = fotoDoJogador(id)
+    }
+  }
+  const ocioso = (window as any).requestIdleCallback as ((f: () => void) => void) | undefined
+  if (ocioso) ocioso(carregar)
+  else setTimeout(carregar, 300)
+}
+
 /* Iniciais de "Erick Pulgar" -> "EP". Nome de uma palavra devolve duas letras
    dela, que é melhor que uma letra sozinha perdida no círculo. */
 function iniciaisDoNome(nome: string): string {
@@ -195,6 +234,8 @@ export function PlayerPhoto({ id, name, size = 36, fonte = 'player' }: {
   fonte?: 'player' | 'referee'
 }) {
   const [falhou, setFalhou] = useState(false)
+  const [carregou, setCarregou] = useState(false)
+  const ref = useJaCarregada(setCarregou)
   return (
     <span
       className="relative shrink-0 rounded-full overflow-hidden bg-surface-3 border border-line
@@ -206,13 +247,21 @@ export function PlayerPhoto({ id, name, size = 36, fonte = 'player' }: {
         {iniciaisDoNome(name)}
       </span>
       {id != null && !falhou && (
+        /* ENTRA SUAVE (12/10/2026): a foto pulava por cima das iniciais, uma
+           de cada vez, e a lista parecia quebrada enquanto carregava. Junto
+           com o pre-carregamento do Raio-X (fotoDoJogador), ela ja' vem do
+           cache quase sempre. */
         <img
-          src={`/api/proxy/${fonte}/${id}.png`}
+          ref={ref}
+          src={fotoDoJogador(id, fonte)}
           alt={name}
           width={size}
           height={size}
           loading="lazy"
-          className="absolute inset-0 w-full h-full object-cover"
+          decoding="async"
+          className={cn('absolute inset-0 w-full h-full object-cover transition-opacity duration-300',
+                        carregou ? 'opacity-100' : 'opacity-0')}
+          onLoad={() => setCarregou(true)}
           onError={() => setFalhou(true)}
         />
       )}

@@ -7,6 +7,7 @@ import mimetypes
 import os
 import pathlib
 import re
+import threading
 import time
 import uuid
 from collections import defaultdict
@@ -560,8 +561,88 @@ def _gravar_cache_logo(cache_path: pathlib.Path, conteudo: bytes) -> None:
         logger.warning("[LOGO] nao consegui gravar %s", cache_path, exc_info=True)
 
 
+#: "O provedor nao tem esta imagem" tambem e' resposta (12/10/2026). Sem
+#: guardar isso, todo jogador sem foto custava uma ida ao provedor (ate' 8s) a
+#: CADA visita, e o 404 sem cache fazia o navegador pedir de novo tambem -- a
+#: lista de jogadores do Raio-X ficava carregando aos pedacos.
+_SEM_IMAGEM_DIAS = 7
+_SEM_IMAGEM_HEADERS = {"Cache-Control": "public, max-age=86400"}
+
+
+def _marcador_sem_imagem(cache_path: pathlib.Path) -> pathlib.Path:
+    return cache_path.with_suffix(".sem")
+
+
+def _sem_imagem_recente(cache_path: pathlib.Path) -> bool:
+    try:
+        idade = time.time() - _marcador_sem_imagem(cache_path).stat().st_mtime
+        return idade < _SEM_IMAGEM_DIAS * 86400
+    except OSError:
+        return False
+
+
+def _buscar_e_guardar_imagem(kind: str, item_id: int, paletizar: bool) -> bytes | None:
+    """Versao SINCRONA de buscar + reduzir + gravar, pro aquecimento em segundo
+    plano (`aquecer_imagens`). Nunca levanta."""
+    cache_path = _logo_disk_cache / f"{kind}_{item_id}_{_LOGO_CACHE_V}.png"
+    if cache_path.exists() or _sem_imagem_recente(cache_path):
+        return None
+    try:
+        r = httpx.get(f"{_LOGO_BASE}/{kind}s/{item_id}.png", timeout=8.0)
+        if r.status_code == 200 and r.content:
+            conteudo = _reduzir_logo(r.content, paletizar)
+            _gravar_cache_logo(cache_path, conteudo)
+            return conteudo
+        if r.status_code == 404:
+            _gravar_cache_logo(_marcador_sem_imagem(cache_path), b"")
+    except Exception:
+        pass
+    return None
+
+
+_aquecendo: set = set()
+_aquecendo_lock = threading.Lock()
+
+
+def aquecer_imagens(itens) -> None:
+    """Baixa em SEGUNDO PLANO as imagens que a tela vai pedir (12/10/2026).
+
+    O Raio-X lista os jogadores dos dois times; a foto de cada um so' era
+    buscada no provedor quando a pessoa clicava e a tela pedia -- e ai' elas
+    chegavam uma a uma. Chamado quando o Raio-X e' montado, isto deixa o cache
+    em disco pronto antes do clique. Nao gasta cota: as imagens vem do CDN do
+    provedor, nao da API. Uma thread por chamada, ids repetidos ignorados.
+    """
+    pendentes = []
+    with _aquecendo_lock:
+        for kind, item_id in itens:
+            chave = (kind, int(item_id))
+            if item_id and chave not in _aquecendo:
+                _aquecendo.add(chave)
+                pendentes.append(chave)
+    if not pendentes:
+        return
+
+    def _rodar():
+        try:
+            for kind, item_id in pendentes:
+                _buscar_e_guardar_imagem(kind, item_id, paletizar=kind not in ("player", "referee"))
+        finally:
+            with _aquecendo_lock:
+                _aquecendo.difference_update(pendentes)
+
+    threading.Thread(target=_rodar, name="aquecer-imagens", daemon=True).start()
+
+
+# O Raio-X (routers/fixtures) chama o aquecimento sem importar `main` -- o
+# import seria circular. Entregue aqui, no carregamento.
+fixtures.aquecer_imagens = aquecer_imagens
+
+
 async def _serve_logo(kind: str, item_id: int, *, paletizar: bool = True) -> Response:
     cache_path = _logo_disk_cache / f"{kind}_{item_id}_{_LOGO_CACHE_V}.png"
+    if await run_in_threadpool(_sem_imagem_recente, cache_path):
+        return Response(status_code=404, headers=_SEM_IMAGEM_HEADERS)
 
     # TUDO QUE BLOQUEIA VAI PRO THREADPOOL.
     #
@@ -582,6 +663,11 @@ async def _serve_logo(kind: str, item_id: int, *, paletizar: bool = True) -> Res
                 conteudo = await run_in_threadpool(_reduzir_logo, r.content, paletizar)
                 await run_in_threadpool(_gravar_cache_logo, cache_path, conteudo)
                 return Response(conteudo, media_type="image/png", headers=_LOGO_CACHE_HEADERS)
+            if r.status_code == 404:
+                # So' o 404 do provedor vira "sem imagem" guardado; erro de rede
+                # ou 5xx continua tentando na proxima visita.
+                await run_in_threadpool(_gravar_cache_logo, _marcador_sem_imagem(cache_path), b"")
+                return Response(status_code=404, headers=_SEM_IMAGEM_HEADERS)
     except Exception:
         pass
     return Response(status_code=404)
