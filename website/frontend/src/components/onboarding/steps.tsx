@@ -422,8 +422,13 @@ const TOUR_STEPS: TourStep[] = [
             [BarChart2, 'A análise da IA'],
           ]}
         />
+        {/* 12/10/2026: o que mudou no card e mais confundia quem estava
+            chegando · a barra que anda com o jogo e o resultado do pick, que
+            nao e' da pessoa ate' ela registrar. */}
         <p className="text-xs text-ink-2 leading-relaxed">
-          Confira as informações do pick antes de realizar sua aposta.
+          Com o jogo rolando, a barra de probabilidade se atualiza com o placar e o minuto.
+          Quando o pick fecha, o card mostra o resultado DO PICK na stake sugerida · ele
+          só vira o seu lucro depois que você registra a aposta.
         </p>
       </div>
     ),
@@ -535,6 +540,10 @@ const TOUR_STEPS: TourStep[] = [
             ['Banca atual', 'R$ 1.180,00'],
           ]}
         />
+        <p className="text-[11px] text-ink-3 leading-relaxed">
+          Você não precisa conferir nada: o resultado fecha sozinho assim que o jogo decide
+          (o de 1º tempo, já no intervalo) e aparece um aviso na tela com o seu green ou red.
+        </p>
       </div>
     ),
   },

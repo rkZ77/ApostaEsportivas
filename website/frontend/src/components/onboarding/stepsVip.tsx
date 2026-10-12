@@ -175,8 +175,9 @@ export const TOUR_STEPS_VIP: TourStep[] = [
           é o do instante da análise, e vale conferir na casa antes de apostar.
         </p>
         <p className="text-[11px] text-ink-3 leading-relaxed">
-          Você recebe um aviso quando o motor publica um pick novo. Quando não há nada, a
-          aba diz se o motor está ligado ou parado, são coisas diferentes.
+          Quando o motor publica um pick novo, um cartão aparece no canto da tela, com o
+          jogo, o mercado e a odd, em qualquer página do site. Quando não há nada, a aba
+          diz se o motor está ligado ou parado, são coisas diferentes.
         </p>
       </div>
     ),
