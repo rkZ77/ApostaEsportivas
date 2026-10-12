@@ -1,5 +1,4 @@
-import { useLocation, useParams, useSearchParams, Link } from 'react-router-dom'
-import { Lock } from 'lucide-react'
+import { useLocation, useParams, useSearchParams } from 'react-router-dom'
 import PageShell from '../components/PageShell'
 import RaioXDoJogo from '../components/jogos/RaioXDoJogo'
 import BandejaDoBilhete from '../components/jogos/BandejaDoBilhete'
@@ -29,6 +28,8 @@ export default function JogoRaioX() {
     league_name: q.get('liga') ?? undefined,
     home_team: q.get('casa') ?? undefined, away_team: q.get('fora') ?? undefined,
     match_datetime: q.get('quando'),
+    status: q.get('st') ?? undefined,
+    home_goals: num('gc') ?? null, away_goals: num('gf') ?? null,
   }
   const titulo = jogo.home_team && jogo.away_team ? `${jogo.home_team} x ${jogo.away_team}` : 'Raio-X do jogo'
   /* Veio da lista: voltar é VOLTAR (12/10/2026), e a lista reaparece no dia,
@@ -40,23 +41,10 @@ export default function JogoRaioX() {
   return (
     <PageShell title={titulo} noindex width="narrow" footer={false}
       bar={{ back: daLista ? true : '/jogos', title: 'Raio-X do jogo' }}>
-      {pode ? (
-        <>
-          <RaioXDoJogo jogo={jogo} />
-          <BandejaDoBilhete />
-        </>
-      ) : (
-        <div className="card p-8 text-center">
-          <Lock className="mx-auto text-yellow-400 mb-3" size={28} />
-          <h2 className="text-lg font-bold text-ink-1">Raio-X é para assinantes</h2>
-          <p className="text-sm text-ink-2 mt-2 mb-5">
-            Taxa de acerto por linha, jogadores com histórico jogo a jogo, confronto e árbitro.
-          </p>
-          <Link to="/checkout" className="inline-flex h-12 items-center px-6 rounded-lg bg-yellow-400 text-on-fill font-black">
-            Assinar
-          </Link>
-        </div>
-      )}
+      {/* Plano gratuito: o placar e as abas trancadas (12/10/2026), em vez
+          de um cartão de "é para assinantes" no lugar da página inteira. */}
+      <RaioXDoJogo jogo={jogo} trancado={!pode} />
+      {pode && <BandejaDoBilhete />}
     </PageShell>
   )
 }

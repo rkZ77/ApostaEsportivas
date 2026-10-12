@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useMemo } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence, m as motion } from 'framer-motion'
 import api from '../services/api'
 import PageShell from '../components/PageShell'
@@ -12,7 +12,7 @@ import { EstatisticasContent } from './Estatisticas'
 import { useAuth } from '../context/AuthContext'
 import { Badge, ErrorState, LiveDot, SearchInput, Spinner } from '../components/ui'
 import { sinalizarNavegacao } from '../services/progressBus'
-import { backdropFade, dialogScale, tabFade } from '../lib/motion'
+import { tabFade } from '../lib/motion'
 import { aoVivo as isLive, encerrado as isFinished, escudoDoTime } from '../lib/aoVivo'
 
 // Data de hoje no fuso de Brasília (toISOString retorna UTC e quebraria de madrugada)
@@ -217,16 +217,15 @@ export default function Fixtures() {
   }, [fixtures])
 
   useEffect(() => {
-    if (!isDesktop || !canSeeStats) return
+    if (!isDesktop) return
     // Só preenche o vazio. Trocar a seleção de quem já clicou seria a tela
     // desfazendo o que a pessoa fez.
     setStatsFixture(atual => atual ?? jogoDestaque)
-  }, [jogoDestaque, isDesktop, canSeeStats])
+  }, [jogoDestaque, isDesktop])
 
   // Data nova, destaque novo: manter o jogo de ontem selecionado enquanto a
   // lista mostra hoje é a pior combinação possível.
   useEffect(() => { setStatsFixture(null) }, [date])
-  const [lockPrompt, setLockPrompt]    = useState(false)
   const [collapsed, setCollapsed]      = useState<Set<string>>(new Set())
   const [liveStats, setLiveStats]      = useState<Record<number, LiveStats>>({})
   const [erro, setErro]                = useState(false)
@@ -244,7 +243,6 @@ export default function Fixtures() {
    * a coleta ainda nao trouxe pro banco.
    */
   function abrirJogo(f: Fixture) {
-    if (!canSeeStats) { setLockPrompt(true); return }
     if (isDesktop) { setStatsFixture(f); return }
     const q = new URLSearchParams()
     if (f.home_team_id) q.set('home', String(f.home_team_id))
@@ -253,6 +251,8 @@ export default function Fixtures() {
     q.set('liga', f.league_name)
     q.set('casa', f.home_team); q.set('fora', f.away_team)
     if (f.match_datetime) q.set('quando', f.match_datetime)
+    if (f.status) q.set('st', f.status)
+    if (f.home_goals != null && f.away_goals != null) { q.set('gc', String(f.home_goals)); q.set('gf', String(f.away_goals)) }
     const lista: EstadoDaLista = { date, filtro, busca, rolagem: window.scrollY }
     navigate(location.pathname + location.search, { replace: true, state: { lista } })
     navigate(`/jogos/${f.fixture_id}?${q}`, { state: { daLista: true } })
@@ -697,7 +697,7 @@ export default function Fixtures() {
           <div className="hidden lg:block lg:self-stretch flex-1 min-w-0">
             {statsFixture ? (
               <div className="sticky top-20 max-h-[calc(100dvh-6rem)] overflow-y-auto pr-1 scrollbar-none">
-                <RaioXDoJogo key={statsFixture.fixture_id} jogo={statsFixture} />
+                <RaioXDoJogo key={statsFixture.fixture_id} jogo={statsFixture} trancado={!canSeeStats} />
               </div>
             ) : (
               <div className="card border-dashed p-12 text-center sticky top-20">
@@ -715,36 +715,6 @@ export default function Fixtures() {
 
       {pageTab === 'jogos' && <BandejaDoBilhete />}
 
-      {/* Lock modal para usuários free */}
-      <AnimatePresence>
-      {lockPrompt && (
-        <motion.div
-          variants={backdropFade} initial="hidden" animate="visible" exit="exit"
-          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center px-4"
-          onClick={() => setLockPrompt(false)}>
-          <motion.div variants={dialogScale} className="bg-surface-0 border border-line rounded-lg p-8 max-w-sm w-full text-center shadow-2xl overflow-y-auto max-h-[92dvh]"
-            onClick={e => e.stopPropagation()}>
-            <div className="w-14 h-14 rounded-full bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center mx-auto mb-4">
-              <svg className="w-7 h-7 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
-            </div>
-            <h3 className="text-ink-1 font-bold text-lg mb-2">Análise exclusiva para assinantes</h3>
-            <p className="text-ink-2 text-sm mb-6 leading-relaxed">
-              Médias de gols, escanteios, cartões, histórico H2H e estatísticas completas por time. Disponível para assinantes.
-            </p>
-            <Link to="/checkout"
-              className="block bg-yellow-400 hover:bg-yellow-300 text-on-fill font-black px-6 py-3 rounded-md transition-colors text-sm mb-3">
-              Assinar
-            </Link>
-            <button onClick={() => setLockPrompt(false)}
-              className="text-ink-4 hover:text-ink-2 text-xs transition-colors">
-              Fechar
-            </button>
-          </motion.div>
-        </motion.div>
-      )}
-      </AnimatePresence>
     </PageShell>
   )
 }
