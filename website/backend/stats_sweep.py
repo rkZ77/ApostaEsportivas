@@ -71,11 +71,35 @@ def _habilitada() -> bool:
     return is_production() and side_effects_enabled()
 
 
-def _ha_jogo_sem_estatistica() -> bool:
-    """Freio de banco: so' banco, zero API.
+#: Depois do apito, quanto esperar pra a folha estar publicada (2h30 do inicio).
+_MINUTOS_ATE_A_FOLHA = 150
 
-    Falso positivo e' inofensivo -- a varredura roda e nao acha nada. Por isso
-    a consulta prefere errar pra esse lado.
+#: O mesmo jogo so' dispara outra coleta depois disto. Cada coleta custa uma
+#: listagem por liga; sem o intervalo, um jogo que a API nunca cobre
+#: dispararia a coleta inteira a cada 10 minutos por tres dias.
+_REPETIR_O_MESMO_JOGO_S = 3600
+_tentados: dict = {}
+
+
+def _existe(cur, tabela: str) -> bool:
+    cur.execute("SELECT to_regclass(%s) IS NOT NULL AS existe", (f"public.{tabela}",))
+    linha = cur.fetchone()
+    return bool(linha["existe"] if isinstance(linha, dict) else linha[0])
+
+
+def _pendentes_sem_estatistica() -> set:
+    """Jogos ja' encerrados que seguram RESULTADO e ainda nao tem folha. So' banco.
+
+    O FREIO NUNCA DISPARAVA (corrigido em 12/10/2026). A pergunta era "jogo com
+    status FT em `fixtures` sem match_statistics" -- mas o sincronizador de
+    status APAGA de `fixtures` o jogo que termina (o status nunca chega a FT
+    la'). A coleta automatica nunca rodou; a folha so' entrava pelo botao
+    "Atualizar Jogos", e o bilhete pessoal (que liquida pela folha) ficava
+    Pendente com os jogos acabados.
+
+    Agora a pergunta e' pelo que importa: pick ou bilhete PENDENTE cujo jogo
+    comecou ha' mais de 2h30 e nao tem folha. O horario vem de `fixtures`, do
+    arquivo de jogos encerrados ou do calendario da temporada.
     """
     desde = date.today() - timedelta(days=_JANELA_DIAS)
     conn = None
@@ -83,24 +107,57 @@ def _ha_jogo_sem_estatistica() -> bool:
         conn = get_connection()
         cur = conn.cursor()
         try:
+            partes = []
+            for tabela in ("picks_vip", "picks_free", "picks_faltas", "picks_live"):
+                if _existe(cur, tabela):
+                    partes.append(f"SELECT fixture_id::bigint AS fid FROM {tabela} "
+                                  f"WHERE result IS NULL AND match_date >= %(desde)s")
+            if _existe(cur, "bilhetes_pessoais"):
+                partes.append(
+                    "SELECT (g->>'fixture_id')::bigint AS fid FROM bilhetes_pessoais b "
+                    "CROSS JOIN LATERAL jsonb_array_elements(b.games::jsonb) g "
+                    "WHERE b.result IS NULL AND b.created_at >= %(desde)s")
+            if not partes:
+                return set()
+            horario = ["f.match_datetime"] if _existe(cur, "fixtures_todas") else []
+            juncoes = ("LEFT JOIN fixtures_todas f ON f.fixture_id = p.fid "
+                       if horario else "")
+            if _existe(cur, "calendario_jogos"):
+                horario.append("c.match_datetime")
+                juncoes += "LEFT JOIN calendario_jogos c ON c.fixture_id = p.fid "
+            if not horario:
+                return set()
             cur.execute(f"""
-                SELECT 1
-                  FROM fixtures f
-             LEFT JOIN match_statistics ms ON ms.fixture_id = f.fixture_id
-                 WHERE f.status IN %s
-                   AND f.match_datetime >= %s
-                   AND ms.fixture_id IS NULL
-                 LIMIT 1
-            """, (_FINALIZADOS, desde))
-            return cur.fetchone() is not None
+                SELECT DISTINCT p.fid
+                  FROM ({" UNION ".join(partes)}) p
+                  {juncoes}
+             LEFT JOIN match_statistics ms ON ms.fixture_id = p.fid
+                 WHERE p.fid IS NOT NULL AND ms.fixture_id IS NULL
+                   AND COALESCE({", ".join(horario)}) <=
+                       (NOW() AT TIME ZONE 'America/Sao_Paulo') - INTERVAL '{_MINUTOS_ATE_A_FOLHA} minutes'
+            """, {"desde": desde})
+            return {int(r["fid"] if isinstance(r, dict) else r[0]) for r in cur.fetchall()}
         finally:
             cur.close()
     except Exception as e:
         logger.warning("[STATS-SWEEP] freio de banco falhou: %s", e)
-        return False
+        return set()
     finally:
         if conn is not None:
             conn.close()
+
+
+def _ha_jogo_sem_estatistica(agora: float | None = None) -> bool:
+    """Freio de banco: so' banco, zero API. Dispara quando algum jogo pendente
+    ainda nao foi tentado na ultima hora (ver _REPETIR_O_MESMO_JOGO_S)."""
+    agora = agora or time.time()
+    novos = {f for f in _pendentes_sem_estatistica()
+             if agora - _tentados.get(f, 0.0) >= _REPETIR_O_MESMO_JOGO_S}
+    if not novos:
+        return False
+    for f in novos:
+        _tentados[f] = agora
+    return True
 
 
 def _coletar() -> dict:
