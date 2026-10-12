@@ -67,7 +67,10 @@ export interface RaioX {
   times: { home: { team_id: number; jogos: JogoDoTime[] }; away: { team_id: number; jogos: JogoDoTime[] } }
   h2h: Array<{ data: string | null; home_team_id: number; away_team_id: number
                home_goals: number | null; away_goals: number | null
-               escanteios: number | null; amarelos: number }>
+               escanteios: number | null; amarelos: number | null }>
+  /** 'api': o banco não tinha o confronto e ele veio da API-Football, só com
+   *  o placar (12/10/2026). Ausente em resposta antiga do cache = banco. */
+  h2h_fonte?: 'banco' | 'api'
   arbitro: { nome: string; jogos: Array<{ amarelos: number; vermelhos: number; faltas: number | null }> } | null
   jogadores: {
     home: { fonte_titulares: string; lista: Jogador[] }

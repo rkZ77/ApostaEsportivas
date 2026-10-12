@@ -1045,6 +1045,14 @@ def _montar_raio_x(fixture_id: int, home, away, league, n: int) -> dict:
                           if r["home_corners"] is not None and r["away_corners"] is not None else None,
             "amarelos": (r["home_yellow_cards"] or 0) + (r["away_yellow_cards"] or 0),
         } for r in cur.fetchall()]
+        # Banco sem o confronto: uma consulta a API por par, guardada 30 dias
+        # (12/10/2026) · ver h2h_api.py. So' placar; escanteio e cartao nulos.
+        h2h_fonte = "banco"
+        if not h2h:
+            import h2h_api
+            da_api = h2h_api.confronto(cur, home_id, away_id, _H2H_MAX)
+            if da_api:
+                h2h, h2h_fonte = da_api, "api"
 
         titulares = _titulares_provaveis(cur, fixture_id, [home_id, away_id])
         jogadores = _jogadores_dos_times(cur, {
@@ -1079,6 +1087,7 @@ def _montar_raio_x(fixture_id: int, home, away, league, n: int) -> dict:
             "away": {"team_id": away_id, "jogos": serie_away},
         },
         "h2h": h2h,
+        "h2h_fonte": h2h_fonte,
         "arbitro": arbitro,
         "jogadores": {
             "home": {"fonte_titulares": titulares[home_id][1], "lista": jogadores[home_id]},

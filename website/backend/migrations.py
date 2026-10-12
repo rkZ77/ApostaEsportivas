@@ -1433,6 +1433,9 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
                 PRIMARY KEY (fixture_id, dia)
             )
         """)
+        # CONFRONTO PELA API (12/10/2026) · ver h2h_api.py.
+        import h2h_api
+        cur.execute(h2h_api.DDL)
 
         conn.commit()
         return True
