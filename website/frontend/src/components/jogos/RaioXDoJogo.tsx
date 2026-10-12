@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Check, Flag, Lock, Minus, Plus, Shield, Users } from 'lucide-react'
+import { Check, Flag, Lock, Minus, Plus, Shield, Star, Users } from 'lucide-react'
+import { useTimesFavoritos } from '../../lib/timesFavoritos'
 import { Link } from 'react-router-dom'
 import api from '../../services/api'
 import { cn } from '../../lib/cn'
@@ -204,6 +205,23 @@ export default function RaioXDoJogo({ jogo, trancado = false }: { jogo: JogoBase
   )
 }
 
+/* ── Estrela do time favorito (12/10/2026) ────────────────────────────────
+   Marcar faz os jogos do time subirem para "Seus times" na aba Jogos. Botão
+   de 36px com rótulo: o dedo acerta e a pessoa sabe o que a estrela faz. */
+function EstrelaDoTime({ id, nome }: { id: number; nome: string }) {
+  const { ehFavorito, alternar } = useTimesFavoritos()
+  const ativo = ehFavorito(id)
+  return (
+    <button type="button" onClick={() => alternar(id)} aria-pressed={ativo}
+      aria-label={ativo ? `Tirar ${nome} dos favoritos` : `Seguir ${nome}`}
+      className={cn('h-9 px-2.5 -mt-1 inline-flex items-center gap-1 rounded-full text-[11px] font-bold transition-colors',
+        ativo ? 'text-yellow-300' : 'text-ink-4 hover:text-ink-2')}>
+      <Star className={cn('w-3.5 h-3.5', ativo && 'fill-yellow-300')} aria-hidden />
+      {ativo ? 'Seguindo' : 'Seguir'}
+    </button>
+  )
+}
+
 /* ── Aba trancada (plano gratuito) ───────────────────────────────────────── */
 
 const O_QUE_TEM: Record<Aba, [string, string[]]> = {
@@ -280,6 +298,7 @@ function Placar({ jogo, dados, aoVivo }: { jogo: JogoBase; dados: RaioX | null; 
       <TeamLogo id={id} name={nome ?? ''} size={52} />
       <span className="text-sm font-bold text-ink-1 leading-tight line-clamp-2">{nome}</span>
       <FormaPontos forma={forma} />
+      {id && <EstrelaDoTime id={id} nome={nome ?? ''} />}
     </div>
   )
 

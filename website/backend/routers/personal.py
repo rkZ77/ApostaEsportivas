@@ -482,3 +482,65 @@ def save_tutorial(
         raise HTTPException(404, "Usuário não encontrado")
 
     return _tutorial_payload(row["status"] or "pending", int(row["step"] or 0), cfg["total"], tour)
+
+# ---------------------------------------------------------------------------
+# TIMES FAVORITOS (12/10/2026)
+#
+# A pessoa marca os times dela com a estrela no Raio-X, e os jogos deles sobem
+# pra um grupo "Seus times" no topo da aba Jogos. Na conta, e nao no
+# navegador: o site e' usado no celular e no PC, e a estrela tem que valer nos
+# dois. Livre pra qualquer plano · a lista de jogos e' aberta a todos.
+# ---------------------------------------------------------------------------
+MAX_FAVORITOS = 30
+
+
+class FavoritoBody(BaseModel):
+    team_id: int = Field(..., gt=0)
+    favorito: bool = True
+
+
+@router.get("/times-favoritos")
+def get_times_favoritos(current_user: dict = Depends(get_current_user)):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT team_id FROM user_times_favoritos WHERE user_id = %s ORDER BY criado_em",
+                    (current_user["id"],))
+        return {"times": [r["team_id"] for r in cur.fetchall()]}
+    except Exception as e:
+        # Tabela ainda nao criada: lista vazia, a aba Jogos funciona igual.
+        conn.rollback()
+        logger.warning("[FAVORITOS] leitura indisponivel: %s", e)
+        return {"times": []}
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.put("/times-favoritos")
+def put_time_favorito(body: FavoritoBody, current_user: dict = Depends(get_current_user)):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        if body.favorito:
+            cur.execute("SELECT COUNT(*) AS n FROM user_times_favoritos WHERE user_id = %s",
+                        (current_user["id"],))
+            if (cur.fetchone() or {}).get("n", 0) >= MAX_FAVORITOS:
+                raise HTTPException(400, f"No máximo {MAX_FAVORITOS} times favoritos")
+            cur.execute("""
+                INSERT INTO user_times_favoritos (user_id, team_id) VALUES (%s, %s)
+                ON CONFLICT DO NOTHING
+            """, (current_user["id"], body.team_id))
+        else:
+            cur.execute("DELETE FROM user_times_favoritos WHERE user_id = %s AND team_id = %s",
+                        (current_user["id"], body.team_id))
+        conn.commit()
+        cur.execute("SELECT team_id FROM user_times_favoritos WHERE user_id = %s ORDER BY criado_em",
+                    (current_user["id"],))
+        return {"times": [r["team_id"] for r in cur.fetchall()]}
+    except HTTPException:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        conn.close()
