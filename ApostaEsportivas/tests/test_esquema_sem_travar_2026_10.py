@@ -94,9 +94,12 @@ def test_coluna_comparada_sem_caixa():
     assert esquema.faltando(cur, ["ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS round TEXT"]) == []
 
 
-def test_coletor_de_estatistica_nao_emite_alter_cru():
+def test_coletor_de_estatistica_nao_emite_alter_cru(monkeypatch):
     """O defeito era o `cur.execute("ALTER TABLE ...")` direto na abertura."""
     import inspect
+
+    # O modulo exige a chave no import; sozinho, este teste nao a teria.
+    monkeypatch.setenv("API_FOOTBALL_KEY", "chave-de-teste")
 
     from collectors import match_statistics_sync_service as svc
     fonte = inspect.getsource(svc.MatchStatisticsSyncService._ensure_columns)
