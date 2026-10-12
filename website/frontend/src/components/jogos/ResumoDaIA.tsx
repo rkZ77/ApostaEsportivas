@@ -21,13 +21,19 @@ import { TeamLogo } from '../TeamLogo'
  */
 
 type Tendencia = 'over' | 'under' | 'dividido'
-interface Mercado { mercado: string; tendencia: Tendencia; leitura: string }
+interface Mercado { mercado: string; tendencia: Tendencia; leitura: string; pct?: number }
+/** Números do time no mando desta partida, calculados no servidor (nunca pela IA). */
+interface NumerosDoTime {
+  jogos?: number; forma?: string; gols_pro?: number; gols_contra?: number
+  pct_marcou?: number; pct_sofreu?: number; escanteios_pro?: number
+}
 type Perfil = 'dominante' | 'ofensivo' | 'equilibrado' | 'defensivo' | 'reativo'
 interface LeituraDoTime { lado: 'mandante' | 'visitante'; perfil: Perfil; leitura: string; mercados: Mercado[] }
 interface Resumo {
   status: 'ok' | 'inelegivel' | 'bloqueado' | 'limite' | 'falhou' | 'desligado'
   motivo?: string; resumo?: string; times?: LeituraDoTime[]; mercados_do_jogo?: Mercado[]
   contexto?: string; alerta?: string
+  numeros?: { mandante?: NumerosDoTime; visitante?: NumerosDoTime }
 }
 interface Props {
   fixtureId: number
@@ -122,6 +128,7 @@ export default function ResumoDaIA({ fixtureId, homeId, awayId, homeNome, awayNo
                 {PERFIL[t.perfil] ?? t.perfil}
               </span>
             </div>
+            {r.numeros?.[lado] && <FaixaDeNumeros n={r.numeros[lado]!} mando={mando} />}
             <p className="px-4 pb-3 text-sm text-ink-2 leading-relaxed">{t.leitura}</p>
             {!!t.mercados.length && <ListaDeMercados mercados={t.mercados} />}
           </div>
@@ -169,9 +176,57 @@ function ListaDeMercados({ mercados }: { mercados: Mercado[] }) {
           <div className="min-w-0">
             <div className="text-sm font-bold text-ink-1">{m.mercado}</div>
             <div className="text-xs text-ink-3 leading-snug mt-0.5">{m.leitura}</div>
+            {m.pct != null && m.pct >= 0 && m.pct <= 100 && (
+              <div className="mt-1.5 flex items-center gap-2">
+                <div className="h-1 flex-1 max-w-[160px] bg-surface-3 rounded-full overflow-hidden">
+                  <div className={cn('h-full rounded-full', m.tendencia === 'under' ? 'bg-sky-400' : 'bg-accent')}
+                    style={{ width: `${m.pct}%` }} />
+                </div>
+                <span className="font-mono text-[11px] font-bold text-ink-2 tabular-nums">{m.pct}%</span>
+              </div>
+            )}
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+const num = (v?: number) => v == null ? '—' : v.toLocaleString('pt-BR', { maximumFractionDigits: 1 })
+
+/* Quatro números do time no mando da partida, e a forma recente nele. */
+function FaixaDeNumeros({ n, mando }: { n: NumerosDoTime; mando: string }) {
+  const celulas: [string, string][] = [
+    ['Gols feitos', num(n.gols_pro)],
+    ['Gols sofridos', num(n.gols_contra)],
+    ['Marcou', n.pct_marcou == null ? '—' : `${n.pct_marcou}%`],
+    ['Escanteios', num(n.escanteios_pro)],
+  ]
+  return (
+    <div className="px-4 pb-3">
+      <div className="grid grid-cols-4 gap-1.5">
+        {celulas.map(([rotulo, valor]) => (
+          <div key={rotulo} className="rounded-md bg-surface-2/70 px-2 py-1.5 text-center">
+            <div className="font-mono text-base font-black text-ink-1 tabular-nums leading-tight">{valor}</div>
+            <div className="text-[10px] text-ink-3 leading-tight mt-0.5">{rotulo}</div>
+          </div>
+        ))}
+      </div>
+      {(n.jogos || n.forma) && (
+        <div className="mt-2 flex items-center gap-2 text-[11px] text-ink-3">
+          {n.jogos ? <span>Média em {n.jogos} jogos {mando}</span> : null}
+          {n.forma && (
+            <span className="ml-auto flex gap-1" aria-label={`Forma ${mando}: ${n.forma}`}>
+              {n.forma.slice(0, 5).split('').map((c, i) => (
+                <span key={i} className={cn('w-4 h-4 rounded-sm grid place-items-center text-[9px] font-black',
+                  c === 'V' ? 'bg-accent/20 text-accent-ink' : c === 'E' ? 'bg-surface-3 text-ink-2' : 'bg-red-500/15 text-red-400')}>
+                  {c}
+                </span>
+              ))}
+            </span>
+          )}
+        </div>
+      )}
     </div>
   )
 }

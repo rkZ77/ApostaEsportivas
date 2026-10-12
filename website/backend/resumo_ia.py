@@ -373,36 +373,39 @@ def tecnicos_dos_times(cur, ids: list) -> dict:
 # ─────────────────────────────────────────────────────────────────────────────
 #: Formato da leitura. Sobe quando o formato muda: leitura guardada de versao
 #: antiga e' gerada de novo na proxima abertura (ver _vale).
-VERSAO = 2
+VERSAO = 3
 
-SYSTEM = """Voce escreve a leitura de pre-jogo do Raio-X do PickIA, um site brasileiro de analise de apostas esportivas. Quem le esta no celular, decidindo se aposta, e quer saber em segundos como cada time joga e quais mercados os numeros sustentam.
+SYSTEM = """Você escreve a leitura de pré-jogo do Raio-X do PickIA, um site brasileiro de análise de apostas esportivas. Quem lê está no celular, decidindo se aposta, e quer saber em segundos como cada time joga e quais mercados os números sustentam.
 
 Fonte:
-- Use SOMENTE os numeros do JSON. Nao invente lesao, escalacao, noticia, odd, motivacao ou historia. Dado que nao veio, nao existe.
-- RESPEITE O MANDO. Do mandante, leia "EM_CASA_na_temporada"; do visitante, "FORA_na_temporada". "ultimos_10_geral" so para confirmar ou contrastar, e quando usar diga que e o geral. Sempre diga a amostra do jeito certo ("em 7 jogos em casa", "em 6 de 9 fora"). Nunca chame de "10 jogos em casa" uma serie que tem 4.
-- "time" sao os numeros do proprio time (o que ele faz e o que cede); "jogo" sao totais das partidas dele.
+- Use SOMENTE os números do JSON. Não invente lesão, escalação, notícia, odd, motivação ou história. Dado que não veio não existe.
+- RESPEITE O MANDO. Do mandante, leia "EM_CASA_na_temporada"; do visitante, "FORA_na_temporada". "ultimos_10_geral" serve só para confirmar ou contrastar, e quando usar diga que é o geral. Diga a amostra do jeito certo ("em 7 jogos em casa").
+- Todo campo "pct_" é PERCENTUAL DE JOGOS (em quantos jogos aconteceu), nunca percentual de gols. Ex.: pct_marcou_no_1t = 60 significa "marcou no 1º tempo em 6 de cada 10 jogos".
+- "time" são os números do próprio time (o que ele faz e o que cede); "jogo" são totais das partidas dele.
+- Só chame a amostra de curta quando o mando tiver menos de 8 jogos.
 
 O que escrever:
-- "resumo": no maximo 2 frases sobre o confronto (quem chega melhor no mando e o que os numeros apontam).
+- "resumo": no máximo 2 frases sobre o confronto: quem chega melhor no mando e o que os números apontam.
 - "times": um item para o mandante e um para o visitante, nessa ordem.
-  - "perfil": dominante (posse alta, mais chutes e escanteios a favor que contra), ofensivo (marca muito, mas tambem sofre), equilibrado, defensivo (sofre pouco e marca pouco), reativo (pouca posse, cede escanteios e chutes, joga no contra-ataque). Escolha pelo mando desta partida.
-  - "leitura": 1 ou 2 frases sobre como o time joga NESTE mando, com numeros.
-  - "mercados": ate 3 mercados DO PROPRIO TIME que os numeros sustentam (ex.: "Bragantino marca", "Bragantino over 4.5 escanteios", "Cruzeiro over 1.5 cartoes", "Cruzeiro sofre gol"). So o que tiver 60% ou mais, ou 40% ou menos para "under".
-- "mercados_do_jogo": ate 3 linhas do JOGO (gols, escanteios, cartoes, ambas marcam, gol no 1o tempo) em que os numeros do mandante em casa E do visitante fora apontam para o mesmo lado. Se discordam, nao entra, ou entra como "dividido".
-- "tendencia" TEM que bater com a "leitura": se a frase diz que a linha esta dividida, a tendencia e "dividido"; "over" so quando os numeros citados sustentam over; "under" quando sustentam under.
-- "contexto": tabela, tecnico e formato. Formato importa: em "liga" posicao e mando pesam; em mata-mata o jogo e decidido no placar e times se fecham (na ida e volta, a 2a partida depende da 1a); em "grupos" e "copa" a amostra mistura competicoes. Tecnico so se tiver 3 ou menos jogos seguidos.
-- "alerta": o que deixa a leitura fraca (amostra curta, numeros que se contradizem, mata-mata). Vazio se nao houver.
+  - "perfil": dominante (posse alta, mais chutes e escanteios a favor que contra), ofensivo (marca muito, mas também sofre), equilibrado, defensivo (sofre pouco e marca pouco), reativo (pouca posse, cede escanteios e chutes, joga no contra-ataque). Escolha pelo mando desta partida.
+  - "leitura": 1 ou 2 frases sobre como o time joga NESTE mando, com números.
+  - "mercados": até 3 mercados DO PRÓPRIO TIME com pct de 65 ou mais ("over") ou 35 ou menos ("under"). Ex.: "Chapecoense sofre gol", "Athletico-PR mais de 4,5 escanteios". Nada entre 36 e 64. Se nenhum passar, lista vazia.
+- "mercados_do_jogo": até 3 linhas do JOGO (gols, escanteios, cartões, ambas marcam, gol no 1º tempo) em que o mandante em casa E o visitante fora apontam para o mesmo lado. Discordaram, não entra.
+- Em todo mercado, "pct" é o percentual que sustenta a tendência (para "under", o percentual de jogos em que NÃO aconteceu), e "tendencia" tem que bater com a "leitura".
+- "contexto": tabela, técnico e formato. Em "liga" posição e mando pesam; em mata-mata o jogo é decidido no placar e os times se fecham (na ida e volta, a 2ª partida depende da 1ª); em "grupos" e "copa" a amostra mistura competições. Técnico só se tiver 3 ou menos jogos seguidos.
+- "alerta": o que deixa a leitura fraca (amostra curta, números que se contradizem, mata-mata). Vazio se não houver.
 
-Estilo: portugues do Brasil, direto, sem jargao estatistico, sem certeza nem promessa ("vai sair", "garantido"). Fale em tendencia."""
+Estilo: português do Brasil com acentuação correta. Decimais com vírgula ("1,4 gol por jogo"). Escreva "1º tempo", "2º tempo", "4º colocado". Use o nome de cada time exatamente como está em "nome", sempre igual. Direto, sem jargão estatístico, sem certeza nem promessa ("vai sair", "garantido"). Fale em tendência."""
 
 _MERCADO = {
     "type": "object",
     "properties": {
         "mercado": {"type": "string"},
-        "tendencia": {"type": "string", "enum": ["over", "under", "dividido"]},
+        "tendencia": {"type": "string", "enum": ["over", "under"]},
+        "pct": {"type": "integer"},
         "leitura": {"type": "string"},
     },
-    "required": ["mercado", "tendencia", "leitura"],
+    "required": ["mercado", "tendencia", "pct", "leitura"],
     "additionalProperties": False,
 }
 
@@ -432,6 +435,23 @@ _SCHEMA = {
     "required": ["resumo", "times", "mercados_do_jogo", "contexto", "alerta"],
     "additionalProperties": False,
 }
+
+
+def numeros_da_tela(fatos: dict) -> dict:
+    """A faixa de números de cada time na aba (12/10/2026): sai da MESMA conta
+    que foi pro modelo, e nao do texto dele · numero na tela nunca e'
+    escrito pela IA."""
+    saida = {}
+    for lado, chave in (("mandante", "EM_CASA_na_temporada"), ("visitante", "FORA_na_temporada")):
+        n = (fatos.get(lado) or {}).get(chave) or {}
+        t = n.get("time") or {}
+        saida[lado] = {
+            "jogos": n.get("jogos"), "forma": n.get("forma_recente_primeiro"),
+            "gols_pro": t.get("gols_pro_media"), "gols_contra": t.get("gols_contra_media"),
+            "pct_marcou": t.get("pct_marcou"), "pct_sofreu": t.get("pct_sofreu"),
+            "escanteios_pro": t.get("escanteios_pro_media"),
+        }
+    return saida
 
 #: US$ por milhao de tokens do Haiku 5.5 (entrada, saida). So' pra estimar o
 #: custo no /admin · a fatura de verdade e' a do console da Anthropic.
@@ -607,6 +627,7 @@ def resumo_do_jogo(cur, fixture_id: int, montar_raio_x) -> dict:
             logger.warning("[RESUMO IA] jogo %s falhou: %s", fixture_id, e)
             _gravar(cur, fixture_id, dia, "falhou", motivo=str(e)[:300])
             return {"status": "falhou"}
+        conteudo["numeros"] = numeros_da_tela(fatos)
         conteudo["versao"] = VERSAO
         _gravar(cur, fixture_id, dia, "ok", conteudo=conteudo, tokens_in=t_in, tokens_out=t_out)
         logger.info("[RESUMO IA] jogo %s gerado (%s in / %s out)", fixture_id, t_in, t_out)
