@@ -186,8 +186,10 @@ export const TOUR_STEPS_VIP: TourStep[] = [
     id: 'vip-jogos',
     titulo: 'Estatísticas de cada jogo',
     Icon: BolaDeFutebol,
-    rota: '/picks',
-    alvos: ['[data-tour="nav-jogos"]'],
+    /* /jogos e a lista, e nao o link do menu: no celular o menu fica na
+       gaveta fechada e o passo nao achava o que destacar (12/10). */
+    rota: '/jogos',
+    alvos: ['[data-tour="jogos-lista"]', '[data-tour="nav-jogos"]'],
     resumo: 'Na aba Jogos, clicar numa partida passa a abrir o Raio-X completo dela em vez do convite para assinar.',
     corpo: (
       <div className="space-y-3">
