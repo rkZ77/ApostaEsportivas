@@ -612,3 +612,55 @@ def liquidar_de_todos(conn) -> int:
             logger.warning("[BILHETE] liquidacao do usuario %s falhou", user_id, exc_info=True)
             conn.rollback()
     return fechados
+
+# ---------------------------------------------------------------------------
+# AVISO DE JOGO COMECANDO (12/10/2026)
+#
+# Quem montou um bilhete no Raio-X ganha um aviso pouco antes de cada jogo
+# dele comecar: no sino e no cartao do canto (JogoComecandoToast), se estiver
+# com o site aberto. Um aviso por jogo por pessoa, mesmo com o jogo em varios
+# bilhetes. So' banco · o agendador chama a cada volta (60s).
+# ---------------------------------------------------------------------------
+JANELA_DO_AVISO_MIN = 20
+
+
+def avisar_jogos_comecando(conn) -> int:
+    """Cria o aviso dos jogos de bilhete pendente que comecam nos proximos
+    JANELA_DO_AVISO_MIN minutos. Devolve quantos (pessoa x jogo) avisou.
+    Prod e noprod rodam juntos no mesmo banco: o dedupe_key segura a repeticao."""
+    from routers.notifications import create_notification
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT DISTINCT b.user_id, f.fixture_id, f.home_team, f.away_team,
+                   f.home_team_id, f.away_team_id, f.match_datetime
+              FROM bilhetes_pessoais b
+              CROSS JOIN LATERAL jsonb_array_elements(
+                   CASE WHEN jsonb_typeof(b.games) = 'array' THEN b.games ELSE '[]'::jsonb END) g
+              JOIN fixtures f ON f.fixture_id = (g->>'fixture_id')::int
+             WHERE b.result IS NULL
+               AND f.status IN ('NS', 'TBD')
+               AND f.match_datetime >  (NOW() AT TIME ZONE 'America/Sao_Paulo')
+               AND f.match_datetime <= (NOW() AT TIME ZONE 'America/Sao_Paulo')
+                                       + make_interval(mins => %s)
+        """, (JANELA_DO_AVISO_MIN,))
+        linhas = cur.fetchall()
+        for r in linhas:
+            hora = r["match_datetime"].strftime("%H:%M") if r["match_datetime"] else ""
+            create_notification(
+                cur, r["user_id"], "jogo_comecando",
+                f'{r["home_team"]} x {r["away_team"]}',
+                f'comecando:{r["fixture_id"]}',
+                body=f"Jogo do seu bilhete começa às {hora}.",
+                url="/picks#minhas_apostas",
+                payload={"fixture_id": r["fixture_id"], "inicio": hora,
+                         "home_team_id": r["home_team_id"], "away_team_id": r["away_team_id"]},
+            )
+        conn.commit()
+        return len(linhas)
+    except Exception:
+        conn.rollback()
+        logger.warning("[BILHETE] aviso de jogo comecando falhou", exc_info=True)
+        return 0
+    finally:
+        cur.close()
