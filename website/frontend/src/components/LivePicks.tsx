@@ -597,6 +597,24 @@ function PickCard({ pick, unitValue, onRefresh, syncedAt }: {
   const premioR  = potRetR != null
     ? (effectiveResult === 'GREEN' ? potRetR : effectiveResult === 'RED' ? 0 : null)
     : null
+  /* GANHO E LUCRO (12/10/2026, pedido do usuário: "só tem o valor apostado").
+     Aberto: quanto volta e quanto lucra se bater. Fechado: o lucro de fato,
+     inclusive no cash out (recebido menos apostado) e na devolvida (zero). */
+  const lucroPossivel = potRetR != null && stakeR != null ? potRetR - stakeR : null
+  const lucroFinal: number | null =
+    hasCashout && stakeR != null ? Number(pick.cashout_amount) - stakeR
+    : effectiveResult === 'GREEN' ? lucroPossivel
+    : effectiveResult === 'RED' && stakeR != null ? -stakeR
+    : pick.result === 'PUSH' ? 0
+    : null
+  const aberto = !hasResult && !hasCashout && pick.result !== 'PUSH'
+  /* Em unidades também (mesmo pedido): é a régua de quem acompanha banca. O
+     valor da unidade vem da banca da pessoa; sem banca, só os reais. */
+  const emUnidades = (r: number | null, sinal = false) => {
+    if (r == null || !unitValue) return null
+    const u = r / unitValue
+    return `${sinal && u > 0 ? '+' : ''}${u.toFixed(2)}u`
+  }
 
   // Probabilidade ao vivo
   const lineLc      = pick.line?.toLowerCase() ?? ''
@@ -701,6 +719,11 @@ function PickCard({ pick, unitValue, onRefresh, syncedAt }: {
             {stakeR != null && (
               <span className="font-mono text-sm font-bold text-ink-1">R${stakeR.toFixed(2)}</span>
             )}
+            {aberto && potRetR != null && effOdd > 1 && (
+              <span className="font-mono text-xs text-ink-3 whitespace-nowrap">
+                ganha <span className="font-bold text-accent-ink">R${potRetR.toFixed(2)}</span>
+              </span>
+            )}
             {pick.bet_house && (
               <span className="text-[10px] text-ink-4">{pick.bet_house}</span>
             )}
@@ -795,7 +818,10 @@ function PickCard({ pick, unitValue, onRefresh, syncedAt }: {
             {stakeR != null && (
               <div className="font-mono flex justify-between text-sm">
                 <span className="text-ink-2">Montante apostado</span>
-                <span className="text-ink-1 font-semibold">R${stakeR.toFixed(2)}</span>
+                <span className="text-ink-1 font-semibold">
+                  R${stakeR.toFixed(2)}
+                  {emUnidades(stakeR) && <span className="text-ink-3 ml-1.5">{emUnidades(stakeR)}</span>}
+                </span>
               </div>
             )}
             {premioR != null && !hasCashout && (
@@ -810,6 +836,30 @@ function PickCard({ pick, unitValue, onRefresh, syncedAt }: {
               <div className="font-mono flex justify-between text-sm">
                 <span className="text-ink-2">Cash Out recebido</span>
                 <span className="font-black text-orange-400">R${Number(pick.cashout_amount).toFixed(2)}</span>
+              </div>
+            )}
+            {aberto && potRetR != null && lucroPossivel != null && effOdd > 1 && (
+              <>
+                <div className="font-mono flex justify-between text-sm">
+                  <span className="text-ink-2">Retorno possível</span>
+                  <span className="text-ink-1 font-semibold">R${potRetR.toFixed(2)}</span>
+                </div>
+                <div className="font-mono flex justify-between text-sm">
+                  <span className="text-ink-2">Lucro possível</span>
+                  <span className="font-black text-accent-ink">
+                    +R${lucroPossivel.toFixed(2)}
+                    {emUnidades(lucroPossivel, true) && <span className="font-semibold text-ink-3 ml-1.5">{emUnidades(lucroPossivel, true)}</span>}
+                  </span>
+                </div>
+              </>
+            )}
+            {lucroFinal != null && (
+              <div className="font-mono flex justify-between text-sm">
+                <span className="text-ink-2">Lucro</span>
+                <span className={`font-black ${lucroFinal > 0 ? 'text-green-400' : lucroFinal < 0 ? 'text-red-400' : 'text-ink-2'}`}>
+                  {lucroFinal > 0 ? '+' : lucroFinal < 0 ? '-' : ''}R${Math.abs(lucroFinal).toFixed(2)}
+                  {emUnidades(lucroFinal, true) && <span className="font-semibold text-ink-3 ml-1.5">{emUnidades(lucroFinal, true)}</span>}
+                </span>
               </div>
             )}
             {pick.observacao && (
