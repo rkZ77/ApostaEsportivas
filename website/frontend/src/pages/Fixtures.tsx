@@ -1,5 +1,7 @@
 import { useEffect, useState, useRef, useMemo } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { Star } from 'lucide-react'
+import { separarFavoritos, useTimesFavoritos } from '../lib/timesFavoritos'
 import { AnimatePresence, m as motion } from 'framer-motion'
 import api from '../services/api'
 import PageShell from '../components/PageShell'
@@ -161,6 +163,7 @@ interface LiveStats {
 
 type PageTab = 'jogos' | 'estatistica'
 type Filtro = 'todos' | 'pick' | 'aovivo'
+const GRUPO_FAVORITOS = 'Seus times'
 interface EstadoDaLista { date: string; filtro: Filtro; busca: string; rolagem: number }
 
 export default function Fixtures() {
@@ -229,6 +232,7 @@ export default function Fixtures() {
   const [collapsed, setCollapsed]      = useState<Set<string>>(new Set())
   const [liveStats, setLiveStats]      = useState<Record<number, LiveStats>>({})
   const [erro, setErro]                = useState(false)
+  const { favoritos } = useTimesFavoritos()
   const [busca, setBusca]              = useState(voltando?.busca ?? '')
   const [filtro, setFiltro]            = useState<Filtro>(voltando?.filtro ?? 'todos')
   const navigate = useNavigate()
@@ -349,7 +353,13 @@ export default function Fixtures() {
   // Agrupa por liga (preserva ordem de aparição)
   const grouped: { key: string; league_id: number; logo?: string; flag?: string; country?: string; games: Fixture[] }[] = []
   const seen = new Set<string>()
-  for (const f of visiveis) {
+  /* SEUS TIMES (12/10/2026): os jogos dos times com estrela (marcada no
+     Raio-X) num grupo próprio no topo, e fora do grupo da liga. */
+  const { dosFavoritos, resto } = separarFavoritos(visiveis, favoritos)
+  if (dosFavoritos.length) {
+    grouped.push({ key: GRUPO_FAVORITOS, league_id: 0, games: dosFavoritos })
+  }
+  for (const f of resto) {
     if (!seen.has(f.league_name)) {
       seen.add(f.league_name)
       grouped.push({
@@ -517,6 +527,9 @@ export default function Fixtures() {
                   className={`px-3 sm:px-4 py-2 sm:py-3 border-b flex items-center gap-2.5 cursor-pointer select-none ${isCopa ? 'bg-yellow-950/40 border-yellow-700/30' : 'bg-surface-2/60 border-line'}`}
                   onClick={() => toggleCollapse(league)}
                 >
+                  {league === GRUPO_FAVORITOS && (
+                    <Star className="w-4 h-4 text-yellow-300 fill-yellow-300 shrink-0" aria-hidden />
+                  )}
                   {logo && (
                     <img src={logo} alt={league} width={24} height={24}
                       className="w-6 h-6 object-contain shrink-0"
@@ -525,7 +538,7 @@ export default function Fixtures() {
                   )}
                   {/* Nome e país em português quando a liga é conhecida
                       (lib/paisDaLiga) · o provedor manda "Serie A" e "Brazil". */}
-                  <span className={`text-xs font-bold ${isCopa ? 'text-yellow-300' : 'text-ink-2'}`}>{nomeDaLigaPt(league_id, league)}</span>
+                  <span className={`text-xs font-bold ${isCopa ? 'text-yellow-300' : 'text-ink-2'}`}>{league === GRUPO_FAVORITOS ? league : nomeDaLigaPt(league_id, league)}</span>
                   {(paisDaLiga(league_id)?.pais ?? country) && (
                     <span className={`text-xs font-normal ${isCopa ? 'text-yellow-700' : 'text-ink-4'}`}>{paisDaLiga(league_id)?.pais ?? country}</span>
                   )}

@@ -1433,6 +1433,15 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
                 PRIMARY KEY (fixture_id, dia)
             )
         """)
+        # TIMES FAVORITOS (12/10/2026) · ver routers/personal.py.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS user_times_favoritos (
+                user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                team_id   INTEGER NOT NULL,
+                criado_em TIMESTAMP NOT NULL DEFAULT NOW(),
+                PRIMARY KEY (user_id, team_id)
+            )
+        """)
         # CONFRONTO PELA API (12/10/2026) · ver h2h_api.py.
         import h2h_api
         cur.execute(h2h_api.DDL)
