@@ -738,7 +738,7 @@ def get_today_suggestions(
                    COALESCE(pf.away_team_id, f.away_team_id) AS away_team_id,
                    f.match_datetime
             FROM picks_free pf
-            LEFT JOIN fixtures f ON f.fixture_id = pf.fixture_id
+            LEFT JOIN fixtures_todas f ON f.fixture_id = pf.fixture_id
             WHERE {_pf_where}
             ORDER BY pf.match_date DESC, pf.created_at ASC
         """
@@ -771,12 +771,14 @@ def get_today_suggestions(
                        s.market_type, s.confidence, s.ev, s.probability,
                        s.stake_pct,
                        s.reasoning, s.result, s.profit,
-                       f.league_id,
+                       -- A liga gravada no proprio pick vale quando o jogo nao
+                       -- esta mais em fixtures (11/10/2026, ver migrations).
+                       COALESCE(f.league_id, s.league_id) AS league_id,
                        f.match_datetime,
-                       l.name AS league_name
+                       COALESCE(l.name, s.league_name) AS league_name
                 FROM picks_vip s
-                LEFT JOIN fixtures f ON f.fixture_id = s.fixture_id
-                LEFT JOIN leagues l ON l.league_id = f.league_id
+                LEFT JOIN fixtures_todas f ON f.fixture_id = s.fixture_id
+                LEFT JOIN leagues l ON l.league_id = COALESCE(f.league_id, s.league_id)
                 WHERE {_vip_where}
                 ORDER BY s.match_date DESC, s.confidence DESC
             """, _d)
@@ -850,8 +852,8 @@ def get_today_suggestions(
                        pa.result, pa.profit, pa.created_at,
                        {_sql_escudos_alav(3)}
                 FROM picks_alavancagem pa
-                LEFT JOIN fixtures f1 ON f1.fixture_id = pa.fixture_id_1
-                LEFT JOIN fixtures f2 ON f2.fixture_id = pa.fixture_id_2
+                LEFT JOIN fixtures_todas f1 ON f1.fixture_id = pa.fixture_id_1
+                LEFT JOIN fixtures_todas f2 ON f2.fixture_id = pa.fixture_id_2
                 WHERE {_alav_where}
                 ORDER BY pa.match_date DESC
                 LIMIT 1
@@ -889,7 +891,7 @@ def get_today_suggestions(
                        pf.result, pf.profit, pf.created_at,
                        f.match_datetime, l.name AS league_name
                 FROM picks_faltas pf
-                LEFT JOIN fixtures f ON f.fixture_id = pf.fixture_id
+                LEFT JOIN fixtures_todas f ON f.fixture_id = pf.fixture_id
                 LEFT JOIN leagues  l ON l.league_id  = pf.league_id
                 WHERE {_merc_where.replace('match_date', 'pf.match_date').replace('result IS NULL', 'pf.result IS NULL')}
                 -- Ordem do laco que sobrescrevia esta consulta, nao a que estava
@@ -910,7 +912,7 @@ def get_today_suggestions(
                        pg.result, pg.profit, pg.created_at,
                        f.match_datetime, l.name AS league_name
                 FROM picks_goleiros pg
-                LEFT JOIN fixtures f ON f.fixture_id = pg.fixture_id
+                LEFT JOIN fixtures_todas f ON f.fixture_id = pg.fixture_id
                 LEFT JOIN leagues  l ON l.league_id  = pg.league_id
                 WHERE {_merc_where.replace('match_date', 'pg.match_date').replace('result IS NULL', 'pg.result IS NULL')}
                 ORDER BY pg.edge DESC NULLS LAST
@@ -933,7 +935,7 @@ def get_today_suggestions(
                        pp.result, pp.profit, pp.created_at,
                        f.match_datetime, l.name AS league_name
                 FROM picks_player_stats pp
-                LEFT JOIN fixtures f ON f.fixture_id = pp.fixture_id
+                LEFT JOIN fixtures_todas f ON f.fixture_id = pp.fixture_id
                 LEFT JOIN leagues  l ON l.league_id  = pp.league_id
                 WHERE {_merc_where.replace('match_date', 'pp.match_date').replace('result IS NULL', 'pp.result IS NULL')}
                 ORDER BY pp.score DESC NULLS LAST
@@ -965,7 +967,7 @@ def get_today_suggestions(
                        pb.result, pb.result_ft, pb.result_ht, pb.profit, pb.created_at,
                        f.match_datetime, l.name AS league_name
                 FROM picks_boost pb
-                LEFT JOIN fixtures f ON f.fixture_id = pb.fixture_id
+                LEFT JOIN fixtures_todas f ON f.fixture_id = pb.fixture_id
                 LEFT JOIN leagues  l ON l.league_id  = pb.league_id
                 WHERE {_merc_where.replace('match_date', 'pb.match_date').replace('result IS NULL', 'pb.result IS NULL')}
                 ORDER BY pb.score DESC NULLS LAST
@@ -1017,7 +1019,7 @@ def get_today_suggestions(
                        pb.result, pb.result_ft, pb.result_ht, pb.profit, pb.created_at,
                        f.match_datetime, l.name AS league_name
                 FROM picks_boost pb
-                LEFT JOIN fixtures f ON f.fixture_id = pb.fixture_id
+                LEFT JOIN fixtures_todas f ON f.fixture_id = pb.fixture_id
                 LEFT JOIN leagues  l ON l.league_id  = pb.league_id
                 WHERE {_merc_where.replace('match_date', 'pb.match_date').replace('result IS NULL', 'pb.result IS NULL')}
                 ORDER BY pb.score DESC NULLS LAST
@@ -1046,11 +1048,11 @@ def get_today_suggestions(
                        s.home_team_name, s.away_team_name,
                        s.home_team_id, s.away_team_id,
                        s.odd,
-                       f.league_id, f.match_datetime,
-                       l.name AS league_name
+                       COALESCE(f.league_id, s.league_id) AS league_id, f.match_datetime,
+                       COALESCE(l.name, s.league_name) AS league_name
                 FROM picks_vip s
-                LEFT JOIN fixtures f ON f.fixture_id = s.fixture_id
-                LEFT JOIN leagues l ON l.league_id = f.league_id
+                LEFT JOIN fixtures_todas f ON f.fixture_id = s.fixture_id
+                LEFT JOIN leagues l ON l.league_id = COALESCE(f.league_id, s.league_id)
                 WHERE ({_vip_where}) AND s.result IS NULL
                 ORDER BY s.match_date DESC, s.confidence DESC
             """, _d)
@@ -1111,7 +1113,7 @@ def get_today_suggestions(
                                p.league_id, p.odd,
                                f.match_datetime, l.name AS league_name
                         FROM {tabela} p
-                        LEFT JOIN fixtures f ON f.fixture_id = p.fixture_id
+                        LEFT JOIN fixtures_todas f ON f.fixture_id = p.fixture_id
                         LEFT JOIN leagues  l ON l.league_id  = p.league_id
                         WHERE ({_merc_where.replace('match_date', 'p.match_date').replace('result IS NULL', 'p.result IS NULL')})
                           AND p.result IS NULL
@@ -1143,11 +1145,11 @@ def get_today_suggestions(
                        s.home_team_id, s.away_team_id,
                        s.market, s.line, s.odd,
                        s.result, s.profit,
-                       f.league_id, f.match_datetime,
-                       l.name AS league_name
+                       COALESCE(f.league_id, s.league_id) AS league_id, f.match_datetime,
+                       COALESCE(l.name, s.league_name) AS league_name
                 FROM picks_vip s
-                LEFT JOIN fixtures f ON f.fixture_id = s.fixture_id
-                LEFT JOIN leagues l ON l.league_id = f.league_id
+                LEFT JOIN fixtures_todas f ON f.fixture_id = s.fixture_id
+                LEFT JOIN leagues l ON l.league_id = COALESCE(f.league_id, s.league_id)
                 WHERE ({_vip_where}) AND s.result IS NOT NULL
                 ORDER BY s.match_date DESC, s.id DESC
                 LIMIT 12
@@ -1188,7 +1190,7 @@ def get_today_suggestions(
                                p.result, p.profit,
                                f.match_datetime, l.name AS league_name
                         FROM {tabela} p
-                        LEFT JOIN fixtures f ON f.fixture_id = p.fixture_id
+                        LEFT JOIN fixtures_todas f ON f.fixture_id = p.fixture_id
                         LEFT JOIN leagues  l ON l.league_id  = p.league_id
                         WHERE ({_merc_where.replace('match_date', 'p.match_date').replace('result IS NULL', 'p.result IS NOT NULL')})
                           AND p.result IS NOT NULL
@@ -1697,7 +1699,7 @@ def get_suggestion_detail(
                        f1.league_id      AS fix_league_id,
                        f1.season         AS fix_season
                 FROM picks_alavancagem pa
-                LEFT JOIN fixtures f1 ON f1.fixture_id = pa.fixture_id_1
+                LEFT JOIN fixtures_todas f1 ON f1.fixture_id = pa.fixture_id_1
                 WHERE pa.id = %s
             """, (suggestion_id,))
             row = cur.fetchone()
@@ -1829,7 +1831,7 @@ def get_suggestion_detail(
                        p.fixture_id,
                        f.match_datetime, f.league_id, l.name AS league_name
                   FROM {tabela} p
-             LEFT JOIN fixtures f ON f.fixture_id = p.fixture_id
+             LEFT JOIN fixtures_todas f ON f.fixture_id = p.fixture_id
              LEFT JOIN leagues  l ON l.league_id = f.league_id
                  WHERE p.id = %s
             """, (suggestion_id,))
@@ -1894,7 +1896,7 @@ def get_suggestion_detail(
                        f.match_datetime,
                        f.league_id AS fix_league_id, f.season AS fix_season
                 FROM picks_free pf
-                LEFT JOIN fixtures f ON f.fixture_id = pf.fixture_id
+                LEFT JOIN fixtures_todas f ON f.fixture_id = pf.fixture_id
                 WHERE pf.id = %s
             """, (suggestion_id,))
             row = cur.fetchone()
@@ -1906,7 +1908,7 @@ def get_suggestion_detail(
             cur.execute("""
                 SELECT s.*, f.match_datetime, f.league_id AS fix_league_id, f.season AS fix_season
                 FROM picks_vip s
-                LEFT JOIN fixtures f ON f.fixture_id = s.fixture_id
+                LEFT JOIN fixtures_todas f ON f.fixture_id = s.fixture_id
                 WHERE s.id = %s
             """, (suggestion_id,))
             row = cur.fetchone()
@@ -2161,7 +2163,7 @@ def get_recent_results(
                    pf.confidence, pf.result, pf.profit,
                    COALESCE(ufp.stake_units, 1) AS stake
             FROM picks_free pf
-            LEFT JOIN fixtures f ON f.fixture_id = pf.fixture_id
+            LEFT JOIN fixtures_todas f ON f.fixture_id = pf.fixture_id
             LEFT JOIN user_followed_picks ufp
                 ON ufp.pick_id = pf.id AND ufp.pick_type = 'free' AND ufp.user_id = %s
             WHERE pf.result IS NOT NULL
@@ -2288,7 +2290,7 @@ def get_recent_results(
                    pa.confidence AS confidence,
                    pa.result, pa.profit
             FROM picks_alavancagem pa
-            LEFT JOIN fixtures f1 ON f1.fixture_id = pa.fixture_id_1
+            LEFT JOIN fixtures_todas f1 ON f1.fixture_id = pa.fixture_id_1
             WHERE pa.result IS NOT NULL
             ORDER BY pa.match_date DESC, pa.id DESC
             LIMIT %s
@@ -2345,7 +2347,7 @@ def get_picks_free_history(
                    COALESCE(pf.home_team_id, f.home_team_id) AS home_team_id,
                    COALESCE(pf.away_team_id, f.away_team_id) AS away_team_id
             FROM picks_free pf
-            LEFT JOIN fixtures f ON f.fixture_id = pf.fixture_id
+            LEFT JOIN fixtures_todas f ON f.fixture_id = pf.fixture_id
             {where}
             ORDER BY pf.match_date DESC
             LIMIT %s

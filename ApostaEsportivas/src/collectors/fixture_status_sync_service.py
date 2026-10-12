@@ -15,6 +15,37 @@ FINALIZED_STATUSES = {
 
 TZ_BR = ZoneInfo("America/Sao_Paulo")
 
+#: O jogo encerrado sai de `fixtures` mas o card do pick ainda precisa da liga e
+#: do horario dele. A MESMA DDL esta' em website/backend/migrations.py -- quem
+#: rodar primeiro cria. Ver `delete_fixtures`.
+SQL_TABELA_DE_ARQUIVO = """
+    CREATE TABLE IF NOT EXISTS fixtures_arquivo (
+        fixture_id     INTEGER PRIMARY KEY,
+        league_id      INTEGER,
+        season         INTEGER,
+        home_team_id   INTEGER,
+        away_team_id   INTEGER,
+        home_team      TEXT,
+        away_team      TEXT,
+        match_datetime TIMESTAMP,
+        status         TEXT,
+        referee        TEXT,
+        round          TEXT,
+        arquivado_em   TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+"""
+
+SQL_ARQUIVAR = """
+    INSERT INTO fixtures_arquivo (fixture_id, league_id, season, home_team_id,
+        away_team_id, home_team, away_team, match_datetime, status, referee, round)
+    SELECT fixture_id, league_id, season, home_team_id, away_team_id,
+           home_team, away_team, match_datetime, status, referee, round
+      FROM fixtures WHERE fixture_id = ANY(%s)
+    ON CONFLICT (fixture_id) DO UPDATE
+       SET status = EXCLUDED.status, match_datetime = EXCLUDED.match_datetime,
+           referee = EXCLUDED.referee, arquivado_em = NOW()
+"""
+
 
 def _para_br_naive(dt_str: str) -> datetime:
     """ISO da API (UTC) -> datetime ingenuo em horario de Brasilia.
@@ -137,12 +168,29 @@ class FixtureStatusSyncService:
         self.delete_fixtures([fixture_id])
 
     def delete_fixtures(self, fixture_ids):
-        """Deleta em uma query só. Era uma conexão nova por fixture."""
+        """Deleta em uma query só. Era uma conexão nova por fixture.
+
+        ARQUIVA ANTES DE APAGAR (11/10/2026). O card de pick do site tira a liga
+        e o HORARIO do jogo desta tabela; apagado o jogo encerrado, o pick
+        resolvido ficava sem os dois (visto pelo usuario em Lazio x Monza). A
+        tabela continua so' com o que esta' por vir -- quem conta com isso nao
+        muda --, e o que sai vai pra `fixtures_arquivo`, que o site le' junto
+        (view `fixtures_todas`). Falha no arquivo nunca impede o DELETE.
+        """
         if not fixture_ids:
             return
 
         conn = get_connection()
         cur = conn.cursor()
+
+        try:
+            cur.execute("SAVEPOINT arquivo")
+            cur.execute(SQL_TABELA_DE_ARQUIVO)
+            cur.execute(SQL_ARQUIVAR, (list(fixture_ids),))
+            cur.execute("RELEASE SAVEPOINT arquivo")
+        except Exception as e:
+            cur.execute("ROLLBACK TO SAVEPOINT arquivo")
+            print(f"[DELETE] arquivo de fixtures indisponivel: {e}")
 
         cur.execute("DELETE FROM fixtures WHERE fixture_id = ANY(%s)",
                     (list(fixture_ids),))
