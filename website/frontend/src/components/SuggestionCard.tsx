@@ -616,16 +616,21 @@ function SuggestionCard({
             return (
               <>
                 <div className="flex-1 px-4 py-3 text-center">
+                  {/* "RESULTADO DO PICK", E NAO "LUCRO" (12/10/2026, pedido do
+                      usuario: "estava como se eu tivesse perdido, nem apostei").
+                      Sem a coluna "Sua aposta", o "-4.00u" de quem nao seguiu
+                      lia como prejuizo DELE. O numero e' do pick, na stake
+                      sugerida, e a linha de baixo diz isso com todas as letras. */}
                   <div className="text-[10px] text-ink-3 mb-0.5">
-                    {seguiu ? 'Seu lucro' : 'Lucro do pick'}
+                    {seguiu ? 'Seu lucro' : 'Resultado do pick'}
                   </div>
                   {contaU ? (
                     <>
                       <div className={`text-xl font-black ${color}`}>
                         {p >= 0 ? '+' : ''}{p.toFixed(2)}u
                       </div>
-                      <div className="text-[10px] text-ink-4">
-                        {seguiu ? `(${u}u)` : `por ${u}u`}
+                      <div className="text-[10px] text-ink-4 leading-tight">
+                        {seguiu ? `(${u}u)` : <>stake sugerida {u}u<br />você não apostou</>}
                       </div>
                     </>
                   ) : (
