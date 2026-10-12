@@ -40,15 +40,18 @@ export interface ContextoTour {
    registrar e como acompanhar. Quem apresenta produto e' o tour do VIP, que
    abre quando o acesso libera. Produto citado nos dois vira a mesma explicacao
    duas vezes em poucos dias. */
+/* 9 desde 12/10/2026 (pedido do usuario): entraram "Raio-X de cada jogo" e
+   "Agente IA". Sao lugares do SITE, que todo mundo ve -- quem pulava o tour do
+   VIP nunca descobria os dois. */
 /** Passos do roteiro de boas-vindas que toda conta vê. */
-export const PASSOS_FIXOS = 7
+export const PASSOS_FIXOS = 9
 
 /**
  * Maior roteiro de boas-vindas possível. É o teto que o backend valida em
  * `tutorial_step`. Mudar aqui exige mudar `TUTORIAL_TOTAL_STEPS` em
  * routers/personal.py · há teste travando os dois juntos.
  */
-export const MAX_PASSOS = 9
+export const MAX_PASSOS = 11
 
 /**
  * Roteiro do VIP · o que a assinatura abriu.

@@ -188,16 +188,19 @@ export const TOUR_STEPS_VIP: TourStep[] = [
     Icon: BolaDeFutebol,
     rota: '/picks',
     alvos: ['[data-tour="nav-jogos"]'],
-    resumo: 'Na aba Jogos, clicar numa partida passa a abrir os números dela em vez do convite para assinar.',
+    resumo: 'Na aba Jogos, clicar numa partida passa a abrir o Raio-X completo dela em vez do convite para assinar.',
     corpo: (
       <div className="space-y-3">
+        {/* 12/10/2026: o texto antigo falava do cadeado que sumiu e nao do
+            que o Raio-X tem hoje (abas, odds e o bilhete montado). */}
         <p className="text-xs text-ink-2 leading-relaxed">
-          São os mesmos números que o motor lê para decidir os picks, escanteios, faltas,
-          cartões e chutes, jogo a jogo. Serve tanto para conferir um pick quanto para
-          olhar uma partida que a IA não escolheu.
+          São os mesmos números que o motor lê para decidir os picks: mercados linha a linha,
+          jogadores, escalação, tabela, confronto direto e forma, com as odds das casas ao lado.
+          Serve para conferir um pick ou pesquisar um jogo que a IA não escolheu.
         </p>
         <p className="text-[11px] text-ink-3 leading-relaxed">
-          O cadeado que aparecia ao clicar num jogo não aparece mais.
+          Tocando nas linhas você monta o seu bilhete; ele fica em Minhas Apostas e fecha
+          sozinho quando os jogos acabam.
         </p>
       </div>
     ),
