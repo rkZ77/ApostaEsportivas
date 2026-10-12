@@ -30,7 +30,7 @@ import ResumoDaIA from './ResumoDaIA'
  * A conta (linha, taxa, média) é toda de lib/raioX.ts · aqui é só desenho.
  */
 
-type Aba = 'mercados' | 'jogadores' | 'escalacao' | 'tabela' | 'confronto' | 'forma'
+type Aba = 'mercados' | 'ia' | 'jogadores' | 'escalacao' | 'tabela' | 'confronto' | 'forma'
 
 export interface JogoBase {
   fixture_id: number
@@ -125,18 +125,18 @@ export default function RaioXDoJogo({ jogo }: { jogo: JogoBase }) {
   return (
     <div className="min-w-0">
       <Placar jogo={jogo} dados={dados} aoVivo={aoVivoAgora} />
-      <ResumoDaIA fixtureId={jogo.fixture_id} />
 
       {/* Abas fixas ao rolar · no celular a lista de jogadores é longa e a
           troca de aba não pode exigir voltar ao topo. */}
       <div className="sticky top-0 z-20 -mx-4 px-4 sm:mx-0 sm:px-0 bg-surface-0/95 backdrop-blur border-b border-line">
-        {/* Seis abas não cabem numa linha de celular, e aba escondida fora da
-            tela é aba que ninguém descobre: no celular viram 3 x 2, todas à
-            vista; do tablet pra cima, uma linha só. */}
-        <div className="grid grid-cols-3 sm:flex" role="tablist">
+        {/* Sete abas não cabem numa linha de celular, e aba escondida fora da
+            tela é aba que ninguém descobre: no celular viram 4 + 3, todas à
+            vista; do tablet pra cima, uma linha só. A Leitura da IA virou aba
+            (12/10/2026, pedido do usuário) em vez de bloco acima delas. */}
+        <div className="grid grid-cols-4 sm:flex" role="tablist">
           {([
-            ['mercados', 'Mercados'], ['jogadores', 'Jogadores'], ['escalacao', 'Escalação'], ['tabela', 'Tabela'],
-            ['confronto', 'Confronto'], ['forma', 'Forma'],
+            ['mercados', 'Mercados'], ['ia', 'Leitura IA'], ['jogadores', 'Jogadores'], ['escalacao', 'Escalação'],
+            ['tabela', 'Tabela'], ['confronto', 'Confronto'], ['forma', 'Forma'],
           ] as [Aba, string][]).map(([k, rotulo]) => (
             <button key={k} role="tab" aria-selected={aba === k} onClick={() => setAba(k)}
               className={cn(
@@ -161,6 +161,10 @@ export default function RaioXDoJogo({ jogo }: { jogo: JogoBase }) {
           </div>
         ) : aba === 'mercados' ? (
           <AbaMercados dados={vistos!} nomeJogo={nomeJogo} odds={odds} oddsAoVivo={oddsAoVivo} mando={mando} setMando={setMando} />
+        ) : aba === 'ia' ? (
+          /* Pedida só ao abrir a aba: na primeira vez do dia é ela que faz o
+             servidor gerar, então quem não olha não gasta IA. */
+          <ResumoDaIA fixtureId={dados.fixture.fixture_id} />
         ) : aba === 'jogadores' ? (
           <AbaJogadores dados={vistos!} nomeJogo={nomeJogo} mando={mando} setMando={setMando} />
         ) : aba === 'escalacao' ? (
