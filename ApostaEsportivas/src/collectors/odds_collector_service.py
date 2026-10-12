@@ -3,6 +3,7 @@ import re
 
 from psycopg2.extras import execute_batch
 from utils.db_utils import get_connection
+from utils import esquema
 from utils.api_client import buscar, ApiFootballError, ApiQuotaEsgotada
 from dotenv import load_dotenv, find_dotenv
 from services.pick_engine.stats_model import classify_market
@@ -287,9 +288,9 @@ def _create_odds_snapshots_table(cur) -> None:
             captured_at        TIMESTAMP DEFAULT NOW()
         );
     """)
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_odds_snapshots_fixture "
+    esquema.ddl(cur, "CREATE INDEX IF NOT EXISTS idx_odds_snapshots_fixture "
                 "ON odds_snapshots (fixture_id, market_id, value_name);")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_odds_snapshots_captured "
+    esquema.ddl(cur, "CREATE INDEX IF NOT EXISTS idx_odds_snapshots_captured "
                 "ON odds_snapshots (captured_at DESC);")
 
 

@@ -67,6 +67,28 @@ def test_tabela_nova_cria_e_depois_as_colunas_na_ordem():
     assert cur.executados[2].startswith("ALTER TABLE")
 
 
+class _CurComRestricao(_Cur):
+    def __init__(self, tabelas, restricoes):
+        super().__init__(tabelas)
+        self.restricoes = set(restricoes)
+
+    def execute(self, sql, args=None):
+        if "pg_constraint" in sql:
+            self._ultimo = [(1,)] if args in self.restricoes else [None]
+            return
+        super().execute(sql, args)
+
+
+def test_drop_so_quando_ainda_existe():
+    """DROP ... IF EXISTS tambem pede o lock: so' roda se ainda tiver o que soltar."""
+    sqls = ["ALTER TABLE picks_alavancagem DROP CONSTRAINT IF EXISTS picks_alavancagem_match_date_key",
+            "DROP INDEX IF EXISTS idx_existente_velho"]
+    em_dia = _CurComRestricao({}, [])
+    assert esquema.faltando(em_dia, sqls[:1]) == []
+    velho = _CurComRestricao({}, [("picks_alavancagem", "picks_alavancagem_match_date_key")])
+    assert esquema.faltando(velho, sqls) == sqls
+
+
 def test_coluna_comparada_sem_caixa():
     cur = _Cur({"match_statistics": {"Round"}})
     assert esquema.faltando(cur, ["ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS round TEXT"]) == []

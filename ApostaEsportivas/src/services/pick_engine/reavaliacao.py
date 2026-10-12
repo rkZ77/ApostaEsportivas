@@ -50,6 +50,7 @@ import os
 from statistics import median
 
 from services.pick_engine import contexto_atual
+from utils import esquema
 from services.pick_engine.config import DEFAULT_CONFIG
 
 DDL = (
@@ -235,7 +236,7 @@ def reavaliar_fixture(cur, fixture_id: int) -> list:
     if not habilitada():
         return []
     for sql in DDL:
-        cur.execute(sql)
+        esquema.ddl(cur, sql)
     cur.execute("SELECT home_team_id, away_team_id, match_datetime FROM fixtures "
                 "WHERE fixture_id = %s", (fixture_id,))
     fx = cur.fetchone()

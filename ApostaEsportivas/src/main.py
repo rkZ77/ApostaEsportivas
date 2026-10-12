@@ -74,6 +74,7 @@ from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv())
 
 from utils.db_utils import get_connection
+from utils import esquema
 
 
 # ─────────────────────────────────────────────────────────────
@@ -624,7 +625,7 @@ def run_migrations():
     cur = conn.cursor()
     for sql in migrations:
         try:
-            cur.execute(sql)
+            esquema.ddl(cur, sql)
             conn.commit()
             print(f"[MIGRATE] OK: {sql.strip()}")
         except Exception as e:

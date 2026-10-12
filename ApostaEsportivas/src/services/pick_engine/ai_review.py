@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from utils.db_utils import get_connection
+from utils import esquema
 
 
 # Provider padrao por pipeline (2026-07-31, pedido do usuario): Claude nos
@@ -562,7 +563,7 @@ class AIReviewGate:
             model TEXT NOT NULL, review JSONB NOT NULL, expires_at TIMESTAMP NOT NULL,
             created_at TIMESTAMP DEFAULT NOW()
         )""")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_ai_pick_reviews_expiry ON ai_pick_reviews (expires_at)")
+        esquema.ddl(cur, "CREATE INDEX IF NOT EXISTS idx_ai_pick_reviews_expiry ON ai_pick_reviews (expires_at)")
         cur.execute("""CREATE TABLE IF NOT EXISTS ai_pick_review_events (
             id BIGSERIAL PRIMARY KEY, cache_key TEXT NOT NULL, pipeline TEXT NOT NULL,
             mode TEXT NOT NULL, provider TEXT NOT NULL, model TEXT NOT NULL,
@@ -570,7 +571,7 @@ class AIReviewGate:
             cached BOOLEAN NOT NULL DEFAULT FALSE, review JSONB NOT NULL,
             created_at TIMESTAMP DEFAULT NOW()
         )""")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_ai_pick_review_events_created ON ai_pick_review_events (created_at DESC)")
+        esquema.ddl(cur, "CREATE INDEX IF NOT EXISTS idx_ai_pick_review_events_created ON ai_pick_review_events (created_at DESC)")
         conn.commit()
         cur.close()
         conn.close()

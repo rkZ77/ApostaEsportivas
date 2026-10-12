@@ -93,6 +93,7 @@ import math
 import os
 from collections import Counter
 from datetime import date, datetime, timedelta
+from utils import esquema
 
 FATORES = ("tecnico", "forma", "desfalques", "dados")
 
@@ -705,7 +706,7 @@ def tecnico_atual(cur, team_id: int, instante: datetime | None = None) -> tuple:
     conhecido -- e nada e' consultado na API, que so' sabe o presente."""
     try:
         for sql in _DDL_TECNICO:
-            cur.execute(sql)
+            esquema.ddl(cur, sql)
         cur.execute("""
             SELECT coach_id, coach_name, inicio, consultado_em,
                    (NOW() - consultado_em) < INTERVAL '24 hours' AS fresco

@@ -24,6 +24,7 @@ import json
 import textwrap
 import traceback
 from utils.db_utils import get_connection
+from utils import esquema
 from utils.data_br import HOJE_BR, APITO_FUTURO
 from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
@@ -140,22 +141,22 @@ def _create_table_if_needed(cur):
     # Tabela ja' existe em PROD, entao ALTER (CREATE TABLE IF NOT EXISTS acima
     # nao adiciona coluna em tabela criada antes; mesmo gap de migracao ja'
     # documentado em multipla_pipeline.py).
-    cur.execute("ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS ai_review JSONB;")
+    esquema.ddl(cur, "ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS ai_review JSONB;")
     # engine_debug (2026-09-11, V2): o documento de decisao do bilhete. Mesmo
     # gap de migracao das colunas abaixo -- a tabela ja' existe em PROD, o
     # CREATE acima nao a adiciona, e sem o ALTER o INSERT quebra no deploy.
-    cur.execute("ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS engine_debug JSONB;")
+    esquema.ddl(cur, "ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS engine_debug JSONB;")
     # Mesmo gap: a tabela ja' existe em PROD, e o CREATE acima nao adiciona
     # coluna nova nela. Sem estes ALTERs o INSERT de _save_pick quebra na
     # primeira rodada depois do deploy. Ver a migracao equivalente do site em
     # website/backend/migrations.py, que tambem faz o backfill do historico.
     for _n in (1, 2, 3):
-        cur.execute(f"ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS home_team_id_{_n} INTEGER;")
-        cur.execute(f"ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS away_team_id_{_n} INTEGER;")
+        esquema.ddl(cur, f"ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS home_team_id_{_n} INTEGER;")
+        esquema.ddl(cur, f"ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS away_team_id_{_n} INTEGER;")
         # market_id por perna (2026-10-05): era o unico produto sem ele, e sem
         # market_id a perna nao casa com o fechamento -- alavancagem nao tinha
         # CLV nenhum. Ver picks_ledger_sync_service._fechamento.
-        cur.execute(f"ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS market_id_{_n} INTEGER;")
+        esquema.ddl(cur, f"ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS market_id_{_n} INTEGER;")
     # UM CAMINHO POR DIA ERA REGRA DO BANCO (2026-09-15). `match_date DATE
     # UNIQUE` nasceu na epoca em que a alavancagem era uma aposta so' por dia,
     # e sobreviveu a MAX_CAMINHOS_POR_DIA=5: o motor abria o segundo caminho,
@@ -165,7 +166,7 @@ def _create_table_if_needed(cur):
     # caminhos: o teto de cinco nunca teve como valer.
     #
     # Mesmo defeito, e mesma correcao, do indice unico da multipla (V2).
-    cur.execute("ALTER TABLE picks_alavancagem "
+    esquema.ddl(cur, "ALTER TABLE picks_alavancagem "
                 "DROP CONSTRAINT IF EXISTS picks_alavancagem_match_date_key;")
 
 
