@@ -2306,6 +2306,42 @@ def veredito_do_cache(fid: int, market: str, market_type: str | None, line: str,
     return resultado if resultado in (settlement.GREEN, settlement.RED, settlement.PUSH) else None
 
 
+def amarelos_do_cache(fid: int, lado: str | None, periodo: str = "total") -> tuple[float | None, str | None]:
+    """(amarelos, status do jogo) lidos SO' do cache, pro bilhete pessoal.
+
+    O bilhete conta cartao como AMARELO (match_statistics.yellow_cards), e nao
+    na regra dos picks (vermelho vale 2, banco fora) · por isso nao passa por
+    `veredito_do_cache`. Mesma trava de folha: crua, do mesmo status e fresca.
+    `lado` None = jogo inteiro. Folha ausente devolve (None, status).
+    """
+    entrada = _fix_cache.get(int(fid))
+    if not entrada or time.time() - entrada[0] > _IDADE_MAXIMA_DO_CACHE:
+        return None, None
+    fix_data = entrada[1]
+    status = ((fix_data.get("fixture") or {}).get("status") or {}).get("short")
+    if periodo == "2t" and status in ("TBD", "NS", "1H", "HT"):
+        return None, status
+    times = fix_data.get("teams") or {}
+    t1, t2 = _SO_CACHE.set(True), _LIQUIDANDO_DO_CACHE.set(True)
+    try:
+        folha = _fetch_stats(int(fid), status)
+    finally:
+        _LIQUIDANDO_DO_CACHE.reset(t2)
+        _SO_CACHE.reset(t1)
+    chave = ("statistics_1h" if periodo == "1t" and status not in ("1H",)
+             else "statistics_2h" if periodo == "2t" else "statistics")
+    casa, fora = _parse_stats(folha, (times.get("home") or {}).get("id"),
+                              (times.get("away") or {}).get("id"), chave=chave)
+    a_casa, a_fora = casa.get("Yellow Cards"), fora.get("Yellow Cards")
+    if lado == "home":
+        return (None if a_casa is None else float(a_casa)), status
+    if lado == "away":
+        return (None if a_fora is None else float(a_fora)), status
+    if a_casa is None or a_fora is None:
+        return None, status
+    return float(a_casa + a_fora), status
+
+
 def leitura_ao_vivo_do_pick(item: dict, agora: float | None = None) -> dict | None:
     """O jogo do pick agora, lido SO' do cache. None = nada a mostrar.
 

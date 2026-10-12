@@ -336,11 +336,13 @@ def veredito_ao_vivo(perna: dict) -> str | None:
     Sem cache, devolve None e o caminho por `match_statistics` decide como
     sempre.
 
-    Cartao fica de fora: o bilhete conta so' amarelo (ver `_so_amarelos` em
-    routers/live.py) e a regra dos picks soma vermelho como 2.
+    Cartao vai por `_veredito_de_cartao`: o bilhete conta so' amarelo (ver
+    `_so_amarelos` em routers/live.py), e a regra dos picks soma vermelho como 2.
     """
-    if perna.get("tipo") != "time" or str(perna.get("mercado", "")).startswith("cartoes"):
+    if perna.get("tipo") != "time":
         return None
+    if str(perna.get("mercado", "")).startswith("cartoes"):
+        return _veredito_de_cartao(perna)
     try:
         mercado = mercado_ao_vivo(perna)
         if not mercado:
@@ -352,6 +354,40 @@ def veredito_ao_vivo(perna: dict) -> str | None:
         logger.warning("[BILHETE] veredito ao vivo falhou", exc_info=True)
         return None
     return _DO_SETTLEMENT.get(r) if r else None
+
+
+_FIM_DO_JOGO = ("FT", "AET", "PEN")
+#: O 1o tempo de cartao fecha com o 2o tempo rolando · mesma folga de
+#: routers/live._1T_ENCERRADO_FOLHA (cartao dos acrescimos ainda chegando).
+_FIM_DO_1T = ("2H", "ET", "BT", "P") + _FIM_DO_JOGO
+
+
+def _veredito_de_cartao(perna: dict) -> str | None:
+    """Cartao do bilhete, em AMARELOS, pelo cache (11/10/2026).
+
+    No fim do periodo decide pela regra do bilhete (`_decide`). Antes disso,
+    so' o que nao volta: amarelo nao e' retirado, entao passar da linha ja'
+    e' GREEN no "mais" e RED no "menos". Prorrogacao fica pro caminho antigo
+    (a folha soma os 120 minutos).
+    """
+    try:
+        from routers import live
+        periodo = perna.get("periodo") or "total"
+        lado = perna.get("lado_time") if perna["mercado"].endswith("_time") else None
+        valor, status = live.amarelos_do_cache(perna["fixture_id"], lado, periodo)
+    except Exception:
+        logger.warning("[BILHETE] cartao do cache falhou", exc_info=True)
+        return None
+    if valor is None or status is None:
+        return None
+    linha, direcao = float(perna["linha"]), perna["direcao"]
+    if periodo != "1t" and status in ("AET", "PEN"):
+        return None
+    if status in (_FIM_DO_1T if periodo == "1t" else _FIM_DO_JOGO):
+        return _decide(valor, direcao, linha)
+    if valor > linha:
+        return "GREEN" if direcao == "mais" else "RED"
+    return None
 
 
 # ── banco ─────────────────────────────────────────────────────────────────
