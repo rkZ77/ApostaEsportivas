@@ -824,11 +824,11 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
             return (
               <>
                 <div className="flex-1 px-4 py-3 text-center">
-                  <div className="text-[10px] text-ink-3 mb-0.5">{seguiu ? 'Seu lucro' : 'Lucro do pick'}</div>
+                  <div className="text-[10px] text-ink-3 mb-0.5">{seguiu ? 'Seu lucro' : 'Resultado do pick'}</div>
                   <div className={`text-xl font-black ${color}`}>
                     {p >= 0 ? '+' : ''}{p.toFixed(2)}u
                   </div>
-                  <div className="text-[10px] text-ink-4">{seguiu ? `(${u}u)` : `por ${u}u`}</div>
+                  <div className="text-[10px] text-ink-4">{seguiu ? `(${u}u)` : `stake sugerida ${u}u`}</div>
                 </div>
                 <div className="flex-1 px-4 py-3 text-center">
                   {seguiu ? (
@@ -1277,11 +1277,11 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
             return (
               <>
                 <div className="flex-1 px-4 py-3 text-center">
-                  <div className="text-[10px] text-ink-3 mb-0.5">{seguiu ? 'Seu lucro' : 'Lucro do pick'}</div>
+                  <div className="text-[10px] text-ink-3 mb-0.5">{seguiu ? 'Seu lucro' : 'Resultado do pick'}</div>
                   <div className={`text-xl font-black ${color}`}>
                     {p >= 0 ? '+' : ''}{p.toFixed(2)}u
                   </div>
-                  <div className="text-[10px] text-ink-4">{seguiu ? `(${u}u)` : `por ${u}u`}</div>
+                  <div className="text-[10px] text-ink-4">{seguiu ? `(${u}u)` : `stake sugerida ${u}u`}</div>
                 </div>
                 <div className="flex-1 px-4 py-3 text-center">
                   {seguiu ? (
@@ -2379,7 +2379,7 @@ function CardResolvido({ p }: { p: PickResolvidoAberto }) {
         )}
         {lucro != null && (
           <div className="flex-1 px-4 py-3 text-center">
-            <div className="text-[10px] text-ink-3 mb-0.5">Lucro do pick</div>
+            <div className="text-[10px] text-ink-3 mb-0.5">Resultado do pick</div>
             <div className={`text-xl font-black ${lucro >= 0 ? 'text-green-400' : 'text-red-400'}`}>
               {lucro >= 0 ? '+' : ''}{lucro.toFixed(2)}u
             </div>
