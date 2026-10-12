@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useMemo } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence, m as motion } from 'framer-motion'
 import api from '../services/api'
 import PageShell from '../components/PageShell'
@@ -160,12 +160,20 @@ interface LiveStats {
 }
 
 type PageTab = 'jogos' | 'estatistica'
+type Filtro = 'todos' | 'pick' | 'aovivo'
+interface EstadoDaLista { date: string; filtro: Filtro; busca: string; rolagem: number }
 
 export default function Fixtures() {
   const { isVip, isAdmin, user }   = useAuth()
   const canSeeStats = isVip || isAdmin || user?.plan === 'trial'
+  /* VOLTAR DO RAIO-X (12/10/2026, celular). `abrirJogo` grava na entrada do
+     histórico desta lista o dia, o filtro, a busca e a rolagem; o voltar do
+     Raio-X traz a lista de volta como estava. Entrar pelo menu não tem estado
+     e abre em hoje, no topo. */
+  const location = useLocation()
+  const [voltando] = useState(() => (location.state as { lista?: EstadoDaLista } | null)?.lista ?? null)
   const [pageTab, setPageTab]      = useState<PageTab>('jogos')
-  const [date, setDate]            = useState(TODAY)
+  const [date, setDate]            = useState(voltando?.date ?? TODAY)
   const [fixtures, setFixtures]    = useState<Fixture[]>([])
   const [loading, setLoading]      = useState(true)
   const [statsFixture, setStatsFixture] = useState<Fixture | null>(null)
@@ -222,8 +230,8 @@ export default function Fixtures() {
   const [collapsed, setCollapsed]      = useState<Set<string>>(new Set())
   const [liveStats, setLiveStats]      = useState<Record<number, LiveStats>>({})
   const [erro, setErro]                = useState(false)
-  const [busca, setBusca]              = useState('')
-  const [filtro, setFiltro]            = useState<'todos' | 'pick' | 'aovivo'>('todos')
+  const [busca, setBusca]              = useState(voltando?.busca ?? '')
+  const [filtro, setFiltro]            = useState<Filtro>(voltando?.filtro ?? 'todos')
   const navigate = useNavigate()
 
   /*
@@ -245,8 +253,20 @@ export default function Fixtures() {
     q.set('liga', f.league_name)
     q.set('casa', f.home_team); q.set('fora', f.away_team)
     if (f.match_datetime) q.set('quando', f.match_datetime)
-    navigate(`/jogos/${f.fixture_id}?${q}`)
+    const lista: EstadoDaLista = { date, filtro, busca, rolagem: window.scrollY }
+    navigate(location.pathname + location.search, { replace: true, state: { lista } })
+    navigate(`/jogos/${f.fixture_id}?${q}`, { state: { daLista: true } })
   }
+
+  /* De volta do Raio-X: a rolagem só depois que a lista carregou, senão a
+     página ainda não tem altura para chegar lá. Uma vez só. */
+  const rolagemPendente = useRef(voltando?.rolagem ?? 0)
+  useEffect(() => {
+    if (loading || !rolagemPendente.current) return
+    const y = rolagemPendente.current
+    rolagemPendente.current = 0
+    requestAnimationFrame(() => window.scrollTo(0, y))
+  }, [loading])
 
   function fetchFixtures(d: string) {
     setLoading(true)
@@ -275,7 +295,7 @@ export default function Fixtures() {
     })
   }
 
-  useEffect(() => { fetchFixtures(TODAY) }, [])
+  useEffect(() => { fetchFixtures(date) }, [])
 
   /*
    * Atualiza estatísticas ao vivo a cada 30s para jogos em andamento.
@@ -433,7 +453,7 @@ export default function Fixtures() {
 
         {/* Busca e recortes · no celular a lista de um sábado passa de 40
             jogos, e achar "o do Flamengo" rolando é o que mais se faz aqui. */}
-        <div className="flex flex-col sm:flex-row gap-2 mb-4 lg:max-w-[720px]">
+        <div className="flex flex-col sm:flex-row gap-2 mb-3 sm:mb-4 lg:max-w-[720px]">
           <SearchInput value={busca} onChange={setBusca} placeholder="Buscar time ou liga"
             label="Buscar jogo" className="flex-1" />
           <div className="flex gap-2">
@@ -446,7 +466,7 @@ export default function Fixtures() {
             ))}
           </div>
         </div>
-        <p className="text-[11px] text-ink-3 mb-4">
+        <p className="hidden sm:block text-[11px] text-ink-3 mb-4">
           Só as ligas cadastradas no site. Toque num jogo pra abrir o Raio-X: taxa de acerto por linha,
           jogadores, confronto e árbitro.
         </p>
@@ -484,7 +504,7 @@ export default function Fixtures() {
              selecionado, que é onde a largura de tela realmente ajuda.
           */
           <div className="lg:flex lg:gap-5 lg:items-start">
-          <div className="grid gap-5 items-start lg:w-[420px] xl:w-[460px] lg:shrink-0">
+          <div className="grid gap-3 sm:gap-5 items-start lg:w-[420px] xl:w-[460px] lg:shrink-0">
             {grouped.map(({ key: league, league_id, logo, flag, country, games }, i) => {
               const isCopa = league_id === 1
               return (
@@ -494,7 +514,7 @@ export default function Fixtures() {
 
                 {/* Cabeçalho da liga com logo + bandeira (clicável para recolher) */}
                 <div
-                  className={`px-4 py-3 border-b flex items-center gap-2.5 cursor-pointer select-none ${isCopa ? 'bg-yellow-950/40 border-yellow-700/30' : 'bg-surface-2/60 border-line'}`}
+                  className={`px-3 sm:px-4 py-2 sm:py-3 border-b flex items-center gap-2.5 cursor-pointer select-none ${isCopa ? 'bg-yellow-950/40 border-yellow-700/30' : 'bg-surface-2/60 border-line'}`}
                   onClick={() => toggleCollapse(league)}
                 >
                   {logo && (
@@ -539,7 +559,7 @@ export default function Fixtures() {
                     return (
                       <div key={f.fixture_id}>
                       <div
-                        className={`flex items-center gap-3 px-3 sm:px-4 py-2.5 transition-colors cursor-pointer ${
+                        className={`flex items-center gap-2.5 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 transition-colors cursor-pointer ${
                           f.has_pick ? 'border-l-2 border-green-500/40' : ''} ${
                           // Selecionado fica marcado: com o painel ao lado, sem
                           // isso não dá pra saber de qual jogo ele fala.
@@ -575,7 +595,7 @@ export default function Fixtures() {
 
                         <div className="w-px self-stretch bg-line/60 shrink-0" />
 
-                        <div className="flex-1 min-w-0 space-y-1">
+                        <div className="flex-1 min-w-0 space-y-0.5 sm:space-y-1">
                           {([
                             ['home', f.home_team, f.home_team_id, f.home_goals, f.away_goals, f.forma_home] as const,
                             ['away', f.away_team, f.away_team_id, f.away_goals, f.home_goals, f.forma_away] as const,

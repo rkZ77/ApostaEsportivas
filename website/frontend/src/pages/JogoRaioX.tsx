@@ -1,4 +1,4 @@
-import { useParams, useSearchParams, Link } from 'react-router-dom'
+import { useLocation, useParams, useSearchParams, Link } from 'react-router-dom'
 import { Lock } from 'lucide-react'
 import PageShell from '../components/PageShell'
 import RaioXDoJogo from '../components/jogos/RaioXDoJogo'
@@ -31,10 +31,15 @@ export default function JogoRaioX() {
     match_datetime: q.get('quando'),
   }
   const titulo = jogo.home_team && jogo.away_team ? `${jogo.home_team} x ${jogo.away_team}` : 'Raio-X do jogo'
+  /* Veio da lista: voltar é VOLTAR (12/10/2026), e a lista reaparece no dia,
+     filtro e rolagem em que estava (ver Fixtures, `estadoDaLista`). Abrir
+     /jogos de novo empilhava uma lista nova, no dia de hoje e no topo. Link
+     aberto direto (compartilhado) não tem para onde voltar: vai para /jogos. */
+  const daLista = !!(useLocation().state as { daLista?: boolean } | null)?.daLista
 
   return (
     <PageShell title={titulo} noindex width="narrow" footer={false}
-      bar={{ back: '/jogos', title: 'Raio-X do jogo' }}>
+      bar={{ back: daLista ? true : '/jogos', title: 'Raio-X do jogo' }}>
       {pode ? (
         <>
           <RaioXDoJogo jogo={jogo} />
