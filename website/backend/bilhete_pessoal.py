@@ -322,6 +322,63 @@ def mercado_ao_vivo(perna: dict) -> tuple[str, str | None, str] | None:
     return nome, mtype, linha
 
 
+#: Ficha de jogador pedida e ainda vazia: a mesma partida so' volta a ser
+#: pedida depois disto (cada pedido e' uma requisicao a' API).
+_REPETIR_FICHA_VAZIA_S = 1800
+_ficha_vazia_em: dict = {}
+
+
+def _jogo_encerrado(fid: int, jogo: dict | None) -> bool:
+    if jogo and jogo.get("status") in _FIM:
+        return True
+    try:
+        from routers import live
+        entrada = live._fix_cache.get(int(fid))
+        status = (((entrada or (0, {}))[1].get("fixture") or {}).get("status") or {}).get("short")
+        return status in _FIM
+    except Exception:
+        return False
+
+
+def veredito_do_jogador(perna: dict, jogo: dict | None,
+                        agora: float | None = None) -> tuple:
+    """(resultado, valor, motivo) da perna de JOGADOR pela ficha da API (12/10/2026).
+
+    A perna de jogador so' fechava com `player_match_stats`, que o site nao
+    preenche (quem preenche e' o botao "Estatistica de Jogador"). Com o jogo
+    encerrado, a ficha vem pela MESMA funcao que ja' liquida os picks de
+    jogador (routers/live._valor_do_jogador): uma requisicao por partida, com
+    cache. So' em producao, como as outras varreduras -- a chave da API e' uma
+    so' pros tres ambientes.
+    """
+    import time as _t
+    pendente = (None, None, None)
+    fid, player_id = perna.get("fixture_id"), perna.get("player_id")
+    coluna = _ESTAT_JOGADOR.get(perna.get("estat"))
+    if not fid or not player_id or not coluna or not _jogo_encerrado(fid, jogo):
+        return pendente
+    try:
+        from routers import live
+        if not live._varredura_habilitada():
+            return pendente
+        agora = agora or _t.time()
+        if agora - _ficha_vazia_em.get(int(fid), 0.0) < _REPETIR_FICHA_VAZIA_S:
+            return pendente
+        if not live._fetch_player_sheet(int(fid)):
+            _ficha_vazia_em[int(fid)] = agora     # API ainda nao publicou
+            return pendente
+        valor, minutos = live._valor_do_jogador(int(fid), int(player_id), coluna)
+    except Exception:
+        logger.warning("[BILHETE] ficha do jogador falhou", exc_info=True)
+        return pendente
+    if not minutos:
+        # A ficha da partida existe e ele nao esta' nela (ou nao entrou).
+        return "VOID", None, "jogador nao entrou em campo"
+    # Em campo, contador em branco e' zero (mesma regra de `liquidar_perna`).
+    valor = valor or 0
+    return ("GREEN" if valor >= perna["minimo"] else "RED"), valor, None
+
+
 #: Vocabulario do settlement -> do bilhete pessoal (linha empatada e' VOID aqui).
 _DO_SETTLEMENT = {"GREEN": "GREEN", "RED": "RED", "PUSH": "VOID"}
 
@@ -470,7 +527,9 @@ def liquidar_pendentes(cur, user_id: int, agora: datetime | None = None) -> int:
             res, valor, motivo = liquidar_perna(
                 p, jogo, fichas.get((p["fixture_id"], p.get("player_id"))),
                 p["fixture_id"] in com_ficha, vencido)
-            if res is None:
+            if res is None and p.get("tipo") == "jogador":
+                res, valor, motivo = veredito_do_jogador(p, jogo)
+            elif res is None:
                 res = veredito_ao_vivo(p)
             p["resultado"], p["valor"] = res, valor
             if motivo:

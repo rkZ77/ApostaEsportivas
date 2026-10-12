@@ -973,6 +973,27 @@ class MatchStatisticsSyncService:
                 except Exception:
                     pass
 
+        # BILHETE PESSOAL (12/10/2026): a perna de TIME liquida pela folha da
+        # partida (website/backend/bilhete_pessoal.py), e o jogo dele so' era
+        # coletado se por acaso tambem estivesse num pick. O usuario viu o
+        # bilhete Pendente com os tres jogos encerrados.
+        try:
+            self.cur.execute(
+                f"SELECT games FROM bilhetes_pessoais WHERE TRUE {filtro};")
+            for (games_raw,) in self.cur.fetchall():
+                try:
+                    games = _json.loads(games_raw) if isinstance(games_raw, str) else games_raw
+                    # Todas as pernas: a de jogador tambem precisa saber que o
+                    # jogo acabou, e e' a folha da partida que diz isso.
+                    for leg in (games if isinstance(games, list) else []):
+                        if leg.get("fixture_id") is not None:
+                            pending_ids.add(int(leg["fixture_id"]))
+                except Exception:
+                    pass
+        except Exception as e:
+            print(f"[MATCH_STATS] Aviso: bilhetes_pessoais indisponivel ({e})")
+            self.conn.rollback()
+
         # Remove os que já têm a folha COMPLETA. Antes bastava existir a linha:
         # um jogo gravado com a folha vazia nunca era rebuscado.
         if pending_ids:
