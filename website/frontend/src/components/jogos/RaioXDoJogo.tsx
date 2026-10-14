@@ -439,7 +439,7 @@ const TOM: Record<ReturnType<typeof tomDaTaxa>, string> = {
   bom: 'text-accent-ink', medio: 'text-amber-400', ruim: 'text-red-400', nenhum: 'text-ink-4',
 }
 
-function NumeroDaTaxa({ t, grande }: { t: Taxa; grande?: boolean }) {
+function NumeroDaTaxa({ t, grande, semMedia }: { t: Taxa; grande?: boolean; semMedia?: boolean }) {
   return (
     <div className="text-right shrink-0">
       <div className={cn('font-mono font-black tabular-nums leading-none', grande ? 'text-2xl' : 'text-lg', TOM[tomDaTaxa(t.pct)])}>
@@ -447,7 +447,7 @@ function NumeroDaTaxa({ t, grande }: { t: Taxa; grande?: boolean }) {
       </div>
       <div className="text-[11px] text-ink-3 mt-1 tabular-nums">
         {t.pct != null ? `${Math.round(t.pct * 100)}%` : 'sem dado'}
-        {t.media != null && <> · média {t.media.toFixed(1)}</>}
+        {t.media != null && !semMedia && <> · média {t.media.toFixed(1)}</>}
       </div>
     </div>
   )
@@ -645,9 +645,11 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
     )
   }
 
+  /* Ambas marcam · Sim e · Não (14/10/2026): o "Não" é o mesmo histórico ao
+     contrário · os jogos em que pelo menos um dos dois times passou em branco. */
   const btts = useMemo(() => {
     const serie = [...home.jogos, ...away.jogos].map(ambasMarcam).map(b => (b == null ? null : b ? 1 : 0))
-    return taxa(serie, 0.5, 'mais')
+    return { sim: taxa(serie, 0.5, 'mais'), nao: taxa(serie, 0.5, 'menos') }
   }, [home.jogos, away.jogos])
 
   /* ── mercado do JOGO: os dois times somados ── */
@@ -779,20 +781,33 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
       )}
 
       {id === 'gols' && periodo === 'total' && (
-        <div className="card p-4">
-          <div className="flex items-center gap-3">
-            <div className="flex-1 min-w-0">
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">Também no jogo</div>
-              <div className="text-base font-bold text-ink-1 mt-0.5">Ambas marcam · Sim</div>
-            </div>
-            <NumeroDaTaxa t={btts} />
-            <BotaoBilhete selecao={comOdd({
-              id: `${f.fixture_id}:btts`, fixture_id: f.fixture_id, jogo: nomeJogo,
-              descricao: 'Ambas marcam · Sim', bateu: btts.bateu, n: btts.n,
-              perna: { ...base, descricao: 'Ambas marcam · Sim', tipo: 'time', mercado: 'btts' },
-            }, btts.bateu, btts.n, oddDaSelecao(odds, { mercado: 'btts', quem: 'jogo', periodo: 'total' }))} />
-          </div>
-          <LinhaDaOdd odd={oddDaSelecao(odds, { mercado: 'btts', quem: 'jogo', periodo: 'total' })} bateu={btts.bateu} n={btts.n} />
+        <div className="card p-4 divide-y divide-line/60">
+          {(['sim', 'nao'] as const).map(escolha => {
+            const t = btts[escolha]
+            const descricao = `Ambas marcam · ${escolha === 'sim' ? 'Sim' : 'Não'}`
+            const odd = oddDaSelecao(odds, { mercado: 'btts', quem: 'jogo', periodo: 'total', escolha })
+            return (
+              <div key={escolha} className={escolha === 'nao' ? 'pt-3 mt-3' : undefined}>
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    {escolha === 'sim' && (
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">Também no jogo</div>
+                    )}
+                    <div className="text-base font-bold text-ink-1 mt-0.5">{descricao}</div>
+                  </div>
+                  {/* Sim/não: a "média" seria a de zeros e uns, não diz nada. */}
+                  <NumeroDaTaxa t={t} semMedia />
+                  <BotaoBilhete selecao={comOdd({
+                    id: `${f.fixture_id}:btts${escolha === 'nao' ? ':nao' : ''}`, fixture_id: f.fixture_id, jogo: nomeJogo,
+                    descricao, bateu: t.bateu, n: t.n,
+                    perna: { ...base, descricao, tipo: 'time', mercado: 'btts',
+                             ...(escolha === 'nao' ? { escolha: 'nao' } : {}) },
+                  }, t.bateu, t.n, odd)} />
+                </div>
+                <LinhaDaOdd odd={odd} bateu={t.bateu} n={t.n} />
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
