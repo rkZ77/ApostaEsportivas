@@ -162,7 +162,9 @@ export const MERCADOS_PRINCIPAIS: Array<{ id: string; rotulo: string; jogo: stri
   { id: 'faltas', rotulo: 'Faltas', jogo: 'faltas', time: 'faltas_time' },
   { id: 'chutes', rotulo: 'Chutes', jogo: 'chutes', time: 'chutes_time' },
   { id: 'impedimentos', rotulo: 'Impedimentos', jogo: 'impedimentos', time: 'impedimentos_time' },
-  { id: 'defesas', rotulo: 'Defesas', jogo: 'defesas', time: 'defesas_time' },
+  /* Defesas saiu daqui (14/10/2026, pedido do usuário): defesa é do goleiro,
+     e mora na aba Jogadores. `defesas`/`defesas_time` continuam em
+     MERCADOS_DE_TIME só pra ler bilhete antigo que tem essa perna. */
 ]
 
 /** "Escanteios no jogo · 1º tempo" · o tempo só entra no texto quando não é o jogo todo. */
