@@ -172,7 +172,7 @@ export default function LogAoVivo({ titulo, rodando, linhas, seguir, onSeguir, o
               {l.tipo === 'ok' && <CheckCircle2 className="w-3 h-3 text-green-400" />}
             </span>
             {l.marca && (
-              <span className={`shrink-0 text-[9px] font-sans font-bold px-1.5 rounded border ${corDaMarca(l.marca)}`}>
+              <span className={`shrink-0 text-[10px] font-sans font-bold px-1.5 rounded border ${corDaMarca(l.marca)}`}>
                 {l.marca}
               </span>
             )}

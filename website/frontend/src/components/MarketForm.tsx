@@ -193,7 +193,7 @@ function Grafico({
             /* Mesma escala das barras (85%, o resto é do número em cima). */
             style={{ bottom: `${alturaLinha * 0.85}%` }}
           >
-            <span className="absolute right-0 -top-4 font-mono text-[9px] text-ink-3 bg-surface-0 px-1">
+            <span className="absolute right-0 -top-4 font-mono text-[10px] text-ink-3 bg-surface-0 px-1">
               {serie.line}
             </span>
           </div>

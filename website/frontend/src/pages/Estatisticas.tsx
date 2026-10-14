@@ -332,13 +332,13 @@ export function EstatisticasContent() {
                       <Icon className="w-4 h-4" />
                     </div>
                     <div className={`font-mono text-xl font-black ${cls}`}>{display}</div>
-                    <div className="text-[9px] text-ink-4 font-semibold mt-0.5 leading-tight">{def.label}</div>
-                    <div className={`flex items-center justify-center gap-0.5 mt-1 text-[9px] font-bold ${cls}`}>
+                    <div className="text-[10px] text-ink-4 font-semibold mt-0.5 leading-tight">{def.label}</div>
+                    <div className={`flex items-center justify-center gap-0.5 mt-1 text-[10px] font-bold ${cls}`}>
                       <TrendIcon value={val} high={def.high} low={def.low} />
                       {trendLbl(val, def.high, def.low)}
                     </div>
                     {hasRank && (
-                      <div className="mt-1.5 text-[9px] text-ink-4 font-semibold">Ranking</div>
+                      <div className="mt-1.5 text-[10px] text-ink-4 font-semibold">Ranking</div>
                     )}
                   </button>
                 )

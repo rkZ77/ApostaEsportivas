@@ -52,6 +52,7 @@ import { LIVE_PICKS_ENABLED, bingoVisivel } from '../config'
 import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronDown, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2, TrendingUp, X as XIcon, Lock, Ticket } from 'lucide-react'
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import { stakeDe } from '../utils/stakePlan'
+import ResultadoDoPick from '../components/ResultadoDoPick'
 import { fmtUnits, pctProb, capitalizarFrase, plural } from '../utils/format'
 import { getResultStyle, PICK_TYPE_CLS, PICK_TYPE_BORDER, cascaDoPick, caixaDoPick } from '../utils/resultStyle'
 import { useShareStoryImage, useShareAlavancagemImage, useShareBilheteImage } from '../hooks/useShareStoryImage'
@@ -753,10 +754,10 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
             {oddExibida.toFixed(2)}
           </div>
           {seguido && oddSeguida != null && Math.abs(oddSeguida - Number(dica.odd)) > 0.001 && (
-            <div className="text-[9px] text-ink-4 mt-0.5">pick: {Number(dica.odd).toFixed(2)}</div>
+            <div className="text-[10px] text-ink-4 mt-0.5">pick: {Number(dica.odd).toFixed(2)}</div>
           )}
           {oddCorrente != null && Math.abs(oddCorrente - Number(dica.odd)) > 0.001 && (
-            <div className="text-[9px] text-ink-4 mt-0.5 tabular-nums">
+            <div className="text-[10px] text-ink-4 mt-0.5 tabular-nums">
               publicada {Number(dica.odd).toFixed(2)}
               <span className={oddCorrente > Number(dica.odd)
                 ? 'text-accent-ink font-bold ml-1' : 'text-red-400 font-bold ml-1'}>
@@ -808,50 +809,9 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
             </div>
           </>
         ) : dica.result ? (
-          (() => {
-            /* Dinheiro só pra quem apostou · ver SuggestionCard: a stake caía
-               pra sugestão quando o usuário NÃO seguiu, e o card anunciava um
-               ganho que ele nunca teve, na conta da banca dele.
-
-               Quem NÃO seguiu vê o pick na stake do plano público
-               (stakePlan.ts · free = 3u), não em 1u fixo: o placar da mesma
-               tela já pesava esse mesmo pick pelo plano. */
-            const seguiu = stakeSeguida != null
-            const u = seguiu ? stakeSeguida! : stakeDe('free')
-            const p = calcProfitUnits(dica.result, Number(dica.odd), u, seguiu ? oddSeguida : null)
-            // Cor só pra quem apostou · ver SuggestionCard (14/10/2026).
-            const color = !seguiu ? 'text-ink-1' : p >= 0 ? 'text-green-400' : 'text-red-400'
-            const profitR = seguiu && banca ? Math.abs(p) * banca.unit_value : null
-            return (
-              <>
-                <div className="flex-1 px-4 py-3 text-center">
-                  <div className="text-[10px] text-ink-3 mb-0.5">{seguiu ? 'Seu lucro' : 'Resultado do pick'}</div>
-                  <div className={`text-xl font-black ${color}`}>
-                    {p >= 0 ? '+' : ''}{p.toFixed(2)}u
-                  </div>
-                  <div className="text-[10px] text-ink-4 leading-tight">
-                    {seguiu ? `(${u}u)` : <>stake sugerida {u}u<br />você não apostou</>}
-                  </div>
-                </div>
-                {/* Igual ao SuggestionCard (14/10/2026, pedido do usuário: "tudo
-                    tem que ser padronizado nos cards"): a coluna "Sua aposta /
-                    Não registrada" saiu · em três colunas ela cortava no celular.
-                    Quem seguiu continua vendo o valor em reais. */}
-                {seguiu && (
-                  <div className="flex-1 px-4 py-3 text-center">
-                    <div className="text-[10px] text-ink-3 mb-0.5">Em reais</div>
-                    {profitR != null ? (
-                      <div className={`text-xl font-black ${color}`}>
-                        {p >= 0 ? '+' : '-'}R${profitR.toFixed(0)}
-                      </div>
-                    ) : (
-                      <div className="text-xl font-black text-ink-4">-</div>
-                    )}
-                  </div>
-                )}
-              </>
-            )
-          })()
+          <ResultadoDoPick result={dica.result} odd={Number(dica.odd)}
+            stakeSeguida={stakeSeguida} oddSeguida={oddSeguida}
+            stakePlano={stakeDe('free')} banca={banca} />
         ) : (
           <div className="flex-1 px-4 py-3 text-center">
             {dica.ev != null ? (
@@ -1221,7 +1181,7 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
               : oddDoBilhete != null ? oddDoBilhete.toFixed(2) : '-'}
           </div>
           {seguido && oddSeguida != null && Math.abs(oddSeguida - Number(m.total_odd)) > 0.001 && (
-            <div className="text-[9px] text-ink-4 mt-0.5">bilhete: {(oddDoBilhete ?? 0).toFixed(2)}</div>
+            <div className="text-[10px] text-ink-4 mt-0.5">bilhete: {(oddDoBilhete ?? 0).toFixed(2)}</div>
           )}
         </div>
         {!m.result && seguido && stakeSeguida != null ? (
@@ -1259,47 +1219,9 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
             </div>
           </>
         ) : m.result ? (
-          (() => {
-            /* Dinheiro só pra quem apostou · ver SuggestionCard: a stake caía
-               pra sugestão quando o usuário NÃO seguiu, e o card anunciava um
-               ganho que ele nunca teve, na conta da banca dele.
-
-               Quem NÃO seguiu vê o bilhete na stake do plano público
-               (stakePlan.ts · múltipla = 1u). O número não muda hoje: o que
-               muda é a origem dele, que passa a ser a mesma do placar. */
-            const seguiu = stakeSeguida != null
-            const u = seguiu ? stakeSeguida! : stakeDe(tipo)
-            const p = calcProfitUnits(m.result, Number(m.total_odd), u, seguiu ? oddSeguida : null)
-            // Cor só pra quem apostou · ver SuggestionCard (14/10/2026).
-            const color = !seguiu ? 'text-ink-1' : p >= 0 ? 'text-green-400' : 'text-red-400'
-            const profitR = seguiu && banca ? Math.abs(p) * banca.unit_value : null
-            return (
-              <>
-                <div className="flex-1 px-4 py-3 text-center">
-                  <div className="text-[10px] text-ink-3 mb-0.5">{seguiu ? 'Seu lucro' : 'Resultado do pick'}</div>
-                  <div className={`text-xl font-black ${color}`}>
-                    {p >= 0 ? '+' : ''}{p.toFixed(2)}u
-                  </div>
-                  <div className="text-[10px] text-ink-4 leading-tight">
-                    {seguiu ? `(${u}u)` : <>stake sugerida {u}u<br />você não apostou</>}
-                  </div>
-                </div>
-                {/* Igual ao SuggestionCard (14/10/2026): sem a coluna "Sua aposta". */}
-                {seguiu && (
-                  <div className="flex-1 px-4 py-3 text-center">
-                    <div className="text-[10px] text-ink-3 mb-0.5">Em reais</div>
-                    {profitR != null ? (
-                      <div className={`text-xl font-black ${color}`}>
-                        {p >= 0 ? '+' : '-'}R${profitR.toFixed(0)}
-                      </div>
-                    ) : (
-                      <div className="text-xl font-black text-ink-4">-</div>
-                    )}
-                  </div>
-                )}
-              </>
-            )
-          })()
+          <ResultadoDoPick result={m.result} odd={Number(m.total_odd)}
+            stakeSeguida={stakeSeguida} oddSeguida={oddSeguida}
+            stakePlano={stakeDe(tipo)} banca={banca} />
         ) : (
           <div className="flex-1 px-5 py-3 text-center">
             <div className="text-[10px] text-ink-3 mb-0.5">Probabilidade</div>

@@ -105,7 +105,7 @@ export function Escada({ entrada, steps, altura = 'h-40' }: {
                 title={d.match || d.rotulo}
               />
             </div>
-            <span className="text-[9px] text-ink-4 mt-1 truncate w-full text-center">
+            <span className="text-[10px] text-ink-4 mt-1 truncate w-full text-center">
               {d.rotulo}
             </span>
           </div>

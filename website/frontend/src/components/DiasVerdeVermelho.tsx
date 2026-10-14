@@ -152,7 +152,7 @@ export default function DiasVerdeVermelho({ dias }: { dias: Dia[] }) {
         <div className="flex items-stretch gap-1 mt-1.5">
           {ultimos.map(d => (
             <span key={d.match_date}
-                  className="flex-1 min-w-0 text-center font-mono text-[9px] text-ink-4 tabular-nums truncate">
+                  className="flex-1 min-w-0 text-center font-mono text-[10px] text-ink-4 tabular-nums truncate">
               {diaBR(d.match_date)}
             </span>
           ))}

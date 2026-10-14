@@ -806,9 +806,9 @@ export default function Login() {
 
       <footer className="relative border-t border-line">
         <div className="mx-auto w-full max-w-3xl px-5 sm:px-6 py-5 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-xs text-ink-4">
-          <Link to="/termos" className="hover:text-ink-2 transition-colors">Termos de Uso</Link>
-          <Link to="/privacidade" className="hover:text-ink-2 transition-colors">Privacidade</Link>
-          <Link to="/como-funciona" className="hover:text-ink-2 transition-colors">Como funciona</Link>
+          <Link to="/termos" className="inline-flex items-center min-h-[44px] hover:text-ink-2 transition-colors">Termos de Uso</Link>
+          <Link to="/privacidade" className="inline-flex items-center min-h-[44px] hover:text-ink-2 transition-colors">Privacidade</Link>
+          <Link to="/como-funciona" className="inline-flex items-center min-h-[44px] hover:text-ink-2 transition-colors">Como funciona</Link>
           {/* Não é enfeite legal: é o aviso que separa quem opera às claras de
               quem promete lucro garantido. */}
           <span className="w-full text-center text-ink-4 mt-1">

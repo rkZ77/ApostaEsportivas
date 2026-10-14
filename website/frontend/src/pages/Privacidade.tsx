@@ -124,8 +124,8 @@ export default function Privacidade() {
         </div>
 
         <div className="mt-12 pt-6 border-t border-line flex gap-4 text-xs text-ink-4">
-          <Link to="/termos" className="hover:text-ink-2 transition-colors">Termos de Uso</Link>
-          <Link to="/" className="hover:text-ink-2 transition-colors">Início</Link>
+          <Link to="/termos" className="inline-flex items-center min-h-[44px] hover:text-ink-2 transition-colors">Termos de Uso</Link>
+          <Link to="/" className="inline-flex items-center min-h-[44px] hover:text-ink-2 transition-colors">Início</Link>
         </div>
     </PageShell>
   )

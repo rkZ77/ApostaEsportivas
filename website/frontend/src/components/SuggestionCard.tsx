@@ -7,6 +7,7 @@ import { prefetchAnalise } from '../services/analisePick'
 import { pctProb, capitalizarFrase } from '../utils/format'
 import { calcVipStake, calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import { stakeDe, contaEmUnidades } from '../utils/stakePlan'
+import ResultadoDoPick from './ResultadoDoPick'
 import ApostaModal from './ApostaModal'
 import { translateMarket, translateLine, translateTeamName, linhaDoJogador, valorLiquidado } from '../utils/marketTranslate'
 import { PICK_TYPE_BORDER, cascaDoPick, caixaDoPick } from '../utils/resultStyle'
@@ -523,10 +524,10 @@ function SuggestionCard({
             {oddExibida.toFixed(2)}
           </div>
           {seguido && oddSeguida != null && Math.abs(oddSeguida - Number(s.odd)) > 0.001 && (
-            <div className="text-[9px] text-ink-4 mt-0.5">pick: {Number(s.odd).toFixed(2)}</div>
+            <div className="text-[10px] text-ink-4 mt-0.5">pick: {Number(s.odd).toFixed(2)}</div>
           )}
           {oddCorrente != null && Math.abs(oddCorrente - Number(s.odd)) > 0.001 && (
-            <div className="text-[9px] text-ink-4 mt-0.5 tabular-nums">
+            <div className="text-[10px] text-ink-4 mt-0.5 tabular-nums">
               publicada {Number(s.odd).toFixed(2)}
               <span className={oddCorrente > Number(s.odd)
                 ? 'text-accent-ink font-bold ml-1' : 'text-red-400 font-bold ml-1'}>
@@ -580,92 +581,10 @@ function SuggestionCard({
             </div>
           </>
         ) : s.result ? (
-          (() => {
-            /*
-             * DINHEIRO SÓ PRA QUEM APOSTOU DE VERDADE.
-             *
-             * A stake caía pra `stakeSuggestion?.units ?? 1` quando o usuário
-             * NÃO tinha seguido o pick, e o card estampava "Lucro +3,75u · Em
-             * reais +R$38" com o valor da banca dele. Ele não entrou nessa
-             * aposta: o card anunciava um ganho que nunca existiu, na conta de
-             * quem só estava olhando o histórico.
-             *
-             * Seguiu (`user_stake_units`) -> a conta é a dele: stake que ele
-             * declarou, odd que ele pegou, e o valor em reais pela unidade da
-             * banca dele.
-             *
-             * Não seguiu -> mostra o resultado DO PICK na stake do PLANO
-             * PÚBLICO (stakePlan.ts), com o rótulo dizendo em quantas unidades.
-             * Era 1u fixo, e isso fazia o card discordar do placar da mesma
-             * semana: /public/results já pesava o mesmo pick por 4u (VIP) ou 3u
-             * (free e mercados). Dois números do mesmo pick, na mesma tela.
-             * Sem reais: real depende de stake, e stake que não houve não vira
-             * dinheiro.
-             *
-             * Alavancagem não tem stake de plano (peso 0): ela é um caminho e
-             * só vira unidade na banca de quem apostou. Pra quem não seguiu, o
-             * card mostra o resultado e diz que não conta em unidades, em vez
-             * de estampar um "+0,00u" que parece defeito.
-             */
-            const seguiu = stakeSeguida != null
-            const contaU = seguiu || contaEmUnidades(pickType)
-            const u = seguiu ? stakeSeguida! : stakeDe(pickType)
-            const p = calcProfitUnits(s.result, Number(s.odd), u, seguiu ? oddSeguida : null)
-            /* Verde e vermelho só pra quem apostou (14/10/2026, pedido do
-               usuário: "fica vermelho como se eu tivesse perdido; o site
-               perdeu, eu usuário não"). O selo GREEN/RED do topo já diz como
-               o pick foi. */
-            const color = !seguiu ? 'text-ink-1' : p >= 0 ? 'text-green-400' : 'text-red-400'
-            const profitR = seguiu && banca ? Math.abs(p) * banca.unit_value : null
-            return (
-              <>
-                <div className="flex-1 px-4 py-3 text-center">
-                  {/* "RESULTADO DO PICK", E NAO "LUCRO" (12/10/2026, pedido do
-                      usuario: "estava como se eu tivesse perdido, nem apostei").
-                      Sem a coluna "Sua aposta", o "-4.00u" de quem nao seguiu
-                      lia como prejuizo DELE. O numero e' do pick, na stake
-                      sugerida, e a linha de baixo diz isso com todas as letras. */}
-                  <div className="text-[10px] text-ink-3 mb-0.5">
-                    {seguiu ? 'Seu lucro' : 'Resultado do pick'}
-                  </div>
-                  {contaU ? (
-                    <>
-                      <div className={`text-xl font-black ${color}`}>
-                        {p >= 0 ? '+' : ''}{p.toFixed(2)}u
-                      </div>
-                      <div className="text-[10px] text-ink-4 leading-tight">
-                        {seguiu ? `(${u}u)` : <>stake sugerida {u}u<br />você não apostou</>}
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="text-xl font-black text-ink-3">-</div>
-                      <div className="text-[10px] text-ink-4">só conta apostado</div>
-                    </>
-                  )}
-                </div>
-                {/* A COLUNA "SUA APOSTA / NAO REGISTRADA" SAIU (07/09).
-                    Ela existia so' para dizer que nao havia nada: num pick
-                    encerrado que a pessoa nao seguiu, um terco da largura do
-                    card ficava com a palavra "Nao" numa linha e "registrada"
-                    na outra -- e num card de duas colunas isso apertava a odd
-                    e o lucro, que sao o assunto. Quem seguiu continua vendo o
-                    valor em reais, que e' informacao. */}
-                {seguiu && (
-                  <div className="flex-1 px-4 py-3 text-center">
-                    <div className="text-[10px] text-ink-3 mb-0.5">Em reais</div>
-                    {profitR != null ? (
-                      <div className={`text-xl font-black ${color}`}>
-                        {p >= 0 ? '+' : '-'}R${profitR.toFixed(0)}
-                      </div>
-                    ) : (
-                      <div className="text-xl font-black text-ink-4">-</div>
-                    )}
-                  </div>
-                )}
-              </>
-            )
-          })()
+          <ResultadoDoPick result={s.result} odd={Number(s.odd)}
+            stakeSeguida={stakeSeguida} oddSeguida={oddSeguida}
+            stakePlano={stakeDe(pickType)} contaEmUnidades={contaEmUnidades(pickType)}
+            banca={banca} />
         ) : (
           <div className="flex-1 px-4 py-3 text-center">
             <div className="text-[10px] text-ink-3 mb-0.5">EV</div>

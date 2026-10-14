@@ -69,7 +69,7 @@ export default function ForgotPassword() {
       </Helmet>
       <div className="w-full max-w-sm">
         <button onClick={goBack}
-          className="text-ink-3 hover:text-ink-1 transition-colors text-sm mb-6 flex items-center gap-1">
+          className="text-ink-3 hover:text-ink-1 transition-colors text-sm mb-4 flex items-center gap-1 min-h-[44px] -ml-1 px-1">
           ← Voltar
         </button>
 
@@ -113,7 +113,7 @@ export default function ForgotPassword() {
               {loading ? 'Enviando...' : 'Enviar código'}
             </button>
             <Link to="/login"
-              className="block text-center text-ink-4 text-xs hover:text-ink-2 transition-colors">
+              className="block text-center text-ink-4 text-xs hover:text-ink-2 transition-colors py-3">
               Lembrou a senha? Entrar
             </Link>
           </form>

@@ -113,7 +113,9 @@ export default function Classificacao({ fixtureId, leagueId, homeId, awayId }: {
           {g.nome && grupos.length > 1 && (
             <div className="px-3 py-2 border-b border-line text-xs font-bold text-ink-2">{g.nome}</div>
           )}
-          <table className="w-full text-sm tabular-nums">
+          {/* table-fixed: sem ele o `truncate` do nome não corta, e um nome
+              longo ("Atlético Torque") alargava a coluna e espremia as outras. */}
+          <table className="w-full table-fixed text-sm tabular-nums">
             <thead>
               <tr className="text-[11px] text-ink-3 border-b border-line">
                 <th className="w-9 py-2 font-semibold">#</th>

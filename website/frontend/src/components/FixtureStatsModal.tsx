@@ -248,7 +248,7 @@ function FormRow({ matches, teamId, name }: { matches: Match[]; teamId: number; 
               }`}>
                 {won ? 'V' : drew ? 'E' : 'D'}
               </span>
-              <span className="text-[9px] text-ink-4">{scored}-{conceded}</span>
+              <span className="text-[10px] text-ink-4">{scored}-{conceded}</span>
             </div>
           )
         })}
