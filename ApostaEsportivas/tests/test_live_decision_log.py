@@ -20,8 +20,8 @@ import pytest
 
 from engine_pipelines import decision_log, live_pipeline
 from engine_pipelines.decision_log import (
-    LIVE_NENHUM_APROVADO, LIVE_REPROVOU_TRIAGEM, LIVE_SEM_ESTATISTICA,
-    PIPELINE_LIVE, STATUS_AVALIADO, STATUS_DESCARTADO,
+    LIVE_NENHUM_APROVADO, LIVE_REPROVOU_TRIAGEM, LIVE_SEM_AMOSTRA_DOS_TIMES,
+    LIVE_SEM_ESTATISTICA, PIPELINE_LIVE, STATUS_AVALIADO, STATUS_DESCARTADO,
 )
 from services.pick_engine_live.config import LiveEngineConfig
 
@@ -86,7 +86,13 @@ def motor(monkeypatch):
                lambda *a: {"nivel": "OK", "motivos": []})
     mp.setattr(live_pipeline, "observacoes_anteriores", lambda *a, **k: [])
     mp.setattr(live_pipeline, "baselines_por_liga", lambda *a: {})
-    mp.setattr(live_pipeline, "baseline_do_confronto", lambda *a: {})
+    # Amostra dos dois times nas duas familias: sem ela a partida sai antes
+    # (gate de amostra minima, 14/10/2026), e estes testes sao de depois dele.
+    mp.setattr(live_pipeline, "baseline_do_confronto",
+               lambda *a: {"corners": 10.0, "goals": 2.6})
+    mp.setattr(live_pipeline, "baseline_do_mando", lambda *a: {})
+    mp.setattr(live_pipeline, "historico_contextual",
+               lambda *a: {"baselines": {}, "detalhe": {}})
     mp.setattr(live_pipeline, "baseline_do_arbitro", lambda *a: {})
     mp.setattr(live_pipeline, "baseline_do_h2h", lambda *a: {})
     mp.setattr(live_pipeline, "contexto_pre_jogo", lambda *a: None)
@@ -104,6 +110,41 @@ def _rodar():
         1, BRUTO, cur=None, conn=None, feed=_Feed(), config=CONFIG,
         relatorio=relatorio)
     return resumo, relatorio
+
+
+def test_so_media_da_liga_nao_vira_pick(motor, gravadas):
+    """Minimo de jogos dos times, como no pre-jogo (14/10/2026): sem confronto,
+    mando nem historico dos dois times a familia so' teria a media da liga, e
+    a partida sai antes da triagem e da odd."""
+    motor.setattr(live_pipeline, "baselines_por_liga",
+                  lambda *a: {"corners": 9.8, "goals": 2.5})
+    motor.setattr(live_pipeline, "baseline_do_confronto", lambda *a: {})
+    motor.setattr(live_pipeline.orchestrator, "observado_da_familia", lambda *a: 3)
+    motor.setattr(live_pipeline.orchestrator, "analisar",
+                  lambda *a, **k: pytest.fail("nao pode analisar sem amostra dos times"))
+
+    resumo, _ = _rodar()
+
+    assert resumo["decisao"] == "SKIP"
+    _, _, status, reason, _, _, _ = gravadas[0]
+    assert (status, reason) == (STATUS_DESCARTADO, LIVE_SEM_AMOSTRA_DOS_TIMES)
+
+
+def test_familia_sem_amostra_sai_e_a_outra_segue(motor, gravadas):
+    motor.setattr(live_pipeline, "baseline_do_confronto", lambda *a: {"corners": 10.0})
+    motor.setattr(live_pipeline.orchestrator, "observado_da_familia", lambda *a: 3)
+    vistas = []
+    motor.setattr(live_pipeline.orchestrator, "analisar",
+                  lambda estado, obs, config, *a, **k: vistas.append(config.familias) or
+                  {"estado": dict(ESTADO), "familias": {}, "pressao": {}, "ritmo": {},
+                   "necessidade": {}})
+    motor.setattr(live_pipeline.orchestrator, "triagem",
+                  lambda *a: {"vale": False, "motivo": "x", "familias": [], "detalhes": []},
+                  raising=False)
+
+    _rodar()
+
+    assert vistas and vistas[0] == ("corners",)
 
 
 def test_partida_sem_estatistica_deixa_linha(motor, gravadas):

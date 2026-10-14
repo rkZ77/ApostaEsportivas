@@ -70,7 +70,8 @@ from services.engine_audit import auditar
 from engine_pipelines import decision_log
 from engine_pipelines.decision_log import (
     LIVE_DUPLICATA, LIVE_NENHUM_APROVADO, LIVE_REPROVOU_TRIAGEM,
-    LIVE_SEM_ESTATISTICA, LIVE_SEM_LINHA, LIVE_SEM_ORCAMENTO, PIPELINE_LIVE,
+    LIVE_SEM_AMOSTRA_DOS_TIMES, LIVE_SEM_ESTATISTICA, LIVE_SEM_LINHA,
+    LIVE_SEM_ORCAMENTO, PIPELINE_LIVE,
 )
 
 TZ_BR = ZoneInfo("America/Sao_Paulo")
@@ -330,6 +331,11 @@ def ligas_cadastradas(cur) -> set:
 #: o baseline vale 14 jogos de prior, ou seja, ele manda na projecao do comeco
 #: ao fim. Baseline de mando ruim agora vira pick ruim direto.
 MIN_JOGOS_MANDO = 5
+
+#: Camadas de baseline que vem de jogos DOS DOIS TIMES, cada uma com o seu
+#: minimo de amostra. Familia que so' passou por "liga" (ou arbitro/h2h em
+#: cima da liga) nao tem amostra dos times e nao vira pick (14/10/2026).
+CAMADAS_COM_AMOSTRA_DOS_TIMES = frozenset({"times", "mando", "historico"})
 
 
 def baselines_por_liga(cur, league_id: int | None) -> dict:
@@ -1904,10 +1910,16 @@ def _processar_partida(indice: int, bruto: dict, cur, conn, feed: LiveFeed,
     baselines: dict = {}
     origens: dict = {}
 
+    #: Familias com amostra DOS TIMES (confronto, mando ou historico) · ver o
+    #: gate logo depois das camadas.
+    com_amostra_dos_times: set = set()
+
     def camada(valores: dict, rotulo: str) -> None:
         for familia, valor in (valores or {}).items():
             baselines[familia] = valor
             origens[familia] = rotulo
+            if rotulo in CAMADAS_COM_AMOSTRA_DOS_TIMES:
+                com_amostra_dos_times.add(familia)
 
     da_liga = baselines_por_liga(cur, estado.get("league_id"))
     camada(da_liga, "liga")
@@ -1951,6 +1963,29 @@ def _processar_partida(indice: int, bruto: dict, cur, conn, feed: LiveFeed,
         arbitro = (estado.get("referee") or "").strip()
         print("Cartoes fora: " + ("arbitro sem amostra minima nesta liga"
                                   if arbitro else "a partida nao publicou o arbitro"))
+
+    # MINIMO DE JOGOS DOS TIMES, COMO NO PRE-JOGO (14/10/2026, pedido do
+    # usuario: "o motor ao vivo respeita a regra minima de jogos?").
+    #
+    # Nao respeitava inteiro. Cada camada de time ja' exige amostra (confronto
+    # >= 6 jogos de cada time, mando >= MIN_JOGOS_MANDO, historico com
+    # cobertura >= 0.60), mas quando NENHUMA delas existia a familia seguia so'
+    # com a media da liga -- um pick sobre dois times dos quais o motor nao
+    # sabia nada. O pre-jogo reprova esse caso (min_amostra). Aqui a familia
+    # sai desta partida, e so' ela.
+    sem_amostra = [f for f in config.familias if f not in com_amostra_dos_times]
+    if sem_amostra:
+        config = replace(config, familias=tuple(
+            f for f in config.familias if f in com_amostra_dos_times))
+        print(f"Fora por amostra curta dos times: {', '.join(sem_amostra)}")
+        if not any(f in disponiveis for f in config.familias):
+            print("DECISAO: SKIP")
+            resumo["motivo"] = "sem amostra minima dos times"
+            _observar(cur, conn, estado)
+            decision_log.log_skip(
+                PIPELINE_LIVE, _fixture_do_log(estado, nome), LIVE_SEM_AMOSTRA_DOS_TIMES,
+                _contexto_do_log(estado, faltando=sem_amostra, folha_vazia=False))
+            return resumo
 
     analisadas = [f for f in config.familias if f in disponiveis]
     if len(analisadas) < len(familias_iniciais):
