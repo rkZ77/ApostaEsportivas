@@ -16,6 +16,7 @@ import AdminReavaliacoes from '../components/AdminReavaliacoes'
 import LogAoVivo from '../components/LogAoVivo'
 import AdminDados from '../components/AdminDados'
 import AdminMotorDecisoes from '../components/AdminMotorDecisoes'
+import AdminHoje from '../components/AdminHoje'
 import AdminAuditoriaMotores from '../components/AdminAuditoriaMotores'
 import AdminAuditoriaResultados from '../components/AdminAuditoriaResultados'
 import AdminFluxoDosMotores from '../components/AdminFluxoDosMotores'
@@ -129,6 +130,8 @@ interface ContagemPick { n: number; pendentes: number }
 interface Overview {
   usuarios: Record<string, number>
   picks_hoje: Record<string, ContagemPick>
+  ontem?: Record<string, { green: number; red: number; push: number; pendentes: number }>
+  pendentes_antigos?: number
   coleta: {
     jogos_hoje: number; jogos_por_comecar: number; jogos_com_odds: number
     ultimo_jogo_coletado: string | null
@@ -178,6 +181,9 @@ const PICK_LABEL: Record<string, string> = {
 // Usuários ao lado de Disparos (medir quem sumiu e falar com eles), Ligas ao
 // lado de Dados ao lado de Motor ("por que não saiu pick" desce nessa ordem).
 const ABAS = [
+  // HOJE (14/10/2026): a porta de entrada · triagem com alertas e um botão
+  // pra aba onde se age. Ver components/AdminHoje.tsx.
+  { key: 'hoje',       label: 'Hoje',       grupo: 'Dia a dia' },
   { key: 'picks',      label: 'Picks',      grupo: 'Dia a dia' },
   { key: 'pipeline',   label: 'Pipeline',   grupo: 'Dia a dia' },
   { key: 'live',       label: 'Ao Vivo',    grupo: 'Dia a dia' },
@@ -200,6 +206,10 @@ type AdminAba = typeof ABAS[number]['key']
  * Dados) não tem índice: o próprio componente é a seção.
  */
 const GUIAS: Record<AdminAba, { paraQue: string; quando: string[]; secoes?: { id: string; titulo: string }[] }> = {
+  hoje: {
+    paraQue: 'O dia numa tela: o que precisa de atenção, os picks de hoje, como foi ontem, a coleta, os usuários e o dinheiro do mês. Cada bloco abre a aba onde se resolve.',
+    quando: [],
+  },
   picks: {
     paraQue: 'Os picks já publicados: quantos saíram hoje, marcar green ou red de quem já jogou, e corrigir resultado errado.',
     quando: [
@@ -427,7 +437,7 @@ export default function Admin() {
   // cai no Pipeline, que e' de onde se opera o dia.
   const [aba, setAba] = useState<AdminAba>(() => {
     const h = window.location.hash.replace('#', '') as AdminAba
-    return ABAS.some(a => a.key === h) ? h : 'pipeline'
+    return ABAS.some(a => a.key === h) ? h : 'hoje'
   })
   const USERS_PER_PAGE = 15
   const PAYMENTS_PER_PAGE = 10
@@ -1192,6 +1202,17 @@ export default function Admin() {
         </Secao>
         </div>
         </>)}
+
+        {aba === 'hoje' && (
+          <AdminHoje overview={overview} rotulos={PICK_LABEL}
+            irPara={k => {
+              const alvo = ABAS.find(a => a.key === k)?.key
+              if (!alvo) return
+              sinalizarNavegacao()
+              setAba(alvo); window.location.hash = alvo
+              window.scrollTo({ top: 0 })
+            }} />
+        )}
 
         {aba === 'disparos' && <AdminDisparos />}
 

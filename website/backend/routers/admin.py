@@ -3698,7 +3698,12 @@ def admin_overview(current_user: dict = Depends(require_admin)):
                    (SELECT COUNT(*) FROM fixtures
                      WHERE {data_br('match_datetime')} = {HOJE_BR}
                        AND status IN ('NS','TBD'))                          AS jogos_por_comecar,
-                   (SELECT COUNT(DISTINCT fixture_id) FROM odds_values)        AS jogos_com_odds,
+                   -- SO' OS JOGOS DE HOJE (14/10/2026). Contava todo jogo
+                   -- que ja' teve odd na historia, entao nunca zerava: o dia
+                   -- em que a coleta de odds falhou parecia normal.
+                   (SELECT COUNT(DISTINCT ov.fixture_id) FROM odds_values ov
+                      JOIN fixtures f ON f.fixture_id = ov.fixture_id
+                     WHERE {data_br('f.match_datetime')} = {HOJE_BR})          AS jogos_com_odds,
                    (SELECT MAX(match_date) FROM match_statistics)              AS ultimo_jogo_coletado,
                    (SELECT COUNT(*) FROM leagues)                              AS ligas,
                    (SELECT COUNT(*) FROM teams)                                AS times,
@@ -3713,8 +3718,33 @@ def admin_overview(current_user: dict = Depends(require_admin)):
               AND created_at >= date_trunc('month', NOW())
         """, {})
 
+        # ABA "HOJE" (14/10/2026, pedido do usuario: "a aba de admin esta' bem
+        # ruim pra ver as coisas"). Duas perguntas que nenhum bloco respondia
+        # de cara: como foi ONTEM, e se sobrou pick velho sem resultado.
+        ontem: dict = {}
+        pendentes_antigos = 0
+        for rotulo, tabela in (("vip", "picks_vip"), ("free", "picks_free"),
+                               ("multiplas", "picks_multiplas"), ("bingo", "picks_bingo"),
+                               ("faltas", "picks_faltas"),
+                               ("player_stats", "picks_player_stats"),
+                               ("boost", "picks_boost"), ("live", "picks_live")):
+            linha = uma(f"""
+                SELECT COUNT(*) FILTER (WHERE result IN ('GREEN','HALF-WIN'))  AS green,
+                       COUNT(*) FILTER (WHERE result IN ('RED','HALF-LOSS'))   AS red,
+                       COUNT(*) FILTER (WHERE result IN ('PUSH','VOID'))       AS push,
+                       COUNT(*) FILTER (WHERE result IS NULL)                  AS pendentes
+                  FROM {tabela} WHERE match_date = {HOJE_BR} - 1
+            """, None)
+            if linha and any(linha.values()):
+                ontem[rotulo] = linha
+            velhos = uma(f"SELECT COUNT(*) AS n FROM {tabela} "
+                         f"WHERE result IS NULL AND match_date < {HOJE_BR} - 1", {"n": 0})
+            pendentes_antigos += int((velhos or {}).get("n") or 0)
+
         return {
             "usuarios": usuarios,
+            "ontem": ontem,
+            "pendentes_antigos": pendentes_antigos,
             "picks_hoje": picks,
             "coleta": coleta,
             "financeiro": financeiro,
