@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { AnimatePresence, m as motion } from 'framer-motion'
 import { ArrowLeft, Check, ChevronUp, Copy, Ticket, Trash2, Wallet, X } from 'lucide-react'
 import { cn } from '../../lib/cn'
+import { fecharNoFundo } from '../../lib/fecharNoFundo'
 import { chanceCombinada, limpar, oddCombinada, remover, textoDoBilhete, useBilheteMontado } from '../../lib/bilheteMontado'
 import RegistrarBilhete from './RegistrarBilhete'
 
@@ -70,7 +71,7 @@ export default function BandejaDoBilhete() {
           <motion.div
             className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end md:items-center md:justify-center"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            onClick={fechar}
+            {...fecharNoFundo(fechar)}
           >
             <motion.div
               role="dialog" aria-label="Bilhete montado"

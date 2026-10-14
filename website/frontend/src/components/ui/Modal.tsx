@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { m as motion } from 'framer-motion'
 import { X } from 'lucide-react'
 import { cn } from '../../lib/cn'
+import { fecharNoFundo } from '../../lib/fecharNoFundo'
 import { backdropFade, sheetUp, dialogScale, drawerRight } from '../../lib/motion'
 
 /*
@@ -123,7 +124,7 @@ export default function Modal({
       initial="hidden"
       animate="visible"
       exit="exit"
-      onClick={onClose}
+      {...fecharNoFundo(onClose)}
       className={cn(
         'fixed inset-0 flex justify-center bg-black/70 backdrop-blur-sm p-4',
         acimaDeTudo ? 'z-[70]' : 'z-50',
@@ -209,7 +210,7 @@ export function Drawer({
       initial="hidden"
       animate="visible"
       exit="exit"
-      onClick={onClose}
+      {...fecharNoFundo(onClose)}
       className="fixed inset-0 z-50 flex justify-end bg-black/70 backdrop-blur-sm"
     >
       <motion.div

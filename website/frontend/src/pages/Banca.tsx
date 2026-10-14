@@ -3,6 +3,7 @@ import { TrendingUp, Info, Wallet } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AnimatePresence, m as motion } from 'framer-motion'
 import { backdropFade, dialogScale } from '../lib/motion'
+import { fecharNoFundo } from '../lib/fecharNoFundo'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import { useOnboarding } from '../context/OnboardingContext'
@@ -79,7 +80,7 @@ function SetupModal({ current, locked, onSave, onClose, onWithdraw, onAjustar }:
     return (
       <motion.div
         variants={backdropFade} initial="hidden" animate="visible" exit="exit"
-        className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center px-4" onClick={onClose}
+        className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center px-4" {...fecharNoFundo(onClose)}
       >
         <motion.div variants={dialogScale} className="bg-surface-1 border border-line-strong rounded-lg p-6 max-w-sm w-full overflow-y-auto max-h-[92dvh]"
           onClick={e => e.stopPropagation()}>

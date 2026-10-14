@@ -10,6 +10,7 @@ import api from '../services/api'
 import { plural } from '../utils/format'
 import { rotuloDoMercado } from '../utils/marketTranslate'
 import { backdropFade, sheetUp } from '../lib/motion'
+import { fecharNoFundo } from '../lib/fecharNoFundo'
 import { AO_VIVO as LIVE_SET, ENCERRADO as FINISHED_SET, STATUS_LABEL } from '../lib/aoVivo'
 import { TeamLogo } from './TeamLogo'
 import { ehCartela } from '../utils/cartela'
@@ -440,7 +441,7 @@ function CashoutModal({ pick, unitValue, onClose, onDone }: {
   return (
     <motion.div
       variants={backdropFade} initial="hidden" animate="visible" exit="exit"
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm px-4" onClick={onClose}
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm px-4" {...fecharNoFundo(onClose)}
     >
       <motion.div variants={sheetUp} className="w-full max-w-sm bg-surface-1 border border-line-strong rounded-lg p-5 space-y-4 overflow-y-auto max-h-[92dvh]" onClick={e => e.stopPropagation()}>
         <div>
