@@ -574,6 +574,7 @@ LIVE_SEM_ORCAMENTO = "orcamento de API esgotado antes da odd"
 LIVE_SEM_LINHA = "sem linha ativa nas familias triadas"
 LIVE_NENHUM_APROVADO = "nenhum candidato passou nos gates"
 LIVE_DUPLICATA = "pick equivalente ja' existe nesta partida"
+LIVE_SEM_AMOSTRA_DOS_TIMES = "sem amostra minima dos times, so' media da liga"
 
 
 def _live_candidate_summary(c: dict) -> dict:
