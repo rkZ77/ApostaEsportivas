@@ -8,8 +8,8 @@ aposta a mesma coisa numa entrada simples e num bilhete de quatro pernas.
 O placar publico entao anuncia um plano fixo, declarado aqui e em nenhum outro
 lugar:
 
-    ao vivo ............................................ 4u
     VIP ................................................ 4u
+    ao vivo ............................................ 2u
     free, faltas, defesas, player stats, pick boost .... 3u
     multipla, bingo do dia ............................. 1u
     alavancagem ........... 1u POR CAMINHO, nao por pick (ver abaixo)
@@ -82,7 +82,11 @@ STAKE_PADRAO: dict[str, int] = {
     # na vitrine. Peso diferente pro sucessor faria o placar dar um degrau no
     # dia da troca, sem nada ter mudado na aposta.
     "player_stats": 3,
-    # Ao vivo: 4u desde 29/08, no mesmo degrau do VIP (decisao do usuario).
+    # Ao vivo: 2u desde 14/10/2026 (pedido do usuario: "stake sugerida do ao
+    # vivo e' padrao 2 unidades, muda todas"). Vale pro historico tambem: o
+    # placar recalcula todo pick ao vivo com o peso daqui.
+    #
+    # Historia: 4u de 29/08 a 14/10, no mesmo degrau do VIP.
     #
     # A regra anterior era "o peso descreve a FORMA da aposta", e por ela o ao
     # vivo entrou com 3 -- um jogo, um mercado, uma odd, igual ao free. O
@@ -93,7 +97,7 @@ STAKE_PADRAO: dict[str, int] = {
     # continua saindo da banca dele (suggestions::_compute_suggested_stake_
     # units), com o teto de 4u de banca.STAKE_LIMITS -- que por coincidencia
     # e' o mesmo numero, e coincidencia e' tudo o que e'.
-    "live":        4,
+    "live":        2,
     # Pick Boost publicado em 2026-08-28. Peso 2, entre a multipla (1) e os
     # mercados proprios (3), e o meio nao e' indecisao:
     #
@@ -171,6 +175,6 @@ def rotulo_curto() -> str:
     Separador por VIRGULA, e nao pelo ponto do meio que estava aqui. Ele foi
     varrido do texto do site em 01/09 e esta linha tinha passado batido.
     """
-    return (f"Premium e ao vivo {STAKE_PADRAO['vip']}u, free e mercados "
+    return (f"Premium {STAKE_PADRAO['vip']}u, ao vivo {STAKE_PADRAO['live']}u, free e mercados "
             f"{STAKE_PADRAO['free']}u, múltipla {STAKE_PADRAO['multiplas']}u, "
             f"alavancagem 1u por caminho")

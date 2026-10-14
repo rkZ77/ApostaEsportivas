@@ -25,10 +25,9 @@ export const STAKE_PADRAO: Record<string, number> = {
   // Player Stats herda o peso de goleiros · é o mesmo produto, o mesmo formato
   // de entrada e o mesmo lugar na vitrine. Ver o comentário no Python.
   player_stats: 3,
-  // Ao vivo · 4u desde 29/08, no mesmo degrau do VIP: é produto exclusivo de
-  // assinante, e o placar público pesa pelo produto. Ver o comentário no
-  // Python, que é a fonte.
-  live:        4,
+  // Ao vivo · 2u desde 14/10/2026 (pedido do usuário; era 4u desde 29/08).
+  // Ver o comentário no Python, que é a fonte.
+  live:        2,
   // Pick Boost · 3u desde 29/08, igualando os mercados próprios. É um
   // COMBINADO e quebra inteiro quando uma perna erra, o que o mantém abaixo do
   // VIP e do ao vivo. Ver o comentário no Python, que é a fonte.

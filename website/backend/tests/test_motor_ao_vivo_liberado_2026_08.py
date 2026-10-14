@@ -229,25 +229,17 @@ class TestOCardSegueOPadrao:
         # que e' a metade que nao decide nada.
         assert "banca.unit_value" in src
 
-    def test_a_unidade_sugerida_olha_a_BANCA_do_usuario(self):
-        """Igual VIP, multipla e free · pedido do usuario em 27/08.
+    def test_a_unidade_sugerida_e_o_plano_fixo_do_ao_vivo(self):
+        """2u fixos desde 14/10/2026 (pedido do usuario: "stake sugerida do ao
+        vivo e' padrao 2 unidades, muda todas"). Ate' ali era o Kelly da banca
+        (27/08), que dava 4u. Card, modal e API saem do mesmo plano."""
+        import stake_plan
 
-        `picks_live.stake_units` e' a sugestao do MOTOR, e ela nao conhece a
-        banca de ninguem: e' a mesma pra quem tem R$ 200 e pra quem tem
-        R$ 20.000. Os cards pre-jogo resolvem isso com Kelly em cima do bankroll
-        real, e nao havia razao pro Live ser o unico produto a mostrar uma
-        unidade que nao fala da banca de quem esta' lendo.
-
-        `calcVipStake` e' a MESMA funcao do card VIP · o que muda e' so' o teto.
-        """
+        assert stake_plan.stake_de("live") == 2
         src = _ler(_FRONT, "components", "LivePicksFeed.tsx")
-        assert "calcVipStake" in src
-        assert "bankroll_current" in src
-        # Sem banca configurada cai na sugestao do motor, que continua vindo do
-        # feed · e' melhor que nada, e e' o mesmo numero que o /admin mostra.
-        assert "pick.stake_units" in src
+        assert "return stakeDe('live')" in src
         api = _ler(_BACKEND, "routers", "live_picks.py")
-        assert "stake_units" in api
+        assert 'stake_plan.stake_de("live")' in api
 
     def test_o_teto_do_live_e_o_mesmo_dos_dois_lados(self):
         """Sem o teto no cliente, o Kelly pediria 7u num pick de 82% e o modal
@@ -269,7 +261,8 @@ class TestOCardSegueOPadrao:
         pergunta, na mesma batida de dedo."""
         src = _ler(_FRONT, "components", "LivePicksFeed.tsx")
         assert "function unidadesSugeridas" in src
-        assert "suggestedUnits={unidadesSugeridas(alvo, banca)}" in src
+        assert "suggestedUnits={unidadesSugeridas()}" in src
+        assert "pick.user_stake_units ?? unidadesSugeridas()" in src
 
     def test_a_odd_da_conta_e_a_que_o_usuario_registrou(self):
         """Ao vivo a linha se move mais que em pre-jogo · usar a do pick pra

@@ -55,7 +55,7 @@ import { LeagueLogo, TeamLogo } from './TeamLogo'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
 import { pctProb } from '../utils/format'
 import { rotuloDoStatus, escudoDoTime } from '../lib/aoVivo'
-import { calcVipStake } from '../utils/stakeUtils'
+import { stakeDe } from '../utils/stakePlan'
 import { sinalizarNavegacao } from '../services/progressBus'
 import FiltrosDePicks, { filtrarPicks, ordenarPicks,
          type OrdemDePick, type BilheteFiltro } from './FiltrosDePicks'
@@ -721,33 +721,15 @@ function EmLeituraAgora({ partidas, tick, disponivel, motor }: {
   )
 }
 
-/** Unidades sugeridas pra ESTE pick e ESTA banca · a mesma conta do card VIP.
+/** Unidades sugeridas no ao vivo · 2u FIXOS (14/10/2026, pedido do usuário:
+ * "stake sugerida do ao vivo é padrão 2 unidades"). Era o Kelly da banca, que
+ * dava 4u e discordava do plano; o número sai do plano (stakePlan.ts), igual
+ * ao que o backend manda (live_picks.py).
  *
  * Fica fora do card porque o MODAL precisa abrir com o mesmo número que o card
- * mostrou. Enquanto ele calculava por conta própria (`stake_units ?? 1`), o
- * card dizia "3u" e o modal abria em "1u" · duas respostas pra mesma pergunta,
- * na mesma batida de dedo. */
-function unidadesSugeridas(
-  pick: Pick<LivePick, 'probability' | 'odd' | 'ev' | 'stake_units' | 'suggested_stake_units'>,
-  banca?: { bankroll_current: number; unit_value: number } | null,
-): number {
-  // O backend calcula a mesma coisa desde 29/08 (live_picks.py), e ele é a
-  // resposta preferida pelo mesmo motivo que vale no SuggestionCard: é o
-  // número que o APP recebe, e duas implementações do mesmo Kelly divergem no
-  // dia em que uma das duas mudar.
-  if (pick.suggested_stake_units != null && pick.suggested_stake_units > 0) {
-    return Math.min(pick.suggested_stake_units, MAX_UNIDADES_LIVE)
-  }
-  if (banca?.bankroll_current && banca.unit_value > 0) {
-    const kelly = calcVipStake(
-      Number(pick.probability), Number(pick.odd), Number(pick.ev),
-      banca.bankroll_current, banca.unit_value,
-    )
-    if (kelly) return Math.min(kelly.units, MAX_UNIDADES_LIVE)
-  }
-  // Sem banca configurada, a sugestão do motor · é melhor que nada, e é o
-  // mesmo número que o pick carrega no /admin.
-  return Math.min(pick.stake_units ?? 1, MAX_UNIDADES_LIVE)
+ * mostrou. */
+function unidadesSugeridas(): number {
+  return stakeDe('live')
 }
 import { PICK_TYPE_BORDER, cascaDoPick, caixaDoPick } from '../utils/resultStyle'
 
@@ -1076,16 +1058,12 @@ const CardLive = forwardRef<HTMLDivElement, {
    * real do usuário, e não havia razão pro Live ser o único produto a mostrar
    * uma unidade que não fala da banca de quem está lendo.
    *
-   * `calcVipStake` é a MESMA função do card VIP · o que muda é só o teto, que
-   * aqui é 4u (ver MAX_UNIDADES_LIVE).
-   *
-   * Sem banca configurada, cai na sugestão do motor: é melhor que nada, e é o
-   * mesmo número que o pick carrega no /admin.
+   * Desde 14/10/2026 é o plano fixo do ao vivo (2u) · ver unidadesSugeridas.
    *
    * Quem já apostou vê o que APOSTOU, não o que era sugerido. */
   const aposta = useMemo(
-    () => ({ unidades: pick.user_stake_units ?? unidadesSugeridas(pick, banca) }),
-    [pick, banca])
+    () => ({ unidades: pick.user_stake_units ?? unidadesSugeridas() }),
+    [pick])
   const direcao: 'over' | 'under' = pick.line.toLowerCase().startsWith('under') ? 'under' : 'over'
   const linhaNum = parseFloat(pick.line.replace(/[^\d.]/g, ''))
   /* A BARRA "agora X / linha Y" E' DE JOGO EM ANDAMENTO (2026-09-05, pedido do
@@ -1225,14 +1203,17 @@ const CardLive = forwardRef<HTMLDivElement, {
 
         {encerrado ? (
           <div className="flex-1 px-4 py-3 text-center">
-            <div className="text-[10px] text-ink-3 mb-0.5">Resultado</div>
+            <div className="text-[10px] text-ink-3 mb-0.5">{seguido ? 'Resultado' : 'Resultado do pick'}</div>
             {pick.profit != null ? (
               <>
-                <div className={`text-xl font-black tabular-nums ${
-                  Number(pick.profit) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {/* Sem cor de ganho/perda pra quem não apostou (14/10/2026,
+                    pedido do usuário): "o site perdeu, eu usuário não". */}
+                <div className={`text-xl font-black tabular-nums ${!seguido ? 'text-ink-1'
+                  : Number(pick.profit) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                   {Number(pick.profit) >= 0 ? '+' : ''}{Number(pick.profit).toFixed(2)}u
                 </div>
-                {banca && (
+                {!seguido && <div className="text-[10px] text-ink-4">você não apostou</div>}
+                {banca && seguido && (
                   <div className="text-[11px] text-ink-4 tabular-nums">
                     {Number(pick.profit) >= 0 ? '+' : '-'}R$
                     {Math.abs(Number(pick.profit) * banca.unit_value).toFixed(0)}
@@ -1993,7 +1974,7 @@ export default function LivePicksFeed({ isActive, banca }: {
         {alvo && (
           <ApostaModal
             pickOdd={Number(alvo.odd)}
-            suggestedUnits={unidadesSugeridas(alvo, banca)}
+            suggestedUnits={unidadesSugeridas()}
             maxUnits={MAX_UNIDADES_LIVE}
             loading={salvando}
             error={erroModal}
