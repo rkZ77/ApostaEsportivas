@@ -517,11 +517,11 @@ export default function Profile() {
                     placeholder="Senha atual"
                     autoComplete="current-password"
                     required
-                    className="input w-full pr-10 text-sm"
+                    className="input w-full pr-12 text-sm"
                   />
                   <button type="button" onClick={() => setShowCurrentPw(v => !v)}
                     aria-label={showCurrentPw ? 'Ocultar senha' : 'Mostrar senha'}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-3 hover:text-ink-2 transition-colors">
+                    className="absolute right-1 top-1/2 -translate-y-1/2 w-10 h-10 grid place-items-center rounded-md text-ink-3 hover:text-ink-2 transition-colors touch-manipulation">
                     {showCurrentPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
@@ -534,11 +534,11 @@ export default function Profile() {
                     placeholder="Nova senha (mínimo 10 caracteres)"
                     autoComplete="new-password"
                     required
-                    className="input w-full pr-10 text-sm"
+                    className="input w-full pr-12 text-sm"
                   />
                   <button type="button" onClick={() => setShowNewPw(v => !v)}
                     aria-label={showNewPw ? 'Ocultar senha' : 'Mostrar senha'}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-3 hover:text-ink-2 transition-colors">
+                    className="absolute right-1 top-1/2 -translate-y-1/2 w-10 h-10 grid place-items-center rounded-md text-ink-3 hover:text-ink-2 transition-colors touch-manipulation">
                     {showNewPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
