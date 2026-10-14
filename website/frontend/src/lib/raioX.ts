@@ -65,7 +65,7 @@ export interface RaioX {
     placar_final?: [number, number] | null
   }
   times: { home: { team_id: number; jogos: JogoDoTime[] }; away: { team_id: number; jogos: JogoDoTime[] } }
-  h2h: Array<{ data: string | null; home_team_id: number; away_team_id: number
+  h2h: Array<{ data: string | null; league_id?: number | null; home_team_id: number; away_team_id: number
                home_goals: number | null; away_goals: number | null
                escanteios: number | null; amarelos: number | null }>
   /** 'api': o banco não tinha o confronto e ele veio da API-Football, só com

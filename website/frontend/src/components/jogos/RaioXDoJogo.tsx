@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Check, Flag, Lock, Minus, Plus, Shield, Star, Users } from 'lucide-react'
+import { Check, Flag, Goal, Lock, Minus, Plus, Repeat, Shield, Square, Star, TrendingUp, Users } from 'lucide-react'
 import { useTimesFavoritos } from '../../lib/timesFavoritos'
 import { Link } from 'react-router-dom'
 import api from '../../services/api'
@@ -1152,54 +1152,144 @@ function dataCurta(iso: string | null): string {
   return m ? `${m[3]}/${m[2]}/${m[1].slice(2)}` : ''
 }
 
+/*
+ * CONFRONTO COM FILTRO (14/10/2026, pedido do usuário): todos os confrontos
+ * ou só os desta competição, e todos ou só com o mandante de hoje em casa /
+ * fora. Os números de cima (vitórias, médias, taxas) saem do recorte escolhido.
+ */
+type CompetH2H = 'todas' | 'esta'
+type MandoH2H = 'todos' | 'casa' | 'fora'
+
 function AbaConfronto({ dados }: { dados: RaioX }) {
   const f = dados.fixture
-  const jogos = dados.h2h
-  if (!jogos.length) {
+  const [compet, setCompet] = useState<CompetH2H>('todas')
+  const [mando, setMando] = useState<MandoH2H>('todos')
+
+  if (!dados.h2h.length) {
     return <div className="card p-8 text-center text-sm text-ink-2">Não achamos confrontos anteriores entre os dois.</div>
+  }
+
+  const jogos = dados.h2h.filter(j =>
+    (compet === 'todas' || (f.league_id != null && j.league_id === f.league_id))
+    && (mando === 'todos' || (mando === 'casa') === (j.home_team_id === f.home_team_id)))
+
+  /* Placar do ponto de vista do mandante de HOJE, jogue onde jogou. */
+  const doMandante = (j: RaioX['h2h'][number]) => {
+    if (j.home_goals == null || j.away_goals == null) return null
+    const pro = j.home_team_id === f.home_team_id ? j.home_goals : j.away_goals
+    const contra = j.home_team_id === f.home_team_id ? j.away_goals : j.home_goals
+    return pro > contra ? 'V' : pro < contra ? 'D' : 'E'
   }
   let vHome = 0, empates = 0, vAway = 0
   for (const j of jogos) {
-    if (j.home_goals == null || j.away_goals == null) continue
-    const golsHome = j.home_team_id === f.home_team_id ? j.home_goals : j.away_goals
-    const golsAway = j.home_team_id === f.home_team_id ? j.away_goals : j.home_goals
-    if (golsHome > golsAway) vHome++
-    else if (golsHome < golsAway) vAway++
-    else empates++
+    const r = doMandante(j)
+    if (r === 'V') vHome++
+    else if (r === 'D') vAway++
+    else if (r === 'E') empates++
   }
-  const gols = jogos.filter(j => j.home_goals != null).map(j => (j.home_goals ?? 0) + (j.away_goals ?? 0))
+  const comPlacar = jogos.filter(j => j.home_goals != null && j.away_goals != null)
+  const gols = comPlacar.map(j => j.home_goals! + j.away_goals!)
   const esc = jogos.map(j => j.escanteios).filter((v): v is number => v != null)
+  const cart = jogos.map(j => j.amarelos).filter((v): v is number => v != null)
   const media = (xs: number[]) => (xs.length ? (xs.reduce((a, b) => a + b, 0) / xs.length).toFixed(1) : '—')
+  const pct = (n: number) => (comPlacar.length ? `${Math.round((n / comPlacar.length) * 100)}%` : '—')
+  const ambas = comPlacar.filter(j => j.home_goals! > 0 && j.away_goals! > 0).length
+  const mais25 = gols.filter(g => g > 2.5).length
+
+  const numeros: Array<[ReactNode, string, string]> = [
+    [<Goal key="g" className="w-4 h-4" />, media(gols), 'gols/jogo'],
+    [<Flag key="e" className="w-4 h-4" />, media(esc), 'escanteios/jogo'],
+    [<Square key="c" className="w-4 h-4" />, media(cart), 'cartões/jogo'],
+    [<Repeat key="a" className="w-4 h-4" />, pct(ambas), 'ambas marcam'],
+    [<TrendingUp key="o" className="w-4 h-4" />, pct(mais25), 'mais de 2.5'],
+  ]
+
+  const Seletor = <T extends string>({ valor, set, opcoes }: {
+    valor: T; set: (v: T) => void; opcoes: Array<[T, string, boolean?]>
+  }) => (
+    <div className="grid rounded-lg border border-line p-0.5 bg-surface-1"
+      style={{ gridTemplateColumns: `repeat(${opcoes.length}, minmax(0, 1fr))` }}>
+      {opcoes.map(([k, rotulo, desligado]) => (
+        <button key={k} onClick={() => set(k)} disabled={desligado} aria-pressed={valor === k}
+          className={cn('h-10 rounded-md text-sm font-bold transition-colors truncate px-1 disabled:opacity-30',
+            valor === k ? 'bg-surface-3 text-ink-1' : 'text-ink-3')}>
+          {rotulo}
+        </button>
+      ))}
+    </div>
+  )
 
   return (
     <div className="space-y-3">
-      <div className="card p-4">
-        <div className="grid grid-cols-3 text-center">
-          {[[vHome, f.home_team], [empates, 'Empates'], [vAway, f.away_team]].map(([n, r], i) => (
-            <div key={i} className="min-w-0">
-              <div className={cn('font-mono text-3xl font-black tabular-nums', i === 1 ? 'text-ink-2' : 'text-ink-1')}>{n}</div>
-              <div className="text-[11px] text-ink-3 truncate px-1">{r}</div>
+      <div className="card p-3 space-y-2">
+        <Seletor valor={compet} set={setCompet} opcoes={[
+          ['todas', 'Todas as competições'], ['esta', 'Esta competição', f.league_id == null],
+        ]} />
+        <Seletor valor={mando} set={setMando} opcoes={[
+          ['todos', 'Todos'], ['casa', `${f.home_team} em casa`], ['fora', `${f.home_team} fora`],
+        ]} />
+      </div>
+
+      {!jogos.length ? (
+        <div className="card p-8 text-center text-sm text-ink-2">Nenhum confronto neste recorte.</div>
+      ) : (
+        <>
+          <div className="card p-4">
+            <div className="grid grid-cols-3 text-center">
+              {([[vHome, f.home_team, f.home_team_id], [empates, 'Empates', null], [vAway, f.away_team, f.away_team_id]] as const)
+                .map(([n, r, id], i) => (
+                  <div key={i} className="min-w-0 flex flex-col items-center">
+                    {id != null ? <TeamLogo id={id} name={r} size={22} />
+                      : <span className="w-[22px] h-[22px] grid place-items-center rounded-full bg-surface-3 text-[11px] font-black text-ink-2">X</span>}
+                    <div className={cn('font-mono text-3xl font-black tabular-nums mt-1', i === 1 ? 'text-ink-2' : 'text-ink-1')}>{n}</div>
+                    <div className="text-[11px] text-ink-3 truncate px-1 max-w-full">{r}</div>
+                  </div>
+                ))}
             </div>
-          ))}
-        </div>
-        <div className="mt-4 pt-3 border-t border-line grid grid-cols-2 text-center text-sm">
-          <div><span className="font-mono font-bold text-ink-1">{media(gols)}</span> <span className="text-ink-3 text-xs">gols/jogo</span></div>
-          <div><span className="font-mono font-bold text-ink-1">{media(esc)}</span> <span className="text-ink-3 text-xs">escanteios/jogo</span></div>
-        </div>
-      </div>
-      <div className="card divide-y divide-line/60">
-        {jogos.map((j, i) => (
-          <div key={i} className="px-4 py-3 flex items-center gap-3 text-sm">
-            <span className="text-[11px] text-ink-3 w-16 shrink-0 tabular-nums">{dataCurta(j.data)}</span>
-            <TeamLogo id={j.home_team_id} name="" size={18} />
-            <span className="font-mono font-black text-ink-1 tabular-nums">{j.home_goals ?? '-'} - {j.away_goals ?? '-'}</span>
-            <TeamLogo id={j.away_team_id} name="" size={18} />
-            {(j.escanteios != null || j.amarelos != null) && (
-              <span className="ml-auto text-[11px] text-ink-3 tabular-nums">{j.escanteios ?? '—'} esc · {j.amarelos ?? '—'} cart</span>
-            )}
+            <div className="mt-4 pt-3 border-t border-line grid grid-cols-2 sm:grid-cols-5 gap-3">
+              {numeros.map(([icone, valor, rotulo]) => (
+                <div key={rotulo} className="flex items-center gap-2 min-w-0">
+                  <span className="w-8 h-8 shrink-0 grid place-items-center rounded-lg bg-surface-2 text-ink-2" aria-hidden>{icone}</span>
+                  <div className="min-w-0">
+                    <div className="font-mono font-black text-ink-1 tabular-nums leading-none">{valor}</div>
+                    <div className="text-[11px] text-ink-3 truncate">{rotulo}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-[11px] text-ink-4">
+              {jogos.length} {jogos.length === 1 ? 'confronto' : 'confrontos'} · vitórias contadas pelo lado de cada time, jogue onde jogou.
+            </p>
           </div>
-        ))}
-      </div>
+          <div className="card divide-y divide-line/60">
+            {jogos.map((j, i) => {
+              const r = doMandante(j)
+              return (
+                <div key={i} className="px-4 py-3 flex items-center gap-2.5 text-sm">
+                  <span className={cn('w-6 h-6 grid place-items-center rounded font-black text-[11px] shrink-0',
+                    r === 'V' ? 'bg-green-500 text-on-fill' : r === 'D' ? 'bg-red-500 text-on-fill' : 'bg-surface-3 text-ink-2')}
+                    title={`Resultado do ${f.home_team}`}>
+                    {r ?? '?'}
+                  </span>
+                  <div className="w-14 shrink-0">
+                    <div className="text-[11px] text-ink-3 tabular-nums">{dataCurta(j.data)}</div>
+                    {j.league_id != null && <div className="mt-0.5"><LeagueLogo id={j.league_id} /></div>}
+                  </div>
+                  <TeamLogo id={j.home_team_id} name="" size={18} />
+                  <span className="font-mono font-black text-ink-1 tabular-nums">{j.home_goals ?? '-'} - {j.away_goals ?? '-'}</span>
+                  <TeamLogo id={j.away_team_id} name="" size={18} />
+                  {(j.escanteios != null || j.amarelos != null) && (
+                    <span className="ml-auto flex items-center gap-2 text-[11px] text-ink-3 tabular-nums">
+                      <span className="flex items-center gap-0.5"><Flag className="w-3 h-3" aria-label="escanteios" />{j.escanteios ?? '—'}</span>
+                      <span className="flex items-center gap-0.5"><Square className="w-3 h-3" aria-label="cartões" />{j.amarelos ?? '—'}</span>
+                    </span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </>
+      )}
       {dados.h2h_fonte === 'api' && (
         <p className="text-[11px] text-ink-4 leading-relaxed px-1">
           Confrontos de fora da nossa base: só o placar, sem escanteios e cartões.
