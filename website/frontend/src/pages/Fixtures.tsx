@@ -138,6 +138,7 @@ interface Fixture {
   league_flag?: string
   league_country?: string
   league_id: number
+  season?: number | null
   status: string
   elapsed?: number | null
   home_goals: number | null

@@ -88,15 +88,29 @@ def test_resultado_e_do_ponto_de_vista_do_time():
 
 
 def test_forma_recente_em_uma_consulta(monkeypatch):
+    s = {"serie_liga": 2, "serie_temporada": 2026}
     cur = Cur([("CROSS JOIN LATERAL", [
-        {"team_id": 10, "home_team_id": 10, "away_team_id": 30, "home_goals": 1, "away_goals": 0},
-        {"team_id": 10, "home_team_id": 40, "away_team_id": 10, "home_goals": 2, "away_goals": 2},
-        {"team_id": 20, "home_team_id": 20, "away_team_id": 50, "home_goals": 0, "away_goals": 3},
+        {"team_id": 10, **s, "home_team_id": 10, "away_team_id": 30, "home_goals": 1, "away_goals": 0},
+        {"team_id": 10, **s, "home_team_id": 40, "away_team_id": 10, "home_goals": 2, "away_goals": 2},
+        {"team_id": 20, **s, "home_team_id": 20, "away_team_id": 50, "home_goals": 0, "away_goals": 3},
     ])])
     monkeypatch.setattr(fx, "get_connection", lambda: Conn(cur))
-    formas = fx._formas_recentes({10, 20}, antes_de="2026-10-06")
-    assert formas == {10: ["V", "E"], 20: ["D"]}
+    formas = fx._formas_recentes({(10, 2, 2026), (20, 2, 2026)}, antes_de="2026-10-06")
+    assert formas == {(10, 2, 2026): ["V", "E"], (20, 2, 2026): ["D"]}
     assert len(cur.feitas) == 1
+    # A liga e a temporada de cada time vao pra consulta (14/10/2026).
+    params = cur.feitas[0][1]
+    assert sorted(zip(params[0], params[1], params[2])) == [(10, 2, 2026), (20, 2, 2026)]
+
+
+def test_serie_so_conta_a_liga_e_a_temporada_do_jogo():
+    """O City na Champions nao pode ter a forma da Premier League junto."""
+    cur = Cur([])
+    fx._ultimos_jogos(cur, [10, 20], None, 5, ligas=[2, 2], temporadas=[2026, 2026])
+    sql, params = cur.feitas[0]
+    assert sql.count("league_id = t.liga") == 2       # nas duas metades, antes do LIMIT
+    assert sql.count("season = t.temporada") == 2
+    assert params[1] == [2, 2] and params[2] == [2026, 2026]
 
 
 def test_forma_que_falha_nao_derruba_a_agenda(monkeypatch):
@@ -104,7 +118,7 @@ def test_forma_que_falha_nao_derruba_a_agenda(monkeypatch):
         def execute(self, *a, **k):
             raise RuntimeError("banco fora")
     monkeypatch.setattr(fx, "get_connection", lambda: Conn(Quebra([])))
-    assert fx._formas_recentes({10}, antes_de="2026-10-06") == {}
+    assert fx._formas_recentes({(10, 71, 2026)}, antes_de="2026-10-06") == {}
 
 
 # ── Raio-X ──────────────────────────────────────────────────────────────────
@@ -172,7 +186,11 @@ def test_raio_x_monta_series_do_ponto_de_vista_de_cada_time(monkeypatch):
     assert r["h2h"][0]["escanteios"] == 9
     # So' jogos ANTES do apito entram na serie.
     sql_serie = next(p for s, p in cur.feitas if "CROSS JOIN LATERAL" in s)
-    assert sql_serie[1] == kickoff and sql_serie[4] == kickoff
+    assert sql_serie[3] == kickoff and sql_serie[6] == kickoff
+    # So' a liga e a temporada do jogo (14/10/2026).
+    assert sql_serie[1] == [71, 71] and sql_serie[2] == [2026, 2026]
+    sql_arb = next(p for s, p in cur.feitas if "split_part(referee" in s)
+    assert sql_arb[1:5] == (71, 71, 2026, 2026)
 
 
 def test_jogador_sem_minuto_fica_de_fora_e_titular_vem_da_escalacao(monkeypatch):
@@ -199,8 +217,10 @@ def test_jogo_fora_do_banco_usa_os_times_do_parametro(monkeypatch):
     cur, _ = _banco_raio_x(None)
     monkeypatch.setattr(fx, "get_connection", lambda: Conn(cur))
 
-    r = fx.get_raio_x(555, current_user={}, home=10, away=20, league=71, n=10)
+    r = fx.get_raio_x(555, current_user={}, home=10, away=20, league=71, season=2025, n=10)
 
+    sql_serie = next(p for s, p in cur.feitas if "CROSS JOIN LATERAL" in s)
+    assert sql_serie[1] == [71, 71] and sql_serie[2] == [2025, 2025]
     assert r["fixture"]["home_team"] == "Casa FC"
     assert r["fixture"]["league_id"] == 71
     assert len(r["times"]["home"]["jogos"]) == 2
