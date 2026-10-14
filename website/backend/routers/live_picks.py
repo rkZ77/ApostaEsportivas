@@ -40,6 +40,7 @@ from pydantic import BaseModel
 from auth_utils import get_current_user, is_vip_active, require_admin, require_vip, require_pro, tem_tier_pro
 from database import get_connection
 from taxa_acerto import taxa_acerto
+import stake_plan
 from settlement_bridge import settlement
 
 # Reuso da camada de dado ao vivo. Os nomes com underscore sao privados por
@@ -646,7 +647,6 @@ def feed(
             linhas = [p for p in linhas if p["result"] is None]
 
         seguidos: dict = {}
-        banca = None
         if linhas:
             cur.execute("""
                 SELECT pick_id, stake_units, actual_odd, bet_house
@@ -654,19 +654,9 @@ def feed(
                 WHERE user_id = %s AND pick_type = 'live' AND pick_id = ANY(%s)
             """, (current_user["id"], [p["id"] for p in linhas]))
             seguidos = {r["pick_id"]: dict(r) for r in cur.fetchall()}
-
-            # A UNIDADE SUGERIDA VEM DA BANCA DE QUEM ESTA LENDO (29/08).
-            #
-            # O site ja' fazia essa conta, mas do lado dele: LivePicksFeed.tsx
-            # roda o mesmo Kelly do card VIP em cima da banca carregada na
-            # tela. O APP nao tem Kelly nenhum de proposito -- justamente pra
-            # nao existir uma segunda implementacao da mesma conta -- entao o
-            # card ao vivo dele nao sabia dizer quanto apostar.
-            #
-            # E' o mesmo buraco que /suggestions/today ja' fechou pra faltas,
-            # jogadores e Pick Boost em 28/08, e a correcao e' a mesma funcao.
-            from routers.suggestions import _compute_suggested_stake_units, _get_user_banca
-            banca = _get_user_banca(cur, current_user["id"])
+            # A unidade sugerida saia da banca (Kelly, 29/08) · desde 14/10 e'
+            # o plano fixo do ao vivo, la' embaixo. O APP continua recebendo o
+            # numero pronto daqui.
     finally:
         cur.close()
         conn.close()
@@ -713,12 +703,11 @@ def feed(
         item["user_stake_units"] = float(seguido["stake_units"]) if seguido else None
         # So' pra quem ainda nao apostou · quem apostou tem o numero dele, e
         # sugerir outro por cima seria discutir uma aposta ja' feita.
-        item["suggested_stake_units"] = (
-            _compute_suggested_stake_units(
-                "live", None, p.get("confidence"), p.get("odd"), p.get("ev"),
-                banca[0], banca[1],
-            ) if banca and not seguido else None
-        )
+        # 2u FIXOS (14/10/2026, pedido do usuario: "stake sugerida do ao vivo
+        # e' padrao 2 unidades, muda todas"). Era o Kelly da banca, que dava
+        # 4u e discordava do plano. O numero sai do plano (stake_plan.py), o
+        # mesmo que pesa o ao vivo no placar.
+        item["suggested_stake_units"] = None if seguido else stake_plan.stake_de("live")
         item["user_actual_odd"] = float(seguido["actual_odd"]) if seguido and seguido["actual_odd"] else None
         item["user_bet_house"] = seguido["bet_house"] if seguido else None
         item["segundos_de_validade"] = (

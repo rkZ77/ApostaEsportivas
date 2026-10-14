@@ -819,7 +819,8 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
             const seguiu = stakeSeguida != null
             const u = seguiu ? stakeSeguida! : stakeDe('free')
             const p = calcProfitUnits(dica.result, Number(dica.odd), u, seguiu ? oddSeguida : null)
-            const color = p >= 0 ? 'text-green-400' : 'text-red-400'
+            // Cor só pra quem apostou · ver SuggestionCard (14/10/2026).
+            const color = !seguiu ? 'text-ink-1' : p >= 0 ? 'text-green-400' : 'text-red-400'
             const profitR = seguiu && banca ? Math.abs(p) * banca.unit_value : null
             return (
               <>
@@ -1269,7 +1270,8 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
             const seguiu = stakeSeguida != null
             const u = seguiu ? stakeSeguida! : stakeDe(tipo)
             const p = calcProfitUnits(m.result, Number(m.total_odd), u, seguiu ? oddSeguida : null)
-            const color = p >= 0 ? 'text-green-400' : 'text-red-400'
+            // Cor só pra quem apostou · ver SuggestionCard (14/10/2026).
+            const color = !seguiu ? 'text-ink-1' : p >= 0 ? 'text-green-400' : 'text-red-400'
             const profitR = seguiu && banca ? Math.abs(p) * banca.unit_value : null
             return (
               <>

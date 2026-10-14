@@ -611,7 +611,11 @@ function SuggestionCard({
             const contaU = seguiu || contaEmUnidades(pickType)
             const u = seguiu ? stakeSeguida! : stakeDe(pickType)
             const p = calcProfitUnits(s.result, Number(s.odd), u, seguiu ? oddSeguida : null)
-            const color = p >= 0 ? 'text-green-400' : 'text-red-400'
+            /* Verde e vermelho só pra quem apostou (14/10/2026, pedido do
+               usuário: "fica vermelho como se eu tivesse perdido; o site
+               perdeu, eu usuário não"). O selo GREEN/RED do topo já diz como
+               o pick foi. */
+            const color = !seguiu ? 'text-ink-1' : p >= 0 ? 'text-green-400' : 'text-red-400'
             const profitR = seguiu && banca ? Math.abs(p) * banca.unit_value : null
             return (
               <>
