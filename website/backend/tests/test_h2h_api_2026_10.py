@@ -8,7 +8,7 @@ import h2h_api
 
 
 def _item(data, casa, fora, gh, ga, status="FT"):
-    return {"fixture": {"date": data, "status": {"short": status}},
+    return {"fixture": {"date": data, "status": {"short": status}}, "league": {"id": 2},
             "teams": {"home": {"id": casa}, "away": {"id": fora}},
             "goals": {"home": gh, "away": ga}}
 
@@ -20,7 +20,8 @@ def test_resposta_vira_o_formato_do_raio_x():
         _item("2026-12-01T18:00:00+00:00", 499, 517, None, None, status="NS"),
     ], 8)
     assert [j["data"][:4] for j in jogos] == ["2025", "2024"]     # mais recente primeiro
-    assert jogos[1] == {"data": "2024-01-10T20:00:00", "home_team_id": 499, "away_team_id": 517,
+    assert jogos[1] == {"data": "2024-01-10T20:00:00", "league_id": 2,
+                        "home_team_id": 499, "away_team_id": 517,
                         "home_goals": 2, "away_goals": 1, "escanteios": None, "amarelos": None}
 
 

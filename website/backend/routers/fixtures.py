@@ -543,7 +543,9 @@ def get_fixture_stats(fixture_id: int, current_user: dict = Depends(get_current_
 # ─────────────────────────────────────────────────────────────────────────────
 
 _JOGOS_RAIO_X = 10
-_H2H_MAX = 8
+#: 15 e nao 8 (14/10/2026): a aba Confronto filtra por competicao e mando, e
+#: com 8 o filtro deixava dois ou tres jogos.
+_H2H_MAX = 15
 
 
 def _serie_do_time(linhas: list, team_id: int) -> list:
@@ -1070,26 +1072,35 @@ def _montar_raio_x(fixture_id: int, home, away, league, n: int, season=None) -> 
 
         # Confronto: as duas ordens de mando como metades separadas, cada uma
         # no indice do mandante · mesmo motivo do UNION ALL em _ultimos_jogos.
+        # SO' O QUE VEIO ANTES DESTE JOGO (14/10/2026): o jogo de hoje, ja'
+        # encerrado, aparecia na lista como "confronto anterior".
         cur.execute("""
             SELECT * FROM (
-                (SELECT match_date, home_team_id, away_team_id, home_goals, away_goals,
-                        home_corners, away_corners, home_yellow_cards, away_yellow_cards
+                (SELECT fixture_id, match_date, league_id, home_team_id, away_team_id,
+                        home_goals, away_goals, home_corners, away_corners,
+                        home_yellow_cards, away_yellow_cards
                    FROM match_statistics
                   WHERE home_team_id = %s AND away_team_id = %s
-                    AND status IN ('FT','AET','PEN')
+                    AND status IN ('FT','AET','PEN') AND fixture_id <> %s
+                    AND (%s::timestamp IS NULL OR match_date < %s::timestamp)
                   ORDER BY match_date DESC LIMIT %s)
                 UNION ALL
-                (SELECT match_date, home_team_id, away_team_id, home_goals, away_goals,
-                        home_corners, away_corners, home_yellow_cards, away_yellow_cards
+                (SELECT fixture_id, match_date, league_id, home_team_id, away_team_id,
+                        home_goals, away_goals, home_corners, away_corners,
+                        home_yellow_cards, away_yellow_cards
                    FROM match_statistics
                   WHERE home_team_id = %s AND away_team_id = %s
-                    AND status IN ('FT','AET','PEN')
+                    AND status IN ('FT','AET','PEN') AND fixture_id <> %s
+                    AND (%s::timestamp IS NULL OR match_date < %s::timestamp)
                   ORDER BY match_date DESC LIMIT %s)
             ) h2h
             ORDER BY match_date DESC LIMIT %s
-        """, (home_id, away_id, _H2H_MAX, away_id, home_id, _H2H_MAX, _H2H_MAX))
+        """, (home_id, away_id, fixture_id, antes_de, antes_de, _H2H_MAX,
+              away_id, home_id, fixture_id, antes_de, antes_de, _H2H_MAX, _H2H_MAX))
         h2h = [{
             "data": r["match_date"].isoformat() if r["match_date"] else None,
+            # A competicao de cada confronto · a aba filtra "so' esta".
+            "league_id": r.get("league_id"),
             "home_team_id": r["home_team_id"], "away_team_id": r["away_team_id"],
             "home_goals": r["home_goals"], "away_goals": r["away_goals"],
             "escanteios": (r["home_corners"] or 0) + (r["away_corners"] or 0)
@@ -1101,7 +1112,11 @@ def _montar_raio_x(fixture_id: int, home, away, league, n: int, season=None) -> 
         h2h_fonte = "banco"
         if not h2h:
             import h2h_api
-            da_api = h2h_api.confronto(cur, home_id, away_id, _H2H_MAX)
+            da_api = h2h_api.confronto(cur, home_id, away_id, _H2H_MAX + 1)
+            if da_api:
+                corte = antes_de.isoformat() if antes_de else None
+                da_api = [j for j in da_api
+                          if not corte or not j.get("data") or j["data"] < corte][:_H2H_MAX]
             if da_api:
                 h2h, h2h_fonte = da_api, "api"
 

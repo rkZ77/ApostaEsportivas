@@ -55,6 +55,9 @@ def jogos_da_resposta(resposta: list, limite: int) -> list[dict]:
             continue
         jogos.append({
             "data": (fx.get("date") or "")[:19] or None,
+            # Pro filtro "so' esta competicao" da aba Confronto (14/10/2026).
+            # Cache gravado antes disso vem sem: conta so' em "todas".
+            "league_id": (item.get("league") or {}).get("id"),
             "home_team_id": (times.get("home") or {}).get("id"),
             "away_team_id": (times.get("away") or {}).get("id"),
             "home_goals": gols["home"], "away_goals": gols["away"],

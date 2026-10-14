@@ -189,6 +189,10 @@ def test_raio_x_monta_series_do_ponto_de_vista_de_cada_time(monkeypatch):
     assert sql_serie[3] == kickoff and sql_serie[6] == kickoff
     # So' a liga e a temporada do jogo (14/10/2026).
     assert sql_serie[1] == [71, 71] and sql_serie[2] == [2026, 2026]
+    # Confronto: sem o proprio jogo e so' antes do apito (14/10/2026).
+    sql_h2h = next(p for s, p in cur.feitas if ") h2h" in s)
+    assert sql_h2h[2] == 555 and sql_h2h[3] == kickoff
+    assert r["h2h"][0]["league_id"] == 71
     sql_arb = next(p for s, p in cur.feitas if "split_part(referee" in s)
     assert sql_arb[1:5] == (71, 71, 2026, 2026)
 
