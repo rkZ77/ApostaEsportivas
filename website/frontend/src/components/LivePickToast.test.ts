@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { jogoDoTitulo, partesDoCorpo } from './LivePickToast'
+import { jogoDoTitulo, mercadoLegivel, partesDoCorpo } from './LivePickToast'
+
+describe('mercadoLegivel', () => {
+  it('mercado e linha do servidor viram português', () => {
+    expect(mercadoLegivel('Gols Mais/Menos Under 2.75')).toBe('Gols, Menos de 2.75')
+    expect(mercadoLegivel('Escanteios Mais/Menos Over 9.5')).toBe('Escanteios, Mais de 9.5')
+  })
+
+  it('fora do formato volta como veio', () => {
+    expect(mercadoLegivel('Ambas Marcam Sim')).toBe('Ambas Marcam Sim')
+    expect(mercadoLegivel(null)).toBeNull()
+  })
+})
 
 describe('partesDoCorpo', () => {
   it('separa mercado, odd e minuto do texto do servidor', () => {

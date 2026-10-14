@@ -11,10 +11,9 @@ import { escudoDoTime } from '../../lib/aoVivo'
  * A faixa fina de antes (uma linha de texto truncado e um "x" de 28px) lia mal
  * no celular e era difícil de fechar com o dedo. Aqui:
  *
- *  - QUADRADO no desktop (300x300), com o jogo em destaque e o detalhe embaixo;
- *    no celular, largura da tela menos as margens e altura do conteúdo, pra
- *    não cobrir meia página.
- *  - FECHAR GRANDE: botão de 40px no canto, e no celular dá pra arrastar o
+ *  - COMPACTO desde 14/10/2026 (era quadrado de 300x300): 340px no desktop,
+ *    largura da tela menos as margens no celular, altura do conteúdo.
+ *  - FECHAR: botão de 36px no canto, e no celular dá pra arrastar o
  *    cartão pro lado. Fechar NÃO marca como lido: o item continua no sino.
  *  - TEMPO VISÍVEL: a barra de baixo mostra quanto falta pra ele sair sozinho,
  *    e o tempo para enquanto o mouse está em cima (ninguém perde o aviso no
@@ -42,32 +41,34 @@ function EscudoDoAviso({ id, nome }: { id?: number | null; nome: string }) {
   const src = escudoDoTime(id ?? undefined)
   const iniciais = nome.trim().split(/\s+/).map(p => p[0]).join('').slice(0, 2).toUpperCase() || '?'
   return (
-    <span className="relative w-9 h-9 shrink-0 grid place-items-center">
+    <span className="relative w-6 h-6 shrink-0 grid place-items-center">
       {(!src || falhou) && (
-        <span className="w-9 h-9 rounded-full bg-surface-3 grid place-items-center text-[11px] font-black text-ink-3">
+        <span className="w-6 h-6 rounded-full bg-surface-3 grid place-items-center text-[9px] font-black text-ink-3">
           {iniciais}
         </span>
       )}
       {src && !falhou && (
-        <img src={src} alt="" width={36} height={36} className="w-9 h-9 object-contain"
+        <img src={src} alt="" width={24} height={24} className="w-6 h-6 object-contain"
           onError={() => setFalhou(true)} />
       )}
     </span>
   )
 }
 
-/** "Flamengo  x  Fluminense" com o escudo em cima de cada nome. */
+/** "[escudo] Flamengo  x  Fluminense [escudo]" numa linha só (14/10/2026):
+ *  o escudo em cima de cada nome dobrava a altura do aviso. */
 function LinhaDosTimes({ casa, fora, casaId, foraId }: TimesDoAviso) {
   return (
     <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2" aria-label={`${casa} x ${fora}`}>
-      {[{ nome: casa, id: casaId }, null, { nome: fora, id: foraId }].map((t, i) => t ? (
-        <span key={i} className="flex flex-col items-center gap-1 min-w-0">
-          <EscudoDoAviso id={t.id} nome={t.nome} />
-          <span className="w-full text-center text-[13px] font-black text-ink-1 leading-tight truncate">{t.nome}</span>
-        </span>
-      ) : (
-        <span key={i} className="text-sm font-black text-ink-4 pb-5">x</span>
-      ))}
+      <span className="flex items-center justify-end gap-1.5 min-w-0">
+        <span className="text-[13px] font-black text-ink-1 leading-tight truncate">{casa}</span>
+        <EscudoDoAviso id={casaId} nome={casa} />
+      </span>
+      <span className="text-xs font-black text-ink-4">x</span>
+      <span className="flex items-center gap-1.5 min-w-0">
+        <EscudoDoAviso id={foraId} nome={fora} />
+        <span className="text-[13px] font-black text-ink-1 leading-tight truncate">{fora}</span>
+      </span>
     </div>
   )
 }
@@ -150,71 +151,68 @@ export default function CartaoDeAviso({
       onPointerLeave={e => { if (e.pointerType === 'mouse') setPausado(false) }}
       role={urgente ? 'alert' : 'status'}
       aria-live={urgente ? 'assertive' : 'polite'}
+      /* COMPACTO (14/10/2026, pedido do usuário: "poderia ser um pouco menor").
+         Era um quadrado fixo de 300x300 com espaço sobrando; agora a altura é
+         a do conteúdo, e destaque + botão dividem a última linha. */
       className={cn(
-        'pointer-events-auto relative w-full sm:w-[300px] sm:aspect-square',
-        'bg-surface-1 border rounded-2xl shadow-2xl overflow-hidden',
+        'pointer-events-auto relative w-full sm:w-[340px]',
+        'bg-surface-1/95 backdrop-blur border rounded-xl shadow-2xl overflow-hidden',
         'flex flex-col touch-pan-y select-none',
         cores.borda,
       )}
     >
-      <div className="flex items-center justify-between gap-2 pl-3 pr-2 pt-3">
-        <div className="flex items-center gap-2.5 min-w-0">
-          {/* A MARCA COM O SELINHO (11/10/2026, pedido do usuário): a logo da
-              PickIA no lugar do ícone genérico, e o status (✓, ✗, ao vivo)
-              num selinho por cima dela · o aviso diz de quem é e o que foi. */}
-          <span className="relative shrink-0 w-10 h-10">
-            <img src="/logo-64.webp" alt="PickIA" width={40} height={40}
-              className="w-10 h-10 rounded-full object-cover" />
-            <span className={cn('absolute -bottom-1 -right-1 w-5 h-5 rounded-full ring-2 ring-surface-1',
-                                'flex items-center justify-center', cores.icone)}>
-              {icone}
-            </span>
-          </span>
-          <span className="flex flex-col items-start gap-1 min-w-0">
-            <span className="text-[13px] font-black text-ink-1 leading-none">PickIA</span>
-            <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wide', cores.selo)}>
-              {selo}
-            </span>
-          </span>
-        </div>
+      {/* Marca, selo e fechar NUMA linha: o selo solto embaixo do nome ficava
+          "no meio do nada". O ícone de status vai dentro do próprio selo. */}
+      <div className="flex items-center gap-2 pl-3 pr-1.5 pt-2">
+        <img src="/logo-64.webp" alt="PickIA" width={22} height={22}
+          className="w-[22px] h-[22px] rounded-full object-cover shrink-0" />
+        <span className="text-xs font-black text-ink-1">PickIA</span>
+        <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide min-w-0',
+                            cores.selo)}>
+          {icone}{selo}
+        </span>
         <button
           type="button"
           onClick={onFechar}
           aria-label="Fechar aviso"
-          className="w-10 h-10 -mt-1 shrink-0 flex items-center justify-center rounded-full
-                     text-ink-2 hover:text-ink-1 hover:bg-surface-3 active:bg-surface-3 transition-colors"
+          className="ml-auto w-9 h-9 shrink-0 flex items-center justify-center rounded-full
+                     text-ink-3 hover:text-ink-1 hover:bg-surface-3 active:bg-surface-3 transition-colors"
         >
-          <X className="w-5 h-5" aria-hidden="true" />
+          <X className="w-4 h-4" aria-hidden="true" />
         </button>
       </div>
 
-      <div className="flex-1 flex flex-col px-4 pt-3 pb-4 gap-2.5 min-h-0">
+      <div className="px-3 pb-3 pt-1 space-y-2.5">
         <div className="min-w-0">
           {times
             ? <LinhaDosTimes {...times} />
-            : <p className="text-[15px] font-black text-ink-1 leading-snug line-clamp-2 break-words">{titulo}</p>}
+            : <p className="text-sm font-black text-ink-1 leading-snug line-clamp-2 break-words">{titulo}</p>}
           {texto && (
-            <p className={cn('mt-1 text-[13px] text-ink-2 leading-snug line-clamp-2 break-words', times && 'text-center')}>
+            <p className={cn('mt-1 text-xs text-ink-2 leading-snug line-clamp-2 break-words', times && 'text-center')}>
               {texto}
             </p>
           )}
         </div>
 
-        {destaque && <div className="sm:flex-1 flex items-center">{destaque}</div>}
-
-        {acao && (
-          <button
-            type="button"
-            onClick={acao.onClick}
-            className={cn(
-              'mt-auto w-full min-h-[44px] rounded-xl text-sm font-black transition-colors',
-              tom === 'red' || tom === 'neutro'
-                ? 'bg-surface-3 hover:bg-surface-2 text-ink-1'
-                : 'bg-accent hover:bg-accent-hover active:bg-accent-press text-on-fill',
+        {(destaque || acao) && (
+          <div className="flex items-center gap-3">
+            {destaque && <div className="flex-1 min-w-0">{destaque}</div>}
+            {acao && (
+              <button
+                type="button"
+                onClick={acao.onClick}
+                className={cn(
+                  'shrink-0 h-10 px-4 rounded-lg text-sm font-black transition-colors',
+                  !destaque && 'flex-1',
+                  tom === 'red' || tom === 'neutro'
+                    ? 'bg-surface-3 hover:bg-surface-2 text-ink-1'
+                    : 'bg-accent hover:bg-accent-hover active:bg-accent-press text-on-fill',
+                )}
+              >
+                {acao.rotulo}
+              </button>
             )}
-          >
-            {acao.rotulo}
-          </button>
+          </div>
         )}
       </div>
 
