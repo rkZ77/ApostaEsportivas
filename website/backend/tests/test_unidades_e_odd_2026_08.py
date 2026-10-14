@@ -891,12 +891,16 @@ def test_lucro_em_reais_so_pra_quem_apostou():
     continua sendo a unica porta pro valor em reais. Exigir o rotulo aqui era
     travar a moldura junto com a regra.
     """
+    # Desde 14/10/2026 o bloco de resultado mora num componente so'
+    # (ResultadoDoPick), usado pelos cards Premium, Free e multipla.
+    bloco = _front_codigo("components/ResultadoDoPick.tsx")
+    assert "const seguiu =" in bloco
+    assert "seguiu && banca" in bloco, "ResultadoDoPick calcula reais sem checar se apostou"
     for tela in ("components/SuggestionCard.tsx", "pages/Picks.tsx"):
         fonte = _front_codigo(tela)
         assert "user_stake_units ?? stakeSuggestion?.units ?? 1" not in fonte, \
             f"{tela} ainda cai na stake sugerida pra calcular lucro"
-        assert "const seguiu =" in fonte, tela
-        assert "seguiu && banca" in fonte, f"{tela} calcula reais sem checar se apostou"
+        assert "<ResultadoDoPick" in fonte, f"{tela} desenha o resultado por conta propria"
 
 
 def test_suporte_tem_um_link_so():

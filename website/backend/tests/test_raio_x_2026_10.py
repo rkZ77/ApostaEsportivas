@@ -259,13 +259,26 @@ def test_volta_de_mata_mata_acha_a_ida_pelo_mando_invertido():
     assert params[:4] == (20, 10, 11, 2026) and "21 days" in sql
 
 
+def test_jogo_de_ida_acha_a_volta_marcada_na_agenda():
+    """Leitura da IA dizia "nao da' pra saber se e' ida ou volta" (14/10)."""
+    kickoff = dt.datetime(2026, 10, 14, 21, 30)
+    cur = Cur([("FROM league_standings", []),
+               ("FROM match_statistics", []),
+               ("FROM fixtures", [{"match_datetime": dt.datetime(2026, 10, 21, 21, 30)}])])
+    c = fx._competicao_do_jogo(cur, "Semi-finals", 10, 20, 13, 2026, kickoff)
+    assert c["formato"] == "mata-mata ida e volta" and c["perna"] == "ida"
+    assert c["ida"] is None and c["volta_em"].startswith("2026-10-21")
+    sql, params = cur.feitas[-1]
+    assert params[:4] == (20, 10, 13, 2026)
+
+
 def test_liga_e_grupos_nao_procuram_ida():
     cur = Cur([("FROM league_standings", [{"x": 1}])])
     assert fx._competicao_do_jogo(cur, "Regular Season - 29", 10, 20, 71, 2026,
                                   dt.datetime(2026, 10, 14))["formato"] == "liga"
     cur = Cur([("FROM league_standings", [])])
     c = fx._competicao_do_jogo(cur, "Group A - 4", 10, 20, 13, 2026, dt.datetime(2026, 10, 14))
-    assert c == {"formato": "grupos", "ida": None}
+    assert c == {"formato": "grupos", "ida": None, "perna": None, "volta_em": None}
     assert not any("match_statistics" in s for s, _ in cur.feitas)
 
 

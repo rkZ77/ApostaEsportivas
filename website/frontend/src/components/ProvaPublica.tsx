@@ -81,7 +81,7 @@ export default function ProvaPublica({ compacta = false }: {
         {!compacta && (
           <Link
             to="/resultados"
-            className="text-[11px] text-accent-ink font-semibold inline-flex items-center gap-1 shrink-0"
+            className="text-[11px] text-accent-ink font-semibold inline-flex items-center gap-1 shrink-0 min-h-[44px]"
           >
             Conferir pick a pick
             <ArrowRight className="w-3 h-3" aria-hidden="true" />

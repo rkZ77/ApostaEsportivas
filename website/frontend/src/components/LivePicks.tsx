@@ -362,24 +362,24 @@ function LiveLeg({ leg, syncedAt }: { leg: any; syncedAt: number }) {
         </div>
         <div className="flex items-center gap-2 shrink-0 ml-2">
           {isLive && relogio && (
-            <span className="font-mono flex items-center gap-1 text-[9px] font-black text-green-400 tabular-nums">
+            <span className="font-mono flex items-center gap-1 text-[10px] font-black text-green-400 tabular-nums">
               <span className="w-1 h-1 rounded-full bg-green-500 animate-pulse shrink-0" />
               {relogio}
             </span>
           )}
           {legProb != null && (
-            <span className={`font-mono text-[9px] font-black border px-1.5 py-0.5 rounded ${probCls}`}>
+            <span className={`font-mono text-[10px] font-black border px-1.5 py-0.5 rounded ${probCls}`}>
               {legProb}%
             </span>
           )}
           {leg.is_locked && leg.pick_status === 'winning' && (
-            <span className="text-[9px] font-black text-green-400 bg-green-400/15 border border-green-500/30 px-1.5 py-0.5 rounded">✓</span>
+            <span className="text-[10px] font-black text-green-400 bg-green-400/15 border border-green-500/30 px-1.5 py-0.5 rounded">✓</span>
           )}
           {leg.is_locked && leg.pick_status === 'losing' && (
-            <span className="text-[9px] font-black text-red-400 bg-red-400/15 border border-red-500/30 px-1.5 py-0.5 rounded">✗</span>
+            <span className="text-[10px] font-black text-red-400 bg-red-400/15 border border-red-500/30 px-1.5 py-0.5 rounded">✗</span>
           )}
           {leg.resultado === 'VOID' && (
-            <span className="text-[9px] font-black text-ink-2 bg-surface-3 border border-line-strong px-1.5 py-0.5 rounded">ANULADA</span>
+            <span className="text-[10px] font-black text-ink-2 bg-surface-3 border border-line-strong px-1.5 py-0.5 rounded">ANULADA</span>
           )}
           {leg.status === 'NS' && quandoJoga(leg.kickoff_ts) && (
             <span className="font-mono text-[10px] text-ink-3 tabular-nums">{quandoJoga(leg.kickoff_ts)}</span>
@@ -672,7 +672,7 @@ function PickCard({ pick, unitValue, onRefresh, syncedAt }: {
        em dois componentes do mesmo produto. Verde tambem nao servia aqui:
        ele e' GREEN, e um selo verde em cima de um pick em andamento sugere
        resultado. Ver a tabela de cores em ui/Badge.tsx. */
-    <span className="flex items-center gap-1 text-[9px] font-black text-indigo-300">
+    <span className="flex items-center gap-1 text-[10px] font-black text-indigo-300">
       <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
       AO VIVO
     </span>
@@ -795,7 +795,7 @@ function PickCard({ pick, unitValue, onRefresh, syncedAt }: {
                     <div className="h-1 bg-surface-2 rounded-full overflow-hidden">
                       <div className={`h-full rounded-full transition-all duration-700 ${liveProb >= 60 ? 'bg-green-500' : liveProb >= 35 ? 'bg-yellow-400' : 'bg-red-500'}`} style={{ width: `${liveProb}%` }} />
                     </div>
-                    <p className="text-[9px] text-ink-4">Estimativa via Poisson, atualiza a cada 15s</p>
+                    <p className="text-[10px] text-ink-4">Estimativa via Poisson, atualiza a cada 15s</p>
                   </div>
                 )}
               </div>

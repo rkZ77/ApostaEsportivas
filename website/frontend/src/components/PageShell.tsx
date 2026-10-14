@@ -187,9 +187,15 @@ export default function PageShell({
         ser filho direto deste elemento. Um invólucro extra viraria o único
         filho do grid e achataria a página inteira numa coluna.
       */}
+      {/* ALTURA MÍNIMA DA TELA (14/10/2026). Enquanto os dados carregam, o
+          conteúdo é curto e o rodapé aparecia no meio da tela; quando os
+          dados chegavam ele era empurrado pra baixo · o maior salto de layout
+          do site (CLS 0.61 em /performance e 0.27 em /resultados, medido no
+          celular). Com o main ocupando a tela (menos o cabeçalho de 4rem), o
+          rodapé começa abaixo da dobra e não tem de onde pular. */}
       <main
         className={cn(
-          'flex-1 w-full mx-auto py-6 md:py-8',
+          'flex-1 w-full mx-auto py-6 md:py-8 min-h-[calc(100svh-4rem)]',
           bar && !beforeMain && 'pt-4 md:pt-5',
           PAGE_WIDTH[width],
           classesRevelacao(revelado),

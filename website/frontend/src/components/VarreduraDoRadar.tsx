@@ -161,7 +161,7 @@ export default function VarreduraDoRadar({ partidas }: { partidas: Alvo[] }) {
             {minuto != null && !cheio && (
               /* O MINUTO ANDA SOZINHO entre duas varreduras · o `~` avisa
                  quando ele é projeção da última leitura, e não leitura nova. */
-              <span className="font-mono text-[9px] font-bold text-ink-3 tabular-nums ml-0.5">
+              <span className="font-mono text-[10px] font-bold text-ink-3 tabular-nums ml-0.5">
                 {projetado ? '~' : ''}{minuto}&apos;
               </span>
             )}

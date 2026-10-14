@@ -69,7 +69,7 @@ export default function ForgotPassword() {
       </Helmet>
       <div className="w-full max-w-sm">
         <button onClick={goBack}
-          className="text-ink-3 hover:text-ink-1 transition-colors text-sm mb-6 flex items-center gap-1">
+          className="text-ink-3 hover:text-ink-1 transition-colors text-sm mb-4 flex items-center gap-1 min-h-[44px] -ml-1 px-1">
           ← Voltar
         </button>
 
@@ -113,7 +113,7 @@ export default function ForgotPassword() {
               {loading ? 'Enviando...' : 'Enviar código'}
             </button>
             <Link to="/login"
-              className="block text-center text-ink-4 text-xs hover:text-ink-2 transition-colors">
+              className="block text-center text-ink-4 text-xs hover:text-ink-2 transition-colors py-3">
               Lembrou a senha? Entrar
             </Link>
           </form>
@@ -139,7 +139,7 @@ export default function ForgotPassword() {
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
-                  className="input w-full pr-10"
+                  className="input w-full pr-12"
                   placeholder="Mínimo 10 caracteres"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
@@ -148,7 +148,7 @@ export default function ForgotPassword() {
                 />
                 <button type="button" onClick={() => setShowPassword(v => !v)}
                   aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-3 hover:text-ink-2 transition-colors">
+                  className="absolute right-1 top-1/2 -translate-y-1/2 w-10 h-10 grid place-items-center rounded-md text-ink-3 hover:text-ink-2 transition-colors touch-manipulation">
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>

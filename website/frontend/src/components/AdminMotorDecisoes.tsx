@@ -443,7 +443,7 @@ export default function AdminMotorDecisoes() {
                                     morto ? 'text-ink-4' : 'text-ink-1'}`}>
                                     {m.rotulo}
                                     {v?.is_best_pick && (
-                                      <span className="text-[9px] font-bold text-green-400 ml-1.5">escolhido</span>
+                                      <span className="text-[10px] font-bold text-green-400 ml-1.5">escolhido</span>
                                     )}
                                   </span>
                                   <span className="text-[10px] font-mono tabular-nums text-ink-4">
@@ -488,7 +488,7 @@ export default function AdminMotorDecisoes() {
                                                   {c.direcao && <span className="text-ink-4 ml-1">{c.direcao}</span>}
                                                 </span>
                                                 {venceu && (
-                                                  <span className="text-[9px] text-ink-3 ml-1.5">
+                                                  <span className="text-[10px] text-ink-3 ml-1.5">
                                                     linha do mercado
                                                   </span>
                                                 )}
@@ -498,7 +498,7 @@ export default function AdminMotorDecisoes() {
                                                   * vazios por construcao, nao por
                                                   * falha. */}
                                                 {semConta && (
-                                                  <span className="text-[9px] font-mono text-ink-4 ml-1.5">
+                                                  <span className="text-[10px] font-mono text-ink-4 ml-1.5">
                                                     nem calculou
                                                   </span>
                                                 )}

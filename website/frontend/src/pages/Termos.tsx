@@ -139,8 +139,8 @@ export default function Termos() {
         </div>
 
         <div className="mt-12 pt-6 border-t border-line flex gap-4 text-xs text-ink-4">
-          <Link to="/privacidade" className="hover:text-ink-2 transition-colors">Política de Privacidade</Link>
-          <Link to="/" className="hover:text-ink-2 transition-colors">Início</Link>
+          <Link to="/privacidade" className="inline-flex items-center min-h-[44px] hover:text-ink-2 transition-colors">Política de Privacidade</Link>
+          <Link to="/" className="inline-flex items-center min-h-[44px] hover:text-ink-2 transition-colors">Início</Link>
         </div>
     </PageShell>
   )

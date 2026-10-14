@@ -631,12 +631,12 @@ export default function Login() {
                 <div className="relative">
                   <input id="password" type={showPassword ? 'text' : 'password'} value={password}
                     onChange={e => setPassword(e.target.value)}
-                    required className="input pr-10"
+                    required className="input pr-12"
                     placeholder={mode === 'register' ? 'Mínimo 10 caracteres' : '••••••••'}
                     autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
                   <button type="button" onClick={() => setShowPassword(v => !v)}
                     aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-3 hover:text-ink-2 transition-colors">
+                    className="absolute right-1 top-1/2 -translate-y-1/2 w-10 h-10 grid place-items-center rounded-md text-ink-3 hover:text-ink-2 transition-colors touch-manipulation">
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
@@ -676,11 +676,11 @@ export default function Login() {
                 <div className="relative">
                   <input id="password-confirm" type={showConfirm ? 'text' : 'password'} value={confirm}
                     onChange={e => setConfirm(e.target.value)}
-                    required className="input pr-10" placeholder="Repita a senha"
+                    required className="input pr-12" placeholder="Repita a senha"
                     autoComplete="new-password" />
                   <button type="button" onClick={() => setShowConfirm(v => !v)}
                     aria-label={showConfirm ? 'Ocultar senha' : 'Mostrar senha'}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-3 hover:text-ink-2 transition-colors">
+                    className="absolute right-1 top-1/2 -translate-y-1/2 w-10 h-10 grid place-items-center rounded-md text-ink-3 hover:text-ink-2 transition-colors touch-manipulation">
                     {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
@@ -791,7 +791,9 @@ export default function Login() {
                   to="/forgot-password"
                   className="inline-flex items-center justify-center min-h-[44px] px-1 font-bold text-accent-ink hover:text-accent-hover transition-colors"
                 >
-                  Clique aqui
+                  {/* O link diz o que faz (leitor de tela e Google leem o
+                      texto do link sozinho, sem a frase em volta). */}
+                  Recuperar senha
                 </Link>
               </p>
             )}
@@ -804,9 +806,9 @@ export default function Login() {
 
       <footer className="relative border-t border-line">
         <div className="mx-auto w-full max-w-3xl px-5 sm:px-6 py-5 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-xs text-ink-4">
-          <Link to="/termos" className="hover:text-ink-2 transition-colors">Termos de Uso</Link>
-          <Link to="/privacidade" className="hover:text-ink-2 transition-colors">Privacidade</Link>
-          <Link to="/como-funciona" className="hover:text-ink-2 transition-colors">Como funciona</Link>
+          <Link to="/termos" className="inline-flex items-center min-h-[44px] hover:text-ink-2 transition-colors">Termos de Uso</Link>
+          <Link to="/privacidade" className="inline-flex items-center min-h-[44px] hover:text-ink-2 transition-colors">Privacidade</Link>
+          <Link to="/como-funciona" className="inline-flex items-center min-h-[44px] hover:text-ink-2 transition-colors">Como funciona</Link>
           {/* Não é enfeite legal: é o aviso que separa quem opera às claras de
               quem promete lucro garantido. */}
           <span className="w-full text-center text-ink-4 mt-1">

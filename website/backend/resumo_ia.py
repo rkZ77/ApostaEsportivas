@@ -253,7 +253,13 @@ def montar_fatos(dados: dict, liga: str | None, formato: str, tabela: dict,
     arb_jogos = arb.get("jogos") or []
     # Placar da ida, quando este e' o jogo de volta · e' o que decide como os
     # dois vao jogar (14/10/2026).
-    ida = (dados.get("competicao") or {}).get("ida")
+    competicao = dados.get("competicao") or {}
+    ida = competicao.get("ida")
+    # Qual perna e' esta (14/10/2026): sem isso, no jogo de IDA o modelo
+    # escrevia "nao da' pra saber se e' ida ou volta".
+    perna = {"ida": "jogo de IDA: a vaga se decide na volta, os dois jogam sem precisar de um resultado especifico",
+             "volta": "jogo de VOLTA: o placar da ida (jogo_de_ida) define quem precisa do resultado"
+             }.get(competicao.get("perna"))
     jogo_de_ida = ({
         "placar": f'{f["home_team"]} {ida["gols_mandante"]} x {ida["gols_visitante"]} {f["away_team"]}',
         "quem_esta_na_frente": (f["home_team"] if ida["gols_mandante"] > ida["gols_visitante"]
@@ -265,6 +271,7 @@ def montar_fatos(dados: dict, liga: str | None, formato: str, tabela: dict,
             "mandante": f["home_team"], "visitante": f["away_team"],
             "competicao": liga, "rodada": f.get("round"), "formato": formato,
             "data": (f.get("match_datetime") or "")[:16],
+            "perna": perna,
             "jogo_de_ida": jogo_de_ida,
         },
         "amostra_na_temporada": amostra,
@@ -383,7 +390,9 @@ def tecnicos_dos_times(cur, ids: list) -> dict:
 # ─────────────────────────────────────────────────────────────────────────────
 #: Formato da leitura. Sobe quando o formato muda: leitura guardada de versao
 #: antiga e' gerada de novo na proxima abertura (ver _vale).
-VERSAO = 3
+#: 4 (14/10/2026): entrou a perna do mata-mata (ida/volta) · a leitura do
+#: jogo de ida dizia "nao da' pra saber se e' ida ou volta".
+VERSAO = 4
 
 SYSTEM = """Você escreve a leitura de pré-jogo do Raio-X do PickIA, um site brasileiro de análise de apostas esportivas. Quem lê está no celular, decidindo se aposta, e quer saber em segundos como cada time joga e quais mercados os números sustentam.
 
@@ -402,7 +411,7 @@ O que escrever:
   - "mercados": até 3 mercados DO PRÓPRIO TIME com pct de 65 ou mais ("over") ou 35 ou menos ("under"). Ex.: "Chapecoense sofre gol", "Athletico-PR mais de 4,5 escanteios". Nada entre 36 e 64. Se nenhum passar, lista vazia.
 - "mercados_do_jogo": até 3 linhas do JOGO (gols, escanteios, cartões, ambas marcam, gol no 1º tempo) em que o mandante em casa E o visitante fora apontam para o mesmo lado. Discordaram, não entra.
 - Em todo mercado, "pct" é o percentual que sustenta a tendência (para "under", o percentual de jogos em que NÃO aconteceu), e "tendencia" tem que bater com a "leitura".
-- "contexto": tabela, técnico e formato. Em "liga" posição e mando pesam; em mata-mata o jogo é decidido no placar e os times se fecham (na ida e volta, a 2ª partida depende da 1ª: com "jogo_de_ida", diga quem precisa do resultado e como isso muda o jogo); em "grupos" e "copa" a amostra mistura competições. Técnico só se tiver 3 ou menos jogos seguidos.
+- "contexto": tabela, técnico e formato. Em "liga" posição e mando pesam; em mata-mata o jogo é decidido no placar e os times se fecham (na ida e volta, a 2ª partida depende da 1ª: "perna" diz se este é o jogo de ida ou de volta; na volta, com "jogo_de_ida", diga quem precisa do resultado e como isso muda o jogo); em "grupos" e "copa" a amostra mistura competições. Técnico só se tiver 3 ou menos jogos seguidos.
 - "alerta": o que deixa a leitura fraca (amostra curta, números que se contradizem, mata-mata). Vazio se não houver.
 
 Estilo: português do Brasil com acentuação correta. Decimais com vírgula ("1,4 gol por jogo"). Escreva "1º tempo", "2º tempo", "4º colocado". Use o nome de cada time exatamente como está em "nome", sempre igual. Direto, sem jargão estatístico, sem certeza nem promessa ("vai sair", "garantido"). Fale em tendência."""
@@ -626,7 +635,7 @@ def resumo_do_jogo(cur, fixture_id: int, montar_raio_x) -> dict:
             dados = montar_raio_x()
             # Jogo de VOLTA que o texto da rodada nao entrega (Libertadores:
             # "Semi-finals"): o Raio-X achou a ida no banco (14/10/2026).
-            if ((dados.get("competicao") or {}).get("ida")
+            if ((dados.get("competicao") or {}).get("perna")
                     and formato.startswith("mata-mata")):
                 formato = "mata-mata ida e volta"
             cur.execute("SELECT name FROM leagues WHERE league_id = %s LIMIT 1",

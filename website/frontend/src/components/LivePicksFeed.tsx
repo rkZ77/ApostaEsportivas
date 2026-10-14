@@ -1173,14 +1173,14 @@ const CardLive = forwardRef<HTMLDivElement, {
           {/* A odd que o usuário registrou pode divergir da do pick: ele segue
               depois, e a linha se move ao vivo mais que em pré-jogo. */}
           {seguido && Math.abs(Number(oddEfetiva) - Number(pick.odd)) > 0.001 && (
-            <div className="text-[9px] text-ink-4 mt-0.5">pick: {Number(pick.odd).toFixed(2)}</div>
+            <div className="text-[10px] text-ink-4 mt-0.5">pick: {Number(pick.odd).toFixed(2)}</div>
           )}
           {/* A odd da PUBLICAÇÃO vira a nota de rodapé, e só quando ela de fato
               difere do preço de agora · repetir o mesmo número duas vezes em
               dois tamanhos não informa nada. A seta diz para que lado a casa
               moveu desde que o pick saiu. */}
           {oddCorrente != null && Math.abs(oddCorrente - Number(pick.odd)) > 0.001 && (
-            <div className="text-[9px] mt-0.5 tabular-nums text-ink-4">
+            <div className="text-[10px] mt-0.5 tabular-nums text-ink-4">
               publicada {Number(pick.odd).toFixed(2)}
               <span className={oddCorrente > Number(pick.odd) ? 'text-accent-ink font-bold ml-1'
                                                               : 'text-red-400 font-bold ml-1'}>
@@ -1189,14 +1189,14 @@ const CardLive = forwardRef<HTMLDivElement, {
             </div>
           )}
           {!encerrado && !seguido && oddAgora && !oddAgora.cotado && (
-            <div className="text-[9px] text-amber-400/80 mt-0.5">sem cotação agora</div>
+            <div className="text-[10px] text-amber-400/80 mt-0.5">sem cotação agora</div>
           )}
           {/* Odd vencida SEM leitura nenhuma (a rota falhou, ou o pick é de um
               jogo que a leitura não alcança): o preço da tela é histórico, e
               dizer isso ao lado dele é o mínimo antes de alguém copiar o
               número pra casa. */}
           {!encerrado && !oddAgora && oddVencida && (
-            <div className="text-[9px] text-amber-400/80 mt-0.5">confira o preço na casa</div>
+            <div className="text-[10px] text-amber-400/80 mt-0.5">confira o preço na casa</div>
           )}
 
         </div>

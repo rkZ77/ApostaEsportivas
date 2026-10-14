@@ -278,7 +278,11 @@ async def security_headers(request: Request, call_next):
         # fonts.googleapis.com saiu do style-src junto: dominio que ninguem
         # mais usa e' superficie de graca.
         "font-src 'self' data:; "
-        "frame-src https://accounts.google.com https://challenges.cloudflare.com; "
+        # www.facebook.com (14/10/2026): o fbevents.js abre um iframe dele, e
+        # bloqueado era um erro vermelho no console de toda visita (medido no
+        # Lighthouse). So' o dominio do Meta, sem curinga.
+        "frame-src https://accounts.google.com https://challenges.cloudflare.com "
+        "https://www.facebook.com; "
         "frame-ancestors 'none'"
     )
     return response
