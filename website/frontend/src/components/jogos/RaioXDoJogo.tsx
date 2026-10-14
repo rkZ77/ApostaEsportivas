@@ -39,6 +39,8 @@ export interface JogoBase {
   home_team_id?: number
   away_team_id?: number
   league_id?: number
+  /** Temporada do jogo · o Raio-X conta só a liga e a temporada dele. */
+  season?: number | null
   /** O nome gravado; vale só pra liga fora do mapa de nomes em português. */
   league_name?: string
   home_team?: string
@@ -68,7 +70,8 @@ export default function RaioXDoJogo({ jogo, trancado = false }: { jogo: JogoBase
     setDados(null)
     if (trancado) return
     api.get(`/fixtures/${jogo.fixture_id}/raio-x`, {
-      params: { home: jogo.home_team_id, away: jogo.away_team_id, league: jogo.league_id },
+      params: { home: jogo.home_team_id, away: jogo.away_team_id, league: jogo.league_id,
+                season: jogo.season ?? undefined },
     })
       .then(r => setDados(r.data))
       .catch(() => setErro(true))
@@ -1202,7 +1205,7 @@ function AbaForma({ dados }: { dados: RaioX }) {
         <span className="text-sm font-bold text-ink-1 truncate">{nome}</span>
       </div>
       {jogos.length === 0 ? (
-        <p className="p-4 text-sm text-ink-3">Sem jogos encerrados no histórico.</p>
+        <p className="p-4 text-sm text-ink-3">Sem jogos encerrados nesta competição e temporada.</p>
       ) : (
         <div className="divide-y divide-line/60">
           {jogos.map(j => {

@@ -310,13 +310,15 @@ def get_today_fixtures(
             f["pick_market"] = pick["market"] if pick else None
             f["pick_type_flag"] = pick["pick_type"] if pick else None
 
+        def _chave(f, lado):
+            return (f[f"{lado}_team_id"], f.get("league_id"), f.get("season"))
         formas = _formas_recentes(
-            {f["home_team_id"] for f in all_fixtures} | {f["away_team_id"] for f in all_fixtures},
+            {_chave(f, "home") for f in all_fixtures} | {_chave(f, "away") for f in all_fixtures},
             antes_de=target_brt,
         )
         for f in all_fixtures:
-            f["forma_home"] = formas.get(f["home_team_id"], [])
-            f["forma_away"] = formas.get(f["away_team_id"], [])
+            f["forma_home"] = formas.get(_chave(f, "home"), [])
+            f["forma_away"] = formas.get(_chave(f, "away"), [])
 
     all_fixtures.sort(key=lambda x: x["match_datetime"] or "")
     return all_fixtures
@@ -343,8 +345,15 @@ _COLUNAS_DO_JOGO = """fixture_id, match_date, league_id, home_team_id, away_team
                home_goalkeeper_saves, away_goalkeeper_saves"""
 
 
-def _ultimos_jogos(cur, team_ids: list, antes_de, n: int) -> list:
+def _ultimos_jogos(cur, team_ids: list, antes_de, n: int,
+                   ligas: list | None = None, temporadas: list | None = None) -> list:
     """Os ultimos `n` jogos encerrados de CADA time, numa consulta so'.
+
+    SO' A LIGA E A TEMPORADA DO JOGO (14/10/2026, pedido do usuario): o City
+    na Champions aparecia com a forma da Premier League junto. `ligas[i]` e
+    `temporadas[i]` sao as do time `team_ids[i]`; None = sem esse corte. O
+    filtro entra DENTRO de cada metade, antes do LIMIT, entao a serie continua
+    tendo ate' `n` jogos daquela competicao.
 
     COMO, E POR QUE ASSIM. Um time aparece em `home_team_id` OU em
     `away_team_id`, e um `OR` entre duas colunas faz o Postgres desistir dos
@@ -359,50 +368,64 @@ def _ultimos_jogos(cur, team_ids: list, antes_de, n: int) -> list:
     """
     if not team_ids:
         return []
+    team_ids = list(team_ids)
+    ligas = list(ligas) if ligas else [None] * len(team_ids)
+    temporadas = list(temporadas) if temporadas else [None] * len(team_ids)
+    corte = """AND (t.liga IS NULL OR league_id = t.liga)
+                    AND (t.temporada IS NULL OR season = t.temporada)"""
     cur.execute(f"""
-        SELECT t.team_id, j.*
-        FROM unnest(%s::int[]) AS t(team_id)
+        SELECT t.team_id, t.liga AS serie_liga, t.temporada AS serie_temporada, j.*
+        FROM unnest(%s::int[], %s::int[], %s::int[]) AS t(team_id, liga, temporada)
         CROSS JOIN LATERAL (
             SELECT * FROM (
                 (SELECT {_COLUNAS_DO_JOGO} FROM match_statistics
                   WHERE home_team_id = t.team_id
                     AND status IN ('FT','AET','PEN')
                     AND (%s::timestamp IS NULL OR match_date < %s::timestamp)
+                    {corte}
                   ORDER BY match_date DESC LIMIT %s)
                 UNION ALL
                 (SELECT {_COLUNAS_DO_JOGO} FROM match_statistics
                   WHERE away_team_id = t.team_id
                     AND status IN ('FT','AET','PEN')
                     AND (%s::timestamp IS NULL OR match_date < %s::timestamp)
+                    {corte}
                   ORDER BY match_date DESC LIMIT %s)
             ) dois_lados
             ORDER BY match_date DESC
             LIMIT %s
         ) j
         ORDER BY t.team_id, j.match_date DESC
-    """, (list(team_ids), antes_de, antes_de, n, antes_de, antes_de, n, n))
+    """, (team_ids, ligas, temporadas, antes_de, antes_de, n, antes_de, antes_de, n, n))
     return [dict(r) for r in cur.fetchall()]
 
 
-def _formas_recentes(team_ids: set, antes_de: str, n: int = 5) -> dict:
+def _formas_recentes(chaves: set, antes_de: str, n: int = 5) -> dict:
     """Ultimos `n` resultados de cada time, do mais recente pro mais antigo.
+
+    `chaves` sao tuplas (time, liga, temporada) · a forma e' so' a da
+    competicao do jogo (14/10/2026). A saida usa a mesma tupla como chave.
 
     UMA consulta pra lista inteira, com ROW_NUMBER por time · uma por jogo
     seriam 40 idas ao banco num sabado de rodada cheia. `antes_de` existe pra
     que olhar a rodada de ontem mostre a forma de ANTES daquele jogo, e nao um
     resultado que o proprio jogo ja' produziu.
     """
-    ids = [t for t in team_ids if t]
-    if not ids:
+    chaves = [c for c in chaves if c[0]]
+    if not chaves:
         return {}
     conn = get_connection()
     cur = conn.cursor()
     try:
-        saida: dict[int, list] = {}
-        for r in _ultimos_jogos(cur, ids, antes_de, n):
+        saida: dict[tuple, list] = {}
+        linhas = _ultimos_jogos(cur, [c[0] for c in chaves], antes_de, n,
+                                ligas=[c[1] for c in chaves],
+                                temporadas=[c[2] for c in chaves])
+        for r in linhas:
             res = _resultado_do_time(r, r["team_id"])
             if res:
-                saida.setdefault(r["team_id"], []).append(res)
+                chave = (r["team_id"], r.get("serie_liga"), r.get("serie_temporada"))
+                saida.setdefault(chave, []).append(res)
         return saida
     except Exception:
         # Forma e' enfeite da lista: falhar aqui nao pode derrubar a agenda.
@@ -685,7 +708,7 @@ def _jogadores_dos_times(cur, jogos_por_time: dict, titulares: dict) -> dict:
     return saida
 
 
-def _arbitro(cur, nome: str | None, n: int) -> dict | None:
+def _arbitro(cur, nome: str | None, n: int, liga=None, temporada=None) -> dict | None:
     # Pela chave do nome, nao pelo texto exato (2026-10-07): a API escreve o
     # mesmo arbitro como "Raphael Claus" e "Raphael Claus, Brazil", e o Raio-X
     # mostrava so' os jogos da grafia de hoje. Ver arbitro.py.
@@ -697,8 +720,10 @@ def _arbitro(cur, nome: str | None, n: int) -> dict | None:
                home_red_cards, away_red_cards, home_fouls, away_fouls
         FROM match_statistics
         WHERE {sql_chave('referee')} = %s AND status IN ('FT','AET','PEN')
+          AND (%s::int IS NULL OR league_id = %s)
+          AND (%s::int IS NULL OR season = %s)
         ORDER BY match_date DESC LIMIT %s
-    """, (chave, n))
+    """, (chave, liga, liga, temporada, temporada, n))
     jogos = [{
         "amarelos": (r["home_yellow_cards"] or 0) + (r["away_yellow_cards"] or 0),
         "vermelhos": (r["home_red_cards"] or 0) + (r["away_red_cards"] or 0),
@@ -723,6 +748,7 @@ def get_raio_x(
     home: Optional[int] = Query(None, description="time da casa, se o jogo ainda nao estiver em `fixtures`"),
     away: Optional[int] = Query(None),
     league: Optional[int] = Query(None),
+    season: Optional[int] = Query(None),
     n: int = Query(_JOGOS_RAIO_X, ge=5, le=20),
 ):
     """Tudo pra montar bilhete sobre um jogo · ver o bloco acima.
@@ -731,7 +757,7 @@ def get_raio_x(
     """
     dados = cache_publico.obter(
         f"raio-x:{fixture_id}:{home}:{away}:{n}", _RAIO_X_TTL,
-        lambda: _montar_raio_x(fixture_id, home, away, league, n),
+        lambda: _montar_raio_x(fixture_id, home, away, league, n, season),
     )
     _aquecer_imagens_do_raio_x(dados)
     return dados
@@ -990,7 +1016,7 @@ def get_odds_do_jogo(fixture_id: int, current_user: dict = Depends(_assinante)):
     return cache_publico.obter(f"odds-jogo:{fixture_id}", 180, montar)
 
 
-def _montar_raio_x(fixture_id: int, home, away, league, n: int) -> dict:
+def _montar_raio_x(fixture_id: int, home, away, league, n: int, season=None) -> dict:
     """Sete consultas numa conexao so', todas em indice · ver cada helper."""
     conn = get_connection()
     cur = conn.cursor()
@@ -1022,8 +1048,23 @@ def _montar_raio_x(fixture_id: int, home, away, league, n: int) -> dict:
         if not home_id or not away_id:
             raise HTTPException(404, "Jogo nao encontrado")
 
+        # SO' A COMPETICAO DO JOGO (14/10/2026, pedido do usuario): serie,
+        # jogadores e arbitro contam so' a liga e a temporada deste jogo · ver
+        # _ultimos_jogos. O confronto (h2h) fica de fora do corte: dois times
+        # se enfrentam uma ou duas vezes por temporada, e cortar zeraria a aba.
+        liga = fix.get("league_id") or league
+        temporada = fix.get("season") or season
+        if liga and not temporada:
+            # Jogo que ainda nao esta' em `fixtures` e tela antiga, sem a
+            # season no pedido: a temporada mais recente da liga no banco.
+            cur.execute("SELECT MAX(season) AS s FROM match_statistics WHERE league_id = %s",
+                        (liga,))
+            linha = cur.fetchone()
+            temporada = linha["s"] if linha else None
+
         antes_de = fix.get("match_datetime")
-        ultimos = _ultimos_jogos(cur, [home_id, away_id], antes_de, n)
+        ultimos = _ultimos_jogos(cur, [home_id, away_id], antes_de, n,
+                                 ligas=[liga, liga], temporadas=[temporada, temporada])
         serie_home = _serie_do_time(ultimos, home_id)
         serie_away = _serie_do_time(ultimos, away_id)
 
@@ -1076,7 +1117,7 @@ def _montar_raio_x(fixture_id: int, home, away, league, n: int) -> dict:
         for j in serie_home + serie_away:
             j["adversario"] = nomes.get(j["adversario_id"], "")
 
-        arbitro = _arbitro(cur, fix.get("referee"), 15)
+        arbitro = _arbitro(cur, fix.get("referee"), 15, liga, temporada)
     finally:
         cur.close(); conn.close()
 
