@@ -731,7 +731,8 @@ def _competicao_do_jogo(cur, rodada: str | None, home_id: int, away_id: int,
         cur.execute("SELECT 1 FROM league_standings WHERE league_id = %s LIMIT 1", (liga,))
         tem_tabela = cur.fetchone() is not None
     formato = resumo_ia.formato_da_partida(rodada, tem_tabela)
-    saida = {"formato": formato, "ida": None}
+    # perna: 'ida' | 'volta' | None (jogo unico, ou o banco nao sabe).
+    saida = {"formato": formato, "ida": None, "perna": None, "volta_em": None}
     if not formato.startswith("mata-mata") or not (liga and temporada and antes_de):
         return saida
     cur.execute("""
@@ -746,11 +747,30 @@ def _competicao_do_jogo(cur, rodada: str | None, home_id: int, away_id: int,
     r = cur.fetchone()
     if r and r["home_goals"] is not None and r["away_goals"] is not None:
         saida["formato"] = "mata-mata ida e volta"
+        saida["perna"] = "volta"
         # Do ponto de vista do MANDANTE DE HOJE, que foi visitante na ida.
         saida["ida"] = {
             "data": r["match_date"].isoformat() if r["match_date"] else None,
             "gols_mandante": int(r["away_goals"]), "gols_visitante": int(r["home_goals"]),
         }
+        return saida
+    # JOGO DE IDA (14/10/2026, pedido do usuario): a leitura da IA dizia "nao
+    # da' pra saber se e' ida ou volta". Na ida nao ha' jogo anterior; o que
+    # entrega e' a VOLTA ja' marcada na agenda, mando invertido, ate' 21 dias
+    # depois.
+    cur.execute("""
+        SELECT match_datetime FROM fixtures
+         WHERE home_team_id = %s AND away_team_id = %s
+           AND league_id = %s AND season = %s
+           AND match_datetime > %s::timestamp
+           AND match_datetime <= %s::timestamp + INTERVAL '21 days'
+         ORDER BY match_datetime LIMIT 1
+    """, (away_id, home_id, liga, temporada, antes_de, antes_de))
+    v = cur.fetchone()
+    if v:
+        saida["formato"] = "mata-mata ida e volta"
+        saida["perna"] = "ida"
+        saida["volta_em"] = v["match_datetime"].isoformat() if v["match_datetime"] else None
     return saida
 
 

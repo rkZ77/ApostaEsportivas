@@ -86,6 +86,10 @@ export interface RaioX {
   competicao?: {
     formato: 'liga' | 'grupos' | 'mata-mata' | 'mata-mata ida e volta' | 'copa' | null
     ida: { data: string | null; gols_mandante: number; gols_visitante: number } | null
+    /** 'ida' | 'volta' · null = jogo único ou o banco não sabe. */
+    perna?: 'ida' | 'volta' | null
+    /** No jogo de ida, quando é a volta. */
+    volta_em?: string | null
   }
   arbitro: { nome: string; jogos: Array<{ amarelos: number; vermelhos: number; faltas: number | null }> } | null
   jogadores: {

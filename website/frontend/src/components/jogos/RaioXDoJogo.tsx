@@ -326,7 +326,9 @@ function Placar({ jogo, dados, aoVivo }: { jogo: JogoBase; dados: RaioX | null; 
             const rotulo = !c?.formato ? null
               : c.formato === 'liga' ? 'Pontos corridos'
               : c.formato === 'grupos' ? 'Fase de grupos'
-              : c.formato === 'mata-mata ida e volta' ? (c.ida ? 'Mata-mata · jogo de volta' : 'Mata-mata · ida e volta')
+              : c.formato === 'mata-mata ida e volta'
+                ? (c.perna === 'volta' || c.ida ? 'Mata-mata · jogo de volta'
+                  : c.perna === 'ida' ? 'Mata-mata · jogo de ida' : 'Mata-mata · ida e volta')
               : c.formato === 'mata-mata' ? 'Mata-mata' : null
             if (!rotulo) return null
             return (
@@ -337,6 +339,11 @@ function Placar({ jogo, dados, aoVivo }: { jogo: JogoBase; dados: RaioX | null; 
                 {c?.ida && f && (
                   <span className="text-[11px] text-ink-3 tabular-nums">
                     Ida: {f.home_team} <b className="text-ink-1">{c.ida.gols_mandante} x {c.ida.gols_visitante}</b> {f.away_team}
+                  </span>
+                )}
+                {c?.perna === 'ida' && c.volta_em && (
+                  <span className="text-[11px] text-ink-3">
+                    Volta em {new Date(c.volta_em).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
                   </span>
                 )}
               </div>
