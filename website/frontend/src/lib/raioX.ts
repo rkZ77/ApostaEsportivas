@@ -82,6 +82,11 @@ export interface RaioX {
   /** {id: nome} dos times e das competições das listas da aba Confronto. */
   nomes_times?: Record<string, string>
   nomes_ligas?: Record<string, string>
+  /** Formato da competição e, no jogo de volta, o placar da ida (14/10/2026). */
+  competicao?: {
+    formato: 'liga' | 'grupos' | 'mata-mata' | 'mata-mata ida e volta' | 'copa' | null
+    ida: { data: string | null; gols_mandante: number; gols_visitante: number } | null
+  }
   arbitro: { nome: string; jogos: Array<{ amarelos: number; vermelhos: number; faltas: number | null }> } | null
   jogadores: {
     home: { fonte_titulares: string; lista: Jogador[] }

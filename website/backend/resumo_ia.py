@@ -251,11 +251,21 @@ def montar_fatos(dados: dict, liga: str | None, formato: str, tabela: dict,
     } for j in (dados.get("h2h") or [])[:6] if j.get("home_goals") is not None]
     arb = dados.get("arbitro") or {}
     arb_jogos = arb.get("jogos") or []
+    # Placar da ida, quando este e' o jogo de volta · e' o que decide como os
+    # dois vao jogar (14/10/2026).
+    ida = (dados.get("competicao") or {}).get("ida")
+    jogo_de_ida = ({
+        "placar": f'{f["home_team"]} {ida["gols_mandante"]} x {ida["gols_visitante"]} {f["away_team"]}',
+        "quem_esta_na_frente": (f["home_team"] if ida["gols_mandante"] > ida["gols_visitante"]
+                                else f["away_team"] if ida["gols_visitante"] > ida["gols_mandante"]
+                                else "empate"),
+    } if ida else None)
     return _sem_vazios({
         "jogo": {
             "mandante": f["home_team"], "visitante": f["away_team"],
             "competicao": liga, "rodada": f.get("round"), "formato": formato,
             "data": (f.get("match_datetime") or "")[:16],
+            "jogo_de_ida": jogo_de_ida,
         },
         "amostra_na_temporada": amostra,
         "mandante": {
@@ -392,7 +402,7 @@ O que escrever:
   - "mercados": até 3 mercados DO PRÓPRIO TIME com pct de 65 ou mais ("over") ou 35 ou menos ("under"). Ex.: "Chapecoense sofre gol", "Athletico-PR mais de 4,5 escanteios". Nada entre 36 e 64. Se nenhum passar, lista vazia.
 - "mercados_do_jogo": até 3 linhas do JOGO (gols, escanteios, cartões, ambas marcam, gol no 1º tempo) em que o mandante em casa E o visitante fora apontam para o mesmo lado. Discordaram, não entra.
 - Em todo mercado, "pct" é o percentual que sustenta a tendência (para "under", o percentual de jogos em que NÃO aconteceu), e "tendencia" tem que bater com a "leitura".
-- "contexto": tabela, técnico e formato. Em "liga" posição e mando pesam; em mata-mata o jogo é decidido no placar e os times se fecham (na ida e volta, a 2ª partida depende da 1ª); em "grupos" e "copa" a amostra mistura competições. Técnico só se tiver 3 ou menos jogos seguidos.
+- "contexto": tabela, técnico e formato. Em "liga" posição e mando pesam; em mata-mata o jogo é decidido no placar e os times se fecham (na ida e volta, a 2ª partida depende da 1ª: com "jogo_de_ida", diga quem precisa do resultado e como isso muda o jogo); em "grupos" e "copa" a amostra mistura competições. Técnico só se tiver 3 ou menos jogos seguidos.
 - "alerta": o que deixa a leitura fraca (amostra curta, números que se contradizem, mata-mata). Vazio se não houver.
 
 Estilo: português do Brasil com acentuação correta. Decimais com vírgula ("1,4 gol por jogo"). Escreva "1º tempo", "2º tempo", "4º colocado". Use o nome de cada time exatamente como está em "nome", sempre igual. Direto, sem jargão estatístico, sem certeza nem promessa ("vai sair", "garantido"). Fale em tendência."""
@@ -614,6 +624,11 @@ def resumo_do_jogo(cur, fixture_id: int, montar_raio_x) -> dict:
 
         try:
             dados = montar_raio_x()
+            # Jogo de VOLTA que o texto da rodada nao entrega (Libertadores:
+            # "Semi-finals"): o Raio-X achou a ida no banco (14/10/2026).
+            if ((dados.get("competicao") or {}).get("ida")
+                    and formato.startswith("mata-mata")):
+                formato = "mata-mata ida e volta"
             cur.execute("SELECT name FROM leagues WHERE league_id = %s LIMIT 1",
                         (fix["league_id"],))
             liga = (cur.fetchone() or {}).get("name")

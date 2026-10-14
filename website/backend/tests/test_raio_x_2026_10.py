@@ -245,6 +245,30 @@ def test_jogo_desconhecido_e_sem_parametro_e_404(monkeypatch):
     assert e.value.status_code == 404
 
 
+# ── formato da competicao e jogo de ida (14/10/2026) ───────────────────────
+def test_volta_de_mata_mata_acha_a_ida_pelo_mando_invertido():
+    kickoff = dt.datetime(2026, 10, 14, 19, 0)
+    cur = Cur([("FROM league_standings", []),
+               ("FROM match_statistics", [{"match_date": dt.datetime(2026, 10, 7, 21, 30),
+                                           "home_goals": 1, "away_goals": 0}])])
+    c = fx._competicao_do_jogo(cur, "Semi-finals", 10, 20, 11, 2026, kickoff)
+    assert c["formato"] == "mata-mata ida e volta"
+    # Na ida o mandante de hoje (10) foi visitante e perdeu de 1x0.
+    assert (c["ida"]["gols_mandante"], c["ida"]["gols_visitante"]) == (0, 1)
+    sql, params = cur.feitas[-1]
+    assert params[:4] == (20, 10, 11, 2026) and "21 days" in sql
+
+
+def test_liga_e_grupos_nao_procuram_ida():
+    cur = Cur([("FROM league_standings", [{"x": 1}])])
+    assert fx._competicao_do_jogo(cur, "Regular Season - 29", 10, 20, 71, 2026,
+                                  dt.datetime(2026, 10, 14))["formato"] == "liga"
+    cur = Cur([("FROM league_standings", [])])
+    c = fx._competicao_do_jogo(cur, "Group A - 4", 10, 20, 13, 2026, dt.datetime(2026, 10, 14))
+    assert c == {"formato": "grupos", "ida": None}
+    assert not any("match_statistics" in s for s, _ in cur.feitas)
+
+
 # ── lista do dia: a API pelo dia inteiro ────────────────────────────────────
 def _item(fid, liga, quando="2026-10-06T20:00:00-03:00"):
     return {"fixture": {"id": fid, "date": quando, "status": {"short": "NS"}},
