@@ -174,6 +174,8 @@ def test_chamada_usa_modelo_barato_json_e_corta_em_4(monkeypatch):
     assert pedido["model"] == "claude-haiku-5-5"
     assert pedido["output_config"]["effort"] == "low"
     assert pedido["output_config"]["format"]["type"] == "json_schema"
+    # 3500 cortava a leitura no meio em PROD (max_tokens, 13/10/2026).
+    assert pedido["max_tokens"] >= 8000
     assert len(conteudo["mercados_do_jogo"]) == 3 and len(conteudo["times"]) == 2
     assert len(conteudo["times"][0]["mercados"]) == 3 and (t_in, t_out) == (1500, 300)
 
