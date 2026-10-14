@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Brain, ChevronRight, CircleSlash, RefreshCw, Target, Users } from 'lucide-react'
 import api from '../services/api'
 import AdminAmostra, { type AlvoAmostra } from './AdminAmostra'
+import AdminPorQue from './AdminPorQue'
 import { Button, EmptyState, Pagination, SpinnerBlock } from './ui'
 
 /*
@@ -237,6 +238,7 @@ export default function AdminMotorDecisoes() {
 
   return (
     <div className="space-y-6">
+      <AdminPorQue />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="flex items-center gap-2 text-sm font-bold text-ink-1">
           <Brain className="w-4 h-4" />
