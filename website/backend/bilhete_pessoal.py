@@ -128,6 +128,13 @@ def validar_pernas(pernas) -> list[dict]:
             mercado = p.get("mercado")
             if mercado == "btts":
                 perna = {**base, "tipo": "time", "mercado": "btts"}
+                # "Ambas marcam · Nao" (14/10/2026). Sem `escolha` = Sim, como
+                # toda perna gravada antes disso.
+                escolha = str(p.get("escolha") or "sim").lower()
+                if escolha not in ("sim", "nao"):
+                    raise PernaInvalida("ambas marcam invalido")
+                if escolha == "nao":
+                    perna["escolha"] = "nao"
             elif mercado == "resultado":
                 escolha = str(p.get("escolha") or "").upper()
                 if escolha not in _ESCOLHAS_RESULTADO:
@@ -236,7 +243,8 @@ def liquidar_perna(perna: dict, jogo: dict | None, jogador: dict | None,
         if valor is None:
             return ("VOID", None, "sem estatistica do jogo") if vencido else (None, None, None)
         if perna["mercado"] == "btts":
-            return ("GREEN" if valor else "RED"), valor, None
+            quer = 0 if perna.get("escolha") == "nao" else 1
+            return ("GREEN" if valor == quer else "RED"), valor, None
         if perna["mercado"] == "resultado":
             hg, ag = jogo["home_goals"], jogo["away_goals"]
             saiu = "1" if hg > ag else "2" if hg < ag else "X"
@@ -304,7 +312,7 @@ def mercado_ao_vivo(perna: dict) -> tuple[str, str | None, str] | None:
     if perna.get("tipo") != "time":
         return None
     if perna["mercado"] == "btts":
-        return "Ambas Marcam", "btts", "Sim"
+        return "Ambas Marcam", "btts", ("Não" if perna.get("escolha") == "nao" else "Sim")
     if perna["mercado"] == "resultado":
         # settlement.settle_outcome le "1", "X", "2", "1X", "12", "X2".
         nome = "Resultado Final" if len(perna["escolha"]) == 1 else "Dupla Chance"

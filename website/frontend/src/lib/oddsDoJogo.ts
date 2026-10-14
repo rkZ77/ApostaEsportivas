@@ -43,7 +43,8 @@ export function oddDaSelecao(
   }
   if (sel.mercado === 'btts') {
     const id = sel.periodo === '1t' ? 34 : sel.periodo === '2t' ? 35 : 8
-    return odds.find(o => o.market_id === id && o.valor.toLowerCase() === 'yes') ?? null
+    const valor = sel.escolha === 'nao' ? 'no' : 'yes'
+    return odds.find(o => o.market_id === id && o.valor.toLowerCase() === valor) ?? null
   }
   const base = BASE[sel.mercado]
   const id = base ? MERCADO_DA_API[base]?.[sel.quem]?.[sel.periodo] : undefined

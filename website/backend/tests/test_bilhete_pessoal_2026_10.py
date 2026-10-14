@@ -75,6 +75,19 @@ def test_ambas_marcam():
     assert bp.liquidar_perna(btts, {**JOGO, "away_goals": 0}, None, False, False)[0] == "RED"
 
 
+def test_ambas_marcam_nao():
+    """14/10/2026: o "Nao" e' o contrario do Sim; sem escolha continua Sim."""
+    [nao] = bp.validar_pernas([{**BASE, "tipo": "time", "mercado": "btts", "escolha": "nao"}])
+    assert nao["escolha"] == "nao"
+    assert bp.liquidar_perna(nao, JOGO, None, False, False)[0] == "RED"
+    assert bp.liquidar_perna(nao, {**JOGO, "away_goals": 0}, None, False, False)[0] == "GREEN"
+    assert bp.mercado_ao_vivo(nao) == ("Ambas Marcam", "btts", "Não")
+    [sim] = bp.validar_pernas([{**BASE, "tipo": "time", "mercado": "btts"}])
+    assert "escolha" not in sim
+    with pytest.raises(bp.PernaInvalida):
+        bp.validar_pernas([{**BASE, "tipo": "time", "mercado": "btts", "escolha": "talvez"}])
+
+
 def test_jogo_nao_terminado_espera_e_depois_anula():
     assert bp.liquidar_perna(perna_time(), {**JOGO, "status": "NS"}, None, False, False)[0] is None
     assert bp.liquidar_perna(perna_time(), None, None, False, True) == ("VOID", None, "jogo sem resultado")
