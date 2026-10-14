@@ -12,6 +12,7 @@ import { m as motion } from 'framer-motion'
 import { X, User, Check, Minus } from 'lucide-react'
 import api from '../../services/api'
 import { backdropFade, dialogScale } from '../../lib/motion'
+import { fecharNoFundo } from '../../lib/fecharNoFundo'
 import { getResultStyle } from '../../utils/resultStyle'
 import { fmtBRL } from '../../utils/format'
 import { TeamLogo } from '../TeamLogo'
@@ -69,7 +70,7 @@ export default function DetalheDoBilhetePessoal({ id, onClose }: { id: number; o
   return createPortal(
     <motion.div variants={backdropFade} initial="hidden" animate="visible" exit="exit"
       className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm sm:p-4"
-      onClick={onClose}>
+      {...fecharNoFundo(onClose)}>
       <motion.div variants={dialogScale}
         className="w-full max-h-[92dvh] sm:max-w-lg bg-surface-0 border border-line rounded-t-xl sm:rounded-lg flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()} role="dialog" aria-label="Meu bilhete">

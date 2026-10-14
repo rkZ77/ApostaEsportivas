@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { m as motion } from 'framer-motion'
 import { AlertTriangle } from 'lucide-react'
 import { backdropFade, dialogScale } from '../lib/motion'
+import { fecharNoFundo } from '../lib/fecharNoFundo'
 import { fmtSigned } from '../utils/format'
 
 /*
@@ -43,7 +44,7 @@ export default function ResetMonthModal({
     <motion.div
       variants={backdropFade} initial="hidden" animate="visible" exit="exit"
       className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center px-4"
-      onClick={onClose}
+      {...fecharNoFundo(onClose)}
     >
       <motion.div
         variants={dialogScale}
