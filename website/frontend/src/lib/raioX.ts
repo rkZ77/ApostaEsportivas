@@ -55,6 +55,14 @@ export interface Jogador {
   jogos: JogoDoJogador[]
 }
 
+/** Um jogo encerrado em formato curto · confronto direto e últimos jogos. */
+export interface JogoCurto {
+  fixture_id?: number; data: string | null; league_id?: number | null
+  home_team_id: number; away_team_id: number
+  home_goals: number | null; away_goals: number | null
+  escanteios: number | null; amarelos: number | null
+}
+
 export interface RaioX {
   fixture: {
     fixture_id: number; league_id: number | null
@@ -65,12 +73,15 @@ export interface RaioX {
     placar_final?: [number, number] | null
   }
   times: { home: { team_id: number; jogos: JogoDoTime[] }; away: { team_id: number; jogos: JogoDoTime[] } }
-  h2h: Array<{ data: string | null; league_id?: number | null; home_team_id: number; away_team_id: number
-               home_goals: number | null; away_goals: number | null
-               escanteios: number | null; amarelos: number | null }>
+  h2h: JogoCurto[]
   /** 'api': o banco não tinha o confronto e ele veio da API-Football, só com
    *  o placar (12/10/2026). Ausente em resposta antiga do cache = banco. */
   h2h_fonte?: 'banco' | 'api'
+  /** Últimos jogos de cada time em TODAS as competições (aba Confronto, 14/10/2026). */
+  ultimos_todas?: { home: JogoCurto[]; away: JogoCurto[] }
+  /** {id: nome} dos times e das competições das listas da aba Confronto. */
+  nomes_times?: Record<string, string>
+  nomes_ligas?: Record<string, string>
   arbitro: { nome: string; jogos: Array<{ amarelos: number; vermelhos: number; faltas: number | null }> } | null
   jogadores: {
     home: { fonte_titulares: string; lista: Jogador[] }

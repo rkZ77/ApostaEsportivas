@@ -546,6 +546,8 @@ _JOGOS_RAIO_X = 10
 #: 15 e nao 8 (14/10/2026): a aba Confronto filtra por competicao e mando, e
 #: com 8 o filtro deixava dois ou tres jogos.
 _H2H_MAX = 15
+#: Ultimos jogos de cada time em todas as competicoes, na aba Confronto.
+_ULTIMOS_TODAS = 15
 
 
 def _serie_do_time(linhas: list, team_id: int) -> list:
@@ -1070,6 +1072,28 @@ def _montar_raio_x(fixture_id: int, home, away, league, n: int, season=None) -> 
         serie_home = _serie_do_time(ultimos, home_id)
         serie_away = _serie_do_time(ultimos, away_id)
 
+        # ULTIMOS JOGOS DE CADA TIME EM TODAS AS COMPETICOES (14/10/2026,
+        # pedido do usuario): a aba Confronto mostra, alem do H2H, os jogos
+        # recentes de cada lado · "Esta competicao" e o mando sao filtro da
+        # tela. Uma consulta, nos mesmos indices de _ultimos_jogos.
+        def _linha_curta(r):
+            return {
+                "fixture_id": r["fixture_id"],
+                "data": r["match_date"].isoformat() if r["match_date"] else None,
+                "league_id": r.get("league_id"),
+                "home_team_id": r["home_team_id"], "away_team_id": r["away_team_id"],
+                "home_goals": r["home_goals"], "away_goals": r["away_goals"],
+                "escanteios": (r["home_corners"] or 0) + (r["away_corners"] or 0)
+                              if r["home_corners"] is not None and r["away_corners"] is not None else None,
+                "amarelos": (r["home_yellow_cards"] or 0) + (r["away_yellow_cards"] or 0)
+                            if r["home_yellow_cards"] is not None else None,
+            }
+        todas = _ultimos_jogos(cur, [home_id, away_id], antes_de, _ULTIMOS_TODAS)
+        ultimos_todas = {
+            "home": [_linha_curta(r) for r in todas if r["team_id"] == home_id],
+            "away": [_linha_curta(r) for r in todas if r["team_id"] == away_id],
+        }
+
         # Confronto: as duas ordens de mando como metades separadas, cada uma
         # no indice do mandante · mesmo motivo do UNION ALL em _ultimos_jogos.
         # SO' O QUE VEIO ANTES DESTE JOGO (14/10/2026): o jogo de hoje, ja'
@@ -1126,11 +1150,21 @@ def _montar_raio_x(fixture_id: int, home, away, league, n: int, season=None) -> 
             away_id: {j["fixture_id"] for j in serie_away},
         }, titulares)
 
+        linhas_curtas = ultimos_todas["home"] + ultimos_todas["away"] + h2h
         nomes = _nomes_dos_times(
             cur, {home_id, away_id}
-                 | {j["adversario_id"] for j in serie_home + serie_away})
+                 | {j["adversario_id"] for j in serie_home + serie_away}
+                 | {j[k] for j in linhas_curtas for k in ("home_team_id", "away_team_id")})
         for j in serie_home + serie_away:
             j["adversario"] = nomes.get(j["adversario_id"], "")
+        # Nome de cada competicao da aba Confronto (cabecalho de cada grupo).
+        ids_ligas = sorted({j["league_id"] for j in linhas_curtas if j.get("league_id")})
+        nomes_ligas = {}
+        if ids_ligas:
+            cur.execute("SELECT DISTINCT ON (league_id) league_id, name FROM leagues "
+                        "WHERE league_id = ANY(%s) ORDER BY league_id, season DESC",
+                        (ids_ligas,))
+            nomes_ligas = {r["league_id"]: r["name"] for r in cur.fetchall()}
 
         arbitro = _arbitro(cur, fix.get("referee"), 15, liga, temporada)
     finally:
@@ -1154,6 +1188,10 @@ def _montar_raio_x(fixture_id: int, home, away, league, n: int, season=None) -> 
         },
         "h2h": h2h,
         "h2h_fonte": h2h_fonte,
+        "ultimos_todas": ultimos_todas,
+        # {id: nome} dos times e das competicoes das listas da aba Confronto.
+        "nomes_times": {str(k): v for k, v in nomes.items()},
+        "nomes_ligas": {str(k): v for k, v in nomes_ligas.items()},
         "arbitro": arbitro,
         "jogadores": {
             "home": {"fonte_titulares": titulares[home_id][1], "lista": jogadores[home_id]},

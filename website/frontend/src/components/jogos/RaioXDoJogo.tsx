@@ -10,7 +10,7 @@ import { nomeDaLigaPt, rotuloDaRodada } from '../../lib/paisDaLiga'
 import {
   ambasMarcam, comPeriodo, ehGoleiro, ESTATS_DE_JOGADOR, fraseDoJogador, MERCADOS_DE_TIME, MERCADOS_PRINCIPAIS, numero,
   resultadoDoJogo, RESULTADOS_ACEITOS, ROTULO_PERIODO, rotuloDaLinha, serieDeResultado, taxa, taxaDoJogador, tomDaTaxa,
-  filtrarPorMando, type EscolhaDeResultado, type EstatDeJogador, type Mando, type Jogador, type JogoDoTime, type Lado, type Periodo, type RaioX, type Taxa,
+  filtrarPorMando, type EscolhaDeResultado, type EstatDeJogador, type Mando, type Jogador, type JogoCurto, type JogoDoTime, type Lado, type Periodo, type RaioX, type Taxa,
 } from '../../lib/raioX'
 import { alternar, trocarNoGrupo, useBilheteMontado, type Selecao } from '../../lib/bilheteMontado'
 import { chanceDoResultado, oddDaSelecao, vantagem, type OddDaCasa } from '../../lib/oddsDoJogo'
@@ -1153,98 +1153,133 @@ function dataCurta(iso: string | null): string {
 }
 
 /*
- * CONFRONTO COM FILTRO (14/10/2026, pedido do usuário): todos os confrontos
- * ou só os desta competição, e todos ou só com o mandante de hoje em casa /
- * fora. Os números de cima (vitórias, médias, taxas) saem do recorte escolhido.
+ * CONFRONTO, NA LÓGICA DO SOFASCORE (14/10/2026, pedido do usuário).
+ *
+ * Três vistas: os últimos jogos do mandante, o confronto direto (H2H) e os
+ * últimos jogos do visitante · quando os dois nunca se enfrentaram, a aba
+ * ainda diz como cada um chega. Dois filtros: "esta competição" e o mando
+ * (no estádio do mandante, no H2H; em casa / fora, na vista de um time). A
+ * lista vem agrupada por competição, e os números de cima saem do recorte.
  */
-type CompetH2H = 'todas' | 'esta'
-type MandoH2H = 'todos' | 'casa' | 'fora'
+type VistaConfronto = 'home' | 'h2h' | 'away'
 
 function AbaConfronto({ dados }: { dados: RaioX }) {
   const f = dados.fixture
-  const [compet, setCompet] = useState<CompetH2H>('todas')
-  const [mando, setMando] = useState<MandoH2H>('todos')
+  const ultimos = dados.ultimos_todas ?? { home: [], away: [] }
+  const [vista, setVista] = useState<VistaConfronto>(dados.h2h.length ? 'h2h' : 'home')
+  const [soEsta, setSoEsta] = useState(false)
+  const [noMando, setNoMando] = useState(false)
 
-  if (!dados.h2h.length) {
-    return <div className="card p-8 text-center text-sm text-ink-2">Não achamos confrontos anteriores entre os dois.</div>
-  }
+  const nomeTime = (id: number) =>
+    id === f.home_team_id ? f.home_team : id === f.away_team_id ? f.away_team : (dados.nomes_times?.[id] ?? '')
+  const nomeLiga = (id: number | null | undefined) =>
+    id == null ? 'Outras competições' : nomeDaLigaPt(id, dados.nomes_ligas?.[id])
 
-  const jogos = dados.h2h.filter(j =>
-    (compet === 'todas' || (f.league_id != null && j.league_id === f.league_id))
-    && (mando === 'todos' || (mando === 'casa') === (j.home_team_id === f.home_team_id)))
+  /* De quem é o ponto de vista: no H2H, o mandante de hoje; numa vista de
+     time, aquele time. */
+  const foco = vista === 'away' ? f.away_team_id : f.home_team_id
+  const base: JogoCurto[] = vista === 'h2h' ? dados.h2h : ultimos[vista]
+  const jogos = base.filter(j =>
+    (!soEsta || (f.league_id != null && j.league_id === f.league_id))
+    && (!noMando || (vista === 'away' ? j.away_team_id === foco : j.home_team_id === foco)))
 
-  /* Placar do ponto de vista do mandante de HOJE, jogue onde jogou. */
-  const doMandante = (j: RaioX['h2h'][number]) => {
+  const resultado = (j: JogoCurto): 'V' | 'E' | 'D' | null => {
     if (j.home_goals == null || j.away_goals == null) return null
-    const pro = j.home_team_id === f.home_team_id ? j.home_goals : j.away_goals
-    const contra = j.home_team_id === f.home_team_id ? j.away_goals : j.home_goals
+    const pro = j.home_team_id === foco ? j.home_goals : j.away_goals
+    const contra = j.home_team_id === foco ? j.away_goals : j.home_goals
     return pro > contra ? 'V' : pro < contra ? 'D' : 'E'
   }
-  let vHome = 0, empates = 0, vAway = 0
+  let v = 0, e = 0, d = 0
   for (const j of jogos) {
-    const r = doMandante(j)
-    if (r === 'V') vHome++
-    else if (r === 'D') vAway++
-    else if (r === 'E') empates++
+    const r = resultado(j)
+    if (r === 'V') v++
+    else if (r === 'D') d++
+    else if (r === 'E') e++
   }
   const comPlacar = jogos.filter(j => j.home_goals != null && j.away_goals != null)
   const gols = comPlacar.map(j => j.home_goals! + j.away_goals!)
-  const esc = jogos.map(j => j.escanteios).filter((v): v is number => v != null)
-  const cart = jogos.map(j => j.amarelos).filter((v): v is number => v != null)
+  const esc = jogos.map(j => j.escanteios).filter((x): x is number => x != null)
+  const cart = jogos.map(j => j.amarelos).filter((x): x is number => x != null)
   const media = (xs: number[]) => (xs.length ? (xs.reduce((a, b) => a + b, 0) / xs.length).toFixed(1) : '—')
   const pct = (n: number) => (comPlacar.length ? `${Math.round((n / comPlacar.length) * 100)}%` : '—')
-  const ambas = comPlacar.filter(j => j.home_goals! > 0 && j.away_goals! > 0).length
-  const mais25 = gols.filter(g => g > 2.5).length
-
   const numeros: Array<[ReactNode, string, string]> = [
     [<Goal key="g" className="w-4 h-4" />, media(gols), 'gols/jogo'],
     [<Flag key="e" className="w-4 h-4" />, media(esc), 'escanteios/jogo'],
     [<Square key="c" className="w-4 h-4" />, media(cart), 'cartões/jogo'],
-    [<Repeat key="a" className="w-4 h-4" />, pct(ambas), 'ambas marcam'],
-    [<TrendingUp key="o" className="w-4 h-4" />, pct(mais25), 'mais de 2.5'],
+    [<Repeat key="a" className="w-4 h-4" />, pct(comPlacar.filter(j => j.home_goals! > 0 && j.away_goals! > 0).length), 'ambas marcam'],
+    [<TrendingUp key="o" className="w-4 h-4" />, pct(gols.filter(g => g > 2.5).length), 'mais de 2.5'],
   ]
 
-  const Seletor = <T extends string>({ valor, set, opcoes }: {
-    valor: T; set: (v: T) => void; opcoes: Array<[T, string, boolean?]>
+  /* Agrupa por competição, na ordem do jogo mais recente de cada uma. */
+  const grupos: Array<{ liga: number | null; jogos: JogoCurto[] }> = []
+  for (const j of jogos) {
+    const liga = j.league_id ?? null
+    const g = grupos.find(x => x.liga === liga)
+    if (g) g.jogos.push(j)
+    else grupos.push({ liga, jogos: [j] })
+  }
+
+  const rotuloMando = vista === 'h2h' ? `No estádio do ${f.home_team}`
+    : vista === 'home' ? 'Só em casa' : 'Só fora de casa'
+  const placarDe = vista === 'h2h' ? [[v, f.home_team, f.home_team_id], [e, 'Empates', null], [d, f.away_team, f.away_team_id]] as const
+    : [[v, 'Vitórias', null], [e, 'Empates', null], [d, 'Derrotas', null]] as const
+
+  const Caixa = ({ marcado, set, rotulo, desligado }: {
+    marcado: boolean; set: (b: boolean) => void; rotulo: string; desligado?: boolean
   }) => (
-    <div className="grid rounded-lg border border-line p-0.5 bg-surface-1"
-      style={{ gridTemplateColumns: `repeat(${opcoes.length}, minmax(0, 1fr))` }}>
-      {opcoes.map(([k, rotulo, desligado]) => (
-        <button key={k} onClick={() => set(k)} disabled={desligado} aria-pressed={valor === k}
-          className={cn('h-10 rounded-md text-sm font-bold transition-colors truncate px-1 disabled:opacity-30',
-            valor === k ? 'bg-surface-3 text-ink-1' : 'text-ink-3')}>
-          {rotulo}
-        </button>
-      ))}
-    </div>
+    <button onClick={() => set(!marcado)} disabled={desligado} aria-pressed={marcado}
+      className={cn('h-10 px-3 rounded-lg border text-sm font-semibold flex items-center gap-2 min-w-0 transition-colors disabled:opacity-30',
+        marcado ? 'border-accent/50 bg-accent/10 text-ink-1' : 'border-line text-ink-3')}>
+      <span className={cn('w-4 h-4 shrink-0 rounded grid place-items-center border',
+        marcado ? 'bg-accent border-accent text-on-fill' : 'border-line-strong')} aria-hidden>
+        {marcado && <Check className="w-3 h-3" />}
+      </span>
+      <span className="truncate">{rotulo}</span>
+    </button>
   )
 
   return (
     <div className="space-y-3">
       <div className="card p-3 space-y-2">
-        <Seletor valor={compet} set={setCompet} opcoes={[
-          ['todas', 'Todas as competições'], ['esta', 'Esta competição', f.league_id == null],
-        ]} />
-        <Seletor valor={mando} set={setMando} opcoes={[
-          ['todos', 'Todos'], ['casa', `${f.home_team} em casa`], ['fora', `${f.home_team} fora`],
-        ]} />
+        {/* [mandante] [H2H] [visitante] */}
+        <div className="grid grid-cols-3 rounded-lg border border-line p-0.5 bg-surface-1">
+          {([
+            ['home', f.home_team, f.home_team_id],
+            ['h2h', 'H2H', null],
+            ['away', f.away_team, f.away_team_id],
+          ] as const).map(([k, rotulo, id]) => (
+            <button key={k} onClick={() => setVista(k)} aria-pressed={vista === k}
+              className={cn('h-10 rounded-md text-sm font-bold transition-colors flex items-center justify-center gap-1.5 px-1 min-w-0',
+                vista === k ? 'bg-surface-3 text-ink-1' : 'text-ink-3')}>
+              {id != null && <TeamLogo id={id} name={rotulo} size={18} />}
+              <span className="truncate">{rotulo}</span>
+            </button>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <Caixa marcado={noMando} set={setNoMando} rotulo={rotuloMando} />
+          <Caixa marcado={soEsta} set={setSoEsta} rotulo="Esta competição" desligado={f.league_id == null} />
+        </div>
       </div>
 
       {!jogos.length ? (
-        <div className="card p-8 text-center text-sm text-ink-2">Nenhum confronto neste recorte.</div>
+        <div className="card p-8 text-center text-sm text-ink-2">
+          {vista === 'h2h' && !dados.h2h.length
+            ? 'Os dois ainda não se enfrentaram. Veja os últimos jogos de cada um nos escudos acima.'
+            : 'Nenhum jogo neste recorte.'}
+        </div>
       ) : (
         <>
           <div className="card p-4">
             <div className="grid grid-cols-3 text-center">
-              {([[vHome, f.home_team, f.home_team_id], [empates, 'Empates', null], [vAway, f.away_team, f.away_team_id]] as const)
-                .map(([n, r, id], i) => (
-                  <div key={i} className="min-w-0 flex flex-col items-center">
-                    {id != null ? <TeamLogo id={id} name={r} size={22} />
-                      : <span className="w-[22px] h-[22px] grid place-items-center rounded-full bg-surface-3 text-[11px] font-black text-ink-2">X</span>}
-                    <div className={cn('font-mono text-3xl font-black tabular-nums mt-1', i === 1 ? 'text-ink-2' : 'text-ink-1')}>{n}</div>
-                    <div className="text-[11px] text-ink-3 truncate px-1 max-w-full">{r}</div>
-                  </div>
-                ))}
+              {placarDe.map(([n, r, id], i) => (
+                <div key={i} className="min-w-0 flex flex-col items-center">
+                  {id != null && <TeamLogo id={id} name={r} size={22} />}
+                  <div className={cn('font-mono text-3xl font-black tabular-nums', id != null && 'mt-1',
+                    i === 1 ? 'text-ink-2' : 'text-ink-1')}>{n}</div>
+                  <div className="text-[11px] text-ink-3 truncate px-1 max-w-full">{r}</div>
+                </div>
+              ))}
             </div>
             <div className="mt-4 pt-3 border-t border-line grid grid-cols-2 sm:grid-cols-5 gap-3">
               {numeros.map(([icone, valor, rotulo]) => (
@@ -1258,39 +1293,55 @@ function AbaConfronto({ dados }: { dados: RaioX }) {
               ))}
             </div>
             <p className="mt-3 text-[11px] text-ink-4">
-              {jogos.length} {jogos.length === 1 ? 'confronto' : 'confrontos'} · vitórias contadas pelo lado de cada time, jogue onde jogou.
+              {jogos.length} {jogos.length === 1 ? 'jogo' : 'jogos'}
+              {vista === 'h2h' ? ' entre os dois' : ` do ${vista === 'home' ? f.home_team : f.away_team}`}
             </p>
           </div>
-          <div className="card divide-y divide-line/60">
-            {jogos.map((j, i) => {
-              const r = doMandante(j)
-              return (
-                <div key={i} className="px-4 py-3 flex items-center gap-2.5 text-sm">
-                  <span className={cn('w-6 h-6 grid place-items-center rounded font-black text-[11px] shrink-0',
-                    r === 'V' ? 'bg-green-500 text-on-fill' : r === 'D' ? 'bg-red-500 text-on-fill' : 'bg-surface-3 text-ink-2')}
-                    title={`Resultado do ${f.home_team}`}>
-                    {r ?? '?'}
-                  </span>
-                  <div className="w-14 shrink-0">
-                    <div className="text-[11px] text-ink-3 tabular-nums">{dataCurta(j.data)}</div>
-                    {j.league_id != null && <div className="mt-0.5"><LeagueLogo id={j.league_id} /></div>}
-                  </div>
-                  <TeamLogo id={j.home_team_id} name="" size={18} />
-                  <span className="font-mono font-black text-ink-1 tabular-nums">{j.home_goals ?? '-'} - {j.away_goals ?? '-'}</span>
-                  <TeamLogo id={j.away_team_id} name="" size={18} />
-                  {(j.escanteios != null || j.amarelos != null) && (
-                    <span className="ml-auto flex items-center gap-2 text-[11px] text-ink-3 tabular-nums">
-                      <span className="flex items-center gap-0.5"><Flag className="w-3 h-3" aria-label="escanteios" />{j.escanteios ?? '—'}</span>
-                      <span className="flex items-center gap-0.5"><Square className="w-3 h-3" aria-label="cartões" />{j.amarelos ?? '—'}</span>
-                    </span>
-                  )}
-                </div>
-              )
-            })}
-          </div>
+
+          {grupos.map(g => (
+            <div key={g.liga ?? 'sem'} className="card overflow-hidden">
+              <div className="px-4 py-2.5 flex items-center gap-2 border-b border-line bg-surface-2/40">
+                {g.liga != null && <LeagueLogo id={g.liga} />}
+                <span className="text-xs font-bold text-ink-1 truncate">{nomeLiga(g.liga)}</span>
+              </div>
+              <div className="divide-y divide-line/60">
+                {g.jogos.map((j, i) => {
+                  const r = resultado(j)
+                  const venceu = (lado: 'home' | 'away') => j.home_goals != null && j.away_goals != null
+                    && (lado === 'home' ? j.home_goals > j.away_goals : j.away_goals > j.home_goals)
+                  const perdeu = (lado: 'home' | 'away') => j.home_goals != null && j.away_goals != null
+                    && (lado === 'home' ? j.home_goals < j.away_goals : j.away_goals < j.home_goals)
+                  return (
+                    <div key={j.fixture_id ?? i} className="px-4 py-2.5 flex items-center gap-3">
+                      <span className="text-[11px] text-ink-3 w-14 shrink-0 tabular-nums">{dataCurta(j.data)}</span>
+                      <div className="flex-1 min-w-0 space-y-1">
+                        {(['home', 'away'] as const).map(lado => {
+                          const id = lado === 'home' ? j.home_team_id : j.away_team_id
+                          const gols = lado === 'home' ? j.home_goals : j.away_goals
+                          return (
+                            <div key={lado} className={cn('flex items-center gap-2 text-sm',
+                              venceu(lado) ? 'text-ink-1 font-bold' : perdeu(lado) ? 'text-ink-3' : 'text-ink-2')}>
+                              <TeamLogo id={id} name={nomeTime(id)} size={16} />
+                              <span className="truncate flex-1">{nomeTime(id)}</span>
+                              <span className="font-mono tabular-nums">{gols ?? '-'}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                      <span className={cn('w-6 h-6 grid place-items-center rounded font-black text-[11px] shrink-0',
+                        r === 'V' ? 'bg-green-500 text-on-fill' : r === 'D' ? 'bg-red-500 text-on-fill' : 'bg-surface-3 text-ink-2')}
+                        title={`Resultado do ${nomeTime(foco)}`}>
+                        {r ?? '?'}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
         </>
       )}
-      {dados.h2h_fonte === 'api' && (
+      {vista === 'h2h' && dados.h2h_fonte === 'api' && (
         <p className="text-[11px] text-ink-4 leading-relaxed px-1">
           Confrontos de fora da nossa base: só o placar, sem escanteios e cartões.
         </p>
