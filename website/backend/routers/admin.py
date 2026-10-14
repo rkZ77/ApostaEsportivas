@@ -6876,6 +6876,108 @@ def _picks_do_dia(conn, cur, pipeline: str, dia: str) -> int | None:
         return None
 
 
+@router.get("/motor/por-que")
+def motor_por_que(liga: int | None = None, data: str | None = None,
+                  current_user: dict = Depends(require_admin)):
+    """POR QUE ESTA LIGA NAO TEVE PICK (14/10/2026, pedido do usuario: "o
+    motor nao gerou pick do Championship, estava sem odd ou o que?").
+
+    Jogo a jogo da liga no dia, o que cada motor fez com ele. Junta tres
+    coisas que so' existiam separadas:
+
+      a agenda (`fixtures`)     o jogo existia pro motor?
+      as odds (`odds_values`)   os pipelines so' leem jogo COM odd (JOIN) ·
+                                sem odd o jogo nem aparece em engine_decisions
+      `engine_decisions`        avaliado / descartado (e o motivo) / sem pick
+
+    Sem `liga`, devolve so' as ligas ativas pro seletor. Le', nao escreve.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT league_id, name, COALESCE(ativa, TRUE) AS ativa FROM leagues "
+                    "ORDER BY COALESCE(ativa, TRUE) DESC, name")
+        ligas = [dict(r) for r in cur.fetchall()]
+        if liga is None:
+            return {"ligas": ligas, "jogos": []}
+        cur.execute("SELECT (NOW() AT TIME ZONE 'America/Sao_Paulo')::date::text AS hoje")
+        dia = data or cur.fetchone()["hoje"]
+        info = next((l for l in ligas if l["league_id"] == liga), None)
+
+        cur.execute("""
+            SELECT fixture_id, home_team, away_team, match_datetime::text AS quando, status
+              FROM fixtures
+             WHERE league_id = %s AND match_datetime::date = %s
+             ORDER BY match_datetime
+        """, (liga, dia))
+        jogos = [dict(r) for r in cur.fetchall()]
+        ids = [j["fixture_id"] for j in jogos]
+
+        odds: dict = {}
+        decisoes: dict = {}
+        if ids:
+            cur.execute("""
+                SELECT fixture_id, COUNT(*) AS n, COUNT(DISTINCT market_id) AS mercados
+                  FROM odds_values WHERE fixture_id = ANY(%s) GROUP BY fixture_id
+            """, (ids,))
+            odds = {r["fixture_id"]: dict(r) for r in cur.fetchall()}
+            try:
+                cur.execute("""
+                    SELECT fixture_id, pipeline, status, reason,
+                           (SELECT COUNT(*) FROM jsonb_array_elements(COALESCE(candidates, '[]'::jsonb)) c
+                             WHERE (c->>'eligible')::boolean) AS aprovados,
+                           (SELECT COUNT(*) FROM jsonb_array_elements(COALESCE(candidates, '[]'::jsonb)) c
+                             WHERE COALESCE(c->>'origem', 'candidato') <> 'rastro') AS candidatos
+                      FROM engine_decisions
+                     WHERE fixture_id = ANY(%s) AND match_date = %s
+                     ORDER BY id DESC
+                """, (ids, dia))
+                for r in cur.fetchall():
+                    # A ultima decisao de cada pipeline pra cada jogo (o
+                    # pipeline pode rodar mais de uma vez no dia).
+                    decisoes.setdefault(r["fixture_id"], {}).setdefault(r["pipeline"], dict(r))
+            except Exception as e:
+                conn.rollback()
+                if not _sem_tabela(e):
+                    raise
+
+        rotulos = dict(_PIPELINES_DO_MOTOR)
+        saida = []
+        for j in jogos:
+            fid = j["fixture_id"]
+            o = odds.get(fid)
+            por_pipeline = []
+            for p, d in (decisoes.get(fid) or {}).items():
+                if d["status"] == "avaliado":
+                    explicacao = (f"avaliado: {d['candidatos']} mercado(s) pontuado(s), "
+                                  f"{d['aprovados']} aprovado(s)"
+                                  + ("" if d["aprovados"] else " · nenhum passou nos criterios"))
+                else:
+                    explicacao = f"{d['status']}: {d['reason'] or 'sem motivo gravado'}"
+                por_pipeline.append({"pipeline": p, "rotulo": rotulos.get(p, p),
+                                     "status": d["status"], "explicacao": explicacao})
+            if not o:
+                resumo = ("Sem odd coletada: os motores so' leem jogo com odd, entao "
+                          "este nem entrou na analise.")
+            elif not por_pipeline:
+                resumo = ("Tinha odd, mas nenhum motor registrou decisao neste dia: "
+                          "o pipeline nao rodou depois da coleta, ou rodou noutro dia.")
+            elif any(x["status"] == "avaliado" for x in por_pipeline):
+                resumo = "O motor avaliou · veja em cada produto por que nao saiu pick."
+            else:
+                resumo = "Descartado antes do calculo · o motivo esta' em cada produto."
+            saida.append({**j, "odds": o["n"] if o else 0,
+                          "mercados_com_odd": o["mercados"] if o else 0,
+                          "resumo": resumo, "pipelines": por_pipeline})
+        return {"ligas": ligas, "liga": info, "data": dia, "jogos": saida,
+                "aviso": None if jogos else
+                ("Nenhum jogo desta liga na agenda deste dia." if (info or {}).get("ativa", True)
+                 else "Liga desativada: a coleta e o motor nao olham pra ela.")}
+    finally:
+        cur.close()
+        conn.close()
+
+
 @router.get("/motor/decisoes/linhas")
 def motor_decisoes_linhas(
     pipeline: str,
