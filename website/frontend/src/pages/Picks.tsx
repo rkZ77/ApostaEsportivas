@@ -828,29 +828,26 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
                   <div className={`text-xl font-black ${color}`}>
                     {p >= 0 ? '+' : ''}{p.toFixed(2)}u
                   </div>
-                  <div className="text-[10px] text-ink-4">{seguiu ? `(${u}u)` : `stake sugerida ${u}u`}</div>
+                  <div className="text-[10px] text-ink-4 leading-tight">
+                    {seguiu ? `(${u}u)` : <>stake sugerida {u}u<br />você não apostou</>}
+                  </div>
                 </div>
-                <div className="flex-1 px-4 py-3 text-center">
-                  {seguiu ? (
-                    <>
-                      <div className="text-[10px] text-ink-3 mb-0.5">Em reais</div>
-                      {profitR != null ? (
-                        <div className={`text-xl font-black ${color}`}>
-                          {p >= 0 ? '+' : '-'}R${profitR.toFixed(0)}
-                        </div>
-                      ) : (
-                        <div className="text-xl font-black text-ink-4">-</div>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      {/* Vocabulário do próprio card: o botão vira "Registrado"
-                          quando a aposta é seguida, então o oposto é este. */}
-                      <div className="text-[10px] text-ink-3 mb-0.5">Sua aposta</div>
-                      <div className="text-sm font-semibold text-ink-4 pt-1.5">Não registrada</div>
-                    </>
-                  )}
-                </div>
+                {/* Igual ao SuggestionCard (14/10/2026, pedido do usuário: "tudo
+                    tem que ser padronizado nos cards"): a coluna "Sua aposta /
+                    Não registrada" saiu · em três colunas ela cortava no celular.
+                    Quem seguiu continua vendo o valor em reais. */}
+                {seguiu && (
+                  <div className="flex-1 px-4 py-3 text-center">
+                    <div className="text-[10px] text-ink-3 mb-0.5">Em reais</div>
+                    {profitR != null ? (
+                      <div className={`text-xl font-black ${color}`}>
+                        {p >= 0 ? '+' : '-'}R${profitR.toFixed(0)}
+                      </div>
+                    ) : (
+                      <div className="text-xl font-black text-ink-4">-</div>
+                    )}
+                  </div>
+                )}
               </>
             )
           })()
@@ -1281,29 +1278,23 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
                   <div className={`text-xl font-black ${color}`}>
                     {p >= 0 ? '+' : ''}{p.toFixed(2)}u
                   </div>
-                  <div className="text-[10px] text-ink-4">{seguiu ? `(${u}u)` : `stake sugerida ${u}u`}</div>
+                  <div className="text-[10px] text-ink-4 leading-tight">
+                    {seguiu ? `(${u}u)` : <>stake sugerida {u}u<br />você não apostou</>}
+                  </div>
                 </div>
-                <div className="flex-1 px-4 py-3 text-center">
-                  {seguiu ? (
-                    <>
-                      <div className="text-[10px] text-ink-3 mb-0.5">Em reais</div>
-                      {profitR != null ? (
-                        <div className={`text-xl font-black ${color}`}>
-                          {p >= 0 ? '+' : '-'}R${profitR.toFixed(0)}
-                        </div>
-                      ) : (
-                        <div className="text-xl font-black text-ink-4">-</div>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      {/* Vocabulário do próprio card: o botão vira "Registrado"
-                          quando a aposta é seguida, então o oposto é este. */}
-                      <div className="text-[10px] text-ink-3 mb-0.5">Sua aposta</div>
-                      <div className="text-sm font-semibold text-ink-4 pt-1.5">Não registrada</div>
-                    </>
-                  )}
-                </div>
+                {/* Igual ao SuggestionCard (14/10/2026): sem a coluna "Sua aposta". */}
+                {seguiu && (
+                  <div className="flex-1 px-4 py-3 text-center">
+                    <div className="text-[10px] text-ink-3 mb-0.5">Em reais</div>
+                    {profitR != null ? (
+                      <div className={`text-xl font-black ${color}`}>
+                        {p >= 0 ? '+' : '-'}R${profitR.toFixed(0)}
+                      </div>
+                    ) : (
+                      <div className="text-xl font-black text-ink-4">-</div>
+                    )}
+                  </div>
+                )}
               </>
             )
           })()
