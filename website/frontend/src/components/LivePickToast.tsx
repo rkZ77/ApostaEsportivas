@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
-import { Activity } from 'lucide-react'
 import { useNotifications } from '../context/NotificationContext'
+import { rotuloDoMercado } from '../utils/marketTranslate'
 import { LiveDot } from './ui'
 import CartaoDeAviso, { timesDoAviso } from './ui/CartaoDeAviso'
 
@@ -59,6 +59,16 @@ export function partesDoCorpo(corpo: string | null | undefined): {
   return { mercado: m[1].trim() || null, odd: m[2], minuto: m[3] ?? null }
 }
 
+/** "Gols Mais/Menos Under 2.75" → "Gols, Menos de 2.75" (14/10/2026): o
+ *  servidor manda mercado e linha colados e em inglês. Fora do formato, volta
+ *  como veio. */
+export function mercadoLegivel(texto: string | null | undefined): string | null {
+  if (!texto) return null
+  const m = texto.match(/^(.*?)\s+((?:over|under|mais de|menos de)\s+[\d.,]+)$/i)
+  if (!m) return texto
+  return rotuloDoMercado(m[1], m[2]).replace(/\s*Mais\/Menos/i, '') || texto
+}
+
 export default function LivePickToast() {
   const { livePickNovo, dismissLivePickNovo } = useNotifications()
   const { pathname, hash } = useLocation()
@@ -92,21 +102,17 @@ export default function LivePickToast() {
           key={livePickNovo.id}
           tom="ao_vivo"
           urgente
-          selo={<><LiveDot tone="green" className="w-1.5 h-1.5" /> Pick ao vivo</>}
-          /* `Activity` e não `Radio`: o que o aviso anuncia é uma partida em
-             andamento · a linha de batimento diz jogo correndo. */
-          icone={<Activity className="w-3 h-3" strokeWidth={3} aria-hidden="true" />}
+          selo="Pick ao vivo"
+          icone={<LiveDot tone="green" className="w-1.5 h-1.5" />}
           titulo={jogoDoTitulo(livePickNovo.title)}
           times={timesDoAviso(jogoDoTitulo(livePickNovo.title), livePickNovo.payload)}
-          texto={partes.mercado}
+          texto={mercadoLegivel(partes.mercado)}
           destaque={partes.odd && (
-            <div className="flex items-end gap-3">
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-wide text-ink-3">Odd</p>
-                <p className="text-3xl font-black text-accent-ink leading-none tabular-nums">{partes.odd}</p>
-              </div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-[11px] font-bold uppercase tracking-wide text-ink-3">Odd</span>
+              <span className="text-2xl font-black text-accent-ink leading-none tabular-nums">{partes.odd}</span>
               {partes.minuto && (
-                <p className="text-xs text-ink-3 pb-0.5">criado aos {partes.minuto}'</p>
+                <span className="text-[11px] text-ink-3 truncate">aos {partes.minuto}'</span>
               )}
             </div>
           )}

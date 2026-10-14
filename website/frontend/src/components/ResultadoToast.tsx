@@ -1,8 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
-import { Check, CheckCircle2, RotateCcw, X } from 'lucide-react'
+import { Check, RotateCcw, X } from 'lucide-react'
 import { useNotifications } from '../context/NotificationContext'
+import { mercadoLegivel } from './LivePickToast'
 import { fmtBRL } from '../utils/format'
 import CartaoDeAviso, { timesDoAviso, type TomDoAviso } from './ui/CartaoDeAviso'
 
@@ -80,7 +81,7 @@ export default function ResultadoToast() {
   const visual = visualDoResultado(resultadoNovo?.payload?.result)
   const pnl = resultadoNovo?.payload?.pnl
   const unidades = resultadoNovo?.payload?.profit_units
-  const mercado = mercadoDoResultado(resultadoNovo?.body)
+  const mercado = mercadoLegivel(mercadoDoResultado(resultadoNovo?.body))
   const corDoNumero = visual.tom === 'green' ? 'text-accent-ink' : visual.tom === 'red' ? 'text-red-400' : 'text-ink-1'
 
   return (
@@ -89,10 +90,7 @@ export default function ResultadoToast() {
         <CartaoDeAviso
           key={resultadoNovo.id}
           tom={visual.tom}
-          selo={<>
-            {visual.tom === 'green' && <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />}
-            {visual.selo}
-          </>}
+          selo={visual.selo}
           icone={visual.icone}
           titulo={jogoDoResultado(resultadoNovo.title)}
           times={timesDoAviso(jogoDoResultado(resultadoNovo.title), resultadoNovo.payload)}
@@ -100,18 +98,20 @@ export default function ResultadoToast() {
             ? `${mercado ? `${mercado} · ` : ''}e mais ${resultadosJuntos} ${resultadosJuntos === 1 ? 'resultado' : 'resultados'}`
             : mercado}
           destaque={(pnl != null || unidades != null) && (
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-wide text-ink-3">{visual.legenda}</p>
-              <p className={`text-3xl font-black leading-none tabular-nums ${corDoNumero}`}>
-                {pnl != null
-                  ? `${sinal(pnl)}${fmtBRL(Number(pnl))}`
-                  : `${sinal(unidades)}${Math.abs(Number(unidades)).toFixed(2)}u`}
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-ink-3">{visual.legenda}</p>
+              <p className="flex items-baseline gap-2 min-w-0">
+                <span className={`text-2xl font-black leading-none tabular-nums ${corDoNumero}`}>
+                  {pnl != null
+                    ? `${sinal(pnl)}${fmtBRL(Number(pnl))}`
+                    : `${sinal(unidades)}${Math.abs(Number(unidades)).toFixed(2)}u`}
+                </span>
+                {pnl != null && unidades != null && (
+                  <span className="text-[11px] text-ink-3 tabular-nums truncate">
+                    {sinal(unidades)}{Math.abs(Number(unidades)).toFixed(2)}u
+                  </span>
+                )}
               </p>
-              {pnl != null && unidades != null && (
-                <p className="mt-1 text-xs text-ink-3 tabular-nums">
-                  {sinal(unidades)}{Math.abs(Number(unidades)).toFixed(2)} unidades
-                </p>
-              )}
             </div>
           )}
           acao={{ rotulo: 'Ver na Banca', onClick: abrir }}
