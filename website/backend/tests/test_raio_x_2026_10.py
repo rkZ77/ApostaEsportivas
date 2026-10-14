@@ -193,6 +193,13 @@ def test_raio_x_monta_series_do_ponto_de_vista_de_cada_time(monkeypatch):
     sql_h2h = next(p for s, p in cur.feitas if ") h2h" in s)
     assert sql_h2h[2] == 555 and sql_h2h[3] == kickoff
     assert r["h2h"][0]["league_id"] == 71
+    # Ultimos jogos de cada time em TODAS as competicoes: segunda consulta,
+    # sem corte de liga (aba Confronto, 14/10/2026).
+    series = [p for s, p in cur.feitas if "CROSS JOIN LATERAL" in s]
+    assert len(series) == 2 and series[1][1] == [None, None]
+    assert [j["fixture_id"] for j in r["ultimos_todas"]["home"]] == [901, 902]
+    assert r["ultimos_todas"]["home"][0]["escanteios"] == 9
+    assert r["nomes_times"]["77"] == "Rival A"
     sql_arb = next(p for s, p in cur.feitas if "split_part(referee" in s)
     assert sql_arb[1:5] == (71, 71, 2026, 2026)
 
