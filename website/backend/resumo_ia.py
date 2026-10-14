@@ -488,7 +488,11 @@ def chamar_modelo(fatos: dict) -> tuple[dict, int, int]:
     """(conteudo, tokens de entrada, tokens de saida). Levanta em falha."""
     resposta = _get_client().messages.create(
         model=MODELO,
-        max_tokens=3500,
+        # 8000, e nao 3500 (14/10/2026): com os numeros do time e a forca de
+        # cada mercado (12/10) a leitura passou do teto e voltava cortada
+        # ("resposta incompleta: max_tokens" nos logs de PROD) · a tela
+        # mostrava "nao deu para gerar". O teto so' limita; paga-se o que sai.
+        max_tokens=8000,
         system=[{"type": "text", "text": SYSTEM, "cache_control": {"type": "ephemeral"}}],
         output_config={"effort": "low",
                        "format": {"type": "json_schema", "schema": _SCHEMA}},
