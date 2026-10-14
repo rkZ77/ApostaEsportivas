@@ -318,6 +318,30 @@ function Placar({ jogo, dados, aoVivo }: { jogo: JogoBase; dados: RaioX | null; 
             <PaisDaLigaTag id={ligaId} soBandeira />
           </div>
           {f?.round && <span className="text-[11px] text-ink-3">{rotuloDaRodada(f.round)}</span>}
+          {/* FORMATO DA COMPETIÇÃO E PLACAR DA IDA (14/10/2026, pedido do
+              usuário): pontos corridos e mata-mata se jogam diferente, e no
+              jogo de volta quem está na frente muda tudo. */}
+          {(() => {
+            const c = dados?.competicao
+            const rotulo = !c?.formato ? null
+              : c.formato === 'liga' ? 'Pontos corridos'
+              : c.formato === 'grupos' ? 'Fase de grupos'
+              : c.formato === 'mata-mata ida e volta' ? (c.ida ? 'Mata-mata · jogo de volta' : 'Mata-mata · ida e volta')
+              : c.formato === 'mata-mata' ? 'Mata-mata' : null
+            if (!rotulo) return null
+            return (
+              <div className="mt-1 flex flex-col items-center gap-1">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-2 border border-line rounded-full px-2 py-0.5">
+                  {rotulo}
+                </span>
+                {c?.ida && f && (
+                  <span className="text-[11px] text-ink-3 tabular-nums">
+                    Ida: {f.home_team} <b className="text-ink-1">{c.ida.gols_mandante} x {c.ida.gols_visitante}</b> {f.away_team}
+                  </span>
+                )}
+              </div>
+            )
+          })()}
         </div>
         <div className="flex items-start gap-2">
           <Time id={f?.home_team_id ?? jogo.home_team_id} nome={f?.home_team || jogo.home_team} forma={formaHome} />

@@ -712,6 +712,48 @@ def _jogadores_dos_times(cur, jogos_por_time: dict, titulares: dict) -> dict:
     return saida
 
 
+def _competicao_do_jogo(cur, rodada: str | None, home_id: int, away_id: int,
+                        liga, temporada, antes_de) -> dict:
+    """Formato da competicao deste jogo e, no mata-mata, o jogo de ida
+    (14/10/2026, pedido do usuario: "tem que entender se e' pontos corridos ou
+    eliminatorio, na aba jogos e na leitura da IA").
+
+    O formato sai do texto da rodada, a mesma leitura da Leitura IA
+    (resumo_ia.formato_da_partida). A IDA nao sai do texto: Libertadores e
+    Sul-Americana escrevem so' "Semi-finals", sem dizer a perna. Ela e' o
+    mesmo confronto com o mando invertido, na mesma competicao e temporada,
+    ate' 21 dias antes · e so' em fase de mata-mata, porque na fase de grupos
+    o returno tambem e' "mando invertido".
+    """
+    import resumo_ia
+    tem_tabela = False
+    if liga:
+        cur.execute("SELECT 1 FROM league_standings WHERE league_id = %s LIMIT 1", (liga,))
+        tem_tabela = cur.fetchone() is not None
+    formato = resumo_ia.formato_da_partida(rodada, tem_tabela)
+    saida = {"formato": formato, "ida": None}
+    if not formato.startswith("mata-mata") or not (liga and temporada and antes_de):
+        return saida
+    cur.execute("""
+        SELECT match_date, home_goals, away_goals FROM match_statistics
+         WHERE home_team_id = %s AND away_team_id = %s
+           AND league_id = %s AND season = %s
+           AND status IN ('FT','AET','PEN')
+           AND match_date < %s::timestamp
+           AND match_date >= %s::timestamp - INTERVAL '21 days'
+         ORDER BY match_date DESC LIMIT 1
+    """, (away_id, home_id, liga, temporada, antes_de, antes_de))
+    r = cur.fetchone()
+    if r and r["home_goals"] is not None and r["away_goals"] is not None:
+        saida["formato"] = "mata-mata ida e volta"
+        # Do ponto de vista do MANDANTE DE HOJE, que foi visitante na ida.
+        saida["ida"] = {
+            "data": r["match_date"].isoformat() if r["match_date"] else None,
+            "gols_mandante": int(r["away_goals"]), "gols_visitante": int(r["home_goals"]),
+        }
+    return saida
+
+
 def _arbitro(cur, nome: str | None, n: int, liga=None, temporada=None) -> dict | None:
     # Pela chave do nome, nao pelo texto exato (2026-10-07): a API escreve o
     # mesmo arbitro como "Raphael Claus" e "Raphael Claus, Brazil", e o Raio-X
@@ -1167,6 +1209,14 @@ def _montar_raio_x(fixture_id: int, home, away, league, n: int, season=None) -> 
             nomes_ligas = {r["league_id"]: r["name"] for r in cur.fetchall()}
 
         arbitro = _arbitro(cur, fix.get("referee"), 15, liga, temporada)
+        try:
+            competicao = _competicao_do_jogo(cur, fix.get("round"), home_id, away_id,
+                                             liga, temporada, antes_de)
+        except Exception:
+            # Enfeite do cabecalho e da leitura: nao derruba o Raio-X.
+            logger.warning("[RAIO-X] formato da competicao indisponivel", exc_info=True)
+            cur.connection.rollback()
+            competicao = {"formato": None, "ida": None}
     finally:
         cur.close(); conn.close()
 
@@ -1189,6 +1239,9 @@ def _montar_raio_x(fixture_id: int, home, away, league, n: int, season=None) -> 
         "h2h": h2h,
         "h2h_fonte": h2h_fonte,
         "ultimos_todas": ultimos_todas,
+        # 'liga' | 'grupos' | 'mata-mata' | 'mata-mata ida e volta' | 'copa',
+        # e o placar da ida quando este e' o jogo de volta.
+        "competicao": competicao,
         # {id: nome} dos times e das competicoes das listas da aba Confronto.
         "nomes_times": {str(k): v for k, v in nomes.items()},
         "nomes_ligas": {str(k): v for k, v in nomes_ligas.items()},
