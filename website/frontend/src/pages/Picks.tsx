@@ -57,7 +57,7 @@ import { fmtUnits, pctProb, capitalizarFrase, plural } from '../utils/format'
 import { getResultStyle, PICK_TYPE_CLS, PICK_TYPE_BORDER, cascaDoPick, caixaDoPick } from '../utils/resultStyle'
 import { useShareStoryImage, useShareAlavancagemImage, useShareBilheteImage } from '../hooks/useShareStoryImage'
 import { useOddAtualizada } from '../hooks/useOddAtualizada'
-import { useBilhete, useRecarregarQuandoMudar } from '../lib/sincronia'
+import { temPendenteRolando, useBilhete, useRecarregarEnquanto, useRecarregarQuandoMudar } from '../lib/sincronia'
 import { useOddAgora } from '../hooks/useOddsAgora'
 import { translateMarket, translateLine, translateTeamName, valorLiquidado } from '../utils/marketTranslate'
 // Copa do Mundo 2026 · fase pelo match_date
@@ -3040,6 +3040,13 @@ export default function Picks() {
       setSemBanca(!r.data.has_banca)
     }).catch(() => {})
     if (canSeeVip) api.get('/banca/alavancagem-serie').then(r => setUserAlavSerie(r.data)).catch(() => {})
+  })
+
+  /* Jogo acabando com a tela aberta (15/10/2026): enquanto o dia de hoje tiver
+     pick sem resultado com o jogo já começado, a lista volta a cada 2 min, por
+     baixo. Só leitura do banco · não toca na cota da API-Football. */
+  useRecarregarEnquanto(selectedOffset === 0 && temPendenteRolando(today), 120_000, () => {
+    api.get('/suggestions/today').then(r => setToday(r.data)).catch(() => {})
   })
 
   useEffect(() => {

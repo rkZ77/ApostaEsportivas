@@ -19,6 +19,7 @@ import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { TeamLogo } from '../components/TeamLogo'
 import { Button, NumberTicker, Spinner } from '../components/ui'
 import { PERIODOS, PERIODO_PADRAO, janelaDoPeriodo, nomeDoMes, type PeriodoKey } from '../lib/periodo'
+import { temPendenteRolando, useRecarregarEnquanto, useRecarregarQuandoMudar } from '../lib/sincronia'
 import SelectMenu from '../components/ui/SelectMenu'
 import MonthlyCloseSection from '../components/MonthlyCloseSection'
 
@@ -264,6 +265,20 @@ export default function Banca() {
   useEffect(() => {
     load(period, produto)
   }, [period, produto, load])
+
+  /* A BANCA SE ATUALIZA SOZINHA (15/10/2026), por baixo, sem esqueleto: depois
+     de uma ação em outra tela, ao voltar pra aba, e a cada 2 min enquanto
+     houver aposta pendente com o jogo já começado · o saldo muda quando ela
+     é liquidada. Mesma busca de `load`, sem o carregando. */
+  const recarregarQuieto = () => {
+    const j = janelaDoPeriodo(period)
+    const params: Record<string, string> = j ? { from_date: j.de, to_date: j.ate } : {}
+    if (produto !== 'all') params.source = produto
+    api.get('/banca', { params }).then(r => setData(r.data)).catch(() => {})
+  }
+  useRecarregarQuandoMudar(recarregarQuieto)
+  useRecarregarEnquanto(temPendenteRolando((data?.entries ?? []).filter((e: any) => !e.result)),
+    120_000, recarregarQuieto)
 
 
   const handleSave = (start: number, unitValue: number) => {
