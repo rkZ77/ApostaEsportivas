@@ -304,7 +304,7 @@ function LinhaProduto({ f, maxAbs }: { f: FechamentoFonte; maxAbs: number }) {
   const largura = maxAbs > 0 ? Math.max(3, (Math.abs(f.profit) / maxAbs) * 100) : 3
   return (
     <div className="flex items-center gap-3 px-4 sm:px-5 py-3">
-      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 w-[82px] text-center ${PICK_TYPE_CLS[f.source] ?? 'bg-surface-2 text-ink-3'}`}>
+      <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded shrink-0 w-[82px] text-center ${PICK_TYPE_CLS[f.source] ?? 'bg-surface-2 text-ink-3'}`}>
         {rotuloProduto(f.source)}
       </span>
 
@@ -322,7 +322,7 @@ function LinhaProduto({ f, maxAbs }: { f: FechamentoFonte; maxAbs: number }) {
         ) : (
           <div className="h-1.5 rounded-full border border-dashed border-line-strong/60" />
         )}
-        <p className="text-[10px] text-ink-4 mt-1 truncate">
+        <p className="text-[11px] text-ink-4 mt-1 truncate">
           {f.total} {f.total === 1 ? 'pick' : 'picks'}, {f.greens}G {f.reds}R
           {unidade ? <>, ROI {f.roi}%</> : <>, {rotuloSemUnidade(f)}</>}
         </p>
@@ -334,7 +334,7 @@ function LinhaProduto({ f, maxAbs }: { f: FechamentoFonte; maxAbs: number }) {
         }`}>
           {unidade ? fmtUnits(f.profit, 1) : '--'}
         </p>
-        <p className={`font-mono text-[10px] tabular-nums ${f.win_rate >= 55 ? 'text-accent-ink/80' : 'text-ink-4'}`}>
+        <p className={`font-mono text-[11px] tabular-nums ${f.win_rate >= 55 ? 'text-accent-ink/80' : 'text-ink-4'}`}>
           {f.win_rate}%
         </p>
       </div>
@@ -437,7 +437,7 @@ function AbaFechamento({ linhas, grafico, stakeLabel }: {
           <span className="text-xs font-bold text-ink-2">
             Produtos em {soOMes(mesAtivo.mes)}
           </span>
-          <span className="text-[10px] text-ink-4">{stakeLabel}</span>
+          <span className="text-[11px] text-ink-4">{stakeLabel}</span>
         </div>
         <div className="divide-y divide-line/50">
           {mesAtivo.fontes.map(f => <LinhaProduto key={f.source} f={f} maxAbs={maxAbs} />)}
@@ -462,11 +462,11 @@ function AbaFechamento({ linhas, grafico, stakeLabel }: {
                   {nomeDoMes(m.mes, true)}
                 </span>
                 {m.campeao ? (
-                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${PICK_TYPE_CLS[m.campeao.source] ?? 'bg-surface-2 text-ink-3'}`}>
+                  <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded shrink-0 ${PICK_TYPE_CLS[m.campeao.source] ?? 'bg-surface-2 text-ink-3'}`}>
                     {rotuloProduto(m.campeao.source)}
                   </span>
                 ) : (
-                  <span className="text-[10px] text-ink-4 shrink-0">sem produto elegível</span>
+                  <span className="text-[11px] text-ink-4 shrink-0">sem produto elegível</span>
                 )}
                 {/* No celular a linha sobrava vazia entre o selo e o numero:
                     o resumo do mes estava escondido em `hidden sm:block`. Ele
@@ -857,7 +857,7 @@ export default function ResultadosPublicos() {
                     {fmtUnits(lucroUnidades, 1)}
                   </div>
                   <div className="stat-label">Lucro</div>
-                  <div className="text-[10px] text-ink-4 mt-0.5">unidades</div>
+                  <div className="text-[11px] text-ink-4 mt-0.5">unidades</div>
                 </div>
                 {[
                   { label: 'Win Rate', value: `${winRatePct}%`,   color: (winRatePct ?? 0) >= 55 ? 'text-accent-ink' : 'text-ink-2' },
@@ -988,7 +988,7 @@ export default function ResultadosPublicos() {
                         {/* Data e hora da partida: ordenados cronologicamente,
                             mais recente no topo. Hora vem de `fixtures`
                             (efêmera), picks antigos mostram só a data. */}
-                        <span className="text-[10px] text-ink-4 shrink-0 w-12 leading-tight">
+                        <span className="text-[11px] text-ink-4 shrink-0 w-12 leading-tight">
                           <span className="block">
                             {new Date(tip.match_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
                           </span>
@@ -996,7 +996,7 @@ export default function ResultadosPublicos() {
                             <span className="block font-mono text-ink-3">{tip.match_datetime.slice(11, 16)}</span>
                           )}
                         </span>
-                        <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shrink-0 ${PICK_TYPE_CLS[tip.source] ?? ''}`}>
+                        <span className={`text-[11px] font-black px-1.5 py-0.5 rounded border shrink-0 ${PICK_TYPE_CLS[tip.source] ?? ''}`}>
                           {SRC_LBL[tip.source] ?? tip.source}
                         </span>
                         {/* No celular os times empilham (2026-09-25): numa linha
@@ -1011,7 +1011,7 @@ export default function ResultadosPublicos() {
                           </div>
                           {tip.away_team_name && (
                             <>
-                              <span className="hidden sm:inline text-[10px] text-ink-4 shrink-0">x</span>
+                              <span className="hidden sm:inline text-[11px] text-ink-4 shrink-0">x</span>
                               <div className="flex items-center gap-1 min-w-0 shrink">
                                 <TeamLogo id={tip.away_team_id} name={tip.away_team_name} size={16} />
                                 <span className="text-xs text-ink-2 truncate">{tip.away_team_name}</span>
@@ -1019,7 +1019,7 @@ export default function ResultadosPublicos() {
                             </>
                           )}
                           {tip.market && (
-                            <span className="sm:hidden text-[10px] text-ink-4 leading-snug line-clamp-2">
+                            <span className="sm:hidden text-[11px] text-ink-4 leading-snug line-clamp-2">
                               {rotuloDoMercado(tip.market, tip.line ?? undefined)}
                             </span>
                           )}
@@ -1109,7 +1109,7 @@ export default function ResultadosPublicos() {
                 <div className="panel p-5 mb-5">
                   <div className="flex items-baseline justify-between gap-3 mb-4">
                     <p className="panel-label">Lucro acumulado por produto</p>
-                    <span className="text-[10px] text-ink-4">
+                    <span className="text-[11px] text-ink-4">
                       {data?.stake_label ?? STAKE_LABEL_PADRAO}
                     </span>
                   </div>
@@ -1127,7 +1127,7 @@ export default function ResultadosPublicos() {
                   <div className="divide-y divide-line/50">
                     {bySource.map(f => (
                       <div key={f.source} className="flex items-center gap-3 px-5 py-3">
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${PICK_TYPE_CLS[f.source] ?? 'bg-surface-2 text-ink-3'}`}>
+                        <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded shrink-0 ${PICK_TYPE_CLS[f.source] ?? 'bg-surface-2 text-ink-3'}`}>
                           {rotuloProduto(f.source)}
                         </span>
                         <span className="text-[11px] text-ink-4 shrink-0 hidden sm:block">{f.total} picks</span>
@@ -1153,7 +1153,7 @@ export default function ResultadosPublicos() {
                             {fmtUnits(Number(f.profit), 1)}
                           </span>
                         ) : (
-                          <span className="font-mono text-[10px] text-ink-4 w-16 text-right shrink-0" title="Só conta em unidades na banca de quem apostou">
+                          <span className="font-mono text-[11px] text-ink-4 w-16 text-right shrink-0" title="Só conta em unidades na banca de quem apostou">
                             n/a
                           </span>
                         )}
@@ -1186,11 +1186,11 @@ export default function ResultadosPublicos() {
                           <div key={`${g.pick_type}-${g.id}`}
                             className="flex items-center gap-2 px-4 py-3 hover:bg-surface-1/50 transition-colors cursor-pointer"
                             onClick={() => setDetailPick({ id: g.id, pick_type: g.pick_type })}>
-                            <span className="text-[10px] text-ink-4 shrink-0 w-12">
+                            <span className="text-[11px] text-ink-4 shrink-0 w-12">
                               {new Date(g.match_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
                             </span>
                             {g.pick_type && source === 'all' && (
-                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shrink-0 ${PICK_TYPE_CLS[g.pick_type] ?? ''}`}>
+                              <span className={`text-[11px] font-black px-1.5 py-0.5 rounded border shrink-0 ${PICK_TYPE_CLS[g.pick_type] ?? ''}`}>
                                 {g.pick_type === 'alavancagem' ? 'Alav.' : g.pick_type === 'multipla' ? 'Múlt.' : g.pick_type.toUpperCase()}
                               </span>
                             )}
@@ -1201,7 +1201,7 @@ export default function ResultadosPublicos() {
                               </div>
                               {g.away_team_name && g.pick_type !== 'multipla' && (
                                 <>
-                                  <span className="text-[10px] text-ink-4 shrink-0">x</span>
+                                  <span className="text-[11px] text-ink-4 shrink-0">x</span>
                                   <div className="flex items-center gap-1 min-w-0 shrink">
                                     <TeamLogo id={g.away_team_id} name={g.away_team_name} size={16} />
                                     <span className="text-xs text-ink-2 truncate">{g.away_team_name}</span>

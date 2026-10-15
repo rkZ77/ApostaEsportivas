@@ -150,7 +150,7 @@ export default function StatsBand({
           vez só. A premissa precisa estar visível em algum lugar · a Banca
           sugere stake variável, e sem ela o visitante compara o lucro daqui
           com o dele e conclui que a conta do site não fecha. */}
-      <p className="text-[10px] text-ink-4 leading-relaxed">
+      <p className="text-[11px] text-ink-4 leading-relaxed">
         Plano fixo de stake: {plano}.
         {leaguesCount > 0 && ` Cobertura: ${leaguesCount} ligas.`}
         {medias && ` Média por pick: ${medias}.`}

@@ -180,7 +180,7 @@ export default function FreePickHero({ revelar = true, onCarregou }: {
               {quando
                 ? <span className="font-mono text-lg font-bold text-ink-1 tabular-nums leading-none">{quando}</span>
                 : <span className="font-display text-sm font-bold text-ink-4">x</span>}
-              <span className="mt-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink-4">
+              <span className="mt-1.5 text-[11px] font-semibold uppercase tracking-wider text-ink-4">
                 {anterior ? 'data' : 'hoje'}
               </span>
             </div>

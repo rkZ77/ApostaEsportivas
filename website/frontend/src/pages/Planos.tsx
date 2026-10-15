@@ -117,17 +117,17 @@ function CardDeAssinatura({
               <p className="font-mono text-lg font-black text-ink-1 tabular-nums mt-0.5">
                 {fmtPlanPrice(pl.price_per_month)}
               </p>
-              <p className="text-[10px] text-ink-4">por mês</p>
+              <p className="text-[11px] text-ink-4">por mês</p>
               {/* No mensal os dois valores são o mesmo número, e repetir
                   "R$ 39,90 no total" logo abaixo de "R$ 39,90 por mês"
                   faz o cartão parecer errado. */}
               {pl.months > 1 && (
-                <p className="text-[10px] text-ink-4 mt-1 pt-1 border-t border-line">
+                <p className="text-[11px] text-ink-4 mt-1 pt-1 border-t border-line">
                   {fmtPlanPrice(pl.price)} no total
                 </p>
               )}
               {pl.save_pct > 0 && (
-                <p className="text-[10px] text-accent-ink font-semibold mt-0.5">
+                <p className="text-[11px] text-accent-ink font-semibold mt-0.5">
                   economiza {pl.save_pct}%
                 </p>
               )}
@@ -455,7 +455,7 @@ export default function Planos() {
                     {isTrial ? rotuloDoPlano('trial') : planoAtual ? `${planoAtual.tier_label} ${planoAtual.label}` : 'Assinante'}
                   </span>
                   {urgent && (
-                    <span className="font-mono text-[10px] bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-sm font-bold animate-pulse">
+                    <span className="font-mono text-[11px] bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-sm font-bold animate-pulse">
                       Expirando
                     </span>
                   )}
@@ -494,7 +494,7 @@ export default function Planos() {
             {/* Barra de progresso */}
             {daysUntilExpiry !== null && (
               <div className="space-y-1.5 mb-5">
-                <div className="flex justify-between text-[10px] text-ink-3">
+                <div className="flex justify-between text-[11px] text-ink-3">
                   <span>Progresso do plano</span>
                   <span>{remaining} / {totalDays} dias</span>
                 </div>
@@ -513,25 +513,25 @@ export default function Planos() {
             <div className="grid grid-cols-2 gap-3 mb-5">
               {startDate && (
                 <div className="bg-surface-2/60 rounded-md p-3">
-                  <p className="text-[10px] text-ink-3 mb-0.5">Início</p>
+                  <p className="text-[11px] text-ink-3 mb-0.5">Início</p>
                   <p className="text-ink-1 text-xs font-semibold">{startDate}</p>
                 </div>
               )}
               {expiryDate && (
                 <div className="bg-surface-2/60 rounded-md p-3">
-                  <p className="text-[10px] text-ink-3 mb-0.5">{aindaVale ? 'Expira' : 'Expirou'}</p>
+                  <p className="text-[11px] text-ink-3 mb-0.5">{aindaVale ? 'Expira' : 'Expirou'}</p>
                   <p className={`text-xs font-semibold ${urgent ? 'text-red-400' : 'text-ink-1'}`}>{expiryDate}</p>
                 </div>
               )}
               {memberSince && (
                 <div className="bg-surface-2/60 rounded-md p-3">
-                  <p className="text-[10px] text-ink-3 mb-0.5">Membro desde</p>
+                  <p className="text-[11px] text-ink-3 mb-0.5">Membro desde</p>
                   <p className="text-ink-1 text-xs font-semibold">{memberSince}</p>
                 </div>
               )}
               {totalSpent > 0 && (
                 <div className="bg-surface-2/60 rounded-md p-3">
-                  <p className="text-[10px] text-ink-3 mb-0.5">Total investido</p>
+                  <p className="text-[11px] text-ink-3 mb-0.5">Total investido</p>
                   <p className="text-green-400 text-xs font-black">R$ {totalSpent.toFixed(2).replace('.', ',')}</p>
                 </div>
               )}
@@ -651,7 +651,7 @@ export default function Planos() {
           <div className="relative bg-surface-1 border border-green-500/50 rounded-lg p-6 overflow-hidden">
             <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-green-500 to-transparent" />
             <div className="absolute top-4 right-4">
-              <span className="bg-accent text-black text-[10px] font-bold px-2.5 py-1 rounded-sm">Grátis</span>
+              <span className="bg-accent text-black text-[11px] font-bold px-2.5 py-1 rounded-sm">Grátis</span>
             </div>
             <div className="flex items-start gap-4">
               <div className="w-12 h-12 bg-green-500/10 border border-green-500/30 rounded-md flex items-center justify-center shrink-0 mt-0.5">
@@ -825,7 +825,7 @@ export default function Planos() {
                       <p className="text-green-400 font-black text-sm">
                         R$ {Number(p.amount).toFixed(2).replace('.', ',')}
                       </p>
-                      <span className="text-[10px] bg-green-500/10 text-green-400 border border-green-500/20 px-1.5 py-0.5 rounded font-bold">
+                      <span className="text-[11px] bg-green-500/10 text-green-400 border border-green-500/20 px-1.5 py-0.5 rounded font-bold">
                         Aprovado
                       </span>
                     </div>
