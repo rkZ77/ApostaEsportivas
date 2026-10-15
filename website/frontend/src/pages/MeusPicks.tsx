@@ -20,6 +20,7 @@ import PipelinesBreakdown from '../components/PipelinesBreakdown'
 import AlavancagemPanel from '../components/AlavancagemPanel'
 import { PAGE_WIDTH } from '../lib/pageWidth'
 import { sinalizarNavegacao } from '../services/progressBus'
+import { temPendenteRolando, useRecarregarEnquanto, useRecarregarQuandoMudar } from '../lib/sincronia'
 
 const SOURCE_LBL: Record<string, string> = {
   vip: 'Premium', free: 'Free', multipla: 'Múlt.', bingo: 'Bingo', alavancagem: 'Alav.',
@@ -120,6 +121,22 @@ export default function MeusPicks() {
   }
 
   useEffect(() => { load() }, [load])
+
+  /* A TELA SE ATUALIZA SOZINHA (15/10/2026). Por baixo, sem esqueleto: depois
+     de uma ação em outra tela, ao voltar pra aba, e a cada 2 min enquanto
+     houver aposta pendente com o jogo já começado. O que já foi carregado no
+     "ver mais" continua na lista. */
+  const recarregarQuieto = () => {
+    api.get('/banca').then(r => setData((prev: any) => {
+      if (!prev) return r.data
+      const novos = new Set((r.data.entries ?? []).map((e: any) => e.id))
+      const extras = (prev.entries ?? []).filter((e: any) => e.result && !novos.has(e.id))
+      return { ...r.data, entries: [...(r.data.entries ?? []), ...extras] }
+    })).catch(() => {})
+  }
+  useRecarregarQuandoMudar(recarregarQuieto)
+  useRecarregarEnquanto(temPendenteRolando((data?.entries ?? []).filter((e: any) => !e.result)),
+    120_000, recarregarQuieto)
 
   // Auto-muda para Resolvidos na 1ª carga se não houver pendentes
   useEffect(() => {

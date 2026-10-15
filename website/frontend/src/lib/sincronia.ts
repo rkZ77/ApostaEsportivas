@@ -25,7 +25,7 @@
  * pra ele é outro passo). É o mínimo pra que nenhuma tela mostre estado velho
  * depois de uma ação feita em outra.
  */
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 
 /* ── 1. Bilhetes ─────────────────────────────────────────────────────────── */
 
@@ -149,4 +149,54 @@ export function useRecarregarQuandoMudar(recarregar: () => void) {
     // render, e o gatilho aqui é só a versão.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [versao])
+}
+
+/**
+ * QUEM FICA OLHANDO A TELA (15/10/2026, pedido do usuário: "não atualiza se eu
+ * não atualizo a página"). A versão acima cobre ação e volta à aba; não cobre
+ * quem deixa /picks aberto esperando o jogo acabar · o card ficava "pendente"
+ * até o F5.
+ *
+ * Chama `recarregar` a cada `ms` enquanto `ativo` (a tela diz quando vale:
+ * pick sem resultado com o jogo já começado) e a aba estiver visível. Aba
+ * escondida não gasta requisição; a volta a ela já recarrega pela versão.
+ */
+export function useRecarregarEnquanto(ativo: boolean, ms: number, recarregar: () => void) {
+  const ref = useRef(recarregar)
+  ref.current = recarregar
+  useEffect(() => {
+    if (!ativo) return
+    const t = window.setInterval(() => { if (!document.hidden) ref.current() }, ms)
+    return () => window.clearInterval(t)
+  }, [ativo, ms])
+}
+
+/**
+ * Há, em `dados`, algum pick SEM resultado cujo jogo já começou? Varre a
+ * estrutura inteira (listas e objetos), porque cada produto guarda o pick num
+ * formato · procura `result` vazio ao lado de um horário já passado
+ * (`match_datetime`, ou o de uma das pernas em `games`/`legs`).
+ */
+export function temPendenteRolando(dados: unknown, agora = Date.now()): boolean {
+  /* O banco grava o horário de Brasília SEM fuso ("2026-10-15 21:30:00" · os
+     cards cortam o texto e mostram 21:30). Sem fuso no texto, ele é lido como
+     -03:00, e não no fuso do aparelho de quem abriu. */
+  const instante = (s: string) =>
+    /([zZ]|[+-]\d{2}:?\d{2})$/.test(s) ? Date.parse(s) : Date.parse(`${s.replace(' ', 'T').slice(0, 19)}-03:00`)
+  const comecou = (v: unknown) => typeof v === 'string' && !Number.isNaN(instante(v)) && instante(v) <= agora
+  const visitar = (x: unknown, profundidade: number): boolean => {
+    if (!x || typeof x !== 'object' || profundidade > 6) return false
+    if (Array.isArray(x)) return x.some(i => visitar(i, profundidade + 1))
+    const o = x as Record<string, unknown>
+    if ('result' in o && (o.result == null || o.result === '')) {
+      if (comecou(o.match_datetime) || comecou(o.kickoff)) return true
+      for (const k of ['games', 'legs', 'pernas']) {
+        const p = o[k]
+        if (Array.isArray(p) && p.some(g => g && typeof g === 'object'
+            && (comecou((g as any).match_datetime) || comecou((g as any).kickoff)))) return true
+      }
+    }
+    return Object.values(o).some(v => visitar(v, profundidade + 1))
+  }
+  return visitar(dados, 0)
 }
