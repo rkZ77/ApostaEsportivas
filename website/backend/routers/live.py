@@ -2990,7 +2990,8 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
             cur.execute("""
                 SELECT id, fixture_id, market, market_type, line, odd, result,
                        home_team_name AS home_team, away_team_name AS away_team,
-                       home_team_id, away_team_id, match_date, league_id
+                       home_team_id, away_team_id, match_date, league_id,
+                       minute_at_creation, observed_at_creation
                 FROM picks_live WHERE id = ANY(%s)
             """, (live_ids,))
             live_map = {r["id"]: r for r in cur.fetchall()}
@@ -3236,6 +3237,12 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                 "is_live":        leg["is_live"],
                 "league_id":      p.get("league_id"),
                 "result":         final_result,
+                # De quando o pick nasceu (15/10/2026): a odd dele vale do
+                # minuto da criacao em diante, a partir do valor daquele
+                # momento · a chance ao vivo da tela calibra por aqui.
+                "minuto_criacao": p.get("minute_at_creation"),
+                "valor_criacao":  (float(p["observed_at_creation"])
+                                   if p.get("observed_at_creation") is not None else None),
                 **{k: leg[k] for k in (
                     "fixture_id", "home_team", "away_team",
                     "home_team_id", "away_team_id",
