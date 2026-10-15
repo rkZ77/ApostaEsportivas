@@ -114,8 +114,13 @@ export default function RaioXDoJogo({ jogo, trancado = false }: { jogo: JogoBase
      lado, que já pergunta a cada 30s; no celular, a varredura dos picks.
      Sem nada no cache, o placar fica com o horário, como antes. */
   const [aoVivoAgora, setAoVivoAgora] = useState<PlacarAoVivo | null>(null)
+  /* ACABOU COM A TELA ABERTA (15/10/2026): o placar final só vinha do Raio-X
+     carregado na abertura, e quando o jogo terminava o topo voltava a mostrar
+     o horário de início. O fim que o placar ao vivo informa fica guardado. */
+  const [encerradoAgora, setEncerradoAgora] = useState<[number, number] | null>(null)
   useEffect(() => {
     setAoVivoAgora(null)
+    setEncerradoAgora(null)
     let vivo = true
     let timer: ReturnType<typeof setTimeout> | undefined
     const id = String(jogo.fixture_id)
@@ -125,6 +130,10 @@ export default function RaioXDoJogo({ jogo, trancado = false }: { jogo: JogoBase
         const d = r.data?.[id] as PlacarAoVivo | undefined
         const rolando = !!d && estaAoVivo(d.status)
         setAoVivoAgora(rolando ? d! : null)
+        if (d && ['FT', 'AET', 'PEN'].includes(d.status) && d.home_goals != null && d.away_goals != null) {
+          setEncerradoAgora([d.home_goals, d.away_goals])
+          return   // acabou: nada mais a acompanhar
+        }
         timer = setTimeout(ler, rolando ? 30_000 : 120_000)
       })
       .catch(() => { if (vivo) timer = setTimeout(ler, 120_000) })
@@ -141,7 +150,7 @@ export default function RaioXDoJogo({ jogo, trancado = false }: { jogo: JogoBase
 
   return (
     <div className="min-w-0">
-      <Placar jogo={jogo} dados={dados} aoVivo={aoVivoAgora} />
+      <Placar jogo={jogo} dados={dados} aoVivo={aoVivoAgora} encerrado={encerradoAgora} />
 
       {/* Abas fixas ao rolar · no celular a lista de jogadores é longa e a
           troca de aba não pode exigir voltar ao topo. */}
@@ -285,13 +294,15 @@ interface PlacarAoVivo {
   home_possession: number; away_possession: number
 }
 
-function Placar({ jogo, dados, aoVivo }: { jogo: JogoBase; dados: RaioX | null; aoVivo: PlacarAoVivo | null }) {
+function Placar({ jogo, dados, aoVivo, encerrado }: {
+  jogo: JogoBase; dados: RaioX | null; aoVivo: PlacarAoVivo | null; encerrado?: [number, number] | null
+}) {
   const f = dados?.fixture
   const ligaId = f?.league_id ?? jogo.league_id
   const quando = f?.match_datetime ?? jogo.match_datetime
   const hora = quando ? new Date(quando).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '--:--'
   const dia = quando ? new Date(quando).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }) : ''
-  const placarFinal = f?.placar_final ?? (jogo.status && ['FT', 'AET', 'PEN'].includes(jogo.status)
+  const placarFinal = encerrado ?? f?.placar_final ?? (jogo.status && ['FT', 'AET', 'PEN'].includes(jogo.status)
     && jogo.home_goals != null && jogo.away_goals != null ? [jogo.home_goals, jogo.away_goals] : null)
   const formaHome = jogo.forma_home ?? dados?.times.home.jogos.slice(0, 5).map(resultadoDoJogo).filter(Boolean) as string[] ?? []
   const formaAway = jogo.forma_away ?? dados?.times.away.jogos.slice(0, 5).map(resultadoDoJogo).filter(Boolean) as string[] ?? []
