@@ -152,6 +152,12 @@ interface Fixture {
 }
 
 interface LiveStats {
+  /* Estado do jogo AGORA (15/10/2026): a lista mostrava status, minuto e
+     placar da hora em que a página abriu, e só lia escanteio/chute daqui. */
+  status?: string
+  elapsed?: number | null
+  home_goals?: number | null
+  away_goals?: number | null
   home_corners: number
   away_corners: number
   home_shots_on: number
@@ -302,6 +308,37 @@ export default function Fixtures() {
 
   useEffect(() => { fetchFixtures(date) }, [])
 
+  /* A LISTA SE ATUALIZA SOZINHA (15/10/2026, pedido do usuário: "não atualiza
+     se eu não atualizo a página"). A lista inteira de novo a cada 5 min e ao
+     voltar pra aba, SEM o esqueleto de carregando: o servidor guarda o dia
+     por 10 min pra todo mundo (fixtures.CACHE_TTL), então isso não custa cota.
+     O que muda rápido (minuto, placar) vem do placar ao vivo, logo abaixo. */
+  const dateRef = useRef(date)
+  dateRef.current = date
+  useEffect(() => {
+    const recarregar = () => {
+      if (document.hidden) return
+      const d = dateRef.current
+      api.get('/fixtures/today', { params: { date: d } })
+        .then(r => { if (dateRef.current === d) setFixtures(r.data) })
+        .catch(() => {})
+    }
+    const timer = setInterval(recarregar, 5 * 60_000)
+    document.addEventListener('visibilitychange', recarregar)
+    return () => { clearInterval(timer); document.removeEventListener('visibilitychange', recarregar) }
+  }, [])
+
+  /* O JOGO COMO ESTÁ AGORA: o que a lista trouxe, com status, minuto e placar
+     do placar ao vivo por cima. Tudo na tela lê daqui, e não de `fixtures`. */
+  const jogos = useMemo(() => fixtures.map(f => {
+    const ls = liveStats[f.fixture_id]
+    if (!ls?.status) return f
+    return { ...f, status: ls.status, elapsed: ls.elapsed ?? f.elapsed,
+             home_goals: ls.home_goals ?? f.home_goals, away_goals: ls.away_goals ?? f.away_goals }
+  }), [fixtures, liveStats])
+  const jogosRef = useRef(jogos)
+  jogosRef.current = jogos
+
   /*
    * Atualiza estatísticas ao vivo a cada 30s para jogos em andamento.
    *
@@ -316,11 +353,24 @@ export default function Fixtures() {
    * olhando não vale requisição.
    */
   useEffect(() => {
-    const ids = fixtures.filter(f => isLive(f.status)).map(f => f.fixture_id)
-    if (ids.length === 0) return
+    /* Quem acompanhar, recalculado A CADA rodada (15/10/2026): os ao vivo, e
+       os que a lista ainda dá como "não começou" mas cujo horário já passou
+       (até 3h depois) · é assim que o jogo que começa com a página aberta
+       vira ao vivo sem F5. Antes a lista era fixada na abertura da página. */
+    const acompanhar = () => {
+      const agora = Date.now()
+      return jogosRef.current.filter(f => {
+        if (isLive(f.status)) return true
+        if (isFinished(f.status) || !f.match_datetime) return false
+        const passou = agora - new Date(f.match_datetime).getTime()
+        return passou >= 0 && passou < 3 * 3600_000
+      }).map(f => f.fixture_id)
+    }
 
     const fetchAll = () => {
       if (document.hidden) return
+      const ids = acompanhar()
+      if (ids.length === 0) return
       api.get('/live/live-stats', { params: { fixture_ids: ids.join(',') } })
         .then(r => setLiveStats(prev => {
           const next = { ...prev }
@@ -346,7 +396,7 @@ export default function Fixtures() {
      "sao paulo" tem que achar o São Paulo. */
   const semAcento = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
   const termo = semAcento(busca.trim())
-  const visiveis = fixtures.filter(f =>
+  const visiveis = jogos.filter(f =>
     (filtro !== 'pick' || f.has_pick) &&
     (filtro !== 'aovivo' || isLive(f.status)) &&
     (!termo || semAcento(`${f.home_team} ${f.away_team} ${f.league_name}`).includes(termo)))
@@ -376,7 +426,7 @@ export default function Fixtures() {
   }
 
   const dateLabel  = formatDateLabel(date)
-  const liveCount  = fixtures.filter(f => isLive(f.status)).length
+  const liveCount  = jogos.filter(f => isLive(f.status)).length
   const pickCount  = fixtures.filter(f => f.has_pick).length
 
   return (
