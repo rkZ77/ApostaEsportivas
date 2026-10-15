@@ -120,7 +120,7 @@ function findLambda(targetProb: number, minGoals: number): number {
   }
   return (lo + hi) / 2
 }
-function calcLiveProb(pick: any): number | null {
+export function calcLiveProb(pick: any): number | null {
   const odd = Number(pick.odd)
   if (!odd || odd <= 1) return null
   const baseProb  = 1 / odd
@@ -137,19 +137,33 @@ function calcLiveProb(pick: any): number | null {
 
   // Over/Under · Poisson sobre gols/eventos restantes
   if ((isOver || isUnder) && pick.current_val != null && pick.line_val != null && elapsed != null && remainRatio != null) {
+    /* DE ONDE A ODD VALE (15/10/2026). Pick de pré-jogo: a odd é do jogo
+       inteiro, a partir de 0. Pick AO VIVO: ela foi tirada no minuto da criação
+       e vale dali até o fim, a partir do valor daquele momento. Tratar a odd de
+       um pick criado aos 37' como se fosse do jogo todo subestimava o "Mais de"
+       e inflava o "Menos de". */
+    const m0 = pick.minuto_criacao != null && pick.valor_criacao != null
+      ? Math.min(Number(pick.minuto_criacao), totalMins - 1) : null
+    const inicio = m0 ?? 0
+    const valorInicio = m0 != null ? Number(pick.valor_criacao) : 0
+    // Fração do trecho calibrado (da criação ao fim) que ainda falta.
+    const fracao = Math.max(0, Math.min(1, (remaining ?? 0) / (totalMins - inicio)))
     if (isOver) {
       const needed = Math.ceil(pick.line_val) - Math.floor(Number(pick.current_val))
       if (needed <= 0) return 99
       if (remaining === 0) return 1
-      const lambdaFull = findLambda(baseProb, Math.ceil(pick.line_val))
-      return Math.round(poissonGe(lambdaFull * remainRatio, needed) * 100)
+      const precisavaNoInicio = Math.max(1, Math.ceil(pick.line_val) - Math.floor(valorInicio))
+      const lambdaTrecho = findLambda(baseProb, precisavaNoInicio)
+      return Math.round(poissonGe(lambdaTrecho * fracao, needed) * 100)
     }
     if (isUnder) {
       const maxMore = Math.floor(pick.line_val) - Math.ceil(Number(pick.current_val))
       if (maxMore < 0) return 1
       if (remaining === 0) return 99
-      const lambdaFull = findLambda(1 - baseProb, Math.ceil(pick.line_val))
-      return Math.round(poissonLe(lambdaFull * remainRatio, maxMore) * 100)
+      const cabiaNoInicio = Math.floor(pick.line_val) - Math.ceil(valorInicio)
+      if (cabiaNoInicio < 0) return 1
+      const lambdaTrecho = findLambda(1 - baseProb, cabiaNoInicio + 1)
+      return Math.round(poissonLe(lambdaTrecho * fracao, maxMore) * 100)
     }
   }
 

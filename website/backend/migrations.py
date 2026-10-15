@@ -1459,6 +1459,71 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         # de cima desiste (lock_timeout, deadlock).
         _migrar_arquivo_de_fixtures(logger)
         _migrar_pernas_final(logger)
+        _preencher_lucro_vazio(logger)
+
+
+#: Tabela -> coluna da odd. Alavancagem fica de fora DE PROPOSITO: o lucro
+#: dela e' por caminho (alavancagem_caminho.py), nao por pick.
+_ODD_DA_TABELA = {
+    "picks_vip": "odd", "picks_free": "odd", "picks_faltas": "odd",
+    "picks_goleiros": "odd", "picks_player_stats": "odd", "picks_boost": "odd",
+    "picks_live": "odd", "picks_multiplas": "total_odd", "picks_bingo": "total_odd",
+}
+
+
+def _preencher_lucro_vazio(logger: logging.Logger) -> None:
+    """Pick com resultado e SEM lucro (15/10/2026, validacao da matematica).
+
+    A conferencia pick a pick de /public/results achou tres picks liquidados
+    com `profit` NULL (um Free de 21/07 e duas multiplas de agosto): no placar
+    eles contavam como zero, e o publico deixava de ver +2,76u. Todo caminho
+    de liquidacao de hoje grava o lucro junto; o buraco e' historico.
+
+    A conta e' a de sempre, em unidade (o peso do plano entra na consulta):
+    GREEN odd-1, HALF-WIN (odd-1)/2, RED -1, HALF-LOSS -0.5, PUSH/VOID 0.
+    So' toca linha com lucro vazio · rodar de novo nao muda nada.
+    """
+    from database import get_connection
+    try:
+        conn = get_connection()
+    except Exception as e:
+        logger.error("[MIGRATION] lucro vazio: banco indisponivel: %s", e)
+        return
+    cur = conn.cursor()
+    try:
+        cur.execute("SET lock_timeout = '5s'")   # ver run_startup_migrations
+        total = 0
+        for tabela, odd in _ODD_DA_TABELA.items():
+            cur.execute("SELECT to_regclass(%s) IS NOT NULL AS existe", (f"public.{tabela}",))
+            linha = cur.fetchone()
+            if not (linha and (linha["existe"] if isinstance(linha, dict) else linha[0])):
+                continue
+            cur.execute(f"""
+                UPDATE {tabela}
+                   SET profit = CASE result
+                       WHEN 'GREEN'     THEN ROUND(({odd} - 1)::numeric, 4)
+                       WHEN 'HALF-WIN'  THEN ROUND((({odd} - 1) / 2)::numeric, 4)
+                       WHEN 'RED'       THEN -1
+                       WHEN 'HALF-LOSS' THEN -0.5
+                       WHEN 'PUSH'      THEN 0
+                       WHEN 'VOID'      THEN 0
+                   END
+                 WHERE result IN ('GREEN','HALF-WIN','RED','HALF-LOSS','PUSH','VOID')
+                   AND profit IS NULL
+                   AND ({odd} IS NOT NULL OR result NOT IN ('GREEN','HALF-WIN'))
+            """)
+            if cur.rowcount:
+                logger.info("[MIGRATION] lucro vazio: %s pick(s) em %s", cur.rowcount, tabela)
+                total += cur.rowcount
+        conn.commit()
+        if total:
+            logger.info("[MIGRATION] lucro vazio preenchido em %s pick(s)", total)
+    except Exception as e:
+        logger.error("[MIGRATION] lucro vazio: %s", e)
+        conn.rollback()
+    finally:
+        cur.close()
+        conn.close()
 
 
 def _migrar_pernas_final(logger: logging.Logger) -> None:

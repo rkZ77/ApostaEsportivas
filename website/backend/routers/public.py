@@ -141,12 +141,15 @@ def _sub_vip(date_cond: str) -> str:
                pv.result, pv.profit * {_P_VIP} AS profit,
                {_P_VIP}::numeric AS stake,
                'vip' AS source,
-               ms.league_id AS league_id,
-               COALESCE(l.name, 'Liga ' || ms.league_id) AS league_name
+               -- A agenda como segunda fonte (15/10/2026): pick liquidado antes
+               -- da coleta de estatistica da partida saia SEM liga e sumia do
+               -- "por liga" (98 picks Premium). Mesma regra do Free.
+               COALESCE(ms.league_id, fx.league_id) AS league_id,
+               COALESCE(l.name, 'Liga ' || COALESCE(ms.league_id, fx.league_id)) AS league_name
         FROM picks_vip pv
         LEFT JOIN match_statistics ms ON ms.fixture_id = pv.fixture_id
         LEFT JOIN fixtures fx ON fx.fixture_id = pv.fixture_id
-        LEFT JOIN leagues l ON l.league_id = ms.league_id
+        LEFT JOIN leagues l ON l.league_id = COALESCE(ms.league_id, fx.league_id)
         WHERE pv.result IS NOT NULL {_qualificar(date_cond, "pv")}
     """
 

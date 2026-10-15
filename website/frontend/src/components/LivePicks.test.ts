@@ -1,5 +1,32 @@
 import { describe, expect, it } from 'vitest'
-import { resumoDoDia } from './LivePicks'
+import { calcLiveProb, resumoDoDia } from './LivePicks'
+
+describe('calcLiveProb · de onde a odd vale (15/10/2026)', () => {
+  const base = { odd: 2, line: 'Over 2.5', market: 'Gols', line_val: 2.5, status: '2H' }
+
+  it('pick AO VIVO: no minuto em que nasceu, a chance é a da odd', () => {
+    const p = calcLiveProb({ ...base, elapsed: 60, current_val: 1, minuto_criacao: 60, valor_criacao: 1 })
+    expect(p).toBeGreaterThanOrEqual(49)
+    expect(p).toBeLessThanOrEqual(51)
+  })
+
+  it('a conta antiga (odd tratada como do jogo todo) dava bem menos', () => {
+    const antiga = calcLiveProb({ ...base, elapsed: 60, current_val: 1 })
+    expect(antiga!).toBeLessThan(40)
+  })
+
+  it('pick de pré-jogo no apito continua a chance da odd', () => {
+    const p = calcLiveProb({ ...base, status: '1H', elapsed: 0.0001, current_val: 0 })
+    expect(p).toBeGreaterThanOrEqual(49)
+    expect(p).toBeLessThanOrEqual(51)
+  })
+
+  it('Menos de: nasceu aos 60 com 1 gol, odd 2 → ~50% na hora', () => {
+    const p = calcLiveProb({ ...base, line: 'Under 2.5', elapsed: 60, current_val: 1, minuto_criacao: 60, valor_criacao: 1 })
+    expect(p).toBeGreaterThanOrEqual(49)
+    expect(p).toBeLessThanOrEqual(51)
+  })
+})
 
 describe('resumoDoDia', () => {
   it('soma o que está em jogo, o retorno possível e o resultado fechado', () => {
