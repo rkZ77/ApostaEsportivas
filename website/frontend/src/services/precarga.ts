@@ -43,6 +43,9 @@ export function chaveDaPrecarga(url?: string, params?: Record<string, unknown>):
   const caminho = url.replace(/^\/api/, '')
 
   if (caminho === '/public/free-pick-today' && !params) return '/api/public/free-pick-today'
+  // /login e /planos (15/10/2026) · ver o <script> do index.html.
+  if (caminho === '/auth/google/config' && !params) return '/api/auth/google/config'
+  if (caminho === '/notifications/vapid-public-key' && !params) return '/api/notifications/vapid-public-key'
   if (caminho === '/payments/plans' && !params) return '/api/payments/plans'
   if (caminho === '/public/next-fixtures' && params?.limit === 30 && Object.keys(params).length === 1) {
     return '/api/public/next-fixtures?limit=30'

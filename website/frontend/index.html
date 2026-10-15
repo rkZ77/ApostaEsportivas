@@ -40,9 +40,31 @@
       ruim (401, 500, rede) e' descartada e a chamada normal acontece como se
       nada tivesse sido pre-carregado · ver src/services/precarga.ts.
 
-      So' na Home. Em outra rota isto seriam quatro requisicoes jogadas fora.
+      So' na Home (e em /planos e /login, logo abaixo). Em outra rota isto
+      seriam requisicoes jogadas fora.
+
+      /PLANOS E /LOGIN (15/10/2026). Medido no celular lento: as chamadas da
+      pagina so' saiam aos 4,0 s (/planos) e 2,3 s (/login), depois do
+      JavaScript, e o conteudo aparecia logo em seguida. Saindo daqui, elas
+      correm junto com o download do bundle.
     -->
     <script>
+      ;(function () {
+        var porRota = {
+          '/planos': ['/api/payments/plans', '/api/public/results?recent_limit=1&slim=1',
+                      '/api/notifications/vapid-public-key'],
+          '/login': ['/api/public/results?recent_limit=1&slim=1', '/api/auth/google/config',
+                     '/api/notifications/vapid-public-key'],
+        }
+        var alvos = porRota[location.pathname]
+        if (!alvos) return
+        window.__pickia_precarga = {}
+        alvos.forEach(function (u) {
+          window.__pickia_precarga[u] = fetch(u, { credentials: 'include' })
+            .then(function (r) { return r.ok ? r.json() : undefined })
+            .catch(function () { return undefined })
+        })
+      })()
       if (location.pathname === '/') {
         window.__pickia_precarga = {}
         var alvos = [
