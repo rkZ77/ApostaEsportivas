@@ -90,7 +90,7 @@ export default function ProvaSocial() {
                 <p className="font-mono text-base font-bold text-accent-ink tabular-nums">
                   +{l.yield_roi.toFixed(1)}%
                 </p>
-                <p className="text-[10px] text-ink-4 leading-none">retorno</p>
+                <p className="text-[11px] text-ink-4 leading-none">retorno</p>
               </div>
             </motion.li>
           ))}

@@ -150,7 +150,7 @@ function ClvSection({ data, loading }: { data: ClvData | null; loading: boolean 
             <PickTypeBadge type={r.pick_type} short />
             <span className="text-xs text-ink-1 truncate">{r.home_team} x {r.away_team}</span>
           </div>
-          <p className="text-[10px] text-ink-4 truncate mt-0.5">{rotuloDoMercado(r.market, r.line)}</p>
+          <p className="text-[11px] text-ink-4 truncate mt-0.5">{rotuloDoMercado(r.market, r.line)}</p>
         </div>
       ),
     },

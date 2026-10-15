@@ -155,7 +155,7 @@ export default function RecentResults({ summary }: { summary: PublicSummary | nu
                     {/* Data e hora da partida: ordenados cronologicamente, mais
                         recente no topo. Hora vem de `fixtures` (efêmera), então
                         picks antigos mostram só a data. */}
-                    <span className="font-mono text-[10px] text-ink-4 tabular-nums shrink-0 w-10 leading-tight">
+                    <span className="font-mono text-[11px] text-ink-4 tabular-nums shrink-0 w-10 leading-tight">
                       <span className="block">
                         {new Date(tip.match_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
                       </span>
@@ -172,13 +172,13 @@ export default function RecentResults({ summary }: { summary: PublicSummary | nu
                         <span className="text-xs text-ink-1 font-medium truncate">{tip.home_team_name}</span>
                         {tip.away_team_name && tip.away_team_name !== '--' && (
                           <>
-                            <span className="text-ink-4 text-[10px] shrink-0">x</span>
+                            <span className="text-ink-4 text-[11px] shrink-0">x</span>
                             <TeamLogo id={tip.away_team_id} name={tip.away_team_name} size={16} />
                             <span className="text-xs text-ink-1 font-medium truncate">{tip.away_team_name}</span>
                           </>
                         )}
                       </div>
-                      <p className="text-[10px] text-ink-3 truncate mt-0.5">
+                      <p className="text-[11px] text-ink-3 truncate mt-0.5">
                         {rotuloDoMercado(tip.market, tip.line)}
                       </p>
                     </div>

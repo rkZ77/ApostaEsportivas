@@ -126,7 +126,7 @@ function GameCard({ game, hoje }: { game: UpcomingFixture; hoje: string }) {
     >
       <div className="flex items-center justify-between gap-2 mb-3">
         <span
-          className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+          className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${
             dia.ehHoje ? 'bg-accent/15 text-accent-ink' : 'bg-surface-2 text-ink-3'
           }`}
         >
@@ -151,7 +151,7 @@ function GameCard({ game, hoje }: { game: UpcomingFixture; hoje: string }) {
 
       <div className="flex items-center gap-1.5 mt-3 pt-2.5 border-t border-line/60 min-w-0">
         <LeagueLogo id={game.league_id} name={game.league_name} />
-        <span className="text-[10px] text-ink-4 truncate">{game.league_name}</span>
+        <span className="text-[11px] text-ink-4 truncate">{game.league_name}</span>
       </div>
 
       {/*
@@ -169,14 +169,14 @@ function GameCard({ game, hoje }: { game: UpcomingFixture; hoje: string }) {
         {game.has_pick ? (
           <>
             <Check className="w-3 h-3 text-accent-ink shrink-0" />
-            <span className="text-[10px] font-semibold text-accent-ink">
+            <span className="text-[11px] font-semibold text-accent-ink">
               {game.pick_type === 'free' ? 'Pick grátis publicado' : 'Pick publicado'}
             </span>
           </>
         ) : (
           <>
             <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-ink-4 shrink-0" />
-            <span className="text-[10px] text-ink-4">Análise na fila</span>
+            <span className="text-[11px] text-ink-4">Análise na fila</span>
           </>
         )}
       </div>
@@ -285,7 +285,7 @@ export default function NextGames({ revelar = true, onCarregou }: {
           {naFila && <LiveDot />}
           {naFila ? 'Na fila da IA' : 'Próximos jogos'}
         </h2>
-        <span className="text-[10px] text-ink-4 shrink-0">
+        <span className="text-[11px] text-ink-4 shrink-0">
           {porVir.length === 1 ? 'próximo jogo' : `próximos ${porVir.length} jogos`}
         </span>
       </div>
