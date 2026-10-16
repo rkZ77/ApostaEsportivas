@@ -37,13 +37,17 @@ class TestATabelaNasce:
         assert "CREATE TABLE IF NOT EXISTS league_analysis" in sql
         assert "UNIQUE (league_id, season)" in sql
 
-    def test_o_pipeline_cria_antes_de_truncar(self):
-        """O TRUNCATE era a PRIMEIRA instrucao do script."""
+    def test_o_script_cria_a_tabela_e_nao_gera_nem_limpa(self):
+        """15/10/2026: quem escreve o perfil e' a Leitura da liga do site
+        (website/backend/liga_ia.py). O script nao chama mais a IA, e o
+        TRUNCATE apagaria o que o site gravou."""
         from pathlib import Path
         fonte = (Path(__file__).resolve().parents[1] / "src" / "atualizar_ligas.py"
                  ).read_text(encoding="utf-8")
-        assert "criar_tabela(cur)" in fonte
-        assert fonte.index("criar_tabela(cur)") < fonte.index("TRUNCATE TABLE league_analysis")
+        codigo = fonte.split('"""', 2)[2]          # sem a docstring
+        assert "criar_tabela(cur)" in codigo
+        assert "TRUNCATE" not in codigo
+        assert "LeagueAnalysisService" not in codigo
 
     def test_o_reset_nao_derruba_mais_as_outras_tabelas(self):
         """TRUNCATE de tabela inexistente derruba a instrucao INTEIRA: com

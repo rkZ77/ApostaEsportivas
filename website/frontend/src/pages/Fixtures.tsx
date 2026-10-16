@@ -12,6 +12,7 @@ import RaioXDoJogo, { FormaPontos } from '../components/jogos/RaioXDoJogo'
 import NumeroVivo from '../components/ui/NumeroVivo'
 import BandejaDoBilhete from '../components/jogos/BandejaDoBilhete'
 import { EstatisticasContent } from './Estatisticas'
+import { linkDoRaioX } from '../lib/linkDoRaioX'
 import { useAuth } from '../context/AuthContext'
 import { Badge, ErrorState, LiveDot, SearchInput, Spinner } from '../components/ui'
 import { sinalizarNavegacao } from '../services/progressBus'
@@ -236,7 +237,12 @@ export default function Fixtures() {
 
   // Data nova, destaque novo: manter o jogo de ontem selecionado enquanto a
   // lista mostra hoje é a pior combinação possível.
-  useEffect(() => { setStatsFixture(null) }, [date])
+  // Jogo tocado na aba Ligas espera aqui a troca de data (ver abrirDaLiga).
+  const pedidoDaLiga = useRef<Fixture | null>(null)
+  useEffect(() => {
+    setStatsFixture(pedidoDaLiga.current)
+    pedidoDaLiga.current = null
+  }, [date])
   const [collapsed, setCollapsed]      = useState<Set<string>>(new Set())
   const [liveStats, setLiveStats]      = useState<Record<number, LiveStats>>({})
   const [erro, setErro]                = useState(false)
@@ -256,18 +262,20 @@ export default function Fixtures() {
    */
   function abrirJogo(f: Fixture) {
     if (isDesktop) { setStatsFixture(f); return }
-    const q = new URLSearchParams()
-    if (f.home_team_id) q.set('home', String(f.home_team_id))
-    if (f.away_team_id) q.set('away', String(f.away_team_id))
-    q.set('league', String(f.league_id))
-    q.set('liga', f.league_name)
-    q.set('casa', f.home_team); q.set('fora', f.away_team)
-    if (f.match_datetime) q.set('quando', f.match_datetime)
-    if (f.status) q.set('st', f.status)
-    if (f.home_goals != null && f.away_goals != null) { q.set('gc', String(f.home_goals)); q.set('gf', String(f.away_goals)) }
     const lista: EstadoDaLista = { date, filtro, busca, rolagem: window.scrollY }
     navigate(location.pathname + location.search, { replace: true, state: { lista } })
-    navigate(`/jogos/${f.fixture_id}?${q}`, { state: { daLista: true } })
+    navigate(linkDoRaioX(f), { state: { daLista: true } })
+  }
+
+  /* JOGO TOCADO NA ABA LIGAS ("Hoje na liga", 15/10/2026). No computador volta
+     pra aba Jogos, em hoje, com o Raio-X dele no painel; no celular abre a
+     página do Raio-X como qualquer jogo. Trocar a data zera o painel (efeito
+     de `date` acima), então o jogo pedido espera em `pedidoDaLiga`. */
+  function abrirDaLiga(f: Fixture) {
+    if (!isDesktop) { abrirJogo(f); return }
+    setPageTab('jogos')
+    if (date !== TODAY) { pedidoDaLiga.current = f; handleDateChange(TODAY) }
+    else setStatsFixture(f)
   }
 
   /* De volta do Raio-X: a rolagem só depois que a lista carregou, senão a
@@ -507,7 +515,7 @@ export default function Fixtures() {
       <AnimatePresence mode="wait">
       {pageTab === 'estatistica' && (
         <motion.div key="estatistica" variants={tabFade} initial="hidden" animate="visible" exit="exit">
-          <EstatisticasContent />
+          <EstatisticasContent onAbrirJogo={f => abrirDaLiga(f as Fixture)} />
         </motion.div>
       )}
 

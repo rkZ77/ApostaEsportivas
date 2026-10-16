@@ -3272,6 +3272,59 @@ def get_liga_arbitros(
         conn.close()
 
 
+@router.get("/liga/resumo-ia")
+def get_liga_resumo_ia(
+    league_id: int = Query(..., ge=1),
+    current_user: dict = Depends(require_vip),
+):
+    """Leitura da IA da liga · ver liga_ia.py. Gerada na primeira abertura do
+    dia (alguns segundos) e lida do banco depois. Nunca derruba a aba."""
+    import liga_ia
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        return liga_ia.leitura_da_liga(cur, league_id)
+    except Exception:
+        conn.rollback()
+        logger.warning("[LIGA IA] liga %s", league_id, exc_info=True)
+        return {"status": "falhou"}
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.get("/liga/classificacao")
+def get_liga_classificacao(
+    league_id: int = Query(..., ge=1),
+    current_user: dict = Depends(require_vip),
+):
+    """A tabela da liga na aba Ligas (15/10/2026). Mesma leitura de
+    `league_standings` da classificacao do Raio-X (routers/fixtures.py), sem
+    precisar de um jogo · muda uma vez por rodada, entao 10 min de cache."""
+    import cache_publico
+
+    def montar():
+        conn = get_connection()
+        cur = conn.cursor()
+        try:
+            linhas = _safe_query(cur, """
+                SELECT group_name, team_id, team_name, rank, points, goals_diff, form,
+                       description, played, win, draw, lose, goals_for, goals_against,
+                       home_played, home_win, home_draw, home_lose, home_goals_for, home_goals_against,
+                       away_played, away_win, away_draw, away_lose, away_goals_for, away_goals_against
+                  FROM league_standings
+                 WHERE league_id = %s
+                   AND season = (SELECT MAX(season) FROM league_standings WHERE league_id = %s)
+                 ORDER BY group_name NULLS FIRST, rank
+            """, (league_id, league_id))
+            return {"league_id": league_id, "linhas": [dict(r) for r in linhas]}
+        finally:
+            cur.close()
+            conn.close()
+
+    return cache_publico.obter(f"liga-classificacao:{league_id}", 600, montar)
+
+
 @router.get("/liga/ranking")
 def get_liga_ranking(
     league_id: int = Query(1, ge=1),

@@ -1,69 +1,44 @@
-from services.leagues_service import LeaguesService
-from services.league_analysis_service import LeagueAnalysisService, criar_tabela
+"""Perfis de liga · NAO GERA MAIS NADA (15/10/2026, pedido do usuario).
+
+Este script chamava a IA (Sonnet, com todos os jogos da temporada no prompt)
+pra escrever o perfil de cada liga em `league_analysis`, que o gate de IA le'
+(services/pick_engine/league_profile_store). O site passou a ter a Leitura da
+liga na aba Ligas, gerada 1x por liga por dia com modelo barato, e o usuario
+pediu UMA geracao so': "fazer 1 coisa so' pra nao ficar duas e gastar errado".
+
+Quem escreve `league_analysis` agora e' website/backend/liga_ia.py, com o
+texto da liga sem citar time, na mesma tabela e chave. Este script so' garante
+que a tabela existe e mostra o que ha' nela · e NAO a limpa mais: o TRUNCATE
+apagaria os perfis que o site gravou.
+"""
+from services.league_analysis_service import criar_tabela
 from utils.db_utils import get_connection
 
 
 class AILeagueUpdateMain:
 
-    def __init__(self):
-        self.league_service = LeaguesService()
-        self.league_generator = LeagueAnalysisService()
-
-    ##########################################################################
-    # LIMPAR TABELA league_analysis
-    ##########################################################################
     def clear_league_analysis(self):
-        print("[AI_LEAGUE_MAIN] Limpando tabela league_analysis...")
-
+        """Mantida pro `main.py ligas`; so' cria a tabela, nao limpa."""
         conn = get_connection()
         cur = conn.cursor()
-
-        # CRIA ANTES DE LIMPAR. O TRUNCATE era a primeira instrucao do script e
-        # a tabela nao nascia em lugar nenhum, entao o pipeline morria com
-        # UndefinedTable em todo banco que nao a tivesse -- PROD, entre eles.
         criar_tabela(cur)
-        cur.execute("TRUNCATE TABLE league_analysis;")
-
         conn.commit()
         cur.close()
         conn.close()
 
-        print("[AI_LEAGUE_MAIN] Tabela league_analysis limpa.\n")
-
-    ##########################################################################
-    # IA-1 → AGORA GERA PERFIL POR LIGA, NÃO POR FIXTURE
-    ##########################################################################
     def generate_league_profiles(self):
-        print("[AI_LEAGUE_MAIN] Gerando análises das ligas (IA 1)...")
-
-        leagues = self.league_service.get_all_leagues()
-
-        if not leagues:
-            print("[AI_LEAGUE_MAIN] Nenhuma liga encontrada no banco.")
-            return
-
-        for league in leagues:
-            league_id = league["league_id"]
-            league_name = league["name"]
-            season = str(league["season"])
-
-            print(
-                f"[AI_LEAGUE_MAIN] Analisando liga: {league_name} ({season})")
-
-            try:
-                self.league_generator.generate_and_save(
-                    league_id=league_id,
-                    league_name=league_name,
-                    season=season
-                )
-                print(
-                    f"[AI_LEAGUE_MAIN] ✓ OK → Liga {league_name} ({season}) atualizada."
-                )
-            except Exception as e:
-                print(
-                    f"[AI_LEAGUE_MAIN] ERRO ao analisar liga {league_name}: {e}")
-
-        print("[AI_LEAGUE_MAIN] Todas análises atualizadas.\n")
+        print("[AI_LEAGUE_MAIN] O perfil de liga agora vem da Leitura da liga do site "
+              "(aba Ligas, 1x por liga por dia). Nada a gerar aqui.")
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT league_name, season, updated_at FROM league_analysis
+             ORDER BY updated_at DESC NULLS LAST
+        """)
+        for nome, season, quando in cur.fetchall():
+            print(f"[AI_LEAGUE_MAIN] {nome} ({season}) · atualizado em {quando}")
+        cur.close()
+        conn.close()
 
 
 if __name__ == "__main__":

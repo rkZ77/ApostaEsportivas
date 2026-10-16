@@ -67,8 +67,12 @@ export function recortar(linhas: Linha[], recorte: Recorte) {
   return refeitas
 }
 
+/*
+ * Sem `fixtureId` (15/10/2026) é a tabela da LIGA, na aba Ligas: lê pela rota
+ * da liga, não destaca time nenhum e mostra todos os grupos.
+ */
 export default function Classificacao({ fixtureId, leagueId, homeId, awayId }: {
-  fixtureId: number; leagueId: number | null; homeId: number; awayId: number
+  fixtureId?: number; leagueId: number | null; homeId?: number; awayId?: number
 }) {
   const [linhas, setLinhas] = useState<Linha[] | null>(null)
   const [erro, setErro] = useState(false)
@@ -76,11 +80,13 @@ export default function Classificacao({ fixtureId, leagueId, homeId, awayId }: {
 
   const carregar = () => {
     setErro(false)
-    api.get(`/fixtures/${fixtureId}/classificacao`, { params: { league: leagueId ?? undefined } })
-      .then(r => setLinhas(r.data.linhas ?? []))
-      .catch(() => setErro(true))
+    setLinhas(null)
+    const pedido = fixtureId
+      ? api.get(`/fixtures/${fixtureId}/classificacao`, { params: { league: leagueId ?? undefined } })
+      : api.get('/suggestions/liga/classificacao', { params: { league_id: leagueId } })
+    pedido.then(r => setLinhas(r.data.linhas ?? [])).catch(() => setErro(true))
   }
-  useEffect(carregar, [fixtureId])
+  useEffect(carregar, [fixtureId, leagueId])
 
   /* Liga de grupos: mostra só o(s) grupo(s) dos dois times do jogo. */
   const grupos = useMemo(() => {

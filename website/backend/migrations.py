@@ -1445,6 +1445,9 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         # CONFRONTO PELA API (12/10/2026) · ver h2h_api.py.
         import h2h_api
         cur.execute(h2h_api.DDL)
+        # LEITURA DA LIGA (15/10/2026) · uma linha por liga por dia. Ver liga_ia.py.
+        import liga_ia
+        cur.execute(liga_ia.DDL)
 
         conn.commit()
         return True
