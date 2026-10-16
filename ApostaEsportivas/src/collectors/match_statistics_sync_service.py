@@ -387,7 +387,13 @@ class MatchStatisticsSyncService:
             # primeira e devolvia uma resposta bem formada e incompleta, sem
             # erro nenhum. Tambem nao tinha timeout -- era a unica chamada do
             # projeto que podia pendurar a coleta indefinidamente.
-            response = buscar(FIXTURES_URL, params, origem="coletor_stats")
+            try:
+                response = buscar(FIXTURES_URL, params, origem="coletor_stats")
+            except Exception as e:
+                # Uma liga com 5xx nao leva as outras (2026-10-16).
+                print(f"[MATCH_STATS] liga {lg['league_id']}: listagem falhou ({e}), "
+                      f"fica pra proxima rodada.")
+                continue
             # CALENDARIO (2026-09-27): a mesma resposta traz a temporada inteira,
             # passado e futuro -- ver collectors/calendario_service. Gravado
             # ANTES do recorte de `ultimas_rodadas`, que e' so' pra folha.
@@ -523,14 +529,27 @@ class MatchStatisticsSyncService:
                       origem="coletor_stats")
 
     @staticmethod
-    def _separar_lados(stats, home_id):
+    def _separar_lados(stats, home_id, away_id=None):
         """(folha casa, folha fora, 1o tempo casa, 1o tempo fora) pelo team.id.
 
         Um lugar so' pra os tres caminhos de coleta (lote, pendentes, avulsa)
         nao repetirem a comparacao de id -- a API nao garante que o indice 0
-        seja o mandante."""
-        casa, fora = (stats[0], stats[1]) if stats[0]["team"]["id"] == home_id \
-            else (stats[1], stats[0])
+        seja o mandante.
+
+        SEM CHUTE (2026-10-16). Antes, "stats[0] nao e' o mandante" virava
+        "entao stats[1] e'". Com team.id nulo na folha (a API ja' mandou id
+        nulo na classificacao da Liga MX) escanteio, cartao e chute da casa
+        iam pra fora e vice-versa, sem erro nenhum. Agora qualquer um dos dois
+        ids que bata decide; nenhum batendo levanta, e a partida fica pra
+        proxima rodada em vez de virar dado trocado."""
+        ids = [((s or {}).get("team") or {}).get("id") for s in stats[:2]]
+        if ids[0] == home_id or (away_id is not None and ids[1] == away_id):
+            casa, fora = stats[0], stats[1]
+        elif ids[1] == home_id or (away_id is not None and ids[0] == away_id):
+            casa, fora = stats[1], stats[0]
+        else:
+            raise ValueError(f"folha sem o id dos times (veio {ids}, "
+                             f"esperado casa={home_id} fora={away_id})")
         return (casa.get("statistics") or [], fora.get("statistics") or [],
                 casa.get("statistics_1h"), fora.get("statistics_1h"))
 
@@ -1022,6 +1041,9 @@ class MatchStatisticsSyncService:
             try:
                 self._sync_uma_fixture(fixture_id, referee_batch)
             except Exception as e:
+                # Sem o rollback, um erro de banco deixava a transacao
+                # abortada e todo pendente seguinte falhava junto.
+                self.conn.rollback()
                 print(f"[MATCH_STATS] Erro ao processar fixture_id={fixture_id}: {e}")
 
         self._sync_referee_stats(referee_batch)
@@ -1108,7 +1130,8 @@ class MatchStatisticsSyncService:
                 referee_batch.add((fx["referee"], fx["season"]))
             return "linha_sem_folha"
 
-        home_stats, away_stats, home_1h, away_1h = self._separar_lados(stats, home_id)
+        home_stats, away_stats, home_1h, away_1h = self._separar_lados(
+            stats, home_id, fx["away_id"])
 
         if not self._save_stats(fx, home_stats, away_stats, home_1h, away_1h):
             return "sem_placar"
@@ -1144,36 +1167,51 @@ class MatchStatisticsSyncService:
         print("[MATCH_STATS] START")
 
         self._open()
+        try:
+            fixtures = self._load_fixtures(
+                use_date_filter, days, apenas_liga=apenas_liga, temporada=temporada,
+                exigir_os_dois_times=exigir_os_dois_times,
+                ultimas_rodadas=ultimas_rodadas)
+            referee_batch = set()
+            buscadas = 0
+            falhas = 0
 
-        fixtures = self._load_fixtures(
-            use_date_filter, days, apenas_liga=apenas_liga, temporada=temporada,
-            exigir_os_dois_times=exigir_os_dois_times,
-            ultimas_rodadas=ultimas_rodadas)
-        referee_batch = set()
-        buscadas = 0
+            for fx in fixtures:
+                if teto_requisicoes is not None and buscadas >= teto_requisicoes:
+                    print(f"[MATCH_STATS] Teto de {teto_requisicoes} requisicoes atingido · "
+                          f"{len(fixtures) - buscadas} jogo(s) ficaram pra proxima rodada.")
+                    break
+                buscadas += 1
+                # UM JOGO NAO LEVA A RODADA (2026-10-16). Erro de API ou de
+                # banco num jogo matava o laco, o arbitro e o resto do
+                # atualizar. O rollback limpa a transacao abortada: sem ele,
+                # todo jogo seguinte falharia com "current transaction is
+                # aborted".
+                try:
+                    stats = self._fetch_match_stats(fx["fixture_id"])
 
-        for fx in fixtures:
-            if teto_requisicoes is not None and buscadas >= teto_requisicoes:
-                print(f"[MATCH_STATS] Teto de {teto_requisicoes} requisicoes atingido · "
-                      f"{len(fixtures) - buscadas} jogo(s) ficaram pra proxima rodada.")
-                break
-            buscadas += 1
-            stats = self._fetch_match_stats(fx["fixture_id"])
+                    if not stats or len(stats) < 2:
+                        continue
 
-            if not stats or len(stats) < 2:
-                continue
+                    home_stats, away_stats, home_1h, away_1h = self._separar_lados(
+                        stats, fx["home_id"], fx["away_id"])
 
-            home_stats, away_stats, home_1h, away_1h = self._separar_lados(
-                stats, fx["home_id"])
+                    if not self._save_stats(fx, home_stats, away_stats, home_1h, away_1h):
+                        continue
+                except Exception as e:
+                    self.conn.rollback()
+                    falhas += 1
+                    print(f"[MATCH_STATS] Erro no fixture_id={fx['fixture_id']}: {e}")
+                    continue
 
-            if not self._save_stats(fx, home_stats, away_stats, home_1h, away_1h):
-                continue
+                if fx.get("referee"):
+                    referee_batch.add((fx["referee"], fx["season"]))
 
-            if fx.get("referee"):
-                referee_batch.add((fx["referee"], fx["season"]))
-
-        self._sync_referee_stats(referee_batch)
-        self._close()
+            self._sync_referee_stats(referee_batch)
+        finally:
+            self._close()
+        if falhas:
+            print(f"[MATCH_STATS] {falhas} jogo(s) com erro · voltam na proxima rodada.")
         print("[MATCH_STATS] DONE")
 
     # ---------------------------------------------------------
@@ -1203,7 +1241,7 @@ class MatchStatisticsSyncService:
         self._open()
         try:
             self.cur.execute("""
-                SELECT fixture_id, home_team_id
+                SELECT fixture_id, home_team_id, away_team_id
                   FROM match_statistics
                  WHERE (stats_1h_checked_at IS NULL OR finalizacao_checked_at IS NULL)
                    AND status IN %s
@@ -1213,7 +1251,7 @@ class MatchStatisticsSyncService:
             """, (tuple(self.FINISHED), temporada_minima, teto_requisicoes))
             fila = self.cur.fetchall()
             com_folha = sem_folha = 0
-            for fixture_id, home_id in fila:
+            for fixture_id, home_id, away_id in fila:
                 try:
                     stats = self._fetch_match_stats(fixture_id)
                 except Exception as e:
@@ -1228,7 +1266,13 @@ class MatchStatisticsSyncService:
                                      "WHERE fixture_id = %s", (fixture_id,))
                     sem_folha += 1
                 else:
-                    home_cheia, away_cheia, home_1h, away_1h = self._separar_lados(stats, home_id)
+                    try:
+                        home_cheia, away_cheia, home_1h, away_1h = self._separar_lados(
+                            stats, home_id, away_id)
+                    except ValueError as e:
+                        # Folha sem id: nao marca, volta na proxima.
+                        print(f"[MATCH_STATS_1T] fixture_id={fixture_id}: {e}")
+                        continue
                     self._gravar_primeiro_tempo(fixture_id, home_1h or [], away_1h or [])
                     self._gravar_finalizacao(fixture_id, home_cheia, away_cheia)
                     if folha_publicada(home_1h) and folha_publicada(away_1h):

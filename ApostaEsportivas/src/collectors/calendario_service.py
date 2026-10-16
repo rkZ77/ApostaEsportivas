@@ -76,9 +76,15 @@ def coletar_todas_as_ligas() -> dict:
             except Exception as e:
                 print(f"[CALENDARIO] liga {league_id}: {e}")
                 continue
-            total += gravar_temporada(cur, resposta, league_id, season)
+            try:
+                total += gravar_temporada(cur, resposta, league_id, season)
+                conn.commit()
+            except Exception as e:
+                # Erro de banco numa liga nao leva as outras (2026-10-16).
+                conn.rollback()
+                print(f"[CALENDARIO] liga {league_id}: gravacao falhou ({e})")
+                continue
             ligas += 1
-            conn.commit()
     finally:
         cur.close()
         conn.close()
@@ -87,18 +93,20 @@ def coletar_todas_as_ligas() -> dict:
 
 
 def linhas_da_temporada(response: list, league_id: int, season) -> list:
-    saida = []
+    # Por fixture_id: jogo repetido entre paginas da API derrubava o lote
+    # ("ON CONFLICT DO UPDATE cannot affect row a second time"). Fica o ultimo.
+    saida = {}
     for fx in response or []:
         f, t = fx.get("fixture") or {}, fx.get("teams") or {}
         if not f.get("id"):
             continue
-        saida.append((
+        saida[f["id"]] = ((
             f["id"], league_id, season, (fx.get("league") or {}).get("round"),
             _br(f.get("date")), (t.get("home") or {}).get("id"), (t.get("away") or {}).get("id"),
             (f.get("status") or {}).get("short"), (f.get("venue") or {}).get("city"),
             (fx.get("league") or {}).get("country"),
         ))
-    return saida
+    return list(saida.values())
 
 
 def gravar_temporada(cur, response: list, league_id: int, season) -> int:

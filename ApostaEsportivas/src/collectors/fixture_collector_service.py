@@ -135,6 +135,13 @@ class FixtureCollectorService:
             if home_id not in valid_team_ids and away_id not in valid_team_ids:
                 continue
 
+            # Lado ainda indefinido (copa antes do sorteio, id nulo da API):
+            # o save e' uma transacao so' pra janela inteira, entao um NULL
+            # aqui derrubava os 3-4 dias. Volta sozinho quando a API definir.
+            if home_id is None or away_id is None:
+                print(f"[FIXTURES] {fixture['id']}: time sem id na API, pulado.")
+                continue
+
             # Apenas jogos ainda não iniciados
             if status != "NS":
                 continue
