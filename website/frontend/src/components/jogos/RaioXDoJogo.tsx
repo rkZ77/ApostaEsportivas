@@ -22,6 +22,7 @@ import NumeroVivo from '../ui/NumeroVivo'
 import Classificacao from './Classificacao'
 import ResumoDaIA from './ResumoDaIA'
 import EstatisticasDoJogo from './EstatisticasDoJogo'
+import ArbitroDoJogo from './ArbitroDoJogo'
 
 /*
  * Raio-X do jogo (2026-10-06) · o lugar de pesquisar antes de montar bilhete.
@@ -146,6 +147,36 @@ export default function RaioXDoJogo({ jogo, trancado = false }: { jogo: JogoBase
     return () => { vivo = false; clearTimeout(timer) }
   }, [jogo.fixture_id])
 
+  /* ABA ESTATÍSTICAS SÓ COM O QUE MOSTRAR (16/10/2026, pedido do usuário).
+     Jogo que não começou não tem a aba · rolando, tem · encerrado, só se a
+     estatística já existe. A pergunta do encerrado vai com `so_cache`: banco
+     e cache, nunca a API. No plano gratuito a aba é vitrine trancada e
+     aparece com o jogo começado, sem perguntar nada. */
+  const rolando = !!aoVivoAgora || estaAoVivo(jogo.status)
+  const encerrado = !!encerradoAgora || !!dados?.fixture.placar_final
+    || (!!jogo.status && ['FT', 'AET', 'PEN'].includes(jogo.status))
+  const [temEstatistica, setTemEstatistica] = useState(false)
+  useEffect(() => {
+    setTemEstatistica(false)
+    if (!encerrado || trancado) return
+    let vivo = true
+    api.get(`/live/fixture/${jogo.fixture_id}/estatisticas`, { params: { so_cache: true } })
+      .then(r => {
+        const p = r.data?.periodos ?? {}
+        if (vivo) setTemEstatistica(Object.values(p).some(l => Array.isArray(l) && l.length > 0))
+      })
+      .catch(() => {})
+    return () => { vivo = false }
+  }, [jogo.fixture_id, encerrado, trancado])
+  const mostraEstatisticas = rolando || (encerrado && (trancado || temEstatistica))
+  useEffect(() => {
+    if (!mostraEstatisticas && aba === 'estatisticas') setAba('mercados')
+  }, [mostraEstatisticas, aba])
+  /* O botão do árbitro no placar abria a aba Estatísticas, onde o bloco dele
+     mora. Com a aba escondida, ele aparece sozinho até a pessoa tocar numa aba. */
+  const [soArbitro, setSoArbitro] = useState(false)
+  useEffect(() => setSoArbitro(false), [jogo.fixture_id])
+
   /* Casa / Fora vale pras duas abas de taxa (Mercados e Jogadores) e fica
      escolhido ao trocar de uma pra outra · ver filtrarPorMando. */
   const [mando, setMando] = useState<Mando>('todos')
@@ -157,6 +188,9 @@ export default function RaioXDoJogo({ jogo, trancado = false }: { jogo: JogoBase
     <div className="min-w-0">
       <Placar jogo={jogo} dados={dados} aoVivo={aoVivoAgora} encerrado={encerradoAgora}
         onArbitro={() => {
+          // Sem a aba (jogo que não começou), o árbitro abre sozinho: é antes
+          // do apito que ele mais serve.
+          if (!mostraEstatisticas) { setSoArbitro(true); return }
           setAba('estatisticas')
           // Espera a aba montar e o bloco do árbitro existir.
           setTimeout(() => document.getElementById('arbitro-do-jogo')
@@ -175,8 +209,9 @@ export default function RaioXDoJogo({ jogo, trancado = false }: { jogo: JogoBase
           {([
             ['mercados', 'Mercados'], ['estatisticas', 'Estatísticas'], ['ia', 'Leitura IA'], ['jogadores', 'Jogadores'], ['escalacao', 'Escalação'],
             ['tabela', 'Tabela'], ['confronto', 'Confronto'],
-          ] as [Aba, string][]).map(([k, rotulo]) => (
-            <button key={k} role="tab" aria-selected={aba === k} onClick={() => setAba(k)}
+          ] as [Aba, string][]).filter(([k]) => k !== 'estatisticas' || mostraEstatisticas).map(([k, rotulo]) => (
+            <button key={k} role="tab" aria-selected={aba === k && !soArbitro}
+              onClick={() => { setAba(k); setSoArbitro(false) }}
               className={cn(
                 // 13px do tablet pra cima: oito abas numa linha ficavam coladas
                 // ("Mercados Estatísticas") no painel ao lado da lista.
@@ -202,6 +237,10 @@ export default function RaioXDoJogo({ jogo, trancado = false }: { jogo: JogoBase
             <Skeleton className="h-36 w-full" />
             <Skeleton className="h-36 w-full" />
           </div>
+        ) : soArbitro && !mostraEstatisticas ? (
+          <ArbitroDoJogo fixtureId={dados.fixture.fixture_id}
+            homeId={dados.fixture.home_team_id} awayId={dados.fixture.away_team_id}
+            homeNome={dados.fixture.home_team} awayNome={dados.fixture.away_team} />
         ) : aba === 'mercados' ? (
           <AbaMercados dados={vistos!} nomeJogo={nomeJogo} odds={odds} oddsAoVivo={oddsAoVivo} mando={mando} setMando={setMando} />
         ) : aba === 'estatisticas' ? (
