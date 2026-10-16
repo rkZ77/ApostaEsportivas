@@ -77,6 +77,33 @@ class StandingsCollectorService:
         return data[0]["league"]
 
     # ----------------------------------------------------------
+    # TIME SEM ID NA API
+    # ----------------------------------------------------------
+    def resolve_team_id(self, cur, league_id, team_name):
+        """Id do time pelo nome, nos jogos da mesma liga.
+
+        A API as vezes devolve a classificacao com `team.id` nulo (Liga MX,
+        out/2026: Club Leon veio sem id e sem logo). Sem esse fallback o
+        insert em lote da liga quebrava no NOT NULL e a liga inteira ficava
+        sem tabela.
+        """
+        if not team_name:
+            return None
+        cur.execute("""
+            SELECT team_id FROM (
+                SELECT home_team_id AS team_id, home_team AS team_name
+                  FROM fixtures WHERE league_id = %s
+                UNION ALL
+                SELECT away_team_id, away_team
+                  FROM fixtures WHERE league_id = %s
+            ) t
+            WHERE team_id IS NOT NULL AND LOWER(team_name) = LOWER(%s)
+            LIMIT 1
+        """, (league_id, league_id, team_name))
+        row = cur.fetchone()
+        return row[0] if row else None
+
+    # ----------------------------------------------------------
     # SALVAR
     # ----------------------------------------------------------
     def save_standings(self, league_data):
@@ -97,13 +124,25 @@ class StandingsCollectorService:
 
         for group in all_groups:
             for team in group:
+                team_id = team["team"]["id"]
+                if team_id is None:
+                    team_id = self.resolve_team_id(
+                        cur, league_id, team["team"]["name"]
+                    )
+                    if team_id is None:
+                        print(f"[STANDINGS] Liga {league_id}: "
+                              f"{team['team']['name']} sem id na API, pulado.")
+                        continue
+                    print(f"[STANDINGS] Liga {league_id}: "
+                          f"{team['team']['name']} sem id na API, "
+                          f"usando {team_id} dos jogos.")
                 rows.append((
                     league_id,
                     league_name,
                     country,
                     season,
                     team["group"],
-                    team["team"]["id"],
+                    team_id,
                     team["team"]["name"],
                     team["team"]["logo"],
                     team["rank"],
