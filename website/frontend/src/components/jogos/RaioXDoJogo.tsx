@@ -169,7 +169,9 @@ export default function RaioXDoJogo({ jogo, trancado = false }: { jogo: JogoBase
           ] as [Aba, string][]).map(([k, rotulo]) => (
             <button key={k} role="tab" aria-selected={aba === k} onClick={() => setAba(k)}
               className={cn(
-                'relative sm:flex-1 h-11 sm:h-12 px-1 text-sm font-bold transition-colors whitespace-nowrap',
+                // 13px do tablet pra cima: oito abas numa linha ficavam coladas
+                // ("Mercados Estatísticas") no painel ao lado da lista.
+                'relative sm:flex-1 h-11 sm:h-12 px-1 sm:px-1.5 text-sm sm:text-[13px] xl:text-sm font-bold transition-colors whitespace-nowrap',
                 aba === k ? 'text-ink-1' : 'text-ink-3 hover:text-ink-2',
               )}>
               {rotulo}

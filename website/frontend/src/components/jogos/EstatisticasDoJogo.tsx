@@ -135,7 +135,7 @@ export default function EstatisticasDoJogo({ fixtureId, homeId, awayId, homeNome
           <div className="px-4 pb-4">
             <div className="text-center text-[11px] font-bold uppercase tracking-wide text-ink-3 mb-1.5">Posse de bola</div>
             <div className="flex items-center gap-3">
-              <span className="font-mono font-black text-2xl text-ink-1 w-12">
+              <span className="font-mono font-black text-2xl text-ink-1 min-w-[3.5rem] whitespace-nowrap">
                 {rolando ? <NumeroVivo valor={posse.casa} /> : posse.casa}%
               </span>
               <div className="flex-1 flex h-2.5 gap-0.5 rounded-full overflow-hidden"
@@ -143,7 +143,7 @@ export default function EstatisticasDoJogo({ fixtureId, homeId, awayId, homeNome
                 <span className="bg-accent rounded-l-full transition-[width] duration-700" style={{ width: `${posse.casa}%` }} />
                 <span className="bg-sky-400 rounded-r-full flex-1" />
               </div>
-              <span className="font-mono font-black text-2xl text-ink-1 w-12 text-right">
+              <span className="font-mono font-black text-2xl text-ink-1 min-w-[3.5rem] whitespace-nowrap text-right">
                 {rolando ? <NumeroVivo valor={posse.fora} /> : posse.fora}%
               </span>
             </div>
@@ -178,8 +178,9 @@ function LinhaDeEstatistica({ l, rolando }: { l: Linha; rolando: boolean }) {
   const pCasa = l.pct ? l.casa : total ? (l.casa / total) * 100 : 0
   const pFora = l.pct ? l.fora : total ? (l.fora / total) * 100 : 0
   const casaNaFrente = l.casa > l.fora, foraNaFrente = l.fora > l.casa
-  const casas = l.chave === 'xg' ? 2 : 0
-  const valor = (v: number) => rolando && !l.pct ? <NumeroVivo valor={v} casas={casas} /> : formatar(v, l.pct)
+  // O número que rola só pra contagem inteira: NumeroVivo escreve decimal com
+  // ponto ("1.84"), e o xG tem que sair com vírgula.
+  const valor = (v: number) => rolando && !l.pct && Number.isInteger(v) ? <NumeroVivo valor={v} /> : formatar(v, l.pct)
 
   return (
     <li title={`${l.rotulo}: ${formatar(l.casa, l.pct)} x ${formatar(l.fora, l.pct)}`}>

@@ -78,7 +78,11 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
             Fixa em max-w-6xl, como era, a barra ficava desalinhada nos dois
             sentidos ao mesmo tempo · sobrando nas telas estreitas e boiando no
             meio das largas. */}
-        <div className={cn('mx-auto h-16 flex items-center justify-between', PAGE_WIDTH[width])}>
+        {/* Página estreita (Raio-X, formulários) com o menu de computador
+            (16/10/2026): o menu inteiro do Pro não cabe em 672px e vazava 18px
+            pra direita em 1366px. Do lg pra cima ela usa a largura de app. */}
+        <div className={cn('mx-auto h-16 flex items-center justify-between', PAGE_WIDTH[width],
+          width !== 'full' && width !== 'wide' && 'lg:max-w-[1440px] lg:px-8')}>
 
           {/* Marca. Escudo menor que antes (40px o fazia dominar o conjunto,
               e nesse tamanho o texto do anel dele já era ilegível de qualquer
