@@ -1,5 +1,5 @@
 import { useId, useState } from 'react'
-import { ChevronDown, HelpCircle } from 'lucide-react'
+import { ChevronDown, HelpCircle } from '../../lib/icones'
 import { cn } from '../../lib/cn'
 
 /**

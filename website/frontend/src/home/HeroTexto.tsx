@@ -1,4 +1,4 @@
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight } from '../lib/icones'
 import { Button, LiveDot } from '../components/ui'
 
 /*

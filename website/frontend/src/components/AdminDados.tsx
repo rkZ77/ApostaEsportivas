@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   AlertTriangle, CheckCircle2, Database, Gavel, Pencil, PlayCircle, RefreshCw,
   Save, ShieldAlert, User, Users, X,
-} from 'lucide-react'
+} from '../lib/icones'
 import api from '../services/api'
 import AdminAmostra, { type AlvoAmostra } from './AdminAmostra'
 import AdminLacunasJogador from './AdminLacunasJogador'

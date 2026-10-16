@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle } from '../lib/icones'
 import api from '../services/api'
 
 /*

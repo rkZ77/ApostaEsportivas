@@ -9,7 +9,7 @@ import { useCallback, useState, useEffect } from 'react'
 import {
   Zap, BarChart2, Bot, Wallet, ListChecks, ShieldCheck, Crown,
   LogOut, Menu, BookOpen, MessageCircle, History, Compass,
-} from 'lucide-react'
+} from '../lib/icones'
 import BolaDeFutebol from './icones/BolaDeFutebol'
 import Avatar from './Avatar'
 import { GavetaLateral, ItemDaGaveta, Secao } from './MenuLateral'

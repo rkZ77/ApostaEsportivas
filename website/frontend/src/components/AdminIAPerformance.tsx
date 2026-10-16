@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Brain, ShieldAlert, TriangleAlert } from 'lucide-react'
+import { Brain, ShieldAlert, TriangleAlert } from '../lib/icones'
 import api from '../services/api'
 import { Badge, EmptyState, Panel, PanelHead, PillGroup, SpinnerBlock, StatTile, Table, type Column } from './ui'
 

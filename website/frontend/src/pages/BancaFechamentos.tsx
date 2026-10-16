@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { TrendingDown, TrendingUp } from 'lucide-react'
+import { TrendingDown, TrendingUp } from '../lib/icones'
 import api from '../services/api'
 import PageShell from '../components/PageShell'
 import BancaTabs from '../components/BancaTabs'

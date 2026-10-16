@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
-import { Clock } from 'lucide-react'
+import { Clock } from '../lib/icones'
 import { useNotifications } from '../context/NotificationContext'
 import CartaoDeAviso, { timesDoAviso } from './ui/CartaoDeAviso'
 

@@ -1,4 +1,4 @@
-import { BrainCircuit, Check as CheckIcon, Clock, Loader2, Share2, X as XIcon } from 'lucide-react'
+import { BrainCircuit, Check as CheckIcon, Clock, Loader2, Share2, X as XIcon } from '../lib/icones'
 import { cn } from '../lib/cn'
 import { Badge, ResultBadge } from './ui'
 import { rotuloDoMinuto, rotuloDoTempo, type LeituraAoVivo } from '../lib/picksAgora'

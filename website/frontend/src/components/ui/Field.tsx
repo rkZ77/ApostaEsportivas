@@ -1,5 +1,5 @@
 import { useId } from 'react'
-import { ChevronDown, Search, type LucideIcon } from 'lucide-react'
+import { ChevronDown, Search, type LucideIcon } from '../../lib/icones'
 import { cn } from '../../lib/cn'
 
 /*

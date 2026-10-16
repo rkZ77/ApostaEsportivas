@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { Home, CalendarDays, BarChart3, Crown, Gift, Target } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
+import { Home, CalendarDays, BarChart3, Crown, Gift, Target } from '../lib/icones'
+import type { LucideIcon } from '../lib/icones'
 import { useAuth } from '../context/AuthContext'
 import { cn } from '../lib/cn'
 

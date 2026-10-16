@@ -1,5 +1,5 @@
 import { m as motion } from 'framer-motion'
-import { Flag, Target, TrendingDown } from 'lucide-react'
+import { Flag, Target, TrendingDown } from '../../lib/icones'
 import { fmtBRL, fmtSigned, fmtUnits } from '../../utils/format'
 
 /*

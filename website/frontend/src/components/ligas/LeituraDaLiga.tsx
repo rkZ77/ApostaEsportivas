@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Sparkles } from 'lucide-react'
+import { Sparkles } from '../../lib/icones'
 import api from '../../services/api'
 import { Skeleton } from '../ui'
 import { TeamLogo } from '../TeamLogo'

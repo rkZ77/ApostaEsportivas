@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Search } from 'lucide-react'
+import { Search } from '../lib/icones'
 import api from '../services/api'
 import PageShell from '../components/PageShell'
 import PublicNav from '../components/PublicNav'

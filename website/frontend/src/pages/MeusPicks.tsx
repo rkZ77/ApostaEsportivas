@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Pagination, SelectMenu, Spinner, SkeletonPickGrid } from '../components/ui'
 import { PERIODOS, PERIODO_PADRAO, dentroDoPeriodo, nomeDoMes, type PeriodoKey } from '../lib/periodo'
-import { ChevronLeft, ChevronRight, Trash2, RotateCcw } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Trash2, RotateCcw } from '../lib/icones'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, m as motion } from 'framer-motion'
 import { tabFade, toastUp } from '../lib/motion'

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, m as motion } from 'framer-motion'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle } from '../lib/icones'
 import { subscribeError } from '../services/errorToast'
 import { toastUp } from '../lib/motion'
 

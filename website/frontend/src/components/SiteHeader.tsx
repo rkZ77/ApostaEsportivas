@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Menu } from 'lucide-react'
+import { Menu } from '../lib/icones'
 import MenuLateral from './MenuLateral'
 import BarraInferior from './BarraInferior'
 import { useAuth } from '../context/AuthContext'

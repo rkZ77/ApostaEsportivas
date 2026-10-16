@@ -1,5 +1,5 @@
 import { m as motion } from 'framer-motion'
-import { Check, X as XIcon } from 'lucide-react'
+import { Check, X as XIcon } from '../lib/icones'
 
 import { Badge, Button, SectionHead } from '../components/ui'
 import { fmtPlanPrice, type Plan } from '../hooks/usePlans'

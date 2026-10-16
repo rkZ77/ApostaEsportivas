@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, Clock, Cross, HelpCircle, UserX } from 'lucide-react'
+import { CheckCircle2, Clock, Cross, HelpCircle, UserX } from '../../lib/icones'
 import api from '../../services/api'
 import { cn } from '../../lib/cn'
 import { ErrorState, Skeleton } from '../ui'

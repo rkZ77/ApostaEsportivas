@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { Crown, Check, Mail } from 'lucide-react'
+import { Crown, Check, Mail } from '../lib/icones'
 
 import api from '../services/api'
 import PublicNav from '../components/PublicNav'

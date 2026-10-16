@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { TrendingUp, Info, Wallet } from 'lucide-react'
+import { TrendingUp, Info, Wallet } from '../lib/icones'
 import { Link, useNavigate } from 'react-router-dom'
 import { AnimatePresence, m as motion } from 'framer-motion'
 import { backdropFade, dialogScale } from '../lib/motion'

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Spinner } from './ui'
 import { m as motion } from 'framer-motion'
-import { X } from 'lucide-react'
+import { X } from '../lib/icones'
 import api from '../services/api'
 import { backdropFade, sheetUp } from '../lib/motion'
 import { sinalizarNavegacao } from '../services/progressBus'

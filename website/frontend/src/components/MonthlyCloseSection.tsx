@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { CalendarCheck, ChevronRight, History } from 'lucide-react'
+import { CalendarCheck, ChevronRight, History } from '../lib/icones'
 import api from '../services/api'
 import { fmtSigned } from '../utils/format'
 import { useNotifications } from '../context/NotificationContext'

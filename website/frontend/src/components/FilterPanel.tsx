@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { AnimatePresence, m as motion } from 'framer-motion'
-import { SlidersHorizontal, X, ChevronDown } from 'lucide-react'
+import { SlidersHorizontal, X, ChevronDown } from '../lib/icones'
 import { SearchInput, SelectMenu } from './ui'
 
 export interface FilterOption { value: string; label: string; icon?: React.ReactNode }

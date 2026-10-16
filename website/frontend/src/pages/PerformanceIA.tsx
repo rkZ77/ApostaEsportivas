@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Activity, TrendingUp } from 'lucide-react'
+import { Activity, TrendingUp } from '../lib/icones'
 import api from '../services/api'
 import { rotuloDoMercado } from '../utils/marketTranslate'
 import PageShell from '../components/PageShell'

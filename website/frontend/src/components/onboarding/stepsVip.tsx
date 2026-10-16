@@ -1,8 +1,8 @@
-import type { LucideIcon } from 'lucide-react'
+import type { LucideIcon } from '../../lib/icones'
 import {
   BarChart2, Bot, CircleCheck, ClipboardCheck, Crown, Layers, Radio, Rocket, ShieldQuestion,
   Sparkles, TrendingUp, Wallet, Zap,
-} from 'lucide-react'
+} from '../../lib/icones'
 import BolaDeFutebol from '../icones/BolaDeFutebol'
 import type { TourStep } from './steps'
 import { Etiqueta, Lista, Linhas } from './steps'

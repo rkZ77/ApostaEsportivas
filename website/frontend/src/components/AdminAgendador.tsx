@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { CalendarClock, ChevronDown, Play } from 'lucide-react'
+import { CalendarClock, ChevronDown, Play } from '../lib/icones'
 import api from '../services/api'
 import { Panel, PanelHead } from './ui'
 

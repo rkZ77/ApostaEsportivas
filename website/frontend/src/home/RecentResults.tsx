@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { m as motion } from 'framer-motion'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight } from '../lib/icones'
 
 import api from '../services/api'
 import { rotuloDoMercado } from '../utils/marketTranslate'

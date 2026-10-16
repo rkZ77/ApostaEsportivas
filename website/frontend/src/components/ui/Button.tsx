@@ -1,6 +1,6 @@
 import { forwardRef } from 'react'
 import { Link } from 'react-router-dom'
-import type { LucideIcon } from 'lucide-react'
+import type { LucideIcon } from '../../lib/icones'
 import { cn } from '../../lib/cn'
 import Spinner from './Spinner'
 

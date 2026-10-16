@@ -1,5 +1,5 @@
 import { m as motion } from 'framer-motion'
-import { Database, BrainCircuit, Percent, Target, Send } from 'lucide-react'
+import { Database, BrainCircuit, Percent, Target, Send } from '../lib/icones'
 import { SectionHead } from '../components/ui'
 import { fadeInUp, staggerContainer } from '../lib/motion'
 

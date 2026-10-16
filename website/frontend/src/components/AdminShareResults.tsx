@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Share2 } from 'lucide-react'
+import { Share2 } from '../lib/icones'
 import api from '../services/api'
 import { taxaAcerto } from '../utils/format'
 import { useShareResultsImage, useShareTodayGamesImage, useShareLeagueResultsImage } from '../hooks/useShareStoryImage'

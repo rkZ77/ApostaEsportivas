@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import {
   Crown, CreditCard, Target, Plus, X, RefreshCw, Wallet, BarChart3,
   Radio, TrendingUp, Headphones,
-} from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
+} from '../lib/icones'
+import type { LucideIcon } from '../lib/icones'
 import { WA_SUPPORT } from '../lib/support'
 import { SEM_RENOVACAO_AUTOMATICA } from '../lib/oferta'
 import { cn } from '../lib/cn'

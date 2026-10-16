@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { m as motion } from 'framer-motion'
-import { CheckCircle, XCircle, Clock, ShieldCheck } from 'lucide-react'
+import { CheckCircle, XCircle, Clock, ShieldCheck } from '../lib/icones'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import PageShell from '../components/PageShell'
 import { useAuth } from '../context/AuthContext'

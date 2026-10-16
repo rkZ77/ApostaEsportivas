@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { MessageCircle, Radio } from 'lucide-react'
+import { MessageCircle, Radio } from '../lib/icones'
 import api from '../services/api'
 
 /*

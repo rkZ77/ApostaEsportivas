@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, m as motion } from 'framer-motion'
-import { Check, ChevronDown, Search } from 'lucide-react'
+import { Check, ChevronDown, Search } from '../../lib/icones'
 import { cn } from '../../lib/cn'
 
 /*

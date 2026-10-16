@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Lock, ChevronDown } from 'lucide-react'
+import { Lock, ChevronDown } from '../lib/icones'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import { cn } from '../lib/cn'

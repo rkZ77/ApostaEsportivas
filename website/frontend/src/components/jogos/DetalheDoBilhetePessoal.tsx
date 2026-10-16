@@ -9,7 +9,7 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { m as motion } from 'framer-motion'
-import { X, User, Check, Minus } from 'lucide-react'
+import { X, User, Check, Minus } from '../../lib/icones'
 import api from '../../services/api'
 import { backdropFade, dialogScale } from '../../lib/motion'
 import { fecharNoFundo } from '../../lib/fecharNoFundo'

@@ -1,7 +1,7 @@
 import { lazy, Suspense, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft } from '../lib/icones'
 import PageShell from '../components/PageShell'
 import { Button } from '../components/ui'
 import { getPostMeta, getPostLoader } from '../blog/registry'

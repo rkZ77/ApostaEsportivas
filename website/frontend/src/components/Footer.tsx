@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { WA_SUPPORT } from '../lib/support'
 /* O Lucide tirou os ícones de marca (Instagram, X, etc.) por questão de
    trademark, então o do Instagram continua vindo do asset em /public. */
-import { MessageCircle, Headphones, ShieldCheck, Lock } from 'lucide-react'
+import { MessageCircle, Headphones, ShieldCheck, Lock } from '../lib/icones'
 
 /* Ícone do Instagram como SVG inline.
    Era um PNG de 164KB desenhado a 16x16 · sozinho pesava quase o mesmo que

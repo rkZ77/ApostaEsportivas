@@ -1,4 +1,4 @@
-import { Activity, BookOpen, Clock, Gauge, Target } from 'lucide-react'
+import { Activity, BookOpen, Clock, Gauge, Target } from '../lib/icones'
 import Modal from './ui/Modal'
 import { Badge } from './ui'
 import MarketForm from './MarketForm'

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { AnimatePresence, m as motion, useDragControls } from 'framer-motion'
-import { ArrowLeft, Check, ChevronUp, Copy, Ticket, Trash2, Wallet, X } from 'lucide-react'
+import { ArrowLeft, Check, ChevronUp, Copy, Ticket, Trash2, Wallet, X } from '../../lib/icones'
 import { cn } from '../../lib/cn'
 import { fecharNoFundo } from '../../lib/fecharNoFundo'
 import { chanceCombinada, limpar, oddCombinada, remover, textoDoBilhete, useBilheteMontado } from '../../lib/bilheteMontado'

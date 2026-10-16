@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { m as motion } from 'framer-motion'
-import { ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, X } from '../../lib/icones'
 import { useOnboarding } from '../../context/OnboardingContext'
 import { passosDoTour } from './steps'
 import { TOUR_STEPS_VIP } from './stepsVip'

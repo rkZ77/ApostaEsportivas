@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { History, Plus, TrendingDown, TrendingUp, Minus, Trash2 } from 'lucide-react'
+import { History, Plus, TrendingDown, TrendingUp, Minus, Trash2 } from '../lib/icones'
 import api from '../services/api'
 import { Button, Spinner } from './ui'
 

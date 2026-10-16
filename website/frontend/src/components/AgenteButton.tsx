@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, lazy, Suspense } from 'react'
-import { Sparkles } from 'lucide-react'
+import { Sparkles } from '../lib/icones'
 import { Spinner } from './ui'
 import { useLocation } from 'react-router-dom'
 import { AnimatePresence, m as motion } from 'framer-motion'

@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import type { LucideIcon } from 'lucide-react'
+import type { LucideIcon } from '../../lib/icones'
 import {
   ArrowDown, BarChart2, Bot, ClipboardCheck, ClipboardList, CircleCheck, ExternalLink,
   Mail, MessageCircle, Radio, Search, ShieldCheck, Sparkles, Ticket, TrendingUp,
   Wallet, Zap,
-} from 'lucide-react'
+} from '../../lib/icones'
 import BolaDeFutebol from '../icones/BolaDeFutebol'
 import { useAuth } from '../../context/AuthContext'
 import { useOnboarding } from '../../context/OnboardingContext'

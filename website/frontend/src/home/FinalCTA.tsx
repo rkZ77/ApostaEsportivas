@@ -1,5 +1,5 @@
 import { m as motion } from 'framer-motion'
-import { ArrowRight, Check } from 'lucide-react'
+import { ArrowRight, Check } from '../lib/icones'
 import { Button } from '../components/ui'
 import LinhasDeCampo from '../components/ui/LinhasDeCampo'
 

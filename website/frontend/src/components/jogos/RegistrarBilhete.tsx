@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { CheckCircle2, Wallet } from 'lucide-react'
+import { CheckCircle2, Wallet } from '../../lib/icones'
 import api from '../../services/api'
 import { cn } from '../../lib/cn'
 import { limpar, oddCombinada, registraveis, type Selecao } from '../../lib/bilheteMontado'

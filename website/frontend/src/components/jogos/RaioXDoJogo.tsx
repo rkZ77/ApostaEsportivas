@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Check, Flag, Goal, Lock, Minus, Plus, Repeat, Shield, Square, Star, TrendingUp, Users } from 'lucide-react'
+import { Check, Flag, Goal, Lock, Minus, Plus, Repeat, Shield, Square, Star, TrendingUp, Users } from '../../lib/icones'
 import { useTimesFavoritos } from '../../lib/timesFavoritos'
 import { Link } from 'react-router-dom'
 import api from '../../services/api'

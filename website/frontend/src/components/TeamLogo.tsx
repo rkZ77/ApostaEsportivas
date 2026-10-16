@@ -6,7 +6,7 @@
  * então a versão duplicada era pior que a original.
  */
 import { useEffect, useRef, useState } from 'react'
-import { Globe } from 'lucide-react'
+import { Globe } from '../lib/icones'
 import { cn } from '../lib/cn'
 import { paisDaLiga } from '../lib/paisDaLiga'
 import { escudoDoTime } from '../lib/aoVivo'

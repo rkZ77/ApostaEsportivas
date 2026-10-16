@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { m as motion, useDragControls } from 'framer-motion'
-import { X } from 'lucide-react'
+import { X } from '../../lib/icones'
 import { cn } from '../../lib/cn'
 import { fecharNoFundo } from '../../lib/fecharNoFundo'
 import { backdropFade, sheetUp, dialogScale, drawerRight } from '../../lib/motion'
