@@ -86,6 +86,18 @@ def test_o_bilhete_vai_num_campo_proprio_e_so_quando_existe():
     assert '**({"bilhete": debug} if debug.get("gates") and debug.get("legs") else {})' in fonte
 
 
+def test_a_lista_de_red_le_a_odd_do_bilhete_na_coluna_certa():
+    """15/10/2026, log de PROD: `column p.odd does not exist` em multiplas,
+    bingo e alavancagem. A rota pulava os tres calada e a aba de RED mostrava
+    so' os produtos de perna unica."""
+    fonte = _admin()
+    mapa = _bloco(fonte, "_COLUNA_DA_ODD")
+    for tabela, coluna in (("picks_multiplas", "total_odd"), ("picks_bingo", "total_odd"),
+                           ("picks_alavancagem", "odd_combined")):
+        assert f'"{tabela}":' in mapa and f'"{coluna}"' in mapa, tabela
+    assert 'p.{_COLUNA_DA_ODD.get(nome, "odd")} AS odd' in fonte
+
+
 def test_a_coluna_engine_debug_da_alavancagem_nasce_na_migration():
     """Quem escreve a coluna é o motor e quem lê é o site, e a ordem de deploy
     entre os dois não é garantida -- por isso os dois lados fazem o ALTER."""

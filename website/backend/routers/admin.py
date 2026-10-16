@@ -7415,6 +7415,15 @@ _TABELAS_COM_RESULTADO = {
 _TABELAS_DE_PERNA_UNICA = {"picks_vip", "picks_free", "picks_faltas",
                            "picks_goleiros", "picks_live"}
 
+#: Bilhete combinado nao tem `odd`: a odd do bilhete mora em outra coluna.
+#: Sem isto o /motor/reds pulava Multipla, Bingo e Alavancagem calado
+#: ("column p.odd does not exist" no log de PROD, 15/10/2026).
+_COLUNA_DA_ODD = {
+    "picks_multiplas":   "total_odd",
+    "picks_bingo":       "total_odd",
+    "picks_alavancagem": "odd_combined",
+}
+
 
 def _leitura_do_red(conn, tabela: str, pick_id: int) -> dict | None:
     """Leitura do RED pelo que aconteceu no jogo, em todo produto. Nunca
@@ -7778,7 +7787,8 @@ def motor_reds(
                      if col_casa else "NULL AS home_team, NULL AS away_team")
             try:
                 cur.execute(f"""
-                    SELECT p.id, p.match_date::text AS dia, p.odd, p.profit,
+                    SELECT p.id, p.match_date::text AS dia,
+                           p.{_COLUNA_DA_ODD.get(nome, "odd")} AS odd, p.profit,
                            {times},
                            d.id AS decisao_id,
                            d.run_id, d.engine, d.method, d.engine_version,
