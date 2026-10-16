@@ -14,8 +14,7 @@
 import { writeFile, mkdir } from 'node:fs/promises'
 
 const CSS_URL =
-  'https://fonts.googleapis.com/css2?family=Nunito:wght@400..800&family=Inter:wght@400..700' +
-  '&family=Barlow+Condensed:wght@600;700&display=swap'
+  'https://fonts.googleapis.com/css2?family=Nunito:wght@400..800&family=Inter:wght@400..700&display=swap'
 
 // UA de Chrome: sem isso o Google devolve o CSS antigo, com ttf no lugar de woff2.
 const UA =
@@ -29,7 +28,7 @@ const UA =
  * numero (ver .font-mono no index.css), e o latin-ext dela sozinho pesava
  * 85 KB pra nada.
  */
-const QUERO = { Nunito: ['latin', 'latin-ext'], Inter: ['latin'], 'Barlow Condensed': ['latin'] }
+const QUERO = { Nunito: ['latin', 'latin-ext'], Inter: ['latin'] }
 
 const cabecalho = `/*
  * FONTES SERVIDAS PELO PROPRIO DOMINIO. ARQUIVO GERADO · nao editar a mao.
@@ -62,10 +61,7 @@ for (const [, subset, corpo] of blocos) {
   const peso = /font-weight: ([^;]+);/.exec(corpo)[1].trim()
   const url = /url\((\S+?)\)/.exec(corpo)[1]
   const faixa = /unicode-range: ([^;]+);/.exec(corpo)[1].trim()
-  // Familia de peso FIXO (Barlow Condensed, 15/10/2026) vem um arquivo por
-  // peso · o peso entra no nome pra um nao sobrescrever o outro.
-  const pesoNoNome = /\d+ \d+/.test(peso) ? '' : `-${peso}`
-  const nome = `${familia.toLowerCase().replace(/\s+/g, '-')}-${subset}${pesoNoNome}.woff2`
+  const nome = `${familia.toLowerCase()}-${subset}.woff2`
 
   const bytes = Buffer.from(await (await fetch(url)).arrayBuffer())
   await writeFile(`public/fonts/${nome}`, bytes)
