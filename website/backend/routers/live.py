@@ -2239,6 +2239,101 @@ def get_live_stats_bulk(fixture_ids: str, so_cache: bool = False,
             _SO_CACHE.reset(token)
 
 
+#: Folha ao vivo mais velha que isto e' buscada de novo (se a cota deixar).
+#: Igual ao TTL da estatistica: quem ja' aquece o jogo (lista, varredura) nao
+#: deixa passar disso, entao a busca daqui so' acontece com o jogo "sozinho".
+_ESTATISTICAS_IDADE_MAX = _TTL_STATS_LIVE
+#: Cota do dia acima disto: so' cache. Mesmo teto do confronto pela API.
+_ESTATISTICAS_TETO_DA_COTA = 90
+
+
+def _cota_permite_estatistica() -> bool:
+    pct = api_quota.estado_atual().get("pct_usado")
+    return pct is None or pct < _ESTATISTICAS_TETO_DA_COTA
+
+
+@router.get("/fixture/{fixture_id}/estatisticas")
+def get_estatisticas_do_jogo(fixture_id: int, current_user: dict = Depends(get_current_user)):
+    """A aba Estatisticas do Raio-X · ver estatisticas_do_jogo.py.
+
+    Do plano pago, como o resto do Raio-X (o gratuito ve a aba trancada)."""
+    from auth_utils import is_vip_active
+    from fastapi import HTTPException
+    if not is_vip_active(current_user):
+        raise HTTPException(403, "Raio-X e' para assinantes")
+    return montar_estatisticas(fixture_id)
+
+
+def montar_estatisticas(fixture_id: int) -> dict:
+    import estatisticas_do_jogo as ed
+
+    # 1. Encerrado e ja' coletado: banco, zero chamada.
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        try:
+            cur.execute(ed.sql_do_banco(), (fixture_id,))
+            linha = cur.fetchone()
+        except Exception:
+            # Coluna que a coleta ainda nao criou neste banco: segue pelo cache.
+            conn.rollback()
+            logger.warning("[ESTATISTICAS] banco indisponivel (fixture %s)", fixture_id, exc_info=True)
+            linha = None
+        if linha:
+            per = ed.do_banco(dict(linha))
+            if per.get("jogo"):
+                return {"status": linha["status"], "elapsed": None,
+                        "home_goals": linha["home_goals"], "away_goals": linha["away_goals"],
+                        "fonte": "banco", "periodos": per}
+        # Ainda nao comecou (pela hora da agenda): nada a buscar, nem na API.
+        if fixture_id not in _fix_cache:
+            cur.execute("""
+                SELECT match_datetime > (NOW() AT TIME ZONE 'America/Sao_Paulo') + INTERVAL '5 minutes' AS futuro
+                  FROM fixtures WHERE fixture_id = %s
+            """, (fixture_id,))
+            agenda = cur.fetchone()
+            if agenda and agenda["futuro"]:
+                return {"status": "NS", "fonte": "nenhuma", "periodos": {}}
+    finally:
+        cur.close(); conn.close()
+
+    # 2. Rolando: o cache que a lista de Jogos e a varredura mantem quente.
+    agora = time.time()
+    entrada_fix = _fix_cache.get(fixture_id)
+    entrada_stats = _stats_cache.get(fixture_id)
+    velho = (not entrada_fix or not entrada_stats
+             or agora - entrada_fix[0] > _ESTATISTICAS_IDADE_MAX
+             or agora - entrada_stats[0] > _ESTATISTICAS_IDADE_MAX)
+    # 3. Frio ou velho: UMA busca que vale pra todos pelo TTL, se a cota deixar.
+    #    _fetch_fixture/_fetch_stats respeitam o TTL, entao duas pessoas
+    #    abrindo juntas nao viram duas chamadas.
+    if velho and _cota_permite_estatistica():
+        data = _fetch_fixture(fixture_id)
+        status = ((data.get("fixture") or {}).get("status") or {}).get("short", "NS")
+        if status in LIVE_STATUSES or status in FT_STATUSES:
+            _fetch_stats(fixture_id, status)
+    token = _SO_CACHE.set(True)
+    try:
+        data = _fetch_fixture(fixture_id)
+    finally:
+        _SO_CACHE.reset(token)
+    fx = data.get("fixture") or {}
+    status = (fx.get("status") or {}).get("short") or "NS"
+    if status not in LIVE_STATUSES and status not in FT_STATUSES:
+        return {"status": status, "fonte": "nenhuma", "periodos": {}}
+    folha = (_stats_cache.get(fixture_id) or (0, []))[1]
+    times = data.get("teams") or {}
+    goals = data.get("goals") or {}
+    return {
+        "status": status,
+        "elapsed": (fx.get("status") or {}).get("elapsed"),
+        "home_goals": goals.get("home"), "away_goals": goals.get("away"),
+        "fonte": "ao_vivo" if status in LIVE_STATUSES else "cache",
+        "periodos": ed.da_folha(folha, (times.get("home") or {}).get("id"),
+                                (times.get("away") or {}).get("id"), status),
+    }
+
+
 def _montar_live_stats(fixture_id: int) -> dict:
     data = _fetch_fixture(fixture_id)
     if not data:
