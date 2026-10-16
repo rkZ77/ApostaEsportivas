@@ -56,6 +56,9 @@ class _ConnFake:
     def cursor(self):
         return self._cur
 
+    def commit(self):
+        pass
+
     def close(self):
         pass
 

@@ -30,19 +30,41 @@ import json
 import os
 import time
 
-import requests
 from dotenv import find_dotenv, load_dotenv
 
 from utils.db_utils import get_connection
-from services import api_quota
+from utils.api_client import buscar, ApiQuotaEsgotada
 
 load_dotenv(find_dotenv())
 
-BASE = "https://v3.football.api-sports.io"
-HEADERS = {"x-apisports-key": os.getenv("API_FOOTBALL_KEY")}
-
 # A API limita requisicoes por minuto; o resto do projeto usa a mesma pausa.
 PAUSA_ENTRE_CHAMADAS = 0.4
+
+#: PARTIDA SEM FOLHA DE JOGADOR NAO FICA NA FILA PRA SEMPRE (2026-10-16).
+#:
+#: A fila e' "N mais recentes por liga". Partida que a API nao cobre (liga sem
+#: folha de jogador, ou folha nunca publicada) nunca ganhava linha, entao
+#: continuava sendo a mais recente da liga e ocupava a vaga dela em TODA
+#: rodada -- gastando requisicao e travando a liga atras dela. Agora cada
+#: tentativa vazia e' anotada: a partida so' volta depois de
+#: ESPERA_ENTRE_TENTATIVAS (a API as vezes publica com atraso) e sai da fila
+#: de vez com MAX_TENTATIVAS.
+MAX_TENTATIVAS = 3
+ESPERA_ENTRE_TENTATIVAS = "20 hours"
+
+DDL_TENTATIVAS = [
+    """CREATE TABLE IF NOT EXISTS player_stats_tentativas (
+           fixture_id  BIGINT PRIMARY KEY,
+           tentativas  INTEGER NOT NULL DEFAULT 1,
+           motivo      TEXT,
+           ultima_em   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+       )""",
+]
+
+#: Recorte da fila, igual no contador e na lista (os dois andam juntos).
+_FORA_DA_ESPERA = f"""(pt.fixture_id IS NULL OR (
+        pt.tentativas < {MAX_TENTATIVAS}
+        AND pt.ultima_em < NOW() - INTERVAL '{ESPERA_ENTRE_TENTATIVAS}'))"""
 
 
 def _get(dado, *caminho):
@@ -239,16 +261,28 @@ class PlayerStatsCollectorService:
         self._ja_mostrou_shape = False
 
     def _buscar(self, fixture_id: int) -> list:
-        r = requests.get(f"{BASE}/fixtures/players", headers=HEADERS,
-                         params={"fixture": fixture_id}, timeout=20)
-        api_quota.registrar(getattr(r, "headers", None), "coletor_jogadores")
-        r.raise_for_status()
-        corpo = r.json()
-        erros = corpo.get("errors")
-        # A API devolve 200 com errors preenchido quando estoura cota ou plano.
-        if erros:
-            raise RuntimeError(f"API recusou: {erros}")
-        return corpo.get("response", []) or []
+        # Pelo cliente unico (2026-10-16): retry, registro de cota e
+        # `ApiQuotaEsgotada` com nome proprio -- que e' o que deixa `coletar`
+        # parar a rodada em vez de bater na recusa partida por partida.
+        return buscar("fixtures/players", {"fixture": fixture_id},
+                      origem="coletor_jogadores")
+
+    @staticmethod
+    def _garantir_tabela(conn, cur) -> None:
+        from utils import esquema
+        if esquema.garantir(cur, DDL_TENTATIVAS):
+            conn.commit()
+
+    @staticmethod
+    def _anotar_tentativa(cur, fixture_id: int, motivo: str) -> None:
+        cur.execute("""
+            INSERT INTO player_stats_tentativas (fixture_id, tentativas, motivo, ultima_em)
+            VALUES (%s, 1, %s, NOW())
+            ON CONFLICT (fixture_id) DO UPDATE SET
+                tentativas = player_stats_tentativas.tentativas + 1,
+                motivo = EXCLUDED.motivo,
+                ultima_em = NOW()
+        """, (fixture_id, motivo[:300]))
 
     def _mostrar_shape(self, bloco_stats: dict) -> None:
         """Confere o mapeamento contra a resposta real, uma vez por execucao.
@@ -296,6 +330,12 @@ class PlayerStatsCollectorService:
             for jogador in bloco_time.get("players", []) or []:
                 stats = (jogador.get("statistics") or [{}])[0]
                 self._mostrar_shape(stats)
+                # Jogador sem id nao tem chave: um so' derrubava a partida
+                # inteira no NOT NULL (2026-10-16). Pula ele, grava o resto.
+                if _get(jogador, "player", "id") is None:
+                    print(f"[PLAYER_STATS] Fixture {fixture['fixture_id']}: "
+                          f"{_get(jogador, 'player', 'name')} sem id na API, pulado.")
+                    continue
                 linhas.append((
                     fixture["fixture_id"], _get(jogador, "player", "id"),
                     _get(jogador, "player", "name"), team_id, team_name,
@@ -327,14 +367,23 @@ class PlayerStatsCollectorService:
 
         conn = get_connection()
         cur = conn.cursor()
+        self._garantir_tabela(conn, cur)
         total = 0
 
         for fixture in fixtures:
             fid = fixture["fixture_id"]
             try:
                 linhas = self._linhas_da_fixture(fixture, self._buscar(fid))
-                if not linhas:
-                    print(f"[PLAYER_STATS] Fixture {fid}: sem dado de jogador (jogo nao comecou?).")
+                # Ninguem com minuto em campo = folha ainda nao publicada.
+                # Gravar assim tiraria a partida da fila (ela so' olha quem nao
+                # tem linha) com tudo NULL pra sempre. Anota e tenta depois.
+                # Indice 9 = minutes, na ordem da tupla de _linhas_da_fixture.
+                if not linhas or not any((l[9] or 0) > 0 for l in linhas):
+                    motivo = "sem jogador" if not linhas else "sem minutos"
+                    print(f"[PLAYER_STATS] Fixture {fid}: {motivo} na folha · "
+                          f"tenta de novo em {ESPERA_ENTRE_TENTATIVAS}.")
+                    self._anotar_tentativa(cur, fid, motivo)
+                    conn.commit()
                     continue
                 cur.executemany("""
                     INSERT INTO player_match_stats (
@@ -402,9 +451,21 @@ class PlayerStatsCollectorService:
                 conn.commit()
                 total += len(linhas)
                 print(f"[PLAYER_STATS] Fixture {fid}: {len(linhas)} jogadores.")
+            except ApiQuotaEsgotada:
+                conn.rollback()
+                print("[PLAYER_STATS] Cota da API esgotada · rodada encerrada, "
+                      "o resto fica pra proxima.")
+                break
             except Exception as e:
                 conn.rollback()
                 print(f"[PLAYER_STATS] Erro na fixture {fid}, pulando: {e}")
+                # Erro que se repete (payload torto, constraint) tambem nao
+                # pode prender a vaga da liga pra sempre.
+                try:
+                    self._anotar_tentativa(cur, fid, f"erro: {e}")
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
             time.sleep(PAUSA_ENTRE_CHAMADAS)
 
         cur.close()
@@ -442,6 +503,7 @@ class PlayerStatsCollectorService:
         """
         conn = get_connection()
         cur = conn.cursor()
+        self._garantir_tabela(conn, cur)
 
         # Quantas ligas tem fila AGORA · e' o divisor do rodizio, e ele muda a
         # cada execucao (liga que zerou sai, liga que jogou ontem entra).
@@ -454,27 +516,30 @@ class PlayerStatsCollectorService:
         #
         # O rodizio por liga piorava: a liga morta entrava no divisor e tirava
         # vaga das vivas na mesma passada.
-        cur.execute("""
+        cur.execute(f"""
             SELECT COUNT(DISTINCT ms.league_id)
             FROM match_statistics ms
             LEFT JOIN player_match_stats p ON p.fixture_id = ms.fixture_id
+            LEFT JOIN player_stats_tentativas pt ON pt.fixture_id = ms.fixture_id
             JOIN leagues l ON l.league_id = ms.league_id
                           AND l.season = ms.season
                           AND COALESCE(l.ativa, TRUE)
             WHERE p.fixture_id IS NULL AND ms.league_id IS NOT NULL
+              AND {_FORA_DA_ESPERA}
         """)
         ligas_com_fila = (cur.fetchone() or [0])[0] or 0
 
         if por_liga is None:
             por_liga = max(1, limite // ligas_com_fila) if ligas_com_fila else limite
 
-        cur.execute("""
+        cur.execute(f"""
             SELECT fixture_id, league_id, season, match_date FROM (
                 SELECT ms.fixture_id, ms.league_id, ms.season, ms.match_date,
                        ROW_NUMBER() OVER (PARTITION BY ms.league_id
                                           ORDER BY ms.match_date DESC) AS ordem
                   FROM match_statistics ms
              LEFT JOIN player_match_stats p ON p.fixture_id = ms.fixture_id
+             LEFT JOIN player_stats_tentativas pt ON pt.fixture_id = ms.fixture_id
                   -- Mesmo recorte do contador acima. Os dois precisam andar
                   -- juntos: divisor de um universo e fila de outro dariam um
                   -- `por_liga` calculado sobre ligas que nao entram na fila.
@@ -482,6 +547,7 @@ class PlayerStatsCollectorService:
                                 AND l.season = ms.season
                                 AND COALESCE(l.ativa, TRUE)
                  WHERE p.fixture_id IS NULL
+                   AND {_FORA_DA_ESPERA}
             ) t
             WHERE t.ordem <= %s
             -- Entre as ligas, a mais recente primeiro · quando o limite geral
