@@ -135,7 +135,7 @@ export default function EstatisticasDoJogo({ fixtureId, homeId, awayId, homeNome
           <div className="px-4 pb-4">
             <div className="text-center text-[11px] font-bold uppercase tracking-wide text-ink-3 mb-1.5">Posse de bola</div>
             <div className="flex items-center gap-3">
-              <span className="font-placar text-2xl text-ink-1 w-12">
+              <span className="font-mono font-black text-2xl text-ink-1 w-12">
                 {rolando ? <NumeroVivo valor={posse.casa} /> : posse.casa}%
               </span>
               <div className="flex-1 flex h-2.5 gap-0.5 rounded-full overflow-hidden"
@@ -143,7 +143,7 @@ export default function EstatisticasDoJogo({ fixtureId, homeId, awayId, homeNome
                 <span className="bg-accent rounded-l-full transition-[width] duration-700" style={{ width: `${posse.casa}%` }} />
                 <span className="bg-sky-400 rounded-r-full flex-1" />
               </div>
-              <span className="font-placar text-2xl text-ink-1 w-12 text-right">
+              <span className="font-mono font-black text-2xl text-ink-1 w-12 text-right">
                 {rolando ? <NumeroVivo valor={posse.fora} /> : posse.fora}%
               </span>
             </div>

@@ -453,7 +453,7 @@ function HojeNaLiga({ jogos, onAbrir }: { jogos: JogoDoDia[]; onAbrir: (f: JogoD
                         <TeamLogo id={id} name={nome} size={18} />
                         <span className="text-[13px] font-semibold text-ink-1 truncate flex-1">{nome}</span>
                         {(live || fim) && (
-                          <span className={cn('font-placar text-base w-5 text-right', live ? 'text-accent-ink' : 'text-ink-1')}>
+                          <span className={cn('font-mono font-black text-base w-5 text-right', live ? 'text-accent-ink' : 'text-ink-1')}>
                             {gols ?? 0}
                           </span>
                         )}
@@ -519,7 +519,7 @@ function PlacarDaLiga({ summary, limit, onLimit }: {
           return (
             <div key={c.chave} className="bg-surface-1 px-3 py-3">
               <div className="text-[11px] text-ink-3 leading-tight">{c.rotulo}</div>
-              <div className="font-placar text-3xl leading-none text-ink-1 mt-1.5">
+              <div className="font-mono font-black text-3xl leading-none text-ink-1 mt-1.5">
                 {c.pct ? `${Math.round(c.valor)}%` : decimal(c.valor)}
               </div>
               <div className={cn('mt-1.5 flex items-center gap-1 text-[11px] font-semibold', nv.cls)}>
@@ -549,7 +549,7 @@ function PlacarDaLiga({ summary, limit, onLimit }: {
               {folha.map(f => (
                 <div key={f.chave} className="bg-surface-1 px-3 py-3">
                   <div className="text-[11px] text-ink-3 leading-tight">{f.rotulo}</div>
-                  <div className="font-placar text-3xl leading-none text-ink-1 mt-1.5">
+                  <div className="font-mono font-black text-3xl leading-none text-ink-1 mt-1.5">
                     {f.pct ? `${Math.round(f.valor)}%` : decimal(f.valor)}
                   </div>
                   {f.jogos < summary.total_games && (
@@ -621,7 +621,7 @@ function RankingDosTimes({ ranking, campo, onCampo, context, onContext }: {
             {ordenado.map(({ t, v }, i) => {
               return (
                 <li key={t.team_id} className="flex items-center gap-3 px-4 py-2.5">
-                  <span className={cn('w-6 shrink-0 text-right font-placar text-lg leading-none',
+                  <span className={cn('w-6 shrink-0 text-right font-mono font-black text-lg leading-none',
                     i < 3 ? 'text-ink-1' : 'text-ink-4')}>{i + 1}</span>
                   <TeamLogo id={t.team_id} name={t.team_name} size={22} />
                   <span className="flex-1 min-w-0">
@@ -631,7 +631,7 @@ function RankingDosTimes({ ranking, campo, onCampo, context, onContext }: {
                     </span>
                   </span>
                   <span className="font-mono text-[11px] text-ink-4 shrink-0">{t.games}j</span>
-                  <span className="w-14 text-right font-placar text-xl leading-none text-ink-1 shrink-0">
+                  <span className="w-14 text-right font-mono font-black text-xl leading-none text-ink-1 shrink-0">
                     {atual.pct ? `${Math.round(v)}%` : decimal(v)}
                   </span>
                 </li>
@@ -680,7 +680,7 @@ function ArbitrosDaLiga({ arbitros }: { arbitros: Arbitro[] | null }) {
             <span className="w-10 text-center font-mono text-xs text-ink-3">{a.jogos}</span>
             <span className="w-12 text-center font-mono text-xs text-ink-2">{decimal(Number(a.avg_yellow), 1)}</span>
             <span className="w-12 text-center font-mono text-xs text-ink-2">{decimal(Number(a.avg_red), 2)}</span>
-            <span className={cn('w-12 text-center font-placar text-lg leading-none',
+            <span className={cn('w-12 text-center font-mono font-black text-lg leading-none',
               Number(a.avg_card_points) >= 5 ? 'text-accent-ink' : 'text-ink-1')}>
               {decimal(Number(a.avg_card_points), 1)}
             </span>
@@ -717,7 +717,7 @@ function Resultados({ games, visiveis, onMais }: { games: Game[]; visiveis: numb
                     <span key={i} className="flex items-center gap-2">
                       <TeamLogo id={id} name={nome} size={16} />
                       <span className={cn('text-[13px] truncate flex-1', perdeu ? 'text-ink-3' : 'text-ink-1 font-semibold')}>{nome}</span>
-                      <span className={cn('font-placar text-base w-4 text-right', perdeu ? 'text-ink-3' : 'text-ink-1')}>{gols ?? '-'}</span>
+                      <span className={cn('font-mono font-black text-base w-4 text-right', perdeu ? 'text-ink-3' : 'text-ink-1')}>{gols ?? '-'}</span>
                     </span>
                   ))}
               </span>

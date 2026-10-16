@@ -29,7 +29,7 @@ export default function LinhasDaLiga({ jogos }: { jogos: JogoDaLiga[] }) {
                     <span className="flex-1 h-1.5 rounded-full bg-surface-3 overflow-hidden">
                       <span className="block h-full rounded-full bg-accent" style={{ width: `${l.pct ?? 0}%` }} />
                     </span>
-                    <span className="w-10 text-right font-placar text-lg leading-none text-ink-1">
+                    <span className="w-10 text-right font-mono font-black text-lg leading-none text-ink-1">
                       {l.pct == null ? '-' : `${l.pct}%`}
                     </span>
                     <span className="hidden min-[400px]:block w-14 text-right font-mono text-[11px] text-ink-4">
@@ -60,7 +60,7 @@ export default function LinhasDaLiga({ jogos }: { jogos: JogoDaLiga[] }) {
         </div>
         <div className="mt-1.5 flex gap-2 border-t border-line pt-1.5">
           {dist.map(d => (
-            <span key={d.rotulo} className="flex-1 text-center font-placar text-base text-ink-2">{d.rotulo}</span>
+            <span key={d.rotulo} className="flex-1 text-center font-mono font-black text-base text-ink-2">{d.rotulo}</span>
           ))}
         </div>
       </section>
