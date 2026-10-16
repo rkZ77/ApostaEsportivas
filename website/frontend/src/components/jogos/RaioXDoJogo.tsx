@@ -18,6 +18,7 @@ import { rotuloDoTempo } from '../../lib/picksAgora'
 import { aoVivo as estaAoVivo } from '../../lib/aoVivo'
 import SelectMenu from '../ui/SelectMenu'
 import Campinho from './Campinho'
+import NumeroVivo from '../ui/NumeroVivo'
 import Classificacao from './Classificacao'
 import ResumoDaIA from './ResumoDaIA'
 
@@ -368,7 +369,8 @@ function Placar({ jogo, dados, aoVivo, encerrado }: {
                embaixo, no azul do Ao Vivo do site. */
             <div className="shrink-0 pt-2 text-center">
               <div className="font-mono text-3xl font-black text-ink-1 tabular-nums">
-                {aoVivo.home_goals ?? 0}<span className="text-ink-4 mx-1.5">-</span>{aoVivo.away_goals ?? 0}
+                {/* Gol com a tela aberta: o dígito rola, como placar. */}
+                <NumeroVivo valor={aoVivo.home_goals ?? 0} /><span className="text-ink-4 mx-1.5">-</span><NumeroVivo valor={aoVivo.away_goals ?? 0} />
               </div>
               <div className="mt-1 inline-flex items-center gap-1.5 text-[11px] font-bold text-sky-300 tabular-nums">
                 <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" aria-hidden />

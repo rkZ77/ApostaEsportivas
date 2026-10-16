@@ -56,6 +56,7 @@ import { useShareStoryImage } from '../hooks/useShareStoryImage'
 import { pctProb } from '../utils/format'
 import { rotuloDoStatus, escudoDoTime } from '../lib/aoVivo'
 import { stakeDe } from '../utils/stakePlan'
+import NumeroVivo from './ui/NumeroVivo'
 import { sinalizarNavegacao } from '../services/progressBus'
 import FiltrosDePicks, { filtrarPicks, ordenarPicks,
          type OrdemDePick, type BilheteFiltro } from './FiltrosDePicks'
@@ -1168,7 +1169,7 @@ const CardLive = forwardRef<HTMLDivElement, {
             {oddCorrente != null ? 'Odd agora' : 'Odd'}
           </div>
           <div className="text-3xl font-black text-green-400 tabular-nums">
-            {oddExibida.toFixed(2)}
+            <NumeroVivo valor={oddExibida} casas={2} />
           </div>
           {/* A odd que o usuário registrou pode divergir da do pick: ele segue
               depois, e a linha se move ao vivo mais que em pré-jogo. */}

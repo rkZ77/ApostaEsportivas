@@ -13,6 +13,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@number-flow/react": "0.5.10",
+    "@phosphor-icons/react": "2.1.10",
     "axios": "^1.7.2",
     "clsx": "^2.1.1",
     "embla-carousel-react": "^8.6.0",
@@ -23,7 +25,8 @@
     "react-helmet-async": "^3.0.0",
     "react-markdown": "^10.1.0",
     "react-router-dom": "^6.24.0",
-    "tailwind-merge": "^3.6.0"
+    "tailwind-merge": "^3.6.0",
+    "vaul": "1.1.2"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",

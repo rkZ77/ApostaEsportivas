@@ -9,6 +9,7 @@ import { PAGE_WIDTH } from '../lib/pageWidth'
 import { capitalizarFrase } from '../utils/format'
 import { nomeDaLigaPt, paisDaLiga } from '../lib/paisDaLiga'
 import RaioXDoJogo, { FormaPontos } from '../components/jogos/RaioXDoJogo'
+import NumeroVivo from '../components/ui/NumeroVivo'
 import BandejaDoBilhete from '../components/jogos/BandejaDoBilhete'
 import { EstatisticasContent } from './Estatisticas'
 import { useAuth } from '../context/AuthContext'
@@ -684,7 +685,8 @@ export default function Fixtures() {
                                 {(finished || live) && (
                                   <span className={`font-mono text-sm font-black tabular-nums shrink-0 w-5 text-right ${
                                     live ? 'text-green-400' : perdeu ? 'text-ink-4' : 'text-ink-1'}`}>
-                                    {gols ?? 0}
+                                    {/* Ao vivo o gol rola como placar (15/10/2026). */}
+                                    {live ? <NumeroVivo valor={gols ?? 0} /> : (gols ?? 0)}
                                   </span>
                                 )}
                               </div>

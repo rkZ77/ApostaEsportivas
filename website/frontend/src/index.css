@@ -329,6 +329,22 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* NUMERO GRANDE E' PLACAR (15/10/2026) · ver "Voz 4" em base. A Inter fica
+     nos numeros pequenos (tabela, legenda), onde condensada perderia leitura;
+     do text-lg pra cima a evidencia vira placar. `.font-placar` e' o mesmo,
+     pra numero grande que nao usa font-mono (odd e resultado dos cards). */
+  .font-mono:is(.text-lg, .text-xl, .text-2xl, .text-3xl, .text-4xl, .text-5xl),
+  /* O numero de destaque do site e' `font-black` grande (odd e resultado dos
+     cards, placar, lucro da banca · 105 lugares): a regra pega o padrao em
+     vez de marcar cada um. */
+  .font-black:is(.text-xl, .text-2xl, .text-3xl, .text-4xl, .text-5xl),
+  .font-placar {
+    font-family: 'Barlow Condensed', Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+  }
+
   /*
    * ENTRADA DO HERO, EM CSS E NAO EM FRAMER-MOTION.
    *
@@ -430,6 +446,21 @@
        -0.01em segura a densidade do titulo sem colar. */
     letter-spacing: -0.01em;
     @apply text-ink-1;
+  }
+
+  /*
+   * Voz 4 · PLACAR (15/10/2026, pedido do usuario: tirar a "cara de IA").
+   *
+   * Barlow Condensed nos titulos de pagina e de secao (h1, h2) e em todo
+   * numero grande (ver .font-mono grande em utilities e .font-placar): o site
+   * passa a ler como transmissao esportiva. Nome de time, rotulo e texto
+   * corrido continuam em Nunito, que le melhor pequeno no celular. Dois pesos
+   * (600/700), so' latin: 22 KB cada, baixados so' quando a tela usa.
+   */
+  h1, h2 {
+    font-family: 'Barlow Condensed', Nunito, 'Nunito Fallback', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-weight: 700;
+    letter-spacing: 0.005em;
   }
 
   /* Foco visivel consistente no site inteiro, em vez de outline do navegador */
