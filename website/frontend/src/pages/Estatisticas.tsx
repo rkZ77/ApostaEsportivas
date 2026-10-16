@@ -117,6 +117,12 @@ const FOLHA_DA_LIGA: { chave: string; rotulo: string; pct?: boolean }[] = [
   { chave: 'impedimentos',      rotulo: 'Impedimentos' },
   { chave: 'passes',            rotulo: 'Passes' },
   { chave: 'passes_certos',     rotulo: 'Passes certos', pct: true },
+  // Da folha dos jogadores, somada por time (estatisticas_de_jogadores.py).
+  { chave: 'passes_decisivos',  rotulo: 'Passes decisivos' },
+  { chave: 'desarmes',          rotulo: 'Desarmes' },
+  { chave: 'interceptacoes',    rotulo: 'Interceptações' },
+  { chave: 'duelos_ganhos',     rotulo: 'Duelos ganhos' },
+  { chave: 'dribles_certos',    rotulo: 'Dribles certos' },
 ]
 
 /* O ranking: os números de sempre e os da folha cheia. `valor` devolve null
@@ -137,6 +143,11 @@ const RANKINGS: Ranking[] = [
   { id: 'posse',         rotulo: 'Posse',          valor: daFolha('posse'), pct: true },
   { id: 'passes',        rotulo: 'Passes',         valor: daFolha('passes') },
   { id: 'passes_certos', rotulo: 'Passes certos',  valor: daFolha('passes_certos'), pct: true },
+  { id: 'decisivos',     rotulo: 'Passes decisivos', valor: daFolha('passes_decisivos') },
+  { id: 'dribles',       rotulo: 'Dribles certos', valor: daFolha('dribles_certos') },
+  { id: 'duelos',        rotulo: 'Duelos ganhos',  valor: daFolha('duelos_ganhos') },
+  { id: 'desarmes',      rotulo: 'Desarmes',       valor: daFolha('desarmes') },
+  { id: 'intercept',     rotulo: 'Interceptações', valor: daFolha('interceptacoes') },
   { id: 'amarelos',      rotulo: 'Amarelos',       valor: doTime('avg_yellows') },
   { id: 'vermelhos',     rotulo: 'Vermelhos',      valor: doTime('avg_reds') },
   { id: 'faltas',        rotulo: 'Faltas',         valor: doTime('avg_fouls') },
@@ -532,7 +543,7 @@ function PlacarDaLiga({ summary, limit, onLimit }: {
         return (
           <>
             <div className="px-4 pt-3 pb-2 border-t border-line/60">
-              <h4 className="text-[11px] font-bold uppercase tracking-wide text-ink-3">Finalizações e passes</h4>
+              <h4 className="text-[11px] font-bold uppercase tracking-wide text-ink-3">Finalizações, passes e duelos</h4>
             </div>
             <div className="grid grid-cols-2 min-[420px]:grid-cols-4 lg:grid-cols-5 gap-px bg-line/60 border-t border-line/60">
               {folha.map(f => (

@@ -3277,6 +3277,10 @@ def get_liga_tendencias(
             "over25_pct":       round(over25 / n * 100, 1),
             "folha": medias_da_folha(games),
         }
+        # Desarme, duelo, drible... somados da folha dos jogadores (sem API).
+        import estatisticas_de_jogadores as ej
+        summary["folha"].update(ej.medias_da_liga(
+            ej.por_jogo(cur, [g.get("fixture_id") for g in games])))
         return {"games": games, "summary": summary}
     finally:
         cur.close()
@@ -3407,7 +3411,7 @@ def get_liga_ranking(
         def lado(l: str, com_folha: bool) -> str:
             folha = "".join(f",\n                   ms.{l}_{col} AS f_{chave}" for col, chave in _FOLHA_DO_TIME) if com_folha else ""
             return f"""
-            SELECT ms.{l}_team_id AS team_id,
+            SELECT ms.{l}_team_id AS team_id, ms.fixture_id,
                    {_nome_do_time(l)} AS team_name,
                    ms.{l}_goals          AS goals,
                    ms.{l}_corners        AS corners,
@@ -3436,6 +3440,10 @@ def get_liga_ranking(
             logger.warning("[LIGA] ranking sem folha cheia (liga %s)", league_id, exc_info=True)
             raw = _safe_query(cur, *consulta(False))
 
+        # Desarme, duelo, drible... do time em cada jogo, da folha dos jogadores.
+        import estatisticas_de_jogadores as ej
+        dos_jogadores = ej.por_jogo(cur, list({r.get("fixture_id") for r in raw}))
+
         from collections import defaultdict
         acc: dict = defaultdict(lambda: {
             "team_id": None, "team_name": "", "games": 0,
@@ -3455,8 +3463,9 @@ def get_liga_ranking(
             # Folha cheia: so' o jogo com o dado conta (xG e passe faltam em
             # parte das ligas; zero inventado puxaria a media pra baixo).
             folha = a.setdefault("folha", {})
-            for _, chave in _FOLHA_DO_TIME:
-                v = row.get(f"f_{chave}")
+            valores = {chave: row.get(f"f_{chave}") for _, chave in _FOLHA_DO_TIME}
+            valores.update((dos_jogadores.get(row.get("fixture_id")) or {}).get(tid) or {})
+            for chave, v in valores.items():
                 if v is not None:
                     s = folha.setdefault(chave, [0.0, 0])
                     s[0] += float(v)

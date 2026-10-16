@@ -2280,7 +2280,12 @@ def montar_estatisticas(fixture_id: int) -> dict:
             logger.warning("[ESTATISTICAS] banco indisponivel (fixture %s)", fixture_id, exc_info=True)
             linha = None
         if linha:
+            import estatisticas_de_jogadores as ej
             per = ed.do_banco(dict(linha))
+            # Desarme, duelo, drible, passe decisivo: da folha dos jogadores.
+            times = ej.por_jogo(cur, [fixture_id]).get(fixture_id) or {}
+            per = ed.com_jogadores(per, times.get(linha.get("home_team_id")) or {},
+                                   times.get(linha.get("away_team_id")) or {})
             if per.get("jogo"):
                 return {"status": linha["status"], "elapsed": None,
                         "home_goals": linha["home_goals"], "away_goals": linha["away_goals"],

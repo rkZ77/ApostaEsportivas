@@ -35,6 +35,15 @@ SINAIS
   estilo_posse    posse media do mandante menos a do visitante: quem tem a
                   bola contra quem se fecha.
   bloqueio        chutes bloqueados cedidos: time que defende na area.
+
+FOLHA DOS JOGADORES (15/10/2026, pedido do usuario: "coloca tudo que tiver de
+estatistica no site e nos motores"). Duelo, desarme, drible certo e passe
+decisivo nao existem na folha do jogo; a coleta grava por jogador em
+`player_match_stats`, e aqui eles sao somados por time e por jogo (so' time
+com 11+ jogadores com minuto, como no site). O sinal e' a media dos dois
+times nos jogos ANTERIORES. Sem valor tipico conhecido, as faixas sao os
+tercos da propria amostra (baixo / medio / alto). Pela regra da casa, nada
+disso entra no motor sem passar aqui como CONFIRMADO.
 """
 from __future__ import annotations
 
@@ -70,6 +79,51 @@ def carregar():
     jogos = [dict(zip(cols, r)) for r in cur.fetchall()]
     cur.close(); conn.close()
     return jogos
+
+
+#: (coluna em player_match_stats, nome do campo no jogo, rotulo do sinal)
+DOS_JOGADORES = (
+    ("duels_total",      "duelos",    "duelos por jogo (media dos dois)"),
+    ("tackles_total",    "desarmes",  "desarmes por jogo (media dos dois)"),
+    ("dribbles_success", "dribles",   "dribles certos por jogo (media dos dois)"),
+    ("passes_key",       "decisivos", "passes decisivos por jogo (media dos dois)"),
+)
+
+
+def carregar_jogadores() -> dict:
+    """{(fixture_id, team_id): {campo: soma}}. Vazio sem a tabela."""
+    conn = get_connection()
+    cur = conn.cursor()
+    saida = {}
+    somas = ", ".join(f"SUM({col})" for col, _, _ in DOS_JOGADORES)
+    try:
+        cur.execute(f"""SELECT fixture_id, team_id, {somas}
+                          FROM player_match_stats
+                         WHERE minutes > 0 AND season >= 2025
+                         GROUP BY fixture_id, team_id
+                        HAVING COUNT(*) >= 11""")
+        for linha in cur.fetchall():
+            fid, tid, *vals = linha
+            saida[(fid, tid)] = {campo: v for (_, campo, _), v in zip(DOS_JOGADORES, vals)}
+    except Exception as e:
+        print(f"folha dos jogadores indisponivel: {e}")
+    finally:
+        cur.close(); conn.close()
+    return saida
+
+
+def tercos(valores: list) -> tuple | None:
+    """Os dois cortes que dividem a amostra em tres partes iguais."""
+    v = sorted(x for x in valores if x is not None)
+    if len(v) < 3 * MIN_POR_FAIXA:
+        return None
+    return v[len(v) // 3], v[2 * len(v) // 3]
+
+
+def faixa_terco(v, cortes) -> str | None:
+    if v is None or cortes is None:
+        return None
+    return "baixo" if v < cortes[0] else "medio" if v < cortes[1] else "alto"
 
 
 def carregar_calendario():
@@ -158,7 +212,17 @@ def faixa_num(v, cortes, nomes):
 def main():
     jogos = carregar()
     agenda = carregar_calendario()
-    print(f"{len(jogos)} partidas encerradas desde 2025; calendario de {len(agenda)} times")
+    jogadores = carregar_jogadores()
+    # A folha dos jogadores entra no jogo como `home_duelos`, `away_desarmes`...
+    # e a mesma media_campo do resto le' de la'.
+    for m in jogos:
+        for lado in ("home", "away"):
+            for campo, v in (jogadores.get((m["fixture_id"], m[f"{lado}_team_id"])) or {}).items():
+                m[f"{lado}_{campo}"] = v
+    print(f"{len(jogos)} partidas encerradas desde 2025; calendario de {len(agenda)} times; "
+          f"folha de jogadores em {len(jogadores)} time-jogos")
+    # Sinal sem faixa fixa: guarda o valor cru e corta nos tercos no fim.
+    crus = defaultdict(list)            # (sinal, fam) -> [(data, valor, residuo)]
     por_liga_time = defaultdict(list)
     ultimo_jogo = {}                     # team -> data (qualquer competicao)
     acum = defaultdict(lambda: defaultdict(list))   # (sinal, fam) -> faixa -> residuos
@@ -211,9 +275,20 @@ def main():
                 for sinal, faixa in sinais.items():
                     if faixa is not None:
                         acum[(sinal, fam)][faixa].append((m["match_date"], res))
+                for _, campo, rotulo in DOS_JOGADORES:
+                    mh, ma = media_campo(hh, h, campo), media_campo(ha, a, campo)
+                    if mh is not None and ma is not None:
+                        crus[(rotulo, fam)].append((m["match_date"], (mh + ma) / 2, res))
 
         por_liga_time[(lg, h)].append(m); por_liga_time[(lg, a)].append(m)
         ultimo_jogo[h] = m["match_date"]; ultimo_jogo[a] = m["match_date"]
+
+    for chave, linhas in crus.items():
+        cortes = tercos([v for _, v, _ in linhas])
+        for d, v, res in linhas:
+            faixa = faixa_terco(v, cortes)
+            if faixa is not None:
+                acum[chave][faixa].append((d, res))
 
     datas = sorted(d for faixas in acum.values() for rs in faixas.values() for d, _ in rs)
     corte = datas[len(datas) // 2] if datas else None

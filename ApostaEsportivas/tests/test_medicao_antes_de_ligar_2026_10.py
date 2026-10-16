@@ -78,6 +78,21 @@ def test_par_de_faixas_e_escolhido_so_na_descoberta():
     assert not m.veredito(_faixas(1.0, 0.0, 0.0, 1.0), corte=10).startswith("CONFIRMADO")
 
 
+def test_sinal_da_folha_dos_jogadores_corta_nos_tercos():
+    """Duelo, desarme, drible e passe decisivo (15/10/2026): sem valor tipico
+    conhecido, a faixa e' o terco da propria amostra."""
+    import medir_sinais_novos as m
+    cortes = m.tercos(list(range(300)))
+    assert cortes == (100, 200)
+    assert [m.faixa_terco(v, cortes) for v in (5, 150, 250)] == ["baixo", "medio", "alto"]
+    assert m.tercos(list(range(10))) is None            # amostra curta nao corta
+    assert m.faixa_terco(None, cortes) is None
+    # So' time com folha de verdade (11+ jogadores com minuto), como no site.
+    from pathlib import Path
+    fonte = Path(m.__file__).read_text(encoding="utf-8")
+    assert "HAVING COUNT(*) >= 11" in fonte and "minutes > 0" in fonte
+
+
 # ── medir_calibracao_dos_picks ────────────────────────────────────────────
 def _perna(prob, odd, green):
     return {"probability": prob, "odd": odd, "result": "GREEN" if green else "RED"}

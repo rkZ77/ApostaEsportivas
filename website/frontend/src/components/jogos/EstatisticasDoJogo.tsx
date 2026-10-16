@@ -35,8 +35,10 @@ const ROTULO_PERIODO: Record<Periodo, string> = { jogo: 'Jogo', '1t': '1º tempo
 const GRUPOS: { titulo: string; chaves: string[] }[] = [
   { titulo: 'Visão geral', chaves: ['xg', 'chutes', 'chutes_no_gol', 'escanteios', 'faltas', 'amarelos', 'vermelhos'] },
   { titulo: 'Finalizações', chaves: ['chutes_fora', 'chutes_bloqueados', 'chutes_na_area', 'chutes_de_fora'] },
-  { titulo: 'Defesa', chaves: ['defesas', 'impedimentos'] },
-  { titulo: 'Passes', chaves: ['passes', 'passes_certos'] },
+  { titulo: 'Defesa', chaves: ['defesas', 'desarmes', 'interceptacoes', 'impedimentos'] },
+  // Da folha dos jogadores: só aparece depois que o jogo encerrado é coletado.
+  { titulo: 'Duelos', chaves: ['duelos_ganhos', 'dribles_certos'] },
+  { titulo: 'Passes', chaves: ['passes', 'passes_certos', 'passes_decisivos'] },
 ]
 
 const formatar = (v: number, pct: boolean) =>

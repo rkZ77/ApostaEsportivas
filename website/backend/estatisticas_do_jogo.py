@@ -156,8 +156,20 @@ def do_banco(linha: dict) -> dict:
     return periodos(cheia, primeiro, tem_segundo=True)
 
 
+def com_jogadores(per: dict, casa: dict, fora: dict) -> dict:
+    """Junta no jogo inteiro o que vem da folha dos JOGADORES (desarme,
+    duelo, drible, passe decisivo · estatisticas_de_jogadores.py). So' existe
+    depois da coleta do jogo encerrado; o 1o e o 2o tempo nao tem."""
+    import estatisticas_de_jogadores as ej
+    if not per.get("jogo") or not casa or not fora:
+        return per
+    extra = [{"chave": chave, "rotulo": rotulo, "casa": casa[chave], "fora": fora[chave], "pct": False}
+             for _, chave, rotulo in ej.ITENS if chave in casa and chave in fora]
+    return {**per, "jogo": per["jogo"] + extra}
+
+
 def sql_do_banco() -> str:
     cols = [f"{lado}_{c}" for c in list(COLUNAS.values()) + list(COLUNAS_1T.values())
             for lado in ("home", "away")]
-    return ("SELECT status, home_goals, away_goals, " + ", ".join(cols)
+    return ("SELECT status, home_goals, away_goals, home_team_id, away_team_id, " + ", ".join(cols)
             + " FROM match_statistics WHERE fixture_id = %s AND status IN ('FT','AET','PEN') LIMIT 1")

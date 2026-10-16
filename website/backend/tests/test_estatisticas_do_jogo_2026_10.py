@@ -58,11 +58,14 @@ def test_do_banco_monta_jogo_e_tempos():
 
 
 class _Cur:
-    def __init__(self, linha=None, futuro=False):
-        self.linha, self.futuro, self._r = linha, futuro, None
+    def __init__(self, linha=None, futuro=False, jogadores=()):
+        self.linha, self.futuro, self.jogadores, self._r = linha, futuro, list(jogadores), None
+        self.connection = self
 
     def execute(self, sql, params=None):
-        if "FROM match_statistics" in sql:
+        if "FROM player_match_stats" in sql:
+            self._r = self.jogadores
+        elif "FROM match_statistics" in sql:
             self._r = self.linha
         elif "FROM fixtures" in sql:
             self._r = {"futuro": self.futuro}
@@ -70,6 +73,10 @@ class _Cur:
     def fetchone(self):
         return self._r
 
+    def fetchall(self):
+        return self._r
+
+    def rollback(self): pass
     def close(self): pass
 
 
@@ -101,6 +108,26 @@ def test_encerrado_no_banco_nao_chama_a_api(api, monkeypatch):
     r = live.montar_estatisticas(1)
     assert r["fonte"] == "banco" and r["periodos"]["jogo"][0]["chave"] == "escanteios"
     assert api == []
+
+
+def test_encerrado_traz_desarme_e_duelo_da_folha_dos_jogadores(api, monkeypatch):
+    _banco(monkeypatch,
+           linha={"status": "FT", "home_goals": 1, "away_goals": 0, "home_team_id": 10,
+                  "away_team_id": 20, "home_corners": 6, "away_corners": 3},
+           jogadores=[{"fixture_id": 1, "team_id": 10, "desarmes": 18, "duelos_ganhos": 50},
+                      {"fixture_id": 1, "team_id": 20, "desarmes": 12, "duelos_ganhos": 41}])
+    jogo = {l["chave"]: l for l in live.montar_estatisticas(1)["periodos"]["jogo"]}
+    assert (jogo["desarmes"]["casa"], jogo["desarmes"]["fora"]) == (18, 12)
+    assert jogo["duelos_ganhos"]["rotulo"] == "Duelos ganhos" and api == []
+
+
+def test_media_da_liga_dos_jogadores_so_com_os_dois_times():
+    import estatisticas_de_jogadores as ej
+    m = ej.medias_da_liga({1: {10: {"desarmes": 18}, 20: {"desarmes": 12}},
+                           2: {10: {"desarmes": 20}}})            # so' um time com folha
+    assert m == {"desarmes": {"media": 30.0, "jogos": 1}}
+    # A consulta so' conta time com 11 jogadores em campo.
+    assert "HAVING COUNT(*) >= 11" in ej._sql() and "minutes > 0" in ej._sql()
 
 
 def test_jogo_que_nao_comecou_nao_chama_a_api(api, monkeypatch):

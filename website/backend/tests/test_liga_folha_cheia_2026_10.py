@@ -57,7 +57,8 @@ def test_tendencias_sem_a_coluna_cai_na_consulta_de_antes(monkeypatch):
                       home_team="A", away_team="B")])
     monkeypatch.setattr(s, "get_connection", lambda: _Conn(cur))
     r = s.get_liga_tendencias(league_id=79, limit=500, current_user={})
-    assert len(cur.sqls) == 2 and r["summary"]["total_games"] == 1
+    assert len([q for q in cur.sqls if "FROM match_statistics" in q]) == 2
+    assert r["summary"]["total_games"] == 1
     assert r["summary"]["folha"] == {}
 
 
