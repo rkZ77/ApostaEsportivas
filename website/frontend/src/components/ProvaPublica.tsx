@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight } from 'lucide-react'
 import api from '../services/api'
 import { Skeleton } from './ui'
 import { taxaAcerto, fmtUnits, STAKE_LABEL_PADRAO } from '../utils/format'
@@ -84,14 +83,17 @@ export default function ProvaPublica({ compacta = false }: {
             className="text-[11px] text-accent-ink font-semibold inline-flex items-center gap-1 shrink-0 min-h-[44px]"
           >
             Conferir pick a pick
-            <ArrowRight className="w-3 h-3" aria-hidden="true" />
           </Link>
         )}
       </div>
 
-      <div className={`grid gap-3 ${compacta ? 'grid-cols-3' : 'grid-cols-2 sm:grid-cols-4'}`}>
+      {/* Uma grade só, com linha fina entre os números (16/10/2026) · eram
+          quatro cartõezinhos com borda dentro do cartão, o "cartão dentro de
+          cartão" de template. O `gap-px` sobre o fundo da linha desenha as
+          divisórias. */}
+      <div className={`grid gap-px bg-line rounded-md overflow-hidden border border-line ${compacta ? 'grid-cols-3' : 'grid-cols-2 sm:grid-cols-4'}`}>
         {tiles.map(t => (
-          <div key={t.rotulo} className="bg-surface-0 border border-line rounded-md p-3 text-center">
+          <div key={t.rotulo} className="bg-surface-1 p-3 text-center">
             {t.valor == null ? (
               <Skeleton className="h-6 w-16 mx-auto" />
             ) : (

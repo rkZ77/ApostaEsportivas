@@ -164,8 +164,7 @@ export default {
       fontFamily: {
         display: ['Nunito', '"Nunito Fallback"', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', '"Open Sans"', '"Helvetica Neue"', 'sans-serif'],
         sans:    ['Nunito', '"Nunito Fallback"', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', '"Open Sans"', '"Helvetica Neue"', 'sans-serif'],
-        mono:    ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
-      },
+        mono:    ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],      },
       // escala de raio enxuta: 3 degraus + pilula. xl/2xl foram dobrados em lg.
       borderRadius: {
         sm: '4px',

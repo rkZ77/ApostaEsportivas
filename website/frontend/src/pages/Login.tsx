@@ -10,6 +10,7 @@ import api from '../services/api'
 import Turnstile, { TurnstileHandle } from '../components/Turnstile'
 import PublicNav from '../components/PublicNav'
 import GoogleSignInButton from '../components/GoogleSignInButton'
+import LinhasDeCampo from '../components/ui/LinhasDeCampo'
 import { getPasswordStrength } from '../utils/passwordStrength'
 import { tabFade } from '../lib/motion'
 import { useRevelacao, classesRevelacao, FADE_REVELACAO_MS } from '../hooks/useRevelacao'
@@ -60,22 +61,9 @@ function RealWinRate({ className = 'mt-5' }: { className?: string }) {
 function FundoSobrio() {
   return (
     <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-      <div
-        className="absolute inset-0 opacity-60 [mask-image:linear-gradient(to_left,black,transparent_75%)]"
-        style={{
-          backgroundImage:
-            'linear-gradient(rgb(var(--ink-4) / 0.08) 1px, transparent 1px), linear-gradient(90deg, rgb(var(--ink-4) / 0.08) 1px, transparent 1px)',
-          backgroundSize: '56px 56px',
-        }}
-      />
-      <div
-        className="absolute -top-48 -right-40 w-[720px] h-[620px]"
-        style={{ background: 'radial-gradient(50% 50% at 50% 50%, rgb(var(--accent) / 0.12), transparent 70%)' }}
-      />
-      <div
-        className="absolute -bottom-56 -left-40 w-[620px] h-[520px]"
-        style={{ background: 'radial-gradient(50% 50% at 50% 50%, rgb(var(--accent) / 0.05), transparent 70%)' }}
-      />
+      {/* Linhas de campo no lugar da grade e dos dois brilhos verdes
+          (15/10/2026, identidade visual) · ver ui/LinhasDeCampo. */}
+      <LinhasDeCampo foco="centro" />
     </div>
   )
 }

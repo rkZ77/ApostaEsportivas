@@ -259,6 +259,14 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
                 cur.execute(f"ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS "
                             f"{_lado}_{_col} {_tipo};")
         cur.execute("ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS finalizacao_checked_at TIMESTAMP;")
+        # FOLHA CHEIA NA ABA LIGAS (15/10/2026): a media da temporada e o
+        # ranking por time leem estas. A coleta sempre gravou, mas a aba nao
+        # pode cair num banco onde alguma ainda nao nasceu.
+        for _col in ("total_shots", "shots_off", "blocked_shots", "offsides",
+                     "possession", "passes", "passes_accuracy", "goalkeeper_saves"):
+            for _lado in ("home", "away"):
+                cur.execute(f"ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS "
+                            f"{_lado}_{_col} INTEGER;")
         # REGISTRO DE MUDANCAS DO MOTOR (2026-09-27, pedido do usuario: "saber
         # como ficou depois da mudanca"). Cada linha e' uma mudanca com data;
         # o /admin mostra acerto e lucro de cada produto antes e depois dela.
@@ -1445,6 +1453,9 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         # CONFRONTO PELA API (12/10/2026) · ver h2h_api.py.
         import h2h_api
         cur.execute(h2h_api.DDL)
+        # LEITURA DA LIGA (15/10/2026) · uma linha por liga por dia. Ver liga_ia.py.
+        import liga_ia
+        cur.execute(liga_ia.DDL)
 
         conn.commit()
         return True

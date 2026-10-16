@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { m as motion } from 'framer-motion'
-import { ArrowRight } from 'lucide-react'
 
 import api from '../services/api'
 import { rotuloDoMercado } from '../utils/marketTranslate'
@@ -218,7 +217,7 @@ export default function RecentResults({ summary }: { summary: PublicSummary | nu
                 acreditar em nós: dá para abrir o histórico e conferir pick por pick,
                 sem criar conta.
               </p>
-              <Button to="/login?mode=register" size="lg" IconRight={ArrowRight}>
+              <Button to="/login?mode=register" size="lg">
                 Testar o Pro grátis por 2 dias
               </Button>
             </div>

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { AnimatePresence, m as motion } from 'framer-motion'
+import { AnimatePresence, m as motion, useDragControls } from 'framer-motion'
 import { ArrowLeft, Check, ChevronUp, Copy, Ticket, Trash2, Wallet, X } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import { fecharNoFundo } from '../../lib/fecharNoFundo'
@@ -21,6 +21,7 @@ export default function BandejaDoBilhete() {
   const selecoes = useBilheteMontado()
   const [aberta, setAberta] = useState(false)
   const [copiado, setCopiado] = useState(false)
+  const arraste = useDragControls()
   /* 'registrar' troca a lista pelo formulário da banca. Ela segura a folha
      aberta mesmo com o bilhete vazio: registrar LIMPA o bilhete, e sem isso a
      confirmação de sucesso sumiria junto com a última seleção. */
@@ -81,9 +82,17 @@ export default function BandejaDoBilhete() {
               initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 40, opacity: 0 }}
               transition={{ type: 'spring', stiffness: 420, damping: 36 }}
               onClick={e => e.stopPropagation()}
+              /* Arrastar pra baixo fecha (15/10/2026), pela alça e pelo
+                 cabeçalho · ver o comentário gêmeo em ui/Modal. */
+              drag="y" dragListener={false} dragControls={arraste}
+              dragConstraints={{ top: 0, bottom: 0 }} dragElastic={{ top: 0, bottom: 0.7 }}
+              onDragEnd={(_, info) => { if (info.offset.y > 110 || info.velocity.y > 600) fechar() }}
             >
-              <div className="md:hidden mx-auto mt-2 h-1 w-10 rounded-full bg-line-strong" aria-hidden />
-              <div className="px-4 pt-3 pb-3 flex items-center gap-3 border-b border-line">
+              <div onPointerDown={e => arraste.start(e)} className="md:hidden flex justify-center pt-2.5 pb-1 touch-none cursor-grab" aria-hidden>
+                <span className="h-1 w-10 rounded-full bg-line-strong" />
+              </div>
+              <div onPointerDown={e => { if (window.matchMedia('(max-width: 767px)').matches) arraste.start(e) }}
+                className="px-4 pt-3 pb-3 flex items-center gap-3 border-b border-line md:touch-auto touch-none">
                 {modo === 'registrar' ? (
                   <button onClick={() => setModo('lista')} aria-label="Voltar pro bilhete"
                     className="w-11 h-11 -ml-2 grid place-items-center rounded-lg text-ink-3 hover:bg-surface-2"><ArrowLeft size={20} /></button>

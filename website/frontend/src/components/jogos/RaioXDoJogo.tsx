@@ -18,8 +18,10 @@ import { rotuloDoTempo } from '../../lib/picksAgora'
 import { aoVivo as estaAoVivo } from '../../lib/aoVivo'
 import SelectMenu from '../ui/SelectMenu'
 import Campinho from './Campinho'
+import NumeroVivo from '../ui/NumeroVivo'
 import Classificacao from './Classificacao'
 import ResumoDaIA from './ResumoDaIA'
+import EstatisticasDoJogo from './EstatisticasDoJogo'
 
 /*
  * Raio-X do jogo (2026-10-06) · o lugar de pesquisar antes de montar bilhete.
@@ -32,7 +34,7 @@ import ResumoDaIA from './ResumoDaIA'
  * A conta (linha, taxa, média) é toda de lib/raioX.ts · aqui é só desenho.
  */
 
-type Aba = 'mercados' | 'ia' | 'jogadores' | 'escalacao' | 'tabela' | 'confronto' | 'forma'
+type Aba = 'mercados' | 'estatisticas' | 'ia' | 'jogadores' | 'escalacao' | 'tabela' | 'confronto' | 'forma'
 
 export interface JogoBase {
   fixture_id: number
@@ -155,13 +157,14 @@ export default function RaioXDoJogo({ jogo, trancado = false }: { jogo: JogoBase
       {/* Abas fixas ao rolar · no celular a lista de jogadores é longa e a
           troca de aba não pode exigir voltar ao topo. */}
       <div className="sticky top-0 z-20 -mx-4 px-4 sm:mx-0 sm:px-0 bg-surface-0/95 backdrop-blur border-b border-line">
-        {/* Sete abas não cabem numa linha de celular, e aba escondida fora da
-            tela é aba que ninguém descobre: no celular viram 4 + 3, todas à
+        {/* Oito abas não cabem numa linha de celular, e aba escondida fora da
+            tela é aba que ninguém descobre: no celular viram 4 + 4, todas à
             vista; do tablet pra cima, uma linha só. A Leitura da IA virou aba
-            (12/10/2026, pedido do usuário) em vez de bloco acima delas. */}
+            (12/10/2026, pedido do usuário) em vez de bloco acima delas, e as
+            Estatísticas do jogo entraram em 15/10/2026. */}
         <div className="grid grid-cols-4 sm:flex" role="tablist">
           {([
-            ['mercados', 'Mercados'], ['ia', 'Leitura IA'], ['jogadores', 'Jogadores'], ['escalacao', 'Escalação'],
+            ['mercados', 'Mercados'], ['estatisticas', 'Estatísticas'], ['ia', 'Leitura IA'], ['jogadores', 'Jogadores'], ['escalacao', 'Escalação'],
             ['tabela', 'Tabela'], ['confronto', 'Confronto'], ['forma', 'Forma'],
           ] as [Aba, string][]).map(([k, rotulo]) => (
             <button key={k} role="tab" aria-selected={aba === k} onClick={() => setAba(k)}
@@ -190,6 +193,10 @@ export default function RaioXDoJogo({ jogo, trancado = false }: { jogo: JogoBase
           </div>
         ) : aba === 'mercados' ? (
           <AbaMercados dados={vistos!} nomeJogo={nomeJogo} odds={odds} oddsAoVivo={oddsAoVivo} mando={mando} setMando={setMando} />
+        ) : aba === 'estatisticas' ? (
+          <EstatisticasDoJogo fixtureId={dados.fixture.fixture_id}
+            homeId={dados.fixture.home_team_id} awayId={dados.fixture.away_team_id}
+            homeNome={dados.fixture.home_team} awayNome={dados.fixture.away_team} />
         ) : aba === 'ia' ? (
           /* Pedida só ao abrir a aba: na primeira vez do dia é ela que faz o
              servidor gerar, então quem não olha não gasta IA. */
@@ -238,6 +245,7 @@ function EstrelaDoTime({ id, nome }: { id: number; nome: string }) {
 
 const O_QUE_TEM: Record<Aba, [string, string[]]> = {
   mercados: ['Quantas vezes cada linha bateu', ['Gols, escanteios, cartões e chutes, linha a linha', 'Mandante em casa e visitante fora separados', 'A odd das casas ao lado da taxa']],
+  estatisticas: ['As estatísticas do jogo, ao vivo', ['Posse, xG, finalizações, escanteios e cartões', 'Jogo inteiro, 1º e 2º tempo', 'Atualiza sozinha com a bola rolando']],
   ia: ['A leitura da IA sobre este jogo', ['Os mercados de over e under em que os dois times concordam', 'Tabela, técnico e o peso de liga ou mata-mata', 'O alerta quando a amostra é curta']],
   jogadores: ['Cada jogador, jogo a jogo', ['Chutes, chutes no alvo, faltas e cartões', 'Quem começa jogando hoje', 'Monte bilhete de jogador com um toque']],
   escalacao: ['O campinho do jogo', ['Escalação oficial ou provável', 'Desfalques e suspensos', 'Técnico e formação']],
@@ -368,7 +376,8 @@ function Placar({ jogo, dados, aoVivo, encerrado }: {
                embaixo, no azul do Ao Vivo do site. */
             <div className="shrink-0 pt-2 text-center">
               <div className="font-mono text-3xl font-black text-ink-1 tabular-nums">
-                {aoVivo.home_goals ?? 0}<span className="text-ink-4 mx-1.5">-</span>{aoVivo.away_goals ?? 0}
+                {/* Gol com a tela aberta: o dígito rola, como placar. */}
+                <NumeroVivo valor={aoVivo.home_goals ?? 0} /><span className="text-ink-4 mx-1.5">-</span><NumeroVivo valor={aoVivo.away_goals ?? 0} />
               </div>
               <div className="mt-1 inline-flex items-center gap-1.5 text-[11px] font-bold text-sky-300 tabular-nums">
                 <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" aria-hidden />

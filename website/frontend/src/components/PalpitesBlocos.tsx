@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { ArrowRight, CalendarDays, ListChecks } from 'lucide-react'
+import { CalendarDays, ListChecks } from 'lucide-react'
 import {
   Button, EmptyState, Panel, PanelHead, PickTypeBadge, ResultBadge, StatTile,
   Table, type Column,
@@ -214,7 +214,7 @@ export function ConviteDeTopo({ ehVip = false }: { ehVip?: boolean }) {
   if (ehVip) return null
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-4">
-      <Button to="/login?mode=register" size="sm" IconRight={ArrowRight}>
+      <Button to="/login?mode=register" size="sm">
         Testar o Pro grátis por 2 dias
       </Button>
       <span className="text-xs text-ink-4">

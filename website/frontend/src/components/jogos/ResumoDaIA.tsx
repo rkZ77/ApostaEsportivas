@@ -21,7 +21,7 @@ import { TeamLogo } from '../TeamLogo'
  */
 
 type Tendencia = 'over' | 'under' | 'dividido'
-interface Mercado { mercado: string; tendencia: Tendencia; leitura: string; pct?: number }
+export interface Mercado { mercado: string; tendencia: Tendencia; leitura: string; pct?: number }
 /** Números do time no mando desta partida, calculados no servidor (nunca pela IA). */
 interface NumerosDoTime {
   jogos?: number; forma?: string; gols_pro?: number; gols_contra?: number
@@ -165,7 +165,8 @@ export default function ResumoDaIA({ fixtureId, homeId, awayId, homeNome, awayNo
   )
 }
 
-function ListaDeMercados({ mercados }: { mercados: Mercado[] }) {
+/** Também usada pela leitura da liga (ligas/LeituraDaLiga). */
+export function ListaDeMercados({ mercados }: { mercados: Mercado[] }) {
   return (
     <div className="divide-y divide-line/60 border-t border-line/60">
       {mercados.map(m => (

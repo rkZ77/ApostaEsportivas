@@ -13,6 +13,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@number-flow/react": "0.5.10",
     "axios": "^1.7.2",
     "clsx": "^2.1.1",
     "embla-carousel-react": "^8.6.0",

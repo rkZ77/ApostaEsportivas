@@ -3145,6 +3145,59 @@ def get_alavancagem_today(current_user: dict = Depends(require_vip)):
         conn.close()
 
 
+#: FOLHA CHEIA NA ABA LIGAS (15/10/2026, pedido do usuario: "coloca tudo,
+#: finalizacao, passe nas estatisticas da temporada"). (coluna sem o lado,
+#: chave na resposta, como junta os dois lados no jogo). "media" e' pro
+#: percentual de passe: a liga nao soma 85% + 80%.
+_FOLHA_CHEIA = (
+    ("total_shots",      "chutes",            "soma"),
+    ("shots_off",        "chutes_fora",       "soma"),
+    ("blocked_shots",    "chutes_bloqueados", "soma"),
+    ("shots_insidebox",  "chutes_na_area",    "soma"),
+    ("shots_outsidebox", "chutes_de_fora",    "soma"),
+    ("xg",               "xg",                "soma"),
+    ("offsides",         "impedimentos",      "soma"),
+    ("passes",           "passes",            "soma"),
+    ("passes_accuracy",  "passes_certos",     "media"),
+)
+
+
+def _folha_do_jogo(g: dict) -> dict:
+    """{chave: total do jogo} do que os DOIS lados tem. Um lado nulo = sem
+    dado no jogo, e o jogo fica fora da media daquele numero."""
+    saida = {}
+    for col, chave, modo in _FOLHA_CHEIA:
+        a, b = g.get(f"home_{col}"), g.get(f"away_{col}")
+        if a is None or b is None:
+            continue
+        a, b = float(a), float(b)
+        saida[chave] = a + b if modo == "soma" else (a + b) / 2
+    return saida
+
+
+def medias_da_folha(games: list[dict]) -> dict:
+    """{chave: {"media", "jogos"}} so' sobre os jogos com o dado · xG e
+    passes so' existem em parte das ligas, e dividir pelo total de jogos
+    daria uma media perto de zero que nao descreve nada (como as defesas)."""
+    acc: dict = {}
+    for g in games:
+        for chave, v in _folha_do_jogo(g).items():
+            s = acc.setdefault(chave, [0.0, 0])
+            s[0] += v
+            s[1] += 1
+    return {k: {"media": round(s / n, 2), "jogos": n} for k, (s, n) in acc.items() if n}
+
+
+#: O mesmo por TIME (ranking): o que o proprio time faz, mais posse e defesas
+#: do goleiro, que por time fazem sentido (na liga a posse e' sempre 50%).
+_FOLHA_DO_TIME = tuple((col, chave) for col, chave, _ in _FOLHA_CHEIA) + (
+    ("possession", "posse"), ("goalkeeper_saves", "defesas"))
+
+
+def _colunas_da_folha(alias: str = "ms") -> str:
+    return ", ".join(f"{alias}.{lado}_{col}" for col, _, _ in _FOLHA_CHEIA for lado in ("home", "away"))
+
+
 @router.get("/liga/tendencias")
 def get_liga_tendencias(
     league_id: int = Query(1, ge=1),
@@ -3159,14 +3212,15 @@ def get_liga_tendencias(
         # Com os dois JOINs esta consulta devolvia 706 linhas pros 207 jogos
         # reais da Serie B 2026 (medido em prod, 2026-08-10): jogo repetido na
         # lista, e a media do resumo pesava mais o jogo que duplicou mais.
-        rows = _safe_query(cur, f"""
+        def consulta(extras: str) -> str:
+            return f"""
             SELECT ms.fixture_id, ms.match_date, ms.referee,
                    ms.home_goals, ms.away_goals, ms.total_goals,
                    ms.total_corners, ms.total_yellow_cards, ms.total_red_cards,
                    ms.home_shots_on, ms.away_shots_on,
                    ms.home_fouls, ms.away_fouls,
                    ms.home_goalkeeper_saves, ms.away_goalkeeper_saves,
-                   ms.home_team_id, ms.away_team_id,
+                   ms.home_team_id, ms.away_team_id{extras},
                    {_nome_do_time("home")} AS home_team,
                    {_nome_do_time("away")} AS away_team
             FROM match_statistics ms
@@ -3174,7 +3228,16 @@ def get_liga_tendencias(
               AND ms.status IN ('FT', 'AET', 'PEN')
             ORDER BY ms.match_date DESC
             LIMIT %s
-        """, (league_id, limit))
+        """
+        # Com a folha cheia; se alguma coluna nao existir neste banco, a
+        # consulta de antes · a aba nunca cai por causa de um numero extra.
+        try:
+            cur.execute(consulta(", " + _colunas_da_folha()), (league_id, limit))
+            rows = cur.fetchall()
+        except Exception:
+            conn.rollback()
+            logger.warning("[LIGA] folha cheia indisponivel (liga %s)", league_id, exc_info=True)
+            rows = _safe_query(cur, consulta(""), (league_id, limit))
 
         games = []
         for r in rows:
@@ -3212,7 +3275,12 @@ def get_liga_tendencias(
             "avg_shots_on":     round(sum(float(g["total_shots_on"])          for g in games) / n, 2),
             "btts_pct":         round(btts  / n * 100, 1),
             "over25_pct":       round(over25 / n * 100, 1),
+            "folha": medias_da_folha(games),
         }
+        # Desarme, duelo, drible... somados da folha dos jogadores (sem API).
+        import estatisticas_de_jogadores as ej
+        summary["folha"].update(ej.medias_da_liga(
+            ej.por_jogo(cur, [g.get("fixture_id") for g in games])))
         return {"games": games, "summary": summary}
     finally:
         cur.close()
@@ -3272,6 +3340,59 @@ def get_liga_arbitros(
         conn.close()
 
 
+@router.get("/liga/resumo-ia")
+def get_liga_resumo_ia(
+    league_id: int = Query(..., ge=1),
+    current_user: dict = Depends(require_vip),
+):
+    """Leitura da IA da liga · ver liga_ia.py. Gerada na primeira abertura do
+    dia (alguns segundos) e lida do banco depois. Nunca derruba a aba."""
+    import liga_ia
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        return liga_ia.leitura_da_liga(cur, league_id)
+    except Exception:
+        conn.rollback()
+        logger.warning("[LIGA IA] liga %s", league_id, exc_info=True)
+        return {"status": "falhou"}
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.get("/liga/classificacao")
+def get_liga_classificacao(
+    league_id: int = Query(..., ge=1),
+    current_user: dict = Depends(require_vip),
+):
+    """A tabela da liga na aba Ligas (15/10/2026). Mesma leitura de
+    `league_standings` da classificacao do Raio-X (routers/fixtures.py), sem
+    precisar de um jogo · muda uma vez por rodada, entao 10 min de cache."""
+    import cache_publico
+
+    def montar():
+        conn = get_connection()
+        cur = conn.cursor()
+        try:
+            linhas = _safe_query(cur, """
+                SELECT group_name, team_id, team_name, rank, points, goals_diff, form,
+                       description, played, win, draw, lose, goals_for, goals_against,
+                       home_played, home_win, home_draw, home_lose, home_goals_for, home_goals_against,
+                       away_played, away_win, away_draw, away_lose, away_goals_for, away_goals_against
+                  FROM league_standings
+                 WHERE league_id = %s
+                   AND season = (SELECT MAX(season) FROM league_standings WHERE league_id = %s)
+                 ORDER BY group_name NULLS FIRST, rank
+            """, (league_id, league_id))
+            return {"league_id": league_id, "linhas": [dict(r) for r in linhas]}
+        finally:
+            cur.close()
+            conn.close()
+
+    return cache_publico.obter(f"liga-classificacao:{league_id}", 600, montar)
+
+
 @router.get("/liga/ranking")
 def get_liga_ranking(
     league_id: int = Query(1, ge=1),
@@ -3287,36 +3408,41 @@ def get_liga_ranking(
         # cadastrado: 384 linhas pros 207 jogos da Serie B 2026 (medido em prod,
         # 2026-08-10). As MEDIAS sobreviviam (soma e contagem inflavam junto),
         # mas o "jogos" de cada time no ranking mostrava quase o dobro.
-        _HOME = f"""
-            SELECT ms.home_team_id AS team_id,
-                   {_nome_do_time("home")} AS team_name,
-                   ms.home_goals          AS goals,
-                   ms.home_corners        AS corners,
-                   ms.home_yellow_cards   AS yellow_cards,
-                   ms.home_red_cards      AS red_cards,
-                   ms.home_fouls          AS fouls,
-                   ms.home_shots_on       AS shots_on
+        def lado(l: str, com_folha: bool) -> str:
+            folha = "".join(f",\n                   ms.{l}_{col} AS f_{chave}" for col, chave in _FOLHA_DO_TIME) if com_folha else ""
+            return f"""
+            SELECT ms.{l}_team_id AS team_id, ms.fixture_id,
+                   {_nome_do_time(l)} AS team_name,
+                   ms.{l}_goals          AS goals,
+                   ms.{l}_corners        AS corners,
+                   ms.{l}_yellow_cards   AS yellow_cards,
+                   ms.{l}_red_cards      AS red_cards,
+                   ms.{l}_fouls          AS fouls,
+                   ms.{l}_shots_on       AS shots_on{folha}
             FROM match_statistics ms
             WHERE ms.league_id = %s AND ms.status IN ('FT', 'AET', 'PEN')
         """
-        _AWAY = f"""
-            SELECT ms.away_team_id AS team_id,
-                   {_nome_do_time("away")} AS team_name,
-                   ms.away_goals          AS goals,
-                   ms.away_corners        AS corners,
-                   ms.away_yellow_cards   AS yellow_cards,
-                   ms.away_red_cards      AS red_cards,
-                   ms.away_fouls          AS fouls,
-                   ms.away_shots_on       AS shots_on
-            FROM match_statistics ms
-            WHERE ms.league_id = %s AND ms.status IN ('FT', 'AET', 'PEN')
-        """
-        if context == "home":
-            raw = _safe_query(cur, _HOME, (league_id,))
-        elif context == "away":
-            raw = _safe_query(cur, _AWAY, (league_id,))
-        else:
-            raw = _safe_query(cur, f"{_HOME} UNION ALL {_AWAY}", (league_id, league_id))
+
+        def consulta(com_folha: bool) -> tuple[str, tuple]:
+            if context == "home":
+                return lado("home", com_folha), (league_id,)
+            if context == "away":
+                return lado("away", com_folha), (league_id,)
+            return f"{lado('home', com_folha)} UNION ALL {lado('away', com_folha)}", (league_id, league_id)
+
+        # Folha cheia (finalizacao, passe, xG...) com a consulta de antes de
+        # reserva, como em /liga/tendencias.
+        try:
+            cur.execute(*consulta(True))
+            raw = cur.fetchall()
+        except Exception:
+            conn.rollback()
+            logger.warning("[LIGA] ranking sem folha cheia (liga %s)", league_id, exc_info=True)
+            raw = _safe_query(cur, *consulta(False))
+
+        # Desarme, duelo, drible... do time em cada jogo, da folha dos jogadores.
+        import estatisticas_de_jogadores as ej
+        dos_jogadores = ej.por_jogo(cur, list({r.get("fixture_id") for r in raw}))
 
         from collections import defaultdict
         acc: dict = defaultdict(lambda: {
@@ -3334,6 +3460,16 @@ def get_liga_ranking(
             a["games"]    += 1
             for col in ("goals", "corners", "yellow_cards", "red_cards", "fouls", "shots_on"):
                 a[col] += float(row.get(col) or 0)
+            # Folha cheia: so' o jogo com o dado conta (xG e passe faltam em
+            # parte das ligas; zero inventado puxaria a media pra baixo).
+            folha = a.setdefault("folha", {})
+            valores = {chave: row.get(f"f_{chave}") for _, chave in _FOLHA_DO_TIME}
+            valores.update((dos_jogadores.get(row.get("fixture_id")) or {}).get(tid) or {})
+            for chave, v in valores.items():
+                if v is not None:
+                    s = folha.setdefault(chave, [0.0, 0])
+                    s[0] += float(v)
+                    s[1] += 1
 
         result = []
         for a in acc.values():
@@ -3350,6 +3486,9 @@ def get_liga_ranking(
                 "avg_reds":     round(a["red_cards"]    / n, 2),
                 "avg_fouls":    round(a["fouls"]        / n, 2),
                 "avg_shots_on": round(a["shots_on"]     / n, 2),
+                # Media e jogos com o dado de cada numero da folha cheia.
+                "folha": {k: {"media": round(s / c, 2), "jogos": c}
+                          for k, (s, c) in (a.get("folha") or {}).items() if c},
             })
         return result
     finally:

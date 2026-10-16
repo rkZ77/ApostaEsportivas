@@ -8,6 +8,7 @@ import { pctProb, capitalizarFrase } from '../utils/format'
 import { calcVipStake, calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import { stakeDe, contaEmUnidades } from '../utils/stakePlan'
 import ResultadoDoPick from './ResultadoDoPick'
+import NumeroVivo from './ui/NumeroVivo'
 import ApostaModal from './ApostaModal'
 import { translateMarket, translateLine, translateTeamName, linhaDoJogador, valorLiquidado } from '../utils/marketTranslate'
 import { PICK_TYPE_BORDER, cascaDoPick, caixaDoPick } from '../utils/resultStyle'
@@ -521,7 +522,8 @@ function SuggestionCard({
             {temPernas ? 'Odd combinada' : oddCorrente != null ? 'Odd agora' : 'Odd'}
           </div>
           <div className="text-3xl font-black text-green-400">
-            {oddExibida.toFixed(2)}
+            {/* A odd de agora muda com o card aberto · rola como placar. */}
+            <NumeroVivo valor={oddExibida} casas={2} />
           </div>
           {seguido && oddSeguida != null && Math.abs(oddSeguida - Number(s.odd)) > 0.001 && (
             <div className="text-[10px] text-ink-4 mt-0.5">pick: {Number(s.odd).toFixed(2)}</div>
