@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { m as motion } from 'framer-motion'
-import { ArrowRight, Check, Gift, History, Lock } from '../lib/icones'
+import { Check, Gift, History, Lock } from '../lib/icones'
 import api from '../services/api'
 import { translateMarket, translateLine } from '../utils/marketTranslate'
 import { useAuth } from '../context/AuthContext'
@@ -243,7 +243,7 @@ export default function FreePickHero({ revelar = true, onCarregou }: {
         <div className="px-4 pt-4 pb-4">
           {!revelado ? (
             <>
-              <Button to="/login?mode=register" block IconRight={ArrowRight}>
+              <Button to="/login?mode=register" block>
                 Ver o mercado desta dica
               </Button>
               <ul className="mt-3 flex flex-wrap justify-center gap-x-3 gap-y-1">
@@ -256,7 +256,7 @@ export default function FreePickHero({ revelar = true, onCarregou }: {
               </ul>
             </>
           ) : (
-            <Button to={`/p/free/${pick.id}`} block variant="ghost" IconRight={ArrowRight}>
+            <Button to={`/p/free/${pick.id}`} block variant="ghost">
               Ver a análise completa
             </Button>
           )}

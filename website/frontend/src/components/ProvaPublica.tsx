@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight } from '../lib/icones'
 import api from '../services/api'
 import { Skeleton } from './ui'
 import { taxaAcerto, fmtUnits, STAKE_LABEL_PADRAO } from '../utils/format'
@@ -84,7 +83,6 @@ export default function ProvaPublica({ compacta = false }: {
             className="text-[11px] text-accent-ink font-semibold inline-flex items-center gap-1 shrink-0 min-h-[44px]"
           >
             Conferir pick a pick
-            <ArrowRight className="w-3 h-3" aria-hidden="true" />
           </Link>
         )}
       </div>

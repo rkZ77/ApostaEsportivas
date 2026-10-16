@@ -1,5 +1,5 @@
 import { m as motion } from 'framer-motion'
-import { ArrowRight, Check } from '../lib/icones'
+import { Check } from '../lib/icones'
 import { Button } from '../components/ui'
 import LinhasDeCampo from '../components/ui/LinhasDeCampo'
 
@@ -41,7 +41,7 @@ export default function FinalCTA() {
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-8">
-              <Button to="/login?mode=register" size="lg" IconRight={ArrowRight}>
+              <Button to="/login?mode=register" size="lg">
                 Criar conta grátis
               </Button>
               <Button to="/resultados" variant="ghost" size="lg">

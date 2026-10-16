@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { m as motion } from 'framer-motion'
-import { Zap, TrendingUp, BarChart2, Wallet, Bot, BookOpen, ArrowRight, Check, X, Compass, Radio, UserSquare, Flag } from '../lib/icones'
+import { Zap, TrendingUp, BarChart2, Wallet, Bot, BookOpen, Check, X, Compass, Radio, UserSquare, Flag } from '../lib/icones'
 import PageShell from '../components/PageShell'
 import { Button } from '../components/ui'
 import { useAuth } from '../context/AuthContext'
@@ -269,7 +269,6 @@ export default function ComoFunciona() {
               className="inline-flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 text-on-fill font-bold px-8 py-3.5 rounded-md transition-colors text-sm w-full sm:w-auto"
             >
               Ver picks de hoje
-              <ArrowRight className="w-4 h-4" />
             </button>
             {user && (
               <button
