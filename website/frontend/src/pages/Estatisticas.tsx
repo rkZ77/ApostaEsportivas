@@ -5,7 +5,7 @@ import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import { cn } from '../lib/cn'
 import PageShell from '../components/PageShell'
-import { SpinnerBlock, EmptyState, ErrorState, Tabs, Skeleton } from '../components/ui'
+import { SpinnerBlock, EmptyState, ErrorState, Skeleton } from '../components/ui'
 import { TeamLogo } from '../components/TeamLogo'
 import Classificacao from '../components/jogos/Classificacao'
 import LeituraDaLiga from '../components/ligas/LeituraDaLiga'
@@ -324,17 +324,25 @@ export function EstatisticasContent({ onAbrirJogo }: {
         </div>
       )}
 
-      <Tabs<Aba>
-        value={aba}
-        onChange={setAba}
-        items={[
-          { key: 'resumo', label: 'Resumo', dot: hojeDaLiga.some(f => aoVivo(f.status ?? '')) },
-          { key: 'tabela', label: 'Tabela' },
-          { key: 'times', label: 'Times' },
-          { key: 'arbitros', label: 'Árbitros' },
-          { key: 'resultados', label: 'Resultados', count: summary?.total_games },
-        ]}
-      />
+      {/* As cinco abas À VISTA no celular (o público é mais celular): numa
+          faixa que rola de lado, "Resultados" ficava fora da tela, e aba
+          escondida é aba que ninguém descobre · mesma solução do Raio-X. */}
+      <div role="tablist" className="grid grid-cols-5 sm:flex border-b border-line">
+        {([
+          ['resumo', 'Resumo'], ['tabela', 'Tabela'], ['times', 'Times'],
+          ['arbitros', 'Árbitros'], ['resultados', 'Resultados'],
+        ] as [Aba, string][]).map(([k, rotulo]) => (
+          <button key={k} type="button" role="tab" aria-selected={aba === k} onClick={() => setAba(k)}
+            className={cn('relative h-11 sm:px-5 text-xs min-[400px]:text-[13px] sm:text-sm font-bold transition-colors whitespace-nowrap',
+              aba === k ? 'text-ink-1' : 'text-ink-3 hover:text-ink-2')}>
+            {rotulo}
+            {k === 'resumo' && hojeDaLiga.some(f => aoVivo(f.status ?? '')) && (
+              <span className="absolute top-2 right-1 w-1.5 h-1.5 rounded-full bg-accent animate-pulse" aria-label="jogo ao vivo" />
+            )}
+            {aba === k && <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-accent" />}
+          </button>
+        ))}
+      </div>
 
       {aba === 'tabela' && leagueId && <Classificacao leagueId={leagueId} />}
 
@@ -505,7 +513,7 @@ function PlacarDaLiga({ summary, limit, onLimit }: {
           <div className="flex rounded-lg border border-line p-0.5 bg-surface-1">
             {RECORTES.map(r => (
               <button key={r.valor} type="button" aria-pressed={limit === r.valor} onClick={() => onLimit(r.valor)}
-                className={cn('h-9 min-w-[44px] px-2.5 rounded-md text-xs font-bold transition-colors',
+                className={cn('h-10 min-w-[48px] px-3 rounded-md text-sm font-bold transition-colors',
                   limit === r.valor ? 'bg-surface-3 text-ink-1' : 'text-ink-3 hover:text-ink-2')}>
                 {r.rotulo}
               </button>
