@@ -132,3 +132,21 @@ def test_medicoes_existem_no_motor():
     from routers import admin
     for _, _, caminho, _ in ag.MEDICOES:
         assert os.path.exists(os.path.join(admin._PIPELINE_DIR, caminho)), caminho
+
+
+# ── o veredito tambem no log (16/10/2026) ───────────────────────────────────
+def test_o_fim_da_medicao_vai_pro_log_com_prefixo(caplog):
+    texto = "\n".join(f"linha {i}" for i in range(200)) + "\n\nVEREDITO: manter\n"
+    with caplog.at_level("INFO", logger=ag.logger.name):
+        ag._logar_o_fim("calibracao", texto, True)
+    msgs = [r.getMessage() for r in caplog.records]
+    assert all(m.startswith("[MEDICAO calibracao] ") for m in msgs)
+    assert msgs[-1] == "[MEDICAO calibracao] VEREDITO: manter"
+    assert len(msgs) == ag._LINHAS_NO_LOG + 1          # cabecalho + o fim
+    assert "[MEDICAO calibracao] linha 0" not in msgs  # o comeco fica so' no banco
+
+
+def test_medicao_que_falhou_aparece_no_log(caplog):
+    with caplog.at_level("INFO", logger=ag.logger.name):
+        ag._logar_o_fim("dixon_coles", "Falhou: timeout", False)
+    assert "[MEDICAO dixon_coles] FALHOU" in caplog.records[0].getMessage()

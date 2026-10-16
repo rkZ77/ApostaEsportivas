@@ -223,6 +223,22 @@ async def _rodar_comando(t: Tarefa) -> tuple[str, str | None]:
     return ("ok" if st.get("status") == "ok" else "erro"), st.get("error")
 
 
+#: Quantas linhas do FIM de cada medicao vao pro log. O veredito fica no fim.
+_LINHAS_NO_LOG = 80
+
+
+def _logar_o_fim(nome: str, texto: str, ok: bool) -> None:
+    """O fim da saida tambem no log do Railway (16/10/2026).
+
+    A saida inteira fica em `medicoes_do_motor`, que so' o /admin le. Com o
+    veredito no log, quem audita o motor pelo log de PROD nao depende de print
+    da tela. Uma linha por linha, com prefixo, pra filtrar por `[MEDICAO nome]`."""
+    linhas = [l for l in texto.splitlines() if l.strip()][-_LINHAS_NO_LOG:]
+    logger.info("[MEDICAO %s] %s (%s linhas no fim)", nome, "ok" if ok else "FALHOU", len(linhas))
+    for linha in linhas:
+        logger.info("[MEDICAO %s] %s", nome, linha[:500])
+
+
 async def rodar_medicoes(dia: date) -> tuple[str, str | None]:
     """Roda cada script de medicao e guarda a saida inteira. Um que falha nao
     impede os outros."""
@@ -241,6 +257,7 @@ async def rodar_medicoes(dia: date) -> tuple[str, str | None]:
             texto, ok = f"Falhou: {e}", False
         if not ok:
             falhas.append(nome)
+        _logar_o_fim(nome, texto, ok)
         conn = _conexao()
         try:
             cur = conn.cursor()
