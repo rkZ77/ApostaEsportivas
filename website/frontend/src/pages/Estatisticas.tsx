@@ -57,7 +57,10 @@ interface Summary {
   /** null quando nenhum jogo da amostra tem o contador de defesas. */
   avg_saves: number | null
   jogos_com_defesa: number
+  /** Folha cheia (finalização, passe, xG...): média só nos jogos com o dado. */
+  folha?: Record<string, MediaComAmostra>
 }
+interface MediaComAmostra { media: number; jogos: number }
 interface Arbitro {
   referee: string; jogos: number
   avg_yellow: number; avg_red: number; avg_fouls: number
@@ -69,6 +72,7 @@ interface TeamRank {
   avg_goals: number; avg_corners: number
   avg_yellows: number; avg_reds: number
   avg_fouls: number; avg_shots_on: number
+  folha?: Record<string, MediaComAmostra>
 }
 export interface JogoDoDia extends JogoParaRaioX {
   elapsed?: number | null
@@ -78,7 +82,7 @@ export interface JogoDoDia extends JogoParaRaioX {
 }
 
 type Aba = 'resumo' | 'tabela' | 'times' | 'arbitros' | 'resultados'
-type RankField = keyof Omit<TeamRank, 'team_id' | 'team_name' | 'games'>
+type RankField = 'avg_goals' | 'avg_corners' | 'avg_yellows' | 'avg_reds' | 'avg_fouls' | 'avg_shots_on'
 type Context = 'all' | 'home' | 'away'
 
 /*
@@ -97,13 +101,47 @@ const NUMEROS: { chave: keyof Summary; rotulo: string; alto: number; baixo: numb
   { chave: 'over25_pct',       rotulo: 'Mais de 2,5',   alto: 55,  baixo: 35, pct: true },
 ]
 
-const RANKINGS: { campo: RankField; rotulo: string }[] = [
-  { campo: 'avg_goals',    rotulo: 'Gols' },
-  { campo: 'avg_corners',  rotulo: 'Escanteios' },
-  { campo: 'avg_yellows',  rotulo: 'Amarelos' },
-  { campo: 'avg_reds',     rotulo: 'Vermelhos' },
-  { campo: 'avg_fouls',    rotulo: 'Faltas' },
-  { campo: 'avg_shots_on', rotulo: 'Chutes no gol' },
+/*
+ * FOLHA CHEIA DA TEMPORADA (15/10/2026, pedido do usuário: "coloca tudo,
+ * finalização, passe"). Média só nos jogos com o dado (xG e passe faltam em
+ * parte das ligas); abaixo de 10 jogos a média não se sustenta e não aparece.
+ */
+const MIN_JOGOS_FOLHA = 10
+const FOLHA_DA_LIGA: { chave: string; rotulo: string; pct?: boolean }[] = [
+  { chave: 'chutes',            rotulo: 'Finalizações' },
+  { chave: 'chutes_fora',       rotulo: 'Pra fora' },
+  { chave: 'chutes_bloqueados', rotulo: 'Bloqueadas' },
+  { chave: 'chutes_na_area',    rotulo: 'Dentro da área' },
+  { chave: 'chutes_de_fora',    rotulo: 'De fora da área' },
+  { chave: 'xg',                rotulo: 'Gols esperados (xG)' },
+  { chave: 'impedimentos',      rotulo: 'Impedimentos' },
+  { chave: 'passes',            rotulo: 'Passes' },
+  { chave: 'passes_certos',     rotulo: 'Passes certos', pct: true },
+]
+
+/* O ranking: os números de sempre e os da folha cheia. `valor` devolve null
+   quando o time não tem o dado, e ele sai da lista daquele número. */
+interface Ranking { id: string; rotulo: string; pct?: boolean; valor: (t: TeamRank) => number | null }
+const doTime = (campo: RankField) => (t: TeamRank) => t[campo] ?? null
+const daFolha = (chave: string) => (t: TeamRank) => {
+  const f = t.folha?.[chave]
+  return f && f.jogos >= 3 ? f.media : null
+}
+const RANKINGS: Ranking[] = [
+  { id: 'gols',          rotulo: 'Gols',           valor: doTime('avg_goals') },
+  { id: 'chutes',        rotulo: 'Finalizações',   valor: daFolha('chutes') },
+  { id: 'no_gol',        rotulo: 'Chutes no gol',  valor: doTime('avg_shots_on') },
+  { id: 'na_area',       rotulo: 'Dentro da área', valor: daFolha('chutes_na_area') },
+  { id: 'xg',            rotulo: 'xG',             valor: daFolha('xg') },
+  { id: 'escanteios',    rotulo: 'Escanteios',     valor: doTime('avg_corners') },
+  { id: 'posse',         rotulo: 'Posse',          valor: daFolha('posse'), pct: true },
+  { id: 'passes',        rotulo: 'Passes',         valor: daFolha('passes') },
+  { id: 'passes_certos', rotulo: 'Passes certos',  valor: daFolha('passes_certos'), pct: true },
+  { id: 'amarelos',      rotulo: 'Amarelos',       valor: doTime('avg_yellows') },
+  { id: 'vermelhos',     rotulo: 'Vermelhos',      valor: doTime('avg_reds') },
+  { id: 'faltas',        rotulo: 'Faltas',         valor: doTime('avg_fouls') },
+  { id: 'impedimentos',  rotulo: 'Impedimentos',   valor: daFolha('impedimentos') },
+  { id: 'defesas',       rotulo: 'Defesas',        valor: daFolha('defesas') },
 ]
 
 const RECORTES = [
@@ -162,7 +200,7 @@ export function EstatisticasContent({ onAbrirJogo }: {
   const [tentativa, setTentativa]   = useState(0)
   const [ranking, setRanking]       = useState<TeamRank[] | null>(null)
   const [context, setContext]       = useState<Context>('all')
-  const [campo, setCampo]           = useState<RankField>('avg_goals')
+  const [campo, setCampo]           = useState('gols')
   const [arbitros, setArbitros]     = useState<Arbitro[] | null>(null)
   const [hoje, setHoje]             = useState<JogoDoDia[]>([])
   const [visiveis, setVisiveis]     = useState(PAGINA)
@@ -481,12 +519,37 @@ function PlacarDaLiga({ summary, limit, onLimit }: {
           )
         })}
       </div>
-      {defesas != null && (
-        <p className="px-4 py-2 border-t border-line/60 text-[11px] text-ink-3">
-          Defesas dos goleiros: <span className="font-mono text-ink-2">{decimal(defesas)}</span> por jogo
-          (em {summary.jogos_com_defesa} jogos com o dado).
-        </p>
-      )}
+      {(() => {
+        /* Finalizações e passes: média só nos jogos com o dado, e a amostra
+           aparece quando não é a liga inteira (xG fora das ligas grandes). */
+        const folha = FOLHA_DA_LIGA
+          .map(f => ({ ...f, m: summary.folha?.[f.chave] }))
+          .filter((f): f is typeof f & { m: MediaComAmostra } => !!f.m && f.m.jogos >= MIN_JOGOS_FOLHA)
+          .map(f => ({ ...f, valor: f.m.media, jogos: f.m.jogos }))
+        if (defesas != null) folha.push({ chave: 'defesas', rotulo: 'Defesas do goleiro', valor: defesas,
+          jogos: summary.jogos_com_defesa, m: { media: defesas, jogos: summary.jogos_com_defesa } })
+        if (!folha.length) return null
+        return (
+          <>
+            <div className="px-4 pt-3 pb-2 border-t border-line/60">
+              <h4 className="text-[11px] font-bold uppercase tracking-wide text-ink-3">Finalizações e passes</h4>
+            </div>
+            <div className="grid grid-cols-2 min-[420px]:grid-cols-4 lg:grid-cols-5 gap-px bg-line/60 border-t border-line/60">
+              {folha.map(f => (
+                <div key={f.chave} className="bg-surface-1 px-3 py-3">
+                  <div className="text-[11px] text-ink-3 leading-tight">{f.rotulo}</div>
+                  <div className="font-placar text-3xl leading-none text-ink-1 mt-1.5">
+                    {f.pct ? `${Math.round(f.valor)}%` : decimal(f.valor)}
+                  </div>
+                  {f.jogos < summary.total_games && (
+                    <div className="mt-1.5 text-[11px] text-ink-4">em {f.jogos} jogos</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
+        )
+      })()}
     </section>
   )
 }
@@ -500,21 +563,27 @@ function PlacarDaLiga({ summary, limit, onLimit }: {
  */
 function RankingDosTimes({ ranking, campo, onCampo, context, onContext }: {
   ranking: TeamRank[] | null
-  campo: RankField; onCampo: (c: RankField) => void
+  campo: string; onCampo: (c: string) => void
   context: Context; onContext: (c: Context) => void
 }) {
-  const ordenado = useMemo(
-    () => [...(ranking ?? [])].sort((a, b) => (b[campo] ?? 0) - (a[campo] ?? 0)),
-    [ranking, campo])
-  const maior = Math.max(0.01, ...ordenado.map(t => t[campo] ?? 0))
+  // Só os números que algum time da liga tem (xG e passe faltam em parte delas).
+  const opcoes = useMemo(
+    () => RANKINGS.filter(r => ranking == null || ranking.some(t => r.valor(t) != null)),
+    [ranking])
+  const atual = opcoes.find(r => r.id === campo) ?? RANKINGS[0]
+  const ordenado = useMemo(() => (ranking ?? [])
+    .map(t => ({ t, v: atual.valor(t) }))
+    .filter((x): x is { t: TeamRank; v: number } => x.v != null)
+    .sort((a, b) => b.v - a.v), [ranking, atual])
+  const maior = Math.max(0.01, ...ordenado.map(x => x.v))
 
   return (
     <section className="space-y-3">
       <div className="flex gap-2 overflow-x-auto scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0">
-        {RANKINGS.map(r => (
-          <button key={r.campo} type="button" aria-pressed={campo === r.campo} onClick={() => onCampo(r.campo)}
+        {opcoes.map(r => (
+          <button key={r.id} type="button" aria-pressed={atual.id === r.id} onClick={() => onCampo(r.id)}
             className={cn('h-10 px-4 shrink-0 rounded-full border text-sm font-semibold transition-colors',
-              campo === r.campo ? 'bg-accent text-on-fill border-accent' : 'bg-surface-1 text-ink-2 border-line')}>
+              atual.id === r.id ? 'bg-accent text-on-fill border-accent' : 'bg-surface-1 text-ink-2 border-line')}>
             {r.rotulo}
           </button>
         ))}
@@ -538,8 +607,7 @@ function RankingDosTimes({ ranking, campo, onCampo, context, onContext }: {
           <div className="p-8 text-center text-ink-3 text-sm">Sem dados de ranking ainda.</div>
         ) : (
           <ol className="divide-y divide-line/60">
-            {ordenado.map((t, i) => {
-              const v = t[campo] ?? 0
+            {ordenado.map(({ t, v }, i) => {
               return (
                 <li key={t.team_id} className="flex items-center gap-3 px-4 py-2.5">
                   <span className={cn('w-6 shrink-0 text-right font-placar text-lg leading-none',
@@ -552,7 +620,9 @@ function RankingDosTimes({ ranking, campo, onCampo, context, onContext }: {
                     </span>
                   </span>
                   <span className="font-mono text-[11px] text-ink-4 shrink-0">{t.games}j</span>
-                  <span className="w-12 text-right font-placar text-xl leading-none text-ink-1 shrink-0">{decimal(v)}</span>
+                  <span className="w-14 text-right font-placar text-xl leading-none text-ink-1 shrink-0">
+                    {atual.pct ? `${Math.round(v)}%` : decimal(v)}
+                  </span>
                 </li>
               )
             })}
