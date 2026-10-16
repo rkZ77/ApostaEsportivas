@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
-import { Trophy } from '../lib/icones'
+import { Trophy } from 'lucide-react'
 import api from '../services/api'
 import { rotuloDoMercado } from '../utils/marketTranslate'
 import { Helmet } from 'react-helmet-async'

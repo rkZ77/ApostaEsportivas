@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import useEmblaCarousel from 'embla-carousel-react'
-import { ChevronLeft, ChevronRight } from '../lib/icones'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { SectionHead, IconButton, Badge } from '../components/ui'
 import { MODULOS } from '../lib/oferta'
 import { cn } from '../lib/cn'

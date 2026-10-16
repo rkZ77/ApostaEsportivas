@@ -4,8 +4,8 @@ import { AnimatePresence, m as motion } from 'framer-motion'
 import {
   Radio, ChevronDown, RefreshCw, CornerUpRight, RectangleVertical,
   Footprints, Hand, Crosshair, Target, Flag, Goal, User, CalendarDays, Clock,
-} from '../lib/icones'
-import type { LucideIcon } from '../lib/icones'
+} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import api from '../services/api'
 import { plural } from '../utils/format'
 import { rotuloDoMercado } from '../utils/marketTranslate'

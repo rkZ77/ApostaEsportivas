@@ -1,7 +1,7 @@
 import { useState, useRef, FormEvent, useEffect } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { AnimatePresence, m as motion } from 'framer-motion'
-import { PartyPopper, Eye, EyeOff, ArrowLeft, House, ShieldCheck, LineChart, Lock } from '../lib/icones'
+import { PartyPopper, Eye, EyeOff, ArrowLeft, House, ShieldCheck, LineChart, Lock } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { taxaAcerto } from '../utils/format'
 import { useAuth } from '../context/AuthContext'

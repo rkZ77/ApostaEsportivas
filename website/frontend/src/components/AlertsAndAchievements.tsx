@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Bell, BellOff, BellRing, Trophy, Lock } from '../lib/icones'
+import { Bell, BellOff, BellRing, Trophy, Lock } from 'lucide-react'
 import api from '../services/api'
 import { Badge, Panel, PanelHead, Spinner } from './ui'
 

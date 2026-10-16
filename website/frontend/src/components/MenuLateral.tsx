@@ -4,8 +4,8 @@ import { AnimatePresence, m as motion } from 'framer-motion'
 import {
   X, Home, Target, CalendarDays, BarChart3, TrendingUp, Crown, BookOpen,
   User, Headphones, HelpCircle, FileText, ShieldCheck, Newspaper,
-} from '../lib/icones'
-import type { LucideIcon } from '../lib/icones'
+} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { WA_SUPPORT } from '../lib/support'
 import { cn } from '../lib/cn'

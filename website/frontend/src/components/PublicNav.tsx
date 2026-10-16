@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Menu } from '../lib/icones'
+import { Menu } from 'lucide-react'
 import MenuLateral from './MenuLateral'
 import BarraInferior from './BarraInferior'
 import { Button } from './ui'

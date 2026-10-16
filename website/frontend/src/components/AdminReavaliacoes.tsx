@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AlertTriangle, CheckCircle2, RefreshCw } from '../lib/icones'
+import { AlertTriangle, CheckCircle2, RefreshCw } from 'lucide-react'
 import api from '../services/api'
 import { Panel, PanelHead } from './ui'
 

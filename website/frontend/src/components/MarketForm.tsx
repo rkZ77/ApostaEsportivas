@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Activity, AlertTriangle, Gavel } from '../lib/icones'
+import { Activity, AlertTriangle, Gavel } from 'lucide-react'
 import api from '../services/api'
 import { Skeleton } from './ui'
 import { TeamLogo, PlayerPhoto } from './TeamLogo'

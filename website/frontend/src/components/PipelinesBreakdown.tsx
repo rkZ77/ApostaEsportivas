@@ -1,4 +1,4 @@
-import { Info } from '../lib/icones'
+import { Info } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { fmtSigned, fmtUnits } from '../utils/format'
 

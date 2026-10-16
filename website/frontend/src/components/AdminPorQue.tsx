@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { HelpCircle } from '../lib/icones'
+import { HelpCircle } from 'lucide-react'
 import api from '../services/api'
 import { SpinnerBlock } from './ui'
 

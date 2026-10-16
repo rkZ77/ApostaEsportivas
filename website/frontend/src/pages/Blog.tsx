@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { m as motion } from 'framer-motion'
-import { BookOpen } from '../lib/icones'
+import { BookOpen } from 'lucide-react'
 import PageShell from '../components/PageShell'
 import EmptyState from '../components/ui/EmptyState'
 import { POSTS } from '../blog/registry'

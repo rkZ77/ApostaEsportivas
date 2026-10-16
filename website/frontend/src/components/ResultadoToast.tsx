@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
-import { Check, RotateCcw, X } from '../lib/icones'
+import { Check, RotateCcw, X } from 'lucide-react'
 import { useNotifications } from '../context/NotificationContext'
 import { mercadoLegivel } from './LivePickToast'
 import { fmtBRL } from '../utils/format'

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Spinner } from './ui'
 import { CalendarClock, BrainCircuit, ChevronDown, DatabaseZap, CircleCheck,
-         CircleSlash } from '../lib/icones'
+         CircleSlash } from 'lucide-react'
 import api from '../services/api'
 import { sinalizarNavegacao } from '../services/progressBus'
 import { TeamLogo, LeagueLogo } from './TeamLogo'

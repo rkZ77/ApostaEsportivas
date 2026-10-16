@@ -1,5 +1,5 @@
 import { useMemo, useState, type RefObject } from 'react'
-import { AlertTriangle, CheckCircle2, Copy, Search, XCircle } from '../lib/icones'
+import { AlertTriangle, CheckCircle2, Copy, Search, XCircle } from 'lucide-react'
 
 /*
  * Log ao vivo do pipeline (09/10/2026, pedido do usuário: "melhora esse

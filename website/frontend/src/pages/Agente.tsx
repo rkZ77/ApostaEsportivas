@@ -1,6 +1,6 @@
 import { useRef, useEffect } from 'react'
 import { Helmet } from 'react-helmet-async'
-import { Zap, Lock, Sparkles } from '../lib/icones'
+import { Zap, Lock, Sparkles } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import Navbar from '../components/Navbar'
 import PageShell from '../components/PageShell'

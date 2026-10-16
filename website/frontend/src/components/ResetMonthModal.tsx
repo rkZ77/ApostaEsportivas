@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { m as motion } from 'framer-motion'
-import { AlertTriangle } from '../lib/icones'
+import { AlertTriangle } from 'lucide-react'
 import { backdropFade, dialogScale } from '../lib/motion'
 import { fecharNoFundo } from '../lib/fecharNoFundo'
 import { fmtSigned } from '../utils/format'

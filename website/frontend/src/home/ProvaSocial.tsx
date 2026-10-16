@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { m as motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
-import { TrendingUp } from '../lib/icones'
+import { TrendingUp } from 'lucide-react'
 
 import api from '../services/api'
 import Avatar from '../components/Avatar'

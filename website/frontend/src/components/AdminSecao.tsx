@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDownRight } from '../lib/icones'
+import { ArrowDownRight } from 'lucide-react'
 
 /*
  * As peças que organizam o /admin.

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, m as motion } from 'framer-motion'
-import { CalendarDays, ChevronLeft, ChevronRight } from '../../lib/icones'
+import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
 
 /*
  * Escolha de DIA num calendário, com os dias que tiveram pick marcados.

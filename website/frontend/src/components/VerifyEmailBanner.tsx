@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { AnimatePresence, m as motion } from 'framer-motion'
-import { Mail, X } from '../lib/icones'
+import { Mail, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useOnboarding } from '../context/OnboardingContext'
 import api from '../services/api'

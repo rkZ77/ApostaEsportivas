@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Mail, TrendingDown } from '../lib/icones'
+import { Mail, TrendingDown } from 'lucide-react'
 import api from '../services/api'
 
 /*

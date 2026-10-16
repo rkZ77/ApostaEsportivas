@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { m as motion, type PanInfo } from 'framer-motion'
-import { X } from '../../lib/icones'
+import { X } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import { cantoIn } from '../../lib/motion'
 import { escudoDoTime } from '../../lib/aoVivo'

@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useMemo } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Star } from '../lib/icones'
+import { Star } from 'lucide-react'
 import { separarFavoritos, useTimesFavoritos } from '../lib/timesFavoritos'
 import { AnimatePresence, m as motion } from 'framer-motion'
 import api from '../services/api'

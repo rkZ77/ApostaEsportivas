@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { m as motion } from 'framer-motion'
 import api from '../services/api'
-import { Check } from '../lib/icones'
+import { Check } from 'lucide-react'
 import { LiveDot, Marquee, Skeleton } from '../components/ui'
 import { TeamLogo, LeagueLogo } from '../components/TeamLogo'
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   AlertTriangle, CheckCircle2, Copy, Eye, Mail, MessageCircle, Send,
-} from '../lib/icones'
+} from 'lucide-react'
 import api from '../services/api'
 
 /*

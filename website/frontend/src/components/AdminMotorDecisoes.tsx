@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Brain, ChevronRight, CircleSlash, RefreshCw, Target, Users } from '../lib/icones'
+import { Brain, ChevronRight, CircleSlash, RefreshCw, Target, Users } from 'lucide-react'
 import api from '../services/api'
 import AdminAmostra, { type AlvoAmostra } from './AdminAmostra'
 import AdminPorQue from './AdminPorQue'

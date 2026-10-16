@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight } from '../../lib/icones'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '../../lib/cn'
 
 /*

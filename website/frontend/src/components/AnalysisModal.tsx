@@ -1,4 +1,4 @@
-import { BookOpen, Target } from '../lib/icones'
+import { BookOpen, Target } from 'lucide-react'
 import Modal from './ui/Modal'
 import { plural } from '../utils/format'
 import { Badge } from './ui'

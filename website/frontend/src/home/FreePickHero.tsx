@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { m as motion } from 'framer-motion'
-import { Check, Gift, History, Lock } from '../lib/icones'
+import { Check, Gift, History, Lock } from 'lucide-react'
 import api from '../services/api'
 import { translateMarket, translateLine } from '../utils/marketTranslate'
 import { useAuth } from '../context/AuthContext'

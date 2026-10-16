@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AlertTriangle, RefreshCw, Wrench } from '../lib/icones'
+import { AlertTriangle, RefreshCw, Wrench } from 'lucide-react'
 import api from '../services/api'
 import { Spinner } from './ui'
 

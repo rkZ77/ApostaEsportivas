@@ -4,7 +4,7 @@ import { AnimatePresence, m as motion } from 'framer-motion'
 import {
   Activity, Bell, BellOff, CalendarCheck, CheckCheck, CheckCircle2, Clock, Crown, Gift, Lock, MinusCircle,
   PlayCircle, TimerReset, X, XCircle, Zap,
-} from '../lib/icones'
+} from 'lucide-react'
 import { useNotifications, type AppNotification } from '../context/NotificationContext'
 import { backdropFade, popIn, sheetUp } from '../lib/motion'
 

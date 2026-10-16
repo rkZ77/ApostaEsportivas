@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { AnimatePresence, m as motion } from 'framer-motion'
-import { Crown, X } from '../lib/icones'
+import { Crown, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useNotifications } from '../context/NotificationContext'
 import { useOnboarding } from '../context/OnboardingContext'

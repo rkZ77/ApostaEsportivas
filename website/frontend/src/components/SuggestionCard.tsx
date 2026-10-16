@@ -25,7 +25,7 @@ import { useBilhete } from '../lib/sincronia'
 import { useOddAgora } from '../hooks/useOddsAgora'
 import { ehCartela } from '../utils/cartela'
 import { TeamLogo, LeagueLogo, PlayerPhoto } from './TeamLogo'
-import { Ban, Clock } from '../lib/icones'
+import { Ban, Clock } from 'lucide-react'
 
 function wcPhase(dateStr?: string): string | null {
   if (!dateStr) return null

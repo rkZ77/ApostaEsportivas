@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Bell, BellOff, Eye, EyeOff } from '../lib/icones'
+import { Bell, BellOff, Eye, EyeOff } from 'lucide-react'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import PageShell from '../components/PageShell'

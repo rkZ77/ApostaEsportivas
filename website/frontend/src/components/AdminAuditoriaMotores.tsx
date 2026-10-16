@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   AlertTriangle, Check, ChevronRight, CircleSlash, Cpu, Loader2, RefreshCw, X,
-} from '../lib/icones'
+} from 'lucide-react'
 import api from '../services/api'
 import { Badge, Button, EmptyState, Pagination, Select, SpinnerBlock } from './ui'
 import type { BadgeTone } from './ui'

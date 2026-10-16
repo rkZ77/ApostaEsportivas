@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { AlertTriangle, ArrowRight, CheckCircle2, Database, Gauge, Trophy, Users, Wallet } from '../lib/icones'
+import { AlertTriangle, ArrowRight, CheckCircle2, Database, Gauge, Trophy, Users, Wallet } from 'lucide-react'
 import { cn } from '../lib/cn'
 
 /*

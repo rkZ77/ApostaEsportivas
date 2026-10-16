@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { CalendarDays, ListChecks } from '../lib/icones'
+import { CalendarDays, ListChecks } from 'lucide-react'
 import {
   Button, EmptyState, Panel, PanelHead, PickTypeBadge, ResultBadge, StatTile,
   Table, type Column,

@@ -20,7 +20,7 @@
  * de mexer.
  */
 import { useCallback, useEffect, useState } from 'react'
-import { AlertTriangle, Check, Pencil, RefreshCw } from '../lib/icones'
+import { AlertTriangle, Check, Pencil, RefreshCw } from 'lucide-react'
 import api from '../services/api'
 import { Button, EmptyState, ErrorState, Pagination, SkeletonRows } from './ui'
 

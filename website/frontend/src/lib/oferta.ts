@@ -1,8 +1,8 @@
 import {
   Crown, Gift, Layers, Rocket, Wallet, BarChart3, Bot, CalendarDays,
   ShieldHalf, Flag, Radio, Zap, UserSquare, Grid3x3,
-} from './icones'
-import type { LucideIcon } from './icones'
+} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import type { BadgeTone } from '../components/ui'
 
 /*

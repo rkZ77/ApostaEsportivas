@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Layers } from '../lib/icones'
+import { Layers } from 'lucide-react'
 import api from '../services/api'
 import { Skeleton } from './ui'
 import BlocoAmostra, { type Amostra } from './BlocoAmostra'

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Activity, AlertTriangle, CheckCircle2, ChevronDown, Gavel, Play, RefreshCw, Square, XCircle,
-} from '../lib/icones'
+} from 'lucide-react'
 import api from '../services/api'
 import { Spinner } from './ui'
 import Pagination from './ui/Pagination'

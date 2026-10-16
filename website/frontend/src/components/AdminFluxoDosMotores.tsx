@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowDown, Cpu, Database, Filter, Info } from '../lib/icones'
+import { ArrowDown, Cpu, Database, Filter, Info } from 'lucide-react'
 import api from '../services/api'
 import { Badge, EmptyState, SpinnerBlock } from './ui'
 

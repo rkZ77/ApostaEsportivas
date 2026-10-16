@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, m as motion } from 'framer-motion'
-import { TrendingUp, TrendingDown, X, BadgeCheck, Share2, Check, ChevronRight, ArrowLeft } from '../lib/icones'
+import { TrendingUp, TrendingDown, X, BadgeCheck, Share2, Check, ChevronRight, ArrowLeft } from 'lucide-react'
 import api from '../services/api'
 import { fmtBRL, fmtUnits, taxaAcerto } from '../utils/format'
 import { backdropFade, sheetUp, tabFade } from '../lib/motion'

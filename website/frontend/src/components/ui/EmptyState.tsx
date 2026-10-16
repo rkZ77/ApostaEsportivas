@@ -1,4 +1,4 @@
-import type { LucideIcon } from '../../lib/icones'
+import type { LucideIcon } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import Button, { type ButtonProps } from './Button'
 
