@@ -1,13 +1,14 @@
 import { m as motion } from 'framer-motion'
 import { ArrowRight, Check } from 'lucide-react'
 import { Button } from '../components/ui'
+import LinhasDeCampo from '../components/ui/LinhasDeCampo'
 
 /*
  * Fechamento da Home.
  *
  * O bloco é delineado, não preenchido de verde: um painel gritante no fim da
  * página puxa o site pra estética de cassino, que é justamente o que o produto
- * não é. O acento fica só no brilho de fundo e no botão.
+ * não é. O acento fica só nas linhas de campo do fundo e no botão.
  */
 
 const POINTS = [
@@ -26,18 +27,9 @@ export default function FinalCTA() {
           transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
           className="relative overflow-hidden rounded-lg border border-line bg-surface-0 px-6 py-12 sm:px-12 sm:py-16 text-center"
         >
-          {/* Luz difusa subindo do rodapé do bloco. Decorativa. */}
-          <div
-            aria-hidden="true"
-            /* Mesmo motivo do hero da Home: radial-gradient no lugar de
-               blur-[90px], que criava camada e filtro no Safari iOS. */
-            className="pointer-events-none absolute -bottom-40 left-1/2 -translate-x-1/2 w-[640px] h-[400px]"
-            style={{ background: 'radial-gradient(50% 50% at 50% 50%, rgb(var(--accent) / 0.15), transparent 70%)' }}
-          />
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 bg-data-grid bg-[length:28px_28px] opacity-40 [mask-image:radial-gradient(ellipse_70%_60%_at_50%_100%,black,transparent)]"
-          />
+          {/* Linhas de campo subindo da base do bloco, no lugar da luz verde
+              difusa e da grade (15/10/2026) · ver ui/LinhasDeCampo. */}
+          <LinhasDeCampo foco="base" />
 
           <div className="relative">
             <h2 className="font-display text-2xl sm:text-3xl font-bold text-ink-1 leading-tight mb-3">

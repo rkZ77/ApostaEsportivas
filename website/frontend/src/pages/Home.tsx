@@ -5,6 +5,7 @@ import api from '../services/api'
 import SiteHeader from '../components/SiteHeader'
 import Footer from '../components/Footer'
 import SecaoAdiada from '../components/SecaoAdiada'
+import LinhasDeCampo from '../components/ui/LinhasDeCampo'
 import { usePlans, type Plan } from '../hooks/usePlans'
 import { encerrarBarraInicial } from '../lib/barraInicial'
 
@@ -220,20 +221,9 @@ export default function Home() {
 
       {/* ── Hero ── */}
       <section className="relative pt-16">
-        <div
-          aria-hidden="true"
-          className="absolute inset-0 bg-data-grid bg-[length:32px_32px] [mask-image:radial-gradient(ellipse_65%_55%_at_50%_0%,black,transparent)]"
-        />
-        {/* Brilho do hero em radial-gradient, não em `blur-[120px]`.
-            Desfoque de 120px sobre uma área de 560x320 obriga o navegador a
-            criar uma camada e refiltrá-la; no Safari do iPhone é o efeito mais
-            caro desta tela, e ele fica exatamente atrás do conteúdo que rola.
-            O gradiente pinta o mesmo halo direto, sem camada e sem filtro. */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-[820px] h-[520px]"
-          style={{ background: 'radial-gradient(50% 50% at 50% 40%, rgb(var(--accent) / 0.10), transparent 70%)' }}
-        />
+        {/* Linhas de campo no lugar do brilho verde e da grade quadriculada
+            (15/10/2026, identidade visual) · ver ui/LinhasDeCampo. */}
+        <LinhasDeCampo foco="topo" />
 
         <div className="relative max-w-6xl mx-auto px-4 pt-14 pb-16 md:pt-20 md:pb-24">
           <div className="grid lg:grid-cols-2 gap-12 lg:gap-10 items-center">
