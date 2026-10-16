@@ -7,6 +7,7 @@ import { cn } from '../lib/cn'
 import PageShell from '../components/PageShell'
 import { SpinnerBlock, EmptyState, ErrorState, Skeleton } from '../components/ui'
 import { TeamLogo } from '../components/TeamLogo'
+import FaixaRolavel from '../components/ui/FaixaRolavel'
 import Classificacao from '../components/jogos/Classificacao'
 import LeituraDaLiga from '../components/ligas/LeituraDaLiga'
 import LinhasDaLiga from '../components/ligas/LinhasDaLiga'
@@ -389,7 +390,6 @@ export function EstatisticasContent({ onAbrirJogo }: {
 function SeletorDeLiga({ ligas, valor, hoje, onChange }: {
   ligas: League[]; valor: number | null; hoje: JogoDoDia[]; onChange: (id: number) => void
 }) {
-  const ref = useRef<HTMLDivElement>(null)
   const ordenadas = useMemo(() => [
     ...ligas.filter(l => l.ativa !== false),
     ...ligas.filter(l => l.ativa === false),
@@ -400,14 +400,9 @@ function SeletorDeLiga({ ligas, valor, hoje, onChange }: {
     return n
   }, [hoje])
 
-  // A liga aberta sempre à vista, mesmo quando é a 15ª da faixa.
-  useEffect(() => {
-    const el = ref.current?.querySelector<HTMLElement>('[aria-pressed="true"]')
-    el?.scrollIntoView({ block: 'nearest', inline: 'center' })
-  }, [valor])
-
+  // Setas no computador e a liga aberta sempre à vista: ver ui/FaixaRolavel.
   return (
-    <div ref={ref} className="-mx-4 px-4 sm:mx-0 sm:px-0 flex gap-2 overflow-x-auto scrollbar-none pb-1">
+    <FaixaRolavel rotulo="Ligas" foco={valor} className="-mx-4 px-4 sm:mx-0 sm:px-0 gap-2 pb-1">
       {ordenadas.map(l => {
         const ativa = l.league_id === valor
         const n = jogosHoje.get(l.league_id)
@@ -426,7 +421,7 @@ function SeletorDeLiga({ ligas, valor, hoje, onChange }: {
           </button>
         )
       })}
-    </div>
+    </FaixaRolavel>
   )
 }
 
@@ -598,7 +593,7 @@ function RankingDosTimes({ ranking, campo, onCampo, context, onContext }: {
 
   return (
     <section className="space-y-3">
-      <div className="flex gap-2 overflow-x-auto scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0">
+      <FaixaRolavel rotulo="Número do ranking" foco={atual.id} className="gap-2 -mx-4 px-4 sm:mx-0 sm:px-0">
         {opcoes.map(r => (
           <button key={r.id} type="button" aria-pressed={atual.id === r.id} onClick={() => onCampo(r.id)}
             className={cn('h-10 px-4 shrink-0 rounded-full border text-sm font-semibold transition-colors',
@@ -606,7 +601,7 @@ function RankingDosTimes({ ranking, campo, onCampo, context, onContext }: {
             {r.rotulo}
           </button>
         ))}
-      </div>
+      </FaixaRolavel>
       <div className="grid grid-cols-3 rounded-lg border border-line p-0.5 bg-surface-1 max-w-sm">
         {([['all', 'Todos'], ['home', 'Em casa'], ['away', 'Fora']] as [Context, string][]).map(([k, r]) => (
           <button key={k} type="button" aria-pressed={context === k} onClick={() => onContext(k)}
@@ -640,7 +635,8 @@ function RankingDosTimes({ ranking, campo, onCampo, context, onContext }: {
                   </span>
                   <span className="font-mono text-[11px] text-ink-4 shrink-0">{t.games}j</span>
                   <span className="w-14 text-right font-mono font-black text-xl leading-none text-ink-1 shrink-0">
-                    {atual.pct ? `${Math.round(v)}%` : decimal(v)}
+                    {/* Uma casa sempre: "2" ao lado de "2,1" parecia outro tipo de número. */}
+                    {atual.pct ? `${Math.round(v)}%` : v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
                   </span>
                 </li>
               )
