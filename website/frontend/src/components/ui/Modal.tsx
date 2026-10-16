@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { m as motion } from 'framer-motion'
+import { m as motion, useDragControls } from 'framer-motion'
 import { X } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import { fecharNoFundo } from '../../lib/fecharNoFundo'
@@ -74,6 +74,11 @@ function useDialogBehavior(onClose: () => void, ref: React.RefObject<HTMLDivElem
   }, [onClose, ref])
 }
 
+/** Tela de celular (abaixo do `sm` do Tailwind), lida na abertura do modal. */
+function ehCelular(): boolean {
+  return typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches
+}
+
 const WIDTH = {
   xs: 'max-w-xs',
   sm: 'max-w-sm',
@@ -118,6 +123,14 @@ export default function Modal({
   const descId = useId()
   useDialogBehavior(onClose, ref)
 
+  /* GAVETA DE CELULAR (15/10/2026, identidade visual). No celular a folha
+     encosta embaixo, com alça, e ARRASTA PRA BAIXO PRA FECHAR, como gaveta de
+     app. O arraste nasce só na alça e no cabeçalho (`dragControls`): no
+     conteúdo ele brigaria com a rolagem. No desktop nada muda. */
+  const folha = sheetOnMobile && ehCelular()
+  const arraste = useDragControls()
+  const puxar = (e: React.PointerEvent) => { if (folha) arraste.start(e) }
+
   return createPortal(
     <motion.div
       variants={backdropFade}
@@ -126,9 +139,9 @@ export default function Modal({
       exit="exit"
       {...fecharNoFundo(onClose)}
       className={cn(
-        'fixed inset-0 flex justify-center bg-black/70 backdrop-blur-sm p-4',
+        'fixed inset-0 flex justify-center bg-black/70 backdrop-blur-sm',
         acimaDeTudo ? 'z-[70]' : 'z-50',
-        sheetOnMobile ? 'items-end sm:items-center' : 'items-center',
+        sheetOnMobile ? 'items-end sm:items-center p-0 sm:p-4' : 'items-center p-4',
       )}
     >
       <motion.div
@@ -140,15 +153,30 @@ export default function Modal({
         tabIndex={-1}
         variants={sheetOnMobile ? sheetUp : dialogScale}
         onClick={e => e.stopPropagation()}
+        drag={folha ? 'y' : false}
+        dragListener={false}
+        dragControls={arraste}
+        dragConstraints={{ top: 0, bottom: 0 }}
+        dragElastic={{ top: 0, bottom: 0.7 }}
+        onDragEnd={(_, info) => { if (info.offset.y > 110 || info.velocity.y > 600) onClose() }}
         className={cn(
-          'w-full bg-surface-1 border border-line-strong rounded-lg overflow-hidden',
+          'w-full bg-surface-1 border border-line-strong overflow-hidden',
           'flex flex-col max-h-[92dvh] focus:outline-none',
+          sheetOnMobile
+            ? 'rounded-t-2xl rounded-b-none sm:rounded-lg border-b-0 sm:border-b pb-[env(safe-area-inset-bottom)] sm:pb-0'
+            : 'rounded-lg',
           WIDTH[width],
           className,
         )}
       >
+        {sheetOnMobile && (
+          <div onPointerDown={puxar} className="sm:hidden flex justify-center pt-2.5 pb-1 touch-none cursor-grab" aria-hidden>
+            <span className="h-1 w-10 rounded-full bg-line-strong" />
+          </div>
+        )}
         {(title || !hideClose) && (
-          <div className="flex items-start gap-3 px-5 py-4 border-b border-line shrink-0">
+          <div onPointerDown={puxar}
+            className={cn('flex items-start gap-3 px-5 py-4 border-b border-line shrink-0', folha && 'touch-none')}>
             <div className="flex-1 min-w-0">
               {title && (
                 <h2 id={titleId} className="font-display text-base font-semibold text-ink-1 leading-tight">

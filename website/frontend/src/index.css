@@ -338,6 +338,9 @@
      cards, placar, lucro da banca · 105 lugares): a regra pega o padrao em
      vez de marcar cada um. */
   .font-black:is(.text-xl, .text-2xl, .text-3xl, .text-4xl, .text-5xl),
+  /* Titulo com `font-display` (a classe do Tailwind ganha da regra de h1/h2
+     em base): o titulo de pagina e de secao tambem e' placar. */
+  h1.font-display, h2.font-display,
   .font-placar {
     font-family: 'Barlow Condensed', Inter, -apple-system, BlinkMacSystemFont, sans-serif;
     font-weight: 700;
