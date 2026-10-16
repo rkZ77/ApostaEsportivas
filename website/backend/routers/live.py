@@ -2253,18 +2253,23 @@ def _cota_permite_estatistica() -> bool:
 
 
 @router.get("/fixture/{fixture_id}/estatisticas")
-def get_estatisticas_do_jogo(fixture_id: int, current_user: dict = Depends(get_current_user)):
+def get_estatisticas_do_jogo(fixture_id: int, so_cache: bool = False,
+                             current_user: dict = Depends(get_current_user)):
     """A aba Estatisticas do Raio-X · ver estatisticas_do_jogo.py.
 
-    Do plano pago, como o resto do Raio-X (o gratuito ve a aba trancada)."""
+    Do plano pago, como o resto do Raio-X (o gratuito ve a aba trancada).
+
+    `so_cache` (16/10/2026): o Raio-X pergunta, ao abrir um jogo encerrado,
+    se ha' estatistica pra mostrar a aba -- e essa pergunta nao pode gastar
+    cota. Responde so' com banco e cache."""
     from auth_utils import is_vip_active
     from fastapi import HTTPException
     if not is_vip_active(current_user):
         raise HTTPException(403, "Raio-X e' para assinantes")
-    return montar_estatisticas(fixture_id)
+    return montar_estatisticas(fixture_id, so_cache=so_cache)
 
 
-def montar_estatisticas(fixture_id: int) -> dict:
+def montar_estatisticas(fixture_id: int, so_cache: bool = False) -> dict:
     import estatisticas_do_jogo as ed
 
     # 1. Encerrado e ja' coletado: banco, zero chamada.
@@ -2312,7 +2317,7 @@ def montar_estatisticas(fixture_id: int) -> dict:
     # 3. Frio ou velho: UMA busca que vale pra todos pelo TTL, se a cota deixar.
     #    _fetch_fixture/_fetch_stats respeitam o TTL, entao duas pessoas
     #    abrindo juntas nao viram duas chamadas.
-    if velho and _cota_permite_estatistica():
+    if velho and not so_cache and _cota_permite_estatistica():
         data = _fetch_fixture(fixture_id)
         status = ((data.get("fixture") or {}).get("status") or {}).get("short", "NS")
         if status in LIVE_STATUSES or status in FT_STATUSES:

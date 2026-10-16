@@ -156,3 +156,28 @@ def test_cota_alta_nao_busca_mesmo_com_cache_velho(api, monkeypatch):
     monkeypatch.setattr(live.api_quota, "estado_atual", lambda: {"pct_usado": 95})
     r = live.montar_estatisticas(1)
     assert api == [] and r["periodos"]["jogo"]
+
+
+def test_previa_do_raio_x_nunca_gasta_cota(api, monkeypatch):
+    """`so_cache` (16/10): o Raio-X pergunta se ha' estatistica pra mostrar a
+    aba. Mesmo com cache velho e cota folgada, a pergunta nao vai a API."""
+    _banco(monkeypatch)
+    velho = time.time() - 600
+    live._fix_cache[1] = (velho, {"fixture": {"status": {"short": "FT"}}, "teams": {}, "goals": {}})
+    live._stats_cache[1] = (velho, FOLHA, "FT")
+    monkeypatch.setattr(live.api_quota, "estado_atual", lambda: {"pct_usado": 10})
+    r = live.montar_estatisticas(1, so_cache=True)
+    assert api == [] and r["periodos"]["jogo"]
+
+
+def test_aba_so_aparece_com_jogo_comecado_e_previa_sem_cota():
+    """Jogo que nao comecou nao tem a aba; encerrado so' com estatistica, e a
+    pergunta do Raio-X vai sempre com so_cache."""
+    import os
+    caminho = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "src",
+                           "components", "jogos", "RaioXDoJogo.tsx")
+    with open(caminho, encoding="utf-8") as fh:
+        fonte = fh.read()
+    assert "params: { so_cache: true }" in fonte
+    assert "k !== 'estatisticas' || mostraEstatisticas" in fonte
+    assert "rolando || (encerrado && (trancado || temEstatistica))" in fonte
