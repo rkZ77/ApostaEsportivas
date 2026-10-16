@@ -913,6 +913,29 @@ def get_escalacao(
         cur.close(); conn.close()
 
 
+@router.get("/{fixture_id}/arbitro")
+def get_arbitro_do_jogo(fixture_id: int, current_user: dict = Depends(_assinante)):
+    """O arbitro da partida e os numeros dele · ver arbitro_do_jogo.py.
+
+    So' banco. Muda quando a coleta grava jogo novo dele, entao 10 minutos de
+    cache por jogo nao escondem nada."""
+    import arbitro_do_jogo
+
+    def montar():
+        conn = get_connection()
+        cur = conn.cursor()
+        try:
+            return arbitro_do_jogo.arbitro_do_jogo(cur, fixture_id)
+        finally:
+            cur.close(); conn.close()
+
+    try:
+        return cache_publico.obter(f"arbitro:{fixture_id}", 600, montar)
+    except Exception:
+        logger.warning("[ARBITRO] jogo %s", fixture_id, exc_info=True)
+        return {"status": "falhou"}
+
+
 @router.get("/{fixture_id}/classificacao")
 def get_classificacao(
     fixture_id: int,
@@ -1229,6 +1252,16 @@ def _montar_raio_x(fixture_id: int, home, away, league, n: int, season=None) -> 
             nomes_ligas = {r["league_id"]: r["name"] for r in cur.fetchall()}
 
         arbitro = _arbitro(cur, fix.get("referee"), 15, liga, temporada)
+        # POSICAO NA TABELA no topo do Raio-X (16/10/2026, pedido do usuario:
+        # "aparecer o numero da classificacao deles na liga"). Banco puro;
+        # sem tabela (mata-mata, copa) fica vazio e a tela nao mostra.
+        try:
+            import resumo_ia
+            tab = resumo_ia.tabela_dos_times(cur, liga, [home_id, away_id]) if liga else {}
+        except Exception:
+            cur.connection.rollback()
+            tab = {}
+        posicoes = {"home": tab.get(home_id), "away": tab.get(away_id)}
         try:
             competicao = _competicao_do_jogo(cur, fix.get("round"), home_id, away_id,
                                              liga, temporada, antes_de)
@@ -1266,6 +1299,8 @@ def _montar_raio_x(fixture_id: int, home, away, league, n: int, season=None) -> 
         "nomes_times": {str(k): v for k, v in nomes.items()},
         "nomes_ligas": {str(k): v for k, v in nomes_ligas.items()},
         "arbitro": arbitro,
+        # {posicao, de, pontos, ...} de cada time na tabela da liga, ou None.
+        "posicoes": posicoes,
         "jogadores": {
             "home": {"fonte_titulares": titulares[home_id][1], "lista": jogadores[home_id]},
             "away": {"fonte_titulares": titulares[away_id][1], "lista": jogadores[away_id]},

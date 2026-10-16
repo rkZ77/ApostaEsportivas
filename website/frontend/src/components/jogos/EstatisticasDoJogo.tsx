@@ -5,6 +5,7 @@ import { ErrorState, Skeleton } from '../ui'
 import { TeamLogo } from '../TeamLogo'
 import NumeroVivo from '../ui/NumeroVivo'
 import { aoVivo } from '../../lib/aoVivo'
+import ArbitroDoJogo from './ArbitroDoJogo'
 
 /*
  * ABA ESTATÍSTICAS DO RAIO-X (15/10/2026, pedido do usuário: "estatística do
@@ -44,9 +45,20 @@ const GRUPOS: { titulo: string; chaves: string[] }[] = [
 const formatar = (v: number, pct: boolean) =>
   pct ? `${v}%` : v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })
 
-export default function EstatisticasDoJogo({ fixtureId, homeId, awayId, homeNome, awayNome }: {
-  fixtureId: number; homeId?: number; awayId?: number; homeNome?: string; awayNome?: string
-}) {
+type Props = { fixtureId: number; homeId?: number; awayId?: number; homeNome?: string; awayNome?: string }
+
+/* A folha do jogo e, embaixo, o árbitro (16/10/2026). O árbitro aparece em
+   qualquer estado do jogo: antes da bola rolar ele é o que há pra ver aqui. */
+export default function EstatisticasDoJogo(props: Props) {
+  return (
+    <div className="space-y-4">
+      <FolhaDoJogo {...props} />
+      <ArbitroDoJogo {...props} />
+    </div>
+  )
+}
+
+function FolhaDoJogo({ fixtureId, homeId, awayId, homeNome, awayNome }: Props) {
   const [r, setR] = useState<Resposta | null>(null)
   const [erro, setErro] = useState(false)
   const [periodo, setPeriodo] = useState<Periodo>('jogo')

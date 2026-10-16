@@ -63,6 +63,8 @@ export interface JogoCurto {
   escanteios: number | null; amarelos: number | null
 }
 
+export interface PosicaoNaTabela { posicao: number; de: number; pontos: number; jogos?: number }
+
 export interface RaioX {
   fixture: {
     fixture_id: number; league_id: number | null
@@ -92,6 +94,8 @@ export interface RaioX {
     volta_em?: string | null
   }
   arbitro: { nome: string; jogos: Array<{ amarelos: number; vermelhos: number; faltas: number | null }> } | null
+  /** Posição de cada time na tabela da liga (16/10/2026). null sem tabela. */
+  posicoes?: { home: PosicaoNaTabela | null; away: PosicaoNaTabela | null }
   jogadores: {
     home: { fonte_titulares: string; lista: Jogador[] }
     away: { fonte_titulares: string; lista: Jogador[] }

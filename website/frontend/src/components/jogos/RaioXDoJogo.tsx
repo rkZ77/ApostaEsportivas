@@ -10,7 +10,7 @@ import { nomeDaLigaPt, rotuloDaRodada } from '../../lib/paisDaLiga'
 import {
   ambasMarcam, comPeriodo, ehGoleiro, ESTATS_DE_JOGADOR, fraseDoJogador, MERCADOS_DE_TIME, MERCADOS_PRINCIPAIS, numero,
   resultadoDoJogo, RESULTADOS_ACEITOS, ROTULO_PERIODO, rotuloDaLinha, serieDeResultado, taxa, taxaDoJogador, tomDaTaxa,
-  filtrarPorMando, type EscolhaDeResultado, type EstatDeJogador, type Mando, type Jogador, type JogoCurto, type JogoDoTime, type Lado, type Periodo, type RaioX, type Taxa,
+  filtrarPorMando, type EscolhaDeResultado, type PosicaoNaTabela, type EstatDeJogador, type Mando, type Jogador, type JogoCurto, type JogoDoTime, type Lado, type Periodo, type RaioX, type Taxa,
 } from '../../lib/raioX'
 import { alternar, trocarNoGrupo, useBilheteMontado, type Selecao } from '../../lib/bilheteMontado'
 import { chanceDoResultado, oddDaSelecao, vantagem, type OddDaCasa } from '../../lib/oddsDoJogo'
@@ -34,7 +34,10 @@ import EstatisticasDoJogo from './EstatisticasDoJogo'
  * A conta (linha, taxa, média) é toda de lib/raioX.ts · aqui é só desenho.
  */
 
-type Aba = 'mercados' | 'estatisticas' | 'ia' | 'jogadores' | 'escalacao' | 'tabela' | 'confronto' | 'forma'
+/* A aba Forma saiu em 16/10/2026 (pedido do usuário: "coisas repetidas"): os
+   últimos jogos de cada time já estão no Confronto, e a forma em bolinhas no
+   topo do Raio-X. */
+type Aba = 'mercados' | 'estatisticas' | 'ia' | 'jogadores' | 'escalacao' | 'tabela' | 'confronto'
 
 export interface JogoBase {
   fixture_id: number
@@ -152,7 +155,13 @@ export default function RaioXDoJogo({ jogo, trancado = false }: { jogo: JogoBase
 
   return (
     <div className="min-w-0">
-      <Placar jogo={jogo} dados={dados} aoVivo={aoVivoAgora} encerrado={encerradoAgora} />
+      <Placar jogo={jogo} dados={dados} aoVivo={aoVivoAgora} encerrado={encerradoAgora}
+        onArbitro={() => {
+          setAba('estatisticas')
+          // Espera a aba montar e o bloco do árbitro existir.
+          setTimeout(() => document.getElementById('arbitro-do-jogo')
+            ?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 400)
+        }} />
 
       {/* Abas fixas ao rolar · no celular a lista de jogadores é longa e a
           troca de aba não pode exigir voltar ao topo. */}
@@ -165,7 +174,7 @@ export default function RaioXDoJogo({ jogo, trancado = false }: { jogo: JogoBase
         <div className="grid grid-cols-4 sm:flex" role="tablist">
           {([
             ['mercados', 'Mercados'], ['estatisticas', 'Estatísticas'], ['ia', 'Leitura IA'], ['jogadores', 'Jogadores'], ['escalacao', 'Escalação'],
-            ['tabela', 'Tabela'], ['confronto', 'Confronto'], ['forma', 'Forma'],
+            ['tabela', 'Tabela'], ['confronto', 'Confronto'],
           ] as [Aba, string][]).map(([k, rotulo]) => (
             <button key={k} role="tab" aria-selected={aba === k} onClick={() => setAba(k)}
               className={cn(
@@ -216,10 +225,8 @@ export default function RaioXDoJogo({ jogo, trancado = false }: { jogo: JogoBase
         ) : aba === 'tabela' ? (
           <Classificacao fixtureId={dados.fixture.fixture_id} leagueId={dados.fixture.league_id}
             homeId={dados.fixture.home_team_id} awayId={dados.fixture.away_team_id} />
-        ) : aba === 'confronto' ? (
-          <AbaConfronto dados={dados} />
         ) : (
-          <AbaForma dados={dados} />
+          <AbaConfronto dados={dados} />
         )}
       </div>
     </div>
@@ -247,13 +254,12 @@ function EstrelaDoTime({ id, nome }: { id: number; nome: string }) {
 
 const O_QUE_TEM: Record<Aba, [string, string[]]> = {
   mercados: ['Quantas vezes cada linha bateu', ['Gols, escanteios, cartões e chutes, linha a linha', 'Mandante em casa e visitante fora separados', 'A odd das casas ao lado da taxa']],
-  estatisticas: ['As estatísticas do jogo, ao vivo', ['Posse, xG, finalizações, escanteios e cartões', 'Jogo inteiro, 1º e 2º tempo', 'Atualiza sozinha com a bola rolando']],
+  estatisticas: ['As estatísticas do jogo, ao vivo', ['Posse, xG, finalizações, escanteios e cartões', 'Jogo inteiro, 1º e 2º tempo, atualizando sozinha', 'O árbitro: faltas, cartões e VAR, e os jogos dele com cada time']],
   ia: ['A leitura da IA sobre este jogo', ['Os mercados de over e under em que os dois times concordam', 'Tabela, técnico e o peso de liga ou mata-mata', 'O alerta quando a amostra é curta']],
   jogadores: ['Cada jogador, jogo a jogo', ['Chutes, chutes no alvo, faltas e cartões', 'Quem começa jogando hoje', 'Monte bilhete de jogador com um toque']],
   escalacao: ['O campinho do jogo', ['Escalação oficial ou provável', 'Desfalques e suspensos', 'Técnico e formação']],
   tabela: ['A tabela da liga', ['Posição, pontos e saldo', 'Campanha em casa e fora', 'Zona de classificação e rebaixamento']],
   confronto: ['O confronto direto', ['Vitórias de cada lado e empates', 'Gols e escanteios por jogo', 'Os últimos jogos entre os dois']],
-  forma: ['Como os dois chegam', ['Os últimos 10 jogos de cada time', 'Placar, escanteios e cartões de cada partida', 'Mandante e visitante lado a lado']],
 }
 
 function AbaTrancada({ aba }: { aba: Aba }) {
@@ -304,8 +310,10 @@ interface PlacarAoVivo {
   home_possession: number; away_possession: number
 }
 
-function Placar({ jogo, dados, aoVivo, encerrado }: {
+function Placar({ jogo, dados, aoVivo, encerrado, onArbitro }: {
   jogo: JogoBase; dados: RaioX | null; aoVivo: PlacarAoVivo | null; encerrado?: [number, number] | null
+  /** Tocar no nome do árbitro abre o bloco dele, na aba Estatísticas. */
+  onArbitro?: () => void
 }) {
   const f = dados?.fixture
   const ligaId = f?.league_id ?? jogo.league_id
@@ -317,10 +325,19 @@ function Placar({ jogo, dados, aoVivo, encerrado }: {
   const formaHome = jogo.forma_home ?? dados?.times.home.jogos.slice(0, 5).map(resultadoDoJogo).filter(Boolean) as string[] ?? []
   const formaAway = jogo.forma_away ?? dados?.times.away.jogos.slice(0, 5).map(resultadoDoJogo).filter(Boolean) as string[] ?? []
 
-  const Time = ({ id, nome, forma }: { id?: number; nome?: string; forma: string[] }) => (
+  /* POSIÇÃO NA TABELA (16/10/2026, pedido do usuário). Só em jogo de liga ou
+     de grupos: no mata-mata a tabela da fase anterior não diz nada do jogo. */
+  const formato = dados?.competicao?.formato
+  const comTabela = formato !== 'mata-mata' && formato !== 'mata-mata ida e volta'
+  const Time = ({ id, nome, forma, pos }: { id?: number; nome?: string; forma: string[]; pos?: PosicaoNaTabela | null }) => (
     <div className="flex-1 min-w-0 flex flex-col items-center text-center gap-2">
       <TeamLogo id={id} name={nome ?? ''} size={52} />
       <span className="text-sm font-bold text-ink-1 leading-tight line-clamp-2">{nome}</span>
+      {comTabela && pos && (
+        <span className="-mt-1 text-[11px] text-ink-3 tabular-nums">
+          <b className="text-ink-1">{pos.posicao}º</b> de {pos.de} · {pos.pontos} pts
+        </span>
+      )}
       <FormaPontos forma={forma} />
       {id && <EstrelaDoTime id={id} nome={nome ?? ''} />}
     </div>
@@ -372,7 +389,7 @@ function Placar({ jogo, dados, aoVivo, encerrado }: {
           })()}
         </div>
         <div className="flex items-start gap-2">
-          <Time id={f?.home_team_id ?? jogo.home_team_id} nome={f?.home_team || jogo.home_team} forma={formaHome} />
+          <Time id={f?.home_team_id ?? jogo.home_team_id} nome={f?.home_team || jogo.home_team} forma={formaHome} pos={dados?.posicoes?.home} />
           {aoVivo ? (
             /* Rolando: o placar no lugar do horário, e o tempo e o minuto
                embaixo, no azul do Ao Vivo do site. */
@@ -401,8 +418,18 @@ function Placar({ jogo, dados, aoVivo, encerrado }: {
               <div className="text-[11px] text-ink-3 capitalize mt-0.5">{dia}</div>
             </div>
           )}
-          <Time id={f?.away_team_id ?? jogo.away_team_id} nome={f?.away_team || jogo.away_team} forma={formaAway} />
+          <Time id={f?.away_team_id ?? jogo.away_team_id} nome={f?.away_team || jogo.away_team} forma={formaAway} pos={dados?.posicoes?.away} />
         </div>
+        {/* QUEM APITA (16/10/2026, pedido do usuário). O toque leva aos números
+            dele na aba Estatísticas. A escala sai 1 ou 2 dias antes do jogo. */}
+        {dados?.arbitro?.nome && (
+          <button type="button" onClick={onArbitro}
+            className="mt-3 mx-auto flex items-center gap-1.5 h-9 px-3 rounded-full border border-line bg-surface-2/60 text-xs text-ink-2 hover:text-ink-1 transition-colors">
+            <span className="text-ink-3">Árbitro</span>
+            <b className="text-ink-1 font-semibold">{dados.arbitro.nome.split(',')[0]}</b>
+            <span aria-hidden className="text-ink-3">›</span>
+          </button>
+        )}
         {/* Quatro números do jogo, e só: o resto mora nas abas. */}
         {aoVivo && (
           <div className="mt-4 pt-3 border-t border-line grid grid-cols-4 text-center">
@@ -1403,48 +1430,3 @@ function AbaConfronto({ dados }: { dados: RaioX }) {
   )
 }
 
-/* ── Forma ──────────────────────────────────────────────────────────────── */
-
-function AbaForma({ dados }: { dados: RaioX }) {
-  const f = dados.fixture
-  const bloco = (id: number, nome: string, jogos: JogoDoTime[]) => (
-    <div className="card overflow-hidden">
-      <div className="px-4 py-3 flex items-center gap-2 border-b border-line bg-surface-2/40">
-        <TeamLogo id={id} name={nome} size={22} />
-        <span className="text-sm font-bold text-ink-1 truncate">{nome}</span>
-      </div>
-      {jogos.length === 0 ? (
-        <p className="p-4 text-sm text-ink-3">Sem jogos encerrados nesta competição e temporada.</p>
-      ) : (
-        <div className="divide-y divide-line/60">
-          {jogos.map(j => {
-            const r = resultadoDoJogo(j)
-            return (
-              <div key={j.fixture_id} className="px-4 py-2.5 flex items-center gap-3">
-                <span className={cn('w-6 h-6 grid place-items-center rounded font-black text-[11px] shrink-0',
-                  r === 'V' ? 'bg-green-500 text-on-fill' : r === 'D' ? 'bg-red-500 text-on-fill' : 'bg-surface-3 text-ink-2')}>
-                  {r ?? '?'}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm text-ink-1 truncate">
-                    <span className="text-ink-3 text-xs mr-1">{j.em_casa ? 'vs' : '@'}</span>{j.adversario || '—'}
-                  </div>
-                  <div className="text-[11px] text-ink-3 tabular-nums">
-                    {j.escanteios_pro ?? '—'}-{j.escanteios_contra ?? '—'} esc · {j.amarelos_pro ?? '—'}-{j.amarelos_contra ?? '—'} cart
-                  </div>
-                </div>
-                <span className="font-mono font-black text-ink-1 tabular-nums">{j.gols_pro ?? '-'}-{j.gols_contra ?? '-'}</span>
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-  return (
-    <div className="space-y-3">
-      {bloco(f.home_team_id, f.home_team, dados.times.home.jogos)}
-      {bloco(f.away_team_id, f.away_team, dados.times.away.jogos)}
-    </div>
-  )
-}
