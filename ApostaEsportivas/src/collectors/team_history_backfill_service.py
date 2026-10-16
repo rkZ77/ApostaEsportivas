@@ -142,6 +142,16 @@ class TeamHistoryBackfillService:
         if self.conn:
             self.conn.close()
 
+    def _rollback(self):
+        """Limpa as duas transacoes depois de um erro, sem deixar uma falha
+        de rollback (conexao ja' caida) esconder o erro original."""
+        for conn in (getattr(self.stats_sync, "conn", None), self.conn):
+            try:
+                if conn:
+                    conn.rollback()
+            except Exception:
+                pass
+
     # ---------------------------------------------------------
     # API (toda chamada passa por aqui -- e' o unico contador de cota)
     # ---------------------------------------------------------
@@ -298,10 +308,10 @@ class TeamHistoryBackfillService:
             return False
 
         home_id = teams["home"]["id"]
-        if folha[0]["team"]["id"] == home_id:
-            home_stats, away_stats = folha[0]["statistics"], folha[1]["statistics"]
-        else:
-            home_stats, away_stats = folha[1]["statistics"], folha[0]["statistics"]
+        # Mesma regra do Stage 4: lado decidido pelos dois ids, nunca por
+        # eliminacao (folha com id nulo trocava casa e fora em silencio).
+        home_stats, away_stats, _, _ = MatchStatisticsSyncService._separar_lados(
+            folha, home_id, teams["away"]["id"])
 
         fx = {
             "fixture_id": fixture["id"],
@@ -359,6 +369,9 @@ class TeamHistoryBackfillService:
             except Exception as e:
                 # Um jogo que falha nao pode levar o time junto, e um time nao
                 # pode levar a rodada -- este coletor roda ANTES dos pipelines.
+                # O rollback e' o que garante isso: sem ele a transacao ficava
+                # abortada e todo jogo seguinte falhava junto (2026-10-16).
+                self._rollback()
                 print(f"[BACKFILL] Falha no jogo {item['fixture']['id']}: {e}")
 
         return {"team_id": team_id, "team_name": nome, "gravados": gravados}
@@ -387,6 +400,7 @@ class TeamHistoryBackfillService:
                 try:
                     resultados.append(self._backfill_time(time_))
                 except Exception as e:
+                    self._rollback()
                     print(f"[BACKFILL] Falha no time {time_['team_name']}: {e}")
         finally:
             self._close()

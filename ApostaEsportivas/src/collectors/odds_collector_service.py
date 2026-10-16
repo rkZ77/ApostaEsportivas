@@ -417,6 +417,11 @@ def _save_odds_snapshots(cur, values_batch: list) -> None:
     dado de analise, odds_values e' o que o motor le pra gerar pick."""
     if not values_batch:
         return
+    # SAVEPOINT (2026-10-16). O `except` sozinho nao bastava: um erro de banco
+    # aqui deixava a transacao abortada, e o commit do chamador virava
+    # rollback calado -- as odds do jogo sumiam com o log dizendo "salvo com
+    # sucesso". O savepoint desfaz so' o retrato.
+    cur.execute("SAVEPOINT retratos")
     try:
         _inserir_retratos(cur, [
             (
@@ -425,7 +430,9 @@ def _save_odds_snapshots(cur, values_batch: list) -> None:
             )
             for v in values_batch
         ])
+        cur.execute("RELEASE SAVEPOINT retratos")
     except Exception as e:
+        cur.execute("ROLLBACK TO SAVEPOINT retratos")
         print(f"[ODDS_SNAPSHOTS] Aviso: snapshot nao gravado (coleta segue normal): {e}")
 
 

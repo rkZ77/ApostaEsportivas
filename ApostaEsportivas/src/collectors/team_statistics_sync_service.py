@@ -140,25 +140,45 @@ class LeagueTeamsSyncService:
             self._close()
             return
 
-        for league in leagues:
-            league_id = league["league_id"]
-            season = league["season"]
+        # UMA LIGA NAO LEVA AS OUTRAS (2026-10-16). O erro continua alto --
+        # o estagio termina levantando com a lista --, mas so' depois de
+        # sincronizar todas as ligas que responderam.
+        falharam = []
+        try:
+            for league in leagues:
+                league_id = league["league_id"]
+                season = league["season"]
 
-            print(f"[TEAMS] Liga {league_id} | Season {season}")
+                print(f"[TEAMS] Liga {league_id} | Season {season}")
 
-            api_teams = self._fetch_teams_from_api(league_id, season)
+                try:
+                    api_teams = self._fetch_teams_from_api(league_id, season)
 
-            if not api_teams:
-                print("[WARN] Nenhum time retornado pela API.")
-                continue
+                    if not api_teams:
+                        print("[WARN] Nenhum time retornado pela API.")
+                        continue
 
-            for team in api_teams:
-                self._upsert_team(team)
+                    # Time sem id nao tem como virar chave: o ON CONFLICT
+                    # nunca casa NULL e a linha duplicaria a cada rodada.
+                    sem_id = [t for t in api_teams if t["team_id"] is None]
+                    for t in sem_id:
+                        print(f"[WARN] Liga {league_id}: {t['name']} sem id na API, pulado.")
 
-            self.conn.commit()
-            print(f"[OK] {len(api_teams)} times processados.")
+                    for team in api_teams:
+                        if team["team_id"] is not None:
+                            self._upsert_team(team)
 
-        self._close()
+                    self.conn.commit()
+                    print(f"[OK] {len(api_teams) - len(sem_id)} times processados.")
+                except Exception as e:
+                    self.conn.rollback()
+                    falharam.append(league_id)
+                    print(f"[ERRO] Liga {league_id}: {type(e).__name__}: {e}")
+        finally:
+            self._close()
+
+        if falharam:
+            raise RuntimeError(f"times nao sincronizados nas ligas {falharam}")
 
         # Conta total de times no banco após sync
         conn2 = get_connection()

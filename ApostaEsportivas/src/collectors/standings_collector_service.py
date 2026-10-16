@@ -15,23 +15,6 @@ class StandingsCollectorService:
         self.url = "https://v3.football.api-sports.io/standings"
 
     # ----------------------------------------------------------
-    # LIMPAR TABELA
-    # ----------------------------------------------------------
-    def truncate_table(self):
-
-        conn = get_connection()
-        cur = conn.cursor()
-
-        cur.execute("TRUNCATE TABLE league_standings")
-
-        conn.commit()
-
-        cur.close()
-        conn.close()
-
-        print("[STANDINGS] Tabela limpa.")
-
-    # ----------------------------------------------------------
     # BUSCAR LIGAS
     # ----------------------------------------------------------
     def get_leagues(self):
@@ -172,6 +155,30 @@ class StandingsCollectorService:
                     team["update"]
                 ))
 
+        if not rows:
+            cur.close()
+            conn.close()
+            print(f"[STANDINGS] Liga {league_id}: API sem time, tabela antiga mantida.")
+            return
+
+        # Troca a tabela DESTA liga na mesma transacao do insert: se algo
+        # falhar, o rollback devolve a classificacao anterior em vez de deixar
+        # a liga vazia (vazia, o motor cai no peso neutro de adversario).
+        try:
+            cur.execute("DELETE FROM league_standings WHERE league_id = %s",
+                        (league_id,))
+            self._inserir(cur, rows)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cur.close()
+            conn.close()
+
+        print(f"[STANDINGS] Liga {league_id} inserida.")
+
+    def _inserir(self, cur, rows):
         execute_batch(cur, """
 
         INSERT INTO league_standings (
@@ -240,24 +247,39 @@ class StandingsCollectorService:
 
         """, rows)
 
-        conn.commit()
-
-        cur.close()
-        conn.close()
-
-        print(f"[STANDINGS] Liga {league_id} inserida.")
+    # ----------------------------------------------------------
+    # LIGA DESATIVADA
+    # ----------------------------------------------------------
+    def remove_inactive(self, league_ids):
+        """Apaga a classificacao de liga que saiu da lista ativa. Antes o
+        TRUNCATE do comeco fazia isso de carona."""
+        conn = get_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute(
+                "DELETE FROM league_standings WHERE NOT (league_id = ANY(%s))",
+                (list(league_ids),),
+            )
+            conn.commit()
+        finally:
+            cur.close()
+            conn.close()
 
     # ----------------------------------------------------------
     # PROCESSAR TODAS AS LIGAS
     # ----------------------------------------------------------
     def process_all(self):
 
-        # limpa tabela antes de carregar
-        self.truncate_table()
-
+        # SEM TRUNCATE GLOBAL (2026-10-16). Ele rodava antes de qualquer
+        # chamada: cota estourada no meio deixava as ligas restantes sem
+        # tabela ate' o dia seguinte. Agora cada liga troca a propria tabela
+        # numa transacao (save_standings); a que falha fica com a de ontem.
         leagues = self.get_leagues()
 
         print(f"Ligas encontradas: {len(leagues)}")
+
+        if leagues:
+            self.remove_inactive([league_id for league_id, _ in leagues])
 
         for league_id, season in leagues:
 

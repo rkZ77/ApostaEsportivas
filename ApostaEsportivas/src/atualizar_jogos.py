@@ -307,15 +307,29 @@ class DataCollectorMain:
         """
         print("\n========== DATA COLLECTOR ==========\n")
 
-        self.run_stage_0()
-        self.run_stage_1()
-        self.run_stage_2()
-        self.run_stage_3()
+        # CADA ESTAGIO ISOLADO (2026-10-16). Antes, um KeyError no Stage 0 ou
+        # uma liga com 5xx no Stage 4 matava tudo que vinha depois: sem
+        # classificacao, sem medias, sem historico naquele dia. Agora o estagio
+        # que falha e' anotado, os outros rodam, e o script termina com erro
+        # (o /admin le o returncode) dizendo quem falhou.
+        falhas = []
+
+        def _estagio(nome, fn, *a, **kw):
+            try:
+                fn(*a, **kw)
+            except Exception as e:
+                print(f"[{nome}] FALHOU: {type(e).__name__}: {e}")
+                falhas.append(nome)
+
+        _estagio("STAGE 0", self.run_stage_0)
+        _estagio("STAGE 1", self.run_stage_1)
+        _estagio("STAGE 2", self.run_stage_2)
+        _estagio("STAGE 3", self.run_stage_3)
 
         mode = mode or os.getenv("ATUALIZAR_JOGOS_MODE", "custom")
         days = days if days is not None else int(os.getenv("ATUALIZAR_JOGOS_DAYS", "7"))
 
-        self.run_stage_4(mode=mode, days=days)
+        _estagio("STAGE 4", self.run_stage_4, mode=mode, days=days)
         # ESCALACAO das partidas encerradas (2026-09-27). Depois do 4 porque a
         # fila sai de match_statistics. O teto cobre a rodada do dia com folga;
         # o historico antigo e' o comando `escalacoes`, sob demanda.
@@ -328,9 +342,14 @@ class DataCollectorMain:
         # jogo que o backfill acabou de gravar so' entra em team_statistics
         # (e no modelo Poisson que le dali) se ja estiver no banco quando ele
         # rodar. Invertendo a ordem, o dado ficaria um dia atrasado.
-        self.run_stage_6()
-        self.run_stage_5(mode="full" if mode == "full" else "recent", days=days)
+        _estagio("STAGE 6", self.run_stage_6)
+        _estagio("STAGE 5", self.run_stage_5,
+                 mode="full" if mode == "full" else "recent", days=days)
 
+        if falhas:
+            print(f"\n========== DATA COLLECTOR TERMINOU COM FALHA EM: "
+                  f"{', '.join(falhas)} ==========\n")
+            raise SystemExit(1)
         print("\n========== DATA COLLECTOR FINALIZADO ==========\n")
 
 

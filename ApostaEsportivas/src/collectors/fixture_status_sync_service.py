@@ -133,11 +133,18 @@ class FixtureStatusSyncService:
                 fid = fixture.get("id")
                 if fid is None:
                     continue
-                out[fid] = {
-                    "status": fixture["status"]["short"],
-                    "match_datetime": _para_br_naive(fixture["date"]),
-                    "referee": fixture.get("referee"),
-                }
+                # Um item torto (status ou data nulos) pulava pra fora do
+                # Stage 0 inteiro. Pula so' ele, com mensagem de PAYLOAD -- nao
+                # de rede -- pra continuar dando pra ver o defeito.
+                try:
+                    out[fid] = {
+                        "status": fixture["status"]["short"],
+                        "match_datetime": _para_br_naive(fixture["date"]),
+                        "referee": fixture.get("referee"),
+                    }
+                except (KeyError, TypeError, ValueError) as e:
+                    print(f"[STATUS] fixture {fid}: payload inesperado "
+                          f"({type(e).__name__}: {e}), pulado.")
 
         return out
 
@@ -150,7 +157,9 @@ class FixtureStatusSyncService:
             SET
                 status = %s,
                 match_datetime = %s,
-                referee = %s,
+                -- COALESCE: resposta sem arbitro nao apaga o que ja' tinha
+                -- (o coletor de fixtures ja' fazia assim).
+                referee = COALESCE(%s, referee),
                 last_updated = NOW()
             WHERE fixture_id = %s
         """, (

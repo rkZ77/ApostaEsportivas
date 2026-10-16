@@ -92,9 +92,15 @@ def geocodificar(cur, cidade: str, iso: str | None) -> tuple | None:
     if iso:
         params["country_code"] = iso
     try:
-        r = requests.get(GEOCODE, params=params, timeout=_TIMEOUT).json()
+        resp = requests.get(GEOCODE, params=params, timeout=_TIMEOUT)
+        r = resp.json()
     except Exception as e:
         print(f"[CLIMA] geocoding {cidade}: {e}")
+        return None
+    # Erro do servico (429, 5xx, {"error": true}) NAO e' "cidade nao existe":
+    # gravar como nao encontrada tirava a cidade da fila pra sempre.
+    if resp.status_code != 200 or not isinstance(r, dict) or r.get("error"):
+        print(f"[CLIMA] geocoding {cidade}: servico respondeu {resp.status_code}, tenta depois.")
         return None
     resultados = r.get("results") or []
     # Entre homonimos, a cidade mais populosa e' a que tem estadio.
