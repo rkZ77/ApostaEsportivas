@@ -171,7 +171,9 @@ interface LiveStats {
 }
 
 type PageTab = 'jogos' | 'estatistica'
-type Filtro = 'todos' | 'pick' | 'aovivo'
+/* 'aberto' (17/10/2026, pedido do usuário): todo jogo que ainda não acabou,
+   os que vão começar e os que estão rolando. */
+type Filtro = 'todos' | 'pick' | 'aovivo' | 'aberto'
 const GRUPO_FAVORITOS = 'Seus times'
 interface EstadoDaLista { date: string; filtro: Filtro; busca: string; rolagem: number }
 
@@ -408,6 +410,7 @@ export default function Fixtures() {
   const visiveis = jogos.filter(f =>
     (filtro !== 'pick' || f.has_pick) &&
     (filtro !== 'aovivo' || isLive(f.status)) &&
+    (filtro !== 'aberto' || !isFinished(f.status)) &&
     (!termo || semAcento(`${f.home_team} ${f.away_team} ${f.league_name}`).includes(termo)))
 
   // Agrupa por liga (preserva ordem de aparição)
@@ -436,6 +439,7 @@ export default function Fixtures() {
 
   const dateLabel  = formatDateLabel(date)
   const liveCount  = jogos.filter(f => isLive(f.status)).length
+  const abertosCount = jogos.filter(f => !isFinished(f.status)).length
   const pickCount  = fixtures.filter(f => f.has_pick).length
 
   return (
@@ -526,12 +530,15 @@ export default function Fixtures() {
         <div className="flex flex-col sm:flex-row gap-2 mb-3 sm:mb-4 lg:max-w-[720px]">
           <SearchInput value={busca} onChange={setBusca} placeholder="Buscar time ou liga"
             label="Buscar jogo" className="flex-1" />
-          <div className="flex gap-2">
-            {([['todos', 'Todos'], ['pick', 'Com pick'], ['aovivo', 'Ao vivo']] as const).map(([k, r]) => (
+          {/* Quatro recortes não cabem lado a lado num celular de 360px:
+              a fila rola de lado em vez de quebrar a linha. */}
+          <div className="flex gap-2 overflow-x-auto scrollbar-none">
+            {([['todos', 'Todos'], ['pick', 'Com pick'], ['aovivo', 'Ao vivo'], ['aberto', 'Em aberto']] as const).map(([k, r]) => (
               <button key={k} onClick={() => setFiltro(k)}
                 className={`h-11 px-4 rounded-full text-sm font-semibold border shrink-0 transition-colors ${
                   filtro === k ? 'bg-accent text-on-fill border-accent' : 'bg-surface-1 text-ink-2 border-line'}`}>
                 {r}{k === 'aovivo' && liveCount > 0 ? ` · ${liveCount}` : ''}
+                {k === 'aberto' && abertosCount > 0 ? ` · ${abertosCount}` : ''}
               </button>
             ))}
           </div>
