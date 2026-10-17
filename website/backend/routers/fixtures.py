@@ -543,6 +543,11 @@ def get_fixture_stats(fixture_id: int, current_user: dict = Depends(get_current_
 # ─────────────────────────────────────────────────────────────────────────────
 
 _JOGOS_RAIO_X = 10
+#: TODOS OS JOGOS DA TEMPORADA (17/10/2026, pedido do usuario): com 10, o
+#: filtro Casa/Fora da tela cortava DEPOIS e sobravam 4 ou 5 jogos. A serie ja'
+#: e' so' liga + temporada do jogo, entao 60 e' "a temporada inteira" (liga de
+#: 24 times joga 46). O resumo de IA segue nos 10 (`ultimos_10_geral`).
+_JOGOS_RAIO_X_TEMPORADA = 60
 #: 15 e nao 8 (14/10/2026): a aba Confronto filtra por competicao e mando, e
 #: com 8 o filtro deixava dois ou tres jogos.
 _H2H_MAX = 15
@@ -655,7 +660,7 @@ _CAMPOS_JOGADOR = {
 def _jogadores_dos_times(cur, jogos_por_time: dict, titulares: dict) -> dict:
     """Jogadores de cada time nos jogos da serie dele, numa consulta so'.
 
-    `fixture_id = ANY(...)` cai no idx_pms_fixture: sao no maximo 2 x 20 jogos,
+    `fixture_id = ANY(...)` cai no idx_pms_fixture: sao no maximo 2 x 60 jogos,
     o banco busca as fichas desses jogos e o filtro de time separa os lados.
     """
     todos = sorted({f for ids in jogos_por_time.values() for f in ids})
@@ -815,7 +820,7 @@ def get_raio_x(
     away: Optional[int] = Query(None),
     league: Optional[int] = Query(None),
     season: Optional[int] = Query(None),
-    n: int = Query(_JOGOS_RAIO_X, ge=5, le=20),
+    n: int = Query(_JOGOS_RAIO_X_TEMPORADA, ge=5, le=_JOGOS_RAIO_X_TEMPORADA),
 ):
     """Tudo pra montar bilhete sobre um jogo · ver o bloco acima.
 
