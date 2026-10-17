@@ -34,13 +34,16 @@ export function FormaPontos({ forma, pequeno }: { forma: string[]; pequeno?: boo
 
 export const COR_TOM = { bom: cores.green, medio: cores.amber, ruim: cores.red, nenhum: cores.ink4 }
 
-export function NumeroDaTaxa({ t, grande }: { t: Taxa; grande?: boolean }) {
+export function NumeroDaTaxa({ t, grande, recente }: { t: Taxa; grande?: boolean; recente?: number | null }) {
   return (
     <View style={{ alignItems: 'flex-end' }}>
       <Txt variante={grande ? 'display' : 'titulo'} cor={COR_TOM[tomDaTaxa(t.pct)]}>{t.n ? `${t.bateu}/${t.n}` : '—'}</Txt>
       <Txt variante="apoio">
         {t.pct != null ? `${Math.round(t.pct * 100)}%` : 'sem dado'}{t.media != null ? ` · média ${t.media.toFixed(1)}` : ''}
       </Txt>
+      {/* Média dos 5 mais recentes (17/10/2026): a série é a temporada
+          inteira, e a média dela esconde time em alta ou em queda. */}
+      {recente != null ? <Txt variante="apoio">últ. 5: {recente.toFixed(1)}</Txt> : null}
     </View>
   )
 }
@@ -49,13 +52,19 @@ export function NumeroDaTaxa({ t, grande }: { t: Taxa; grande?: boolean }) {
 export function Barras({ valores, linha, lado, max }: { valores: Array<number | null>; linha: number; lado: Lado; max?: number }) {
   const serie = [...valores].reverse()
   const teto = max ?? Math.max(linha + 1, ...serie.map((v) => v ?? 0))
+  /* Temporada inteira (17/10/2026): com muitas barras o gráfico cresce, o
+     número em cima de cada uma some e entra a linha da média. */
+  const muitas = serie.length > 12
+  const validos = serie.filter((v): v is number => v != null)
+  const media = validos.length ? validos.reduce((a, b) => a + b, 0) / validos.length : null
+  const alto = muitas ? 96 : 64
   return (
-    <View style={{ height: 64, flexDirection: 'row', alignItems: 'flex-end', gap: 3 }}>
+    <View style={{ height: alto, flexDirection: 'row', alignItems: 'flex-end', gap: muitas ? 1 : 3 }}>
       {serie.map((v, i) => {
         const bateu = v != null && v !== linha && (lado === 'mais' ? v > linha : v < linha)
         return (
           <View key={i} style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
-            <Txt variante="apoio" style={{ fontSize: 9 }}>{v == null ? '' : String(v)}</Txt>
+            {muitas ? null : <Txt variante="apoio" style={{ fontSize: 9 }}>{v == null ? '' : String(v)}</Txt>}
             <View style={{
               width: '100%', borderRadius: 3,
               height: `${v == null ? 6 : Math.max(6, (v / teto) * 78)}%`,
@@ -64,6 +73,12 @@ export function Barras({ valores, linha, lado, max }: { valores: Array<number | 
           </View>
         )
       })}
+      {media != null ? (
+        <View pointerEvents="none" style={{
+          position: 'absolute', left: 0, right: 0, height: 2, backgroundColor: cores.ink1, opacity: 0.7,
+          bottom: alto * (Math.min(media, teto) / teto) * 0.78,
+        }} />
+      ) : null}
     </View>
   )
 }
