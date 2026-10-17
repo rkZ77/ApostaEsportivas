@@ -20,7 +20,9 @@ export type Perna =
   | { tipo: 'time'; mercado: string; direcao?: 'mais' | 'menos'; linha?: number
       periodo?: 'total' | '1t' | '2t'; lado_time?: 'home' | 'away'
       /** Só no mercado 'resultado': 1, X, 2, 1X, 12 ou X2. */
-      escolha?: string }
+      escolha?: string
+      /** Só em 'ambas_cartao': cartões mínimos de CADA time (1 ou 2). */
+      minimo?: number }
   | { tipo: 'jogador'; estat: string; minimo: number; player_id: number; player_name: string }
 
 export interface PernaCompleta {
