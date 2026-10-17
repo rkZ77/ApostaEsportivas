@@ -8,7 +8,7 @@ import { ErrorState, Skeleton } from '../ui'
 import { LeagueLogo, PaisDaLigaTag, PlayerPhoto, preCarregarFotos, TeamLogo } from '../TeamLogo'
 import { nomeDaLigaPt, rotuloDaRodada } from '../../lib/paisDaLiga'
 import {
-  ambasMarcam, comPeriodo, ehGoleiro, ESTATS_DE_JOGADOR, fraseDoJogador, MERCADOS_DE_TIME, MERCADOS_PRINCIPAIS, numero,
+  ambasMarcam, ambosRecebemCartao, comPeriodo, ehGoleiro, ESTATS_DE_JOGADOR, fraseDoJogador, MERCADOS_DE_TIME, MERCADOS_PRINCIPAIS, numero,
   resultadoDoJogo, RESULTADOS_ACEITOS, ROTULO_PERIODO, rotuloDaLinha, serieDeResultado, taxa, taxaDoJogador, tomDaTaxa,
   filtrarPorMando, type EscolhaDeResultado, type PosicaoNaTabela, type EstatDeJogador, type Mando, type Jogador, type JogoCurto, type JogoDoTime, type Lado, type Periodo, type RaioX, type Taxa,
 } from '../../lib/raioX'
@@ -902,6 +902,14 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
     return { sim: taxa(serie, 0.5, 'mais'), nao: taxa(serie, 0.5, 'menos') }
   }, [home.jogos, away.jogos])
 
+  /* Os dois times recebem cartão, 1+ e 2+ cada (17/10/2026, pedido do
+     usuário) · a mesma conta do ambas marcam, com cartão no lugar de gol. */
+  const cartaoDosDois = useMemo(() => ([1, 2] as const).map(minimo => {
+    const serie = [...home.jogos, ...away.jogos].map(j => ambosRecebemCartao(j, minimo))
+      .map(b => (b == null ? null : b ? 1 : 0))
+    return { minimo, t: taxa(serie, 0.5, 'mais') }
+  }), [home.jogos, away.jogos])
+
   /* ── mercado do JOGO: os dois times somados ── */
   const quadrosDoJogo = () => {
     const vHome = home.jogos.map(j => numero(j, mercado.contador, 'jogo', periodo))
@@ -1028,6 +1036,32 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
 
       {mercado.contador === 'amarelos' && periodo === 'total' && dados.arbitro && (
         <CartaoDoArbitro arbitro={dados.arbitro} linha={linha} lado={lado} />
+      )}
+
+      {mercado.contador === 'amarelos' && periodo === 'total' && (
+        <div className="card p-4 divide-y divide-line/60">
+          {cartaoDosDois.map(({ minimo, t }) => {
+            const descricao = minimo === 1 ? 'Os dois times recebem cartão' : 'Os dois times recebem 2+ cartões'
+            return (
+              <div key={minimo} className={minimo === 2 ? 'pt-3 mt-3' : undefined}>
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    {minimo === 1 && (
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">Também no jogo</div>
+                    )}
+                    <div className="text-base font-bold text-ink-1 mt-0.5">{descricao}</div>
+                  </div>
+                  <NumeroDaTaxa t={t} semMedia />
+                  <BotaoBilhete selecao={{
+                    id: `${f.fixture_id}:ambas_cartao:${minimo}`, fixture_id: f.fixture_id, jogo: nomeJogo,
+                    descricao, bateu: t.bateu, n: t.n,
+                    perna: { ...base, descricao, tipo: 'time', mercado: 'ambas_cartao', minimo },
+                  }} />
+                </div>
+              </div>
+            )
+          })}
+        </div>
       )}
 
       {id === 'gols' && periodo === 'total' && (

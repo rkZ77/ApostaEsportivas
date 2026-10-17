@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest'
-import { ambasMarcam, filtrarPorMando, fraseDoJogador, ESTATS_DE_JOGADOR, numero, resultadoDoJogo, RESULTADOS_ACEITOS, rotuloDaLinha,
+import { ambasMarcam, ambosRecebemCartao, filtrarPorMando, fraseDoJogador, ESTATS_DE_JOGADOR, numero, resultadoDoJogo, RESULTADOS_ACEITOS, rotuloDaLinha,
          serieDeResultado, taxa, taxaDoJogador, type Jogador, type JogoDoTime, type RaioX } from './raioX'
 import { adicionar, chanceCombinada, limpar, remover, textoDoBilhete, trocarNoGrupo, type Selecao } from './bilheteMontado'
 
@@ -186,5 +186,15 @@ describe('bilhete montado', () => {
     const t = textoDoBilhete([sel('Escanteios · Mais de 9.5', 7, 10)])
     expect(t).toContain('Casa x Fora')
     expect(t).toContain('(7/10 nos últimos jogos)')
+  })
+})
+
+describe('os dois times recebem cartão', () => {
+  it('conta pelo time com menos cartões, vermelho incluso', () => {
+    expect(ambosRecebemCartao(jogo({ amarelos_pro: 3, amarelos_contra: 1 }), 1)).toBe(true)
+    expect(ambosRecebemCartao(jogo({ amarelos_pro: 3, amarelos_contra: 0 }), 1)).toBe(false)
+    expect(ambosRecebemCartao(jogo({ amarelos_pro: 2, amarelos_contra: 1 }), 2)).toBe(false)
+    expect(ambosRecebemCartao(jogo({ amarelos_pro: 2, amarelos_contra: 1, vermelhos_contra: 1 }), 2)).toBe(true)
+    expect(ambosRecebemCartao(jogo({ amarelos_pro: null }), 1)).toBeNull()
   })
 })

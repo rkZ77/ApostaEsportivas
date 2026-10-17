@@ -202,6 +202,12 @@ export function comPeriodo(frase: string, periodo: Periodo): string {
 export const ambasMarcam = (j: JogoDoTime): boolean | null =>
   j.gols_pro == null || j.gols_contra == null ? null : j.gols_pro > 0 && j.gols_contra > 0
 
+/** Os dois times com `minimo`+ cartões (amarelo + vermelho) · 17/10/2026.
+ *  Do ponto de vista de um time: o que ele levou e o que o adversário levou. */
+export const ambosRecebemCartao = (j: JogoDoTime, minimo: number): boolean | null =>
+  j.amarelos_pro == null || j.amarelos_contra == null ? null
+    : Math.min(j.amarelos_pro + (j.vermelhos_pro ?? 0), j.amarelos_contra + (j.vermelhos_contra ?? 0)) >= minimo
+
 /* ── A conta ────────────────────────────────────────────────────────────── */
 
 export interface Taxa {

@@ -135,6 +135,14 @@ def validar_pernas(pernas) -> list[dict]:
                     raise PernaInvalida("ambas marcam invalido")
                 if escolha == "nao":
                     perna["escolha"] = "nao"
+            elif mercado == "ambas_cartao":
+                # AMBAS RECEBEM CARTAO (17/10/2026, pedido do usuario): os dois
+                # times com pelo menos `minimo` cartoes (amarelo + vermelho).
+                # 1 = "ambas recebem cartao", 2 = "ambas recebem 2+".
+                minimo = _int(p.get("minimo") or 1, "minimo")
+                if minimo not in (1, 2):
+                    raise PernaInvalida("ambas recebem cartao invalido")
+                perna = {**base, "tipo": "time", "mercado": "ambas_cartao", "minimo": minimo}
             elif mercado == "resultado":
                 escolha = str(p.get("escolha") or "").upper()
                 if escolha not in _ESCOLHAS_RESULTADO:
@@ -192,6 +200,16 @@ def validar_pernas(pernas) -> list[dict]:
 
 
 def _valor_do_time(perna: dict, jogo: dict):
+    if perna["mercado"] == "ambas_cartao":
+        # O valor e' o time com MENOS cartoes: se ele chegou no minimo, os
+        # dois chegaram.
+        lados = []
+        for nome in ("home", "away"):
+            am = jogo.get(f"{nome}_yellow_cards")
+            if am is None:
+                return None
+            lados.append(am + (jogo.get(f"{nome}_red_cards") or 0))
+        return min(lados)
     if perna["mercado"] == "btts":
         hg, ag = jogo.get("home_goals"), jogo.get("away_goals")
         return None if hg is None or ag is None else (1 if hg > 0 and ag > 0 else 0)
@@ -242,6 +260,8 @@ def liquidar_perna(perna: dict, jogo: dict | None, jogador: dict | None,
         valor = _valor_do_time(perna, jogo)
         if valor is None:
             return ("VOID", None, "sem estatistica do jogo") if vencido else (None, None, None)
+        if perna["mercado"] == "ambas_cartao":
+            return ("GREEN" if valor >= perna["minimo"] else "RED"), valor, None
         if perna["mercado"] == "btts":
             quer = 0 if perna.get("escolha") == "nao" else 1
             return ("GREEN" if valor == quer else "RED"), valor, None
@@ -311,6 +331,8 @@ def mercado_ao_vivo(perna: dict) -> tuple[str, str | None, str] | None:
     com match_statistics."""
     if perna.get("tipo") != "time":
         return None
+    if perna["mercado"] == "ambas_cartao":
+        return None   # o acompanhamento ao vivo nao conta cartao por time
     if perna["mercado"] == "btts":
         return "Ambas Marcam", "btts", ("Não" if perna.get("escolha") == "nao" else "Sim")
     if perna["mercado"] == "resultado":
@@ -498,7 +520,8 @@ def liquidar_pendentes(cur, user_id: int, agora: datetime | None = None) -> int:
     cur.execute("""
         SELECT fixture_id, status, match_date,
                home_goals, away_goals, home_corners, away_corners,
-               home_yellow_cards, away_yellow_cards, home_shots_on, away_shots_on,
+               home_yellow_cards, away_yellow_cards, home_red_cards, away_red_cards,
+               home_shots_on, away_shots_on,
                home_fouls, away_fouls,
                home_total_shots, away_total_shots, home_offsides, away_offsides,
                home_goalkeeper_saves, away_goalkeeper_saves,
