@@ -140,9 +140,11 @@ def numeros_do_time(jogos: list) -> dict | None:
     """
     if not jogos:
         return None
+    # Forma = os 5 mais recentes: com a temporada inteira na serie, a faixa
+    # da tela viraria 19 letras.
     forma = "".join(
         "V" if j["gols_pro"] > j["gols_contra"] else "E" if j["gols_pro"] == j["gols_contra"] else "D"
-        for j in jogos if j.get("gols_pro") is not None and j.get("gols_contra") is not None)
+        for j in jogos if j.get("gols_pro") is not None and j.get("gols_contra") is not None)[:5]
     gp, gc = "gols_pro", "gols_contra"
     ep, ec = "escanteios_pro", "escanteios_contra"
     ap, ac = "amarelos_pro", "amarelos_contra"
@@ -191,8 +193,9 @@ def numeros_do_time(jogos: list) -> dict | None:
 
 
 def serie_por_mando(cur, team_id: int, em_casa: bool, season, league_id,
-                    so_na_liga: bool, antes_de, n: int = 10) -> list[dict]:
-    """Os ultimos `n` jogos do time SO' NO MANDO DESTA PARTIDA, na temporada:
+                    so_na_liga: bool, antes_de, n: int = 60) -> list[dict]:
+    """Os jogos do time SO' NO MANDO DESTA PARTIDA, na temporada INTEIRA
+    (60 cobre qualquer liga · 17/10/2026, pedido do usuario):
     o mandante em casa, o visitante fora. A serie geral do Raio-X tem 10 jogos
     misturando os dois, e a leitura saia com "4 jogos em casa" achando que
     eram 10. Mesmo formato de routers/fixtures._serie_do_time."""
@@ -232,7 +235,11 @@ def montar_fatos(dados: dict, liga: str | None, formato: str, tabela: dict,
     """Tudo que o modelo pode usar, ja' contado · ele interpreta, nao calcula.
 
     `casa_em_casa`/`fora_fora`: a serie do mando desta partida na temporada
-    (serie_por_mando). Sem ela, o recorte de mando sai dos ultimos 10 gerais.
+    (serie_por_mando). Sem ela, o recorte de mando sai da serie geral.
+
+    TEMPORADA INTEIRA (17/10/2026, pedido do usuario): o modelo ve' todos os
+    jogos da temporada, mas a leitura e' pelo mando · o geral so' contrasta, e
+    os 5 ultimos no mando dizem se o time mudou de fase.
     """
     f = dados["fixture"]
     times = dados["times"]
@@ -278,14 +285,16 @@ def montar_fatos(dados: dict, liga: str | None, formato: str, tabela: dict,
         "mandante": {
             "nome": f["home_team"],
             "EM_CASA_na_temporada": numeros_do_time(casa_em_casa),
-            "ultimos_10_geral": numeros_do_time(casa),
+            "ultimos_5_em_casa": numeros_do_time(casa_em_casa[:5]),
+            "temporada_geral": numeros_do_time(casa),
             "tabela": tabela.get(hid),
             "tecnico": tecnicos.get(hid),
         },
         "visitante": {
             "nome": f["away_team"],
             "FORA_na_temporada": numeros_do_time(fora_fora),
-            "ultimos_10_geral": numeros_do_time(fora),
+            "ultimos_5_fora": numeros_do_time(fora_fora[:5]),
+            "temporada_geral": numeros_do_time(fora),
             "tabela": tabela.get(aid),
             "tecnico": tecnicos.get(aid),
         },
@@ -398,7 +407,7 @@ SYSTEM = """Você escreve a leitura de pré-jogo do Raio-X do PickIA, um site br
 
 Fonte:
 - Use SOMENTE os números do JSON. Não invente lesão, escalação, notícia, odd, motivação ou história. Dado que não veio não existe.
-- RESPEITE O MANDO. Do mandante, leia "EM_CASA_na_temporada"; do visitante, "FORA_na_temporada". "ultimos_10_geral" serve só para confirmar ou contrastar, e quando usar diga que é o geral. Diga a amostra do jeito certo ("em 7 jogos em casa").
+- RESPEITE O MANDO. Do mandante, leia "EM_CASA_na_temporada"; do visitante, "FORA_na_temporada". Esses dois cobrem a temporada inteira no mando e são a base de toda leitura. "ultimos_5_em_casa"/"ultimos_5_fora" dizem se o time mudou de fase no mando: cite quando divergirem da temporada. "temporada_geral" (casa e fora juntos) serve só para confirmar ou contrastar, e quando usar diga que é o geral. Diga a amostra do jeito certo ("em 14 jogos em casa").
 - Todo campo "pct_" é PERCENTUAL DE JOGOS (em quantos jogos aconteceu), nunca percentual de gols. Ex.: pct_marcou_no_1t = 60 significa "marcou no 1º tempo em 6 de cada 10 jogos".
 - "time" são os números do próprio time (o que ele faz e o que cede); "jogo" são totais das partidas dele.
 - Só chame a amostra de curta quando o mando tiver menos de 8 jogos.

@@ -542,11 +542,10 @@ def get_fixture_stats(fixture_id: int, current_user: dict = Depends(get_current_
 # pode custar cota.
 # ─────────────────────────────────────────────────────────────────────────────
 
-_JOGOS_RAIO_X = 10
 #: TODOS OS JOGOS DA TEMPORADA (17/10/2026, pedido do usuario): com 10, o
 #: filtro Casa/Fora da tela cortava DEPOIS e sobravam 4 ou 5 jogos. A serie ja'
 #: e' so' liga + temporada do jogo, entao 60 e' "a temporada inteira" (liga de
-#: 24 times joga 46). O resumo de IA segue nos 10 (`ultimos_10_geral`).
+#: 24 times joga 46). O resumo de IA usa a mesma serie (`temporada_geral`).
 _JOGOS_RAIO_X_TEMPORADA = 60
 #: 15 e nao 8 (14/10/2026): a aba Confronto filtra por competicao e mando, e
 #: com 8 o filtro deixava dois ou tres jogos.
@@ -852,8 +851,8 @@ def get_resumo_ia(fixture_id: int, current_user: dict = Depends(get_current_user
         return resumo_ia.resumo_do_jogo(
             cur, fixture_id,
             lambda: cache_publico.obter(
-                f"raio-x:{fixture_id}:None:None:{_JOGOS_RAIO_X}", _RAIO_X_TTL,
-                lambda: _montar_raio_x(fixture_id, None, None, None, _JOGOS_RAIO_X)))
+                f"raio-x:{fixture_id}:None:None:{_JOGOS_RAIO_X_TEMPORADA}", _RAIO_X_TTL,
+                lambda: _montar_raio_x(fixture_id, None, None, None, _JOGOS_RAIO_X_TEMPORADA)))
     except Exception:
         # Tabela ainda nao criada, banco ocupado: o Raio-X segue sem o bloco.
         conn.rollback()
