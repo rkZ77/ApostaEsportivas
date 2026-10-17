@@ -558,7 +558,30 @@ const TOM: Record<ReturnType<typeof tomDaTaxa>, string> = {
   bom: 'text-accent-ink', medio: 'text-amber-400', ruim: 'text-red-400', nenhum: 'text-ink-4',
 }
 
+/* MÉDIA EM DESTAQUE (17/10/2026, pedido do usuário): "a média é o que
+   importa", e ela vinha miúda no rodapé do X/N. Agora são duas colunas do
+   mesmo tamanho: Média por jogo e Bateu X/N. */
 function NumeroDaTaxa({ t, grande, semMedia }: { t: Taxa; grande?: boolean; semMedia?: boolean }) {
+  const valor = cn('font-mono font-black tabular-nums leading-none', grande ? 'text-2xl' : 'text-lg')
+  const rotulo = 'text-[10px] font-semibold uppercase tracking-wide text-ink-3 mb-1'
+  if (!semMedia && t.media != null) {
+    return (
+      <div className="flex items-start gap-4 shrink-0 text-right">
+        <div>
+          <div className={rotulo}>Média</div>
+          <div className={cn(valor, 'text-ink-1')}>{t.media.toFixed(1)}</div>
+          <div className="text-[11px] text-ink-3 mt-1">por jogo</div>
+        </div>
+        <div>
+          <div className={rotulo}>Bateu</div>
+          <div className={cn(valor, TOM[tomDaTaxa(t.pct)])}>{t.n ? `${t.bateu}/${t.n}` : '—'}</div>
+          <div className="text-[11px] text-ink-3 mt-1 tabular-nums">
+            {t.pct != null ? `${Math.round(t.pct * 100)}%` : 'sem dado'}
+          </div>
+        </div>
+      </div>
+    )
+  }
   return (
     <div className="text-right shrink-0">
       <div className={cn('font-mono font-black tabular-nums leading-none', grande ? 'text-2xl' : 'text-lg', TOM[tomDaTaxa(t.pct)])}>
@@ -588,8 +611,13 @@ function Barras({ valores, linha, lado, rotulos, max: maxFixo }: {
   const legendas = rotulos ? [...rotulos].reverse() : []
   const max = maxFixo ?? Math.max(linha + 1, ...serie.map(v => v ?? 0))
   const yLinha = 100 - (linha / max) * 100
+  /* Temporada inteira dá 20+ barras: o número em cima de cada uma não cabe
+     no celular. Some o número, fica a legenda no toque e a linha da média. */
+  const muitas = serie.length > 12
+  const validos = serie.filter((v): v is number => v != null)
+  const media = validos.length ? validos.reduce((a, b) => a + b, 0) / validos.length : null
   return (
-    <div className="relative h-14 flex items-end gap-[3px]">
+    <div className={cn('relative h-14 flex items-end', muitas ? 'gap-px' : 'gap-[3px]')}>
       {serie.map((v, i) => {
         const bateu = v != null && v !== linha && (lado === 'mais' ? v > linha : v < linha)
         const legenda = legendas[i]
@@ -598,7 +626,7 @@ function Barras({ valores, linha, lado, rotulos, max: maxFixo }: {
         return (
           <div key={i} title={legenda} aria-label={legenda}
             className="flex-1 h-full flex flex-col justify-end items-center gap-0.5">
-            <span className="text-[9px] font-mono text-ink-3 tabular-nums leading-none">{v ?? ''}</span>
+            {!muitas && <span className="text-[9px] font-mono text-ink-3 tabular-nums leading-none">{v ?? ''}</span>}
             <div
               className={cn('w-full rounded-sm', v == null ? 'bg-surface-3/40' : bateu ? 'bg-green-500' : 'bg-surface-3')}
               style={{ height: `${v == null ? 6 : Math.max(6, (v / max) * 78)}%` }}
@@ -608,6 +636,12 @@ function Barras({ valores, linha, lado, rotulos, max: maxFixo }: {
       })}
       <div className="absolute inset-x-0 border-t border-dashed border-ink-3/60 pointer-events-none"
         style={{ top: `${yLinha * 0.78 + 22}%` }} />
+      {/* Linha cheia = a média da série, pra ver de relance onde ela cai
+          em relação à linha da aposta (tracejada). */}
+      {media != null && (
+        <div className="absolute inset-x-0 border-t-2 border-ink-1/70 pointer-events-none"
+          style={{ top: `${(100 - (Math.min(media, max) / max) * 100) * 0.78 + 22}%` }} />
+      )}
     </div>
   )
 }
@@ -693,12 +727,13 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
   const rotulosDe = (jogos: JogoDoTime[]) =>
     jogos.map(j => `${j.em_casa ? 'vs' : '@'} ${j.adversario || 'adversário'} · ${dataCurta(j.data)}`)
 
-  /* "últimos 10 jogos", ou quantos têm o dado de verdade · no 1º e 2º tempo
-     os jogos antigos não têm a folha do 1º tempo, e a barra vazia sem
-     explicação parece jogo de zero. */
+  /* "19 jogos na temporada" (a série é a temporada inteira nesta competição,
+     ver _JOGOS_RAIO_X_TEMPORADA), ou quantos têm o dado de verdade · no 1º e
+     2º tempo os jogos antigos não têm a folha do 1º tempo, e a barra vazia
+     sem explicação parece jogo de zero. */
   const amostra = (valores: Array<number | null>) => {
     const com = valores.filter(v => v != null).length
-    if (com === valores.length) return `últimos ${valores.length} jogos`
+    if (com === valores.length) return `${valores.length} ${valores.length === 1 ? 'jogo' : 'jogos'} na temporada`
     return `${com} de ${valores.length} jogos com dado ${periodo === 'total' ? '' : `do ${ROTULO_PERIODO[periodo]}`}`.trim()
   }
 
