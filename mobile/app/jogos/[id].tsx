@@ -120,6 +120,8 @@ export default function RaioXDoJogo() {
 
           {quadros.map((q) => {
             const t = taxa(q.valores, linha, lado)
+            const ult = q.valores.length > 5 ? q.valores.filter((v) => v != null).slice(0, 5) : []
+            const recente = ult.length ? taxa(ult, linha, lado).media : null
             return (
               <Card key={q.titulo} style={{ marginHorizontal: espaco.lg, gap: espaco.md, borderColor: q.destaque ? cores.accent : cores.line }}>
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: espaco.md }}>
@@ -127,7 +129,7 @@ export default function RaioXDoJogo() {
                     <Txt variante="corpo" cor={cores.ink1} style={{ fontWeight: '700' }}>{q.titulo}</Txt>
                     <Txt variante="apoio">{comPeriodo(mercado.frase, periodo)} · {rotuloDaLinha(linha, lado)}</Txt>
                   </View>
-                  <NumeroDaTaxa t={t} grande={q.destaque} />
+                  <NumeroDaTaxa t={t} grande={q.destaque} recente={q.destaque ? null : recente} />
                 </View>
                 <Barras valores={q.valores} linha={linha} lado={lado} />
                 {q.destaque ? <LinhaDaOdd odd={oddAtual} bateu={t.bateu} n={t.n} /> : null}
