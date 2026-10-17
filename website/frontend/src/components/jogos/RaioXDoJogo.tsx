@@ -617,7 +617,10 @@ function Barras({ valores, linha, lado, rotulos, max: maxFixo }: {
   const validos = serie.filter((v): v is number => v != null)
   const media = validos.length ? validos.reduce((a, b) => a + b, 0) / validos.length : null
   return (
-    <div className={cn('relative h-14 flex items-end', muitas ? 'gap-px' : 'gap-[3px]')}>
+    <div>
+    {/* Com muitos jogos o gráfico cresce: em 56px trinta barras ficavam
+        achatadas e 7 escanteios parecia 12 (17/10/2026). */}
+    <div className={cn('relative flex items-end', muitas ? 'h-24 gap-px' : 'h-14 gap-[3px]')}>
       {serie.map((v, i) => {
         const bateu = v != null && v !== linha && (lado === 'mais' ? v > linha : v < linha)
         const legenda = legendas[i]
@@ -642,6 +645,19 @@ function Barras({ valores, linha, lado, rotulos, max: maxFixo }: {
         <div className="absolute inset-x-0 border-t-2 border-ink-1/70 pointer-events-none"
           style={{ top: `${(100 - (Math.min(media, max) / max) * 100) * 0.78 + 22}%` }} />
       )}
+    </div>
+    {/* Sem o número em cada barra, a legenda diz o que é cada linha e pra
+        que lado o tempo corre. */}
+    {muitas && (
+      <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] text-ink-4">
+        <span>mais antigo</span>
+        <span className="flex items-center gap-3">
+          <span className="flex items-center gap-1"><span className="w-3 border-t-2 border-ink-1/70" />média</span>
+          <span className="flex items-center gap-1"><span className="w-3 border-t border-dashed border-ink-3" />linha</span>
+        </span>
+        <span>mais recente</span>
+      </div>
+    )}
     </div>
   )
 }
@@ -769,7 +785,9 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
           {selecao && !destaque && <BotaoBilhete selecao={{ ...selecao, bateu: t.bateu, n: t.n }} />}
         </div>
         {grupos ? (
-          <div className="grid grid-cols-2 gap-3">
+          /* Lado a lado só com poucos jogos: com a temporada inteira cada
+             metade virava 30 barras de 4px. Aí um time embaixo do outro. */
+          <div className={cn('grid gap-3', grupos.some(g => g.valores.length > 12) ? 'grid-cols-1 gap-y-4' : 'grid-cols-2')}>
             {grupos.map(g => {
               const tg = taxa(g.valores, linha, lado)
               return (
@@ -777,6 +795,11 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
                   <div className="flex items-center gap-1.5 mb-1.5 min-w-0">
                     <TeamLogo id={g.teamId} name={g.nome} size={16} />
                     <span className="text-[11px] font-semibold text-ink-2 truncate flex-1">{g.nome}</span>
+                    {tg.media != null && (
+                      <span className="font-mono text-[11px] text-ink-3 tabular-nums shrink-0">
+                        média <b className="text-ink-1">{tg.media.toFixed(1)}</b>
+                      </span>
+                    )}
                     <span className={cn('font-mono text-[11px] font-black tabular-nums shrink-0', TOM[tomDaTaxa(tg.pct)])}>
                       {tg.n ? `${tg.bateu}/${tg.n}` : '—'}
                     </span>
