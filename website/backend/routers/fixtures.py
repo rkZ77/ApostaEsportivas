@@ -799,6 +799,11 @@ def _arbitro(cur, nome: str | None, n: int, liga=None, temporada=None) -> dict |
         "vermelhos": (r["home_red_cards"] or 0) + (r["away_red_cards"] or 0),
         "faltas": ((r["home_fouls"] or 0) + (r["away_fouls"] or 0))
                   if r["home_fouls"] is not None and r["away_fouls"] is not None else None,
+        # Cartoes do time que levou MENOS (amarelo + vermelho) · e' a conta
+        # do "os dois times recebem cartao" com este arbitro (17/10/2026).
+        "cartoes_menor": min((r["home_yellow_cards"] or 0) + (r["home_red_cards"] or 0),
+                             (r["away_yellow_cards"] or 0) + (r["away_red_cards"] or 0))
+                         if r["home_yellow_cards"] is not None and r["away_yellow_cards"] is not None else None,
     } for r in cur.fetchall()]
     return {"nome": nome, "jogos": jogos}
 

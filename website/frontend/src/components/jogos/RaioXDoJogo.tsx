@@ -1042,6 +1042,9 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
         <div className="card p-4 divide-y divide-line/60">
           {cartaoDosDois.map(({ minimo, t }) => {
             const descricao = minimo === 1 ? 'Os dois times recebem cartão' : 'Os dois times recebem 2+ cartões'
+            /* Com este árbitro (17/10/2026): cartão depende muito de quem
+               apita, e os jogos dele já vêm no Raio-X. */
+            const doArbitro = taxa((dados.arbitro?.jogos ?? []).map(j => j.cartoes_menor ?? null), minimo - 0.5, 'mais')
             return (
               <div key={minimo} className={minimo === 2 ? 'pt-3 mt-3' : undefined}>
                 <div className="flex items-center gap-3">
@@ -1058,6 +1061,12 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
                     perna: { ...base, descricao, tipo: 'time', mercado: 'ambas_cartao', minimo },
                   }} />
                 </div>
+                {doArbitro.n > 0 && (
+                  <div className="mt-1.5 text-[11px] text-ink-3 tabular-nums">
+                    Com {dados.arbitro!.nome}: <b className={TOM[tomDaTaxa(doArbitro.pct)]}>{doArbitro.bateu}/{doArbitro.n}</b>
+                    {doArbitro.pct != null && ` (${Math.round(doArbitro.pct * 100)}%)`}
+                  </div>
+                )}
               </div>
             )
           })}

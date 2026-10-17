@@ -93,7 +93,9 @@ export interface RaioX {
     /** No jogo de ida, quando é a volta. */
     volta_em?: string | null
   }
-  arbitro: { nome: string; jogos: Array<{ amarelos: number; vermelhos: number; faltas: number | null }> } | null
+  arbitro: { nome: string; jogos: Array<{ amarelos: number; vermelhos: number; faltas: number | null
+    /** Cartões do time que levou menos no jogo (ausente em cache antigo). */
+    cartoes_menor?: number | null }> } | null
   /** Posição de cada time na tabela da liga (16/10/2026). null sem tabela. */
   posicoes?: { home: PosicaoNaTabela | null; away: PosicaoNaTabela | null }
   /** Posição de cada time na tabela da liga ({} sem tabela única). */
