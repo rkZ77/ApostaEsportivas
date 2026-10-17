@@ -611,15 +611,19 @@ function NumeroDaTaxa({ t, grande, semMedia, recente }: {
  * Verde = bateu. É o gráfico que responde "bate sempre ou bateu duas vezes
  * muito?" melhor que qualquer média.
  */
-function Barras({ valores, linha, lado, rotulos, max: maxFixo }: {
+function Barras({ valores, linha, lado, rotulos, max: maxFixo, topo }: {
   valores: Array<number | null>; linha: number; lado: Lado
   /** Legenda de cada jogo (mesma ordem de `valores`), mostrada no toque/hover. */
   rotulos?: string[]
   /** Escala comum, pra duas metades lado a lado terem barras comparáveis. */
   max?: number
+  /** Jogo contra time do top 6 da tabela (mesma ordem de `valores`). */
+  topo?: boolean[]
 }) {
   const serie = [...valores].reverse()
   const legendas = rotulos ? [...rotulos].reverse() : []
+  const marcas = topo ? [...topo].reverse() : []
+  /* Bolinha embaixo da barra = jogo contra o top 6 da tabela. */
   const max = maxFixo ?? Math.max(linha + 1, ...serie.map(v => v ?? 0))
   const yLinha = 100 - (linha / max) * 100
   /* Temporada inteira dá 20+ barras: o número em cima de cada uma não cabe
@@ -641,6 +645,9 @@ function Barras({ valores, linha, lado, rotulos, max: maxFixo }: {
           <div key={i} title={legenda} aria-label={legenda}
             className="flex-1 h-full flex flex-col justify-end items-center gap-0.5">
             {!muitas && <span className="text-[9px] font-mono text-ink-3 tabular-nums leading-none">{v ?? ''}</span>}
+            {marcas[i] !== undefined && (
+              <span className={cn('order-last w-1 h-1 rounded-full shrink-0', marcas[i] ? 'bg-ink-2' : 'bg-transparent')} />
+            )}
             <div
               className={cn('w-full rounded-sm', v == null ? 'bg-surface-3/40' : bateu ? 'bg-green-500' : 'bg-surface-3')}
               style={{ height: `${v == null ? 6 : Math.max(6, (v / max) * 78)}%` }}
@@ -665,10 +672,27 @@ function Barras({ valores, linha, lado, rotulos, max: maxFixo }: {
         <span className="flex items-center gap-3">
           <span className="flex items-center gap-1"><span className="w-3 border-t-2 border-ink-1/70" />média</span>
           <span className="flex items-center gap-1"><span className="w-3 border-t border-dashed border-ink-3" />linha</span>
+          {marcas.some(Boolean) && <span className="flex items-center gap-1"><span className="w-1 h-1 rounded-full bg-ink-2" />top 6</span>}
         </span>
         <span>mais recente</span>
       </div>
     )}
+    </div>
+  )
+}
+
+const BARRA: Record<ReturnType<typeof tomDaTaxa>, string> = {
+  bom: 'bg-accent', medio: 'bg-amber-400', ruim: 'bg-red-400', nenhum: 'bg-ink-4',
+}
+
+/* Um número com rótulo em cima · os três do quadro ficam do mesmo tamanho,
+   lado a lado, no padrão de cartão de indicador (Tremor). */
+function Indicador({ rotulo, valor, detalhe }: { rotulo: string; valor: string; detalhe?: ReactNode }) {
+  return (
+    <div className="rounded-lg bg-surface-1 border border-line/60 px-2.5 py-2 min-w-0">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-3 truncate">{rotulo}</div>
+      <div className="font-mono font-black text-ink-1 text-base tabular-nums leading-tight mt-0.5">{valor}</div>
+      {detalhe && <div className="text-[10px] text-ink-3 truncate">{detalhe}</div>}
     </div>
   )
 }
@@ -751,8 +775,16 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
   const linhaTxt = rotuloDaLinha(linha, lado)
 
   /* "vs Palmeiras · 12/09/26" pra legenda de cada barra. */
+  const rank = dados.rank_adversarios ?? {}
   const rotulosDe = (jogos: JogoDoTime[]) =>
-    jogos.map(j => `${j.em_casa ? 'vs' : '@'} ${j.adversario || 'adversário'} · ${dataCurta(j.data)}`)
+    jogos.map(j => {
+      const pos = rank[String(j.adversario_id)]
+      return `${j.em_casa ? 'vs' : '@'} ${j.adversario || 'adversário'}${pos ? ` (${pos}º)` : ''} · ${dataCurta(j.data)}`
+    })
+  /* Sem tabela única (copa, grupos) volta undefined e a tela não marca nada. */
+  const topoDe = (jogos: JogoDoTime[]) => Object.keys(rank).length
+    ? jogos.map(j => (rank[String(j.adversario_id)] ?? 99) <= 6)
+    : undefined
 
   /* "19 jogos na temporada" (a série é a temporada inteira nesta competição,
      ver _JOGOS_RAIO_X_TEMPORADA), ou quantos têm o dado de verdade · no 1º e
@@ -764,7 +796,7 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
     return `${com} de ${valores.length} jogos com dado ${periodo === 'total' ? '' : `do ${ROTULO_PERIODO[periodo]}`}`.trim()
   }
 
-  interface Grupo { teamId: number; nome: string; valores: Array<number | null>; rotulos: string[] }
+  interface Grupo { teamId: number; nome: string; valores: Array<number | null>; rotulos: string[]; topo?: boolean[] }
 
   /* Uma série vira um quadro: barras jogo a jogo + "bateu X/N".
      Com `grupos`, a série é a soma de duas (os dois times, ou faz + cede), e o
@@ -777,9 +809,9 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
     ...(o ? { odd: o.odd, casa: o.casa, perna: s.perna ? { ...s.perna, odd: o.odd } : s.perna } : {}),
   })
 
-  const Quadro = ({ titulo, sub, teamId, nomeTime, valores, rotulos, grupos, selecao, destaque }: {
+  const Quadro = ({ titulo, sub, teamId, nomeTime, valores, rotulos, topo, grupos, selecao, destaque }: {
     titulo: string; sub: string; teamId?: number; nomeTime?: string
-    valores: Array<number | null>; rotulos?: string[]; grupos?: Grupo[]
+    valores: Array<number | null>; rotulos?: string[]; topo?: boolean[]; grupos?: Grupo[]
     selecao?: Selecao; destaque?: boolean
   }) => {
     const t = taxa(valores, linha, lado)
@@ -788,6 +820,13 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
     const ultimos = (grupos ? grupos.map(g => g.valores) : [valores]).flatMap(vs =>
       vs.length > 5 ? vs.filter(v => v != null).slice(0, 5) : [])
     const recente = ultimos.length ? taxa(ultimos, linha, lado).media : null
+    /* CONTRA O TOP 6 (17/10/2026): a média só dos jogos contra os seis
+       primeiros da tabela · time que só passa da linha contra os fracos
+       aparece aqui. */
+    const series = grupos ? grupos.map(g => [g.valores, g.topo] as const) : [[valores, topo] as const]
+    const vsTopo = series.flatMap(([vs, tp]) => vs.filter((v, i): v is number => v != null && !!tp?.[i]))
+    const mediaTopo = vsTopo.length ? vsTopo.reduce((a, b) => a + b, 0) / vsTopo.length : null
+    const temTabela = series.some(([, tp]) => tp !== undefined)
     const maxComum = Math.max(linha + 1, ...valores.map(v => v ?? 0))
     return (
       <div className={cn('card p-4', destaque && 'border-accent/30')}>
@@ -797,9 +836,27 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
             <div className="text-sm font-bold text-ink-1 truncate">{titulo}</div>
             <div className="text-[11px] text-ink-3">{sub}</div>
           </div>
-          <NumeroDaTaxa t={t} grande={destaque} recente={recente} />
+          <NumeroDaTaxa t={t} grande={destaque} semMedia />
           {selecao && !destaque && <BotaoBilhete selecao={{ ...selecao, bateu: t.bateu, n: t.n }} />}
         </div>
+        {/* Taxa de acerto em barra: o X/N lido de relance. */}
+        <div className="h-1.5 rounded-full bg-surface-3 overflow-hidden mb-3">
+          <div className={cn('h-full rounded-full', BARRA[tomDaTaxa(t.pct)])}
+            style={{ width: `${Math.round((t.pct ?? 0) * 100)}%` }} />
+        </div>
+        {t.media != null && (
+          <div className={cn('grid gap-2 mb-3', temTabela ? 'grid-cols-3' : 'grid-cols-2')}>
+            <Indicador rotulo="Média" valor={t.media.toFixed(1)} detalhe="por jogo" />
+            <Indicador rotulo="Últimos 5" valor={recente != null ? recente.toFixed(1) : '—'}
+              detalhe={recente == null ? 'poucos jogos'
+                : recente > t.media + 0.05 ? '▲ acima da média'
+                : recente < t.media - 0.05 ? '▼ abaixo da média' : 'igual à média'} />
+            {temTabela && (
+              <Indicador rotulo="vs top 6" valor={mediaTopo != null ? mediaTopo.toFixed(1) : '—'}
+                detalhe={vsTopo.length ? `${vsTopo.length} ${vsTopo.length === 1 ? 'jogo' : 'jogos'}` : 'nenhum jogo'} />
+            )}
+          </div>
+        )}
         {grupos ? (
           /* Lado a lado só com poucos jogos: com a temporada inteira cada
              metade virava 30 barras de 4px. Aí um time embaixo do outro. */
@@ -820,13 +877,13 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
                       {tg.n ? `${tg.bateu}/${tg.n}` : '—'}
                     </span>
                   </div>
-                  <Barras valores={g.valores} rotulos={g.rotulos} linha={linha} lado={lado} max={maxComum} />
+                  <Barras valores={g.valores} rotulos={g.rotulos} topo={g.topo} linha={linha} lado={lado} max={maxComum} />
                 </div>
               )
             })}
           </div>
         ) : (
-          <Barras valores={valores} rotulos={rotulos} linha={linha} lado={lado} />
+          <Barras valores={valores} rotulos={rotulos} topo={topo} linha={linha} lado={lado} />
         )}
         {selecao && destaque && (
           <>
@@ -860,13 +917,13 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
         <Quadro destaque titulo="Nos jogos dos dois times" sub={descricao}
           valores={[...vHome, ...vAway]} selecao={selecao}
           grupos={[
-            { teamId: f.home_team_id, nome: f.home_team, valores: vHome, rotulos: rotulosDe(home.jogos) },
-            { teamId: f.away_team_id, nome: f.away_team, valores: vAway, rotulos: rotulosDe(away.jogos) },
+            { teamId: f.home_team_id, nome: f.home_team, valores: vHome, rotulos: rotulosDe(home.jogos), topo: topoDe(home.jogos) },
+            { teamId: f.away_team_id, nome: f.away_team, valores: vAway, rotulos: rotulosDe(away.jogos), topo: topoDe(away.jogos) },
           ]} />
         <Quadro titulo={f.home_team} sub={amostra(vHome)} teamId={f.home_team_id}
-          nomeTime={f.home_team} valores={vHome} rotulos={rotulosDe(home.jogos)} />
+          nomeTime={f.home_team} valores={vHome} rotulos={rotulosDe(home.jogos)} topo={topoDe(home.jogos)} />
         <Quadro titulo={f.away_team} sub={amostra(vAway)} teamId={f.away_team_id}
-          nomeTime={f.away_team} valores={vAway} rotulos={rotulosDe(away.jogos)} />
+          nomeTime={f.away_team} valores={vAway} rotulos={rotulosDe(away.jogos)} topo={topoDe(away.jogos)} />
       </>
     )
   }
@@ -894,13 +951,13 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
         <Quadro destaque titulo="No confronto" sub={`${nomeTime} faz + ${nomeAdv} cede`}
           valores={[...faz, ...cede]} selecao={selecao}
           grupos={[
-            { teamId: ehCasa ? f.home_team_id : f.away_team_id, nome: `${nomeTime} faz`, valores: faz, rotulos: rotulosDe(time.jogos) },
-            { teamId: ehCasa ? f.away_team_id : f.home_team_id, nome: `${nomeAdv} cede`, valores: cede, rotulos: rotulosDe(adv.jogos) },
+            { teamId: ehCasa ? f.home_team_id : f.away_team_id, nome: `${nomeTime} faz`, valores: faz, rotulos: rotulosDe(time.jogos), topo: topoDe(time.jogos) },
+            { teamId: ehCasa ? f.away_team_id : f.home_team_id, nome: `${nomeAdv} cede`, valores: cede, rotulos: rotulosDe(adv.jogos), topo: topoDe(adv.jogos) },
           ]} />
         <Quadro titulo={`${nomeTime} faz`} sub={`${mercado.frase.toLowerCase()} a favor, ${amostra(faz)}`}
-          teamId={ehCasa ? f.home_team_id : f.away_team_id} nomeTime={nomeTime} valores={faz} rotulos={rotulosDe(time.jogos)} />
+          teamId={ehCasa ? f.home_team_id : f.away_team_id} nomeTime={nomeTime} valores={faz} rotulos={rotulosDe(time.jogos)} topo={topoDe(time.jogos)} />
         <Quadro titulo={`${nomeAdv} cede`} sub={`${mercado.frase.toLowerCase()} contra, ${amostra(cede)}`}
-          teamId={ehCasa ? f.away_team_id : f.home_team_id} nomeTime={nomeAdv} valores={cede} rotulos={rotulosDe(adv.jogos)} />
+          teamId={ehCasa ? f.away_team_id : f.home_team_id} nomeTime={nomeAdv} valores={cede} rotulos={rotulosDe(adv.jogos)} topo={topoDe(adv.jogos)} />
       </>
     )
   }

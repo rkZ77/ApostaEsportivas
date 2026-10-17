@@ -1266,6 +1266,22 @@ def _montar_raio_x(fixture_id: int, home, away, league, n: int, season=None) -> 
             cur.connection.rollback()
             tab = {}
         posicoes = {"home": tab.get(home_id), "away": tab.get(away_id)}
+        # POSICAO DE CADA ADVERSARIO (17/10/2026): a tela marca os jogos
+        # contra o top 6 e da' a media so' deles. Liga de grupos fica vazia:
+        # o 3o de um grupo e o 3o de outro nao sao o mesmo nivel.
+        rank_adversarios = {}
+        if liga:
+            try:
+                cur.execute("""
+                    SELECT team_id, rank, group_name FROM league_standings
+                     WHERE league_id = %s
+                       AND season = (SELECT MAX(season) FROM league_standings WHERE league_id = %s)
+                """, (liga, liga))
+                linhas_tab = cur.fetchall()
+                if len({r["group_name"] for r in linhas_tab}) == 1:
+                    rank_adversarios = {str(r["team_id"]): r["rank"] for r in linhas_tab}
+            except Exception:
+                cur.connection.rollback()
         try:
             competicao = _competicao_do_jogo(cur, fix.get("round"), home_id, away_id,
                                              liga, temporada, antes_de)
@@ -1305,6 +1321,8 @@ def _montar_raio_x(fixture_id: int, home, away, league, n: int, season=None) -> 
         "arbitro": arbitro,
         # {posicao, de, pontos, ...} de cada time na tabela da liga, ou None.
         "posicoes": posicoes,
+        # {team_id: posicao} da liga inteira, ou {} sem tabela unica.
+        "rank_adversarios": rank_adversarios,
         "jogadores": {
             "home": {"fonte_titulares": titulares[home_id][1], "lista": jogadores[home_id]},
             "away": {"fonte_titulares": titulares[away_id][1], "lista": jogadores[away_id]},
