@@ -561,7 +561,13 @@ const TOM: Record<ReturnType<typeof tomDaTaxa>, string> = {
 /* MÉDIA EM DESTAQUE (17/10/2026, pedido do usuário): "a média é o que
    importa", e ela vinha miúda no rodapé do X/N. Agora são duas colunas do
    mesmo tamanho: Média por jogo e Bateu X/N. */
-function NumeroDaTaxa({ t, grande, semMedia }: { t: Taxa; grande?: boolean; semMedia?: boolean }) {
+/* MÉDIA RECENTE (17/10/2026): com a temporada inteira, a média esconde time
+   em queda ou em alta. `recente` é a média dos 5 últimos de cada série, e
+   aparece embaixo da média quando há mais que isso. Sem peso escondido: são
+   dois números que a pessoa lê. */
+function NumeroDaTaxa({ t, grande, semMedia, recente }: {
+  t: Taxa; grande?: boolean; semMedia?: boolean; recente?: number | null
+}) {
   const valor = cn('font-mono font-black tabular-nums leading-none', grande ? 'text-2xl' : 'text-lg')
   const rotulo = 'text-[10px] font-semibold uppercase tracking-wide text-ink-3 mb-1'
   if (!semMedia && t.media != null) {
@@ -570,7 +576,12 @@ function NumeroDaTaxa({ t, grande, semMedia }: { t: Taxa; grande?: boolean; semM
         <div>
           <div className={rotulo}>Média</div>
           <div className={cn(valor, 'text-ink-1')}>{t.media.toFixed(1)}</div>
-          <div className="text-[11px] text-ink-3 mt-1">por jogo</div>
+          <div className="text-[11px] text-ink-3 mt-1 tabular-nums whitespace-nowrap">
+            {recente != null
+              ? <>últ. 5: <b className="text-ink-1">{recente.toFixed(1)}</b>{' '}
+                  {recente > t.media + 0.05 ? '▲' : recente < t.media - 0.05 ? '▼' : ''}</>
+              : 'por jogo'}
+          </div>
         </div>
         <div>
           <div className={rotulo}>Bateu</div>
@@ -772,6 +783,11 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
     selecao?: Selecao; destaque?: boolean
   }) => {
     const t = taxa(valores, linha, lado)
+    /* Os 5 mais recentes de cada série (a lista vem do mais novo pro mais
+       antigo) · só quando a série tem mais que 5, senão repetiria a média. */
+    const ultimos = (grupos ? grupos.map(g => g.valores) : [valores]).flatMap(vs =>
+      vs.length > 5 ? vs.filter(v => v != null).slice(0, 5) : [])
+    const recente = ultimos.length ? taxa(ultimos, linha, lado).media : null
     const maxComum = Math.max(linha + 1, ...valores.map(v => v ?? 0))
     return (
       <div className={cn('card p-4', destaque && 'border-accent/30')}>
@@ -781,7 +797,7 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
             <div className="text-sm font-bold text-ink-1 truncate">{titulo}</div>
             <div className="text-[11px] text-ink-3">{sub}</div>
           </div>
-          <NumeroDaTaxa t={t} grande={destaque} />
+          <NumeroDaTaxa t={t} grande={destaque} recente={recente} />
           {selecao && !destaque && <BotaoBilhete selecao={{ ...selecao, bateu: t.bateu, n: t.n }} />}
         </div>
         {grupos ? (
