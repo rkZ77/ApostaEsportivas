@@ -45,6 +45,27 @@ def test_seletor_por_valor_troca_confianca_por_valor():
     assert cm.escolher([], "valor") is None
 
 
+def test_edge_4pp_so_publica_onde_o_motor_passa_o_preco_em_4_pontos():
+    # 1/1.45 = 0,690: A tem edge 3pp, fica de fora; B tem 0,62 - 0,526 = 9pp.
+    a = {"taxa_real": 0.72, "odd": 1.45, "final_score": 0.80, "is_best_pick": True}
+    b = {"taxa_real": 0.62, "odd": 1.90, "final_score": 0.70}
+    assert cm.escolher([a, b], "edge4") is b
+    assert cm.escolher([a], "edge4") is None
+
+
+def test_encolher_mercado_puxa_pro_preco_e_exige_ev_positivo():
+    # Preco sem margem 0,55 e motor 0,64: encolhida 0,595 x 1.75 = 1,04 -> passa.
+    passa = {"taxa_real": 0.64, "odd": 1.75, "prob_baseline_value": 0.55, "final_score": 0.7}
+    # Preco 0,60 e motor 0,66 a 1.55: encolhida 0,63 x 1.55 = 0,977 -> fica de fora.
+    fora = {"taxa_real": 0.66, "odd": 1.55, "prob_baseline_value": 0.60, "final_score": 0.9,
+            "is_best_pick": True}
+    assert cm.prob_encolhida(passa) == pytest.approx(0.595)
+    assert cm.escolher([passa, fora], "encolher") is passa
+    assert cm.escolher([fora], "encolher") is None
+    # Sem o preco gravado, a base e' 1/odd.
+    assert cm.preco_sem_margem({"odd": 2.0}) == pytest.approx(0.5)
+
+
 # ---------------------------------------------------------------------------
 # Stake
 # ---------------------------------------------------------------------------
