@@ -37,7 +37,7 @@ import { Button, LiveDot } from '../components/ui'
 
 /** As tres linhas do titulo. Uma por elemento porque a quebra e' escolhida,
  *  nao consequencia da largura da tela. */
-const HEADLINE = ['Palpites de futebol', 'com valor calculado,', 'não com achismo.']
+const HEADLINE = ['Futebol analisado', 'com estatística real,', 'não com achismo.']
 
 export default function HeroTexto({ animar = true }: { animar?: boolean }) {
   const entra = (extra: string) => (animar ? `entra ${extra} ` : '')
@@ -64,9 +64,9 @@ export default function HeroTexto({ animar = true }: { animar?: boolean }) {
       </h1>
 
       <p className={`${entra('entra-2')}text-ink-2 text-base leading-relaxed mb-7 max-w-lg`}>
-        A Pick IA lê estatística real de cada jogo, calcula a probabilidade de cada
-        mercado e compara com a odd que a casa está pagando. Só vira palpite o que
-        tem valor esperado positivo.
+        A Pick IA lê a estatística real de cada jogo, calcula a probabilidade de
+        gols, escanteios e cartões e mostra o que os números dizem. Só vira palpite
+        o que passa no cálculo.
       </p>
 
       <div className={`${entra('entra-3')}flex flex-col sm:flex-row gap-3 mb-4`}>

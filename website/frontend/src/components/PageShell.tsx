@@ -27,9 +27,9 @@ const ORIGEM = 'https://pickia.com.br'
  *  não passam uma própria (Login, VerifyEmail, ForgotPassword, NotFound e o
  *  link público de pick), que hoje não competem na busca. */
 const DESCRICAO_PADRAO =
-  'Picks de futebol com IA e análise estatística real. Picks Premium e ao vivo, ' +
-  'múltiplas, alavancagem, Pick Boost, estatística de jogador e mercados de ' +
-  'faltas e defesas. Brasileirão e as principais ligas europeias. Histórico ' +
+  'Análise estatística de futebol com IA. Raio-X de cada jogo, forma dos times, ' +
+  'estatística de jogador e de árbitro e probabilidade calculada. Brasileirão e ' +
+  'as principais ligas europeias. Palpites com histórico ' +
   'público e teste grátis de 2 dias.'
 
 export interface PageBar {
