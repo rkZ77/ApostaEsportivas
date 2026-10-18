@@ -462,17 +462,21 @@ def baseline_do_arbitro(cur, estado: dict, config: LiveEngineConfig) -> dict:
     if not arbitro or not league_id:
         return {}
     try:
+        # Todas as grafias da mesma pessoa (18/10/2026) · ver
+        # referee_stats_service.chaves_da_pessoa.
+        from services.referee_stats_service import chaves_da_pessoa
+        chaves = chaves_da_pessoa(cur, arbitro)
         cur.execute(f"""
             SELECT AVG(COALESCE(total_yellow_cards, 0))::float AS amarelo,
                    AVG(COALESCE(total_red_cards, 0))::float    AS vermelho,
                    COUNT(*)                                    AS n
             FROM match_statistics
-            WHERE {sql_chave('referee')} = %s
+            WHERE {sql_chave('referee')} = ANY(%s)
               AND league_id = %s
               AND status IN ('FT', 'AET', 'PEN')
               AND total_yellow_cards IS NOT NULL
               AND match_date >= NOW() - INTERVAL '400 days'
-        """, (arbitro, league_id))
+        """, (chaves, league_id))
         linha = cur.fetchone()
     except Exception:
         return {}

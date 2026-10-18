@@ -89,3 +89,14 @@ def test_copia_do_site_junta_igual():
                              ("paulo cesar", ["paulo cesar a", "paulo cesar b"])):
         assert site.chaves_equivalentes(alvo, conhecidas) == chaves_equivalentes(alvo, conhecidas)
     assert site.sql_candidatas("x") == arbitro.sql_candidatas("x")
+
+
+def test_motor_le_as_duas_fontes_com_os_parametros_na_ordem():
+    """18/10/2026: a media do arbitro no motor soma arbitro_partidas (outras
+    ligas do pais). Rodado contra Postgres 16 local com o caso do Ramon Abatti
+    (4 jogos -> 18). Aqui so' a forma: as duas fontes e o numero de %s."""
+    from services import referee_stats_service as rss
+    assert "arbitro_partidas" in rss.SQL_COM_EXTRAS and "arbitro_partidas" not in rss.SQL_SO_BASE
+    assert rss.SQL_COM_EXTRAS.count("%s") == 6      # base, extra, agregado
+    assert rss.SQL_SO_BASE.count("%s") == 4
+    assert "ANY(%s)" in rss.SQL_COM_EXTRAS
