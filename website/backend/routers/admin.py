@@ -414,6 +414,8 @@ _PIPELINE_SCRIPTS = {
     "coleta_eventos":       "atualizar_jogos.py",
     # Temporada inteira dos arbitros escalados (2026-10-18). Estagio "arbitros".
     "coleta_arbitros":      "atualizar_jogos.py",
+    # Lacunas do historico (2026-10-18). Estagio "lacunas".
+    "coleta_lacunas":       "atualizar_jogos.py",
     "coleta_clima":         "atualizar_jogos.py",
     "gerar_playerstats_todos": os.path.join("engine_pipelines", "player_stats_pipeline.py"),
     "perfis_de_liga":       "atualizar_ligas.py",
@@ -480,6 +482,7 @@ _PIPELINE_ARGS["coleta_escalacoes"] = ["escalacao"]
 _PIPELINE_ARGS["coleta_calendario"] = ["calendario"]
 _PIPELINE_ARGS["coleta_eventos"] = ["eventos", "300"]
 _PIPELINE_ARGS["coleta_arbitros"] = ["arbitros"]
+_PIPELINE_ARGS["coleta_lacunas"] = ["lacunas"]
 _PIPELINE_ARGS["coleta_clima"] = ["clima", "1000"]
 _PIPELINE_ARGS["coleta_fechamento"] = ["loop"]
 
@@ -538,6 +541,7 @@ _PIPELINE_TIMEOUTS = {
 _PASSO_DO_COMANDO = {
     "dados":              "atualizar_jogos",
     "arbitros":           "coleta_arbitros",
+    "lacunas":            "coleta_lacunas",
     "odds":               "capturar_odds",
     "player_stats":       "player_stats",
     "vip":                "gerar_vip",
@@ -592,7 +596,7 @@ _TUDO_STEPS_FALLBACK = [
     # `gerar_free` ANTES de `gerar_vip` desde 15/09: a Free e' um pick so' por
     # dia e e' a isca de aquisicao, entao ela escolhe primeiro. Mesma coisa:
     # a razao esta' no registro do motor, que e' a fonte.
-    "atualizar_jogos", "coleta_arbitros", "player_stats", "capturar_odds",
+    "atualizar_jogos", "coleta_arbitros", "coleta_lacunas", "player_stats", "capturar_odds",
     "gerar_free", "gerar_vip", "gerar_multipla", "gerar_bingo", "gerar_alavancagem",
     "gerar_faltas", "gerar_playerstats", "gerar_pickboost",
     "atualizar_resultados",
@@ -696,6 +700,7 @@ _STEP_LABELS = {
     "coleta_calendario":       "Coletando o calendário das ligas",
     "coleta_eventos":          "Coletando eventos por minuto",
     "coleta_arbitros":         "Coletando os árbitros",
+    "coleta_lacunas":          "Completando o histórico que falta",
     "coleta_clima":            "Coletando clima e altitude",
     "coleta_medias":           "Recalculando médias dos times",
 }
@@ -1228,6 +1233,7 @@ _PASSO_LABEL_CURTO = {
     "coleta_calendario":       "Calendário das Ligas",
     "coleta_eventos":          "Eventos por Minuto",
     "coleta_arbitros":         "Árbitros",
+    "coleta_lacunas":          "Lacunas do Histórico",
     "coleta_clima":            "Clima e Altitude",
     "coleta_medias":           "Médias dos Times",
 }

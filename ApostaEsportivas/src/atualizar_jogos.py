@@ -415,6 +415,12 @@ if __name__ == "__main__":
             #     python atualizar_jogos.py clima 2000
             collector.run_stage_extra(stage, teto=int(sys.argv[2]) if len(sys.argv) > 2 else 100)
 
+        elif stage == "lacunas":
+            # Ex: python atualizar_jogos.py lacunas      (tetos do dia)
+            #     python atualizar_jogos.py lacunas 3    (o triplo)
+            from collectors.lacunas_service import preencher
+            preencher(escala=float(sys.argv[2]) if len(sys.argv) > 2 else 1.0)
+
         elif stage == "arbitros":
             # Ex: python atualizar_jogos.py arbitros        (teto padrao: 40)
             #     python atualizar_jogos.py arbitros 100
