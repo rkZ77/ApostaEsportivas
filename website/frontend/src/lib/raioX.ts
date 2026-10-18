@@ -95,7 +95,10 @@ export interface RaioX {
   }
   arbitro: { nome: string; jogos: Array<{ amarelos: number; vermelhos: number; faltas: number | null
     /** Cartões do time que levou menos no jogo (ausente em cache antigo). */
-    cartoes_menor?: number | null }> } | null
+    cartoes_menor?: number | null
+    /** Quem jogou e o placar (18/10/2026), pra dica de cada barra. */
+    data?: string | null; home_team_id?: number; away_team_id?: number
+    home_team?: string; away_team?: string; home_goals?: number | null; away_goals?: number | null }> } | null
   /** Posição de cada time na tabela da liga (16/10/2026). null sem tabela. */
   posicoes?: { home: PosicaoNaTabela | null; away: PosicaoNaTabela | null }
   /** Posição de cada time na tabela da liga ({} sem tabela única). */
