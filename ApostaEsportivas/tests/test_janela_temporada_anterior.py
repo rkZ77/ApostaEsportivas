@@ -1,71 +1,11 @@
-"""A temporada anterior entra no histórico só quando a corrente não basta.
+"""O recorte de rodadas do backfill (match_statistics_sync_service._ultimas_rodadas).
 
-O motor lia `AND ms.season = %s` e ponto. Em começo de temporada isso é um teto
-que nenhum limiar contorna: as seis ligas europeias que reiniciaram em agosto
-tinham 6 ou 7 jogos por time na semana de 14/09/2026, e delas saiu o bloco de
-amostra curta que mediu 53,7% e -11,57u. A nota está no topo de
-pick_engine/config.py e em get_all_matches_full.
-
-O que estes testes travam é o CONDICIONAL. Alargar sempre mudaria a taxa de todo
-pick do Brasileirão (28ª rodada) por um motivo que ninguém mediu; alargar nunca
-deixa a liga que reiniciou muda por três rodadas. A regra só pode valer pra quem
-está curto.
+A TEMPORADA ANTERIOR SAIU DO MOTOR EM 18/10/2026 (decisao do usuario: o motor
+le' todos os jogos da temporada atual da liga, e so' ela). Os testes do
+condicional que completava o time curto com a temporada passada foram embora
+com ele; a regra nova esta' em test_janela_de_historico_2026_08.py.
 """
 from collectors.match_statistics_sync_service import _ultimas_rodadas
-from services.match_stats_service import (
-    LIMIAR_TEMPORADA_ANTERIOR,
-    _somente_temporada_corrente_se_bastar,
-)
-from services.pick_engine.config import AMOSTRA_RICA
-
-
-def jogos(quantos: int, season: int) -> list:
-    return [{"season": season, "fixture_id": i} for i in range(quantos)]
-
-
-def test_limiar_e_o_dobro_do_piso_de_amostra():
-    """`pool_and_field` corta o pool pelo mando, então 8 no pool pede ~16 no
-    histórico. O número sai do config do motor, não escrito à mão aqui."""
-    assert LIMIAR_TEMPORADA_ANTERIOR == AMOSTRA_RICA * 2
-
-
-def test_temporada_cheia_descarta_a_anterior():
-    """Brasileirão na 28ª rodada continua lendo só a temporada dele."""
-    historico = jogos(28, 2026) + jogos(38, 2025)
-
-    resultado = _somente_temporada_corrente_se_bastar(historico, 2026)
-
-    assert len(resultado) == 28
-    assert all(j["season"] == 2026 for j in resultado)
-
-
-def test_temporada_curta_mantem_a_anterior():
-    """La Liga na 6ª rodada: é exatamente o caso que estava quebrado."""
-    historico = jogos(6, 2026) + jogos(30, 2025)
-
-    resultado = _somente_temporada_corrente_se_bastar(historico, 2026)
-
-    assert len(resultado) == 36
-
-
-def test_o_limiar_e_inclusivo_no_ponto_de_corte():
-    """Com 16 na corrente a anterior já não entra: 16 é o que basta, não o que
-    falta."""
-    no_ponto = _somente_temporada_corrente_se_bastar(
-        jogos(LIMIAR_TEMPORADA_ANTERIOR, 2026) + jogos(10, 2025), 2026)
-    um_a_menos = _somente_temporada_corrente_se_bastar(
-        jogos(LIMIAR_TEMPORADA_ANTERIOR - 1, 2026) + jogos(10, 2025), 2026)
-
-    assert len(no_ponto) == LIMIAR_TEMPORADA_ANTERIOR
-    assert len(um_a_menos) == LIMIAR_TEMPORADA_ANTERIOR - 1 + 10
-
-
-def test_time_sem_temporada_anterior_no_banco_nao_quebra():
-    """Time promovido: a temporada passada dele está sob outro league_id, então
-    a consulta volta só com a corrente. Não é erro, é o resultado certo."""
-    resultado = _somente_temporada_corrente_se_bastar(jogos(5, 2026), 2026)
-
-    assert len(resultado) == 5
 
 
 # ── O recorte de rodadas, que é o freio de cota do backfill ───────────────

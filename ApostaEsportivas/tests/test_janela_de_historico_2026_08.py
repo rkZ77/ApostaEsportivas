@@ -46,8 +46,10 @@ class TestJanelaDaLiga:
         tem comeco e fim, e o time joga de 38 a 46 partidas nele. Cortar em 15
         e' jogar fora o primeiro turno."""
         sql = _sql(getattr(MatchStatsService, nome))
-        assert "LIMIT 15" not in sql
-        assert "{DEFAULT_LIMIT_LEAGUE}" in sql or f"LIMIT {DEFAULT_LIMIT_LEAGUE}" in sql
+        # Desde 18/10/2026 sem teto nenhum: a temporada da liga e' o limite, e
+        # todo jogo dela entra (decisao do usuario).
+        assert "LIMIT 15" not in sql and "{DEFAULT_LIMIT_LEAGUE}" not in sql
+        assert "ms.season = %s" in sql and "season IN" not in sql
 
     @pytest.mark.parametrize("nome", DE_LIGA)
     def test_filtra_jogo_encerrado(self, nome):
@@ -83,3 +85,32 @@ class TestJanelaDaCopa:
         e' stats_model.pool_and_field, porque a folha de um AET cobre 120
         minutos e so' gols tem placar de 90 separado."""
         assert set(re.findall(r"'(\w+)'", FIM_DE_JOGO)) == {"FT", "AET", "PEN"}
+
+
+
+# ── so' a temporada atual (18/10/2026, decisao do usuario) ──────────────────
+def test_copa_le_todas_as_competicoes_so_da_temporada_atual():
+    sql = _sql(MatchStatsService.get_last_n_all_competitions)
+    assert 'season_filter = "AND ms.season = %s" if season is not None' in sql
+    assert 'limite_sql = "" if season is not None' in sql
+
+
+def test_todo_pipeline_de_copa_passa_a_temporada():
+    import pathlib
+    raiz = pathlib.Path(__file__).resolve().parents[1] / "src" / "engine_pipelines"
+    for nome in ("vip", "alavancagem", "bingo", "dica", "multipla", "faltas"):
+        texto = (raiz / f"{nome}_pipeline.py").read_text(encoding="utf-8")
+        chamadas = [l for l in texto.splitlines() if "get_last_n_all_competitions(" in l
+                    or "season=" in l]
+        assert any("season=" in l for l in chamadas), nome
+
+
+def test_get_all_matches_full_nao_mistura_temporada(monkeypatch):
+    vistos = {}
+    def _query(self, sql, params=None):
+        vistos["sql"], vistos["params"] = sql, params
+        return []
+    monkeypatch.setattr(MatchStatsService, "_query", _query)
+    MatchStatsService().get_all_matches_full(10, 2026, 71)
+    assert "IN (%s, %s)" not in vistos["sql"] and "LIMIT" not in vistos["sql"].split("ORDER BY")[-1]
+    assert 2025 not in vistos["params"] and 2026 in vistos["params"]

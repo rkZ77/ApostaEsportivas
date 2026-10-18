@@ -29,6 +29,7 @@ e' da partida mais recente pra mais antiga, que e' a que o motor le' primeiro.
 from __future__ import annotations
 
 from utils.db_utils import get_connection
+from collectors.match_statistics_sync_service import SO_TEMPORADA_ATIVA
 
 FINALIZADOS = ("FT", "AET", "PEN")
 
@@ -70,10 +71,12 @@ def cobertura() -> dict:
     try:
         for rotulo, coluna, temporada, _ in TIPOS:
             try:
+                # So' a temporada ATIVA de cada liga (2026-10-18): e' o que o
+                # motor le', entao e' o que tem que estar completo.
                 cur.execute(f"""
                     SELECT COUNT(*) FILTER (WHERE {coluna} IS NULL), COUNT(*)
                       FROM match_statistics
-                     WHERE status IN %s AND season >= %s
+                     WHERE status IN %s AND season >= %s {SO_TEMPORADA_ATIVA}
                 """, (FINALIZADOS, temporada))
                 saida[rotulo] = tuple(cur.fetchone())
             except Exception as e:
@@ -131,13 +134,13 @@ def de_graca() -> dict:
 def _preencher(rotulo: str, teto: int) -> None:
     if rotulo == "1o tempo":
         from collectors.match_statistics_sync_service import MatchStatisticsSyncService
-        MatchStatisticsSyncService().backfill_primeiro_tempo(teto_requisicoes=teto)
+        MatchStatisticsSyncService().backfill_primeiro_tempo(teto_requisicoes=teto, so_temporada_ativa=True)
     elif rotulo == "eventos":
         from collectors.eventos_collector_service import backfill
-        backfill(teto_requisicoes=teto)
+        backfill(teto_requisicoes=teto, so_temporada_ativa=True)
     elif rotulo == "escalacao":
         from collectors.lineups_collector_service import LineupsCollectorService
-        LineupsCollectorService().backfill(teto_requisicoes=teto)
+        LineupsCollectorService().backfill(teto_requisicoes=teto, so_temporada_ativa=True)
 
 
 def preencher(escala: float = 1.0) -> dict:

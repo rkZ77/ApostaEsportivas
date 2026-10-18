@@ -31,6 +31,10 @@ STATS_URL = "fixtures/statistics"
 #: backfill de cartao.
 _REFEREE_FINALIZADOS = ("FT", "AET", "PEN")
 
+#: So' a temporada ATIVA de cada liga (2026-10-18): o motor so' le' ela.
+SO_TEMPORADA_ATIVA = ("AND EXISTS (SELECT 1 FROM leagues l WHERE l.league_id = match_statistics.league_id "
+                      "AND l.season = match_statistics.season AND COALESCE(l.ativa, TRUE))")
+
 
 def load_leagues_from_db():
     conn = get_connection()
@@ -1253,7 +1257,8 @@ class MatchStatisticsSyncService:
     # BACKFILL DO 1o TEMPO
     # ---------------------------------------------------------
     def backfill_primeiro_tempo(self, teto_requisicoes: int = 100,
-                                temporada_minima: int = 2024) -> dict:
+                                temporada_minima: int = 2024,
+                                so_temporada_ativa: bool = False) -> dict:
         """Busca a folha por tempo das partidas JA gravadas que nunca a tiveram.
 
         A coleta diaria passou a pedir `half=true` em 27/09/2026, entao so' o
@@ -1267,7 +1272,11 @@ class MatchStatisticsSyncService:
 
         Idempotente: `stats_1h_checked_at` tira a partida da fila tenha a folha
         vindo ou nao, entao rodar de novo continua de onde parou.
+
+        `so_temporada_ativa` (2026-10-18): so' a temporada ATIVA de cada liga,
+        que e' tudo que o motor le' desde a mesma data · a etapa LACUNAS usa.
         """
+        ativa = SO_TEMPORADA_ATIVA if so_temporada_ativa else ""
         gastas_no_placar = self.backfill_placar_intervalo(teto_requisicoes)
         teto_requisicoes -= gastas_no_placar
         if teto_requisicoes <= 0:
@@ -1275,12 +1284,12 @@ class MatchStatisticsSyncService:
 
         self._open()
         try:
-            self.cur.execute("""
+            self.cur.execute(f"""
                 SELECT fixture_id, home_team_id, away_team_id
                   FROM match_statistics
                  WHERE (stats_1h_checked_at IS NULL OR finalizacao_checked_at IS NULL)
                    AND status IN %s
-                   AND season >= %s
+                   AND season >= %s {ativa}
                  ORDER BY match_date DESC
                  LIMIT %s;
             """, (tuple(self.FINISHED), temporada_minima, teto_requisicoes))
@@ -1315,10 +1324,10 @@ class MatchStatisticsSyncService:
                     else:
                         sem_folha += 1
                 self.conn.commit()
-            self.cur.execute("""
+            self.cur.execute(f"""
                 SELECT COUNT(*) FROM match_statistics
                  WHERE (stats_1h_checked_at IS NULL OR finalizacao_checked_at IS NULL)
-                   AND status IN %s AND season >= %s;
+                   AND status IN %s AND season >= %s {ativa};
             """, (tuple(self.FINISHED), temporada_minima))
             restantes = self.cur.fetchone()[0]
         finally:
