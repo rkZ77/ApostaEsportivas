@@ -1,11 +1,12 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Lock, ChevronDown } from 'lucide-react'
+import { Lock, ChevronDown, Check, Search } from 'lucide-react'
+import { AnimatePresence } from 'framer-motion'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import { cn } from '../lib/cn'
 import PageShell from '../components/PageShell'
-import { SpinnerBlock, EmptyState, ErrorState, Skeleton } from '../components/ui'
+import { SpinnerBlock, EmptyState, ErrorState, Skeleton, Modal } from '../components/ui'
 import { TeamLogo } from '../components/TeamLogo'
 import FaixaRolavel from '../components/ui/FaixaRolavel'
 import Classificacao from '../components/jogos/Classificacao'
@@ -23,7 +24,7 @@ import { linkDoRaioX, type JogoParaRaioX } from '../lib/linkDoRaioX'
  * Antes era uma grade de 9 cartões iguais com ícone colorido no topo, o
  * ranking escondido atrás de um clique e o seletor de liga dentro de um menu
  * "Filtros". Agora:
- *   - as ligas ficam numa faixa à vista (como as datas da aba Jogos);
+ *   - a liga se troca pelo próprio título, numa lista com busca (18/10);
  *   - a liga abre em abas, como o Raio-X: Resumo, Tabela, Times, Árbitros,
  *     Resultados;
  *   - o Resumo traz os jogos de hoje da liga, a Leitura da IA, os números num
@@ -303,26 +304,9 @@ export function EstatisticasContent({ onAbrirJogo }: {
   return (
     <div className="space-y-4 max-w-[1200px]">
       {leaguesLoading ? (
-        <div className="flex gap-2">
-          {Array.from({ length: 5 }, (_, i) => <Skeleton key={i} className="h-11 w-36 shrink-0" />)}
-        </div>
+        <Skeleton className="h-[68px] w-full" />
       ) : (
-        <SeletorDeLiga ligas={leagues} valor={leagueId} hoje={hoje} onChange={escolherLiga} />
-      )}
-
-      {liga && (
-        <div className="flex items-center gap-3 pt-1">
-          <img src={LEAGUE_LOGO(liga.league_id)} alt="" width={44} height={44}
-            className="w-11 h-11 object-contain shrink-0"
-            onError={e => (e.currentTarget.style.display = 'none')} />
-          <div className="min-w-0">
-            <h2 className="text-2xl leading-tight text-ink-1 truncate">{nomeDaLigaPt(liga.league_id, liga.name)}</h2>
-            <p className="text-xs text-ink-3 mt-0.5">
-              {[paisDaLiga(liga.league_id)?.pais, `Temporada ${liga.season}`,
-                liga.ativa === false ? 'encerrada' : null].filter(Boolean).join(', ')}
-            </p>
-          </div>
-        </div>
+        <SeletorDeLiga ligas={leagues} liga={liga} hoje={hoje} onChange={escolherLiga} />
       )}
 
       {/* As cinco abas À VISTA no celular (o público é mais celular): numa
@@ -382,47 +366,132 @@ export function EstatisticasContent({ onAbrirJogo }: {
 /* ─────────────────────────── Seletor de liga ─────────────────────────── */
 
 /*
- * As ligas à vista numa faixa que rola de lado, como as datas da aba Jogos.
- * Antes ficavam num menu "Filtros": trocar de liga custava dois toques e não
- * se via qual estava aberta. A liga com jogo hoje ganha a contagem; as
- * encerradas vão pro fim, apagadas (o histórico serve, mas não é a porta).
+ * SELETOR NO TÍTULO (18/10/2026, pedido do usuário: "coloca lista suspensa,
+ * acho que fica mais top"). A faixa de pílulas que rolava de lado escondia a
+ * maior parte das ligas fora da tela e repetia o título logo abaixo. Agora o
+ * próprio cabeçalho da liga é o botão: toca e abre a lista inteira (folha que
+ * sobe de baixo no celular, janela no computador), com busca por liga ou país
+ * e três grupos: com jogo hoje, em andamento, encerradas. Cada linha leva o
+ * país e quantos jogos a liga tem hoje.
  */
-function SeletorDeLiga({ ligas, valor, hoje, onChange }: {
-  ligas: League[]; valor: number | null; hoje: JogoDoDia[]; onChange: (id: number) => void
+function SeletorDeLiga({ ligas, liga, hoje, onChange }: {
+  ligas: League[]; liga: League | undefined; hoje: JogoDoDia[]; onChange: (id: number) => void
 }) {
-  const ordenadas = useMemo(() => [
-    ...ligas.filter(l => l.ativa !== false),
-    ...ligas.filter(l => l.ativa === false),
-  ], [ligas])
+  const [aberto, setAberto] = useState(false)
+  const [busca, setBusca] = useState('')
+
   const jogosHoje = useMemo(() => {
     const n = new Map<number, number>()
     for (const f of hoje) n.set(f.league_id, (n.get(f.league_id) ?? 0) + 1)
     return n
   }, [hoje])
 
-  // Setas no computador e a liga aberta sempre à vista: ver ui/FaixaRolavel.
+  const grupos = useMemo(() => {
+    const t = normalizar(busca.trim())
+    const bate = (l: League) => !t ||
+      normalizar(`${nomeDaLigaPt(l.league_id, l.name)} ${l.name} ${paisDaLiga(l.league_id)?.pais ?? ''}`).includes(t)
+    const vis = ligas.filter(bate)
+    const comJogo = vis.filter(l => jogosHoje.has(l.league_id))
+      .sort((a, b) => (jogosHoje.get(b.league_id) ?? 0) - (jogosHoje.get(a.league_id) ?? 0))
+    return [
+      { titulo: 'Com jogo hoje', itens: comJogo },
+      { titulo: 'Em andamento', itens: vis.filter(l => l.ativa !== false && !jogosHoje.has(l.league_id)) },
+      { titulo: 'Encerradas', itens: vis.filter(l => l.ativa === false && !jogosHoje.has(l.league_id)) },
+    ].filter(g => g.itens.length > 0)
+  }, [ligas, jogosHoje, busca])
+
+  function fechar() { setAberto(false); setBusca('') }
+  function escolher(id: number) { onChange(id); fechar() }
+
+  const nHoje = liga ? jogosHoje.get(liga.league_id) : undefined
+
   return (
-    <FaixaRolavel rotulo="Ligas" foco={valor} className="-mx-4 px-4 sm:mx-0 sm:px-0 gap-2 pb-1">
-      {ordenadas.map(l => {
-        const ativa = l.league_id === valor
-        const n = jogosHoje.get(l.league_id)
-        return (
-          <button key={l.league_id} type="button" aria-pressed={ativa}
-            onClick={() => onChange(l.league_id)}
-            className={cn(
-              'h-11 shrink-0 flex items-center gap-2 pl-2.5 pr-3.5 rounded-full border text-sm font-semibold transition-colors',
-              ativa ? 'bg-surface-3 border-line-strong text-ink-1' : 'bg-surface-1 border-line text-ink-2 hover:text-ink-1',
-              l.ativa === false && !ativa && 'opacity-60',
-            )}>
-            <img src={LEAGUE_LOGO(l.league_id)} alt="" width={20} height={20} loading="lazy"
-              className="w-5 h-5 object-contain" onError={e => (e.currentTarget.style.visibility = 'hidden')} />
-            <span className="whitespace-nowrap">{nomeDaLigaPt(l.league_id, l.name)}</span>
-            {n ? <span className="font-mono text-[11px] text-accent-ink">{n} hoje</span> : null}
-          </button>
-        )
-      })}
-    </FaixaRolavel>
+    <>
+      <button type="button" onClick={() => setAberto(true)} aria-haspopup="dialog" aria-expanded={aberto}
+        className="group w-full flex items-center gap-3 p-3 rounded-xl border border-line bg-surface-1 hover:border-line-strong transition-colors text-left">
+        {liga ? (
+          <img src={LEAGUE_LOGO(liga.league_id)} alt="" width={44} height={44}
+            className="w-11 h-11 object-contain shrink-0"
+            onError={e => (e.currentTarget.style.visibility = 'hidden')} />
+        ) : <span className="w-11 h-11 shrink-0" />}
+        <div className="min-w-0 flex-1">
+          <h2 className="text-xl sm:text-2xl leading-tight text-ink-1 truncate">
+            {liga ? nomeDaLigaPt(liga.league_id, liga.name) : 'Escolher liga'}
+          </h2>
+          {liga && (
+            <p className="text-xs text-ink-3 mt-0.5 truncate">
+              {[paisDaLiga(liga.league_id)?.pais, `Temporada ${liga.season}`,
+                liga.ativa === false ? 'encerrada' : null].filter(Boolean).join(', ')}
+              {nHoje ? <span className="text-accent-ink font-semibold"> · {nHoje} {nHoje === 1 ? 'jogo' : 'jogos'} hoje</span> : null}
+            </p>
+          )}
+        </div>
+        <span className="shrink-0 flex items-center gap-1.5 h-9 pl-3 pr-2.5 rounded-full border border-line-strong text-xs font-bold text-ink-2 group-hover:text-ink-1">
+          <span className="hidden min-[400px]:inline">Trocar</span>
+          <ChevronDown className="w-4 h-4" />
+        </span>
+      </button>
+
+      <AnimatePresence>
+        {aberto && (
+          <Modal onClose={fechar} title="Escolher liga" width="md">
+            <div className="sticky top-0 z-10 bg-surface-1 px-4 pt-3 pb-2 border-b border-line">
+              <div className="flex items-center gap-2 h-10 px-3 rounded-lg border border-line-strong bg-surface-2 focus-within:border-accent/50">
+                <Search className="w-4 h-4 text-ink-4 shrink-0" />
+                <input value={busca} onChange={e => setBusca(e.target.value)}
+                  placeholder="Buscar liga ou país" aria-label="Buscar liga ou país"
+                  className="bg-transparent outline-none text-sm text-ink-1 placeholder:text-ink-4 w-full" />
+              </div>
+            </div>
+            <div className="px-2 pb-3">
+              {grupos.length === 0 && <p className="px-3 py-6 text-sm text-ink-3 text-center">Nenhuma liga encontrada.</p>}
+              {grupos.map(g => (
+                <div key={g.titulo} className="pt-3">
+                  <p className="px-3 pb-1.5 text-[11px] font-bold uppercase tracking-wider text-ink-4">{g.titulo}</p>
+                  <ul>
+                    {g.itens.map(l => {
+                      const sel = l.league_id === liga?.league_id
+                      const n = jogosHoje.get(l.league_id)
+                      return (
+                        <li key={l.league_id}>
+                          <button type="button" onClick={() => escolher(l.league_id)} aria-current={sel || undefined}
+                            className={cn('w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors',
+                              sel ? 'bg-accent/10' : 'hover:bg-surface-2',
+                              l.ativa === false && !sel && 'opacity-70')}>
+                            <img src={LEAGUE_LOGO(l.league_id)} alt="" width={28} height={28} loading="lazy"
+                              className="w-7 h-7 object-contain shrink-0" onError={e => (e.currentTarget.style.visibility = 'hidden')} />
+                            <span className="min-w-0 flex-1">
+                              <span className={cn('block text-sm font-semibold truncate', sel ? 'text-accent-ink' : 'text-ink-1')}>
+                                {nomeDaLigaPt(l.league_id, l.name)}
+                              </span>
+                              <span className="block text-[11px] text-ink-3 truncate">
+                                {paisDaLiga(l.league_id)?.pais ?? 'Internacional'}
+                              </span>
+                            </span>
+                            {n ? (
+                              <span className="shrink-0 font-mono text-[11px] font-bold text-accent-ink bg-accent/10 rounded-full px-2 py-0.5">
+                                {n} hoje
+                              </span>
+                            ) : null}
+                            {sel && <Check className="w-4 h-4 text-accent-ink shrink-0" />}
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </Modal>
+        )}
+      </AnimatePresence>
+    </>
   )
+}
+
+/** Sem acento e minúsculo, pra "turquia" achar "Turquia" e "sao" achar "São". */
+function normalizar(s: string) {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 }
 
 /* ─────────────────────────── Hoje na liga ─────────────────────────── */
