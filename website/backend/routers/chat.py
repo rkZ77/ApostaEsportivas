@@ -147,7 +147,7 @@ def _get_site_context(user_id: int) -> str:
                 # Picks VIP
                 cur.execute("""
                     SELECT home_team_name, away_team_name, market, line, odd,
-                           bet_house, confidence, result, stake
+                           confidence, result, stake
                     FROM picks_vip WHERE match_date = CURRENT_DATE ORDER BY confidence DESC
                 """)
                 vip_picks = cur.fetchall()
@@ -159,7 +159,7 @@ def _get_site_context(user_id: int) -> str:
                         stake_s = f" | {p['stake']}u" if p.get('stake') else ""
                         lines.append(
                             f"  • {p['home_team_name']} x {p['away_team_name']}: "
-                            f"{p['market']}{line_s} @ {p['odd']} ({p.get('bet_house','?')})"
+                            f"{p['market']}{line_s} @ {p['odd']}"
                             f"{stake_s} | Conf: {conf} | {p.get('result') or 'pendente'}"
                         )
                 else:

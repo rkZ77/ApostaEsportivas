@@ -242,7 +242,7 @@ export const TOUR_STEPS_VIP: TourStep[] = [
        Nao e' o mesmo texto. La' o assunto e' COMO se registra, campo a campo;
        aqui e' que o botao vale tambem pras abas que acabaram de abrir. */
     id: 'vip-registrar',
-    titulo: 'Registre a aposta',
+    titulo: 'Registre na sua banca',
     Icon: ClipboardCheck,
     rota: '/picks',
     alvos: ['[data-tour="pick-apostar"]', '[data-tour="pick-card"]', '[data-tour="picks-area"]'],
@@ -250,19 +250,19 @@ export const TOUR_STEPS_VIP: TourStep[] = [
     corpo: (
       <div className="space-y-3">
         <p className="text-xs text-ink-2 leading-relaxed">
-          A aposta você faz na casa. Aqui você registra o que apostou, e é isso que
+          O site não faz apostas. Aqui você anota o que fez por conta própria, e é isso que
           transforma o pick em resultado na sua banca.
         </p>
         <Etiqueta>O que o registro pede</Etiqueta>
         <Linhas
           itens={[
-            ['Casa de aposta', 'Superbet, Bet365, Betano, Outra'],
-            ['Odd apostada', '2.05'],
-            ['Unidades a apostar', '2u'],
+            ['Onde você fez', 'opcional, texto livre'],
+            ['Odd que você pegou', '2.05'],
+            ['Unidades', '2u'],
           ]}
         />
         <p className="text-[11px] text-ink-3 leading-relaxed">
-          A odd vem preenchida com a do pick e você ajusta se apostou em outra. As
+          A odd vem preenchida com a do pick e você ajusta se pegou outra. As
           unidades viram reais pelo valor de unidade da sua banca.
         </p>
       </div>

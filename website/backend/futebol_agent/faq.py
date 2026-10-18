@@ -52,7 +52,7 @@ _FAQ: list[dict] = [
         ],
         "resposta": (
             "Os **Picks Premium** (antigo Pick VIP) são os picks principais da plataforma: os de maior "
-            "confiança do dia, com time, mercado, linha, odd e casa de apostas sugerida. São exclusivos "
+            "confiança do dia, com time, mercado, linha e odd. São exclusivos "
             "de assinantes (Pick IA e Pick IA Pro) e de quem está no teste grátis."
         ),
     },

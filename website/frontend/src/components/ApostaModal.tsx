@@ -2,8 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, m as motion } from 'framer-motion'
 import { backdropFade, sheetUp, tabFade } from '../lib/motion'
 
-const HOUSES = ['Superbet', 'Bet365', 'Betano', 'Outra']
-
 interface Props {
   /** Odd que abre o campo · já é a atualizada quando a consulta trouxe uma. */
   pickOdd: number
@@ -14,7 +12,6 @@ interface Props {
    */
   originalOdd?: number
   suggestedUnits?: number
-  suggestedHouse?: string
   maxUnits?: number
   hideUnits?: boolean
   onConfirm: (actualOdd: number, betHouse: string, stakeUnits: number) => void
@@ -44,7 +41,7 @@ interface Props {
 export const REGISTRO_MAX_UNIDADES = 100
 
 export default function ApostaModal({
-  pickOdd, originalOdd, suggestedUnits = 1, suggestedHouse, maxUnits: maxSugerido = 10, hideUnits = false,
+  pickOdd, originalOdd, suggestedUnits = 1, maxUnits: maxSugerido = 10, hideUnits = false,
   onConfirm, onCancel, loading, error, conferindoOdd = false
 }: Props) {
   const maxUnits = Math.max(maxSugerido, REGISTRO_MAX_UNIDADES)
@@ -58,7 +55,9 @@ export default function ApostaModal({
   useEffect(() => {
     if (!editouAMao.current) setOddStr(String(pickOdd))
   }, [pickOdd])
-  const [house,  setHouse]  = useState(suggestedHouse ?? '')
+  /* Casa é anotação livre e opcional da pessoa (18/10/2026): o site não
+     sugere nem pré-preenche casa de aposta. */
+  const [house,  setHouse]  = useState('')
   const [units,  setUnits]  = useState(suggestedUnits)
   const [overrideStep, setOverrideStep] = useState(false)
 
@@ -70,7 +69,7 @@ export default function ApostaModal({
   const variacao = Math.abs(pickOdd - oddPick) > 0.001 ? pickOdd - oddPick : 0
   const exceedsMax = !hideUnits && units > maxUnits
   const exceedsSuggested = !hideUnits && units > suggestedUnits
-  const valid = validOdd && house.length > 0 && !conferindoOdd
+  const valid = validOdd && !conferindoOdd
     && (hideUnits || (units >= 1 && !exceedsMax))
 
   function handlePrimary() {
@@ -79,7 +78,7 @@ export default function ApostaModal({
       setOverrideStep(true)
       return
     }
-    onConfirm(parsed, house, units)
+    onConfirm(parsed, house.trim(), units)
   }
 
   return (
@@ -101,10 +100,10 @@ export default function ApostaModal({
           /* ── Tela de confirmação ao exceder sugestão ── */
           <motion.div key="override" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="p-5">
             <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-md p-4 mb-5">
-              <p className="text-yellow-400 font-black text-sm mb-1">Stake acima do recomendado</p>
+              <p className="text-yellow-400 font-black text-sm mb-1">Valor acima do recomendado</p>
               <p className="text-yellow-200 text-xs leading-relaxed">
-                Você está apostando <strong>{units}u</strong>, a IA recomendou <strong>{suggestedUnits}u</strong> para proteger sua banca.
-                Apostar mais do que o sugerido pode aumentar o risco de ruína.
+                Você está registrando <strong>{units}u</strong>, a IA recomendou <strong>{suggestedUnits}u</strong> para proteger sua banca.
+                Usar mais do que o sugerido pode aumentar o risco de ruína.
               </p>
               <p className="text-yellow-400/70 text-xs mt-2">Tem certeza que quer continuar?</p>
             </div>
@@ -116,7 +115,7 @@ export default function ApostaModal({
                 Voltar
               </button>
               <button
-                onClick={() => onConfirm(parsed, house, units)}
+                onClick={() => onConfirm(parsed, house.trim(), units)}
                 disabled={loading}
                 className="flex-1 py-2.5 rounded-md bg-yellow-600 hover:bg-yellow-500 disabled:opacity-50 text-on-fill font-bold text-sm transition-colors"
               >
@@ -127,34 +126,22 @@ export default function ApostaModal({
         ) : (
           /* ── Tela principal ── */
           <motion.div key="main" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="p-5">
-            <h3 className="text-ink-1 font-bold text-sm mb-1">Pegar bilhete</h3>
-            <p className="text-ink-3 text-xs mb-4">Informe onde e como você apostou.</p>
+            <h3 className="text-ink-1 font-bold text-sm mb-1">Registrar na banca</h3>
+            <p className="text-ink-3 text-xs mb-4">Anote a odd e o valor que você usou, pra controle da sua banca.</p>
 
-            {/* Casa de aposta */}
+            {/* Onde (opcional) */}
             <div className="mb-4">
-              <label className="text-ink-2 text-xs font-semibold mb-1.5 block">Casa de aposta</label>
-              <div className="grid grid-cols-2 gap-1.5">
-                {HOUSES.map(h => (
-                  <button
-                    key={h}
-                    type="button"
-                    onClick={() => setHouse(h)}
-                    className={`py-2 rounded-md border text-xs font-bold transition-colors ${
-                      house === h
-                        ? 'border-green-500/60 bg-green-500/10 text-green-400'
-                        : 'border-line-strong text-ink-2 hover:border-ink-4 hover:text-ink-2'
-                    }`}
-                  >
-                    {h}
-                  </button>
-                ))}
-              </div>
+              <label className="text-ink-2 text-xs font-semibold mb-1.5 block">
+                Onde você fez <span className="text-ink-4 font-normal">(opcional)</span>
+              </label>
+              <input value={house} onChange={e => setHouse(e.target.value)} maxLength={60}
+                placeholder="Anotação livre" className="input w-full text-sm" />
             </div>
 
             {/* Odd */}
             <div className="mb-4">
               <label className="text-ink-2 text-xs font-semibold mb-1.5 block">
-                Odd apostada
+                Odd que você pegou
                 <span className="text-ink-4 font-normal ml-1">(pick: {oddPick})</span>
               </label>
               <input
@@ -179,7 +166,7 @@ export default function ApostaModal({
               )}
               {!conferindoOdd && oddChanged && (
                 <p className="text-yellow-400 text-[11px] mt-1.5">
-                  Odd diferente do pick, será registrada como apostada
+                  Odd diferente do pick, será registrada a sua
                 </p>
               )}
             </div>
@@ -188,7 +175,7 @@ export default function ApostaModal({
             {!hideUnits && (
               <div className="mb-4">
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-ink-2 text-xs font-semibold">Unidades a apostar</label>
+                  <label className="text-ink-2 text-xs font-semibold">Unidades</label>
                   <span className="text-[10px] text-ink-4">IA sugere: <span className="text-green-400 font-bold">{suggestedUnits}u</span></span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -216,7 +203,7 @@ export default function ApostaModal({
                   </p>
                 )}
                 {exceedsMax && (
-                  <p className="text-red-400 text-[11px] mt-1.5">Máximo {maxUnits} unidades por aposta</p>
+                  <p className="text-red-400 text-[11px] mt-1.5">Máximo {maxUnits} unidades por registro</p>
                 )}
               </div>
             )}

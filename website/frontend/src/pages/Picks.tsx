@@ -644,7 +644,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
       /* A casa entra na imagem como campo rotulado, igual no card: sem ela o
          print diz o preço e não diz onde pegar. Quem já registrou vê a casa
          DELE, que é a que vale pra conta dele. */
-      house: (seguido && casaSeguida) ? casaSeguida : (dica.bet_house || null),
+      house: (seguido && casaSeguida) ? casaSeguida : null,
       odd: Number(dica.odd),
       probabilityPct: pctProb(dica.probability ?? dica.confidence),
       result: dica.result,
@@ -857,10 +857,10 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
             </CampoDoPick>
           )}
           <CampoAoVivo aoVivo={agora} />
-          {((seguido && casaSeguida) || dica.bet_house) && (
+          {seguido && casaSeguida && (
             <CampoDoPick rotulo="Casa">
               <dd className="text-xs text-ink-3 truncate">
-                {(seguido && casaSeguida) ? casaSeguida : dica.bet_house}
+                {casaSeguida}
               </dd>
             </CampoDoPick>
           )}
@@ -928,7 +928,6 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
         conferindoOdd={buscandoOdd}
         originalOdd={Number(dica.odd)}
         suggestedUnits={stakeSuggestion?.units ?? 1}
-        suggestedHouse={dica.bet_house}
         maxUnits={Math.max(6, stakeSuggestion?.units ?? 6)}
         onConfirm={handleConfirm}
         onCancel={() => setShowModal(false)}
@@ -1090,7 +1089,7 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
         market: translateMarket(l.market),
         line: translateLine(l.line),
         odd: Number(l.odd) || undefined,
-        house: l.bet_house ?? null,
+        house: null,
       })),
       oddCombined: Number(m.total_odd),
       probabilityPct: pctProb(m.probability ?? m.confidence),
@@ -1244,7 +1243,7 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
             casaId={leg.home_team_id} foraId={leg.away_team_id}
             odd={leg.odd != null ? Number(leg.odd) : null}
             mercado={translateMarket(leg.market)} linha={leg.line ? translateLine(leg.line) : null}
-            casaDeAposta={leg.bet_house} chance={leg.prob_real ?? leg.confidence ?? null}
+            chance={leg.prob_real ?? leg.confidence ?? null}
             valorFinal={leg.settled_value ?? null} mercadoBruto={leg.market}
             cor={{ circulo: estilo.pernaCirculo, texto: estilo.pernaOdd }}
             aoVivo={agoraDasPernas[i]} Escudo={TeamLogo} />
@@ -1427,7 +1426,7 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
         market: translateMarket(l.market),
         line: translateLine(l.line),
         odd: Number(l.odd) || undefined,
-        house: l.house ?? null,
+        house: null,
       })),
       oddCombined,
       result: pick.result,
@@ -1520,7 +1519,7 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
             casa={leg.home} fora={leg.away} casaId={leg.homeId} foraId={leg.awayId}
             odd={leg.odd != null ? Number(leg.odd) : null}
             mercado={translateMarket(leg.market)} linha={leg.line ? translateLine(leg.line) : null}
-            casaDeAposta={leg.house} chance={leg.prob ?? null}
+            chance={leg.prob ?? null}
             cor={{ circulo: 'bg-surface-3 text-ink-3', texto: 'text-ink-1' }}
             aoVivo={agoraDasPernas[i]} Escudo={TeamLogo} />
         ))}
@@ -1604,7 +1603,6 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
         pickOdd={modalOdd ?? Number(pick.odd_combined)}
         conferindoOdd={buscandoBilhete}
         originalOdd={Number(pick.odd_combined)}
-        suggestedHouse={pick.bet_house_1}
         hideUnits
         onConfirm={handleConfirm}
         onCancel={() => setShowModal(false)}
@@ -1719,7 +1717,7 @@ function pernasDoBoost(p: MercadoPick) {
       line: 'Over 1.5',
       label: 'Mais de 1.5 gols',
       periodo: 'Jogo inteiro',
-      house: p.bet_house_ft ?? null,
+      house: null,
       odd: p.odd_ft != null ? Number(p.odd_ft) : null,
       probability: p.prob_ft != null ? Number(p.prob_ft) : null,
       result: p.result_ft ?? null,
@@ -1730,7 +1728,7 @@ function pernasDoBoost(p: MercadoPick) {
       line: 'Under 2.5',
       label: 'Menos de 2.5 gols',
       periodo: '1º tempo',
-      house: p.bet_house_ht ?? null,
+      house: null,
       odd: p.odd_ht != null ? Number(p.odd_ht) : null,
       probability: p.prob_ht != null ? Number(p.prob_ht) : null,
       result: p.result_ht ?? null,
