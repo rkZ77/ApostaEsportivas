@@ -515,6 +515,8 @@ class AIReviewGate:
             "Em `dossie.arbitro` esta' quem apita com a referencia da liga: `pontos_de_cartao_por_jogo` "
             "(amarelo + 2x vermelho, temporada inteira em todas as competicoes) contra "
             "`pontos_de_cartao_da_liga`, o `perfil` (rigoroso, leniente, na_media_da_liga, amostra_curta), "
+            "`faltas_por_jogo` contra `faltas_da_liga` com o `perfil_de_faltas` (marca_muita_falta, "
+            "deixa_o_jogo_correr), "
             "`confronto_direto_cartoes` (cartoes nos encontros anteriores contra o esperado pelos dois times) "
             "e a `temperatura` que junta os dois. Pese em cartoes e faltas: Under de cartoes com arbitro "
             "rigoroso em confronto quente e' o caso classico de veto; Over com arbitro leniente em confronto "

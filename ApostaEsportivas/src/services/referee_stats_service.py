@@ -152,7 +152,10 @@ class RefereeStatsService:
             SELECT
                 COUNT(*) AS games,
                 AVG(home_yellow_cards + away_yellow_cards) AS avg_yellow,
-                AVG(home_red_cards + away_red_cards) AS avg_red
+                AVG(home_red_cards + away_red_cards) AS avg_red,
+                -- Faltas da liga (18/10/2026): referencia do perfil de faltas
+                -- do arbitro no dossie (arbitro_no_contexto).
+                AVG(home_fouls + away_fouls) AS avg_fouls
             FROM match_statistics
             WHERE league_id = %s AND season = %s
               AND home_yellow_cards IS NOT NULL

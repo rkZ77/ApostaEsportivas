@@ -30,6 +30,11 @@ from __future__ import annotations
 DIFERENCA_RELEVANTE = 0.8
 #: Abaixo disto o perfil sai "amostra curta": media de 3 jogos e' ruido.
 MIN_JOGOS_PERFIL = 5
+#: Faltas por jogo acima/abaixo da liga pro perfil de faltas. 3 faltas e' o
+#: tamanho de um degrau de linha de faltas (24,5 -> 27,5). Caso que motivou:
+#: Ramon Abatti em PROD, 18/10/2026, 31,7 faltas por jogo contra 26,4 da liga
+#: com cartao na media (4,6 contra 5,1). Escolhido, nao medido.
+DIFERENCA_FALTAS = 3.0
 
 
 def _pontos(stats: dict | None) -> float | None:
@@ -49,6 +54,17 @@ def perfil_do_arbitro(jogos: int | None, pontos: float | None, pontos_liga: floa
     if diff <= -DIFERENCA_RELEVANTE:
         return "leniente"
     return "na_media_da_liga"
+
+
+def perfil_de_faltas(jogos: int | None, faltas: float | None, faltas_liga: float | None) -> str | None:
+    if faltas is None or faltas_liga is None or (jogos or 0) < MIN_JOGOS_PERFIL:
+        return None
+    diff = faltas - faltas_liga
+    if diff >= DIFERENCA_FALTAS:
+        return "marca_muita_falta"
+    if diff <= -DIFERENCA_FALTAS:
+        return "deixa_o_jogo_correr"
+    return "faltas_na_media_da_liga"
 
 
 def temperatura(perfil: str | None, rivalidade: str | None) -> str | None:
@@ -92,7 +108,11 @@ def leitura(nome: str | None, arbitro: dict | None, liga: dict | None, rivalidad
         "pontos_de_cartao_da_liga": round(pontos_liga, 2) if pontos_liga is not None else None,
         "amarelos_por_jogo": float(arbitro["avg_yellow"]) if (arbitro or {}).get("avg_yellow") is not None else None,
         "faltas_por_jogo": float(arbitro["avg_fouls"]) if (arbitro or {}).get("avg_fouls") is not None else None,
+        "faltas_da_liga": float(liga["avg_fouls"]) if (liga or {}).get("avg_fouls") is not None else None,
         "perfil": perfil,
+        "perfil_de_faltas": perfil_de_faltas(
+            jogos, float(arbitro["avg_fouls"]) if (arbitro or {}).get("avg_fouls") is not None else None,
+            float(liga["avg_fouls"]) if (liga or {}).get("avg_fouls") is not None else None),
         "confronto_direto_cartoes": ({
             "confrontos": rivalidade.get("confrontos"),
             "pontos_por_confronto": rivalidade.get("media_h2h"),

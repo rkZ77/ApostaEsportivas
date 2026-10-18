@@ -37,9 +37,28 @@ interface Bloco { resumo: Resumo; jogos: Jogo[]; team_id?: number }
 interface Resposta {
   status: 'ok' | 'sem_arbitro' | 'sem_jogo' | 'falhou'
   nome?: string; temporada?: number; de_outras_competicoes?: number
+  contexto?: Contexto
   temporada_toda?: Bloco; nesta_liga?: Bloco; com_mandante?: Bloco; com_visitante?: Bloco
 }
 type Recorte = 'temporada_toda' | 'nesta_liga' | 'com_mandante' | 'com_visitante'
+/** O árbitro contra a liga e o cartão do confronto (18/10/2026, backend/arbitro_do_jogo.contexto). */
+interface Contexto {
+  perfil?: 'rigoroso' | 'leniente' | 'na_media_da_liga' | 'amostra_curta'
+  pontos_de_cartao?: number; pontos_de_cartao_da_liga?: number
+  faltas?: number; faltas_da_liga?: number
+  perfil_de_faltas?: 'marca_muita_falta' | 'deixa_o_jogo_correr' | 'faltas_na_media_da_liga'
+  confronto?: { confrontos: number; media_h2h: number; baseline: number; label: string }
+  temperatura?: string
+}
+const PERFIL: Record<string, string> = { rigoroso: 'Rigoroso', leniente: 'Leniente', na_media_da_liga: 'Na média da liga' }
+const PERFIL_FALTAS: Record<string, string> = { marca_muita_falta: 'Marca muita falta', deixa_o_jogo_correr: 'Deixa o jogo correr' }
+const TEMPERATURA: Record<string, string> = {
+  confronto_quente_com_arbitro_rigoroso: 'Confronto quente com árbitro rigoroso: tende a ter cartão acima do normal.',
+  confronto_quente_com_arbitro_leniente: 'Confronto quente, mas o árbitro costuma segurar os cartões.',
+  confronto_frio_com_arbitro_rigoroso: 'Confronto frio, mas o árbitro é rigoroso.',
+  confronto_frio_com_arbitro_leniente: 'Confronto frio e árbitro leniente: tende a ter menos cartão.',
+}
+const dec = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
 interface MediaDaLiga { amarelos: number; vermelhos: number; faltas: number; jogos: number }
 
 /** Linha que o gráfico de amarelos marca: a mesma do tile "Mais de 4,5". */
@@ -177,6 +196,28 @@ export default function ArbitroDoJogo({ fixtureId, homeId, awayId, homeNome, awa
           Temporada {r.temporada}, em todas as competições que ele apitou
           {!!r.de_outras_competicoes && <>, com {r.de_outras_competicoes} {r.de_outras_competicoes === 1 ? 'jogo' : 'jogos'} de outras competições do país</>}
         </div>
+        {r.contexto && (PERFIL[r.contexto.perfil ?? ''] || PERFIL_FALTAS[r.contexto.perfil_de_faltas ?? ''] || r.contexto.confronto) && (
+          <div className="mt-2.5 space-y-1.5 text-[13px] text-ink-2">
+            {PERFIL[r.contexto.perfil ?? ''] && r.contexto.pontos_de_cartao != null && r.contexto.pontos_de_cartao_da_liga != null && (
+              <p>
+                <span className="mr-1.5 px-1.5 py-0.5 rounded border border-line-strong text-[11px] font-bold text-ink-1">{PERFIL[r.contexto.perfil!]}</span>
+                {dec(r.contexto.pontos_de_cartao)} pontos de cartão por jogo; a liga dá {dec(r.contexto.pontos_de_cartao_da_liga)}
+              </p>
+            )}
+            {PERFIL_FALTAS[r.contexto.perfil_de_faltas ?? ''] && r.contexto.faltas != null && r.contexto.faltas_da_liga != null && (
+              <p>
+                <span className="mr-1.5 px-1.5 py-0.5 rounded border border-line-strong text-[11px] font-bold text-ink-1">{PERFIL_FALTAS[r.contexto.perfil_de_faltas!]}</span>
+                {dec(r.contexto.faltas)} faltas por jogo; a liga tem {dec(r.contexto.faltas_da_liga)}
+              </p>
+            )}
+            {r.contexto.confronto && (
+              <p className="text-ink-3">
+                Confronto direto: {dec(r.contexto.confronto.media_h2h)} pontos de cartão nos últimos {r.contexto.confronto.confrontos} jogos entre os dois; o esperado pelos times é {dec(r.contexto.confronto.baseline)}.
+              </p>
+            )}
+            {TEMPERATURA[r.contexto.temperatura ?? ''] && <p className="font-semibold text-ink-1">{TEMPERATURA[r.contexto.temperatura!]}</p>}
+          </div>
+        )}
       </div>
 
       {/* Os quatro recortes à vista, como as abas: o dedo acerta (40px). */}
@@ -291,7 +332,7 @@ export default function ArbitroDoJogo({ fixtureId, homeId, awayId, homeNome, awa
             </button>
           )}
           <p className="px-4 py-2.5 border-t border-line/60 text-[11px] text-ink-4 leading-relaxed">
-            VAR e pênalti só contam os jogos com os eventos coletados. Casa e Fora olham todas as temporadas,
+            Pontos de cartão: amarelo vale 1 e vermelho vale 2. VAR e pênalti só contam os jogos com os eventos coletados. Casa e Fora olham todas as temporadas,
             porque o encontro de árbitro com time é raro.
           </p>
         </>
