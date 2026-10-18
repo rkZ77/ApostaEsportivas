@@ -37,7 +37,7 @@ const AO_VIVO = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'SUSP', 'INT'])
 
 function situacao(p: Perna): string {
   if (p.status_jogo && AO_VIVO.has(p.status_jogo)) return 'Ao vivo'
-  if (p.status_jogo && ['FT', 'AET', 'PEN'].includes(p.status_jogo)) return 'Encerrado · conferindo'
+  if (p.status_jogo && ['FT', 'AET', 'PEN'].includes(p.status_jogo)) return 'Encerrado, conferindo'
   if (p.inicio) {
     const d = new Date(p.inicio)
     return `${d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
@@ -78,7 +78,7 @@ export default function DetalheDoBilhetePessoal({ id, onClose }: { id: number; o
           <div>
             <p className="text-[10px] font-black uppercase tracking-wide text-ink-3">Meu bilhete</p>
             <p className="text-sm text-ink-2 mt-0.5">
-              {b ? `${b.pernas.length} ${b.pernas.length === 1 ? 'seleção' : 'seleções'} · odd ${b.odd.toFixed(2)}` : 'Carregando…'}
+              {b ? `${b.pernas.length} ${b.pernas.length === 1 ? 'seleção' : 'seleções'}, odd ${b.odd.toFixed(2)}` : 'Carregando…'}
             </p>
           </div>
           <div className="flex items-center gap-2">
