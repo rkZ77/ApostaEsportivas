@@ -621,6 +621,17 @@ def sitemap_xml() -> str:
         linhas.append(f"    <priority>{'0.8' if liga['ativa'] else '0.4'}</priority>")
         linhas.append("  </url>")
 
+    # Uma URL por jogo que ainda vai acontecer (18/10/2026). E' a vitrine
+    # publica do Raio-X, a parte de analise que o Google nao enxergava · ver
+    # jogo_publico.py. So' os futuros: o encerrado envelhece e sai daqui.
+    from jogo_publico import proximos_para_o_sitemap
+    for jogo in proximos_para_o_sitemap():
+        linhas.append("  <url>")
+        linhas.append(f"    <loc>{escape(f'{SITE}/jogo/' + str(jogo['fixture_id']) + '/' + jogo['slug'])}</loc>")
+        linhas.append("    <changefreq>daily</changefreq>")
+        linhas.append("    <priority>0.6</priority>")
+        linhas.append("  </url>")
+
     for post in posts_do_blog():
         slug = (post.get("slug") or "").strip()
         if not slug:

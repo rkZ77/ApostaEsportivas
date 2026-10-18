@@ -7,6 +7,7 @@ import {
 import { rotuloDoMercado } from '../utils/marketTranslate'
 import { PaisDaLigaTag } from './TeamLogo'
 import { nomeDaLiga } from '../lib/paisDaLiga'
+import { caminhoDoJogo } from '../lib/jogoPublico'
 import { fmtUnits, STAKE_LABEL_PADRAO } from '../utils/format'
 
 /*
@@ -109,18 +110,26 @@ export function ListaDeJogos({
           <PanelHead label="Jogos que a IA vai analisar" meta={`${jogos.length} partidas`} />
           <ul className="divide-y divide-line/60">
             {jogos.map(j => (
-              <li key={j.fixture_id} className="px-5 py-3 flex items-center gap-3">
-                <span className="font-mono text-xs text-ink-3 tabular-nums w-11 shrink-0">
-                  {j.match_datetime ? String(j.match_datetime).slice(11, 16) : '--:--'}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm text-ink-1 truncate">
-                    {j.home_team} x {j.away_team}
-                  </p>
-                  {comLiga && (
-                    <p className="text-[11px] text-ink-4 truncate">{j.league_name}</p>
-                  )}
-                </div>
+              <li key={j.fixture_id}>
+                {/* Cada linha leva pra página pública do jogo (18/10/2026): é o
+                    link interno que faz o Google achar a análise de cada partida. */}
+                <Link
+                  to={caminhoDoJogo(j)}
+                  className="px-5 py-3 min-h-[44px] flex items-center gap-3 hover:bg-surface-2 transition-colors"
+                >
+                  <span className="font-mono text-xs text-ink-3 tabular-nums w-11 shrink-0">
+                    {j.match_datetime ? String(j.match_datetime).slice(11, 16) : '--:--'}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-ink-1 truncate">
+                      {j.home_team} x {j.away_team}
+                    </p>
+                    {comLiga && (
+                      <p className="text-[11px] text-ink-4 truncate">{j.league_name}</p>
+                    )}
+                  </div>
+                  <span className="text-[11px] text-ink-3 shrink-0">Análise</span>
+                </Link>
               </li>
             ))}
           </ul>
