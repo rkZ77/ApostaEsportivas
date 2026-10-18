@@ -53,7 +53,7 @@ export default function TabsLayout() {
       />
       <Tabs.Screen
         name="minhas-apostas"
-        options={{ title: 'Apostas', tabBarIcon: ({ color, size }) => <ListChecks size={size} color={color} /> }}
+        options={{ title: 'Histórico', tabBarIcon: ({ color, size }) => <ListChecks size={size} color={color} /> }}
       />
       <Tabs.Screen
         name="perfil"

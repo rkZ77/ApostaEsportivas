@@ -77,7 +77,7 @@ export default function MinhasApostas() {
     return entradas
   }, [dados, aba])
 
-  if (carregando) return <Carregando texto="Carregando suas apostas" />
+  if (carregando) return <Carregando texto="Carregando seu histórico" />
 
   return (
     <FlatList
@@ -148,7 +148,7 @@ export default function MinhasApostas() {
       ListEmptyComponent={
         <Vazio
           icone={<ListChecks size={32} color={cores.ink4} />}
-          titulo={erro ? 'Não foi possível carregar' : 'Nenhuma aposta aqui'}
+          titulo={erro ? 'Não foi possível carregar' : 'Nada no seu histórico ainda'}
           descricao={
             erro ??
             'Ao seguir um pick, ele passa a contar na sua banca e aparece nesta lista.'
