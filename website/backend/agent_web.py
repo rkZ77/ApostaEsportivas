@@ -145,7 +145,7 @@ def md_home() -> str:
   o mercado exige conta gratuita.
 - Resultados: o histórico completo de picks resolvidos, com lucro e taxa de
   acerto, sem precisar de conta.
-- Blog: material sobre gestão de banca e leitura de mercado.
+- Blog: material sobre análise de futebol, estatística e método.
 
 ## O que é pago
 
@@ -314,7 +314,7 @@ def md_blog() -> str:
     if not posts:
         return f"""# Blog do Pick IA
 
-> Material sobre gestão de banca, leitura de mercado e método.
+> Material sobre análise de futebol, estatística e método.
 
 A lista de artigos não está disponível neste momento.
 [{SITE}/blog]({SITE}/blog)
@@ -329,7 +329,7 @@ A lista de artigos não está disponível neste momento.
         )
     return f"""# Blog do Pick IA
 
-> Material sobre gestão de banca, leitura de mercado e método, em português.
+> Material sobre análise de futebol, estatística e método, em português.
 
 ## Artigos
 
@@ -390,7 +390,7 @@ PAGINAS: tuple[Pagina, ...] = (
         "Histórico público de picks resolvidos, com acerto e ROI.",
         md_resultados,
     ),
-    Pagina("/blog", "Blog", "Artigos sobre gestão de banca e leitura de mercado.", md_blog),
+    Pagina("/blog", "Blog", "Artigos sobre análise de futebol, estatística e método.", md_blog),
     Pagina("/termos", "Termos de uso", "Resumo e link para o texto integral.", md_termos),
     Pagina(
         "/privacidade",

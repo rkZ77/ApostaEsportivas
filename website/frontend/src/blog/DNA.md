@@ -5,9 +5,17 @@ qualquer artigo. Edite-o quando o posicionamento, o produto ou a estratégia de 
 
 ## Quem somos
 
-**Pick IA** (pickia.com.br) é uma plataforma que usa inteligência artificial para gerar
-picks de apostas esportivas de futebol todos os dias, com base em dados estatísticos reais
-(forma recente dos times, histórico de confrontos, odds de mercado).
+**Pick IA** (pickia.com.br) é uma plataforma de análise e estatística de futebol com
+inteligência artificial: Raio-X de cada jogo (forma recente, confronto direto, escalação,
+tabela, estatística de jogador e de árbitro, resumo da IA) e palpites diários com
+histórico público.
+
+**Posicionamento (18/10/2026, decisão do usuário):** o Pick IA se apresenta como
+plataforma de análise de futebol, no estilo de um Sofascore com IA, e não como site de
+aposta. O blog fala de futebol primeiro. Artigo sobre banca, odd e EV continua
+permitido, mas deixa de ser a maioria: a cada ciclo, pelo menos metade dos artigos sai
+do pilar 0 (análise de futebol). Título e description evitam a palavra "aposta" quando
+o tema não é aposta.
 
 Produtos dentro da plataforma:
 - **Picks VIP** — picks diários com análise completa, publicados até às 12h, com raciocínio,
@@ -59,6 +67,10 @@ Planos: **Free** (Dica do Dia) e **VIP** (mensal, trimestral, anual — ver `/pl
 ## Palavras-chave de SEO
 
 **Primárias** (cada artigo mira exatamente uma):
+- como analisar um jogo de futebol
+- estatísticas de futebol (por liga, por time, por jogador)
+- estatística de árbitro (cartões e faltas)
+- forma recente e mando de campo
 - palpites de futebol (termo principal do negócio: é o que o público digita na busca,
   enquanto "pick" é vocabulário interno. Usar nos artigos de topo de funil, e nas páginas
   públicas `/palpites-de-futebol-hoje` e `/palpites/<liga>`)
@@ -91,6 +103,8 @@ sempre em lista numerada.
 Distribuição sugerida por ciclo de 6 artigos (não repetir tema já publicado — checar
 `POSTS` no registry antes de escolher):
 
+0. **Análise de futebol e estatística** (prioridade máxima): como ler forma, gols,
+   confronto direto, escalação, árbitro, tabela. Pelo menos metade dos artigos do ciclo.
 1. **Gestão de banca e risco** (prioridade alta) — Kelly Criterion, stake, ROI, variância.
 2. **Educação de mercados e odds** (prioridade alta) — EV positivo, odds justas, tipos de mercado.
 3. **Como a IA do Pick IA funciona** (prioridade média) — picks VIP, Dica do Dia, Agente IA,
