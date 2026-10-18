@@ -853,6 +853,23 @@ def _salvar(cur, c: dict) -> None:
     ))
 
 
+def modo_faltas() -> str:
+    """`MOTOR_FALTAS`: on | sombra. Padrao `sombra` (18/10/2026).
+
+    Diagnostico de 18/10 em PROD: 21 pernas de faltas desde 04/08, acerto de
+    43% contra 57% que o preco dizia, ROI de -24%. Nao e' significativo (1,3
+    erro-padrao), mas e' o produto mais negativo e o usuario aprovou tirar do
+    ar ate' ter numero. Em `sombra` o motor avalia igual e grava a escolha em
+    engine_decisions (status selecionado), mas NAO publica em picks_faltas nem
+    passa pela revisao de IA (que custa). scripts/medir_faltas_sombra.py
+    liquida essas escolhas pelas faltas de match_statistics e diz quando
+    voltar: `on` so' com ROI positivo fora do ruido em 50+ escolhas.
+    """
+    import os
+    modo = os.getenv("MOTOR_FALTAS", "sombra").strip().lower()
+    return modo if modo in ("on", "sombra") else "sombra"
+
+
 # AUDITORIA (2026-08-27). Duas linhas, e nenhuma no corpo da funcao: o Pre
 # Live esta' congelado. O decorador abre a execucao (run_id, contagens,
 # status) e o decision_log carimba esse run_id sozinho nas linhas que ja'
@@ -941,7 +958,8 @@ def run_faltas_engine():
     # que a revisao de IA percorre e a que define quais picks o dia publica.
     candidatos.sort(key=lambda c: c["pick_score"], reverse=True)
 
-    gate = review_gate("faltas")
+    sombra = modo_faltas() == "sombra"
+    gate = None if sombra else review_gate("faltas")
     salvos = 0
     for c in candidatos:
         # candidato unico e ja' escolhido: marca explicitamente pro resumo do
@@ -949,6 +967,12 @@ def run_faltas_engine():
         log_decision("FALTAS_ENGINE", c["fixture"], [{**c, "is_best_pick": True}], [c])
         c = _revalidar_linha(c, odds_service)
         if c is None:
+            continue
+        if sombra:
+            # Ver modo_faltas: a escolha ficou no log acima, e e' dali que a
+            # medicao liquida. Nada vai pro site.
+            print(f"[FALTAS_ENGINE] Sombra: {c['fixture']['home_team']} x {c['fixture']['away_team']} "
+                  f"· Over {c['line']} faltas @ {c['odd']} (prob={c['probability'] * 100:.1f}%)")
             continue
         aprovado = gate.apply([c], "faltas", c["fixture"])
         if not aprovado:
@@ -967,7 +991,8 @@ def run_faltas_engine():
     conn.commit()
     cur.close()
     conn.close()
-    print(f"[FALTAS_ENGINE] {salvos} pick(s) de faltas gravado(s).")
+    print(f"[FALTAS_ENGINE] {salvos} pick(s) de faltas gravado(s)"
+          f"{' (MOTOR_FALTAS=sombra: nada publicado)' if sombra else ''}.")
 
 
 if __name__ == "__main__":

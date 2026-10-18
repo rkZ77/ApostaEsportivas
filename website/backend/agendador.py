@@ -94,6 +94,10 @@ MEDICOES = (
     # historico so' de 60+ minutos. So' le; a decisao de ligar e' do usuario.
     ("minutos_do_jogador", "Jogador: 60+ min x toda participação (peso por minutos)",
      "scripts/medir_minutos_do_jogador.py", []),
+    # 18/10: Faltas em sombra (MOTOR_FALTAS). As escolhas do motor liquidadas
+    # pelas faltas do jogo; o veredito diz quando volta pro site.
+    ("faltas_sombra", "Faltas em sombra (escolhas do motor x resultado)",
+     "scripts/medir_faltas_sombra.py", []),
 )
 
 
