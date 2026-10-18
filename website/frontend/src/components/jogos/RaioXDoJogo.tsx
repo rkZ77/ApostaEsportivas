@@ -4,7 +4,7 @@ import { useTimesFavoritos } from '../../lib/timesFavoritos'
 import { Link } from 'react-router-dom'
 import api from '../../services/api'
 import { cn } from '../../lib/cn'
-import { ErrorState, Skeleton } from '../ui'
+import { ErrorState, Skeleton, Tooltip } from '../ui'
 import { LeagueLogo, PaisDaLigaTag, PlayerPhoto, preCarregarFotos, TeamLogo } from '../TeamLogo'
 import { nomeDaLigaPt, rotuloDaRodada } from '../../lib/paisDaLiga'
 import {
@@ -611,7 +611,7 @@ function NumeroDaTaxa({ t, grande, semMedia, recente }: {
  * Verde = bateu. É o gráfico que responde "bate sempre ou bateu duas vezes
  * muito?" melhor que qualquer média.
  */
-function Barras({ valores, linha, lado, rotulos, max: maxFixo, topo }: {
+function Barras({ valores, linha, lado, rotulos, max: maxFixo, topo, dicas: dicasDoJogo }: {
   valores: Array<number | null>; linha: number; lado: Lado
   /** Legenda de cada jogo (mesma ordem de `valores`), mostrada no toque/hover. */
   rotulos?: string[]
@@ -619,10 +619,13 @@ function Barras({ valores, linha, lado, rotulos, max: maxFixo, topo }: {
   max?: number
   /** Jogo contra time do top 6 da tabela (mesma ordem de `valores`). */
   topo?: boolean[]
+  /** A dica de cada barra (mesma ordem de `valores`): escudos, dia e placar. */
+  dicas?: ReactNode[]
 }) {
   const serie = [...valores].reverse()
   const legendas = rotulos ? [...rotulos].reverse() : []
   const marcas = topo ? [...topo].reverse() : []
+  const dicas = dicasDoJogo ? [...dicasDoJogo].reverse() : []
   /* Bolinha embaixo da barra = jogo contra o top 6 da tabela. */
   const max = maxFixo ?? Math.max(linha + 1, ...serie.map(v => v ?? 0))
   const yLinha = 100 - (linha / max) * 100
@@ -638,12 +641,13 @@ function Barras({ valores, linha, lado, rotulos, max: maxFixo, topo }: {
     <div className={cn('relative flex items-end', muitas ? 'h-24 gap-px' : 'h-14 gap-[3px]')}>
       {serie.map((v, i) => {
         const bateu = v != null && v !== linha && (lado === 'mais' ? v > linha : v < linha)
+        const dica = dicas[i]
         const legenda = legendas[i]
           ? `${legendas[i]}: ${v ?? 'sem dado'}`
           : String(v ?? 'sem dado')
-        return (
-          <div key={i} title={legenda} aria-label={legenda}
-            className="flex-1 h-full flex flex-col justify-end items-center gap-0.5">
+        const coluna = (
+          <div title={dica ? undefined : legenda} aria-label={legenda}
+            className="w-full h-full flex flex-col justify-end items-center gap-0.5">
             {!muitas && <span className="text-[9px] font-mono text-ink-3 tabular-nums leading-none">{v ?? ''}</span>}
             {marcas[i] !== undefined && (
               <span className={cn('order-last w-1 h-1 rounded-full shrink-0', marcas[i] ? 'bg-ink-2' : 'bg-transparent')} />
@@ -654,6 +658,10 @@ function Barras({ valores, linha, lado, rotulos, max: maxFixo, topo }: {
             />
           </div>
         )
+        /* Com a dica, a barra abre o balão com escudo e placar; sem ela,
+           fica o title de texto. */
+        if (!dica) return <div key={i} className="flex-1 h-full min-w-0 flex">{coluna}</div>
+        return <Tooltip key={i} className="flex-1 h-full min-w-0" text={dica}>{coluna}</Tooltip>
       })}
       <div className="absolute inset-x-0 border-t border-dashed border-ink-3/60 pointer-events-none"
         style={{ top: `${yLinha * 0.78 + 22}%` }} />
@@ -677,6 +685,48 @@ function Barras({ valores, linha, lado, rotulos, max: maxFixo, topo }: {
         <span>mais recente</span>
       </div>
     )}
+    </div>
+  )
+}
+
+/* DICA DO JOGO (18/10/2026, pedido do usuário): passar o mouse (ou tocar)
+   num resultado ou numa barra mostra com quem foi, o dia e o placar, com os
+   escudos · antes era um title de texto puro. Mandante sempre à esquerda. */
+interface LadoDaPartida { id: number; nome: string; gols: number | null }
+
+function DicaDoJogo({ j, timeId, timeNome, rank, valor }: {
+  j: JogoDoTime; timeId: number; timeNome: string; rank?: number
+  /** "Escanteios no jogo: 13" · o número da barra, quando a dica é de mercado. */
+  valor?: string
+}) {
+  const nos = { id: timeId, nome: timeNome, gols: j.gols_pro }
+  const eles = { id: j.adversario_id, nome: j.adversario || 'Adversário', gols: j.gols_contra }
+  const [casa, fora] = j.em_casa ? [nos, eles] : [eles, nos]
+  return <DicaDePartida casa={casa} fora={fora} valor={valor}
+    detalhe={`${dataCurta(j.data)} · ${j.em_casa ? 'em casa' : 'fora'}${rank ? ` · adversário ${rank}º` : ''}`} />
+}
+
+/** A partida sem lado (jogos do árbitro): mandante x visitante. */
+function DicaDePartida({ casa, fora, detalhe, valor }: {
+  casa: LadoDaPartida; fora: LadoDaPartida; detalhe: string; valor?: string
+}) {
+  const lado = (t: LadoDaPartida) => (
+    <div className="flex-1 min-w-0 flex flex-col items-center gap-1 text-center">
+      <TeamLogo id={t.id} name={t.nome} size={24} />
+      <span className="text-[10px] font-semibold text-ink-2 truncate w-full">{t.nome}</span>
+    </div>
+  )
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2">
+        {lado(casa)}
+        <span className="font-mono font-black text-base text-ink-1 tabular-nums shrink-0">
+          {casa.gols ?? '-'} x {fora.gols ?? '-'}
+        </span>
+        {lado(fora)}
+      </div>
+      <div className="text-center text-[10px] text-ink-3">{detalhe}</div>
+      {valor && <div className="text-center text-[11px] text-ink-1 font-semibold">{valor}</div>}
     </div>
   )
 }
@@ -796,7 +846,7 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
     return `${com} de ${valores.length} jogos com dado ${periodo === 'total' ? '' : `do ${ROTULO_PERIODO[periodo]}`}`.trim()
   }
 
-  interface Grupo { teamId: number; nome: string; valores: Array<number | null>; rotulos: string[]; topo?: boolean[] }
+  interface Grupo { teamId: number; nome: string; valores: Array<number | null>; rotulos: string[]; topo?: boolean[]; jogos?: JogoDoTime[] }
 
   /* Uma série vira um quadro: barras jogo a jogo + "bateu X/N".
      Com `grupos`, a série é a soma de duas (os dois times, ou faz + cede), e o
@@ -809,9 +859,20 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
     ...(o ? { odd: o.odd, casa: o.casa, perna: s.perna ? { ...s.perna, odd: o.odd } : s.perna } : {}),
   })
 
-  const Quadro = ({ titulo, sub, teamId, nomeTime, valores, rotulos, topo, grupos, selecao, destaque }: {
+  /* A dica de cada barra: os jogos daquela série e de qual time ela é. */
+  const nomeDe = (id: number) => (id === f.home_team_id ? f.home_team : f.away_team)
+  const dicaDe = (jogos: JogoDoTime[] | undefined, timeId: number | undefined, valores: Array<number | null>) =>
+    jogos && timeId != null
+      ? jogos.map((j, i) => (
+          <DicaDoJogo key={j.fixture_id} j={j} timeId={timeId} timeNome={nomeDe(timeId)}
+            rank={rank[String(j.adversario_id)]}
+            valor={`${comPeriodo(mercado.frase, periodo)}: ${valores[i] ?? 'sem dado'}`} />
+        ))
+      : undefined
+
+  const Quadro = ({ titulo, sub, teamId, nomeTime, valores, rotulos, topo, jogos, grupos, selecao, destaque }: {
     titulo: string; sub: string; teamId?: number; nomeTime?: string
-    valores: Array<number | null>; rotulos?: string[]; topo?: boolean[]; grupos?: Grupo[]
+    valores: Array<number | null>; rotulos?: string[]; topo?: boolean[]; jogos?: JogoDoTime[]; grupos?: Grupo[]
     selecao?: Selecao; destaque?: boolean
   }) => {
     const t = taxa(valores, linha, lado)
@@ -877,13 +938,13 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
                       {tg.n ? `${tg.bateu}/${tg.n}` : '—'}
                     </span>
                   </div>
-                  <Barras valores={g.valores} rotulos={g.rotulos} topo={g.topo} linha={linha} lado={lado} max={maxComum} />
+                  <Barras valores={g.valores} rotulos={g.rotulos} topo={g.topo} dicas={dicaDe(g.jogos, g.teamId, g.valores)} linha={linha} lado={lado} max={maxComum} />
                 </div>
               )
             })}
           </div>
         ) : (
-          <Barras valores={valores} rotulos={rotulos} topo={topo} linha={linha} lado={lado} />
+          <Barras valores={valores} rotulos={rotulos} topo={topo} dicas={dicaDe(jogos, teamId, valores)} linha={linha} lado={lado} />
         )}
         {selecao && destaque && (
           <>
@@ -925,13 +986,13 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
         <Quadro destaque titulo="Nos jogos dos dois times" sub={descricao}
           valores={[...vHome, ...vAway]} selecao={selecao}
           grupos={[
-            { teamId: f.home_team_id, nome: f.home_team, valores: vHome, rotulos: rotulosDe(home.jogos), topo: topoDe(home.jogos) },
-            { teamId: f.away_team_id, nome: f.away_team, valores: vAway, rotulos: rotulosDe(away.jogos), topo: topoDe(away.jogos) },
+            { teamId: f.home_team_id, nome: f.home_team, valores: vHome, rotulos: rotulosDe(home.jogos), topo: topoDe(home.jogos), jogos: home.jogos },
+            { teamId: f.away_team_id, nome: f.away_team, valores: vAway, rotulos: rotulosDe(away.jogos), topo: topoDe(away.jogos), jogos: away.jogos },
           ]} />
         <Quadro titulo={f.home_team} sub={amostra(vHome)} teamId={f.home_team_id}
-          nomeTime={f.home_team} valores={vHome} rotulos={rotulosDe(home.jogos)} topo={topoDe(home.jogos)} />
+          nomeTime={f.home_team} valores={vHome} rotulos={rotulosDe(home.jogos)} topo={topoDe(home.jogos)} jogos={home.jogos} />
         <Quadro titulo={f.away_team} sub={amostra(vAway)} teamId={f.away_team_id}
-          nomeTime={f.away_team} valores={vAway} rotulos={rotulosDe(away.jogos)} topo={topoDe(away.jogos)} />
+          nomeTime={f.away_team} valores={vAway} rotulos={rotulosDe(away.jogos)} topo={topoDe(away.jogos)} jogos={away.jogos} />
       </>
     )
   }
@@ -959,13 +1020,13 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
         <Quadro destaque titulo="No confronto" sub={`${nomeTime} faz + ${nomeAdv} cede`}
           valores={[...faz, ...cede]} selecao={selecao}
           grupos={[
-            { teamId: ehCasa ? f.home_team_id : f.away_team_id, nome: `${nomeTime} faz`, valores: faz, rotulos: rotulosDe(time.jogos), topo: topoDe(time.jogos) },
-            { teamId: ehCasa ? f.away_team_id : f.home_team_id, nome: `${nomeAdv} cede`, valores: cede, rotulos: rotulosDe(adv.jogos), topo: topoDe(adv.jogos) },
+            { teamId: ehCasa ? f.home_team_id : f.away_team_id, nome: `${nomeTime} faz`, valores: faz, rotulos: rotulosDe(time.jogos), topo: topoDe(time.jogos), jogos: time.jogos },
+            { teamId: ehCasa ? f.away_team_id : f.home_team_id, nome: `${nomeAdv} cede`, valores: cede, rotulos: rotulosDe(adv.jogos), topo: topoDe(adv.jogos), jogos: adv.jogos },
           ]} />
         <Quadro titulo={`${nomeTime} faz`} sub={`${mercado.frase.toLowerCase()} a favor, ${amostra(faz)}`}
-          teamId={ehCasa ? f.home_team_id : f.away_team_id} nomeTime={nomeTime} valores={faz} rotulos={rotulosDe(time.jogos)} topo={topoDe(time.jogos)} />
+          teamId={ehCasa ? f.home_team_id : f.away_team_id} nomeTime={nomeTime} valores={faz} rotulos={rotulosDe(time.jogos)} topo={topoDe(time.jogos)} jogos={time.jogos} />
         <Quadro titulo={`${nomeAdv} cede`} sub={`${mercado.frase.toLowerCase()} contra, ${amostra(cede)}`}
-          teamId={ehCasa ? f.away_team_id : f.home_team_id} nomeTime={nomeAdv} valores={cede} rotulos={rotulosDe(adv.jogos)} topo={topoDe(adv.jogos)} />
+          teamId={ehCasa ? f.away_team_id : f.home_team_id} nomeTime={nomeAdv} valores={cede} rotulos={rotulosDe(adv.jogos)} topo={topoDe(adv.jogos)} jogos={adv.jogos} />
       </>
     )
   }
@@ -1221,12 +1282,15 @@ function QuadrosDeResultado({ dados, nomeJogo, odds, oddsAoVivo }: {
                     const r = resultadoDoJogo(j)
                     const legenda = `${j.em_casa ? 'vs' : '@'} ${j.adversario || 'adversário'} · ${dataCurta(j.data)} · ${j.gols_pro ?? '-'}-${j.gols_contra ?? '-'}`
                     return (
-                      <span key={j.fixture_id} title={legenda} aria-label={legenda}
-                        className={cn('flex-1 h-6 max-w-[28px] grid place-items-center rounded-sm text-[10px] font-black',
-                          r === 'V' ? 'bg-green-500 text-on-fill' : r === 'D' ? 'bg-red-500 text-on-fill'
-                            : r === 'E' ? 'bg-surface-3 text-ink-2' : 'border border-line')}>
-                        {r ?? ''}
-                      </span>
+                      <Tooltip key={j.fixture_id} className="flex-1 max-w-[28px]"
+                        text={<DicaDoJogo j={j} timeId={id} timeNome={nome} rank={dados.rank_adversarios?.[String(j.adversario_id)]} />}>
+                        <button type="button" aria-label={legenda}
+                          className={cn('w-full h-6 grid place-items-center rounded-sm text-[10px] font-black cursor-default',
+                            r === 'V' ? 'bg-green-500 text-on-fill' : r === 'D' ? 'bg-red-500 text-on-fill'
+                              : r === 'E' ? 'bg-surface-3 text-ink-2' : 'border border-line')}>
+                          {r ?? ''}
+                        </button>
+                      </Tooltip>
                     )
                   })}
                 </div>
@@ -1304,7 +1368,13 @@ function CartaoDoArbitro({ arbitro, linha, lado }: { arbitro: NonNullable<RaioX[
         <NumeroDaTaxa t={t} />
       </div>
       {arbitro.jogos.length > 0
-        ? <Barras valores={arbitro.jogos.map(j => j.amarelos)} linha={linha} lado={lado} />
+        ? <Barras valores={arbitro.jogos.map(j => j.amarelos)} linha={linha} lado={lado}
+            dicas={arbitro.jogos.map((j, i) => j.home_team_id && j.away_team_id ? (
+              <DicaDePartida key={i}
+                casa={{ id: j.home_team_id, nome: j.home_team || 'Mandante', gols: j.home_goals ?? null }}
+                fora={{ id: j.away_team_id, nome: j.away_team || 'Visitante', gols: j.away_goals ?? null }}
+                detalhe={dataCurta(j.data ?? null)} valor={`Cartões amarelos: ${j.amarelos}`} />
+            ) : null)} />
         : <p className="text-xs text-ink-3">Sem jogos dele no histórico das nossas ligas.</p>}
     </div>
   )
@@ -1331,6 +1401,13 @@ function AbaJogadores({ dados, nomeJogo, mando, setMando }: {
   const minimo = minimos[estatId] ?? estat.minimoPadrao
   const { fonte_titulares, lista } = dados.jogadores[time]
   const f = dados.fixture
+  /* Os jogos do time por fixture, pra dica de cada quadradinho do jogador. */
+  const doTime = useMemo(() => ({
+    porFixture: new Map(dados.times[time].jogos.map(j => [j.fixture_id, j] as const)),
+    timeId: time === 'home' ? f.home_team_id : f.away_team_id,
+    timeNome: time === 'home' ? f.home_team : f.away_team,
+    rank: dados.rank_adversarios ?? {},
+  }), [dados, time, f])
 
   /* Goleiro só aparece em Defesas, e Defesas só mostra goleiro: zagueiro com
      "0 defesas" em dez jogos é uma linha inteira dizendo nada. Quem jogou um
@@ -1400,7 +1477,7 @@ function AbaJogadores({ dados, nomeJogo, mando, setMando }: {
                   {j.titular_provavel && <span className="text-[10px] font-bold text-accent-ink">Titular provável</span>}
                   <span className="text-[11px] text-ink-3">{j.jogos.length} jogos</span>
                 </div>
-                <div className="mt-1.5 max-w-[200px]"><MiniSerie jogos={j} estat={estatId} minimo={minimo} /></div>
+                <div className="mt-1 max-w-[200px]"><MiniSerie jogos={j} estat={estatId} minimo={minimo} doTime={doTime} /></div>
               </div>
               <NumeroDaTaxa t={t} />
               <BotaoBilhete selecao={{
@@ -1420,16 +1497,34 @@ function AbaJogadores({ dados, nomeJogo, mando, setMando }: {
   )
 }
 
-/** Quadradinhos por jogo do jogador: verde bateu, cinza não, vazado sem dado. */
-function MiniSerie({ jogos, estat, minimo }: { jogos: Jogador; estat: EstatDeJogador['id']; minimo: number }) {
+/** Quadradinhos por jogo do jogador: verde bateu, cinza não, vazado sem dado.
+ *  Com `doTime`, cada um abre a dica do jogo (adversário, dia, placar). */
+function MiniSerie({ jogos, estat, minimo, doTime }: {
+  jogos: Jogador; estat: EstatDeJogador['id']; minimo: number
+  doTime?: { porFixture: Map<number, JogoDoTime>; timeId: number; timeNome: string; rank: Record<string, number> }
+}) {
+  const rotulo = ESTATS_DE_JOGADOR.find(e => e.id === estat)?.rotulo ?? ''
   return (
-    <div className="flex gap-[3px]" aria-hidden>
+    <div className="flex gap-[3px]">
       {[...jogos.jogos].reverse().map((g, i) => {
         const v = g[estat]
-        return (
-          <span key={i} title={v == null ? 'sem dado' : String(v)}
-            className={cn('flex-1 h-2 rounded-[2px] max-w-[14px]',
+        const quadrado = (
+          <span title={doTime ? undefined : v == null ? 'sem dado' : String(v)}
+            className={cn('block w-full h-2 rounded-[2px]',
               v == null ? 'border border-line' : v >= minimo ? 'bg-green-500' : 'bg-surface-3')} />
+        )
+        const jogo = doTime?.porFixture.get(g.fixture_id)
+        if (!jogo || !doTime) return <span key={i} className="flex-1 max-w-[14px] py-1">{quadrado}</span>
+        return (
+          /* py-1: o quadrado tem 8px, o toque precisa de mais. */
+          <Tooltip key={i} className="flex-1 max-w-[14px]"
+            text={<DicaDoJogo j={jogo} timeId={doTime.timeId} timeNome={doTime.timeNome}
+              rank={doTime.rank[String(jogo.adversario_id)]}
+              valor={`${rotulo}: ${v ?? 'sem dado'}${g.minutos ? ` · ${g.minutos} min` : ''}`} />}>
+            <button type="button" aria-label={`${jogo.adversario}: ${v ?? 'sem dado'}`} className="w-full py-1 cursor-default">
+              {quadrado}
+            </button>
+          </Tooltip>
         )
       })}
     </div>

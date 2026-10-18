@@ -787,7 +787,8 @@ def _arbitro(cur, nome: str | None, n: int, liga=None, temporada=None) -> dict |
         return None
     cur.execute(f"""
         SELECT match_date, home_yellow_cards, away_yellow_cards,
-               home_red_cards, away_red_cards, home_fouls, away_fouls
+               home_red_cards, away_red_cards, home_fouls, away_fouls,
+               home_team_id, away_team_id, home_goals, away_goals
         FROM match_statistics
         WHERE {sql_chave('referee')} = %s AND status IN ('FT','AET','PEN')
           AND (%s::int IS NULL OR league_id = %s)
@@ -795,6 +796,11 @@ def _arbitro(cur, nome: str | None, n: int, liga=None, temporada=None) -> dict |
         ORDER BY match_date DESC LIMIT %s
     """, (chave, liga, liga, temporada, temporada, n))
     jogos = [{
+        # Quem jogou, quando e o placar (18/10/2026): a barra do arbitro abre
+        # a mesma dica de jogo das outras. Os nomes entram em _montar_raio_x.
+        "data": r["match_date"].isoformat() if r.get("match_date") else None,
+        "home_team_id": r.get("home_team_id"), "away_team_id": r.get("away_team_id"),
+        "home_goals": r.get("home_goals"), "away_goals": r.get("away_goals"),
         "amarelos": (r["home_yellow_cards"] or 0) + (r["away_yellow_cards"] or 0),
         "vermelhos": (r["home_red_cards"] or 0) + (r["away_red_cards"] or 0),
         "faltas": ((r["home_fouls"] or 0) + (r["away_fouls"] or 0))
@@ -1261,6 +1267,14 @@ def _montar_raio_x(fixture_id: int, home, away, league, n: int, season=None) -> 
             nomes_ligas = {r["league_id"]: r["name"] for r in cur.fetchall()}
 
         arbitro = _arbitro(cur, fix.get("referee"), 15, liga, temporada)
+        if arbitro and arbitro["jogos"]:
+            ids_arb = {j[k] for j in arbitro["jogos"] for k in ("home_team_id", "away_team_id")}
+            faltam = ids_arb - set(nomes)
+            if faltam:
+                nomes.update(_nomes_dos_times(cur, faltam))
+            for j in arbitro["jogos"]:
+                j["home_team"] = nomes.get(j["home_team_id"], "")
+                j["away_team"] = nomes.get(j["away_team_id"], "")
         # POSICAO NA TABELA no topo do Raio-X (16/10/2026, pedido do usuario:
         # "aparecer o numero da classificacao deles na liga"). Banco puro;
         # sem tabela (mata-mata, copa) fica vazio e a tela nao mostra.
