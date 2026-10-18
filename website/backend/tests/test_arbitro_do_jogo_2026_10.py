@@ -38,8 +38,8 @@ def test_resumo_conta_cartao_falta_var_e_mando():
 class _Cur:
     """Responde pelo trecho do SQL."""
 
-    def __init__(self, fix, jogos, eventos=()):
-        self.fix, self.jogos, self.eventos = fix, jogos, list(eventos)
+    def __init__(self, fix, jogos, eventos=(), extras=()):
+        self.fix, self.jogos, self.eventos, self.extras = fix, jogos, list(eventos), list(extras)
         self.connection = self
         self.consultas = []
         self._r = []
@@ -50,6 +50,12 @@ class _Cur:
         self.consultas.append((sql, params))
         if "FROM fixtures f" in sql:
             self._r = [self.fix] if self.fix else []
+        elif "FROM arbitro_partidas" in sql:
+            if "ap.season = %s" in sql:
+                self._r = [dict(e) for e in self.extras]
+            else:
+                time_ = params[1]
+                self._r = [dict(e) for e in self.extras if time_ in (e["home_team_id"], e["away_team_id"])]
         elif "FROM match_events" in sql:
             ids = set(params[0])
             self._r = [e for e in self.eventos if e["fixture_id"] in ids]
@@ -79,9 +85,10 @@ def test_arbitro_do_jogo_monta_os_quatro_recortes():
     assert r["status"] == "ok" and r["nome"] == "Raphael Claus"
     assert r["temporada_toda"]["resumo"]["jogos"] == 3
     assert r["nesta_liga"]["resumo"]["jogos"] == 2              # o da Copa do Brasil (73) sai
-    assert [j["fixture_id"] for j in r["com_mandante"]["jogos"]] == [1, 2]
+    # Mais recente primeiro (o jogo 2 e' de 03/10, o 1 de 02/10), como o ORDER BY.
+    assert [j["fixture_id"] for j in r["com_mandante"]["jogos"]] == [2, 1]
     assert [j["fixture_id"] for j in r["com_visitante"]["jogos"]] == [1]
-    primeiro = r["temporada_toda"]["jogos"][0]
+    primeiro = next(j for j in r["temporada_toda"]["jogos"] if j["fixture_id"] == 1)
     assert primeiro["var"] == [{"minuto": 67, "team_id": 2, "lance": "Gol anulado"}]
     assert primeiro["penaltis"] == 1 and primeiro["data"] == "2026-10-02"
 
@@ -97,3 +104,38 @@ def test_nome_vem_pela_chave_e_nao_pelo_texto():
     ad.arbitro_do_jogo(cur, 99)
     sql, params = next(c for c in cur.consultas if "ms.referee" in c[0] and "ORDER BY ms.match_date" in c[0])
     assert params[0] == "raphael claus" and "split_part" in sql
+
+
+# ── temporada inteira (18/10/2026): jogos de fora da base, em arbitro_partidas ──
+
+def _extra(fid, liga=72, home=1, away=9, hy=2, ay=2, cartao=True):
+    j = _jogo(fid, 1, 0, hy if cartao else None, ay if cartao else None, home=home, away=away, liga=liga)
+    j.update(liga_nome="Serie B", tem_eventos=True, penaltis=1,
+             var_lances=[{"minuto": 50, "team_id": 9, "detalhe": "Penalty confirmed"}])
+    return j
+
+
+def test_jogo_de_liga_nao_cadastrada_entra_na_temporada_e_nao_na_liga():
+    jogos = [_jogo(1, 2, 0, 2, 3)]
+    r = ad.arbitro_do_jogo(_Cur(FIX, jogos, extras=[_extra(5)]), 99)
+    assert r["temporada_toda"]["resumo"]["jogos"] == 2
+    assert r["nesta_liga"]["resumo"]["jogos"] == 1            # Série B (72) não é esta liga
+    assert r["de_outras_competicoes"] == 1
+    extra = next(j for j in r["temporada_toda"]["jogos"] if j["fixture_id"] == 5)
+    assert extra["extra"] and extra["liga_nome"] == "Serie B"
+    assert extra["var"] == [{"minuto": 50, "team_id": 9, "lance": "Pênalti confirmado"}]
+    assert extra["penaltis"] == 1
+    assert [j["fixture_id"] for j in r["com_mandante"]["jogos"]] == [5, 1] or \
+           sorted(j["fixture_id"] for j in r["com_mandante"]["jogos"]) == [1, 5]
+
+
+def test_mesmo_jogo_nas_duas_tabelas_conta_uma_vez():
+    """Com folha em match_statistics, vale ela. Sem folha lá, vale a de fora."""
+    com_folha = _jogo(1, 2, 0, 2, 3)
+    sem_folha = _jogo(2, 1, 1, None, None)
+    extras = [_extra(1, liga=71, hy=9, ay=9), _extra(2, liga=71, hy=4, ay=1)]
+    r = ad.arbitro_do_jogo(_Cur(FIX, [com_folha, sem_folha], extras=extras), 99)
+    por_id = {j["fixture_id"]: j for j in r["temporada_toda"]["jogos"]}
+    assert len(por_id) == 2
+    assert por_id[1]["amarelos"] == 5 and not por_id[1]["extra"]
+    assert por_id[2]["amarelos"] == 5 and por_id[2]["extra"]

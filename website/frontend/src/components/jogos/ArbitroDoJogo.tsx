@@ -26,6 +26,7 @@ interface Resumo {
 interface Lance { minuto: number | null; team_id: number | null; lance: string }
 interface Jogo {
   fixture_id: number; data: string; league_id: number
+  liga_nome?: string | null; extra?: boolean
   home_team_id: number; away_team_id: number; home_team: string | null; away_team: string | null
   home_goals: number | null; away_goals: number | null
   amarelos: number | null; vermelhos: number | null; faltas: number | null
@@ -35,7 +36,7 @@ interface Jogo {
 interface Bloco { resumo: Resumo; jogos: Jogo[]; team_id?: number }
 interface Resposta {
   status: 'ok' | 'sem_arbitro' | 'sem_jogo' | 'falhou'
-  nome?: string; temporada?: number
+  nome?: string; temporada?: number; de_outras_competicoes?: number
   temporada_toda?: Bloco; nesta_liga?: Bloco; com_mandante?: Bloco; com_visitante?: Bloco
 }
 type Recorte = 'temporada_toda' | 'nesta_liga' | 'com_mandante' | 'com_visitante'
@@ -116,7 +117,10 @@ export default function ArbitroDoJogo({ fixtureId, homeId, awayId, homeNome, awa
       <div className="px-4 pt-4 pb-3">
         <div className="text-[11px] font-bold uppercase tracking-wide text-ink-3">Árbitro da partida</div>
         <div className="mt-0.5 text-lg font-bold text-ink-1">{r.nome}</div>
-        <div className="text-[11px] text-ink-3">Temporada {r.temporada}, em todas as competições que ele apitou</div>
+        <div className="text-[11px] text-ink-3">
+          Temporada {r.temporada}, em todas as competições que ele apitou
+          {!!r.de_outras_competicoes && <>, com {r.de_outras_competicoes} {r.de_outras_competicoes === 1 ? 'jogo' : 'jogos'} de outras competições do país</>}
+        </div>
       </div>
 
       {/* Os quatro recortes à vista, como as abas: o dedo acerta (40px). */}
@@ -184,6 +188,7 @@ export default function ArbitroDoJogo({ fixtureId, homeId, awayId, homeNome, awa
                   </span>
                 </div>
                 <div className="mt-1 pl-[70px] flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-ink-3">
+                  {j.liga_nome && <span className="text-ink-2">{j.liga_nome}</span>}
                   <span>{j.amarelos ?? '-'} amarelos</span>
                   {!!j.vermelhos && <span>{j.vermelhos} vermelho{j.vermelhos > 1 ? 's' : ''}</span>}
                   <span>{j.faltas ?? '-'} faltas</span>

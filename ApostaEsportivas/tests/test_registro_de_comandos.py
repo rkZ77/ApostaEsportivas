@@ -80,7 +80,7 @@ def test_tudo_roda_as_etapas_do_pipeline_diario():
     que ja saiu em VIP ou Free, entao ele precisa rodar depois dos dois.
     """
     assert [c.etapa for c in main.COMANDOS if c.etapa] == [
-        "DADOS", "ESTATISTICA DE JOGADOR", "ODDS", "DICA DO DIA", "PICKS VIP",
+        "DADOS", "ÁRBITROS", "ESTATISTICA DE JOGADOR", "ODDS", "DICA DO DIA", "PICKS VIP",
         "MÚLTIPLA", "BINGO DO DIA", "ALAVANCAGEM", "FALTAS",
         "PICKS DE JOGADOR", "PICK BOOST", "RESULTADOS",
         # ESTATISTICA DE JOGADOR entrou em 28/08 e, no mesmo dia, foi movida

@@ -42,6 +42,9 @@ DDL = (
     )""",
     # Pais da liga: desambigua a cidade no geocoding do clima (clima_service).
     "ALTER TABLE calendario_jogos ADD COLUMN IF NOT EXISTS pais TEXT",
+    # Arbitro de cada jogo da temporada (18/10/2026): a escala inteira das
+    # ligas ativas, de graca · ver collectors/arbitro_temporada_service.
+    "ALTER TABLE calendario_jogos ADD COLUMN IF NOT EXISTS referee TEXT",
     "CREATE INDEX IF NOT EXISTS idx_calendario_casa ON calendario_jogos (home_team_id, match_datetime)",
     "CREATE INDEX IF NOT EXISTS idx_calendario_fora ON calendario_jogos (away_team_id, match_datetime)",
 )
@@ -104,7 +107,7 @@ def linhas_da_temporada(response: list, league_id: int, season) -> list:
             f["id"], league_id, season, (fx.get("league") or {}).get("round"),
             _br(f.get("date")), (t.get("home") or {}).get("id"), (t.get("away") or {}).get("id"),
             (f.get("status") or {}).get("short"), (f.get("venue") or {}).get("city"),
-            (fx.get("league") or {}).get("country"),
+            (fx.get("league") or {}).get("country"), f.get("referee"),
         ))
     return list(saida.values())
 
@@ -120,12 +123,14 @@ def gravar_temporada(cur, response: list, league_id: int, season) -> int:
     from psycopg2.extras import execute_values
     execute_values(cur, """
         INSERT INTO calendario_jogos (fixture_id, league_id, season, round, match_datetime,
-                                      home_team_id, away_team_id, status, venue_city, pais)
+                                      home_team_id, away_team_id, status, venue_city, pais, referee)
         VALUES %s
         ON CONFLICT (fixture_id) DO UPDATE SET
             round = EXCLUDED.round, match_datetime = EXCLUDED.match_datetime,
             status = EXCLUDED.status, venue_city = COALESCE(EXCLUDED.venue_city, calendario_jogos.venue_city),
             pais = COALESCE(EXCLUDED.pais, calendario_jogos.pais),
+            -- Resposta sem arbitro nao apaga o que ja' tinha.
+            referee = COALESCE(EXCLUDED.referee, calendario_jogos.referee),
             atualizado_em = NOW()
     """, linhas)
     return len(linhas)

@@ -415,6 +415,14 @@ if __name__ == "__main__":
             #     python atualizar_jogos.py clima 2000
             collector.run_stage_extra(stage, teto=int(sys.argv[2]) if len(sys.argv) > 2 else 100)
 
+        elif stage == "arbitros":
+            # Ex: python atualizar_jogos.py arbitros        (teto padrao: 40)
+            #     python atualizar_jogos.py arbitros 100
+            # Temporada inteira dos arbitros escalados, inclusive em liga nao
+            # cadastrada do pais · ver collectors/arbitro_temporada_service.
+            from collectors.arbitro_temporada_service import coletar, TETO_PADRAO
+            coletar(teto_requisicoes=int(sys.argv[2]) if len(sys.argv) > 2 else TETO_PADRAO)
+
         elif stage == "calendario":
             # Ex: python atualizar_jogos.py calendario   (1 requisicao por liga)
             from collectors.calendario_service import coletar_todas_as_ligas
