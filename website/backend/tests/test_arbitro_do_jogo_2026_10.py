@@ -189,3 +189,64 @@ def test_ranking_da_liga_junta_grafias_e_nao_inventa_falta():
     assert ramon["referee"] == "Ramon Abatti Abel" and ramon["jogos"] == 16
     assert ramon["avg_yellow"] == round(84 / 16, 2)
     assert ramon["avg_fouls"] == round(370 / 14, 1)   # 14 jogos com falta, não 16
+
+
+# ── o arbitro no contexto (18/10/2026) ───────────────────────────────────────
+
+def test_copia_do_contexto_e_igual_a_do_motor():
+    import os
+    aqui = os.path.join(os.path.dirname(__file__), "..", "arbitro_no_contexto.py")
+    motor = os.path.join(os.path.dirname(__file__), "..", "..", "..", "ApostaEsportivas", "src",
+                         "services", "pick_engine", "arbitro_no_contexto.py")
+    assert open(aqui, encoding="utf-8").read() == open(motor, encoding="utf-8").read()
+
+
+class _CurCtx:
+    """Media da liga 4,9; times 5,0 e 5,2; confrontos com 7,5 pontos."""
+
+    def __init__(self):
+        self.connection, self._r = self, []
+
+    def rollback(self): pass
+
+    def execute(self, sql, params=None):
+        if "AVG(total_yellow_cards" in sql:
+            alvo = params[-1]
+            self._r = [{"pontos": 4.9 if "league_id" in sql else (5.0 if alvo == 1 else 5.2),
+                        "faltas": 24.0, "n": 300}]
+        elif "LIMIT 6" in sql:
+            self._r = [{"pontos": 7.5}] * 5
+
+    def fetchone(self):
+        return self._r[0] if self._r else None
+
+    def fetchall(self):
+        return self._r
+
+
+def test_contexto_classico_com_arbitro_rigoroso():
+    fix = {"league_id": 71, "season": 2026, "home_team_id": 1, "away_team_id": 2}
+    ctx = ad.contexto(_CurCtx(), fix, {"pontos_de_cartao": {"media": 6.2, "jogos": 16}})
+    assert ctx["perfil"] == "rigoroso" and ctx["pontos_de_cartao_da_liga"] == 4.9
+    assert ctx["confronto"]["label"] == "rivalidade_alta" and ctx["confronto"]["baseline"] == 5.1
+    assert ctx["temperatura"] == "confronto_quente_com_arbitro_rigoroso"
+
+
+def test_ia_do_raio_x_recebe_o_arbitro_contra_a_liga():
+    import resumo_ia
+    arb = {"status": "ok", "nome": "Ramon Abatti",
+           "temporada_toda": {"resumo": {"jogos": 20, "pontos_de_cartao": {"media": 6.2, "jogos": 20},
+                                         "faltas": {"media": 28.0, "jogos": 18}, "pct_mais_de_4_5_amarelos": 70}},
+           "contexto": {"perfil": "rigoroso", "pontos_de_cartao_da_liga": 4.9, "temperatura": "arbitro_rigoroso"}}
+    f = resumo_ia.fato_do_arbitro(arb)
+    assert f["pontos_de_cartao_por_jogo"] == 6.2 and f["pontos_de_cartao_da_liga"] == 4.9
+    assert f["perfil"] == "rigoroso" and f["jogos_na_temporada"] == 20
+    assert resumo_ia.fato_do_arbitro({"status": "sem_arbitro"}) is None
+    assert "pesa SÓ em cartões e faltas" in resumo_ia.SYSTEM and resumo_ia.VERSAO >= 5
+
+
+def test_contexto_traz_o_perfil_de_faltas():
+    fix = {"league_id": 71, "season": 2026, "home_team_id": 1, "away_team_id": 2}
+    ctx = ad.contexto(_CurCtx(), fix, {"pontos_de_cartao": {"media": 5.0, "jogos": 28},
+                                       "faltas": {"media": 31.7, "jogos": 28}})
+    assert ctx["perfil"] == "na_media_da_liga" and ctx["perfil_de_faltas"] == "marca_muita_falta"

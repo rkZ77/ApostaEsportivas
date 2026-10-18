@@ -229,9 +229,55 @@ def _sem_vazios(d):
     return d
 
 
+def fato_do_arbitro(arb: dict | None) -> dict | None:
+    """O arbitro pra IA (18/10/2026): temporada inteira em todas as
+    competicoes (todas as grafias), contra a media da liga, e o cartao do
+    confronto direto. Sai de arbitro_do_jogo, a mesma conta da tela."""
+    if not arb or arb.get("status") != "ok":
+        return None
+    r = (arb.get("temporada_toda") or {}).get("resumo") or {}
+    ctx = arb.get("contexto") or {}
+
+    def m(k):
+        return (r.get(k) or {}).get("media")
+    conf = ctx.get("confronto")
+    return _sem_vazios({
+        "nome": arb.get("nome"),
+        "jogos_na_temporada": r.get("jogos"),
+        "pontos_de_cartao_por_jogo": m("pontos_de_cartao"),
+        "pontos_de_cartao_da_liga": ctx.get("pontos_de_cartao_da_liga"),
+        "amarelos_por_jogo": m("amarelos"),
+        "vermelhos_por_jogo": m("vermelhos"),
+        "faltas_por_jogo": m("faltas"),
+        "faltas_da_liga": ctx.get("faltas_da_liga"),
+        "pct_jogos_mais_de_4_5_amarelos": r.get("pct_mais_de_4_5_amarelos"),
+        "penaltis_por_jogo": m("penaltis"),
+        "perfil": ctx.get("perfil"),
+        "perfil_de_faltas": ctx.get("perfil_de_faltas"),
+        "confronto_direto_cartoes": {
+            "confrontos": conf["confrontos"], "pontos_por_confronto": conf["media_h2h"],
+            "esperado_pelos_times": conf["baseline"], "leitura": conf["label"],
+        } if conf else None,
+        "temperatura": ctx.get("temperatura"),
+    })
+
+
+def _arbitro_seguro(cur, fixture_id: int) -> dict | None:
+    """fato_do_arbitro sem nunca derrubar a leitura: sem ele, a IA fica com o
+    bloco antigo (nome, jogos e amarelos)."""
+    try:
+        import arbitro_do_jogo
+        return fato_do_arbitro(arbitro_do_jogo.arbitro_do_jogo(cur, fixture_id))
+    except Exception:
+        cur.connection.rollback()
+        logger.warning("[RESUMO IA] arbitro indisponivel no jogo %s", fixture_id, exc_info=True)
+        return None
+
+
 def montar_fatos(dados: dict, liga: str | None, formato: str, tabela: dict,
                  tecnicos: dict, amostra: dict,
-                 casa_em_casa: list | None = None, fora_fora: list | None = None) -> dict:
+                 casa_em_casa: list | None = None, fora_fora: list | None = None,
+                 arbitro: dict | None = None) -> dict:
     """Tudo que o modelo pode usar, ja' contado · ele interpreta, nao calcula.
 
     `casa_em_casa`/`fora_fora`: a serie do mando desta partida na temporada
@@ -299,10 +345,10 @@ def montar_fatos(dados: dict, liga: str | None, formato: str, tabela: dict,
             "tecnico": tecnicos.get(aid),
         },
         "confronto_direto": h2h,
-        "arbitro": {
+        "arbitro": arbitro or ({
             "nome": arb.get("nome"), "jogos": len(arb_jogos),
             "amarelos_media": _media([j["amarelos"] for j in arb_jogos]),
-        } if arb_jogos else None,
+        } if arb_jogos else None),
     })
 
 
@@ -401,7 +447,9 @@ def tecnicos_dos_times(cur, ids: list) -> dict:
 #: antiga e' gerada de novo na proxima abertura (ver _vale).
 #: 4 (14/10/2026): entrou a perna do mata-mata (ida/volta) · a leitura do
 #: jogo de ida dizia "nao da' pra saber se e' ida ou volta".
-VERSAO = 4
+#: 5 (18/10/2026): o arbitro com a temporada inteira, contra a liga, e a
+#: temperatura do confronto.
+VERSAO = 5
 
 SYSTEM = """Você escreve a leitura de pré-jogo do Raio-X do PickIA, um site brasileiro de análise de apostas esportivas. Quem lê está no celular, decidindo se aposta, e quer saber em segundos como cada time joga e quais mercados os números sustentam.
 
@@ -421,6 +469,7 @@ O que escrever:
 - "mercados_do_jogo": até 3 linhas do JOGO (gols, escanteios, cartões, ambas marcam, gol no 1º tempo) em que o mandante em casa E o visitante fora apontam para o mesmo lado. Discordaram, não entra.
 - Em todo mercado, "pct" é o percentual que sustenta a tendência (para "under", o percentual de jogos em que NÃO aconteceu), e "tendencia" tem que bater com a "leitura".
 - "contexto": tabela, técnico e formato. Em "liga" posição e mando pesam; em mata-mata o jogo é decidido no placar e os times se fecham (na ida e volta, a 2ª partida depende da 1ª: "perna" diz se este é o jogo de ida ou de volta; na volta, com "jogo_de_ida", diga quem precisa do resultado e como isso muda o jogo); em "grupos" e "copa" a amostra mistura competições. Técnico só se tiver 3 ou menos jogos seguidos.
+- Árbitro ("arbitro"): pesa SÓ em cartões e faltas, nunca em gols ou escanteios. Compare com a liga ("apita 6,2 pontos de cartão por jogo; a liga, 4,9"; pontos de cartão = amarelo + 2 x vermelho). "perfil_de_faltas" (contra as faltas da liga) vale para mercado de faltas. "perfil" rigoroso ou leniente e "temperatura" (o árbitro junto com o histórico de cartões do confronto direto) entram em "contexto" e podem sustentar ou derrubar um mercado de cartões do jogo; "amostra_curta" não sustenta nada.
 - "alerta": o que deixa a leitura fraca (amostra curta, números que se contradizem, mata-mata). Vazio se não houver.
 
 Estilo: português do Brasil com acentuação correta. Decimais com vírgula ("1,4 gol por jogo"). Escreva "1º tempo", "2º tempo", "4º colocado". Use o nome de cada time exatamente como está em "nome", sempre igual. Direto, sem jargão estatístico, sem certeza nem promessa ("vai sair", "garantido"). Fale em tendência."""
@@ -657,7 +706,8 @@ def resumo_do_jogo(cur, fixture_id: int, montar_raio_x) -> dict:
                                         fix["league_id"], na_liga, fix.get("match_datetime"))
             fatos = montar_fatos(dados, liga, formato, tabela,
                                  tecnicos_dos_times(cur, [fix["home_team_id"], fix["away_team_id"]]),
-                                 amostra, casa_em_casa, fora_fora)
+                                 amostra, casa_em_casa, fora_fora,
+                                 arbitro=_arbitro_seguro(cur, fixture_id))
             conteudo, t_in, t_out = chamar_modelo(fatos)
         except Exception as e:
             cur.connection.rollback()

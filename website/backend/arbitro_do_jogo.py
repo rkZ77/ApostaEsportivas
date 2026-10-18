@@ -223,6 +223,68 @@ def _com_eventos(cur, jogos: list[dict]) -> list[dict]:
     return jogos
 
 
+def _pontos_medios(cur, onde: str, params: tuple):
+    cur.execute(f"""
+        SELECT AVG(total_yellow_cards + 2 * COALESCE(total_red_cards, 0)) AS pontos,
+               AVG(home_fouls + away_fouls) AS faltas, COUNT(*) AS n
+          FROM match_statistics
+         WHERE status IN ('FT','AET','PEN') AND total_yellow_cards IS NOT NULL {onde}
+    """, params)
+    return cur.fetchone() or {}
+
+
+def contexto(cur, fix: dict, resumo_temporada: dict) -> dict | None:
+    """O arbitro contra a liga e o cartao do confronto (18/10/2026): a mesma
+    leitura que o motor poe no dossie (arbitro_no_contexto.py, copia igual a
+    do motor). Falha devolve None: o Raio-X nunca cai por causa disto."""
+    import arbitro_no_contexto as ac
+    try:
+        liga = _pontos_medios(cur, "AND league_id = %s AND season = %s", (fix["league_id"], fix["season"]))
+        casa = _pontos_medios(cur, "AND season = %s AND (home_team_id = %s OR away_team_id = %s)",
+                              (fix["season"], fix["home_team_id"], fix["home_team_id"]))
+        fora = _pontos_medios(cur, "AND season = %s AND (home_team_id = %s OR away_team_id = %s)",
+                              (fix["season"], fix["away_team_id"], fix["away_team_id"]))
+        cur.execute("""
+            SELECT total_yellow_cards + 2 * COALESCE(total_red_cards, 0) AS pontos
+              FROM match_statistics
+             WHERE status IN ('FT','AET','PEN') AND total_yellow_cards IS NOT NULL
+               AND ((home_team_id = %s AND away_team_id = %s) OR (home_team_id = %s AND away_team_id = %s))
+             ORDER BY match_date DESC LIMIT 6
+        """, (fix["home_team_id"], fix["away_team_id"], fix["away_team_id"], fix["home_team_id"]))
+        h2h = [float(r["pontos"]) for r in cur.fetchall()]
+    except Exception:
+        cur.connection.rollback()
+        logger.warning("[ARBITRO] contexto indisponivel", exc_info=True)
+        return None
+    pts = (resumo_temporada.get("pontos_de_cartao") or {})
+    base = [float(x["pontos"]) for x in (casa, fora) if x.get("pontos") is not None]
+    esperado = sum(base) / len(base) if base else None
+    rivalidade = {"confiavel": False, "label": "desconhecido"}
+    if len(h2h) >= 4 and esperado is not None:
+        excesso = sum(h2h) / len(h2h) - esperado
+        rivalidade = {"confiavel": True, "confrontos": len(h2h), "media_h2h": round(sum(h2h) / len(h2h), 2),
+                      "baseline": round(esperado, 2), "excesso": round(excesso, 2),
+                      "label": ("rivalidade_alta" if excesso >= 1.5 else
+                                "confronto_frio" if excesso <= -1.5 else "normal")}
+    pontos_liga = float(liga["pontos"]) if liga.get("pontos") is not None else None
+    perfil = ac.perfil_do_arbitro(pts.get("jogos"), pts.get("media"), pontos_liga)
+    flt = (resumo_temporada.get("faltas") or {})
+    faltas_liga = float(liga["faltas"]) if liga.get("faltas") is not None else None
+    saida = {
+        "perfil": perfil,
+        "faltas": flt.get("media"),
+        "perfil_de_faltas": ac.perfil_de_faltas(flt.get("jogos"), flt.get("media"), faltas_liga),
+        "pontos_de_cartao": pts.get("media"),
+        "pontos_de_cartao_da_liga": round(pontos_liga, 2) if pontos_liga is not None else None,
+        "faltas_da_liga": round(float(liga["faltas"]), 1) if liga.get("faltas") is not None else None,
+        "confronto": {k: rivalidade[k] for k in ("confrontos", "media_h2h", "baseline", "excesso", "label")}
+                     if rivalidade["confiavel"] else None,
+        "temperatura": ac.temperatura(perfil, rivalidade["label"]),
+    }
+    saida = {k: v for k, v in saida.items() if v is not None}
+    return saida or None
+
+
 def arbitro_do_jogo(cur, fixture_id: int) -> dict:
     cur.execute("""
         SELECT f.referee, f.league_id, f.season, f.home_team_id, f.away_team_id,
@@ -263,6 +325,7 @@ def arbitro_do_jogo(cur, fixture_id: int) -> dict:
         # Jogos da temporada que vieram de fora da base (liga não cadastrada
         # ou buraco de folha): o front diz de onde saiu a amostra.
         "de_outras_competicoes": sum(1 for j in temporada if j.get("extra")),
+        "contexto": contexto(cur, fix, resumo(temporada)),
         "temporada_toda": bloco(temporada),
         "nesta_liga": bloco(nesta_liga),
         "com_mandante": {"team_id": fix["home_team_id"], **bloco(com_casa)},

@@ -71,3 +71,12 @@ def test_medicao_acha_o_arbitro_rigoroso_e_nao_inventa_no_neutro():
     t = m.tabela(linhas, "perfil")
     assert t["rigoroso"]["residuo"] > 1.0          # as duas grafias viraram uma pessoa
     assert abs(t["na_media_da_liga"]["residuo"]) < 0.6
+
+
+def test_perfil_de_faltas_caso_do_ramon():
+    """PROD 18/10/2026: cartao na media (4,6 x 5,1), falta bem acima (31,7 x 26,4)."""
+    r = ac.leitura("Ramon Abatti", {"avg_yellow": 4.2, "avg_red": 0.2, "games": 28, "avg_fouls": 31.7},
+                   {"avg_yellow": 4.7, "avg_red": 0.2, "avg_fouls": 26.4}, None)
+    assert r["perfil"] == "na_media_da_liga" and r["perfil_de_faltas"] == "marca_muita_falta"
+    assert ac.perfil_de_faltas(28, 22.0, 26.4) == "deixa_o_jogo_correr"
+    assert ac.perfil_de_faltas(3, 40.0, 26.4) is None
