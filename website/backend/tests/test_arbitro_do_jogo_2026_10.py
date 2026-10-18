@@ -50,7 +50,7 @@ class _Cur:
     def execute(self, sql, params=None):
         self.consultas.append((sql, params))
         if "SELECT DISTINCT" in sql:
-            self._r = [{"k": g} for g in self.grafias if g.split()[0] == params[0]]
+            self._r = [{"k": g} for g in self.grafias if g[:1] == params[0]]
         elif "FROM fixtures f" in sql:
             self._r = [self.fix] if self.fix else []
         elif "FROM arbitro_partidas" in sql:
@@ -148,10 +148,11 @@ def test_nome_curto_e_nome_completo_sao_a_mesma_pessoa():
     """18/10/2026: o Raio-X do Ramon Abatti mostrava 4 jogos de 16. A API
     escreveu "Ramon Abatti Abel" ate' agosto e "Ramon Abatti" depois."""
     fix = {**FIX, "referee": "Ramon Abatti, Brazil"}
-    cur = _Cur(fix, [], grafias=["ramon abatti", "ramon abatti abel", "ramon souza"])
+    # PROD: o grosso do Brasileirao dele estava em "R. Abatti" (11 de 16).
+    cur = _Cur(fix, [], grafias=["r abatti", "ramon abatti", "ramon abatti abel", "ramon souza"])
     ad.arbitro_do_jogo(cur, 99)
     sql, params = next(c for c in cur.consultas if "ORDER BY ms.match_date" in c[0])
-    assert params[0] == ["ramon abatti", "ramon abatti abel"]
+    assert params[0] == ["r abatti", "ramon abatti", "ramon abatti abel"]
 
 
 def test_ranking_da_liga_junta_grafias_e_nao_inventa_falta():

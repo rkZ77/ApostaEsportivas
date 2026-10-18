@@ -73,10 +73,28 @@ def test_nome_curto_ambiguo_nao_junta_ninguem():
     assert chaves_equivalentes("paulo cesar zanovelli", conhecidas) == ["paulo cesar zanovelli"]
 
 
-def test_uma_palavra_so_e_abreviacao_nao_juntam():
+def test_uma_palavra_so_nao_junta():
     assert chaves_equivalentes("ramon", ["ramon", "ramon abatti"]) == ["ramon"]
-    assert chaves_equivalentes("r abatti", ["r abatti", "ramon abatti"]) == ["r abatti"]
     assert chaves_equivalentes(None, ["x y"]) == []
+
+
+def test_abreviacao_junta_quando_so_ha_uma_pessoa():
+    """PROD, 18/10/2026: o Brasileirao do Ramon Abatti estava em "R. Abatti"
+    (11), "Ramon Abatti" (4) e "Ramon Abatti Abel, Brazil" (1)."""
+    conhecidas = ["r abatti", "ramon abatti", "ramon abatti abel", "raphael claus"]
+    pessoa = ["r abatti", "ramon abatti", "ramon abatti abel"]
+    for alvo in pessoa:
+        assert chaves_equivalentes(alvo, conhecidas) == pessoa
+
+
+def test_abreviacao_ambigua_fica_sozinha():
+    conhecidas = ["r silva", "rafael silva", "roberto silva"]
+    assert chaves_equivalentes("r silva", conhecidas) == ["r silva"]
+    assert chaves_equivalentes("rafael silva", conhecidas) == ["rafael silva"]
+
+
+def test_abreviacao_nao_junta_inicial_diferente():
+    assert chaves_equivalentes("a abatti", ["a abatti", "ramon abatti"]) == ["a abatti"]
 
 
 def test_copia_do_site_junta_igual():
@@ -100,3 +118,16 @@ def test_motor_le_as_duas_fontes_com_os_parametros_na_ordem():
     assert rss.SQL_COM_EXTRAS.count("%s") == 6      # base, extra, agregado
     assert rss.SQL_SO_BASE.count("%s") == 4
     assert "ANY(%s)" in rss.SQL_COM_EXTRAS
+
+
+def test_abreviacao_pelo_sobrenome_do_meio():
+    """A API abrevia pelo sobrenome mais conhecido (PROD, 18/10/2026)."""
+    assert chaves_equivalentes("p zanovelli", ["p zanovelli", "paulo cesar zanovelli da silva"]) ==         ["p zanovelli", "paulo cesar zanovelli da silva"]
+    # "W. Sampaio" junta as duas grafias do Wilton, e o Savio fica de fora (outra inicial).
+    conhecidas = ["w sampaio", "wilton sampaio", "wilton pereira sampaio", "savio pereira sampaio"]
+    assert chaves_equivalentes("wilton sampaio", conhecidas) ==         ["w sampaio", "wilton pereira sampaio", "wilton sampaio"]
+
+
+def test_abreviacao_com_tres_pessoas_fica_sozinha():
+    conhecidas = ["j pinheiro", "joao pinheiro", "joao pedro pinheiro", "jonathan benkenstein pinheiro"]
+    assert chaves_equivalentes("j pinheiro", conhecidas) == ["j pinheiro"]

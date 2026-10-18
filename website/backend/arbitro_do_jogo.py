@@ -22,7 +22,8 @@ from __future__ import annotations
 
 import logging
 
-from arbitro import chave_do_arbitro, chaves_equivalentes, sql_candidatas, sql_chave
+from arbitro import (chave_do_arbitro, chaves_equivalentes, parametros_candidatas,
+                     sql_candidatas, sql_chave)
 
 logger = logging.getLogger(__name__)
 
@@ -100,12 +101,11 @@ def _jogos_extras(cur, chaves: list, onde: str, params: tuple, limite: int) -> l
 def chaves_da_pessoa(cur, chave: str) -> list:
     """A chave dele mais as outras grafias da MESMA pessoa no banco ("Ramon
     Abatti" e "Ramon Abatti Abel") · regra em arbitro.chaves_equivalentes."""
-    primeira = chave.split()[0]
     conhecidas = set()
     for tabela in ("match_statistics", "arbitro_partidas"):
         try:
             cur.execute(f"SELECT DISTINCT {sql_chave('referee')} AS k FROM {tabela} "
-                        f"WHERE {sql_candidatas('referee')}", (primeira,))
+                        f"WHERE {sql_candidatas('referee')}", parametros_candidatas(chave))
             conhecidas.update(r["k"] for r in cur.fetchall() if r.get("k"))
         except Exception:
             cur.connection.rollback()

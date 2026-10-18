@@ -50,42 +50,78 @@ def sql_chave(coluna: str) -> str:
             f"'{COM_ACENTO}', '{SEM_ACENTO}')), '[.[:space:]]+', ' ', 'g')), '')")
 
 
-# ── NOME COMPLETO x NOME CURTO (18/10/2026) ──────────────────────────────────
-# A API troca a grafia no meio da temporada: "Ramon Abatti Abel" até agosto,
-# "Ramon Abatti" depois. A chave acima não junta os dois, e o Raio-X mostrava
-# 4 jogos de quem tinha apitado 16 no Brasileirão.
+# ── NOME COMPLETO, NOME CURTO E ABREVIAÇÃO (18/10/2026) ──────────────────────
+# A API escreve a mesma pessoa de três jeitos na mesma temporada. Medido em
+# PROD no Ramon Abatti (Brasileirão 2026, 16 jogos): "R. Abatti" 11,
+# "Ramon Abatti" 4, "Ramon Abatti Abel, Brazil" 1. Pela chave sozinha o
+# Raio-X via 4.
 #
-# A REGRA: o nome curto (2 palavras ou mais) vira a mesma pessoa do nome longo
-# que COMEÇA com ele, mas SÓ quando existe UM nome longo assim. Se "Paulo
-# Cesar" fosse começo de "Paulo Cesar Zanovelli" e de "Paulo Cesar Oliveira",
-# não dá pra saber quem é, e a amostra fica partida (juntar pessoas diferentes
-# é pior). Abreviação ("R. Abatti") continua de fora.
+# AS REGRAS, nesta ordem:
+#  1. Nome curto (2 palavras ou mais) é a mesma pessoa do nome longo que COMEÇA
+#     com ele, se só existir UM nome longo assim ("ramon abatti" e "ramon
+#     abatti abel").
+#  2. Abreviação ("r abatti": primeira palavra de uma letra) é a mesma pessoa
+#     dos nomes completos com a mesma inicial em que o resto APARECE, em
+#     sequência ("p zanovelli" em "paulo cesar zanovelli da silva": a API
+#     abrevia pelo sobrenome mais conhecido, nem sempre o primeiro). Junta só
+#     se todos esses nomes tiverem o MESMO primeiro nome: com "rafael silva" e
+#     "roberto silva" no banco, "r silva" fica sozinho -- juntar pessoas
+#     diferentes é pior que deixar a amostra partida.
+#
+#  Simulado em PROD em 18/10/2026: de 428 grafias abreviadas, 310 juntam
+#  (1.504 jogos que estavam soltos) e 11 ficam sozinhas por ambiguidade
+#  ("j pinheiro" tem três Pinheiros com J; "d silva" tem três Silvas).
 
 def _comeca_com(longo: list, curto: list) -> bool:
     return len(longo) > len(curto) and longo[:len(curto)] == curto
+
+
+def _abreviado(t: list) -> bool:
+    return len(t) >= 2 and len(t[0]) == 1
 
 
 def chaves_equivalentes(chave: str | None, conhecidas) -> list:
     """As chaves da MESMA pessoa entre as `conhecidas` (inclui a própria)."""
     if not chave:
         return []
-    saida = {chave}
-    alvo = chave.split()
-    todas = [c.split() for c in set(conhecidas or ()) if c and c != chave]
-    if len(alvo) >= 2:
-        longas = [c for c in todas if _comeca_com(c, alvo)]
+    todas = {c for c in set(conhecidas or ()) if c} | {chave}
+    pai = {c: c for c in todas}
+
+    def raiz(c):
+        while pai[c] != c:
+            pai[c] = pai[pai[c]]
+            c = pai[c]
+        return c
+
+    def unir(a, b):
+        pai[raiz(a)] = raiz(b)
+
+    partes = {c: c.split() for c in todas}
+    completas = [c for c in todas if not _abreviado(partes[c])]
+    for curta in completas:                                   # regra 1
+        if len(partes[curta]) < 2:
+            continue
+        longas = [c for c in completas if _comeca_com(partes[c], partes[curta])]
         if len(longas) == 1:
-            saida.add(" ".join(longas[0]))
-    for curta in todas:
-        if len(curta) >= 2 and _comeca_com(alvo, curta):
-            # A curta só é nossa se nós somos o ÚNICO nome longo dela.
-            outras = [c for c in todas if c != curta and _comeca_com(c, curta)]
-            if not outras:
-                saida.add(" ".join(curta))
-    return sorted(saida)
+            unir(curta, longas[0])
+    for abrev in [c for c in todas if _abreviado(partes[c])]:  # regra 2
+        inicial, resto = partes[abrev][0], " " + " ".join(partes[abrev][1:]) + " "
+        compativeis = [c for c in completas
+                       if len(partes[c]) >= 2 and partes[c][0][0] == inicial
+                       and resto in " " + " ".join(partes[c][1:]) + " "]
+        if compativeis and len({partes[c][0] for c in compativeis}) == 1:
+            for c in compativeis:
+                unir(abrev, c)
+    alvo = raiz(chave)
+    return sorted(c for c in todas if raiz(c) == alvo)
 
 
 def sql_candidatas(coluna: str) -> str:
-    """Chaves da coluna que começam com a mesma primeira palavra (o parâmetro
-    é essa palavra, sem `%`). É o universo que `chaves_equivalentes` olha."""
-    return f"split_part({sql_chave(coluna)}, ' ', 1) = %s"
+    """Chaves da coluna que podem ser a mesma pessoa: as que começam com a
+    mesma LETRA (o nome curto, o longo e a abreviação começam todos igual).
+    Parâmetro em `parametros_candidatas`. Sem `%` no texto."""
+    return f"left({sql_chave(coluna)}, 1) = %s"
+
+
+def parametros_candidatas(chave: str) -> tuple:
+    return (chave[:1],)

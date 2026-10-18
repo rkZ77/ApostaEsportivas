@@ -1,5 +1,6 @@
 import psycopg2.extras
-from utils.arbitro import chave_do_arbitro, chaves_equivalentes, sql_candidatas, sql_chave
+from utils.arbitro import (chave_do_arbitro, chaves_equivalentes, parametros_candidatas,
+                           sql_candidatas, sql_chave)
 from utils.db_utils import get_connection
 
 
@@ -15,7 +16,7 @@ def chaves_da_pessoa(cur, chave: str) -> list:
         try:
             cur.execute("SAVEPOINT grafias")
             cur.execute(f"SELECT DISTINCT {sql_chave('referee')} AS k FROM {tabela} "
-                        f"WHERE {sql_candidatas('referee')}", (chave.split()[0],))
+                        f"WHERE {sql_candidatas('referee')}", parametros_candidatas(chave))
             for r in cur.fetchall():
                 k = r["k"] if isinstance(r, dict) else r[0]
                 if k:
