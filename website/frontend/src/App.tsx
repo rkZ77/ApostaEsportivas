@@ -100,6 +100,7 @@ const ResultadosPublicos  = lazy(() => import('./pages/ResultadosPublicos'))
 const PerformanceIA       = lazy(() => import('./pages/PerformanceIA'))
 const PalpitesHoje        = lazy(() => import('./pages/PalpitesHoje'))
 const PalpitesLiga        = lazy(() => import('./pages/PalpitesLiga'))
+const JogoPublico         = lazy(() => import('./pages/JogoPublico'))
 const Blog                = lazy(() => import('./pages/Blog'))
 const BlogPost            = lazy(() => import('./pages/BlogPost'))
 
@@ -315,6 +316,7 @@ export default function App() {
                 <Route path="/palpites-de-futebol-hoje" element={<PalpitesHoje />} />
                 <Route path="/palpites" element={<Navigate to="/palpites-de-futebol-hoje" replace />} />
                 <Route path="/palpites/:slug" element={<PalpitesLiga />} />
+                <Route path="/jogo/:fixtureId/:slug?" element={<JogoPublico />} />
                 <Route path="/blog" element={<Blog />} />
                 <Route path="/blog/:slug" element={<BlogPost />} />
                 <Route path="*" element={<NotFound />} />

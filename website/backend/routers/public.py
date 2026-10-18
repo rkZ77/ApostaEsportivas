@@ -1750,3 +1750,24 @@ def descadastrar_email(token: str = Query(..., max_length=80)):
         "ativa, e os avisos de cadastro, senha e pagamento continuam chegando "
         "normalmente, porque esses respondem a algo que você fez.",
     )
+
+
+@router.get("/jogo/{fixture_id}")
+def public_jogo(fixture_id: int):
+    """O basico de um jogo, sem login · a vitrine publica do Raio-X.
+
+    Ver `jogo_publico.py` pro que entra e o que fica no Pro. So' banco.
+
+    O 404 sai DE DENTRO do `obter`, e nao depois dele: a excecao escapa antes
+    de o cache guardar o valor, entao robo testando id aleatorio nao enche a
+    memoria de `None`.
+    """
+    import jogo_publico
+
+    def produzir():
+        dados = jogo_publico.montar(fixture_id)
+        if dados is None:
+            raise HTTPException(404, "Jogo nao encontrado")
+        return dados
+
+    return cache_publico.obter(f"jogo_publico:{fixture_id}", 600, produzir)
