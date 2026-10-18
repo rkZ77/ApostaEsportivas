@@ -14,7 +14,8 @@ import {
   filtrarPorMando, type EscolhaDeResultado, type PosicaoNaTabela, type EstatDeJogador, type Mando, type Jogador, type JogoCurto, type JogoDoTime, type Lado, type Periodo, type RaioX, type Taxa,
 } from '../../lib/raioX'
 import { alternar, trocarNoGrupo, useBilheteMontado, type Selecao } from '../../lib/bilheteMontado'
-import { chanceDoResultado, oddDaSelecao, vantagem, type OddDaCasa } from '../../lib/oddsDoJogo'
+import { chanceDoResultado, oddDaSelecao, precoSemMargem, type OddDaCasa } from '../../lib/oddsDoJogo'
+import { estimar, ROTULO_DA_FONTE, vereditoDoValor, type Estimativa } from '../../lib/chanceAjustada'
 import { rotuloDoTempo } from '../../lib/picksAgora'
 import { aoVivo as estaAoVivo } from '../../lib/aoVivo'
 import SelectMenu from '../ui/SelectMenu'
@@ -749,23 +750,49 @@ function BotaoBilhete({ selecao, cheio }: { selecao: Selecao; cheio?: boolean })
 }
 
 /**
- * "Odd 1.85 · Betano" e o veredito: com valor, justa ou sem valor, pela taxa
- * dos últimos jogos. A conta é a do tipster (chance × odd − 1) e a tela diz
- * de onde vem a chance · não é a probabilidade do motor.
+ * A chance AJUSTADA da seleção, a odd justa contra a odd da casa e o valor
+ * (18/10/2026, pedido do usuário) · ver lib/chanceAjustada.
+ *
+ * Antes era "Odd 1.85 · Betano" com o valor pela taxa crua (bateu/n × odd − 1),
+ * que chamava 8/8 de "Valor +29%" num jogo em que o preço e o motor davam 64%.
+ * O nome da casa saiu junto: casa só aparece quando foi a pessoa que anotou.
+ * Valor negativo em amarelo, não vermelho · vermelho é só pra RED.
  */
-function LinhaDaOdd({ odd, bateu, n }: { odd: OddDaCasa | null; bateu: number; n: number }) {
-  if (!odd) return null
-  const v = vantagem(bateu, n, odd.odd)
-  const selo = v == null ? null
-    : v >= 0.05 ? { txt: `Valor +${Math.round(v * 100)}%`, cls: 'bg-accent/15 text-accent-ink border-accent/40' }
-    : v > -0.05 ? { txt: 'Odd justa', cls: 'bg-surface-2 text-ink-2 border-line' }
-    : { txt: 'Sem valor', cls: 'bg-red-500/10 text-red-400 border-red-500/30' }
+function LinhaDaOdd({ odd, est, bateu, n }: { odd: OddDaCasa | null; est: Estimativa | null; bateu: number; n: number }) {
+  if (!odd && !est) return null
+  const veredito = vereditoDoValor(est?.valor ?? null)
+  const pct = (x: number) => `${x > 0 ? '+' : ''}${Math.round(x * 100)}%`
+  const selo = !est || est.valor == null ? null
+    : veredito === 'valor' ? { txt: `Valor ${pct(est.valor)}`, cls: 'bg-accent/15 text-accent-ink border-accent/40' }
+    : veredito === 'justa' ? { txt: 'Odd justa', cls: 'bg-surface-2 text-ink-2 border-line' }
+    : { txt: `Valor ${pct(est.valor)}`, cls: 'bg-yellow-400/10 text-yellow-400 border-yellow-500/40' }
   return (
-    <div className="mt-3 flex items-center gap-2 flex-wrap text-sm">
-      <span className="text-ink-3">Odd</span>
-      <span className="font-mono font-black text-ink-1 tabular-nums">{odd.odd.toFixed(2)}</span>
-      {odd.casa && <span className="text-ink-3 text-xs">na {odd.casa}</span>}
-      {selo && <span className={cn('ml-auto text-[11px] font-bold px-2 py-0.5 rounded border', selo.cls)}>{selo.txt}</span>}
+    <div className="mt-3 space-y-1.5 text-sm">
+      {est && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-ink-3">Chance estimada</span>
+          <span className="font-mono font-black text-ink-1 tabular-nums">{Math.round(est.chance * 100)}%</span>
+          <span className="ml-auto text-ink-3">Odd justa</span>
+          <span className="font-mono font-black text-ink-1 tabular-nums">{est.oddJusta.toFixed(2)}</span>
+        </div>
+      )}
+      {odd && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-ink-3">Odd da casa</span>
+          <span className="font-mono font-black text-ink-1 tabular-nums">{odd.odd.toFixed(2)}</span>
+          {selo && <span className={cn('ml-auto text-[11px] font-bold px-2 py-0.5 rounded border', selo.cls)}>{selo.txt}</span>}
+        </div>
+      )}
+      {veredito === 'negativo' && (
+        <p className="text-[11px] text-yellow-400 leading-relaxed">
+          A odd paga menos do que a chance vale: no longo prazo, essa seleção perde dinheiro.
+        </p>
+      )}
+      <p className="text-[11px] text-ink-3 leading-relaxed">
+        {est
+          ? `${n ? `${bateu}/${n} nos últimos jogos, ` : ''}${ROTULO_DA_FONTE[est.fonte]}. Sequência curta pesa pouco: quem acerta é o preço.`
+          : 'Sem odd dos dois lados nem média da liga pra estimar a chance. O histórico sozinho não é probabilidade.'}
+      </p>
     </div>
   )
 }
@@ -834,9 +861,27 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
      barras seguidas e não dava pra saber de quem era cada uma. */
   /* A odd da casa pra exatamente esta seleção (mercado, de quem, tempo, linha). */
   const oddAtual = oddDaSelecao(odds, { mercado: id, quem, periodo, lado, linha })
-  const comOdd = (s: Selecao, bateu: number, n: number, o: OddDaCasa | null): Selecao => ({
+  /* A casa não vai pro bilhete (18/10): ela aparecia como "Onde" na banca
+     sem a pessoa ter escolhido. A chance ajustada vai, pra bandeja somar. */
+  const comOdd = (s: Selecao, bateu: number, n: number, o: OddDaCasa | null, est: Estimativa | null): Selecao => ({
     ...s, bateu, n,
-    ...(o ? { odd: o.odd, casa: o.casa, perna: s.perna ? { ...s.perna, odd: o.odd } : s.perna } : {}),
+    ...(o ? { odd: o.odd, perna: s.perna ? { ...s.perna, odd: o.odd } : s.perna } : {}),
+    ...(est ? { chance: est.chance, fonte_chance: est.fonte } : {}),
+  })
+  /* MÉDIA DA LIGA (18/10): a mesma conta da série do time, nos jogos da liga
+     na temporada. No mercado do jogo cada partida vem duas vezes (um ponto de
+     vista por time), então o tamanho da amostra é a metade. */
+  const ligaJogos = dados.liga_jogos ?? []
+  const taxaDaLiga = (serie: Array<number | null>, l: number, ld: Lado, dobrada: boolean) => {
+    const t = taxa(serie, l, ld)
+    return { pct: t.pct, n: dobrada ? Math.floor(t.n / 2) : t.n }
+  }
+  const liga = taxaDaLiga(
+    ligaJogos.map(j => numero(j, mercado.contador, quem === 'jogo' ? 'jogo' : 'pro', periodo)),
+    linha, lado, quem === 'jogo')
+  const precoAtual = precoSemMargem(odds, { mercado: id, quem, periodo, lado, linha })
+  const estimativaDe = (t: Taxa) => estimar({
+    bateu: t.bateu, n: t.n, odd: oddAtual?.odd, precoSemMargem: precoAtual, taxaLiga: liga.pct, nLiga: liga.n,
   })
 
   /* A dica de cada barra: os jogos daquela série e de qual time ela é. */
@@ -928,8 +973,8 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
         )}
         {selecao && destaque && (
           <>
-            <LinhaDaOdd odd={oddAtual} bateu={t.bateu} n={t.n} />
-            <div className="mt-3"><BotaoBilhete cheio selecao={comOdd(selecao, t.bateu, t.n, oddAtual)} /></div>
+            <LinhaDaOdd odd={oddAtual} est={estimativaDe(t)} bateu={t.bateu} n={t.n} />
+            <div className="mt-3"><BotaoBilhete cheio selecao={comOdd(selecao, t.bateu, t.n, oddAtual, estimativaDe(t))} /></div>
           </>
         )}
       </div>
@@ -1086,6 +1131,10 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
             /* Com este árbitro (17/10/2026): cartão depende muito de quem
                apita, e os jogos dele já vêm no Raio-X. */
             const doArbitro = taxa((dados.arbitro?.jogos ?? []).map(j => j.cartoes_menor ?? null), minimo - 0.5, 'mais')
+            /* Sem odd na coleta: a chance é puxada pra média da liga. */
+            const naLiga = taxaDaLiga(ligaJogos.map(j => ambosRecebemCartao(j, minimo)).map(b => (b == null ? null : b ? 1 : 0)),
+              0.5, 'mais', true)
+            const est = estimar({ bateu: t.bateu, n: t.n, taxaLiga: naLiga.pct, nLiga: naLiga.n })
             return (
               <div key={minimo} className={minimo === 2 ? 'pt-3 mt-3' : undefined}>
                 <div className="flex items-center gap-3">
@@ -1099,9 +1148,11 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
                   <BotaoBilhete selecao={{
                     id: `${f.fixture_id}:ambas_cartao:${minimo}`, fixture_id: f.fixture_id, jogo: nomeJogo,
                     descricao, bateu: t.bateu, n: t.n,
+                    ...(est ? { chance: est.chance, fonte_chance: est.fonte } : {}),
                     perna: { ...base, descricao, tipo: 'time', mercado: 'ambas_cartao', minimo },
                   }} />
                 </div>
+                <LinhaDaOdd odd={null} est={est} bateu={t.bateu} n={t.n} />
                 {doArbitro.n > 0 && (
                   <div className="mt-1.5 text-[11px] text-ink-3 tabular-nums">
                     Com {dados.arbitro!.nome}: <b className={TOM[tomDaTaxa(doArbitro.pct)]}>{doArbitro.bateu}/{doArbitro.n}</b>
@@ -1119,7 +1170,12 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
           {(['sim', 'nao'] as const).map(escolha => {
             const t = btts[escolha]
             const descricao = `Ambas marcam: ${escolha === 'sim' ? 'Sim' : 'Não'}`
-            const odd = oddDaSelecao(odds, { mercado: 'btts', quem: 'jogo', periodo: 'total', escolha })
+            const sel = { mercado: 'btts', quem: 'jogo' as const, periodo: 'total' as const, escolha }
+            const odd = oddDaSelecao(odds, sel)
+            const naLiga = taxaDaLiga(ligaJogos.map(ambasMarcam).map(b => (b == null ? null : b ? 1 : 0)),
+              0.5, escolha === 'sim' ? 'mais' : 'menos', true)
+            const est = estimar({ bateu: t.bateu, n: t.n, odd: odd?.odd, precoSemMargem: precoSemMargem(odds, sel),
+              taxaLiga: naLiga.pct, nLiga: naLiga.n })
             return (
               <div key={escolha} className={escolha === 'nao' ? 'pt-3 mt-3' : undefined}>
                 <div className="flex items-center gap-3">
@@ -1136,9 +1192,9 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
                     descricao, bateu: t.bateu, n: t.n,
                     perna: { ...base, descricao, tipo: 'time', mercado: 'btts',
                              ...(escolha === 'nao' ? { escolha: 'nao' } : {}) },
-                  }, t.bateu, t.n, odd)} />
+                  }, t.bateu, t.n, odd, est)} />
                 </div>
-                <LinhaDaOdd odd={odd} bateu={t.bateu} n={t.n} />
+                <LinhaDaOdd odd={odd} est={est} bateu={t.bateu} n={t.n} />
               </div>
             )
           })}
@@ -1293,13 +1349,17 @@ function BotaoDeResultado({ f, home, away, nomeJogo, odds, escolha, prefixo, rot
   const bilhete = useBilheteMontado()
   const aceitos = RESULTADOS_ACEITOS[escolha]
   const t = taxa([...serieDeResultado(home, aceitos.home), ...serieDeResultado(away, aceitos.away)], 0.5, 'mais')
-  const odd = oddDaSelecao(odds, { mercado: 'resultado', quem: 'jogo', periodo: 'total', escolha })
-  const v = vantagem(t.bateu, t.n, odd?.odd)
+  const sel = { mercado: 'resultado', quem: 'jogo' as const, periodo: 'total' as const, escolha }
+  const odd = oddDaSelecao(odds, sel)
+  /* Valor pela chance ajustada ao preço dos três lados (18/10), não pela taxa crua. */
+  const est = estimar({ bateu: t.bateu, n: t.n, odd: odd?.odd, precoSemMargem: precoSemMargem(odds, sel) })
+  const v = est?.valor ?? null
   const descricao = `${prefixo}: ${rotulo}`
   const selecao: Selecao = {
     id: `${f.fixture_id}:resultado:${escolha}`, fixture_id: f.fixture_id, jogo: nomeJogo,
     descricao, bateu: t.bateu, n: t.n,
-    ...(odd ? { odd: odd.odd, casa: odd.casa } : {}),
+    ...(odd ? { odd: odd.odd } : {}),
+    ...(est ? { chance: est.chance, fonte_chance: est.fonte } : {}),
     perna: {
       fixture_id: f.fixture_id, home_team_id: f.home_team_id, away_team_id: f.away_team_id,
       home: f.home_team, away: f.away_team,
@@ -1307,7 +1367,7 @@ function BotaoDeResultado({ f, home, away, nomeJogo, odds, escolha, prefixo, rot
     },
   }
   const dentro = bilhete.some(s => s.id === selecao.id)
-  const legenda = `${rotulo}${odd ? `, odd ${odd.odd.toFixed(2)}${odd.casa ? ` (${odd.casa})` : ''}` : ''}, bateu ${t.bateu} de ${t.n}`
+  const legenda = `${rotulo}${odd ? `, odd ${odd.odd.toFixed(2)}` : ''}, bateu ${t.bateu} de ${t.n}${est ? `, chance estimada ${Math.round(est.chance * 100)}%` : ''}`
 
   return (
     <button onClick={() => trocarNoGrupo(selecao, `${f.fixture_id}:resultado:`)} aria-pressed={dentro} title={legenda}

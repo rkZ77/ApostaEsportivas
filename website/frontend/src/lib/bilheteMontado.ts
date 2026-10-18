@@ -10,6 +10,7 @@
  * aparelho, e não precisa de conta nem de rede pra funcionar.
  */
 import { useSyncExternalStore } from 'react'
+import type { FonteDaChance } from './chanceAjustada'
 
 /**
  * A seleção do jeito que o backend sabe liquidar (bilhete_pessoal.validar_pernas).
@@ -48,6 +49,10 @@ export interface Selecao {
    *  que a coleta traz; chute no alvo, falta e jogador ficam sem. */
   odd?: number
   casa?: string | null
+  /** Chance ajustada (lib/chanceAjustada) quando a seleção entrou · 0..1. Ausente
+   *  nas seleções salvas antes de 18/10 e onde não há preço nem média da liga. */
+  chance?: number
+  fonte_chance?: FonteDaChance
   /** Ausente nas seleções salvas antes de 06/10: essas não vão pra banca. */
   perna?: Perna & PernaCompleta
 }
@@ -122,17 +127,24 @@ export function useBilheteMontado(): Selecao[] {
 }
 
 /**
- * Chance de TODAS baterem, se fossem independentes.
+ * Chance de TODAS baterem, se fossem independentes, pela chance AJUSTADA de
+ * cada seleção (18/10/2026).
  *
- * É uma estimativa grosseira e a tela diz isso: seleções do mesmo jogo andam
- * juntas (jogo de muitos gols tende a ter mais chutes no alvo), e a taxa de
- * acerto passada não é a probabilidade de amanhã. Serve pra mostrar o quanto
- * cada seleção a mais derruba a chance do bilhete inteiro.
+ * Era o produto do bateu/n cru: 8/8 × 6/6 dava "100%" num bilhete que o
+ * preço e o motor davam ~40%. Agora null quando alguma seleção não tem chance
+ * ajustada (salva antes de 18/10, ou mercado sem preço nem média da liga):
+ * a tela diz quantas ficaram sem, em vez de inventar o número.
+ *
+ * Seleções do mesmo jogo andam juntas (jogo de muitos gols tem mais chutes no
+ * alvo), então no mesmo jogo isto é aproximação · a tela avisa.
  */
 export function chanceCombinada(lista: Selecao[]): number | null {
-  if (!lista.length || lista.some(s => !s.n)) return null
-  return lista.reduce((p, s) => p * (s.bateu / s.n), 1)
+  if (!lista.length || lista.some(s => s.chance == null)) return null
+  return lista.reduce((p, s) => p * (s.chance as number), 1)
 }
+
+/** Quantas seleções estão sem chance ajustada · é o que a bandeja explica. */
+export const semChance = (lista: Selecao[]) => lista.filter(s => s.chance == null).length
 
 /**
  * Odd do bilhete pelo produto das odds das casas. Só quando TODAS as seleções
@@ -150,6 +162,6 @@ export function textoDoBilhete(lista: Selecao[]): string {
   const porJogo = new Map<string, Selecao[]>()
   for (const s of lista) porJogo.set(s.jogo, [...(porJogo.get(s.jogo) ?? []), s])
   const blocos = [...porJogo].map(([jogo, ss]) =>
-    `${jogo}\n${ss.map(s => `• ${s.descricao}${s.odd ? ` @ ${s.odd.toFixed(2)}` : ''} (${s.bateu}/${s.n} nos últimos jogos)`).join('\n')}`)
+    `${jogo}\n${ss.map(s => `• ${s.descricao}${s.odd ? ` @ ${s.odd.toFixed(2)}` : ''} (${s.bateu}/${s.n} nos últimos jogos${s.chance != null ? `, chance estimada ${Math.round(s.chance * 100)}%` : ''})`).join('\n')}`)
   return `Meu bilhete no Pick IA\n\n${blocos.join('\n\n')}`
 }

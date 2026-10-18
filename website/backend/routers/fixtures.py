@@ -594,6 +594,48 @@ def _serie_do_time(linhas: list, team_id: int) -> list:
     return jogos
 
 
+#: Quantos jogos da liga entram na media da liga do Raio-X. Uma temporada
+#: inteira passa disso so' no fim; 200 jogos ja' dao a taxa de uma linha com
+#: erro de ~3 pontos, e o payload fica pequeno no celular.
+_JOGOS_DA_LIGA = 200
+
+#: Chaves de `_serie_do_time` que a media da liga nao usa (so' as contagens
+#: entram na conta). Tirar encolhe a resposta.
+_FORA_DA_LIGA = ("fixture_id", "data", "em_casa", "adversario_id", "posse")
+
+
+def _jogos_da_liga(cur, liga, temporada, antes_de) -> list:
+    """Os jogos da liga na temporada, ANTES deste, do ponto de vista de cada
+    time (dois por jogo), no formato de `_serie_do_time`.
+
+    MEDIA DA LIGA NO RAIO-X (18/10/2026, pedido do usuario): a chance de cada
+    selecao deixou de ser o "bateu X/N" cru. Sem odd dos dois lados pra tirar
+    a margem da casa, ela e' puxada pra taxa da liga naquela linha · e' esta
+    lista que a tela usa pra contar essa taxa, com a mesma conta da serie de
+    cada time (lib/raioX.numero). Medido em PROD (03/09-17/10, 23 mil linhas):
+    o Brier cai de 0,261 (cru) pra 0,239 com a liga pesando 40 jogos.
+
+    Dois pontos de vista porque o mercado de UM time ("gols do Lecce") tem
+    como base o que um time da liga faz por jogo, e o do jogo inteiro soma os
+    dois lados · a taxa nao muda com a repeticao.
+    """
+    if not liga or not temporada:
+        return []
+    cur.execute(f"""
+        SELECT {_COLUNAS_DO_JOGO} FROM match_statistics
+         WHERE league_id = %s AND season = %s AND status IN ('FT','AET','PEN')
+           AND (%s::timestamp IS NULL OR match_date < %s::timestamp)
+         ORDER BY match_date DESC LIMIT %s
+    """, (liga, temporada, antes_de, antes_de, _JOGOS_DA_LIGA))
+    saida = []
+    for r in cur.fetchall():
+        r = dict(r)
+        for time in (r["home_team_id"], r["away_team_id"]):
+            for j in _serie_do_time([{**r, "team_id": time}], time):
+                saida.append({k: v for k, v in j.items() if k not in _FORA_DA_LIGA})
+    return saida
+
+
 def _nomes_dos_times(cur, ids: set) -> dict:
     ids = [i for i in ids if i]
     if not ids:
@@ -1310,6 +1352,13 @@ def _montar_raio_x(fixture_id: int, home, away, league, n: int, season=None) -> 
             except Exception:
                 cur.connection.rollback()
         try:
+            liga_jogos = _jogos_da_liga(cur, liga, temporada, antes_de)
+        except Exception:
+            # Sem a media da liga a tela ajusta so' pelo preco, ou nao ajusta.
+            logger.warning("[RAIO-X] jogos da liga indisponiveis", exc_info=True)
+            cur.connection.rollback()
+            liga_jogos = []
+        try:
             competicao = _competicao_do_jogo(cur, fix.get("round"), home_id, away_id,
                                              liga, temporada, antes_de)
         except Exception:
@@ -1338,6 +1387,8 @@ def _montar_raio_x(fixture_id: int, home, away, league, n: int, season=None) -> 
         },
         "h2h": h2h,
         "h2h_fonte": h2h_fonte,
+        # Jogos da liga do ponto de vista de cada time · ver _jogos_da_liga.
+        "liga_jogos": liga_jogos,
         "ultimos_todas": ultimos_todas,
         # 'liga' | 'grupos' | 'mata-mata' | 'mata-mata ida e volta' | 'copa',
         # e o placar da ida quando este e' o jogo de volta.

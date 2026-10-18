@@ -3508,9 +3508,14 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
             if final_result is not None and (
                     fechado_em is None or _data_br(fechado_em) != today_br):
                 continue
-            legs_out = [_perna_pessoal_ao_vivo(perna) for perna in _pernas_pessoais(p)]
+            pernas = _pernas_pessoais(p)
+            legs_out = [_perna_pessoal_ao_vivo(perna) for perna in pernas]
             if not legs_out:
                 continue
+            # Pra casar com a avaliacao do motor (chance_do_motor.anotar).
+            import chance_do_motor
+            for leg, perna in zip(legs_out, pernas):
+                leg["_chave_motor"] = chance_do_motor.chave_da_perna_pessoal(perna)
             criado = p.get("created_at")
             result.append({
                 "pick_id":        pick_id,
@@ -3527,6 +3532,19 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                 "observacao":     p.get("observacao"),
                 "legs":           legs_out,
             })
+
+    # "Casa diz X% / Motor diz Y%" nos bilhetes de varias pernas ainda em
+    # aberto (18/10/2026) · ver chance_do_motor. Bilhete decidido nao mostra
+    # probabilidade, entao nao gasta leitura.
+    import chance_do_motor
+    abertos = []
+    for b in result:
+        if b.get("legs") and not b.get("result"):
+            abertos.append(b)
+        else:
+            for leg in b.get("legs") or []:
+                leg.pop("_chave_motor", None)
+    chance_do_motor.anotar(cur, abertos)
 
     conn.close()
 

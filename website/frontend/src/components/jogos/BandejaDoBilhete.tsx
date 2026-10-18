@@ -3,7 +3,7 @@ import { AnimatePresence, m as motion, useDragControls } from 'framer-motion'
 import { ArrowLeft, Check, ChevronUp, Copy, Ticket, Trash2, Wallet, X } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import { fecharNoFundo } from '../../lib/fecharNoFundo'
-import { chanceCombinada, limpar, oddCombinada, remover, textoDoBilhete, useBilheteMontado } from '../../lib/bilheteMontado'
+import { chanceCombinada, limpar, oddCombinada, remover, semChance, textoDoBilhete, useBilheteMontado } from '../../lib/bilheteMontado'
 import RegistrarBilhete from './RegistrarBilhete'
 
 /*
@@ -26,9 +26,16 @@ export default function BandejaDoBilhete() {
      aberta mesmo com o bilhete vazio: registrar LIMPA o bilhete, e sem isso a
      confirmação de sucesso sumiria junto com a última seleção. */
   const [modo, setModo] = useState<'lista' | 'registrar'>('lista')
+  /* Produto das chances AJUSTADAS (18/10/2026) · era o do bateu/n cru, que
+     dava "100%" pra 8/8 × 6/6. Ver lib/chanceAjustada. */
   const chance = chanceCombinada(selecoes)
+  const faltam = semChance(selecoes)
   /* Produto das odds das casas · só quando todas as seleções têm odd. */
   const oddTotal = oddCombinada(selecoes)
+  const oddJusta = chance != null && chance > 0 ? 1 / chance : null
+  /* chance × odd − 1: negativo = o bilhete paga menos do que a chance vale. */
+  const valor = chance != null && oddTotal != null ? chance * oddTotal - 1 : null
+  const mesmoJogo = new Set(selecoes.map(s => s.fixture_id)).size < selecoes.length
   const fechar = () => { setAberta(false); setModo('lista') }
 
   if (!selecoes.length && !(aberta && modo === 'registrar')) return null
@@ -118,10 +125,12 @@ export default function BandejaDoBilhete() {
                       <div className="text-sm font-semibold text-ink-1">{s.descricao}</div>
                     </div>
                     <div className="text-right shrink-0">
-                      <div className="font-mono text-sm font-black text-ink-2 tabular-nums">{s.bateu}/{s.n}</div>
-                      {s.odd != null && (
-                        <div className="font-mono text-[11px] text-ink-3 tabular-nums">@ {s.odd.toFixed(2)}</div>
-                      )}
+                      <div className="font-mono text-sm font-black text-ink-1 tabular-nums">
+                        {s.chance != null ? `${Math.round(s.chance * 100)}%` : '—'}
+                      </div>
+                      <div className="font-mono text-[11px] text-ink-3 tabular-nums">
+                        {s.bateu}/{s.n}{s.odd != null ? ` @ ${s.odd.toFixed(2)}` : ''}
+                      </div>
                     </div>
                     <button onClick={() => remover(s.id)} aria-label="Tirar das seleções"
                       className="w-11 h-11 grid place-items-center rounded-lg text-ink-3 hover:text-red-400 hover:bg-surface-2 shrink-0">
@@ -133,20 +142,40 @@ export default function BandejaDoBilhete() {
 
               <div className="px-4 py-3 border-t border-line space-y-3">
                 <div className="flex items-baseline justify-between">
-                  <span className="text-sm text-ink-2">Probabilidade de todas baterem</span>
+                  <span className="text-sm text-ink-2">Chance estimada de todas baterem</span>
                   <span className="font-mono text-2xl font-black text-ink-1 tabular-nums">
                     {chance != null ? `${Math.round(chance * 100)}%` : '—'}
                   </span>
                 </div>
-                {oddTotal != null && (
-                  <div className="flex items-baseline justify-between">
-                    <span className="text-sm text-ink-2">Odd combinada (estimada)</span>
-                    <span className="font-mono text-xl font-black text-ink-1 tabular-nums">{oddTotal.toFixed(2)}</span>
+                {(oddJusta != null || oddTotal != null) && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded-lg bg-surface-2 px-3 py-2">
+                      <div className="text-[11px] text-ink-3">Odd justa</div>
+                      <div className="font-mono text-lg font-black text-ink-1 tabular-nums">{oddJusta != null ? oddJusta.toFixed(2) : '—'}</div>
+                    </div>
+                    <div className="rounded-lg bg-surface-2 px-3 py-2">
+                      <div className="text-[11px] text-ink-3">Odd combinada (estimada)</div>
+                      <div className="font-mono text-lg font-black text-ink-1 tabular-nums">{oddTotal != null ? oddTotal.toFixed(2) : '—'}</div>
+                    </div>
                   </div>
                 )}
+                {valor != null && (
+                  valor <= -0.05 ? (
+                    <p className="text-xs font-semibold text-yellow-400 leading-relaxed">
+                      Valor {Math.round(valor * 100)}%: a odd paga menos do que a chance vale. No longo prazo, esse bilhete perde dinheiro.
+                    </p>
+                  ) : (
+                    <p className="text-xs font-semibold text-ink-2 leading-relaxed">
+                      {valor >= 0.05 ? `Valor +${Math.round(valor * 100)}%` : 'Odd justa'}: a odd paga {valor >= 0.05 ? 'mais do que' : 'perto do que'} a chance vale.
+                    </p>
+                  )
+                )}
                 <p className="text-[11px] text-ink-3 leading-relaxed">
-                  Estimativa pela taxa de acerto de cada seleção nos últimos jogos, como se fossem independentes.
-                  Seleções do mesmo jogo andam juntas, e o passado não garante o próximo.
+                  {faltam > 0
+                    ? `${faltam} ${faltam === 1 ? 'seleção está' : 'seleções estão'} sem chance estimada (sem odd nem média da liga, ou ${faltam === 1 ? 'entrou' : 'entraram'} no bilhete antes desta conta). Tire e ponha de novo pelo Raio-X pra recalcular. `
+                    : ''}
+                  Cada chance é o histórico de cada seleção ajustado pelo preço do mercado ou pela média da liga: sequência curta pesa pouco.
+                  {mesmoJogo ? ' Seleções do mesmo jogo andam juntas, então aqui a conta é aproximada.' : ''}
                 </p>
                 <button onClick={() => setModo('registrar')}
                   className="w-full h-12 rounded-lg bg-accent text-on-fill hover:bg-accent-hover text-sm font-bold flex items-center justify-center gap-2">
