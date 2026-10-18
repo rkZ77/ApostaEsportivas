@@ -291,7 +291,12 @@ def _listar_ligas(cur, paises: list, orcamento: int) -> int:
         SELECT league_id, season, nome FROM arbitro_ligas_extras
          WHERE pais = ANY(%s)
            AND (listada_em IS NULL OR listada_em < NOW() - %s)
-         ORDER BY listada_em NULLS FIRST
+         -- Nunca listada primeiro; entre elas, o id mais baixo. Na API o id
+         -- baixo e' a competicao principal do pais (Serie B 72, Copa do
+         -- Brasil 73, Segunda 141, Copa del Rey 143) e o alto e' divisao
+         -- regional, onde arbitro de primeira quase nunca apita. A Espanha
+         -- tem 34 ligas extras: sem esta ordem a fila gastava dias nelas.
+         ORDER BY listada_em NULLS FIRST, league_id
     """, (paises, RELISTAR_LIGA))
     from psycopg2.extras import execute_values
     for league_id, season, nome in cur.fetchall():

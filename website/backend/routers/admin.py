@@ -695,7 +695,7 @@ _STEP_LABELS = {
     "coleta_escalacoes":       "Coletando escalações das partidas antigas",
     "coleta_calendario":       "Coletando o calendário das ligas",
     "coleta_eventos":          "Coletando eventos por minuto",
-    "coleta_arbitros":         "Coletando a temporada dos árbitros",
+    "coleta_arbitros":         "Coletando os árbitros",
     "coleta_clima":            "Coletando clima e altitude",
     "coleta_medias":           "Recalculando médias dos times",
 }
@@ -1227,7 +1227,7 @@ _PASSO_LABEL_CURTO = {
     "coleta_escalacoes":       "Escalações",
     "coleta_calendario":       "Calendário das Ligas",
     "coleta_eventos":          "Eventos por Minuto",
-    "coleta_arbitros":         "Árbitros (temporada inteira)",
+    "coleta_arbitros":         "Árbitros",
     "coleta_clima":            "Clima e Altitude",
     "coleta_medias":           "Médias dos Times",
 }

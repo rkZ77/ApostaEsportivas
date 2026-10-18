@@ -1068,7 +1068,7 @@ COMANDOS: tuple = (
     # ARBITRO LOGO DEPOIS DOS DADOS (2026-10-18): precisa da escala de hoje
     # (`fixtures.referee`) e do calendario que a etapa acima acabou de gravar.
     # Teto de 40 requisicoes; nao mexe no que o motor le (tabela a parte).
-    Comando("arbitros", "Árbitros · temporada inteira (todas as ligas do país)",
+    Comando("arbitros", "Árbitros (todas as ligas do país)",
             "Busca os jogos da temporada dos árbitros escalados, inclusive em liga não cadastrada",
             lambda *a: cmd_arbitros(*a), etapa="ÁRBITROS", uso="arbitros [teto]"),
     # COLETA DE ESTATISTICA DE JOGADOR · entrou no `tudo` em 2026-08-28.
