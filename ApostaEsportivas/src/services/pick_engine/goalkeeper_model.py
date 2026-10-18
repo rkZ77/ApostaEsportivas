@@ -140,28 +140,94 @@ def expected_saves(opponent_shots_on_avg: float | None,
     return round(encolhido if encolhido is not None else mu, 3)
 
 
+# ---------------------------------------------------------------------------
+# MODELO CONDICIONAL (18/10/2026) · o que o Player Stats usa.
+#
+# O modelo acima era PESSIMISTA, e por isso Defesas de goleiro quase nao
+# publicava (4 picks na vida, com o motor avaliando ~60 ofertas por dia).
+# Medido em PROD contra 1410 atuacoes de goleiro (jan-out/2026, so' com dado de
+# antes de cada jogo): previa 53% no Over 2.5 onde acontecia 58%, e nas 630
+# ofertas reais que o motor viu errava MAIS que o preco da casa (Brier 0,2333
+# contra 0,2319). Tres causas, as tres corrigidas aqui:
+#
+#   1. so' o ATAQUE do adversario entrava no volume de chutes. O goleiro
+#      enfrenta o ataque deles E a defesa do proprio time: o volume passa a ser
+#      a media dos dois (o que o adversario produz e o que o time do goleiro
+#      cede, cada um no mando de hoje).
+#   2. a mistura era encolhida DUAS vezes pra media da liga (a do goleiro pela
+#      amostra dele, e o resultado de novo pela amostra do adversario, que com
+#      10 jogos dava metade do peso a' liga). Fica so' o primeiro.
+#   3. a dispersao r=7,76 e' a da distribuicao de TODOS os goleiros juntos.
+#      Depois que o modelo explica parte da variacao jogo a jogo, a que sobra e'
+#      menor: r condicional = 15.
+#
+# ESCALA_DA_MEDIA corrige o nivel que ainda sobrava (a media prevista ficava
+# ~7% abaixo da real). Escala e r foram escolhidos na 1a metade (jan-jul) e
+# confirmados na 2a: Brier 0,2107/0,2112 -> 0,2079/0,2042, vies < 1,1pp nas
+# linhas 2.5, 3.5 e 4.5. Nas ofertas reais de 29/08 a 17/10 (fora da amostra
+# do ajuste), com as travas do Player Stats (62%, edge 4pp): 43 picks,
+# prometeu 72%, acertou 74%, preco 62%, ROI +25% (+-24), positivo nas duas
+# metades. Brier nas 630 ofertas: 0,2192, MENOR que o do preco.
+# ---------------------------------------------------------------------------
+ESCALA_DA_MEDIA = 1.08
+DISPERSAO_CONDICIONAL_R = 15.0
+
+
+def expected_saves_condicional(opponent_shots_on_avg: float | None,
+                               own_shots_on_conceded_avg: float | None,
+                               keeper_saves_avg: float | None,
+                               keeper_sample: int | None,
+                               constantes: dict | None = None) -> float | None:
+    """Defesas esperadas pelo modelo condicional · ver o bloco acima."""
+    base_liga = _const(constantes, "league_mean_saves", LEAGUE_MEAN_SAVES)
+    volumes = [v for v in (opponent_shots_on_avg, own_shots_on_conceded_avg)
+               if v is not None and v > 0]
+    sinais = []
+    if volumes:
+        sinais.append(sum(volumes) / len(volumes)
+                      * _const(constantes, "save_rate_per_shot_on", SAVE_RATE_PER_SHOT_ON))
+    if keeper_saves_avg is not None and keeper_saves_avg > 0:
+        encolhido = shrink_taxa(keeper_saves_avg, keeper_sample, base_liga)
+        sinais.append(encolhido if encolhido is not None else keeper_saves_avg)
+    if not sinais:
+        return None
+    mu = sinais[0] if len(sinais) == 1 else (sinais[0] * 2 + sinais[1]) / 3
+    return round(ESCALA_DA_MEDIA * mu, 3)
+
+
 def analyze_saves_market(opponent_shots_on_avg: float | None,
                          keeper_saves_avg: float | None,
                          sample_size: int | None,
                          odd: float | None,
                          line: float = 1.5,
                          constantes: dict | None = None,
-                         keeper_sample: int | None = None) -> dict | None:
+                         keeper_sample: int | None = None,
+                         own_shots_on_conceded_avg: float | None = None,
+                         condicional: bool = False) -> dict | None:
     """Candidato de pick de defesas, ou None se nao der pra avaliar.
 
     Devolve probabilidade, odd justa, edge e EV no mesmo formato que o resto
     do motor consome. Quem decide se aprova e' o ranking do pipeline, nao
     esta funcao -- aqui so' calcula.
+
+    `condicional=True` usa o modelo condicional (18/10/2026, bloco acima); o
+    padrao segue o de 01/08 pra quem ainda chama assim.
     """
     if sample_size is not None and sample_size < MIN_OPPONENT_SAMPLE:
         return None
 
-    mu = expected_saves(opponent_shots_on_avg, keeper_saves_avg, sample_size,
-                        keeper_sample=keeper_sample, constantes=constantes)
+    if condicional:
+        mu = expected_saves_condicional(opponent_shots_on_avg, own_shots_on_conceded_avg,
+                                        keeper_saves_avg, keeper_sample, constantes)
+        r = DISPERSAO_CONDICIONAL_R
+    else:
+        mu = expected_saves(opponent_shots_on_avg, keeper_saves_avg, sample_size,
+                            keeper_sample=keeper_sample, constantes=constantes)
+        r = _const(constantes, "dispersion_r", DISPERSION_R)
     if mu is None:
         return None
 
-    prob = prob_over(line, mu, _const(constantes, "dispersion_r", DISPERSION_R))
+    prob = prob_over(line, mu, r)
     if prob <= 0:
         return None
 
@@ -172,6 +238,7 @@ def analyze_saves_market(opponent_shots_on_avg: float | None,
         "probability": round(prob, 4),
         "fair_odd": odd_justa,
         "sample_size": sample_size,
+        "dispersion_r": r,
         "lift_vs_base": round(
             prob - _const(constantes, "base_rate_over_15", BASE_RATE_OVER_15), 4),
     }

@@ -344,3 +344,38 @@ def volume_do_adversario(cur, team_id: int, coluna: str, mando: str,
     if not valores:
         return (None, 0)
     return (round(sum(valores) / len(valores), 3), len(valores))
+
+
+def volume_cedido(cur, team_id: int, coluna: str, mando: str,
+                  league_id, season, *, limite: int = 10) -> tuple:
+    """(media, amostra) do volume que o time CEDE ao adversario, no mando de hoje.
+
+    O espelho de `volume_do_adversario`: o time joga em `mando`, e o valor e' a
+    coluna do OUTRO lado. Defesas de goleiro (18/10/2026): o goleiro enfrenta o
+    ataque do adversario e tambem a defesa do proprio time, e so' o primeiro
+    entrava na conta · ver goalkeeper_model.expected_saves_condicional.
+    """
+    lado = "home" if mando == "home" else "away"
+    outro = "away" if lado == "home" else "home"
+    coluna_time = f"{outro}_{coluna}"
+    coluna_id = f"{lado}_team_id"
+
+    filtro_liga, params_liga = "", []
+    if league_id and season:
+        filtro_liga = "AND ms.league_id = %s AND ms.season = %s"
+        params_liga = [league_id, season]
+
+    cur.execute(f"""
+        SELECT ms.{coluna_time} AS valor
+          FROM match_statistics ms
+         WHERE ms.{coluna_id} = %s
+           AND ms.status IN ('FT','AET','PEN')
+           AND ms.{coluna_time} IS NOT NULL
+           {filtro_liga}
+      ORDER BY ms.match_date DESC
+         LIMIT %s
+    """, (team_id, *params_liga, limite))
+    valores = [float(r["valor"] if isinstance(r, dict) else r[0]) for r in cur.fetchall()]
+    if not valores:
+        return (None, 0)
+    return (round(sum(valores) / len(valores), 3), len(valores))

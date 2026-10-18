@@ -325,6 +325,11 @@ def _analise_de_saves(oferta: dict, fixture: dict, cur, ctx: dict,
         cur, adversario_id, "shots_on", mando_adversario,
         fixture["league_id"], fixture["season"])
     media_propria = count_model.media_ponderada(ctx["serie"])
+    # MODELO CONDICIONAL (18/10/2026): o goleiro enfrenta o ataque deles E a
+    # defesa do proprio time · ver goalkeeper_model.expected_saves_condicional.
+    time_id = (fixture["home_team_id"] if mando == "home" else fixture["away_team_id"])
+    media_cedida, _ = player_history.volume_cedido(
+        cur, time_id, "shots_on", mando, fixture["league_id"], fixture["season"])
 
     # "N ou mais" e' P(X >= N), que no modelo (definido como P(X > line)) vira
     # prob_over(N - 0.5). Passar N direto contaria uma defesa a menos.
@@ -332,7 +337,8 @@ def _analise_de_saves(oferta: dict, fixture: dict, cur, ctx: dict,
     analise = analyze_saves_market(
         opponent_shots_on_avg=media_adv, keeper_saves_avg=media_propria,
         sample_size=n_adv, odd=oferta["odd"], line=linha,
-        constantes=constantes, keeper_sample=len(ctx["serie"]))
+        constantes=constantes, keeper_sample=len(ctx["serie"]),
+        own_shots_on_conceded_avg=media_cedida, condicional=True)
     if not analise:
         return None
 
@@ -348,11 +354,12 @@ def _analise_de_saves(oferta: dict, fixture: dict, cur, ctx: dict,
         "esperado_bruto": media_propria,
         "esperado_no_mando": None, "peso_do_mando": 0.0, "amostra_no_mando": 0,
         "ajuste_adversario": None, "ajuste_minutos": fator,
-        "phi": constantes.get("dispersion_r"), "amostra": len(ctx["serie"]),
+        "phi": analise.get("dispersion_r"), "amostra": len(ctx["serie"]),
         "probability_modelo": analise.get("probability"),
         "odd": analise.get("odd"),
         "adversario": {"media": media_adv, "amostra": n_adv,
-                       "mando": mando_adversario, "contador": "chutes no alvo"},
+                       "mando": mando_adversario, "contador": "chutes no alvo",
+                       "cedido_pelo_time": media_cedida},
     }
 
 
