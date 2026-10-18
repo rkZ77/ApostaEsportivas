@@ -104,7 +104,7 @@ export function rotuloDaRodada(bruto?: string | null): string {
   let perna = ''
   const mPerna = texto.match(/\s*-\s*(1st|2nd) leg$/i)
   if (mPerna) {
-    perna = mPerna[1].toLowerCase() === '1st' ? ' · Ida' : ' · Volta'
+    perna = mPerna[1].toLowerCase() === '1st' ? ' (ida)' : ' (volta)'
     texto = texto.slice(0, mPerna.index)
   }
   // "Regular Season - 29" · a fase e o número da rodada
@@ -116,5 +116,5 @@ export function rotuloDaRodada(bruto?: string | null): string {
   const nomeFase = fase.replace(regra[0], regra[1])
   if (numero == null) return nomeFase + perna
   // Pontos corridos: "Rodada 29". Fase com rodadas dentro: "Grupo A · Rodada 3".
-  return (nomeFase === 'Rodada' ? `Rodada ${numero}` : `${nomeFase} · Rodada ${numero}`) + perna
+  return (nomeFase === 'Rodada' ? `Rodada ${numero}` : `${nomeFase}, rodada ${numero}`) + perna
 }

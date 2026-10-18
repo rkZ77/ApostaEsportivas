@@ -123,7 +123,7 @@ export default function EsqueciSenha() {
               desabilitado={codigo.length !== 6 || !senha}
             />
             <Botao
-              titulo="Não recebi · enviar de novo"
+              titulo="Enviar de novo"
               variante="fantasma"
               onPress={() => {
                 setCodigo('')

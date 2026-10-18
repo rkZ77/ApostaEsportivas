@@ -127,7 +127,7 @@ export default function RaioXDoJogo() {
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: espaco.md }}>
                   <View style={{ flex: 1 }}>
                     <Txt variante="corpo" cor={cores.ink1} style={{ fontWeight: '700' }}>{q.titulo}</Txt>
-                    <Txt variante="apoio">{comPeriodo(mercado.frase, periodo)} · {rotuloDaLinha(linha, lado)}</Txt>
+                    <Txt variante="apoio">{comPeriodo(mercado.frase, periodo)}, {rotuloDaLinha(linha, lado).toLowerCase()}</Txt>
                   </View>
                   <NumeroDaTaxa t={t} grande={q.destaque} recente={q.destaque ? null : recente} />
                 </View>

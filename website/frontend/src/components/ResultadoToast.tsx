@@ -95,7 +95,7 @@ export default function ResultadoToast() {
           titulo={jogoDoResultado(resultadoNovo.title)}
           times={timesDoAviso(jogoDoResultado(resultadoNovo.title), resultadoNovo.payload)}
           texto={resultadosJuntos > 0
-            ? `${mercado ? `${mercado} · ` : ''}e mais ${resultadosJuntos} ${resultadosJuntos === 1 ? 'resultado' : 'resultados'}`
+            ? `${mercado ? `${mercado}, ` : ''}e mais ${resultadosJuntos} ${resultadosJuntos === 1 ? 'resultado' : 'resultados'}`
             : mercado}
           destaque={(pnl != null || unidades != null) && (
             <div className="min-w-0">

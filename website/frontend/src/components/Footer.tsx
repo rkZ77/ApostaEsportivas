@@ -167,10 +167,10 @@ export default function Footer() {
 
         <div className="mt-8 pt-5 border-t border-line flex flex-col sm:flex-row items-center justify-between gap-2">
           <p className="text-[11px] text-ink-4 text-center sm:text-left">
-            © {new Date().getFullYear()} Pick IA. Todos os direitos reservados. Conteúdo para maiores de 18 anos · aposte com responsabilidade.
+            © {new Date().getFullYear()} Pick IA. Todos os direitos reservados. Conteúdo para maiores de 18 anos. Aposte com responsabilidade.
           </p>
           <p className="text-[11px] text-ink-4 text-center sm:text-right">
-            Pix · Cartão · Boleto
+            Pix, cartão ou boleto
           </p>
         </div>
       </div>

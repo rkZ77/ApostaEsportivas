@@ -36,7 +36,7 @@ function LinhaAposta({ aposta }: { aposta: Aposta }) {
         {uriCasa ? <Image source={{ uri: uriCasa }} style={{ width: 18, height: 18 }} resizeMode="contain" /> : null}
         {uriFora ? <Image source={{ uri: uriFora }} style={{ width: 18, height: 18 }} resizeMode="contain" /> : null}
         <Txt variante="corpo" numberOfLines={1} style={{ flex: 1, color: cores.ink1 }}>
-          {aposta.home_team_name ?? '—'} · {aposta.away_team_name ?? '—'}
+          {aposta.home_team_name ?? '—'} x {aposta.away_team_name ?? '—'}
         </Txt>
         <Selo texto={estilo.rotulo} cor={estilo.cor} preenchido={Boolean(aposta.result)} />
       </View>
