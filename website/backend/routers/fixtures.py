@@ -785,16 +785,24 @@ def _arbitro(cur, nome: str | None, n: int, liga=None, temporada=None) -> dict |
     chave = chave_do_arbitro(nome)
     if not chave:
         return None
+    # Todas as grafias da mesma pessoa (18/10/2026: "Ramon Abatti" e "Ramon
+    # Abatti Abel") · ver arbitro.chaves_equivalentes.
+    from arbitro_do_jogo import chaves_da_pessoa
+    chaves = chaves_da_pessoa(cur, chave)
     cur.execute(f"""
         SELECT match_date, home_yellow_cards, away_yellow_cards,
                home_red_cards, away_red_cards, home_fouls, away_fouls,
                home_team_id, away_team_id, home_goals, away_goals
         FROM match_statistics
-        WHERE {sql_chave('referee')} = %s AND status IN ('FT','AET','PEN')
+        WHERE {sql_chave('referee')} = ANY(%s) AND status IN ('FT','AET','PEN')
+          -- So' jogo COM folha de cartao (18/10/2026). Sem isto o jogo sem
+          -- folha entrava com `or 0` como "0 amarelos" e puxava a taxa do
+          -- arbitro pra baixo -- o mesmo defeito do 0x0 falso.
+          AND home_yellow_cards IS NOT NULL AND away_yellow_cards IS NOT NULL
           AND (%s::int IS NULL OR league_id = %s)
           AND (%s::int IS NULL OR season = %s)
         ORDER BY match_date DESC LIMIT %s
-    """, (chave, liga, liga, temporada, temporada, n))
+    """, (chaves, liga, liga, temporada, temporada, n))
     jogos = [{
         # Quem jogou, quando e o placar (18/10/2026): a barra do arbitro abre
         # a mesma dica de jogo das outras. Os nomes entram em _montar_raio_x.

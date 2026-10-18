@@ -218,7 +218,8 @@ def test_serie_do_arbitro_nao_filtra_por_liga():
     corpo = _codigo("routers/suggestions.py", "_jogos_do_arbitro")
     # O nome casa NORMALIZADO desde 04/09: a API grava ora "Fulano" ora
     # "Fulano, Brazil", e com `=` cru a serie sumia sem dizer por que.
-    assert "split_part(ms.referee" in corpo
+    # Desde 18/10 pela chave do projeto (arbitro.sql_chave), a mesma do Raio-X.
+    assert "sql_chave('ms.referee')" in corpo and "chaves_da_pessoa" in corpo
     assert "AND ms.season = %s" in corpo
     assert "league_id" not in corpo
 

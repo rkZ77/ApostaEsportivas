@@ -64,7 +64,7 @@ interface Summary {
 interface MediaComAmostra { media: number; jogos: number }
 interface Arbitro {
   referee: string; jogos: number
-  avg_yellow: number; avg_red: number; avg_fouls: number
+  avg_yellow: number; avg_red: number; avg_fouls: number | null
   /** amarelo + 2x vermelho, a mesma conta que o motor usa. */
   avg_card_points: number
 }
