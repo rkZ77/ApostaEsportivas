@@ -47,7 +47,8 @@ def _load_history(match_stats: MatchStatsService, team_id: int, season: int, lea
     # a competicao nao acumula jogo suficiente pra sustentar analise
     # sozinha (ver competition_profile.uses_all_competitions_history).
     if cp.uses_all_competitions_history(league_id):
-        return match_stats.get_last_n_all_competitions(team_id, since_date=since_date)
+        # So' a temporada atual, todas as competicoes (2026-10-18).
+        return match_stats.get_last_n_all_competitions(team_id, since_date=since_date, season=season)
     return match_stats.get_all_matches_full(team_id, season, league_id, since_date=since_date)
 
 

@@ -110,17 +110,21 @@ class LineupsCollectorService:
             (fixture_id,))
         return gravadas
 
-    def backfill(self, teto_requisicoes: int = 100, temporada_minima: int = 2024) -> dict:
+    def backfill(self, teto_requisicoes: int = 100, temporada_minima: int = 2024,
+                 so_temporada_ativa: bool = False) -> dict:
         """Escalacao das partidas encerradas que ainda nao foram pedidas, da
         mais recente pra mais antiga (a que o dossie le primeiro)."""
         self._open()
         com = sem = 0
         try:
-            self.cur.execute("""
+            # So' a temporada ativa de cada liga, se pedido (etapa LACUNAS).
+            from collectors.match_statistics_sync_service import SO_TEMPORADA_ATIVA
+            ativa = SO_TEMPORADA_ATIVA if so_temporada_ativa else ""
+            self.cur.execute(f"""
                 SELECT fixture_id, league_id, season, match_date
                   FROM match_statistics
                  WHERE lineups_checked_at IS NULL
-                   AND status IN %s AND season >= %s
+                   AND status IN %s AND season >= %s {ativa}
                  ORDER BY match_date DESC
                  LIMIT %s
             """, (FINALIZADOS, temporada_minima, teto_requisicoes * IDS_POR_REQUISICAO))

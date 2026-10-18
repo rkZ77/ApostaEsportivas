@@ -29,19 +29,6 @@ FIM_DE_JOGO = "('FT', 'AET', 'PEN')"
 LIMIAR_TEMPORADA_ANTERIOR = AMOSTRA_RICA * 2
 
 
-def _somente_temporada_corrente_se_bastar(jogos: list, season) -> list:
-    """Descarta os jogos da temporada anterior quando a corrente já basta.
-
-    Fica em função separada, e não numa condição dentro do SQL, porque a
-    pergunta "a corrente basta?" só tem resposta depois de contar o que voltou
-    -- e contar em SQL exigiria uma segunda consulta ou uma window function
-    sobre a mesma varredura. É leitura de banco já feita: não custa nada.
-    """
-    da_corrente = [j for j in jogos if j.get("season") == season]
-    if len(da_corrente) >= LIMIAR_TEMPORADA_ANTERIOR:
-        return da_corrente
-    return jogos
-
 # Quantos jogos ler no histórico multi-competição.
 #
 # 30 e não 15: pool_and_field fica só com os jogos do mando que o mercado
@@ -175,7 +162,8 @@ class MatchStatsService:
               AND ms.league_id = %s
               AND ms.status IN {FIM_DE_JOGO}
             ORDER BY ms.match_date DESC
-            LIMIT {DEFAULT_LIMIT_LEAGUE};
+            -- Sem teto desde 2026-10-18: a temporada da liga ja' limita.
+            ;
         """, (team_id, season, league_id))
 
     ##########################################################################
@@ -231,7 +219,8 @@ class MatchStatsService:
               AND ms.league_id = %s
               AND ms.status IN {FIM_DE_JOGO}
             ORDER BY ms.match_date DESC
-            LIMIT {DEFAULT_LIMIT_LEAGUE};
+            -- Sem teto desde 2026-10-18: a temporada da liga ja' limita.
+            ;
         """, (team_id, season, league_id))
 
     ##########################################################################
@@ -281,15 +270,17 @@ class MatchStatsService:
         alcança e ele continua curto até acumular. É o resultado certo -- 38
         jogos da segunda divisão não descrevem o time na primeira -- e é por isso
         que não há fallback pra outra liga aqui."""
+        # SO' A TEMPORADA ATUAL DA LIGA, TODOS OS JOGOS (2026-10-18, decisao do
+        # usuario: "o motor tem que analisar todos os jogos da temporada atual
+        # da liga"). Saiu a temporada anterior que completava o time com menos
+        # de 16 jogos (a nota acima fica como historico da decisao revertida) e
+        # saiu o teto de 60: a temporada ja' limita, e nenhum jogo dela fica de
+        # fora da conta.
         date_filter = "AND ms.match_date < %s" if before_date else ""
         since_filter = "AND ms.match_date >= %s" if since_date else ""
-        temporada_anterior = (season - 1) if isinstance(season, int) else None
-        temporadas = ((season,) if temporada_anterior is None
-                      else (season, temporada_anterior))
-        season_filter = ("AND ms.season = %s" if temporada_anterior is None
-                         else "AND ms.season IN (%s, %s)")
+        season_filter = "AND ms.season = %s"
         params = (
-            (team_id, team_id, team_id) + temporadas + (league_id,)
+            (team_id, team_id, team_id) + (season,) + (league_id,)
             + ((before_date,) if before_date else ())
             + ((since_date,) if since_date else ())
         )
@@ -352,12 +343,9 @@ class MatchStatsService:
               AND ms.status IN {FIM_DE_JOGO}
               {date_filter}
               {since_filter}
-            ORDER BY ms.match_date DESC
-            LIMIT {DEFAULT_LIMIT_LEAGUE};
+            ORDER BY ms.match_date DESC;
         """, params)
-        if temporada_anterior is None:
-            return jogos
-        return _somente_temporada_corrente_se_bastar(jogos, season)
+        return jogos
 
     ##########################################################################
     # Interface unificada padrão (já existente)
@@ -380,7 +368,8 @@ class MatchStatsService:
     # Usado para Copa América, Copa do Mundo, Eliminatórias e Amistosos:
     # a seleção pode ter só 3-4 jogos na Copa mas 15 contando eliminatórias.
     ##########################################################################
-    def get_last_n_all_competitions(self, team_id, limit=DEFAULT_LIMIT_MULTI, before_date=None, since_date=None):
+    def get_last_n_all_competitions(self, team_id, limit=DEFAULT_LIMIT_MULTI, before_date=None,
+                                    since_date=None, season=None):
         """before_date (opcional): só jogos com match_date < before_date --
         usado por backtests pra evitar vazar resultado futuro no histórico
         de um fixture já encerrado. since_date (opcional, Fase 1.6): só
@@ -413,13 +402,20 @@ class MatchStatsService:
         decisão de usar ou não o jogo é POR FAMÍLIA, e quem sabe a família é o
         modelo, não esta consulta.
         """
+        # COM `season` (2026-10-18, decisao do usuario): todas as competicoes
+        # do time, mas so' da temporada atual, e SEM o teto de 30 -- a
+        # temporada limita. Sem `season` fica o comportamento antigo (ultimos
+        # `limit` em qualquer temporada), que so' o backtest ainda usa.
         date_filter = "AND ms.match_date < %s" if before_date else ""
         since_filter = "AND ms.match_date >= %s" if since_date else ""
+        season_filter = "AND ms.season = %s" if season is not None else ""
+        limite_sql = "" if season is not None else "LIMIT %s"
         params = (
             (team_id, team_id, team_id)
+            + ((season,) if season is not None else ())
             + ((before_date,) if before_date else ())
             + ((since_date,) if since_date else ())
-            + (limit,)
+            + ((limit,) if season is None else ())
         )
         return self._query(f"""
             SELECT
@@ -468,10 +464,11 @@ class MatchStatsService:
                  LIMIT 1) ls ON TRUE
             WHERE (ms.home_team_id = %s OR ms.away_team_id = %s)
               AND ms.status IN {FIM_DE_JOGO}
+              {season_filter}
               {date_filter}
               {since_filter}
             ORDER BY ms.match_date DESC
-            LIMIT %s;
+            {limite_sql};
         """, params)
 
     def get_h2h_matches(self, team_a, team_b, limit=10, before_date=None):

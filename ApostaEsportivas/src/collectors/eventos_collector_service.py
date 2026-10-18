@@ -57,7 +57,8 @@ def linhas_de_eventos(fixture_id: int, resposta: list) -> list:
     return saida
 
 
-def backfill(teto_requisicoes: int = 100, temporada_minima: int = 2025) -> dict:
+def backfill(teto_requisicoes: int = 100, temporada_minima: int = 2025,
+             so_temporada_ativa: bool = False) -> dict:
     """Eventos das partidas encerradas ainda nao pedidas, da mais recente pra
     mais antiga."""
     conn = get_connection()
@@ -67,9 +68,12 @@ def backfill(teto_requisicoes: int = 100, temporada_minima: int = 2025) -> dict:
         # So' o DDL que falta, sem travar o site (ver utils/esquema.py).
         esquema.garantir(cur, DDL)
         conn.commit()
-        cur.execute("""
+        # So' a temporada ativa de cada liga, se pedido (etapa LACUNAS).
+        from collectors.match_statistics_sync_service import SO_TEMPORADA_ATIVA
+        ativa = SO_TEMPORADA_ATIVA if so_temporada_ativa else ""
+        cur.execute(f"""
             SELECT fixture_id FROM match_statistics
-             WHERE events_checked_at IS NULL AND status IN %s AND season >= %s
+             WHERE events_checked_at IS NULL AND status IN %s AND season >= %s {ativa}
              ORDER BY match_date DESC LIMIT %s
         """, (FINALIZADOS, temporada_minima, teto_requisicoes * IDS_POR_REQUISICAO))
         from psycopg2.extras import execute_values

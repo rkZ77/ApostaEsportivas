@@ -253,7 +253,9 @@ def _historico(match_stats: MatchStatsService, fixture: dict, team_id: int) -> l
     """
     since = match_stats.get_structural_change_date(team_id)
     if cp.uses_all_competitions_history(fixture["league_id"]):
-        return match_stats.get_last_n_all_competitions(team_id, since_date=since)
+        # So' a temporada atual, todas as competicoes (2026-10-18).
+        return match_stats.get_last_n_all_competitions(team_id, since_date=since,
+                                                       season=fixture["season"])
     return match_stats.get_all_matches_full(
         team_id, fixture["season"], fixture["league_id"], since_date=since)
 
