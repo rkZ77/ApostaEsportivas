@@ -144,7 +144,7 @@ export default function ArbitroDoJogo({ fixtureId, homeId, awayId, homeNome, awa
               <TeamLogo id={timeDoRecorte} name="" size={22} />
               <div className="text-sm text-ink-2">
                 Com ele: <b className="text-ink-1">{campanha.v}V {campanha.e}E {campanha.d}D</b>
-                {campanha.amarelos != null && <> · {campanha.amarelos.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} amarelos do time por jogo</>}
+                {campanha.amarelos != null && <>, {campanha.amarelos.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} amarelos do time por jogo</>}
               </div>
             </div>
           )}

@@ -86,7 +86,7 @@ const sobrenome = (nome: string) => {
 function Jogador({ j, status }: { j: JogadorCampo; status: TimeCampo['status'] }) {
   const anel = j.desfalque ? 'ring-red-500' : status === 'oficial' ? 'ring-green-500' : 'ring-amber-400'
   return (
-    <div className="flex flex-col items-center gap-0.5 w-16 min-w-0" title={j.desfalque ? `${j.nome} · no boletim médico` : j.nome}>
+    <div className="flex flex-col items-center gap-0.5 w-16 min-w-0" title={j.desfalque ? `${j.nome}, no boletim médico` : j.nome}>
       <div className={cn('relative rounded-full ring-2', anel)}>
         <PlayerPhoto id={j.player_id} name={j.nome} size={38} />
         {j.numero != null && (

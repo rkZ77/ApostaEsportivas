@@ -200,7 +200,7 @@ export const MERCADOS_PRINCIPAIS: Array<{ id: string; rotulo: string; jogo: stri
 
 /** "Escanteios no jogo · 1º tempo" · o tempo só entra no texto quando não é o jogo todo. */
 export function comPeriodo(frase: string, periodo: Periodo): string {
-  return periodo === 'total' ? frase : `${frase} · ${ROTULO_PERIODO[periodo]}`
+  return periodo === 'total' ? frase : `${frase} (${ROTULO_PERIODO[periodo]})`
 }
 
 /** Ambas marcam é sim/não, não linha · fica fora da régua de linha. */

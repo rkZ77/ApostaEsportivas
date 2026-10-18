@@ -374,7 +374,7 @@ function Placar({ jogo, dados, aoVivo, encerrado, onArbitro }: {
       <span className="text-sm font-bold text-ink-1 leading-tight line-clamp-2">{nome}</span>
       {comTabela && pos && (
         <span className="-mt-1 text-[11px] text-ink-3 tabular-nums">
-          <b className="text-ink-1">{pos.posicao}º</b> de {pos.de} · {pos.pontos} pts
+          <b className="text-ink-1">{pos.posicao}º</b> de {pos.de}, {pos.pontos} pts
         </span>
       )}
       <FormaPontos forma={forma} />
@@ -404,8 +404,8 @@ function Placar({ jogo, dados, aoVivo, encerrado, onArbitro }: {
               : c.formato === 'liga' ? 'Pontos corridos'
               : c.formato === 'grupos' ? 'Fase de grupos'
               : c.formato === 'mata-mata ida e volta'
-                ? (c.perna === 'volta' || c.ida ? 'Mata-mata · jogo de volta'
-                  : c.perna === 'ida' ? 'Mata-mata · jogo de ida' : 'Mata-mata · ida e volta')
+                ? (c.perna === 'volta' || c.ida ? 'Mata-mata, jogo de volta'
+                  : c.perna === 'ida' ? 'Mata-mata, jogo de ida' : 'Mata-mata, ida e volta')
               : c.formato === 'mata-mata' ? 'Mata-mata' : null
             if (!rotulo) return null
             return (
@@ -600,7 +600,7 @@ function NumeroDaTaxa({ t, grande, semMedia, recente }: {
       </div>
       <div className="text-[11px] text-ink-3 mt-1 tabular-nums">
         {t.pct != null ? `${Math.round(t.pct * 100)}%` : 'sem dado'}
-        {t.media != null && !semMedia && <> · média {t.media.toFixed(1)}</>}
+        {t.media != null && !semMedia && <>, média {t.media.toFixed(1)}</>}
       </div>
     </div>
   )
@@ -703,7 +703,7 @@ function DicaDoJogo({ j, timeId, timeNome, rank, valor }: {
   const eles = { id: j.adversario_id, nome: j.adversario || 'Adversário', gols: j.gols_contra }
   const [casa, fora] = j.em_casa ? [nos, eles] : [eles, nos]
   return <DicaDePartida casa={casa} fora={fora} valor={valor}
-    detalhe={`${dataCurta(j.data)} · ${j.em_casa ? 'em casa' : 'fora'}${rank ? ` · adversário ${rank}º` : ''}`} />
+    detalhe={`${dataCurta(j.data)}, ${j.em_casa ? 'em casa' : 'fora'}${rank ? `, adversário ${rank}º` : ''}`} />
 }
 
 /** A partida sem lado (jogos do árbitro): mandante x visitante. */
@@ -784,7 +784,7 @@ function LinhaDaOdd({ odd, bateu, n }: { odd: OddDaCasa | null; bateu: number; n
     <div className="mt-3 flex items-center gap-2 flex-wrap text-sm">
       <span className="text-ink-3">Odd</span>
       <span className="font-mono font-black text-ink-1 tabular-nums">{odd.odd.toFixed(2)}</span>
-      {odd.casa && <span className="text-ink-3 text-xs">· {odd.casa}</span>}
+      {odd.casa && <span className="text-ink-3 text-xs">na {odd.casa}</span>}
       {selo && <span className={cn('ml-auto text-[11px] font-bold px-2 py-0.5 rounded border', selo.cls)}>{selo.txt}</span>}
     </div>
   )
@@ -829,7 +829,7 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
   const rotulosDe = (jogos: JogoDoTime[]) =>
     jogos.map(j => {
       const pos = rank[String(j.adversario_id)]
-      return `${j.em_casa ? 'vs' : '@'} ${j.adversario || 'adversário'}${pos ? ` (${pos}º)` : ''} · ${dataCurta(j.data)}`
+      return `${j.em_casa ? 'vs' : '@'} ${j.adversario || 'adversário'}${pos ? ` (${pos}º)` : ''}, ${dataCurta(j.data)}`
     })
   /* Sem tabela única (copa, grupos) volta undefined e a tela não marca nada. */
   const topoDe = (jogos: JogoDoTime[]) => Object.keys(rank).length
@@ -975,7 +975,7 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
   const quadrosDoJogo = () => {
     const vHome = home.jogos.map(j => numero(j, mercado.contador, 'jogo', periodo))
     const vAway = away.jogos.map(j => numero(j, mercado.contador, 'jogo', periodo))
-    const descricao = `${comPeriodo(mercado.frase, periodo)} · ${linhaTxt}`
+    const descricao = `${comPeriodo(mercado.frase, periodo)}, ${linhaTxt.toLowerCase()}`
     const selecao: Selecao = {
       id: `${f.fixture_id}:${id}:${periodo}:${lado}:${linha}`, fixture_id: f.fixture_id, jogo: nomeJogo,
       descricao, bateu: 0, n: 0,
@@ -1009,7 +1009,7 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
     const nomeAdv = ehCasa ? f.away_team : f.home_team
     const faz = time.jogos.map(j => numero(j, mercado.contador, 'pro', periodo))
     const cede = adv.jogos.map(j => numero(j, mercado.contador, 'contra', periodo))
-    const descricao = `${comPeriodo(`${mercado.frase} do ${nomeTime}`, periodo)} · ${linhaTxt}`
+    const descricao = `${comPeriodo(`${mercado.frase} do ${nomeTime}`, periodo)}, ${linhaTxt.toLowerCase()}`
     const selecao: Selecao = {
       id: `${f.fixture_id}:${id}:${timeFoco}:${periodo}:${lado}:${linha}`, fixture_id: f.fixture_id,
       jogo: nomeJogo, descricao, bateu: 0, n: 0,
@@ -1089,7 +1089,7 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
             desabilitaMenos={linha <= 0.5} />
         </div>
         {mercado.soTotal && (
-          <p className="text-[11px] text-ink-3">{par.rotulo} só existe no jogo todo: o provedor não separa por tempo.</p>
+          <p className="text-[11px] text-ink-3">{par.rotulo} só no jogo todo.</p>
         )}
       </div>
 
@@ -1138,7 +1138,7 @@ function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
         <div className="card p-4 divide-y divide-line/60">
           {(['sim', 'nao'] as const).map(escolha => {
             const t = btts[escolha]
-            const descricao = `Ambas marcam · ${escolha === 'sim' ? 'Sim' : 'Não'}`
+            const descricao = `Ambas marcam: ${escolha === 'sim' ? 'Sim' : 'Não'}`
             const odd = oddDaSelecao(odds, { mercado: 'btts', quem: 'jogo', periodo: 'total', escolha })
             return (
               <div key={escolha} className={escolha === 'nao' ? 'pt-3 mt-3' : undefined}>
@@ -1275,12 +1275,12 @@ function QuadrosDeResultado({ dados, nomeJogo, odds, oddsAoVivo }: {
                 <div className="flex items-center gap-1.5 mb-1.5 min-w-0">
                   <TeamLogo id={id} name={nome} size={16} />
                   <span className="text-xs font-semibold text-ink-1 truncate flex-1">{nome}</span>
-                  <span className="text-[11px] text-ink-3 tabular-nums shrink-0">{conta.V}V · {conta.E}E · {conta.D}D</span>
+                  <span className="text-[11px] text-ink-3 tabular-nums shrink-0">{conta.V}V {conta.E}E {conta.D}D</span>
                 </div>
                 <div className="flex gap-[3px]">
                   {[...jogos].reverse().map(j => {
                     const r = resultadoDoJogo(j)
-                    const legenda = `${j.em_casa ? 'vs' : '@'} ${j.adversario || 'adversário'} · ${dataCurta(j.data)} · ${j.gols_pro ?? '-'}-${j.gols_contra ?? '-'}`
+                    const legenda = `${j.em_casa ? 'vs' : '@'} ${j.adversario || 'adversário'}, ${dataCurta(j.data)}, ${j.gols_pro ?? '-'}-${j.gols_contra ?? '-'}`
                     return (
                       <Tooltip key={j.fixture_id} className="flex-1 max-w-[28px]"
                         text={<DicaDoJogo j={j} timeId={id} timeNome={nome} rank={dados.rank_adversarios?.[String(j.adversario_id)]} />}>
@@ -1298,8 +1298,7 @@ function QuadrosDeResultado({ dados, nomeJogo, odds, oddsAoVivo }: {
             )
           })}
         <p className="text-[11px] text-ink-3">
-          Pelo placar dos 90 minutos, só no jogo todo. A taxa de cada botão soma os dois lados: "{f.home_team} vence"
-          conta as vitórias dele e as derrotas do {f.away_team}.
+          Pelo placar dos 90 minutos.
         </p>
       </div>
     </>
@@ -1316,7 +1315,7 @@ function BotaoDeResultado({ f, home, away, nomeJogo, odds, escolha, prefixo, rot
   const t = taxa([...serieDeResultado(home, aceitos.home), ...serieDeResultado(away, aceitos.away)], 0.5, 'mais')
   const odd = oddDaSelecao(odds, { mercado: 'resultado', quem: 'jogo', periodo: 'total', escolha })
   const v = vantagem(t.bateu, t.n, odd?.odd)
-  const descricao = `${prefixo} · ${rotulo}`
+  const descricao = `${prefixo}: ${rotulo}`
   const selecao: Selecao = {
     id: `${f.fixture_id}:resultado:${escolha}`, fixture_id: f.fixture_id, jogo: nomeJogo,
     descricao, bateu: t.bateu, n: t.n,
@@ -1328,7 +1327,7 @@ function BotaoDeResultado({ f, home, away, nomeJogo, odds, escolha, prefixo, rot
     },
   }
   const dentro = bilhete.some(s => s.id === selecao.id)
-  const legenda = `${rotulo}${odd ? ` · odd ${odd.odd.toFixed(2)}${odd.casa ? ` (${odd.casa})` : ''}` : ''} · bateu ${t.bateu} de ${t.n}`
+  const legenda = `${rotulo}${odd ? `, odd ${odd.odd.toFixed(2)}${odd.casa ? ` (${odd.casa})` : ''}` : ''}, bateu ${t.bateu} de ${t.n}`
 
   return (
     <button onClick={() => trocarNoGrupo(selecao, `${f.fixture_id}:resultado:`)} aria-pressed={dentro} title={legenda}
@@ -1344,7 +1343,7 @@ function BotaoDeResultado({ f, home, away, nomeJogo, odds, escolha, prefixo, rot
         {odd ? odd.odd.toFixed(2) : '—'}
       </span>
       <span className={cn('text-[11px] font-bold tabular-nums', TOM[tomDaTaxa(t.pct)])}>
-        {t.n ? `${t.bateu}/${t.n} · ${Math.round((t.pct ?? 0) * 100)}%` : 'sem dado'}
+        {t.n ? `${t.bateu}/${t.n} (${Math.round((t.pct ?? 0) * 100)}%)` : 'sem dado'}
       </span>
       {v != null && v >= 0.05 && (
         <span className="text-[10px] font-bold px-1.5 rounded bg-accent/15 text-accent-ink border border-accent/40">
@@ -1461,7 +1460,7 @@ function AbaJogadores({ dados, nomeJogo, mando, setMando }: {
         <div className="card p-8 text-center">
           <Users className="mx-auto text-ink-4 mb-2" size={22} />
           <p className="text-sm text-ink-2">Sem estatística de jogador desse time nos últimos jogos.</p>
-          <p className="text-xs text-ink-3 mt-1">A coleta por jogador cobre as ligas principais; as outras chegam aos poucos.</p>
+          <p className="text-xs text-ink-3 mt-1">Por enquanto só nas ligas principais.</p>
         </div>
       ) : (
         <div className="card divide-y divide-line/60 overflow-hidden">
@@ -1482,10 +1481,10 @@ function AbaJogadores({ dados, nomeJogo, mando, setMando }: {
               <NumeroDaTaxa t={t} />
               <BotaoBilhete selecao={{
                 id: `${f.fixture_id}:p${j.player_id}:${estatId}:${minimo}`, fixture_id: f.fixture_id, jogo: nomeJogo,
-                descricao: `${j.nome} · ${fraseDoJogador(estat, minimo)}`, bateu: t.bateu, n: t.n, player_id: j.player_id,
+                descricao: `${j.nome}: ${fraseDoJogador(estat, minimo)}`, bateu: t.bateu, n: t.n, player_id: j.player_id,
                 perna: {
                   fixture_id: f.fixture_id, home_team_id: f.home_team_id, away_team_id: f.away_team_id,
-                  home: f.home_team, away: f.away_team, descricao: `${j.nome} · ${fraseDoJogador(estat, minimo)}`,
+                  home: f.home_team, away: f.away_team, descricao: `${j.nome}: ${fraseDoJogador(estat, minimo)}`,
                   tipo: 'jogador', estat: estatId, minimo, player_id: j.player_id, player_name: j.nome,
                 },
               }} />
@@ -1520,7 +1519,7 @@ function MiniSerie({ jogos, estat, minimo, doTime }: {
           <Tooltip key={i} className="flex-1 max-w-[14px]"
             text={<DicaDoJogo j={jogo} timeId={doTime.timeId} timeNome={doTime.timeNome}
               rank={doTime.rank[String(jogo.adversario_id)]}
-              valor={`${rotulo}: ${v ?? 'sem dado'}${g.minutos ? ` · ${g.minutos} min` : ''}`} />}>
+              valor={`${rotulo}: ${v ?? 'sem dado'}${g.minutos ? `, ${g.minutos} min` : ''}`} />}>
             <button type="button" aria-label={`${jogo.adversario}: ${v ?? 'sem dado'}`} className="w-full py-1 cursor-default">
               {quadrado}
             </button>
@@ -1731,7 +1730,7 @@ function AbaConfronto({ dados }: { dados: RaioX }) {
       )}
       {vista === 'h2h' && dados.h2h_fonte === 'api' && (
         <p className="text-[11px] text-ink-4 leading-relaxed px-1">
-          Confrontos de fora da nossa base: só o placar, sem escanteios e cartões.
+          Jogos de fora da nossa base: só o placar.
         </p>
       )}
     </div>

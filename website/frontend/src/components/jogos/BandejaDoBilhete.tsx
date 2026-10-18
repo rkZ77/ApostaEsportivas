@@ -57,7 +57,7 @@ export default function BandejaDoBilhete() {
                      flex items-center gap-2.5 font-bold text-sm whitespace-nowrap active:scale-95 transition"
         >
           <Ticket size={18} />
-          <span>Bilhete · {selecoes.length}</span>
+          <span>Bilhete ({selecoes.length})</span>
           {chance != null && (
             <span className="font-mono text-xs bg-black/15 rounded-full px-2 py-0.5 tabular-nums">
               {Math.round(chance * 100)}%

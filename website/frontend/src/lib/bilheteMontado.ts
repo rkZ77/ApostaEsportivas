@@ -151,5 +151,5 @@ export function textoDoBilhete(lista: Selecao[]): string {
   for (const s of lista) porJogo.set(s.jogo, [...(porJogo.get(s.jogo) ?? []), s])
   const blocos = [...porJogo].map(([jogo, ss]) =>
     `${jogo}\n${ss.map(s => `• ${s.descricao}${s.odd ? ` @ ${s.odd.toFixed(2)}` : ''} (${s.bateu}/${s.n} nos últimos jogos)`).join('\n')}`)
-  return `Meu bilhete · Pick IA\n\n${blocos.join('\n\n')}`
+  return `Meu bilhete no Pick IA\n\n${blocos.join('\n\n')}`
 }
