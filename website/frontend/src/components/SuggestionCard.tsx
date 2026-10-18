@@ -300,7 +300,7 @@ function SuggestionCard({
           market: translateMarket(leg.market),
           line: leg.label ?? translateLine(leg.line ?? undefined),
           odd: leg.odd != null ? Number(leg.odd) : undefined,
-          house: leg.house ?? null,
+          house: null,
         })),
         oddCombined: Number(s.odd),
         probabilityPct: pctProb(s.probability ?? s.confidence),
@@ -442,7 +442,7 @@ function SuggestionCard({
   /* A CASA, ROTULADA, EM TODO PICK (04/09) · é o desenho que a alavancagem já
      tinha em cada perna. Mostra a casa de quem registrou quando ela existe,
      senão a que o motor encontrou a odd. */
-  const casaDoPick = (seguido && casaSeguida) ? casaSeguida : (s.bet_house || null)
+  const casaDoPick = (seguido && casaSeguida) ? casaSeguida : null
 
   /*
    * "DEU" NÃO ENTRA NO PICK AO VIVO (04/09, decisão do usuário).
@@ -652,7 +652,7 @@ function SuggestionCard({
                 odd={leg.odd != null ? Number(leg.odd) : null}
                 mercado={translateMarket(leg.market)}
                 linha={leg.label ?? (leg.line ? translateLine(leg.line) : null)}
-                casaDeAposta={leg.house} chance={leg.probability ?? null}
+                chance={leg.probability ?? null}
                 valorFinal={leg.settled_value ?? null} mercadoBruto={leg.market}
                 cor={COR_DA_PERNA[s.pick_type ?? ''] ?? COR_DA_PERNA_PADRAO}
                 aoVivo={agoraDasPernas[i]} Escudo={TeamLogo} />
@@ -897,7 +897,6 @@ function SuggestionCard({
         pickOdd={modalOdd}
         originalOdd={Number(s.odd)}
         suggestedUnits={Math.min(stakeSuggestion?.units ?? 1, maxUnits)}
-        suggestedHouse={s.bet_house}
         maxUnits={maxUnits}
         onConfirm={handleConfirm}
         onCancel={() => setShowModal(false)}

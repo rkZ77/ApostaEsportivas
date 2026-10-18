@@ -296,10 +296,6 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                 <div className="text-[10px] text-ink-3 mb-0.5">Odd</div>
                 <div className="font-mono text-sm font-black text-green-400">{Number(s.odd).toFixed(2)}</div>
               </div>
-              <div className="flex-1 py-2.5 px-3">
-                <div className="text-[10px] text-ink-3 mb-0.5">Casa</div>
-                <div className="text-xs font-bold text-ink-1 truncate">{s.bet_house}</div>
-              </div>
             </div>
           )}
         </div>

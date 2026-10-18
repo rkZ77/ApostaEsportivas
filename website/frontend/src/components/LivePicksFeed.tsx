@@ -1304,10 +1304,10 @@ const CardLive = forwardRef<HTMLDivElement, {
               </dd>
             </CampoDoPick>
           )}
-          {(pick.user_bet_house || pick.bet_house) && (
+          {pick.user_bet_house && (
             <CampoDoPick rotulo="Casa">
               <dd className="text-xs text-ink-3 truncate">
-                {pick.user_bet_house || pick.bet_house}
+                {pick.user_bet_house}
               </dd>
             </CampoDoPick>
           )}

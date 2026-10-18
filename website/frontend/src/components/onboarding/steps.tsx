@@ -446,7 +446,7 @@ const TOUR_STEPS: TourStep[] = [
     Icon: BolaDeFutebol,
     rota: '/jogos',
     alvos: ['[data-tour="jogos-lista"]', '[data-tour="nav-jogos"]'],
-    resumo: 'Na aba Jogos, tocar numa partida abre o Raio-X: os números dela para você pesquisar antes de apostar, com ou sem pick da IA.',
+    resumo: 'Na aba Jogos, tocar numa partida abre o Raio-X: os números dela para você pesquisar, com ou sem pick da IA.',
     corpo: (
       <div className="space-y-3">
         <Etiqueta>O que tem no Raio-X</Etiqueta>
@@ -518,11 +518,11 @@ const TOUR_STEPS: TourStep[] = [
   },
   {
     id: 'registrar',
-    titulo: 'Registre sua aposta',
+    titulo: 'Registre na sua banca',
     Icon: ClipboardCheck,
     rota: '/picks',
     alvos: ['[data-tour="pick-apostar"]', '[data-tour="pick-card"]', '[data-tour="picks-area"]'],
-    resumo: 'Depois de realizar a aposta na casa de apostas, volte para a PickIA e registre o pick para acompanhar seu resultado.',
+    resumo: 'Seguiu um pick por conta própria? Registre aqui pra sua banca acompanhar o resultado.',
     corpo: (
       <div className="space-y-3">
         <Etiqueta>Campos do registro</Etiqueta>
@@ -532,13 +532,13 @@ const TOUR_STEPS: TourStep[] = [
             prometeria uma caixa que não existe naquela tela. */}
         <Linhas
           itens={[
-            ['Casa de aposta', 'Superbet, Bet365, Betano, Outra'],
-            ['Odd apostada', '2.05'],
-            ['Unidades a apostar', '2u'],
+            ['Onde você fez', 'opcional, texto livre'],
+            ['Odd que você pegou', '2.05'],
+            ['Unidades', '2u'],
           ]}
         />
         <p className="text-[11px] text-ink-3 leading-relaxed">
-          A odd já vem preenchida com a do pick e você ajusta se apostou em outra. As
+          A odd já vem preenchida com a do pick e você ajusta se pegou outra. As
           unidades viram reais pelo valor de unidade da sua banca, e a IA sugere quantas
           usar.
         </p>
