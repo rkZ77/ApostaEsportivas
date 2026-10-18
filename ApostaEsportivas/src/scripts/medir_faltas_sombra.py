@@ -6,7 +6,7 @@ SOMENTE LEITURA. Pode rodar contra PROD.
 Uso (da pasta onde esta' o .env.prod):
   python ApostaEsportivas/src/scripts/medir_faltas_sombra.py [desde AAAA-MM-DD]
 
-POR QUE (18/10/2026). Faltas foi pra sombra (engine_pipelines/faltas_pipeline
+POR QUE (18/10/2026). Faltas pode ir pra sombra (engine_pipelines/faltas_pipeline
 .modo_faltas): 21 pernas publicadas com acerto de 43% contra 57% do preco. Em
 sombra o motor continua escolhendo, mas nao publica, entao nao ha' ledger.
 Aqui cada escolha (engine_decisions, FALTAS_ENGINE, status selecionado) e'

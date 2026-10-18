@@ -854,20 +854,19 @@ def _salvar(cur, c: dict) -> None:
 
 
 def modo_faltas() -> str:
-    """`MOTOR_FALTAS`: on | sombra. Padrao `sombra` (18/10/2026).
+    """`MOTOR_FALTAS`: on | sombra. Padrao `on`.
 
-    Diagnostico de 18/10 em PROD: 21 pernas de faltas desde 04/08, acerto de
-    43% contra 57% que o preco dizia, ROI de -24%. Nao e' significativo (1,3
-    erro-padrao), mas e' o produto mais negativo e o usuario aprovou tirar do
-    ar ate' ter numero. Em `sombra` o motor avalia igual e grava a escolha em
-    engine_decisions (status selecionado), mas NAO publica em picks_faltas nem
-    passa pela revisao de IA (que custa). scripts/medir_faltas_sombra.py
-    liquida essas escolhas pelas faltas de match_statistics e diz quando
-    voltar: `on` so' com ROI positivo fora do ruido em 50+ escolhas.
+    18/10/2026: foi pra sombra pelo diagnostico (21 pernas desde 04/08, acerto
+    de 43% contra 57% do preco, ROI de -24%, dentro do ruido) e VOLTOU no
+    mesmo dia por decisao do usuario: faltas e' mercado que ele quer no site.
+    A chave fica pra tirar do ar sem deploy (MOTOR_FALTAS=sombra no Railway):
+    em `sombra` o motor avalia igual e grava a escolha em engine_decisions,
+    mas nao publica em picks_faltas nem chama a revisao de IA. Ligado ou nao,
+    scripts/medir_faltas_sombra.py liquida as escolhas e mede o produto.
     """
     import os
-    modo = os.getenv("MOTOR_FALTAS", "sombra").strip().lower()
-    return modo if modo in ("on", "sombra") else "sombra"
+    modo = os.getenv("MOTOR_FALTAS", "on").strip().lower()
+    return modo if modo in ("on", "sombra") else "on"
 
 
 # AUDITORIA (2026-08-27). Duas linhas, e nenhuma no corpo da funcao: o Pre
