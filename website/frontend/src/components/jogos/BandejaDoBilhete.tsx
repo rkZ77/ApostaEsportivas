@@ -57,7 +57,7 @@ export default function BandejaDoBilhete() {
                      flex items-center gap-2.5 font-bold text-sm whitespace-nowrap active:scale-95 transition"
         >
           <Ticket size={18} />
-          <span>Bilhete ({selecoes.length})</span>
+          <span>Minhas seleções ({selecoes.length})</span>
           {chance != null && (
             <span className="font-mono text-xs bg-black/15 rounded-full px-2 py-0.5 tabular-nums">
               {Math.round(chance * 100)}%
@@ -75,7 +75,7 @@ export default function BandejaDoBilhete() {
             {...fecharNoFundo(fechar)}
           >
             <motion.div
-              role="dialog" aria-label="Bilhete montado"
+              role="dialog" aria-label="Minhas seleções"
               className="w-full md:max-w-md bg-surface-0 border border-line rounded-t-2xl md:rounded-lg
                          max-h-[85dvh] flex flex-col shadow-elev
                          pb-[env(safe-area-inset-bottom)]"
@@ -94,11 +94,11 @@ export default function BandejaDoBilhete() {
               <div onPointerDown={e => { if (window.matchMedia('(max-width: 767px)').matches) arraste.start(e) }}
                 className="px-4 pt-3 pb-3 flex items-center gap-3 border-b border-line md:touch-auto touch-none">
                 {modo === 'registrar' ? (
-                  <button onClick={() => setModo('lista')} aria-label="Voltar pro bilhete"
+                  <button onClick={() => setModo('lista')} aria-label="Voltar pras seleções"
                     className="w-11 h-11 -ml-2 grid place-items-center rounded-lg text-ink-3 hover:bg-surface-2"><ArrowLeft size={20} /></button>
                 ) : <Ticket className="text-accent-ink" size={20} />}
                 <div className="flex-1">
-                  <div className="font-bold text-ink-1">{modo === 'registrar' ? 'Registrar na banca' : 'Meu bilhete'}</div>
+                  <div className="font-bold text-ink-1">{modo === 'registrar' ? 'Registrar na banca' : 'Minhas seleções'}</div>
                   <div className="text-[11px] text-ink-3">
                     {selecoes.length ? `${selecoes.length} ${selecoes.length === 1 ? 'seleção' : 'seleções'}` : 'Pronto'}
                   </div>
@@ -123,7 +123,7 @@ export default function BandejaDoBilhete() {
                         <div className="font-mono text-[11px] text-ink-3 tabular-nums">@ {s.odd.toFixed(2)}</div>
                       )}
                     </div>
-                    <button onClick={() => remover(s.id)} aria-label="Tirar do bilhete"
+                    <button onClick={() => remover(s.id)} aria-label="Tirar das seleções"
                       className="w-11 h-11 grid place-items-center rounded-lg text-ink-3 hover:text-red-400 hover:bg-surface-2 shrink-0">
                       <Trash2 size={18} />
                     </button>
@@ -140,7 +140,7 @@ export default function BandejaDoBilhete() {
                 </div>
                 {oddTotal != null && (
                   <div className="flex items-baseline justify-between">
-                    <span className="text-sm text-ink-2">Odd do bilhete (estimada)</span>
+                    <span className="text-sm text-ink-2">Odd combinada (estimada)</span>
                     <span className="font-mono text-xl font-black text-ink-1 tabular-nums">{oddTotal.toFixed(2)}</span>
                   </div>
                 )}

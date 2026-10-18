@@ -73,10 +73,10 @@ export default function DetalheDoBilhetePessoal({ id, onClose }: { id: number; o
       {...fecharNoFundo(onClose)}>
       <motion.div variants={dialogScale}
         className="w-full max-h-[92dvh] sm:max-w-lg bg-surface-0 border border-line rounded-t-xl sm:rounded-lg flex flex-col overflow-hidden"
-        onClick={e => e.stopPropagation()} role="dialog" aria-label="Meu bilhete">
+        onClick={e => e.stopPropagation()} role="dialog" aria-label="Meu registro">
         <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-line">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-wide text-ink-3">Meu bilhete</p>
+            <p className="text-[10px] font-black uppercase tracking-wide text-ink-3">Meu registro</p>
             <p className="text-sm text-ink-2 mt-0.5">
               {b ? `${b.pernas.length} ${b.pernas.length === 1 ? 'seleção' : 'seleções'}, odd ${b.odd.toFixed(2)}` : 'Carregando…'}
             </p>
@@ -92,7 +92,7 @@ export default function DetalheDoBilhetePessoal({ id, onClose }: { id: number; o
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
           {erro ? (
-            <p className="text-sm text-ink-3 text-center py-10">Não foi possível abrir este bilhete agora. Tente de novo em instantes.</p>
+            <p className="text-sm text-ink-3 text-center py-10">Não foi possível abrir este registro agora. Tente de novo em instantes.</p>
           ) : !b ? (
             <div className="space-y-2 animate-pulse">
               {[1, 2, 3].map(i => <div key={i} className="h-16 rounded-lg bg-surface-2" />)}
@@ -144,11 +144,11 @@ export default function DetalheDoBilhetePessoal({ id, onClose }: { id: number; o
 
               <dl className="rounded-lg border border-line bg-surface-1 divide-y divide-line text-sm">
                 {b.stake_units != null && (
-                  <div className="flex justify-between px-4 py-2.5"><dt className="text-ink-3">Stake</dt><dd className="font-mono text-ink-1">{b.stake_units}u</dd></div>
+                  <div className="flex justify-between px-4 py-2.5"><dt className="text-ink-3">Valor</dt><dd className="font-mono text-ink-1">{b.stake_units}u</dd></div>
                 )}
                 <div className="flex justify-between px-4 py-2.5"><dt className="text-ink-3">Odd</dt><dd className="font-mono text-ink-1">{b.odd.toFixed(2)}</dd></div>
                 {b.casa && (
-                  <div className="flex justify-between px-4 py-2.5"><dt className="text-ink-3">Casa</dt><dd className="text-ink-1">{b.casa}</dd></div>
+                  <div className="flex justify-between px-4 py-2.5"><dt className="text-ink-3">Onde</dt><dd className="text-ink-1">{b.casa}</dd></div>
                 )}
                 {b.lucro_unidades != null && (
                   <div className="flex justify-between px-4 py-2.5">

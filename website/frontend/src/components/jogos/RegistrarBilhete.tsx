@@ -73,7 +73,7 @@ export default function RegistrarBilhete({ selecoes, onFechar }: {
     return (
       <div className="px-4 py-8 text-center">
         <CheckCircle2 className="mx-auto text-accent-ink mb-3" size={40} />
-        <div className="text-lg font-bold text-ink-1">Bilhete registrado na banca</div>
+        <div className="text-lg font-bold text-ink-1">Registrado na sua banca</div>
         <p className="text-sm text-ink-2 mt-2">
           Ele se resolve sozinho, seleção por seleção, quando os jogos terminarem.
         </p>
@@ -102,24 +102,28 @@ export default function RegistrarBilhete({ selecoes, onFechar }: {
   const campo = 'w-full h-12 px-3 rounded-lg bg-surface-1 border border-line text-ink-1 text-base font-mono tabular-nums focus:border-accent outline-none'
   return (
     <div className="px-4 py-4 space-y-4">
+      <p className="text-xs text-ink-3 leading-relaxed">
+        Pra controle da sua banca: anote aqui o bilhete que você fez por conta própria, fora dos picks da IA.
+        O site não faz apostas, só acompanha o resultado de cada seleção.
+      </p>
       <div className="grid grid-cols-2 gap-3">
         <label className="block">
-          <span className="text-xs font-semibold text-ink-2">Stake (unidades)</span>
+          <span className="text-xs font-semibold text-ink-2">Valor (unidades)</span>
           <input inputMode="decimal" value={stake} onChange={e => setStake(e.target.value)} className={cn(campo, 'mt-1')} />
           <span className="text-[11px] text-ink-3 mt-1 block tabular-nums">
             {reais != null && Number.isFinite(reais) ? `R$ ${reais.toFixed(2).replace('.', ',')}` : ' '}
           </span>
         </label>
         <label className="block">
-          <span className="text-xs font-semibold text-ink-2">Odd do bilhete</span>
+          <span className="text-xs font-semibold text-ink-2">Odd que você pegou</span>
           <input inputMode="decimal" placeholder="ex: 3,40" value={odd} onChange={e => setOdd(e.target.value)}
             className={cn(campo, 'mt-1')} />
-          <span className="text-[11px] text-ink-3 mt-1 block">a que a casa mostrou</span>
+          <span className="text-[11px] text-ink-3 mt-1 block">a do bilhete que você fez</span>
         </label>
       </div>
       <label className="block">
-        <span className="text-xs font-semibold text-ink-2">Casa de aposta (opcional)</span>
-        <input value={casa} onChange={e => setCasa(e.target.value)} maxLength={60} placeholder="Betano, Bet365..."
+        <span className="text-xs font-semibold text-ink-2">Onde você fez (opcional)</span>
+        <input value={casa} onChange={e => setCasa(e.target.value)} maxLength={60} placeholder="Anotação livre"
           className={cn(campo, 'mt-1 font-sans')} />
       </label>
       {antigas > 0 && (

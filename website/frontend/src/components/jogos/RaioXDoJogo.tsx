@@ -295,7 +295,7 @@ const O_QUE_TEM: Record<Aba, [string, string[]]> = {
   mercados: ['Quantas vezes cada linha bateu', ['Gols, escanteios, cartões e chutes, linha a linha', 'Mandante em casa e visitante fora separados', 'A odd das casas ao lado da taxa']],
   estatisticas: ['As estatísticas do jogo, ao vivo', ['Posse, xG, finalizações, escanteios e cartões', 'Jogo inteiro, 1º e 2º tempo, atualizando sozinha', 'O árbitro: faltas, cartões e VAR, e os jogos dele com cada time']],
   ia: ['A leitura da IA sobre este jogo', ['Os mercados de over e under em que os dois times concordam', 'Tabela, técnico e o peso de liga ou mata-mata', 'O alerta quando a amostra é curta']],
-  jogadores: ['Cada jogador, jogo a jogo', ['Chutes, chutes no alvo, faltas e cartões', 'Quem começa jogando hoje', 'Monte bilhete de jogador com um toque']],
+  jogadores: ['Cada jogador, jogo a jogo', ['Chutes, chutes no alvo, faltas e cartões', 'Quem começa jogando hoje', 'Separe seleções de jogador com um toque']],
   escalacao: ['O campinho do jogo', ['Escalação oficial ou provável', 'Desfalques e suspensos', 'Técnico e formação']],
   tabela: ['A tabela da liga', ['Posição, pontos e saldo', 'Campanha em casa e fora', 'Zona de classificação e rebaixamento']],
   confronto: ['O confronto direto', ['Vitórias de cada lado e empates', 'Gols e escanteios por jogo', 'Os últimos jogos entre os dois']],
@@ -754,7 +754,7 @@ function BotaoBilhete({ selecao, cheio }: { selecao: Selecao; cheio?: boolean })
     <button
       onClick={() => alternar(selecao)}
       aria-pressed={dentro}
-      aria-label={dentro ? 'Tirar do bilhete' : 'Pôr no bilhete'}
+      aria-label={dentro ? 'Tirar das minhas seleções' : 'Separar nas minhas seleções'}
       className={cn(
         'flex items-center justify-center rounded-lg border font-bold transition active:scale-95',
         cheio ? 'w-full h-12 gap-2 text-sm' : 'w-11 h-11 shrink-0',
@@ -763,7 +763,7 @@ function BotaoBilhete({ selecao, cheio }: { selecao: Selecao; cheio?: boolean })
           : cheio ? 'bg-accent text-on-fill border-accent hover:bg-accent-hover' : 'bg-surface-1 border-line text-ink-2 hover:border-accent/50',
       )}>
       {dentro ? <Check size={18} /> : <Plus size={18} />}
-      {cheio && <span>{dentro ? 'No bilhete' : 'Pôr no bilhete'}</span>}
+      {cheio && <span>{dentro ? 'Separada' : 'Separar seleção'}</span>}
     </button>
   )
 }
@@ -1331,7 +1331,7 @@ function BotaoDeResultado({ f, home, away, nomeJogo, odds, escolha, prefixo, rot
 
   return (
     <button onClick={() => trocarNoGrupo(selecao, `${f.fixture_id}:resultado:`)} aria-pressed={dentro} title={legenda}
-      aria-label={`${dentro ? 'Tirar do bilhete' : 'Pôr no bilhete'}: ${legenda}`}
+      aria-label={`${dentro ? 'Tirar das minhas seleções' : 'Separar nas minhas seleções'}: ${legenda}`}
       className={cn(
         'relative min-w-0 rounded-lg border px-1.5 pt-2.5 pb-2 flex flex-col items-center gap-1 text-center transition active:scale-95',
         dentro ? 'bg-accent/15 border-accent' : 'bg-surface-1 border-line hover:border-line-strong',
