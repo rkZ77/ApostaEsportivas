@@ -152,3 +152,39 @@ def test_nome_curto_e_nome_completo_sao_a_mesma_pessoa():
     ad.arbitro_do_jogo(cur, 99)
     sql, params = next(c for c in cur.consultas if "ORDER BY ms.match_date" in c[0])
     assert params[0] == ["ramon abatti", "ramon abatti abel"]
+
+
+def test_ranking_da_liga_junta_grafias_e_nao_inventa_falta():
+    """Aba Árbitros das Estatísticas (18/10/2026): uma linha por pessoa, e a
+    média de faltas só sobre os jogos que têm a falta."""
+    from routers import suggestions as sg
+
+    class _C:
+        def execute(self, sql, params=None): pass
+        def fetchall(self):
+            return [
+                {"chave": "ramon abatti", "referee": "Ramon Abatti", "jogos": 4, "soma_amarelo": 24,
+                 "soma_vermelho": 1, "soma_faltas": 120, "jogos_faltas": 4},
+                {"chave": "ramon abatti abel", "referee": "Ramon Abatti Abel", "jogos": 12, "soma_amarelo": 60,
+                 "soma_vermelho": 1, "soma_faltas": 250, "jogos_faltas": 10},
+                {"chave": "outro nome", "referee": "Outro Nome", "jogos": 1, "soma_amarelo": 3,
+                 "soma_vermelho": 0, "soma_faltas": None, "jogos_faltas": 0},
+            ]
+        def close(self): pass
+
+    class _Conn:
+        def cursor(self): return _C()
+        def close(self): pass
+
+    import pytest
+    mp = pytest.MonkeyPatch()
+    mp.setattr(sg, "get_connection", lambda: _Conn())
+    mp.setattr(sg, "_safe_query", lambda cur, sql, params: cur.fetchall())
+    try:
+        r = sg.get_liga_arbitros(league_id=71, min_jogos=2, current_user={})
+    finally:
+        mp.undo()
+    (ramon,) = r["arbitros"]                       # o de 1 jogo fica abaixo do mínimo
+    assert ramon["referee"] == "Ramon Abatti Abel" and ramon["jogos"] == 16
+    assert ramon["avg_yellow"] == round(84 / 16, 2)
+    assert ramon["avg_fouls"] == round(370 / 14, 1)   # 14 jogos com falta, não 16

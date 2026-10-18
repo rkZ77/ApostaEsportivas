@@ -3308,32 +3308,60 @@ def get_liga_arbitros(
     conn = get_connection()
     cur = conn.cursor()
     try:
-        rows = _safe_query(cur, """
-            SELECT ms.referee,
+        # POR PESSOA, NAO POR TEXTO (18/10/2026). Agrupava `ms.referee` cru:
+        # "Ramon Abatti" e "Ramon Abatti Abel, Brazil" viravam duas linhas com
+        # meia amostra cada, e as duas podiam cair abaixo do `min_jogos`. Agora
+        # soma por chave (arbitro.py) e junta as grafias da mesma pessoa.
+        #
+        # FALTA AUSENTE NAO E' ZERO: o COALESCE(home_fouls,0) + ... contava o
+        # jogo sem falta na folha como 0 faltas e puxava a media pra baixo.
+        # A media de faltas e' so' sobre os jogos que tem as duas.
+        from arbitro import chaves_equivalentes, sql_chave
+        rows = _safe_query(cur, f"""
+            SELECT {sql_chave('ms.referee')}                          AS chave,
+                   MODE() WITHIN GROUP (ORDER BY split_part(ms.referee, ',', 1)) AS referee,
                    COUNT(*)                                          AS jogos,
-                   ROUND(AVG(COALESCE(ms.total_yellow_cards, 0)), 2)  AS avg_yellow,
-                   ROUND(AVG(COALESCE(ms.total_red_cards, 0)), 2)     AS avg_red,
-                   ROUND(AVG(COALESCE(ms.total_fouls,
-                        COALESCE(ms.home_fouls,0) + COALESCE(ms.away_fouls,0))), 1) AS avg_fouls
+                   SUM(ms.total_yellow_cards)                        AS soma_amarelo,
+                   SUM(COALESCE(ms.total_red_cards, 0))              AS soma_vermelho,
+                   SUM(COALESCE(ms.total_fouls, ms.home_fouls + ms.away_fouls)) AS soma_faltas,
+                   COUNT(COALESCE(ms.total_fouls, ms.home_fouls + ms.away_fouls)) AS jogos_faltas
               FROM match_statistics ms
              WHERE ms.league_id = %s
                AND ms.status IN ('FT','AET','PEN')
                AND ms.referee IS NOT NULL AND ms.referee <> ''
                AND ms.total_yellow_cards IS NOT NULL
-          GROUP BY ms.referee
-            HAVING COUNT(*) >= %s
-          ORDER BY (AVG(COALESCE(ms.total_yellow_cards,0))
-                    + 2 * AVG(COALESCE(ms.total_red_cards,0))) DESC
-        """, (league_id, min_jogos))
+          GROUP BY 1
+        """, (league_id,))
+        por_chave = {r["chave"]: dict(r) for r in rows if r.get("chave")}
+
+        # Grafias da mesma pessoa viram um grupo; o nome mostrado e' o da
+        # grafia com mais jogos.
+        grupos, visto = [], set()
+        for chave in sorted(por_chave, key=lambda c: -por_chave[c]["jogos"]):
+            if chave in visto:
+                continue
+            membros = [c for c in chaves_equivalentes(chave, por_chave) if c not in visto]
+            visto.update(membros)
+            grupos.append([por_chave[c] for c in membros])
 
         arbitros = []
-        for r in rows:
-            d = dict(r)
-            amarelo = float(d["avg_yellow"] or 0)
-            vermelho = float(d["avg_red"] or 0)
-            # Mesma convencao de stats_model._cards_points: vermelho vale 2.
-            d["avg_card_points"] = round(amarelo + 2 * vermelho, 2)
-            arbitros.append(d)
+        for g in grupos:
+            jogos = sum(r["jogos"] for r in g)
+            if jogos < min_jogos:
+                continue
+            amarelo = float(sum(r["soma_amarelo"] or 0 for r in g)) / jogos
+            vermelho = float(sum(r["soma_vermelho"] or 0 for r in g)) / jogos
+            jf = sum(r["jogos_faltas"] or 0 for r in g)
+            arbitros.append({
+                "referee": max(g, key=lambda r: r["jogos"])["referee"],
+                "jogos": jogos,
+                "avg_yellow": round(amarelo, 2),
+                "avg_red": round(vermelho, 2),
+                "avg_fouls": round(float(sum(r["soma_faltas"] or 0 for r in g)) / jf, 1) if jf else None,
+                # Mesma convencao de stats_model._cards_points: vermelho vale 2.
+                "avg_card_points": round(amarelo + 2 * vermelho, 2),
+            })
+        arbitros.sort(key=lambda a: -a["avg_card_points"])
         return {"arbitros": arbitros, "min_jogos": min_jogos}
     finally:
         cur.close()
@@ -4029,8 +4057,17 @@ def _jogos_do_arbitro(cur, referee: str, season, excluir_fixture, limit: int) ->
     # a tela nao tinha como distinguir "arbitro sem historico" de "nome escrito
     # de outro jeito". Aqui os dois lados perdem o sufixo de pais, o espaco em
     # volta e a caixa antes de comparar.
-    alvo_normalizado = "lower(btrim(split_part(%s, ',', 1)))"
-    coluna_normalizada = "lower(btrim(split_part(ms.referee, ',', 1)))"
+    #
+    # A CHAVE DO PROJETO desde 18/10/2026 (arbitro.py): a normalizacao daqui
+    # nao tirava acento nem espaco repetido, e nao juntava "Ramon Abatti" com
+    # "Ramon Abatti Abel" -- o card mostrava so' a metade da temporada que
+    # tivesse a grafia de hoje. Agora e' a mesma do Raio-X.
+    from arbitro import chave_do_arbitro, sql_chave
+    from arbitro_do_jogo import chaves_da_pessoa
+    chave = chave_do_arbitro(referee)
+    if not chave:
+        return []
+    chaves = chaves_da_pessoa(cur, chave)
 
     def _buscar(com_season: bool) -> list:
         filtro_season, params_season = "", []
@@ -4041,13 +4078,13 @@ def _jogos_do_arbitro(cur, referee: str, season, excluir_fixture, limit: int) ->
             SELECT {_COLUNAS_DA_SERIE},
                    {_nome_do_time("home")} || ' x ' || {_nome_do_time("away")} AS opponent
               FROM match_statistics ms
-             WHERE {coluna_normalizada} = {alvo_normalizado}
+             WHERE {sql_chave('ms.referee')} = ANY(%s)
                AND ms.status IN ('FT','AET','PEN')
                AND ms.fixture_id <> COALESCE(%s, -1)
                {filtro_season}
           ORDER BY ms.match_date DESC
              LIMIT %s
-        """, (referee, excluir_fixture, *params_season, limit))
+        """, (chaves, excluir_fixture, *params_season, limit))
         return [dict(r) for r in cur.fetchall()]
 
     jogos = _buscar(True)

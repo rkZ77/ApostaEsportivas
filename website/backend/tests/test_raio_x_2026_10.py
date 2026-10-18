@@ -200,7 +200,8 @@ def test_raio_x_monta_series_do_ponto_de_vista_de_cada_time(monkeypatch):
     assert [j["fixture_id"] for j in r["ultimos_todas"]["home"]] == [901, 902]
     assert r["ultimos_todas"]["home"][0]["escanteios"] == 9
     assert r["nomes_times"]["77"] == "Rival A"
-    sql_arb = next(p for s, p in cur.feitas if "split_part(referee" in s)
+    # A consulta dos JOGOS dele (a outra com split_part e' a das grafias).
+    sql_arb = next(p for s, p in cur.feitas if "split_part(referee" in s and "ORDER BY match_date" in s)
     assert sql_arb[1:5] == (71, 71, 2026, 2026)
 
 
