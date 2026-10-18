@@ -1026,7 +1026,8 @@ const CardLive = forwardRef<HTMLDivElement, {
       pickType: 'live',
       market: translateMarket(pick.market),
       line: translateLine(pick.line),
-      house: pick.user_bet_house ?? pick.bet_house ?? undefined,
+      // Só a casa que a pessoa anotou: a do motor nunca vai pra imagem (18/10/2026).
+      house: pick.user_bet_house ?? undefined,
       odd: Number(pick.odd),
       probabilityPct: pctProb(pick.probability ?? pick.confidence),
       result: pick.result ?? undefined,

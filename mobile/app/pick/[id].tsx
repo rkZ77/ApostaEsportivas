@@ -12,7 +12,7 @@
 import { useLocalSearchParams } from 'expo-router'
 import { Image, ScrollView, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Brain, Cpu, Store } from 'lucide-react-native'
+import { Brain, Cpu } from 'lucide-react-native'
 import { useDados } from '../../src/hooks/useDados'
 import { aoVivo, picks as apiPicks } from '../../src/api/endpoints'
 import { Card, Carregando, Dado, Selo, Separador, Txt, Vazio } from '../../src/components/ui'
@@ -126,12 +126,6 @@ export default function DetalheDoPick() {
           </>
         ) : null}
 
-        {dados.bet_house ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: espaco.sm }}>
-            <Store size={14} color={cores.ink3} />
-            <Txt variante="apoio">Odd observada em {dados.bet_house}</Txt>
-          </View>
-        ) : null}
       </Card>
 
       {/* raciocínio · texto que o motor gravou junto com o pick */}
