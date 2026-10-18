@@ -118,7 +118,7 @@ export function PickCard({ pick, onPress, banca }: {
           }}
         >
           <View style={{ gap: 2 }}>
-            <Txt variante="rotulo">{jaApostou ? 'Apostado' : 'Apostar'}</Txt>
+            <Txt variante="rotulo">{jaApostou ? 'Você seguiu' : 'Sugerido'}</Txt>
             <Txt variante="numero" cor={cores.green}>{fmtUnidades(unidades)}</Txt>
             {valorDaUnidade ? (
               <Txt variante="apoio">{reais(unidades * valorDaUnidade)}</Txt>

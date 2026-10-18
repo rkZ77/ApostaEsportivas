@@ -120,7 +120,7 @@ export default function DetalheDoPick() {
           <>
             <Separador />
             <Dado
-              rotulo={jaApostou ? 'Stake apostada' : 'Stake sugerida'}
+              rotulo={jaApostou ? 'Sua stake' : 'Stake sugerida'}
               valor={stake != null ? unidades(stake) : `${pct(dados.stake_pct)} da banca`}
             />
           </>

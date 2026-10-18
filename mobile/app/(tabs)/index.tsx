@@ -145,7 +145,7 @@ export default function Inicio() {
               cor={banca.dados.total_pnl > 0 ? cores.green : banca.dados.total_pnl < 0 ? cores.red : cores.ink1}
             />
             <Dado rotulo="Acerto" valor={pct(banca.dados.win_rate)} />
-            <Dado rotulo="Apostas" valor={String(banca.dados.total_resolved)} />
+            <Dado rotulo="Seguidos" valor={String(banca.dados.total_resolved)} />
             <ChevronRight size={18} color={cores.ink3} />
           </Card>
         </View>
