@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import logging
 
-from arbitro import chave_do_arbitro, sql_chave
+from arbitro import chave_do_arbitro, chaves_equivalentes, sql_candidatas, sql_chave
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ def var_em_portugues(detalhe: str | None) -> str:
     return VAR_PT.get(d.lower(), d or "Revisão do VAR")
 
 
-def _jogos(cur, chave: str, onde: str, params: tuple, limite: int) -> list[dict]:
+def _jogos(cur, chaves: list, onde: str, params: tuple, limite: int) -> list[dict]:
     cur.execute(f"""
         SELECT ms.fixture_id, ms.match_date, ms.league_id, ms.season,
                ms.home_team_id, ms.away_team_id,
@@ -61,14 +61,14 @@ def _jogos(cur, chave: str, onde: str, params: tuple, limite: int) -> list[dict]
                ms.home_yellow_cards, ms.away_yellow_cards, ms.home_red_cards, ms.away_red_cards,
                ms.home_fouls, ms.away_fouls, ms.events_checked_at IS NOT NULL AS tem_eventos
           FROM match_statistics ms
-         WHERE {sql_chave('ms.referee')} = %s AND ms.status IN ('FT','AET','PEN') {onde}
+         WHERE {sql_chave('ms.referee')} = ANY(%s) AND ms.status IN ('FT','AET','PEN') {onde}
          ORDER BY ms.match_date DESC
          LIMIT %s
-    """, (chave, *params, limite))
+    """, (chaves, *params, limite))
     return [dict(r) for r in cur.fetchall()]
 
 
-def _jogos_extras(cur, chave: str, onde: str, params: tuple, limite: int) -> list[dict]:
+def _jogos_extras(cur, chaves: list, onde: str, params: tuple, limite: int) -> list[dict]:
     """Os jogos dele em `arbitro_partidas`, no formato de `_jogos`. Sem a
     tabela (ambiente onde o coletor nunca rodou) volta vazio."""
     try:
@@ -79,11 +79,11 @@ def _jogos_extras(cur, chave: str, onde: str, params: tuple, limite: int) -> lis
                    ap.home_yellow_cards, ap.away_yellow_cards, ap.home_red_cards, ap.away_red_cards,
                    ap.home_fouls, ap.away_fouls, ap.tem_eventos, ap.var_lances, ap.penaltis
               FROM arbitro_partidas ap
-             WHERE {sql_chave('ap.referee')} = %s AND ap.status IN ('FT','AET','PEN')
+             WHERE {sql_chave('ap.referee')} = ANY(%s) AND ap.status IN ('FT','AET','PEN')
                AND ap.folha_checked_at IS NOT NULL {onde.replace('ms.', 'ap.')}
              ORDER BY ap.match_date DESC
              LIMIT %s
-        """, (chave, *params, limite))
+        """, (chaves, *params, limite))
         linhas = [dict(r) for r in cur.fetchall()]
     except Exception:
         cur.connection.rollback()
@@ -95,6 +95,21 @@ def _jogos_extras(cur, chave: str, onde: str, params: tuple, limite: int) -> lis
                      "lance": var_em_portugues(v.get("detalhe"))} for v in (j.pop("var_lances", None) or [])]
         j["penaltis"] = j.get("penaltis") or 0
     return linhas
+
+
+def chaves_da_pessoa(cur, chave: str) -> list:
+    """A chave dele mais as outras grafias da MESMA pessoa no banco ("Ramon
+    Abatti" e "Ramon Abatti Abel") · regra em arbitro.chaves_equivalentes."""
+    primeira = chave.split()[0]
+    conhecidas = set()
+    for tabela in ("match_statistics", "arbitro_partidas"):
+        try:
+            cur.execute(f"SELECT DISTINCT {sql_chave('referee')} AS k FROM {tabela} "
+                        f"WHERE {sql_candidatas('referee')}", (primeira,))
+            conhecidas.update(r["k"] for r in cur.fetchall() if r.get("k"))
+        except Exception:
+            cur.connection.rollback()
+    return chaves_equivalentes(chave, conhecidas)
 
 
 def _juntar(base: list[dict], extras: list[dict], limite: int) -> list[dict]:
@@ -224,9 +239,11 @@ def arbitro_do_jogo(cur, fixture_id: int) -> dict:
         # A escala costuma sair 1 ou 2 dias antes do jogo.
         return {"status": "sem_arbitro"}
 
+    chaves = chaves_da_pessoa(cur, chave)
+
     def os_dois(onde, params, limite):
-        return _com_eventos(cur, _juntar(_jogos(cur, chave, onde, params, limite),
-                                         _jogos_extras(cur, chave, onde, params, limite), limite))
+        return _com_eventos(cur, _juntar(_jogos(cur, chaves, onde, params, limite),
+                                         _jogos_extras(cur, chaves, onde, params, limite), limite))
 
     temporada = os_dois("AND ms.season = %s", (fix["season"],), 500)
     com_casa = os_dois("AND (ms.home_team_id = %s OR ms.away_team_id = %s)",

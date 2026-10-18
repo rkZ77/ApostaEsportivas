@@ -38,8 +38,9 @@ def test_resumo_conta_cartao_falta_var_e_mando():
 class _Cur:
     """Responde pelo trecho do SQL."""
 
-    def __init__(self, fix, jogos, eventos=(), extras=()):
+    def __init__(self, fix, jogos, eventos=(), extras=(), grafias=()):
         self.fix, self.jogos, self.eventos, self.extras = fix, jogos, list(eventos), list(extras)
+        self.grafias = list(grafias)
         self.connection = self
         self.consultas = []
         self._r = []
@@ -48,7 +49,9 @@ class _Cur:
 
     def execute(self, sql, params=None):
         self.consultas.append((sql, params))
-        if "FROM fixtures f" in sql:
+        if "SELECT DISTINCT" in sql:
+            self._r = [{"k": g} for g in self.grafias if g.split()[0] == params[0]]
+        elif "FROM fixtures f" in sql:
             self._r = [self.fix] if self.fix else []
         elif "FROM arbitro_partidas" in sql:
             if "ap.season = %s" in sql:
@@ -103,7 +106,7 @@ def test_nome_vem_pela_chave_e_nao_pelo_texto():
     cur = _Cur(FIX, [])
     ad.arbitro_do_jogo(cur, 99)
     sql, params = next(c for c in cur.consultas if "ms.referee" in c[0] and "ORDER BY ms.match_date" in c[0])
-    assert params[0] == "raphael claus" and "split_part" in sql
+    assert params[0] == ["raphael claus"] and "split_part" in sql
 
 
 # ── temporada inteira (18/10/2026): jogos de fora da base, em arbitro_partidas ──
@@ -139,3 +142,13 @@ def test_mesmo_jogo_nas_duas_tabelas_conta_uma_vez():
     assert len(por_id) == 2
     assert por_id[1]["amarelos"] == 5 and not por_id[1]["extra"]
     assert por_id[2]["amarelos"] == 5 and por_id[2]["extra"]
+
+
+def test_nome_curto_e_nome_completo_sao_a_mesma_pessoa():
+    """18/10/2026: o Raio-X do Ramon Abatti mostrava 4 jogos de 16. A API
+    escreveu "Ramon Abatti Abel" ate' agosto e "Ramon Abatti" depois."""
+    fix = {**FIX, "referee": "Ramon Abatti, Brazil"}
+    cur = _Cur(fix, [], grafias=["ramon abatti", "ramon abatti abel", "ramon souza"])
+    ad.arbitro_do_jogo(cur, 99)
+    sql, params = next(c for c in cur.consultas if "ORDER BY ms.match_date" in c[0])
+    assert params[0] == ["ramon abatti", "ramon abatti abel"]
