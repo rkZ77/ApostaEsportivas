@@ -391,6 +391,26 @@ def _leitura_tatica(ctx, hist_casa, hist_fora, casa, fora) -> dict | None:
         return None
 
 
+def _arbitro_no_contexto(arbitro, liga, temporada, hist_casa, hist_fora, h2h) -> dict | None:
+    """Bloco `arbitro` do dossie. Qualquer falha devolve None: o dossie nunca
+    cai por causa do arbitro."""
+    if not arbitro:
+        return None
+    try:
+        from services.referee_stats_service import RefereeStatsService
+        from services.pick_engine import arbitro_no_contexto, rivalry_model
+        servico = RefereeStatsService()
+        medias = [m for m in (rivalry_model._media_cartoes(hist_casa),
+                              rivalry_model._media_cartoes(hist_fora)) if m is not None]
+        baseline = sum(medias) / len(medias) if medias else None
+        return arbitro_no_contexto.leitura(
+            arbitro, servico.get_stats(arbitro, temporada), servico.get_league_stats(liga, temporada),
+            rivalry_model.rivalry_signal(h2h, baseline))
+    except Exception as e:
+        print(f"[DOSSIE] arbitro indisponivel: {e}")
+        return None
+
+
 def contexto_do_motor(fixture_id: int) -> dict | None:
     """Contexto atual da partida pro motor (contexto_partida de
     orchestrator.analyze_fixture_markets). Sai do mesmo memo do dossie."""
@@ -447,13 +467,13 @@ def _montar(fixture_id: int) -> dict | None:
     try:
         cur.execute("""
             SELECT fixture_id, home_team_id, away_team_id, home_team, away_team,
-                   league_id, season, match_datetime, round
+                   league_id, season, match_datetime, round, referee
               FROM fixtures WHERE fixture_id = %s
         """, (fixture_id,))
         linha = cur.fetchone()
         if not linha:
             return None
-        (_, casa, fora, nome_casa, nome_fora, liga, temporada, quando, rodada) = linha
+        (_, casa, fora, nome_casa, nome_fora, liga, temporada, quando, rodada, arbitro) = linha
 
         stats = MatchStatsService()
         hist_casa = stats.get_all_matches_full(casa, temporada, liga, before_date=quando)
@@ -506,6 +526,9 @@ def _montar(fixture_id: int) -> dict | None:
 
     from services.pick_engine import contexto_atual
     dossie = {
+        # O arbitro com a referencia da liga e o historico de cartao do
+        # confronto (18/10/2026) · ver arbitro_no_contexto.
+        "arbitro": _arbitro_no_contexto(arbitro, liga, temporada, hist_casa, hist_fora, h2h),
         "rodada": rodada,
         "mandante": time(casa, nome_casa, hist_casa, "home", escal_casa),
         "visitante": time(fora, nome_fora, hist_fora, "away", escal_fora),

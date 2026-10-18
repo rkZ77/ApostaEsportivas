@@ -98,6 +98,10 @@ MEDICOES = (
     # pelas faltas do jogo; o veredito diz quando volta pro site.
     ("faltas_sombra", "Faltas (escolhas do motor x resultado)",
      "scripts/medir_faltas_sombra.py", []),
+    # 18/10: o arbitro (perfil contra a liga) e o classico mudam o cartao alem
+    # do que os times dizem? Hoje isso vai so' pro dossie da IA.
+    ("arbitro_e_classico", "Árbitro e clássico (cartão além do esperado pelos times)",
+     "scripts/medir_arbitro_e_classico.py", []),
 )
 
 
