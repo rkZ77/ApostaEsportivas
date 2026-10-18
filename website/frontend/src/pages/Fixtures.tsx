@@ -537,8 +537,13 @@ export default function Fixtures() {
               <button key={k} onClick={() => setFiltro(k)}
                 className={`h-11 px-4 rounded-full text-sm font-semibold border shrink-0 transition-colors ${
                   filtro === k ? 'bg-accent text-on-fill border-accent' : 'bg-surface-1 text-ink-2 border-line'}`}>
-                {r}{k === 'aovivo' && liveCount > 0 ? ` · ${liveCount}` : ''}
-                {k === 'aberto' && abertosCount > 0 ? ` · ${abertosCount}` : ''}
+                {r}
+                {/* A contagem é um selo, não "Ao vivo · 3" (18/10/2026). */}
+                {(k === 'aovivo' ? liveCount : k === 'aberto' ? abertosCount : 0) > 0 && (
+                  <span className="ml-1.5 text-xs font-bold tabular-nums opacity-75">
+                    {k === 'aovivo' ? liveCount : abertosCount}
+                  </span>
+                )}
               </button>
             ))}
           </div>

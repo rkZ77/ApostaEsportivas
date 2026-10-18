@@ -319,7 +319,7 @@ export function EstatisticasContent({ onAbrirJogo }: {
             <h2 className="text-2xl leading-tight text-ink-1 truncate">{nomeDaLigaPt(liga.league_id, liga.name)}</h2>
             <p className="text-xs text-ink-3 mt-0.5">
               {[paisDaLiga(liga.league_id)?.pais, `Temporada ${liga.season}`,
-                liga.ativa === false ? 'encerrada' : null].filter(Boolean).join(' · ')}
+                liga.ativa === false ? 'encerrada' : null].filter(Boolean).join(', ')}
             </p>
           </div>
         </div>

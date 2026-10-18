@@ -139,7 +139,7 @@ export default function VarreduraDoRadar({ partidas }: { partidas: Alvo[] }) {
             key={p.fixture_id}
             title={`${p.home_team ?? 'Time'} x ${p.away_team ?? 'Time'}`
                    + (minuto != null ? `, ${minuto}'` : '')
-                   + (p.tem_pick ? ' · já virou pick' : '')}
+                   + (p.tem_pick ? ', já virou pick' : '')}
             className={`absolute -translate-x-1/2 -translate-y-1/2 flex items-center gap-0.5
                         transition-[left,top] duration-1000 ease-linear
                         rounded-full border backdrop-blur-[1px] ${cheio ? 'px-1 py-0.5' : 'px-1.5 py-1'} ${

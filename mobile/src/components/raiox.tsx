@@ -39,7 +39,7 @@ export function NumeroDaTaxa({ t, grande, recente }: { t: Taxa; grande?: boolean
     <View style={{ alignItems: 'flex-end' }}>
       <Txt variante={grande ? 'display' : 'titulo'} cor={COR_TOM[tomDaTaxa(t.pct)]}>{t.n ? `${t.bateu}/${t.n}` : '—'}</Txt>
       <Txt variante="apoio">
-        {t.pct != null ? `${Math.round(t.pct * 100)}%` : 'sem dado'}{t.media != null ? ` · média ${t.media.toFixed(1)}` : ''}
+        {t.pct != null ? `${Math.round(t.pct * 100)}%` : 'sem dado'}{t.media != null ? `, média ${t.media.toFixed(1)}` : ''}
       </Txt>
       {/* Média dos 5 mais recentes (17/10/2026): a série é a temporada
           inteira, e a média dela esconde time em alta ou em queda. */}
@@ -154,7 +154,7 @@ export function LinhaDaOdd({ odd, bateu, n }: { odd: OddDaCasa | null; bateu: nu
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: espaco.sm, marginTop: espaco.md }}>
       <Txt variante="apoio">Odd</Txt>
       <Txt variante="numero">{odd.odd.toFixed(2)}</Txt>
-      {odd.casa ? <Txt variante="apoio">· {odd.casa}</Txt> : null}
+      {odd.casa ? <Txt variante="apoio">na {odd.casa}</Txt> : null}
       {selo ? (
         <View style={{ marginLeft: 'auto', borderWidth: 1, borderColor: selo.cor, borderRadius: raio.sm, paddingHorizontal: 8, paddingVertical: 3 }}>
           <Txt variante="apoio" cor={selo.cor} style={{ fontWeight: '700' }}>{selo.txt}</Txt>
