@@ -86,6 +86,7 @@ def run_migrations():
     from collectors.calendario_service import DDL as DDL_CALENDARIO
     from collectors.eventos_collector_service import DDL as DDL_EVENTOS
     from collectors.clima_service import DDL as DDL_CLIMA
+    from collectors.arbitro_temporada_service import DDL as DDL_ARBITRO
     migrations = [
         # HORA DO JOGO NA TABELA QUE NAO SOME (2026-08-30, pedido do usuario).
         #
@@ -124,6 +125,8 @@ def run_migrations():
         # EVENTOS POR MINUTO E CLIMA (2026-09-27).
         *DDL_EVENTOS,
         *DDL_CLIMA,
+        # TEMPORADA INTEIRA DO ARBITRO (2026-10-18) -- ver arbitro_temporada_service.
+        *DDL_ARBITRO,
         "ALTER TABLE picks_vip   ADD COLUMN IF NOT EXISTS market_id INTEGER;",
         "ALTER TABLE picks_free  ADD COLUMN IF NOT EXISTS market_id INTEGER;",
         "ALTER TABLE picks_vip   ADD COLUMN IF NOT EXISTS stake_units INTEGER;",
@@ -773,6 +776,15 @@ def cmd_eventos(*args):
     backfill(teto_requisicoes=int(args[0]) if args and args[0] else 100)
 
 
+def cmd_arbitros(*args):
+    """Temporada inteira dos arbitros escalados, em todas as ligas do pais.
+
+    Barato: descoberta semanal, listagem a cada 3 dias, folha 20 jogos por
+    requisicao -- ver collectors/arbitro_temporada_service."""
+    from collectors.arbitro_temporada_service import coletar, TETO_PADRAO
+    coletar(teto_requisicoes=int(args[0]) if args and args[0] else TETO_PADRAO)
+
+
 def cmd_clima(*args):
     """Clima e altitude das partidas do calendario (Open-Meteo, sem cota)."""
     from collectors.clima_service import coletar
@@ -1053,6 +1065,12 @@ COMANDOS: tuple = (
             "Atualiza jogos, stats, classificação",
             lambda *a: cmd_dados(mode="full" if _tem(a, "full") else "fast"),
             etapa="DADOS", uso="dados [full]"),
+    # ARBITRO LOGO DEPOIS DOS DADOS (2026-10-18): precisa da escala de hoje
+    # (`fixtures.referee`) e do calendario que a etapa acima acabou de gravar.
+    # Teto de 40 requisicoes; nao mexe no que o motor le (tabela a parte).
+    Comando("arbitros", "Árbitros · temporada inteira (todas as ligas do país)",
+            "Busca os jogos da temporada dos árbitros escalados, inclusive em liga não cadastrada",
+            lambda *a: cmd_arbitros(*a), etapa="ÁRBITROS", uso="arbitros [teto]"),
     # COLETA DE ESTATISTICA DE JOGADOR · entrou no `tudo` em 2026-08-28.
     #
     # A razao que a mantinha fora se inverteu. O comentario antigo dizia "1

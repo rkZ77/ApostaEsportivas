@@ -8,6 +8,11 @@ Tudo do banco, nenhuma chamada a API:
   - VAR e pênalti: `match_events` (coletor de eventos). Só existe nos jogos
     com evento coletado, e a média diz em quantos.
 
+Desde 18/10/2026 entra também `arbitro_partidas`: os jogos dele nas ligas do
+país que não cadastramos (Série B, Copa do Brasil, estadual) e os buracos de
+folha das ativas · ver collectors/arbitro_temporada_service.py. O mesmo jogo
+nas duas tabelas vale o de `match_statistics` quando ele tem a folha.
+
 Recortes: a temporada dele em TODAS as competições (árbitro apita liga e
 copa), a mesma só nesta liga, e os jogos dele com cada um dos dois times em
 qualquer temporada · encontro de árbitro com time é raro, e só a temporada
@@ -61,6 +66,46 @@ def _jogos(cur, chave: str, onde: str, params: tuple, limite: int) -> list[dict]
          LIMIT %s
     """, (chave, *params, limite))
     return [dict(r) for r in cur.fetchall()]
+
+
+def _jogos_extras(cur, chave: str, onde: str, params: tuple, limite: int) -> list[dict]:
+    """Os jogos dele em `arbitro_partidas`, no formato de `_jogos`. Sem a
+    tabela (ambiente onde o coletor nunca rodou) volta vazio."""
+    try:
+        cur.execute(f"""
+            SELECT ap.fixture_id, ap.match_date, ap.league_id, ap.season, ap.liga_nome,
+                   ap.home_team_id, ap.away_team_id, ap.home_team, ap.away_team,
+                   ap.home_goals, ap.away_goals,
+                   ap.home_yellow_cards, ap.away_yellow_cards, ap.home_red_cards, ap.away_red_cards,
+                   ap.home_fouls, ap.away_fouls, ap.tem_eventos, ap.var_lances, ap.penaltis
+              FROM arbitro_partidas ap
+             WHERE {sql_chave('ap.referee')} = %s AND ap.status IN ('FT','AET','PEN')
+               AND ap.folha_checked_at IS NOT NULL {onde.replace('ms.', 'ap.')}
+             ORDER BY ap.match_date DESC
+             LIMIT %s
+        """, (chave, *params, limite))
+        linhas = [dict(r) for r in cur.fetchall()]
+    except Exception:
+        cur.connection.rollback()
+        logger.warning("[ARBITRO] arbitro_partidas indisponivel", exc_info=True)
+        return []
+    for j in linhas:
+        j["extra"] = True
+        j["var"] = [{"minuto": v.get("minuto"), "team_id": v.get("team_id"),
+                     "lance": var_em_portugues(v.get("detalhe"))} for v in (j.pop("var_lances", None) or [])]
+        j["penaltis"] = j.get("penaltis") or 0
+    return linhas
+
+
+def _juntar(base: list[dict], extras: list[dict], limite: int) -> list[dict]:
+    """Um jogo só uma vez. `match_statistics` ganha quando tem a folha de
+    cartão; sem ela, o de `arbitro_partidas` (que existe pra tapar o buraco)."""
+    por_id = {j["fixture_id"]: j for j in base}
+    for j in extras:
+        atual = por_id.get(j["fixture_id"])
+        if atual is None or (atual.get("home_yellow_cards") is None and j.get("home_yellow_cards") is not None):
+            por_id[j["fixture_id"]] = j
+    return sorted(por_id.values(), key=lambda j: str(j["match_date"])[:19], reverse=True)[:limite]
 
 
 def _eventos(cur, fixture_ids: list) -> dict:
@@ -134,6 +179,10 @@ def resumo(jogos: list[dict]) -> dict:
 def _linha_da_tela(j: dict) -> dict:
     return {
         "fixture_id": j["fixture_id"],
+        # Nome da competição só nos jogos de fora da base (Série B, estadual):
+        # os das ligas cadastradas o front já sabe nomear pelo id.
+        "liga_nome": j.get("liga_nome") if j.get("extra") else None,
+        "extra": bool(j.get("extra")),
         "data": j["match_date"].isoformat()[:10] if hasattr(j["match_date"], "isoformat") else str(j["match_date"])[:10],
         "league_id": j["league_id"],
         "home_team_id": j["home_team_id"], "away_team_id": j["away_team_id"],
@@ -149,8 +198,10 @@ def _linha_da_tela(j: dict) -> dict:
 
 
 def _com_eventos(cur, jogos: list[dict]) -> list[dict]:
-    ev = _eventos(cur, [j["fixture_id"] for j in jogos if j.get("tem_eventos")])
+    ev = _eventos(cur, [j["fixture_id"] for j in jogos if j.get("tem_eventos") and not j.get("extra")])
     for j in jogos:
+        if j.get("extra"):
+            continue                    # VAR e pênalti já vieram com o jogo
         e = ev.get(j["fixture_id"]) or {}
         j["var"] = e.get("var", [])
         j["penaltis"] = e.get("penaltis", 0)
@@ -173,13 +224,15 @@ def arbitro_do_jogo(cur, fixture_id: int) -> dict:
         # A escala costuma sair 1 ou 2 dias antes do jogo.
         return {"status": "sem_arbitro"}
 
-    temporada = _com_eventos(cur, _jogos(cur, chave, "AND ms.season = %s", (fix["season"],), 500))
-    com_casa = _com_eventos(cur, _jogos(
-        cur, chave, "AND (ms.home_team_id = %s OR ms.away_team_id = %s)",
-        (fix["home_team_id"], fix["home_team_id"]), MAX_COM_TIME))
-    com_fora = _com_eventos(cur, _jogos(
-        cur, chave, "AND (ms.home_team_id = %s OR ms.away_team_id = %s)",
-        (fix["away_team_id"], fix["away_team_id"]), MAX_COM_TIME))
+    def os_dois(onde, params, limite):
+        return _com_eventos(cur, _juntar(_jogos(cur, chave, onde, params, limite),
+                                         _jogos_extras(cur, chave, onde, params, limite), limite))
+
+    temporada = os_dois("AND ms.season = %s", (fix["season"],), 500)
+    com_casa = os_dois("AND (ms.home_team_id = %s OR ms.away_team_id = %s)",
+                       (fix["home_team_id"], fix["home_team_id"]), MAX_COM_TIME)
+    com_fora = os_dois("AND (ms.home_team_id = %s OR ms.away_team_id = %s)",
+                       (fix["away_team_id"], fix["away_team_id"]), MAX_COM_TIME)
     nesta_liga = [j for j in temporada if j["league_id"] == fix["league_id"]]
 
     def bloco(jogos, limite=MAX_LISTA):
@@ -190,6 +243,9 @@ def arbitro_do_jogo(cur, fixture_id: int) -> dict:
         "nome": nome.split(",", 1)[0].strip(),
         "temporada": fix["season"],
         "league_id": fix["league_id"],
+        # Jogos da temporada que vieram de fora da base (liga não cadastrada
+        # ou buraco de folha): o front diz de onde saiu a amostra.
+        "de_outras_competicoes": sum(1 for j in temporada if j.get("extra")),
         "temporada_toda": bloco(temporada),
         "nesta_liga": bloco(nesta_liga),
         "com_mandante": {"team_id": fix["home_team_id"], **bloco(com_casa)},
