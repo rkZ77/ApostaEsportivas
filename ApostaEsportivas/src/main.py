@@ -675,7 +675,7 @@ def cmd_odds():
     OddsMain().run()
 
 
-def cmd_player_stats(limite: str = "50"):
+def cmd_player_stats(limite: str = "200"):
     """Estatistica por jogador dos jogos ja encerrados que ainda nao tem.
 
     Fora do cmd_tudo de proposito: consome 1 requisicao da API por fixture, e
@@ -1084,7 +1084,8 @@ COMANDOS: tuple = (
     # quando alguem lembra de clicar -- e o sintoma seria o pior tipo: aba
     # vazia, sem erro nenhum, indistinguivel de "hoje nao teve oportunidade".
     #
-    # O CUSTO E' LIMITADO E PREVISIVEL: teto de 50 fixtures por rodada, e o
+    # O CUSTO E' LIMITADO E PREVISIVEL: teto de 200 fixtures por rodada (~10
+    # requisicoes: 20 por lote desde 18/10/2026; eram 50, uma cada), e o
     # rodizio por liga reparte esse teto entre as ligas com fila em vez de
     # gastar tudo nas duas que jogaram ontem (ver coletar_pendentes).
     #
@@ -1104,8 +1105,8 @@ COMANDOS: tuple = (
     # de jogo JA ENCERRADO. Odd e' do jogo de hoje. Sao filas diferentes, e
     # nenhuma delas espera pela outra.
     Comando("player_stats", "Estatistica de jogador (API)",
-            "Coleta estatística por jogador dos jogos encerrados (limite: 50)",
-            lambda *a: cmd_player_stats(a[0] if a else "50"),
+            "Coleta estatística por jogador dos jogos encerrados (limite: 200, 20 por requisição)",
+            lambda *a: cmd_player_stats(a[0] if a else "200"),
             uso="player_stats [limite]", etapa="ESTATISTICA DE JOGADOR"),
     Comando("odds", "Capturar odds",
             "Coleta odds pré-jogo",

@@ -72,6 +72,8 @@ def _coletar(monkeypatch, respostas):
             raise r
         return r
     monkeypatch.setattr(servico, "_buscar", _buscar)
+    # Lote vazio: estes testes sao do caminho partida por partida.
+    monkeypatch.setattr(servico, "_buscar_lote", lambda ids: {})
     servico.coletar([{"fixture_id": f} for f in respostas])
     return cur, chamadas
 
@@ -116,3 +118,41 @@ def test_nao_ha_mais_chamada_a_mao_na_api():
     fonte = inspect.getsource(col)
     assert "requests.get" not in fonte
     assert 'buscar("fixtures/players"' in fonte
+
+
+# ── vinte partidas por requisicao (18/10/2026) ───────────────────────────────
+
+def test_lote_traz_os_jogadores_e_so_o_que_faltou_vai_avulso(monkeypatch):
+    cur = _Cur()
+    monkeypatch.setattr(col, "get_connection", lambda: _Conn(cur))
+    monkeypatch.setattr(col, "PAUSA_ENTRE_CHAMADAS", 0)
+    lotes, avulsas = [], []
+
+    def _buscar_api(recurso, params, origem=None):
+        assert recurso == "fixtures"
+        ids = [int(x) for x in params["ids"].split("-")]
+        lotes.append(ids)
+        # A partida 3 vem sem o bloco `players`: tem que ir avulsa.
+        return [{"fixture": {"id": f}, "players": _resposta(_jogador(f * 10, 90))}
+                for f in ids if f != 3] + [{"fixture": {"id": 3}}]
+    monkeypatch.setattr(col, "buscar", _buscar_api)
+    servico = col.PlayerStatsCollectorService(debug_shape=False)
+    monkeypatch.setattr(servico, "_buscar", lambda fid: avulsas.append(fid) or _resposta(_jogador(99, 90)))
+
+    servico.coletar([{"fixture_id": f} for f in range(1, 23)])
+    assert lotes == [list(range(1, 21)), [21, 22]]       # 22 partidas, 2 requisicoes
+    assert avulsas == [3]
+    assert len(cur.lotes) == 22
+
+
+def test_cota_esgotada_no_lote_para_a_rodada(monkeypatch):
+    cur = _Cur()
+    monkeypatch.setattr(col, "get_connection", lambda: _Conn(cur))
+    servico = col.PlayerStatsCollectorService(debug_shape=False)
+
+    def _sem_cota(ids):
+        raise ApiQuotaEsgotada("fixtures", {"requests": "limite"})
+    monkeypatch.setattr(servico, "_buscar_lote", _sem_cota)
+    monkeypatch.setattr(servico, "_buscar", lambda fid: pytest.fail("nao devia ir avulsa"))
+    servico.coletar([{"fixture_id": 1}, {"fixture_id": 2}])
+    assert cur.lotes == [] and not _anotadas(cur)

@@ -40,6 +40,15 @@ load_dotenv(find_dotenv())
 # A API limita requisicoes por minuto; o resto do projeto usa a mesma pausa.
 PAUSA_ENTRE_CHAMADAS = 0.4
 
+#: VINTE PARTIDAS POR REQUISICAO (18/10/2026). `/fixtures?ids=` devolve, pra
+#: cada partida, o mesmo bloco `players` de `/fixtures/players` -- o que era 1
+#: requisicao por jogo vira 1 a cada 20. Com o mesmo gasto de antes (~10
+#: requisicoes) a rodada passa de 50 pra 200 partidas, e o backlog de jogador
+#: das ligas com fila anda 4x mais rapido. Partida que o lote nao trouxer cai
+#: no caminho antigo, uma por uma.
+IDS_POR_REQUISICAO = 20
+LIMITE_PADRAO = 200
+
 #: PARTIDA SEM FOLHA DE JOGADOR NAO FICA NA FILA PRA SEMPRE (2026-10-16).
 #:
 #: A fila e' "N mais recentes por liga". Partida que a API nao cobre (liga sem
@@ -267,6 +276,19 @@ class PlayerStatsCollectorService:
         return buscar("fixtures/players", {"fixture": fixture_id},
                       origem="coletor_jogadores")
 
+    def _buscar_lote(self, fixture_ids: list) -> dict:
+        """{fixture_id: bloco `players`} das partidas que vieram no lote.
+
+        So' entra quem trouxe a chave `players`: partida sem ela no lote (ou
+        lote que falhou) fica de fora e vai pelo `_buscar` de uma por uma.
+        `ApiQuotaEsgotada` sobe, pra `coletar` encerrar a rodada."""
+        resposta = buscar("fixtures", {"ids": "-".join(map(str, fixture_ids))},
+                          origem="coletor_jogadores")
+        return {_get(item, "fixture", "id"): item["players"]
+                for item in resposta or []
+                if isinstance(item, dict) and isinstance(item.get("players"), list)
+                and _get(item, "fixture", "id") is not None}
+
     @staticmethod
     def _garantir_tabela(conn, cur) -> None:
         from utils import esquema
@@ -369,11 +391,28 @@ class PlayerStatsCollectorService:
         cur = conn.cursor()
         self._garantir_tabela(conn, cur)
         total = 0
+        lote: dict = {}
 
-        for fixture in fixtures:
+        for i, fixture in enumerate(fixtures):
             fid = fixture["fixture_id"]
+            if i % IDS_POR_REQUISICAO == 0:
+                ids = [f["fixture_id"] for f in fixtures[i:i + IDS_POR_REQUISICAO]]
+                try:
+                    lote = self._buscar_lote(ids)
+                except ApiQuotaEsgotada:
+                    print("[PLAYER_STATS] Cota da API esgotada · rodada encerrada, "
+                          "o resto fica pra proxima.")
+                    break
+                except Exception as e:
+                    # Lote que falha nao perde as partidas: vao uma por uma.
+                    print(f"[PLAYER_STATS] Lote a partir de {ids[0]} falhou ({e}) · "
+                          f"seguindo partida por partida.")
+                    lote = {}
+                time.sleep(PAUSA_ENTRE_CHAMADAS)
+            avulsa = fid not in lote
             try:
-                linhas = self._linhas_da_fixture(fixture, self._buscar(fid))
+                resposta = lote[fid] if not avulsa else self._buscar(fid)
+                linhas = self._linhas_da_fixture(fixture, resposta)
                 # Ninguem com minuto em campo = folha ainda nao publicada.
                 # Gravar assim tiraria a partida da fila (ela so' olha quem nao
                 # tem linha) com tudo NULL pra sempre. Anota e tenta depois.
@@ -466,14 +505,15 @@ class PlayerStatsCollectorService:
                     conn.commit()
                 except Exception:
                     conn.rollback()
-            time.sleep(PAUSA_ENTRE_CHAMADAS)
+            if avulsa:
+                time.sleep(PAUSA_ENTRE_CHAMADAS)
 
         cur.close()
         conn.close()
         print(f"[PLAYER_STATS] {total} linhas de jogador gravadas.")
         return total
 
-    def coletar_pendentes(self, limite: int = 50, por_liga: int | None = None) -> int:
+    def coletar_pendentes(self, limite: int = LIMITE_PADRAO, por_liga: int | None = None) -> int:
         """Fixtures ja finalizadas que ainda nao tem estatistica de jogador.
 
         Usa match_statistics como fonte de jogos encerrados -- e' a mesma
@@ -570,5 +610,5 @@ if __name__ == "__main__":
     # por caminho, nao importa modulo). Limite pelo argv ou PLAYER_STATS_LIMIT.
     import sys
 
-    limite_arg = sys.argv[1] if len(sys.argv) > 1 else os.getenv("PLAYER_STATS_LIMIT", "50")
+    limite_arg = sys.argv[1] if len(sys.argv) > 1 else os.getenv("PLAYER_STATS_LIMIT", str(LIMITE_PADRAO))
     PlayerStatsCollectorService().coletar_pendentes(limite=int(limite_arg))
