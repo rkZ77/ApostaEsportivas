@@ -1,4 +1,4 @@
-"""Faltas em sombra (18/10/2026): a chave do pipeline e a medicao que liquida
+"""Faltas (18/10/2026): a chave on|sombra do pipeline e a medicao que liquida
 as escolhas do motor pelas faltas do jogo."""
 import pytest
 
@@ -6,13 +6,14 @@ from engine_pipelines import faltas_pipeline as fp
 from scripts import medir_faltas_sombra as mf
 
 
-def test_padrao_e_sombra_e_so_on_publica(monkeypatch):
+def test_padrao_e_publicar_e_sombra_so_quando_pedida(monkeypatch):
+    # Voltou pro site em 18/10 por decisao do usuario.
     monkeypatch.delenv("MOTOR_FALTAS", raising=False)
-    assert fp.modo_faltas() == "sombra"
-    monkeypatch.setenv("MOTOR_FALTAS", "on")
     assert fp.modo_faltas() == "on"
-    monkeypatch.setenv("MOTOR_FALTAS", "qualquer")
+    monkeypatch.setenv("MOTOR_FALTAS", "sombra")
     assert fp.modo_faltas() == "sombra"
+    monkeypatch.setenv("MOTOR_FALTAS", "qualquer")
+    assert fp.modo_faltas() == "on"
 
 
 def test_liquida_over_pelas_faltas_do_jogo():
