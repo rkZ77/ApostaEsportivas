@@ -192,7 +192,7 @@ export default function Home() {
     applicationCategory: 'SportsApplication',
     operatingSystem: 'Web, iOS, Android',
     url: 'https://pickia.com.br',
-    description: 'Plataforma de análise esportiva com inteligência artificial. Estatística real de futebol, probabilidade calculada e picks com valor esperado positivo.',
+    description: 'Plataforma de análise de futebol com inteligência artificial. Estatística real de cada jogo, Raio-X da partida e probabilidade calculada.',
     offers: [
       { '@type': 'Offer', name: 'Plano Free', price: '0', priceCurrency: 'BRL' },
       ...plans.map(p => ({
@@ -208,10 +208,10 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-surface-0 text-ink-1 overflow-x-hidden flex flex-col">
       <Helmet>
-        <title>Palpites de Futebol Hoje com IA | Pick IA</title>
+        <title>Análise de Futebol com IA: Estatística e Palpites | Pick IA</title>
         <meta
           name="description"
-          content="Palpites de futebol gerados por inteligência artificial. Estatística real de cada jogo, probabilidade calculada e apenas entradas com valor esperado positivo. Histórico público e auditável. Teste grátis por 2 dias."
+          content="Análise de futebol com inteligência artificial. Raio-X de cada jogo, estatística real, probabilidade calculada e palpites com histórico público e auditável. Teste grátis por 2 dias."
         />
         <link rel="canonical" href="https://pickia.com.br/" />
         <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>

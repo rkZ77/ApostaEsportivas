@@ -91,7 +91,7 @@ export default function PickPublico() {
     <div className={`min-h-screen bg-surface-0 flex flex-col ${classesRevelacao(revelado)}`} style={{ transitionDuration: `${FADE_REVELACAO_MS}ms` }} aria-busy={!revelado}>
       <Helmet>
         <title>{pageTitle}</title>
-        <meta name="description" content={`Odd ${odd?.toFixed(2) ?? '-'}, ${typeLabel}. Análise de IA para apostas esportivas.`} />
+        <meta name="description" content={`${typeLabel} da Pick IA. Análise estatística de futebol com inteligência artificial, com o resultado no histórico público.`} />
       </Helmet>
       {/* Topo */}
       <div className="px-4 pt-5 pb-3 flex items-center justify-between">

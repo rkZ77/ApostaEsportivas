@@ -1,7 +1,7 @@
 {
   "name": "Pick IA",
   "short_name": "Pick IA",
-  "description": "Picks de futebol por Inteligência Artificial",
+  "description": "Análise de futebol com Inteligência Artificial",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0a0a0c",

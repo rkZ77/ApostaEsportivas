@@ -132,8 +132,10 @@ def md_home() -> str:
     )
     return f"""# Pick IA
 
-> Picks de futebol com análise estatística, cobrindo o Brasileirão e as
-> principais ligas europeias. Parte do conteúdo é gratuita e {linha_preco}.
+> Análise estatística de futebol com inteligência artificial: Raio-X de cada
+> jogo, estatística de times, jogadores e árbitros, e picks com histórico
+> público. Cobre o Brasileirão e as principais ligas europeias. Parte do
+> conteúdo é gratuita e {linha_preco}.
 
 {_SOBRE_O_PRODUTO}
 
