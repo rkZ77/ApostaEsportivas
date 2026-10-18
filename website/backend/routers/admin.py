@@ -5575,6 +5575,93 @@ def times_da_partida(fixture_id: int, current_user: dict = Depends(require_admin
 # que já está no banco. É a diferença entre este botão e a recoleta.
 
 
+def _arbitros_por_pessoa(cur, season: int, busca: str | None, pagina: int, por_pagina: int):
+    """(pagina de arbitros, total) da temporada, uma linha por pessoa.
+
+    Soma por chave de nome em match_statistics + arbitro_partidas (o mesmo
+    jogo uma vez so', como o motor) e junta as chaves da mesma pessoa com
+    arbitro.chaves_equivalentes. Sem `arbitro_partidas`, so' a base."""
+    from arbitro import chave_do_arbitro, chaves_equivalentes, sql_chave
+    # A busca vale pelo texto e pela chave ("r. abatti" acha "R Abatti").
+    alvo = chave_do_arbitro(busca.strip()) if busca and busca.strip() else None
+    base = """SELECT ms.fixture_id, ms.referee, ms.total_yellow_cards AS y, ms.total_red_cards AS r,
+                     ms.home_fouls + ms.away_fouls AS f, ms.total_corners AS c, ms.total_goals AS g
+                FROM match_statistics ms
+               WHERE ms.season = %s AND ms.status IN ('FT','AET','PEN') AND ms.referee IS NOT NULL"""
+    extra = """SELECT ap.fixture_id, ap.referee, ap.home_yellow_cards + ap.away_yellow_cards AS y,
+                      ap.home_red_cards + ap.away_red_cards AS r, ap.home_fouls + ap.away_fouls AS f,
+                      NULL::int AS c, ap.home_goals + ap.away_goals AS g
+                 FROM arbitro_partidas ap
+                WHERE ap.season = %s AND ap.status IN ('FT','AET','PEN')
+                  AND ap.folha_checked_at IS NOT NULL AND ap.home_yellow_cards IS NOT NULL"""
+    agregado = f"""
+        SELECT {sql_chave('referee')} AS chave,
+               MODE() WITHIN GROUP (ORDER BY split_part(referee, ',', 1)) AS nome,
+               COUNT(*) AS games_total, COUNT(y) AS games,
+               SUM(y) AS sy, SUM(r) FILTER (WHERE y IS NOT NULL) AS sr,
+               COUNT(r) FILTER (WHERE y IS NOT NULL) AS nr,
+               SUM(f) AS sf, COUNT(f) AS nf, SUM(c) AS sc, COUNT(c) AS nc, SUM(g) AS sg, COUNT(g) AS ng,
+               MAX(y) AS max_yellow, MIN(y) AS min_yellow
+          FROM todos GROUP BY 1"""
+    try:
+        cur.execute("SAVEPOINT lista_arbitros")
+        cur.execute(f"""WITH base AS ({base}), extra AS ({extra}),
+            todos AS (SELECT * FROM base b WHERE NOT (b.y IS NULL AND EXISTS
+                          (SELECT 1 FROM extra e WHERE e.fixture_id = b.fixture_id))
+                      UNION ALL
+                      SELECT * FROM extra e WHERE NOT EXISTS
+                          (SELECT 1 FROM base b WHERE b.fixture_id = e.fixture_id AND b.y IS NOT NULL))
+            {agregado}""", (season, season))
+        linhas = cur.fetchall()
+        cur.execute("RELEASE SAVEPOINT lista_arbitros")
+    except Exception:
+        cur.execute("ROLLBACK TO SAVEPOINT lista_arbitros")
+        cur.execute(f"WITH todos AS ({base}) {agregado}", (season,))
+        linhas = cur.fetchall()
+    por_chave = {r["chave"]: dict(r) for r in linhas if r.get("chave")}
+
+    cur.execute(f"SELECT referee_id, {sql_chave('name')} AS chave FROM referees")
+    id_da_chave = {}
+    for r in cur.fetchall():
+        id_da_chave.setdefault(r["chave"], r["referee_id"])
+
+    def media(soma, n):
+        return round(float(soma) / n, 2) if n else None
+
+    pessoas, visto = [], set()
+    for chave in sorted(por_chave, key=lambda c: -por_chave[c]["games_total"]):
+        if chave in visto:
+            continue
+        membros = [c for c in chaves_equivalentes(chave, por_chave) if c not in visto]
+        visto.update(membros)
+        g = [por_chave[c] for c in membros]
+        principal = max(g, key=lambda r: (r["games_total"], len(r["nome"] or "")))
+        nomes = sorted({r["nome"] for r in g if r["nome"]})
+        if alvo and not (any(busca.strip().lower() in n.lower() for n in nomes)
+                         or any(alvo in c for c in membros)):
+            continue
+
+        def soma(k):
+            return sum(r[k] or 0 for r in g)
+        pessoas.append({
+            "referee_id": next((id_da_chave[c] for c in [principal["chave"], *membros]
+                                if c in id_da_chave), None),
+            "name": max(nomes, key=len) if nomes else principal["nome"],
+            "grafias": nomes, "season": season,
+            "games": soma("games"), "games_total": soma("games_total"),
+            "avg_yellow": media(soma("sy"), soma("games")),
+            "avg_red": media(soma("sr"), soma("nr")),
+            "avg_fouls": media(soma("sf"), soma("nf")),
+            "avg_corners": media(soma("sc"), soma("nc")),
+            "avg_goals": media(soma("sg"), soma("ng")),
+            "max_yellow": max((r["max_yellow"] for r in g if r["max_yellow"] is not None), default=None),
+            "min_yellow": min((r["min_yellow"] for r in g if r["min_yellow"] is not None), default=None),
+            "atualizado_em": None,
+        })
+    pessoas.sort(key=lambda a: (-(a["games"] or 0), a["name"] or ""))
+    return pessoas[pagina * por_pagina:(pagina + 1) * por_pagina], len(pessoas)
+
+
 @router.get("/dados/arbitros")
 def lista_de_arbitros(
     season: int | None = None,
@@ -5609,33 +5696,12 @@ def lista_de_arbitros(
         cur.execute("SELECT DISTINCT season FROM referee_stats ORDER BY season DESC")
         temporadas = [r["season"] for r in cur.fetchall()]
 
-        filtro, params = "", [season]
-        if busca and busca.strip():
-            filtro = "AND r.name ILIKE %s"
-            params.append(f"%{busca.strip()}%")
-
-        cur.execute(f"""
-            SELECT COUNT(*) AS n
-              FROM referee_stats rs
-              JOIN referees r ON r.referee_id = rs.referee_id
-             WHERE rs.season = %s {filtro}
-        """, tuple(params))
-        total = (cur.fetchone() or {}).get("n") or 0
-
-        cur.execute(f"""
-            SELECT r.referee_id, r.name, rs.season,
-                   rs.games, rs.games_total,
-                   rs.avg_yellow, rs.avg_red, rs.avg_fouls,
-                   rs.avg_corners, rs.avg_goals,
-                   rs.max_yellow, rs.min_yellow,
-                   rs.last_updated::text AS atualizado_em
-              FROM referee_stats rs
-              JOIN referees r ON r.referee_id = rs.referee_id
-             WHERE rs.season = %s {filtro}
-             ORDER BY rs.games DESC NULLS LAST, r.name
-             LIMIT %s OFFSET %s
-        """, tuple(params) + (por_pagina, pagina * por_pagina))
-        arbitros = [dict(r) for r in cur.fetchall()]
+        # UMA LINHA POR PESSOA (18/10/2026). `referee_stats` tem uma linha por
+        # grafia: "R. Abatti", "Ramon Abatti" e "Ramon Abatti Abel" eram tres
+        # arbitros de amostra curta, e nenhum batia com o que o motor usa
+        # desde a mesma data (todas as grafias + os jogos de fora da base, ver
+        # referee_stats_service). A lista agora e' a mesma conta do motor.
+        arbitros, total = _arbitros_por_pessoa(cur, season, busca, pagina, por_pagina)
     except Exception as e:
         conn.rollback()
         logging.getLogger(__name__).warning("[ADMIN/ARBITROS] lista: %s", e)
@@ -6600,14 +6666,18 @@ def amostra_do_arbitro(
         # Pela chave do nome (2026-10-07): as grafias do mesmo arbitro entram
         # juntas, que e' como o coletor passou a calcular a media salva. Ver
         # arbitro.py.
+        # Desde 18/10/2026 com todas as grafias da mesma pessoa ("R. Abatti",
+        # "Ramon Abatti", "Ramon Abatti Abel") · ver arbitro.chaves_equivalentes.
         from arbitro import chave_do_arbitro, sql_chave
+        from arbitro_do_jogo import chaves_da_pessoa
         chave = chave_do_arbitro(nome)
+        chaves = chaves_da_pessoa(cur, chave) if chave else []
 
         cur.execute(f"""
             SELECT DISTINCT season FROM match_statistics
-             WHERE {sql_chave('referee')} = %s AND status IN ('FT','AET','PEN')
+             WHERE {sql_chave('referee')} = ANY(%s) AND status IN ('FT','AET','PEN')
              ORDER BY season DESC
-        """, (chave,))
+        """, (chaves,))
         temporadas = [r["season"] for r in cur.fetchall()]
         if season is None:
             season = temporadas[0] if temporadas else None
@@ -6642,10 +6712,10 @@ def amostra_do_arbitro(
                              ORDER BY season DESC LIMIT 1) casa ON TRUE
          LEFT JOIN LATERAL (SELECT name FROM teams WHERE team_id = ms.away_team_id
                              ORDER BY season DESC LIMIT 1) fora ON TRUE
-             WHERE {sql_chave('ms.referee')} = %s AND ms.season = %s
+             WHERE {sql_chave('ms.referee')} = ANY(%s) AND ms.season = %s
                AND ms.status IN ('FT','AET','PEN')
              ORDER BY ms.match_date DESC, ms.fixture_id DESC
-        """, (chave, season))
+        """, (chaves, season))
         jogos = []
         com_buraco = 0
         for r in cur.fetchall():

@@ -159,6 +159,8 @@ interface Arbitro {
   avg_fouls: number | string | null
   avg_corners: number | string | null
   atualizado_em: string | null
+  /** As grafias da mesma pessoa que a linha junta (18/10/2026). */
+  grafias?: string[]
 }
 
 /** Partida com 0x0 gravado que não terminou 0x0 · ver o cartão lá embaixo. */
@@ -2289,7 +2291,7 @@ export default function AdminDados() {
                                                   season: arbitros.season, nome: a.name })}
                       className="border-b border-line/60 cursor-pointer hover:bg-surface-2/60 transition-colors duration-1"
                     >
-                      <td className="px-4 py-2.5 text-ink-2 truncate max-w-[12rem]">{a.name}</td>
+                      <td className="px-4 py-2.5 text-ink-2 truncate max-w-[12rem]">{a.name}{(a.grafias?.length ?? 0) > 1 && <div className="text-[11px] text-ink-4 truncate" title={a.grafias!.join(', ')}>{a.grafias!.join(', ')}</div>}</td>
                       <td className={`px-2 py-2.5 text-right font-mono tabular-nums ${
                         curto ? 'text-yellow-400' : 'text-ink-2'}`}>
                         {a.games ?? '-'}
