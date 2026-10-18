@@ -86,9 +86,9 @@ export default function Footer() {
               </span>
             </Link>
             <p className="text-sm text-ink-3 leading-relaxed max-w-[44ch]">
-              Com o <span className="text-accent-ink font-medium">Pick IA</span> você recebe só os
-              picks que passaram no corte: inteligência artificial em cima de estatística real
-              de futebol, publicando apenas o que tem valor esperado positivo.
+              O <span className="text-accent-ink font-medium">Pick IA</span> analisa futebol com
+              inteligência artificial em cima de estatística real: Raio-X de cada jogo, forma dos
+              times e palpites com histórico público.
             </p>
 
             <p className="mt-5 mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-4">
