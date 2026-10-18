@@ -197,23 +197,56 @@ def test_jogadores_pagina(monkeypatch):
     assert saida["total"] == 97
 
 
+class _CurArbitros:
+    """Responde a lista por pessoa (18/10/2026): agregado por chave e o
+    `referees` pra achar o id."""
+
+    def __init__(self, chaves):
+        self.chaves, self._r = chaves, []
+
+    def execute(self, sql, params=None):
+        if "FROM referees" in sql and "referee_id" in sql and "chave" in sql:
+            self._r = [{"referee_id": i, "chave": c} for i, c in enumerate(self.chaves, 1)]
+        elif "GROUP BY 1" in sql:
+            self._r = [{"chave": c, "nome": c.title(), "games_total": n, "games": n, "sy": 4 * n,
+                        "sr": 0, "nr": n, "sf": 25 * n, "nf": n, "sc": 9 * n, "nc": n, "sg": 2 * n,
+                        "ng": n, "max_yellow": 7, "min_yellow": 1} for c, n in self.chaves.items()]
+        elif "MAX(season)" in sql:
+            self._r = [{"s": 2026}]
+        elif "DISTINCT season" in sql:
+            self._r = [{"season": 2026}]
+
+    def fetchone(self):
+        return self._r[0] if self._r else None
+
+    def fetchall(self):
+        return self._r
+
+    def close(self):
+        pass
+
+
 def test_arbitros_pagina_e_conta(monkeypatch):
     """Vinha com `limite=60` e a tela desenhava os 60 · numa temporada com 14
-    ligas isso e' uma tabela que nao acaba no celular."""
-    cur = _FakeCursor(linhas=[{"referee_id": 1, "name": "Daronco"}], total=88)
+    ligas isso e' uma tabela que nao acaba no celular. Desde 18/10 a pagina e'
+    cortada DEPOIS de juntar as grafias da mesma pessoa."""
+    chaves = {f"arbitro{i:02d} sobrenome": 100 - i for i in range(88)}
+    cur = _CurArbitros(chaves)
     monkeypatch.setattr(admin, "get_connection", lambda: _FakeConn(cur))
-    saida = admin.lista_de_arbitros(season=2026, pagina=3, por_pagina=15,
-                                    current_user=ADMIN)
+    saida = admin.lista_de_arbitros(season=2026, pagina=3, por_pagina=15, current_user=ADMIN)
     assert saida["total"] == 88
-    assert cur.params[-1][-2:] == (15, 45)
+    assert len(saida["arbitros"]) == 15
+    assert saida["arbitros"][0]["games"] == 100 - 45      # do mais visto pro menos
 
 
-def test_arbitros_busca_por_nome(monkeypatch):
-    """Paginar sem poder procurar so' troca rolagem por clique: o arbitro que
-    interessa quase nunca esta' na primeira pagina."""
-    cur = _FakeCursor(linhas=[], total=1)
+def test_arbitros_uma_linha_por_pessoa_e_busca_por_qualquer_grafia(monkeypatch):
+    """"R. Abatti", "Ramon Abatti" e "Ramon Abatti Abel" sao uma linha so', e
+    procurar por qualquer uma das grafias acha a pessoa."""
+    cur = _CurArbitros({"r abatti": 11, "ramon abatti": 4, "ramon abatti abel": 5, "anderson daronco": 10})
     monkeypatch.setattr(admin, "get_connection", lambda: _FakeConn(cur))
-    admin.lista_de_arbitros(season=2026, busca="daronco", current_user=ADMIN)
-    sql = next(s for s in cur.sqls if "ORDER BY rs.games" in s)
-    assert "r.name ILIKE %s" in sql
-    assert "%daronco%" in cur.params[-1]
+    saida = admin.lista_de_arbitros(season=2026, current_user=ADMIN)
+    assert saida["total"] == 2
+    ramon = saida["arbitros"][0]
+    assert ramon["games"] == 20 and len(ramon["grafias"]) == 3
+    busca = admin.lista_de_arbitros(season=2026, busca="r. abatti", current_user=ADMIN)
+    assert busca["total"] == 1 and busca["arbitros"][0]["games"] == 20
