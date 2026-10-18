@@ -18,13 +18,15 @@ de virar termo de probabilidade.
 
 CUSTO
 -----
-Uma requisicao por partida (/fixtures/lineups devolve os dois times).
+Uma requisicao a cada 20 partidas desde 18/10/2026 (`/fixtures?ids=`, ver
+utils/lote_de_partidas); antes era uma por partida (/fixtures/lineups).
 `lineups_checked_at` em match_statistics tira a partida da fila tenha a API
 publicado ou nao, entao o backfill e' idempotente e continua de onde parou.
 """
 from __future__ import annotations
 
 from utils.api_client import buscar
+from utils.lote_de_partidas import IDS_POR_REQUISICAO, percorrer
 from utils.db_utils import get_connection
 from utils import esquema
 
@@ -121,15 +123,15 @@ class LineupsCollectorService:
                    AND status IN %s AND season >= %s
                  ORDER BY match_date DESC
                  LIMIT %s
-            """, (FINALIZADOS, temporada_minima, teto_requisicoes))
-            for fixture_id, league_id, season, match_date in self.cur.fetchall():
-                try:
-                    resposta = buscar("fixtures/lineups", {"fixture": fixture_id},
-                                      origem="coletor_escalacao")
-                except Exception as e:
-                    # Falha de rede nao marca: a partida volta na proxima.
-                    print(f"[ESCALACAO] fixture_id={fixture_id}: {e}")
-                    continue
+            """, (FINALIZADOS, temporada_minima, teto_requisicoes * IDS_POR_REQUISICAO))
+            # `teto_requisicoes` conta requisicao; cada lote cobre ate' 20 partidas.
+            # Falha de rede nao marca: a partida volta na proxima.
+            dados = {r[0]: r[1:] for r in self.cur.fetchall()}
+            avulsa = lambda fid: buscar("fixtures/lineups", {"fixture": fid},
+                                        origem="coletor_escalacao")
+            for fixture_id, resposta in percorrer(dados, "lineups", avulsa,
+                                                  teto_requisicoes, "coletor_escalacao"):
+                league_id, season, match_date = dados[fixture_id]
                 if self._gravar(fixture_id, league_id, season, match_date, resposta):
                     com += 1
                 else:
