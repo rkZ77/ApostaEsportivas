@@ -615,6 +615,10 @@ function Barras({ valores, linha, lado, rotulos, max: maxFixo, topo, dicas: dica
   const muitas = serie.length > 12
   const validos = serie.filter((v): v is number => v != null)
   const media = validos.length ? validos.reduce((a, b) => a + b, 0) / validos.length : null
+  /* JOGO SEM O NÚMERO (18/10/2026): a barra cinza baixa parecia zero. Fica
+     vazada e tracejada, o balão diz "sem dado" e a legenda conta quantos têm.
+     O motor também só conta o jogo que tem o número. */
+  const semDado = serie.length - validos.length
   return (
     <div>
     {/* Com muitos jogos o gráfico cresce: em 56px trinta barras ficavam
@@ -624,8 +628,8 @@ function Barras({ valores, linha, lado, rotulos, max: maxFixo, topo, dicas: dica
         const bateu = v != null && v !== linha && (lado === 'mais' ? v > linha : v < linha)
         const dica = dicas[i]
         const legenda = legendas[i]
-          ? `${legendas[i]}: ${v ?? 'sem dado'}`
-          : String(v ?? 'sem dado')
+          ? `${legendas[i]}: ${v ?? 'sem dado neste jogo'}`
+          : String(v ?? 'sem dado neste jogo')
         const coluna = (
           <div title={dica ? undefined : legenda} aria-label={legenda}
             className="w-full h-full flex flex-col justify-end items-center gap-0.5">
@@ -634,15 +638,16 @@ function Barras({ valores, linha, lado, rotulos, max: maxFixo, topo, dicas: dica
               <span className={cn('order-last w-1 h-1 rounded-full shrink-0', marcas[i] ? 'bg-ink-2' : 'bg-transparent')} />
             )}
             <div
-              className={cn('w-full rounded-sm', v == null ? 'bg-surface-3/40' : bateu ? 'bg-green-500' : 'bg-surface-3')}
-              style={{ height: `${v == null ? 6 : Math.max(6, (v / max) * 78)}%` }}
+              className={cn('w-full rounded-sm', v == null ? 'border border-dashed border-ink-4/60 bg-transparent' : bateu ? 'bg-green-500' : 'bg-surface-3')}
+              style={{ height: `${v == null ? 22 : Math.max(6, (v / max) * 78)}%` }}
             />
           </div>
         )
         /* Com a dica, a barra abre o balão com escudo e placar; sem ela,
            fica o title de texto. */
         if (!dica) return <div key={i} className="flex-1 h-full min-w-0 flex">{coluna}</div>
-        return <Tooltip key={i} className="flex-1 h-full min-w-0" text={dica}>{coluna}</Tooltip>
+        return <Tooltip key={i} className="flex-1 h-full min-w-0"
+          text={v == null ? <>{dica}<div className="mt-1 text-[11px] text-ink-3">Sem dado neste jogo</div></> : dica}>{coluna}</Tooltip>
       })}
       <div className="absolute inset-x-0 border-t border-dashed border-ink-3/60 pointer-events-none"
         style={{ top: `${yLinha * 0.78 + 22}%` }} />
@@ -655,6 +660,12 @@ function Barras({ valores, linha, lado, rotulos, max: maxFixo, topo, dicas: dica
     </div>
     {/* Sem o número em cada barra, a legenda diz o que é cada linha e pra
         que lado o tempo corre. */}
+    {semDado > 0 && (
+      <div className="mt-1 text-[10px] text-ink-4">
+        <span className="inline-block w-2 h-2 mr-1 align-middle rounded-sm border border-dashed border-ink-4/60" />
+        sem dado em {semDado} de {serie.length} jogos; a conta usa os {validos.length} que têm
+      </div>
+    )}
     {muitas && (
       <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] text-ink-4">
         <span>mais antigo</span>

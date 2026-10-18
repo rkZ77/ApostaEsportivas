@@ -42,6 +42,26 @@ TIPOS = (
 )
 
 
+#: So' MEDIDOS aqui: quem preenche e' outra etapa do `tudo`, e o log diz se
+#: ela esta' dando conta. (rotulo, SQL que devolve (faltam, total), quem enche)
+SO_MEDIR = (
+    ("jogos fora do banco", """
+        SELECT COUNT(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM match_statistics ms
+                                                   WHERE ms.fixture_id = cj.fixture_id)), COUNT(*)
+          FROM calendario_jogos cj
+          JOIN leagues l ON l.league_id = cj.league_id AND l.season = cj.season AND COALESCE(l.ativa, TRUE)
+         WHERE cj.status IN ('FT','AET','PEN') AND cj.match_datetime < NOW() - INTERVAL '6 hours'
+    """, "DADOS (ate' 200 por dia)"),
+    ("jogadores", """
+        SELECT COUNT(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM player_match_stats p
+                                                   WHERE p.fixture_id = ms.fixture_id)), COUNT(*)
+          FROM match_statistics ms
+          JOIN leagues l ON l.league_id = ms.league_id AND l.season = ms.season AND COALESCE(l.ativa, TRUE)
+         WHERE ms.status IN ('FT','AET','PEN')
+    """, "ESTATISTICA DE JOGADOR (200 por dia)"),
+)
+
+
 def cobertura() -> dict:
     """{rotulo: (faltam, total)} por tipo, sem API."""
     conn = get_connection()
@@ -58,6 +78,13 @@ def cobertura() -> dict:
                 saida[rotulo] = tuple(cur.fetchone())
             except Exception as e:
                 # Coluna que o coletor ainda nao criou neste ambiente.
+                conn.rollback()
+                print(f"[LACUNAS] {rotulo}: sem como medir ({e})")
+        for rotulo, sql, _ in SO_MEDIR:
+            try:
+                cur.execute(sql)
+                saida[rotulo] = tuple(cur.fetchone())
+            except Exception as e:
                 conn.rollback()
                 print(f"[LACUNAS] {rotulo}: sem como medir ({e})")
     finally:
@@ -130,11 +157,12 @@ def preencher(escala: float = 1.0) -> dict:
             print(f"[LACUNAS] {rotulo} falhou: {e}")
     depois = cobertura()
     print("[LACUNAS] cobertura (faltam / total de partidas encerradas):")
-    for rotulo, _, temporada, _ in TIPOS:
+    linhas = [(r, f"desde {t}") for r, _, t, _ in TIPOS] + [(r, f"enche: {q}") for r, _, q in SO_MEDIR]
+    for rotulo, nota in linhas:
         a, d = antes.get(rotulo), depois.get(rotulo)
         if not d:
             continue
         pct = 100 * (d[1] - d[0]) / d[1] if d[1] else 100
-        print(f"    {rotulo:<10} desde {temporada}: faltavam {a[0] if a else '?'}, "
-              f"faltam {d[0]} de {d[1]} ({pct:.0f}% coberto)")
+        print(f"    {rotulo:<20} faltavam {a[0] if a else '?'}, faltam {d[0]} de {d[1]} "
+              f"({pct:.0f}% coberto) · {nota}")
     return {"antes": antes, "depois": depois}
