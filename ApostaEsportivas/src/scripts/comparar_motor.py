@@ -35,6 +35,17 @@ AS VARIANTES (todas contra `atual`)
   stake_probabilidade  mesmos picks; stake com o Kelly lendo a probabilidade
   contexto_on          MOTOR_CONTEXTO=on (sem desfalques -- ver acima)
   tatico_on            MOTOR_TATICO=on com coeficientes de antes da janela
+  edge_4pp             mesmos candidatos; so' publica onde a probabilidade do
+                       motor passa 1/odd em 4 pontos ou mais (18/10/2026)
+  encolher_mercado     mesmos candidatos; a probabilidade vai 50% pro preco
+                       sem margem e so' publica com EV ainda positivo
+                       (18/10/2026)
+
+POR QUE AS DUAS ULTIMAS (diagnostico de 18/10/2026, PROD). CLV desde 02/10 de
+-1,9% (IC95 [-2,7%; -1,1%], 151 pernas): o mercado anda contra o pick em 58%
+das pernas. Com edge < 4pp sobre 1/odd o CLV era -2,9% e o acerto igual ao
+preco; com edge >= 4pp, 73% contra preco de 62%. Mas por ROI o corte nao se
+confirmou nas duas metades do historico, e a variante e' o teste que decide.
 
 O QUE SAI
 ---------
@@ -68,7 +79,11 @@ from services.pick_engine.staking import (  # noqa: E402
     calculate_stake, calculate_stake_por_probabilidade)
 
 VARIANTES = ("atual", "seletor_valor", "seletor_ev", "stake_probabilidade",
-             "contexto_on", "tatico_on")
+             "contexto_on", "tatico_on", "edge_4pp", "encolher_mercado")
+#: edge_4pp: probabilidade do motor - 1/odd minima pra publicar.
+EDGE_MINIMO_VARIANTE = 0.04
+#: encolher_mercado: quanto da probabilidade do motor fica (o resto vai pro preco).
+PESO_DO_MOTOR_VARIANTE = 0.5
 #: Configuracao do motor por variante: (MOTOR_CONTEXTO, MOTOR_TATICO).
 _MOTOR = {"atual": ("off", "off"), "contexto_on": ("on", "off"), "tatico_on": ("off", "on")}
 MIN_GRUPO = 20
@@ -77,10 +92,30 @@ MIN_GRUPO = 20
 # ---------------------------------------------------------------------------
 # Selecao e stake (puras -- o teste cobre)
 # ---------------------------------------------------------------------------
+def preco_sem_margem(pick: dict) -> float:
+    """A probabilidade do mercado sem margem que o motor gravou no candidato
+    (`prob_baseline_value`), ou 1/odd quando ela falta."""
+    p = pick.get("prob_baseline_value")
+    return float(p) if p else 1 / float(pick["odd"])
+
+
+def prob_encolhida(pick: dict) -> float:
+    """encolher_mercado: a probabilidade do motor puxada pro preco."""
+    w = PESO_DO_MOTOR_VARIANTE
+    return w * float(pick["taxa_real"]) + (1 - w) * preco_sem_margem(pick)
+
+
 def escolher(picks: list, seletor: str) -> dict | None:
     """O pick que cada seletor publicaria entre os aprovados do jogo."""
     if not picks:
         return None
+    if seletor == "edge4":
+        picks = [p for p in picks
+                 if float(p["taxa_real"]) - 1 / float(p["odd"]) >= EDGE_MINIMO_VARIANTE]
+        return escolher(picks, "score")
+    if seletor == "encolher":
+        picks = [p for p in picks if prob_encolhida(p) * float(p["odd"]) > 1]
+        return escolher(picks, "score")
     if seletor == "valor":
         return ranking.escolher_por_valor(picks, z=1.0)
     if seletor == "ev":
@@ -281,7 +316,9 @@ def rodar_partida(fx, ctx, ms, odds_service, checker, calibracao, cur) -> dict:
              "seletor_ev": ("atual", "ev", "confidence"),
              "stake_probabilidade": ("atual", "score", "probabilidade"),
              "contexto_on": ("contexto_on", "score", "confidence"),
-             "tatico_on": ("tatico_on", "score", "confidence")}
+             "tatico_on": ("tatico_on", "score", "confidence"),
+             "edge_4pp": ("atual", "edge4", "confidence"),
+             "encolher_mercado": ("atual", "encolher", "confidence")}
     saida = {}
     for var, (motor, seletor, regua) in plano.items():
         p = escolher(picks_por_motor[motor], seletor)
@@ -295,7 +332,10 @@ def rodar_partida(fx, ctx, ms, odds_service, checker, calibracao, cur) -> dict:
         fech = _fechamento(cur, fx["fixture_id"], p.get("market_id"), p.get("value_label"))
         saida[var] = {"data": fx["match_date"], "league_id": fx["league_id"],
                       "market_type": p["market_type"], "linha": p.get("value_label"),
-                      "prob": float(p["taxa_real"]), "odd": float(p["odd"]),
+                      # encolher_mercado publica a probabilidade encolhida: e'
+                      # ela que o Brier tem que julgar.
+                      "prob": prob_encolhida(p) if seletor == "encolher" else float(p["taxa_real"]),
+                      "odd": float(p["odd"]),
                       "result": g["result"], "profit": float(g["profit"]),
                       "units": unidades(p, regua),
                       "clv": (round(float(p["odd"]) / fech - 1, 4) if fech else None)}
