@@ -48,3 +48,44 @@ def sql_chave(coluna: str) -> str:
     """
     return (f"NULLIF(btrim(regexp_replace(lower(translate(split_part({coluna}, ',', 1), "
             f"'{COM_ACENTO}', '{SEM_ACENTO}')), '[.[:space:]]+', ' ', 'g')), '')")
+
+
+# ── NOME COMPLETO x NOME CURTO (18/10/2026) ──────────────────────────────────
+# A API troca a grafia no meio da temporada: "Ramon Abatti Abel" até agosto,
+# "Ramon Abatti" depois. A chave acima não junta os dois, e o Raio-X mostrava
+# 4 jogos de quem tinha apitado 16 no Brasileirão.
+#
+# A REGRA: o nome curto (2 palavras ou mais) vira a mesma pessoa do nome longo
+# que COMEÇA com ele, mas SÓ quando existe UM nome longo assim. Se "Paulo
+# Cesar" fosse começo de "Paulo Cesar Zanovelli" e de "Paulo Cesar Oliveira",
+# não dá pra saber quem é, e a amostra fica partida (juntar pessoas diferentes
+# é pior). Abreviação ("R. Abatti") continua de fora.
+
+def _comeca_com(longo: list, curto: list) -> bool:
+    return len(longo) > len(curto) and longo[:len(curto)] == curto
+
+
+def chaves_equivalentes(chave: str | None, conhecidas) -> list:
+    """As chaves da MESMA pessoa entre as `conhecidas` (inclui a própria)."""
+    if not chave:
+        return []
+    saida = {chave}
+    alvo = chave.split()
+    todas = [c.split() for c in set(conhecidas or ()) if c and c != chave]
+    if len(alvo) >= 2:
+        longas = [c for c in todas if _comeca_com(c, alvo)]
+        if len(longas) == 1:
+            saida.add(" ".join(longas[0]))
+    for curta in todas:
+        if len(curta) >= 2 and _comeca_com(alvo, curta):
+            # A curta só é nossa se nós somos o ÚNICO nome longo dela.
+            outras = [c for c in todas if c != curta and _comeca_com(c, curta)]
+            if not outras:
+                saida.add(" ".join(curta))
+    return sorted(saida)
+
+
+def sql_candidatas(coluna: str) -> str:
+    """Chaves da coluna que começam com a mesma primeira palavra (o parâmetro
+    é essa palavra, sem `%`). É o universo que `chaves_equivalentes` olha."""
+    return f"split_part({sql_chave(coluna)}, ' ', 1) = %s"

@@ -45,7 +45,7 @@ from datetime import datetime, timedelta
 
 from utils import esquema
 from utils.api_client import buscar
-from utils.arbitro import chave_do_arbitro, sql_chave
+from utils.arbitro import chave_do_arbitro, chaves_equivalentes, sql_candidatas, sql_chave
 from utils.db_utils import get_connection
 from utils.stat_sheet import folha_publicada, ler_valor
 
@@ -234,6 +234,20 @@ def _alvos(cur) -> tuple[list, list]:
     return sorted(chaves), sorted(paises)
 
 
+def _com_as_outras_grafias(cur, chaves: list) -> list:
+    """Cada chave mais as grafias da MESMA pessoa no banco ("Ramon Abatti" e
+    "Ramon Abatti Abel") · regra em utils/arbitro.chaves_equivalentes."""
+    saida = set(chaves)
+    for chave in chaves:
+        conhecidas = set()
+        for tabela in ("match_statistics", "calendario_jogos", "arbitro_partidas"):
+            cur.execute(f"SELECT DISTINCT {sql_chave('referee')} FROM {tabela} "
+                        f"WHERE {sql_candidatas('referee')}", (chave.split()[0],))
+            conhecidas.update(r[0] for r in cur.fetchall() if r[0])
+        saida.update(chaves_equivalentes(chave, conhecidas))
+    return sorted(saida)
+
+
 def _descobrir_ligas(cur, paises: list, orcamento: int) -> int:
     gastas = 0
     cur.execute("SELECT league_id FROM leagues WHERE COALESCE(ativa, TRUE)")
@@ -385,13 +399,17 @@ def coletar(teto_requisicoes: int = TETO_PADRAO) -> dict:
     cur = conn.cursor()
     resumo = {"arbitros": 0, "requisicoes": 0, "buracos_das_ativas": 0, "folhas": 0}
     try:
-        esquema.garantir(cur, DDL)
+        # O DDL do calendario junto: a coluna `referee` dele e' lida aqui, e o
+        # comando pode rodar avulso antes de a coleta diaria passar.
+        from collectors.calendario_service import DDL as DDL_CALENDARIO
+        esquema.garantir(cur, (*DDL_CALENDARIO, *DDL))
         conn.commit()
         chaves, paises = _alvos(cur)
         resumo["arbitros"] = len(chaves)
         if not chaves:
             print("[ARBITRO] nenhum arbitro escalado nos proximos dias.")
             return resumo
+        chaves = _com_as_outras_grafias(cur, chaves)
         # Metade do teto no maximo pra descobrir/listar: a folha e' o que importa.
         gastas = _descobrir_ligas(cur, paises, teto_requisicoes // 4)
         gastas += _listar_ligas(cur, paises, teto_requisicoes // 2 - gastas)
