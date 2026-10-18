@@ -16,13 +16,15 @@ contador da folha.
 
 CUSTO
 -----
-Uma requisicao por partida. `events_checked_at` em match_statistics tira a
+Uma requisicao a cada 20 partidas desde 18/10/2026 (`/fixtures?ids=`, ver
+utils/lote_de_partidas); antes era uma por partida. `events_checked_at` em match_statistics tira a
 partida da fila tenha vindo evento ou nao -- idempotente, continua de onde
 parou, com teto.
 """
 from __future__ import annotations
 
 from utils.api_client import buscar
+from utils.lote_de_partidas import IDS_POR_REQUISICAO, percorrer
 from utils.db_utils import get_connection
 from utils import esquema
 
@@ -69,14 +71,13 @@ def backfill(teto_requisicoes: int = 100, temporada_minima: int = 2025) -> dict:
             SELECT fixture_id FROM match_statistics
              WHERE events_checked_at IS NULL AND status IN %s AND season >= %s
              ORDER BY match_date DESC LIMIT %s
-        """, (FINALIZADOS, temporada_minima, teto_requisicoes))
+        """, (FINALIZADOS, temporada_minima, teto_requisicoes * IDS_POR_REQUISICAO))
         from psycopg2.extras import execute_values
-        for (fixture_id,) in cur.fetchall():
-            try:
-                resposta = buscar("fixtures/events", {"fixture": fixture_id}, origem="coletor_eventos")
-            except Exception as e:
-                print(f"[EVENTOS] fixture_id={fixture_id}: {e}")
-                continue
+        # `teto_requisicoes` conta requisicao; cada lote cobre ate' 20 partidas.
+        fila = [r[0] for r in cur.fetchall()]
+        avulsa = lambda fid: buscar("fixtures/events", {"fixture": fid}, origem="coletor_eventos")
+        for fixture_id, resposta in percorrer(fila, "events", avulsa, teto_requisicoes,
+                                              "coletor_eventos"):
             linhas = linhas_de_eventos(fixture_id, resposta)
             if linhas:
                 cur.execute("DELETE FROM match_events WHERE fixture_id = %s", (fixture_id,))
