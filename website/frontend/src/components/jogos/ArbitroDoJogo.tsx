@@ -40,6 +40,29 @@ interface Resposta {
   temporada_toda?: Bloco; nesta_liga?: Bloco; com_mandante?: Bloco; com_visitante?: Bloco
 }
 type Recorte = 'temporada_toda' | 'nesta_liga' | 'com_mandante' | 'com_visitante'
+interface MediaDaLiga { amarelos: number; vermelhos: number; faltas: number; jogos: number }
+
+/** Linha que o gráfico de amarelos marca: a mesma do tile "Mais de 4,5". */
+const LINHA_AMARELOS = 4.5
+
+/* O que a API ainda manda em inglês e o mapa do backend não pega
+   ("Card upgrade confirmed" aparecia cru na lista). */
+const VAR_RESTO: [RegExp, string][] = [
+  [/card (upgrade|reviewed|downgrade)/i, 'Cartão revisto'],
+  [/goal (cancel+ed|disallowed)/i, 'Gol anulado'], [/goal confirmed/i, 'Gol confirmado'],
+  [/penalty (cancel+ed|not awarded)/i, 'Pênalti cancelado'], [/penalty (confirmed|awarded)/i, 'Pênalti confirmado'],
+]
+const lanceVar = (t: string) => VAR_RESTO.find(([re]) => re.test(t))?.[1] ?? t
+
+/* Perfil pela pontuação de cartão (amarelo + 2 x vermelho) contra a da liga.
+   15% pra cada lado é o corte: menos que isso é ruído de amostra. Rigoroso
+   não é vermelho: vermelho no site é só RED de pick. */
+function perfilDoArbitro(dele: number, daLiga: number) {
+  const dif = daLiga > 0 ? dele / daLiga - 1 : 0
+  if (dif >= 0.15) return { rotulo: 'Rigoroso', dif, cls: 'bg-amber-400/15 text-amber-300 border-amber-400/40' }
+  if (dif <= -0.15) return { rotulo: 'Deixa jogar', dif, cls: 'bg-sky-400/15 text-sky-300 border-sky-400/40' }
+  return { rotulo: 'Na média', dif, cls: 'bg-surface-3 text-ink-2 border-line-strong' }
+}
 
 const num = (m: Media | null, casas = 1) =>
   m ? m.media.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas }) : '-'
@@ -61,6 +84,27 @@ export default function ArbitroDoJogo({ fixtureId, homeId, awayId, homeNome, awa
     return () => { vivo = false }
   }, [fixtureId])
   useEffect(() => { setMostrar(8) }, [recorte])
+
+  /* A MÉDIA DA LIGA, PRA DIZER SE ELE É RIGOROSO (18/10/2026, pedido do
+     usuário: "melhora o formato do árbitro, deixa mais inovador"). Vem do
+     mesmo /liga/tendencias da aba Ligas: banco, sem API. A liga sai dos jogos
+     dele nesta liga; sem jogo dele aqui, o perfil não aparece. */
+  const ligaId = r?.nesta_liga?.jogos[0]?.league_id
+  const [liga, setLiga] = useState<MediaDaLiga | null>(null)
+  useEffect(() => {
+    setLiga(null)
+    if (!ligaId) return
+    let vivo = true
+    api.get('/suggestions/liga/tendencias', { params: { league_id: ligaId, limit: 500 } })
+      .then(res => {
+        const m = res.data?.summary
+        if (vivo && m?.total_games >= 10) setLiga({
+          amarelos: m.avg_yellow_cards, vermelhos: m.avg_red_cards, faltas: m.avg_fouls, jogos: m.total_games,
+        })
+      })
+      .catch(() => { /* sem assinatura ou sem dado: o resto da tela segue */ })
+    return () => { vivo = false }
+  }, [ligaId])
 
   const bloco = r?.[recorte]
   // Com um time: a campanha DELE nos jogos apitados por este árbitro.
@@ -112,6 +156,18 @@ export default function ArbitroDoJogo({ fixtureId, homeId, awayId, homeNome, awa
     ['VAR por jogo', num(s.var, 2), emJogos(s.var)],
   ]
 
+  // O perfil só faz sentido nos recortes de temporada; com um time a amostra é outra.
+  const pontosDaLiga = liga ? liga.amarelos + 2 * liga.vermelhos : 0
+  const perfil = liga && !timeDoRecorte && s.pontos_de_cartao && s.jogos >= 3
+    ? perfilDoArbitro(s.pontos_de_cartao.media, pontosDaLiga) : null
+  const comparacao = !liga ? [] : [
+    { rotulo: 'Amarelos', dele: s.amarelos?.media, daLiga: liga.amarelos },
+    { rotulo: 'Faltas', dele: s.faltas?.media, daLiga: liga.faltas },
+    { rotulo: 'Pontos de cartão', dele: s.pontos_de_cartao?.media, daLiga: pontosDaLiga },
+  ].filter((c): c is { rotulo: string; dele: number; daLiga: number } => c.dele != null && c.daLiga > 0)
+  // Do mais antigo pro mais novo, como se lê um gráfico de tempo.
+  const serie = bloco.jogos.filter(j => j.amarelos != null).slice(0, 12).reverse()
+
   return (
     <section id="arbitro-do-jogo" className="card overflow-hidden scroll-mt-28">
       <div className="px-4 pt-4 pb-3">
@@ -153,6 +209,29 @@ export default function ArbitroDoJogo({ fixtureId, homeId, awayId, homeNome, awa
             </div>
           )}
 
+          {perfil && liga && (
+            <div className="mx-4 mb-3 rounded-xl border border-line bg-surface-2/40 p-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={cn('h-7 px-2.5 rounded-full border text-xs font-black uppercase tracking-wide flex items-center', perfil.cls)}>
+                  {perfil.rotulo}
+                </span>
+                <span className="text-sm text-ink-2">
+                  {Math.abs(perfil.dif) < 0.005 ? 'Cartão igual à média da liga'
+                    : <>{Math.round(Math.abs(perfil.dif) * 100)}% {perfil.dif > 0 ? 'mais' : 'menos'} cartão que a média da liga</>}
+                </span>
+              </div>
+              <div className="mt-3 space-y-2.5">
+                {comparacao.map(c => <BarraContraLiga key={c.rotulo} {...c} />)}
+              </div>
+              <div className="mt-2.5 flex items-center gap-3 text-[11px] text-ink-3">
+                <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 rounded-full bg-accent" />Ele</span>
+                <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 rounded-full bg-ink-4" />Média da liga ({liga.jogos} jogos)</span>
+              </div>
+            </div>
+          )}
+
+          {serie.length >= 3 && <AmarelosJogoAJogo jogos={serie} />}
+
           <div className="grid grid-cols-2 min-[480px]:grid-cols-4 gap-px bg-line/60 border-y border-line/60">
             {celulas.map(([rotulo, valor, nota]) => (
               <div key={rotulo} className="bg-surface-1 px-3 py-3">
@@ -163,20 +242,23 @@ export default function ArbitroDoJogo({ fixtureId, homeId, awayId, homeNome, awa
             ))}
           </div>
 
-          <div className="px-4 py-3 space-y-1.5 text-sm text-ink-2">
-            {s.pct_mandante_vence != null && (
-              <p>
-                <span className="text-[11px] font-bold uppercase tracking-wide text-ink-3 mr-1.5">Resultado</span>
-                mandante vence {s.pct_mandante_vence}%, empate {s.pct_empate}%, visitante {s.pct_visitante_vence}%
-              </p>
-            )}
-            {s.amarelos_mandante && s.amarelos_visitante && (
-              <p>
-                <span className="text-[11px] font-bold uppercase tracking-wide text-ink-3 mr-1.5">Amarelos</span>
-                {num(s.amarelos_mandante)} pro mandante, {num(s.amarelos_visitante)} pro visitante
-              </p>
-            )}
-          </div>
+          {(s.pct_mandante_vence != null || (s.amarelos_mandante && s.amarelos_visitante)) && (
+            <div className="px-4 py-3 space-y-3">
+              {s.pct_mandante_vence != null && (
+                <BarraDividida titulo="Resultado com ele" partes={[
+                  { rotulo: 'Mandante', valor: s.pct_mandante_vence, texto: `${s.pct_mandante_vence}%`, cls: 'bg-accent' },
+                  { rotulo: 'Empate', valor: s.pct_empate ?? 0, texto: `${s.pct_empate ?? 0}%`, cls: 'bg-ink-4' },
+                  { rotulo: 'Visitante', valor: s.pct_visitante_vence ?? 0, texto: `${s.pct_visitante_vence ?? 0}%`, cls: 'bg-sky-400' },
+                ]} />
+              )}
+              {s.amarelos_mandante && s.amarelos_visitante && (
+                <BarraDividida titulo="Pra quem vai o amarelo" partes={[
+                  { rotulo: 'Mandante', valor: s.amarelos_mandante.media, texto: num(s.amarelos_mandante), cls: 'bg-accent' },
+                  { rotulo: 'Visitante', valor: s.amarelos_visitante.media, texto: num(s.amarelos_visitante), cls: 'bg-sky-400' },
+                ]} />
+              )}
+            </div>
+          )}
 
           <ul className="divide-y divide-line/60 border-t border-line/60">
             {bloco.jogos.slice(0, mostrar).map(j => (
@@ -195,7 +277,7 @@ export default function ArbitroDoJogo({ fixtureId, homeId, awayId, homeNome, awa
                   {!!j.penaltis && <span>{j.penaltis} pênalti{j.penaltis > 1 ? 's' : ''}</span>}
                   {(j.var ?? []).map((v, i) => (
                     <span key={i} className="px-1.5 rounded border border-line-strong text-ink-2">
-                      VAR {v.minuto != null ? `${v.minuto}' ` : ''}{v.lance}
+                      VAR {v.minuto != null ? `${v.minuto}' ` : ''}{lanceVar(v.lance)}
                     </span>
                   ))}
                 </div>
@@ -215,5 +297,99 @@ export default function ArbitroDoJogo({ fixtureId, homeId, awayId, homeNome, awa
         </>
       )}
     </section>
+  )
+}
+
+const umaCasa = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+
+/* Ele contra a liga num número: duas barras finas na mesma escala e o valor
+   escrito ao lado, pra cor não carregar o dado sozinha. */
+function BarraContraLiga({ rotulo, dele, daLiga }: { rotulo: string; dele: number; daLiga: number }) {
+  const teto = Math.max(dele, daLiga) * 1.1
+  return (
+    <div title={`${rotulo}: ele ${umaCasa(dele)}, liga ${umaCasa(daLiga)}`}>
+      <div className="flex items-baseline justify-between text-[11px]">
+        <span className="text-ink-2 font-semibold">{rotulo} por jogo</span>
+        <span className="font-mono text-ink-3"><b className="text-ink-1">{umaCasa(dele)}</b> x {umaCasa(daLiga)}</span>
+      </div>
+      <div className="mt-1 space-y-[2px]">
+        <div className="h-1.5 rounded-full bg-surface-3/60">
+          <div className="h-full rounded-full bg-accent" style={{ width: `${(dele / teto) * 100}%` }} />
+        </div>
+        <div className="h-1.5 rounded-full bg-surface-3/60">
+          <div className="h-full rounded-full bg-ink-4" style={{ width: `${(daLiga / teto) * 100}%` }} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* Uma barra dividida em partes, com rótulo e valor de cada parte embaixo. */
+function BarraDividida({ titulo, partes }: {
+  titulo: string; partes: { rotulo: string; valor: number; texto: string; cls: string }[]
+}) {
+  const total = partes.reduce((t, p) => t + p.valor, 0) || 1
+  return (
+    <div>
+      <div className="text-[11px] font-bold uppercase tracking-wide text-ink-3">{titulo}</div>
+      <div className="mt-1.5 flex h-2.5 gap-[2px]" role="img" aria-label={partes.map(p => `${p.rotulo} ${p.texto}`).join(', ')}>
+        {partes.filter(p => p.valor > 0).map(p => (
+          <div key={p.rotulo} className={cn('h-full rounded-[4px]', p.cls)}
+            style={{ width: `${(p.valor / total) * 100}%` }} title={`${p.rotulo}: ${p.texto}`} />
+        ))}
+      </div>
+      <div className="mt-1.5 flex justify-between gap-2 text-[11px]">
+        {partes.map(p => (
+          <span key={p.rotulo} className="flex items-center gap-1.5 text-ink-3 min-w-0">
+            <span className={cn('w-2 h-2 rounded-full shrink-0', p.cls)} />
+            <span className="truncate">{p.rotulo} <b className="text-ink-1 font-mono">{p.texto}</b></span>
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/*
+ * AMARELOS JOGO A JOGO: os últimos jogos dele, do mais antigo ao mais novo,
+ * com a linha de 4,5 tracejada. Tocar na barra mostra o jogo embaixo (no
+ * celular não há hover). Acima da linha a barra ganha o verde da marca.
+ */
+function AmarelosJogoAJogo({ jogos }: { jogos: Jogo[] }) {
+  const [sel, setSel] = useState<number | null>(null)
+  const teto = Math.max(LINHA_AMARELOS + 1.5, ...jogos.map(j => j.amarelos ?? 0))
+  const acima = jogos.filter(j => (j.amarelos ?? 0) > LINHA_AMARELOS).length
+  const j = sel != null ? jogos[sel] : null
+  return (
+    <div className="mx-4 mb-3">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[11px] font-bold uppercase tracking-wide text-ink-3">Amarelos jogo a jogo</span>
+        <span className="text-[11px] text-ink-3">mais de 4,5 em <b className="text-ink-1">{acima} de {jogos.length}</b></span>
+      </div>
+      <div className="relative mt-3 h-28 flex items-end gap-[2px]" onMouseLeave={() => setSel(null)}>
+        <div className="absolute inset-x-0 border-t border-dashed border-ink-4/70 pointer-events-none"
+          style={{ bottom: `${(LINHA_AMARELOS / teto) * 100}%` }}>
+          <span className="absolute left-0 -top-3.5 text-[10px] font-mono text-ink-4">4,5</span>
+        </div>
+        {jogos.map((g, i) => {
+          const v = g.amarelos ?? 0
+          return (
+            <button key={g.fixture_id} type="button" onClick={() => setSel(i === sel ? null : i)} onMouseEnter={() => setSel(i)}
+              aria-label={`${dm(g.data)} ${g.home_team ?? ''} x ${g.away_team ?? ''}: ${v} amarelos`}
+              className="relative flex-1 h-full flex flex-col justify-end items-center">
+              <span className={cn('text-[10px] font-mono mb-0.5', sel === i ? 'text-ink-1 font-bold' : 'text-ink-4')}>{v}</span>
+              <span className={cn('w-full max-w-[22px] rounded-t-[4px] transition-opacity',
+                v > LINHA_AMARELOS ? 'bg-accent' : 'bg-ink-4/70',
+                sel != null && sel !== i && 'opacity-40')}
+                style={{ height: `${Math.max((v / teto) * 100, 2)}%` }} />
+            </button>
+          )
+        })}
+      </div>
+      <p className="mt-1.5 min-h-[18px] text-[11px] text-ink-3 truncate">
+        {j ? <>{dm(j.data)}, <span className="text-ink-1">{j.home_team} {j.home_goals}-{j.away_goals} {j.away_team}</span>: {j.amarelos} amarelos, {j.faltas ?? '-'} faltas</>
+          : 'Toque numa barra pra ver o jogo'}
+      </p>
+    </div>
   )
 }
