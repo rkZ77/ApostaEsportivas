@@ -66,6 +66,41 @@ def cobertura() -> dict:
     return saida
 
 
+#: Colunas que `calendario_jogos` ja' tem e `match_statistics` perdeu, copiadas
+#: sem API. Medido em PROD (18/10/2026): 810 partidas sem rodada (a ida/volta
+#: do mata-mata sai dela) e 91 sem arbitro, as duas com o dado no calendario.
+#: COALESCE do lado de quem recebe: so' preenche onde esta' NULL.
+DE_GRACA = (
+    ("rodada", "round", "round"),
+    ("arbitro", "referee", "referee"),
+)
+
+
+def de_graca() -> dict:
+    """{rotulo: linhas preenchidas} copiando do calendario. Zero requisicao."""
+    conn = get_connection()
+    cur = conn.cursor()
+    saida = {}
+    try:
+        for rotulo, destino, origem in DE_GRACA:
+            try:
+                cur.execute(f"""
+                    UPDATE match_statistics ms SET {destino} = cj.{origem}
+                      FROM calendario_jogos cj
+                     WHERE cj.fixture_id = ms.fixture_id
+                       AND ms.{destino} IS NULL AND cj.{origem} IS NOT NULL
+                """)
+                saida[rotulo] = cur.rowcount
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                print(f"[LACUNAS] {rotulo} do calendario: {e}")
+    finally:
+        cur.close()
+        conn.close()
+    return saida
+
+
 def _preencher(rotulo: str, teto: int) -> None:
     if rotulo == "1o tempo":
         from collectors.match_statistics_sync_service import MatchStatisticsSyncService
@@ -81,6 +116,9 @@ def _preencher(rotulo: str, teto: int) -> None:
 def preencher(escala: float = 1.0) -> dict:
     """Uma rodada. `escala` multiplica os tetos (2 = o dobro, num dia de folga
     de cota). Um tipo que quebra nao leva os outros."""
+    copiados = de_graca()
+    if any(copiados.values()):
+        print(f"[LACUNAS] copiado do calendario (sem API): {copiados}")
     antes = cobertura()
     for rotulo, _, _, teto in TIPOS:
         faltam = (antes.get(rotulo) or (0, 0))[0]
