@@ -278,6 +278,12 @@ class MatchStatisticsSyncService:
     # ---------------------------------------------------------
     # LOAD FIXTURES (COM GOLS)
     # ---------------------------------------------------------
+    #: Jogos que escaparam da janela diaria buscados por rodada (1 requisicao
+    #: cada). Ver o comentario em _load_fixtures.
+    MAX_ATRASADOS_POR_RODADA = 200
+    #: Jogo no banco com folha incompleta volta a ser pedido por este prazo.
+    DIAS_REPESCAGEM = 30
+
     def _load_fixtures(self, use_date_filter=True, days=3, apenas_liga=None,
                        temporada=None, exigir_os_dois_times=True,
                        ultimas_rodadas=None):
@@ -371,9 +377,24 @@ class MatchStatisticsSyncService:
         fixtures = []
         skipped = 0
         rodadas_a_gravar: list = []
+        atrasados: list = []
 
         if use_date_filter:
             limit_date = datetime.now(timezone.utc) - timedelta(days=days)
+            # JOGO QUE ESCAPOU DA JANELA (2026-10-18). A janela de `days` dias
+            # deixava pra tras, pra sempre, o jogo que nao foi coletado no
+            # prazo: liga cadastrada no meio da temporada, fase previa, dia em
+            # que a coleta falhou. Medido em PROD: 551 jogos encerrados de
+            # ligas ativas fora de match_statistics (MLS 386, Liga MX 75,
+            # Champions 41, Copa do Brasil 33) -- jogos que o motor nao via.
+            # A listagem ja' traz a temporada inteira, entao achar o jogo
+            # ausente nao custa nada; buscar a folha dele custa 1 requisicao,
+            # por isso ate' MAX_ATRASADOS_POR_RODADA, do mais recente pro mais
+            # antigo, e o resto entra nas proximas rodadas.
+            cur_ids = tuple(l["league_id"] for l in leagues) or (-1,)
+            self.cur.execute("SELECT fixture_id FROM match_statistics WHERE league_id IN %s",
+                             (cur_ids,))
+            ja_no_banco = {row[0] for row in self.cur.fetchall()}
 
         for lg in leagues:
             season_da_liga = temporada if temporada is not None else lg["season"]
@@ -427,8 +448,16 @@ class MatchStatisticsSyncService:
                     fixture["date"].replace("Z", "+00:00")
                 )
 
+                atrasado = False
                 if use_date_filter and match_date < limit_date:
-                    continue
+                    # No banco com folha incompleta (a API publica com atraso)
+                    # tenta de novo ate' 30 dias; depois disso e' jogo sem
+                    # folha e para de gastar requisicao.
+                    if fixture["id"] in ja_no_banco and (
+                            fixture["id"] in settled_fixture_ids
+                            or match_date < datetime.now(timezone.utc) - timedelta(days=self.DIAS_REPESCAGEM)):
+                        continue
+                    atrasado = True
 
                 home_id = teams["home"]["id"]
                 away_id = teams["away"]["id"]
@@ -466,7 +495,7 @@ class MatchStatisticsSyncService:
                 ht = score.get("halftime") or {}
                 ft90 = score.get("fulltime") or {}
 
-                fixtures.append({
+                (atrasados if atrasado else fixtures).append({
                     "fixture_id": fixture["id"],
                     "league_id": lg["league_id"],
                     # A temporada COLETADA, nunca a de `leagues`. Gravar o
@@ -497,6 +526,12 @@ class MatchStatisticsSyncService:
                 })
 
         self._gravar_rodadas(rodadas_a_gravar)
+
+        if atrasados:
+            atrasados.sort(key=lambda f: f["match_date"], reverse=True)
+            print(f"[MATCH_STATS] {len(atrasados)} jogo(s) encerrado(s) fora do banco e fora da "
+                  f"janela · {min(len(atrasados), self.MAX_ATRASADOS_POR_RODADA)} entram nesta rodada.")
+            fixtures.extend(atrasados[:self.MAX_ATRASADOS_POR_RODADA])
 
         print(f"[INFO] {len(fixtures)} jogos carregados "
               f"({skipped} pulados · estatística já estabilizada no banco)")

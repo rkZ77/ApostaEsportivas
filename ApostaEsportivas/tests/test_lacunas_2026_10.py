@@ -6,6 +6,7 @@ def test_preenche_so_o_que_falta_e_um_tipo_nao_derruba_o_outro(monkeypatch, caps
     medidas = iter([{"1o tempo": (1793, 3051), "eventos": (0, 4000), "escalacao": (50, 4000)},
                     {"1o tempo": (1493, 3051), "eventos": (0, 4000), "escalacao": (0, 4000)}])
     monkeypatch.setattr(ls, "cobertura", lambda: next(medidas))
+    monkeypatch.setattr(ls, "de_graca", lambda: {"rodada": 810, "arbitro": 91})
     chamados = []
 
     def _preencher(rotulo, teto):
@@ -17,10 +18,12 @@ def test_preenche_so_o_que_falta_e_um_tipo_nao_derruba_o_outro(monkeypatch, caps
     assert chamados == [("1o tempo", 300), ("escalacao", 30)]       # eventos sem fila: nada
     saida = capsys.readouterr().out
     assert "1o tempo falhou" in saida and "faltam 1493 de 3051" in saida
+    assert "copiado do calendario" in saida
 
 
 def test_escala_multiplica_os_tetos(monkeypatch):
     monkeypatch.setattr(ls, "cobertura", lambda: {"1o tempo": (10, 10), "eventos": (10, 10), "escalacao": (10, 10)})
+    monkeypatch.setattr(ls, "de_graca", lambda: {})
     chamados = []
     monkeypatch.setattr(ls, "_preencher", lambda r, t: chamados.append(t))
     ls.preencher(escala=2)
