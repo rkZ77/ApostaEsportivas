@@ -45,7 +45,8 @@ from datetime import datetime, timedelta
 
 from utils import esquema
 from utils.api_client import buscar
-from utils.arbitro import chave_do_arbitro, chaves_equivalentes, sql_candidatas, sql_chave
+from utils.arbitro import (chave_do_arbitro, chaves_equivalentes, parametros_candidatas,
+                           sql_candidatas, sql_chave)
 from utils.db_utils import get_connection
 from utils.stat_sheet import folha_publicada, ler_valor
 
@@ -242,7 +243,7 @@ def _com_as_outras_grafias(cur, chaves: list) -> list:
         conhecidas = set()
         for tabela in ("match_statistics", "calendario_jogos", "arbitro_partidas"):
             cur.execute(f"SELECT DISTINCT {sql_chave('referee')} FROM {tabela} "
-                        f"WHERE {sql_candidatas('referee')}", (chave.split()[0],))
+                        f"WHERE {sql_candidatas('referee')}", parametros_candidatas(chave))
             conhecidas.update(r[0] for r in cur.fetchall() if r[0])
         saida.update(chaves_equivalentes(chave, conhecidas))
     return sorted(saida)
