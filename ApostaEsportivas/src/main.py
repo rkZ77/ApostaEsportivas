@@ -785,6 +785,14 @@ def cmd_arbitros(*args):
     coletar(teto_requisicoes=int(args[0]) if args and args[0] else TETO_PADRAO)
 
 
+def cmd_lacunas(*args):
+    """Acha o dado de historico que falta (1o tempo, eventos, escalacao) e
+    preenche dentro do teto do dia · ver collectors/lacunas_service.
+    `lacunas 2` dobra os tetos."""
+    from collectors.lacunas_service import preencher
+    preencher(escala=float(args[0]) if args and args[0] else 1.0)
+
+
 def cmd_clima(*args):
     """Clima e altitude das partidas do calendario (Open-Meteo, sem cota)."""
     from collectors.clima_service import coletar
@@ -1070,7 +1078,15 @@ COMANDOS: tuple = (
     # Teto de 40 requisicoes; nao mexe no que o motor le (tabela a parte).
     Comando("arbitros", "Árbitros (todas as ligas do país)",
             "Busca os jogos da temporada dos árbitros escalados, inclusive em liga não cadastrada",
-            lambda *a: cmd_arbitros(*a), etapa="ÁRBITROS", uso="arbitros [teto]"),
+            lambda *a: cmd_arbitros(*[x for x in a if x != "full"]), etapa="ÁRBITROS", uso="arbitros [teto]"),
+    # LACUNAS (2026-10-18, pedido do usuario: "pegar esses gaps sem minha
+    # ajuda"). 1o tempo, eventos e escalacao do historico, ~360 requisicoes
+    # por dia; o log diz quanto falta. Depois dos dados pra a partida de ontem
+    # ja' estar no banco quando a fila e' montada.
+    Comando("lacunas", "Lacunas · completa 1º tempo, eventos e escalações do histórico",
+            "Acha o dado de histórico que falta e preenche dentro do teto do dia",
+            lambda *a: cmd_lacunas(*[x for x in a if x != "full"]), etapa="LACUNAS",
+            uso="lacunas [escala]"),
     # COLETA DE ESTATISTICA DE JOGADOR · entrou no `tudo` em 2026-08-28.
     #
     # A razao que a mantinha fora se inverteu. O comentario antigo dizia "1

@@ -89,3 +89,16 @@ def test_comando_roda_no_tudo_logo_depois_dos_dados():
     import main
     etapas = [c.nome for c in main.COMANDOS if c.etapa]
     assert etapas[etapas.index("dados") + 1] == "arbitros"
+
+
+def test_tudo_full_nao_quebra_arbitros_nem_lacunas(monkeypatch):
+    """`tudo full` passa "full" pra toda etapa; teto nao pode virar int("full")."""
+    import main
+    from collectors import arbitro_temporada_service, lacunas_service
+    vistos = {}
+    monkeypatch.setattr(arbitro_temporada_service, "coletar", lambda teto_requisicoes: vistos.update(arb=teto_requisicoes))
+    monkeypatch.setattr(lacunas_service, "preencher", lambda escala: vistos.update(lac=escala))
+    por_nome = {c.nome: c for c in main.COMANDOS}
+    por_nome["arbitros"].executar("full")
+    por_nome["lacunas"].executar("full")
+    assert vistos == {"arb": arbitro_temporada_service.TETO_PADRAO, "lac": 1.0}
