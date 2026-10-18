@@ -76,6 +76,11 @@ export interface RaioX {
   }
   times: { home: { team_id: number; jogos: JogoDoTime[] }; away: { team_id: number; jogos: JogoDoTime[] } }
   h2h: JogoCurto[]
+  /** Jogos da liga na temporada, antes deste, um por time (dois por partida),
+   *  pra média da liga da chance ajustada (18/10/2026). Só as contagens vêm
+   *  (sem fixture_id, data e adversário); `numero` não lê o resto. Ausente em
+   *  cache antigo. */
+  liga_jogos?: JogoDoTime[]
   /** 'api': o banco não tinha o confronto e ele veio da API-Football, só com
    *  o placar (12/10/2026). Ausente em resposta antiga do cache = banco. */
   h2h_fonte?: 'banco' | 'api'

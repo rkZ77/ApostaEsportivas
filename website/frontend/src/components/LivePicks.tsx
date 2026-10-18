@@ -515,8 +515,34 @@ function CashoutModal({ pick, unitValue, onClose, onDone }: {
   )
 }
 
-// Probabilidade combinada de uma múltipla/alavancagem
-// Produto das probabilidades individuais de cada leg ainda em aberto.
+/*
+ * "MOTOR DIZ" (18/10/2026, pedido do usuário). O mesmo produto do
+ * calcMultiProb, mas com a chance que o MOTOR deu pra cada perna em aberto
+ * (`prob_motor`, ver backend/chance_do_motor.py) no lugar de 1/odd. Perna ao
+ * vivo usa a mesma leitura ao vivo dos dois lados. null quando o motor não
+ * avaliou alguma perna em aberto · aí a tela não inventa o número.
+ */
+function calcMotorProb(legs: any[]): number | null {
+  if (!legs || legs.length === 0) return null
+  let combined = 1.0
+  for (const leg of legs) {
+    const finished = FINISHED_SET.has(leg.status)
+    if (leg.is_locked || finished) {
+      if (leg.pick_status === 'winning') continue
+      return 1
+    }
+    const isLive = LIVE_SET.has(leg.status)
+    const aoVivo = isLive && leg.elapsed != null ? calcLiveProb(leg) : null
+    if (aoVivo != null) { combined *= aoVivo / 100; continue }
+    const p = Number(leg.prob_motor)
+    if (leg.prob_motor == null || !Number.isFinite(p) || p <= 0) return null
+    combined *= p
+  }
+  return Math.round(combined * 100)
+}
+
+// "CASA DIZ": produto de 1/odd de cada leg ainda em aberto · a opinião da
+// casa, com a margem dela dentro. Não é a probabilidade do motor (calcMotorProb).
 function calcMultiProb(legs: any[]): number | null {
   if (!legs || legs.length === 0) return null
   let combined = 1.0
@@ -641,7 +667,10 @@ function PickCard({ pick, unitValue, onRefresh, syncedAt }: {
     : pick.pick_status === 'losing' ? 'text-red-400' : 'text-ink-2'
   const liveProb    = !isMulti && isLive && !effectiveLocked && pick.elapsed != null ? calcLiveProb(pick) : null
   const multiProb   = isMulti ? calcMultiProb(pick.legs ?? []) : null
-  const displayProb = liveProb ?? multiProb
+  const motorProb   = isMulti ? calcMotorProb(pick.legs ?? []) : null
+  /* No card fechado o número é o do motor quando ele avaliou todas as
+     pernas · o da casa é a odd invertida, não uma probabilidade nossa. */
+  const displayProb = liveProb ?? motorProb ?? multiProb
   const probCls     = displayProb == null ? '' : displayProb >= 60
     ? 'text-green-400 bg-green-400/10 border-green-500/25'
     : displayProb >= 35
@@ -763,15 +792,28 @@ function PickCard({ pick, unitValue, onRefresh, syncedAt }: {
             {isMulti ? (
               <div className="space-y-2">
                 {(pick.legs ?? []).map((leg: any, i: number) => <LiveLeg key={i} leg={leg} syncedAt={syncedAt} />)}
-                {multiProb != null && !hasResult && (
+                {/* CASA DIZ x MOTOR DIZ (18/10/2026, pedido do usuário). Era um
+                    "Prob. combinada" só com 1/odd, a opinião da casa com a
+                    margem dentro, lida como se fosse a do motor. */}
+                {(multiProb != null || motorProb != null) && !hasResult && (
                   <div className="pt-2 border-t border-line/60 space-y-1.5">
-                    <div className="font-mono flex justify-between text-xs">
-                      <span className="text-ink-3">Prob. combinada</span>
-                      <span className={`font-black ${multiProb >= 60 ? 'text-green-400' : multiProb >= 35 ? 'text-yellow-400' : 'text-red-400'}`}>{multiProb}%</span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="rounded-lg bg-surface-2 px-3 py-2">
+                        <div className="text-[11px] text-ink-3">Casa diz</div>
+                        <div className="font-mono text-lg font-black text-ink-1 tabular-nums">{multiProb != null ? `${multiProb}%` : '—'}</div>
+                      </div>
+                      <div className="rounded-lg bg-surface-2 px-3 py-2">
+                        <div className="text-[11px] text-ink-3">Motor diz</div>
+                        <div className="font-mono text-lg font-black text-ink-1 tabular-nums">{motorProb != null ? `${motorProb}%` : '—'}</div>
+                      </div>
                     </div>
-                    <div className="h-1 bg-surface-2 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full transition-all duration-700 ${multiProb >= 60 ? 'bg-green-500' : multiProb >= 35 ? 'bg-yellow-400' : 'bg-red-500'}`} style={{ width: `${multiProb}%` }} />
-                    </div>
+                    <p className="text-[11px] text-ink-3 leading-relaxed">
+                      {motorProb == null
+                        ? 'O motor não avaliou todas as pernas deste bilhete. A casa é a odd invertida, com a margem dela dentro.'
+                        : motorProb > (multiProb ?? 0)
+                        ? 'O motor vê mais chance do que a odd paga. A casa é a odd invertida, com a margem dela dentro.'
+                        : 'O motor vê menos chance do que a odd paga: a casa está cobrando caro. A casa é a odd invertida, com a margem dela dentro.'}
+                    </p>
                   </div>
                 )}
               </div>

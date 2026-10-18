@@ -69,11 +69,39 @@ export function chanceDoResultado(odds: OddDaCasa[] | null | undefined): { casa:
   return { casa: 1 / c / soma, empate: 1 / e / soma, fora: 1 / f / soma }
 }
 
+type SelecaoDaOdd = Parameters<typeof oddDaSelecao>[1]
+
+/** O outro lado da mesma seleção: Mais ↔ Menos, Sim ↔ Não. */
+function contraria(sel: SelecaoDaOdd): SelecaoDaOdd | null {
+  if (sel.mercado === 'btts') return { ...sel, escolha: sel.escolha === 'nao' ? undefined : 'nao' }
+  if (sel.lado) return { ...sel, lado: sel.lado === 'mais' ? 'menos' : 'mais' }
+  return null
+}
+
 /**
- * Vantagem pela taxa histórica: chance × odd − 1. Só com amostra de 8 jogos
- * ou mais · com menos, 4/4 viraria "valor" em cima de quatro jogos.
+ * A chance que o PREÇO da casa dá pra seleção, sem a margem (18/10/2026).
+ *
+ * Linha e ambas marcam: a odd dos dois lados. Resultado e chance dupla: os
+ * três lados do resultado final (chanceDoResultado). null quando falta um
+ * lado · aí a chance ajustada cai pra média da liga (lib/chanceAjustada).
+ *
+ * Substitui o `vantagem` (bateu/n × odd − 1), que chamava de valor qualquer
+ * sequência curta: medido em PROD, "100% nos últimos jogos" acerta o que o
+ * preço diz, não 100%.
  */
-export function vantagem(bateu: number, n: number, odd: number | null | undefined): number | null {
-  if (!odd || n < 8) return null
-  return (bateu / n) * odd - 1
+export function precoSemMargem(odds: OddDaCasa[] | null | undefined, sel: SelecaoDaOdd): number | null {
+  if (sel.mercado === 'resultado') {
+    const r = chanceDoResultado(odds)
+    if (!r || !sel.escolha) return null
+    const parte: Record<string, number> = {
+      '1': r.casa, X: r.empate, '2': r.fora,
+      '1X': r.casa + r.empate, '12': r.casa + r.fora, X2: r.empate + r.fora,
+    }
+    return parte[sel.escolha] ?? null
+  }
+  const outro = contraria(sel)
+  const a = oddDaSelecao(odds, sel)?.odd
+  const b = outro ? oddDaSelecao(odds, outro)?.odd : undefined
+  if (!a || !b || a <= 1 || b <= 1) return null
+  return (1 / a) / (1 / a + 1 / b)
 }

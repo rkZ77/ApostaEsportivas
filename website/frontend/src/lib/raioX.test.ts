@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { ambasMarcam, ambosRecebemCartao, filtrarPorMando, fraseDoJogador, ESTATS_DE_JOGADOR, numero, resultadoDoJogo, RESULTADOS_ACEITOS, rotuloDaLinha,
          serieDeResultado, taxa, taxaDoJogador, type Jogador, type JogoDoTime, type RaioX } from './raioX'
-import { adicionar, chanceCombinada, limpar, remover, textoDoBilhete, trocarNoGrupo, type Selecao } from './bilheteMontado'
+import { adicionar, chanceCombinada, limpar, remover, semChance, textoDoBilhete, trocarNoGrupo, type Selecao } from './bilheteMontado'
 
 const noBilhete = (): Selecao[] => JSON.parse(localStorage.getItem('pickia_bilhete_montado') ?? '[]')
 
@@ -176,9 +176,12 @@ describe('bilhete montado', () => {
     expect(JSON.parse(localStorage.getItem('pickia_bilhete_montado')!)).toHaveLength(1)
   })
 
-  it('chance combinada multiplica as taxas, e some sem amostra', () => {
-    expect(chanceCombinada([sel('a', 8, 10), sel('b', 5, 10)])).toBeCloseTo(0.4)
-    expect(chanceCombinada([sel('a', 8, 10), sel('b', 0, 0)])).toBeNull()
+  it('chance combinada multiplica as chances AJUSTADAS, não o bateu/n cru', () => {
+    // O caso de 18/10: 8/8 e 6/6 davam "100%". Com a chance ajustada, ~45%.
+    expect(chanceCombinada([{ ...sel('a', 8, 8), chance: 0.64 }, { ...sel('b', 6, 6), chance: 0.706 }])).toBeCloseTo(0.452, 3)
+    // Seleção sem chance ajustada (salva antes, ou sem preço nem liga): não inventa.
+    expect(chanceCombinada([{ ...sel('a', 8, 8), chance: 0.64 }, sel('b', 6, 6)])).toBeNull()
+    expect(semChance([{ ...sel('a', 8, 8), chance: 0.64 }, sel('b', 6, 6)])).toBe(1)
     expect(chanceCombinada([])).toBeNull()
   })
 
