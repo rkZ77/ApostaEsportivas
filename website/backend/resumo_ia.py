@@ -130,13 +130,97 @@ def _acima(j, a, b, linha):
     return None if s is None else s > linha
 
 
+def _valor(j: dict, contador: str, quem: str, periodo: str = "total"):
+    """O numero de um jogo · a mesma conta de lib/raioX.numero na tela.
+
+    quem: 'pro' | 'contra' | 'jogo' (soma dos dois). periodo: 'total' | '1t' |
+    '2t' (2o tempo = total - 1o, so' com os dois)."""
+    def lado(q):
+        total = j.get(f"{contador}_{q}")
+        if periodo == "total":
+            return total
+        prim = j.get(f"{contador}_{q}_1t")
+        if periodo == "1t":
+            return prim
+        return None if total is None or prim is None else total - prim
+    if quem != "jogo":
+        return lado(quem)
+    a, b = lado("pro"), lado("contra")
+    return None if a is None or b is None else a + b
+
+
+def _mercado(jogos: list, contador: str, quem: str, linhas: tuple, periodo: str = "total") -> dict | None:
+    """Media e "% de jogos acima de cada linha" de um mercado do Raio-X.
+
+    `jogos` = quantos tem o numero (jogo antigo sem a folha do 1o tempo, ou
+    sem faltas, nao conta nem a favor nem contra · igual a tela)."""
+    valores = [_valor(j, contador, quem, periodo) for j in jogos]
+    validos = [v for v in valores if v is not None]
+    if not validos:
+        return None
+    pcts = {str(l): round(100 * sum(1 for v in validos if v > l) / len(validos)) for l in linhas}
+    return {
+        "media": round(sum(validos) / len(validos), 1),
+        "jogos": len(validos),
+        # CUSTO (19/10/2026): linha entre 36 e 64 nao vira mercado (regra do
+        # SYSTEM), entao nao vai · corta ~metade da entrada. A media fica.
+        "pct_mais_de": {k: v for k, v in pcts.items() if v <= 35 or v >= 65},
+    }
+
+
+#: TODOS OS MERCADOS DA ABA MERCADOS (19/10/2026, pedido do usuario: "a
+#: leitura tem que ler todos os mercados do Raio-X e dos jogadores"). Antes a
+#: IA so' via gols, escanteios e amarelos. (nome, contador, quem, periodo,
+#: linhas) · as linhas cobrem as que a tela abre e as vizinhas que a casa
+#: oferece. Faltas, chutes, impedimentos e defesas so' tem o jogo todo.
+_MERCADOS_DO_TIME = (
+    ("gols_feitos", "gols", "pro", "total", (0.5, 1.5, 2.5)),
+    ("gols_sofridos", "gols", "contra", "total", (0.5, 1.5, 2.5)),
+    ("gols_feitos_1t", "gols", "pro", "1t", (0.5, 1.5)),
+    ("gols_feitos_2t", "gols", "pro", "2t", (0.5, 1.5)),
+    ("gols_sofridos_1t", "gols", "contra", "1t", (0.5,)),
+    ("gols_sofridos_2t", "gols", "contra", "2t", (0.5,)),
+    ("escanteios_a_favor", "escanteios", "pro", "total", (2.5, 3.5, 4.5, 5.5, 6.5)),
+    ("escanteios_cedidos", "escanteios", "contra", "total", (2.5, 3.5, 4.5, 5.5, 6.5)),
+    ("escanteios_a_favor_1t", "escanteios", "pro", "1t", (1.5, 2.5, 3.5)),
+    ("escanteios_a_favor_2t", "escanteios", "pro", "2t", (1.5, 2.5, 3.5)),
+    ("cartoes_amarelos_recebidos", "amarelos", "pro", "total", (0.5, 1.5, 2.5, 3.5)),
+    ("cartoes_amarelos_recebidos_1t", "amarelos", "pro", "1t", (0.5, 1.5)),
+    ("chutes_no_alvo_a_favor", "chutes_alvo", "pro", "total", (2.5, 3.5, 4.5, 5.5)),
+    ("chutes_no_alvo_cedidos", "chutes_alvo", "contra", "total", (2.5, 3.5, 4.5, 5.5)),
+    ("chutes_no_alvo_a_favor_1t", "chutes_alvo", "pro", "1t", (0.5, 1.5, 2.5)),
+    ("chutes_a_favor", "chutes", "pro", "total", (8.5, 10.5, 12.5, 14.5)),
+    ("chutes_cedidos", "chutes", "contra", "total", (8.5, 10.5, 12.5, 14.5)),
+    ("faltas_cometidas", "faltas", "pro", "total", (9.5, 10.5, 11.5, 12.5, 13.5)),
+    ("faltas_sofridas", "faltas", "contra", "total", (9.5, 10.5, 11.5, 12.5, 13.5)),
+    ("impedimentos", "impedimentos", "pro", "total", (0.5, 1.5, 2.5)),
+    ("defesas_do_goleiro", "defesas", "pro", "total", (1.5, 2.5, 3.5, 4.5)),
+)
+_MERCADOS_DO_JOGO = (
+    ("gols", "gols", "jogo", "total", (0.5, 1.5, 2.5, 3.5, 4.5)),
+    ("gols_1t", "gols", "jogo", "1t", (0.5, 1.5, 2.5)),
+    ("gols_2t", "gols", "jogo", "2t", (0.5, 1.5, 2.5)),
+    ("escanteios", "escanteios", "jogo", "total", (7.5, 8.5, 9.5, 10.5, 11.5)),
+    ("escanteios_1t", "escanteios", "jogo", "1t", (3.5, 4.5, 5.5)),
+    ("escanteios_2t", "escanteios", "jogo", "2t", (4.5, 5.5, 6.5)),
+    ("cartoes_amarelos", "amarelos", "jogo", "total", (2.5, 3.5, 4.5, 5.5)),
+    ("cartoes_amarelos_1t", "amarelos", "jogo", "1t", (0.5, 1.5, 2.5)),
+    ("chutes_no_alvo", "chutes_alvo", "jogo", "total", (6.5, 7.5, 8.5, 9.5, 10.5)),
+    ("chutes_no_alvo_1t", "chutes_alvo", "jogo", "1t", (2.5, 3.5, 4.5)),
+    ("chutes", "chutes", "jogo", "total", (18.5, 20.5, 22.5, 24.5, 26.5)),
+    ("faltas", "faltas", "jogo", "total", (18.5, 20.5, 22.5, 24.5, 26.5)),
+    ("impedimentos", "impedimentos", "jogo", "total", (1.5, 2.5, 3.5, 4.5)),
+    ("defesas_dos_goleiros", "defesas", "jogo", "total", (4.5, 5.5, 6.5, 7.5)),
+)
+
+
 def numeros_do_time(jogos: list) -> dict | None:
     """Taxas sobre a serie jogo a jogo, do ponto de vista do time.
 
     Dois blocos (12/10/2026, pedido do usuario: "mostrando por time,
     respeitando mandante"): as linhas do JOGO (total dos dois) e as do proprio
     TIME (o que ele faz e o que cede), que e' o que diz se ele domina, ataca
-    ou se defende.
+    ou se defende. Desde 19/10/2026, todos os mercados da aba Mercados.
     """
     if not jogos:
         return None
@@ -146,49 +230,109 @@ def numeros_do_time(jogos: list) -> dict | None:
         "V" if j["gols_pro"] > j["gols_contra"] else "E" if j["gols_pro"] == j["gols_contra"] else "D"
         for j in jogos if j.get("gols_pro") is not None and j.get("gols_contra") is not None)[:5]
     gp, gc = "gols_pro", "gols_contra"
-    ep, ec = "escanteios_pro", "escanteios_contra"
     ap, ac = "amarelos_pro", "amarelos_contra"
 
-    def time_acima(col, linha):
-        return lambda j: None if j.get(col) is None else j[col] > linha
+    def resultado(j):
+        if j.get(gp) is None or j.get(gc) is None:
+            return None
+        return "V" if j[gp] > j[gc] else "E" if j[gp] == j[gc] else "D"
+
+    def cartoes(j, q):
+        if j.get(f"amarelos_{q}") is None:
+            return None
+        return j[f"amarelos_{q}"] + (j.get(f"vermelhos_{q}") or 0)
 
     return {
         "jogos": len(jogos),
         "forma_recente_primeiro": forma,
-        "time": {
-            "gols_pro_media": _media([j.get(gp) for j in jogos]),
-            "gols_contra_media": _media([j.get(gc) for j in jogos]),
-            "pct_marcou": _pct(jogos, time_acima(gp, 0)),
-            "pct_marcou_2_ou_mais": _pct(jogos, time_acima(gp, 1)),
-            "pct_sofreu": _pct(jogos, time_acima(gc, 0)),
-            "pct_marcou_no_1t": _pct(jogos, time_acima("gols_pro_1t", 0)),
-            "escanteios_pro_media": _media([j.get(ep) for j in jogos]),
-            "escanteios_contra_media": _media([j.get(ec) for j in jogos]),
-            "pct_escanteios_pro_over_3_5": _pct(jogos, time_acima(ep, 3.5)),
-            "pct_escanteios_pro_over_4_5": _pct(jogos, time_acima(ep, 4.5)),
-            "pct_escanteios_pro_over_5_5": _pct(jogos, time_acima(ep, 5.5)),
-            "amarelos_pro_media": _media([j.get(ap) for j in jogos]),
-            "pct_amarelos_pro_over_1_5": _pct(jogos, time_acima(ap, 1.5)),
-            "pct_amarelos_pro_over_2_5": _pct(jogos, time_acima(ap, 2.5)),
-            "chutes_no_alvo_pro_media": _media([j.get("chutes_alvo_pro") for j in jogos]),
-            "chutes_no_alvo_contra_media": _media([j.get("chutes_alvo_contra") for j in jogos]),
-            "posse_media": _media([j.get("posse") for j in jogos]),
+        "resultado": {
+            "pct_vitoria": _pct(jogos, lambda j: None if resultado(j) is None else resultado(j) == "V"),
+            "pct_empate": _pct(jogos, lambda j: None if resultado(j) is None else resultado(j) == "E"),
+            "pct_derrota": _pct(jogos, lambda j: None if resultado(j) is None else resultado(j) == "D"),
         },
+        "posse_media": _media([j.get("posse") for j in jogos]),
+        # Sempre, mesmo entre 36 e 64: e' a faixa de numeros da tela.
+        "pct_marcou": _pct(jogos, lambda j: None if j.get(gp) is None else j[gp] > 0),
+        "pct_sofreu": _pct(jogos, lambda j: None if j.get(gc) is None else j[gc] > 0),
+        "time": {nome: _mercado(jogos, c, q, linhas, p) for nome, c, q, p, linhas in _MERCADOS_DO_TIME},
         "jogo": {
-            "pct_over_1_5_gols": _pct(jogos, lambda j: _acima(j, gp, gc, 1.5)),
-            "pct_over_2_5_gols": _pct(jogos, lambda j: _acima(j, gp, gc, 2.5)),
-            "pct_over_3_5_gols": _pct(jogos, lambda j: _acima(j, gp, gc, 3.5)),
+            **{nome: _mercado(jogos, c, q, linhas, p) for nome, c, q, p, linhas in _MERCADOS_DO_JOGO},
             "pct_ambas_marcam": _pct(jogos, lambda j: None if j.get(gp) is None or j.get(gc) is None
                                      else j[gp] > 0 and j[gc] > 0),
-            "pct_gol_no_1t": _pct(jogos, lambda j: _acima(j, "gols_pro_1t", "gols_contra_1t", 0.5)),
-            "escanteios_total_media": _media([_soma(j, ep, ec) for j in jogos]),
-            "pct_over_8_5_escanteios": _pct(jogos, lambda j: _acima(j, ep, ec, 8.5)),
-            "pct_over_9_5_escanteios": _pct(jogos, lambda j: _acima(j, ep, ec, 9.5)),
-            "pct_over_10_5_escanteios": _pct(jogos, lambda j: _acima(j, ep, ec, 10.5)),
-            "amarelos_total_media": _media([_soma(j, ap, ac) for j in jogos]),
-            "pct_over_3_5_amarelos": _pct(jogos, lambda j: _acima(j, ap, ac, 3.5)),
-            "pct_over_4_5_amarelos": _pct(jogos, lambda j: _acima(j, ap, ac, 4.5)),
+            "pct_ambos_recebem_cartao": _pct(
+                jogos, lambda j: None if cartoes(j, "pro") is None or cartoes(j, "contra") is None
+                else min(cartoes(j, "pro"), cartoes(j, "contra")) >= 1),
+            "pct_teve_vermelho": _pct(
+                jogos, lambda j: None if j.get(ap) is None or j.get(ac) is None
+                else (j.get("vermelhos_pro") or 0) + (j.get("vermelhos_contra") or 0) > 0),
         },
+    }
+
+
+#: Linhas de jogador ("X ou mais" no jogo dele), as mesmas da aba Jogadores.
+_LINHAS_DO_JOGADOR = (
+    ("chutes", (1, 2, 3)), ("chutes_alvo", (1, 2)), ("gols", (1,)), ("assistencias", (1,)),
+    ("faltas", (1, 2)), ("faltas_sofridas", (1, 2, 3)), ("desarmes", (1, 2, 3)),
+    ("amarelos", (1,)), ("dribles", (1, 2)),
+)
+_LINHAS_DO_GOLEIRO = (("defesas", (2, 3, 4, 5)),)
+#: Jogos minimos do jogador no recorte pra entrar na leitura.
+MIN_JOGOS_JOGADOR = 4
+#: Jogadores por time que vao pro modelo (titulares provaveis primeiro).
+MAX_JOGADORES = 11
+
+
+def numeros_dos_jogadores(lista: list, jogos_do_mando: set) -> list:
+    """Os jogadores de um time pra IA (19/10/2026, pedido do usuario).
+
+    Mesma conta da aba Jogadores com "Casa / Fora": so' os jogos do time NO
+    MANDO DESTA PARTIDA. Jogador com menos de MIN_JOGOS_JOGADOR nesse recorte
+    fica fora. So' vao as linhas em que bateu em 65% ou mais dos jogos (prop
+    de jogador e' sempre "X ou mais") · o resto e' token pago a toa.
+    """
+    saida = []
+    for p in lista:
+        jogos = [g for g in p.get("jogos") or [] if g.get("fixture_id") in jogos_do_mando]
+        if len(jogos) < MIN_JOGOS_JOGADOR:
+            continue
+        goleiro = (p.get("posicao") or "").upper().startswith("G")
+        mercados = {}
+        for estat, minimos in (_LINHAS_DO_GOLEIRO if goleiro else _LINHAS_DO_JOGADOR):
+            valores = [g.get(estat) for g in jogos if g.get(estat) is not None]
+            if not valores:
+                continue
+            pcts = {f"{m}+": round(100 * sum(1 for v in valores if v >= m) / len(valores))
+                    for m in minimos}
+            pcts = {k: v for k, v in pcts.items() if v >= 65}
+            if pcts:
+                mercados[estat] = {"media": round(sum(valores) / len(valores), 1),
+                                   "pct_jogos_com": pcts}
+        if not mercados:
+            continue
+        saida.append({
+            "nome": p.get("nome"), "posicao": p.get("posicao"),
+            "titular_provavel": bool(p.get("titular_provavel")),
+            "jogos": len(jogos),
+            "minutos_media": round(sum(g.get("minutos") or 0 for g in jogos) / len(jogos)),
+            "mercados": mercados,
+        })
+        if len(saida) >= MAX_JOGADORES:
+            break
+    return saida
+
+
+def numeros_curtos(jogos: list) -> dict | None:
+    """So' as medias, sem as linhas (19/10/2026): "ultimos 5" e "geral" so'
+    contrastam o mando. Com todos os mercados completos nos tres blocos, a
+    entrada triplicava · e e' paga em todo jogo aberto no dia."""
+    n = numeros_do_time(jogos)
+    if not n:
+        return None
+    return {
+        "jogos": n["jogos"], "forma_recente_primeiro": n["forma_recente_primeiro"],
+        "resultado": n["resultado"], "posse_media": n["posse_media"],
+        "medias_do_time": {k: v["media"] for k, v in n["time"].items() if v},
+        "medias_do_jogo": {k: v["media"] for k, v in n["jogo"].items() if isinstance(v, dict)},
     }
 
 
@@ -198,12 +342,13 @@ def serie_por_mando(cur, team_id: int, em_casa: bool, season, league_id,
     (60 cobre qualquer liga · 17/10/2026, pedido do usuario):
     o mandante em casa, o visitante fora. A serie geral do Raio-X tem 10 jogos
     misturando os dois, e a leitura saia com "4 jogos em casa" achando que
-    eram 10. Mesmo formato de routers/fixtures._serie_do_time."""
-    lado, outro = ("home", "away") if em_casa else ("away", "home")
+    eram 10. Sai de routers/fixtures._serie_do_time, com as MESMAS colunas
+    da tela (19/10/2026): faltas, chutes, impedimentos, defesas, vermelhos e
+    o 1o tempo de escanteios, cartoes e chutes no alvo entraram."""
+    from routers.fixtures import _COLUNAS_DO_JOGO, _serie_do_time
+    lado = "home" if em_casa else "away"
     cur.execute(f"""
-        SELECT home_goals, away_goals, home_goals_ht, away_goals_ht,
-               home_corners, away_corners, home_yellow_cards, away_yellow_cards,
-               home_shots_on, away_shots_on, home_possession, away_possession
+        SELECT {_COLUNAS_DO_JOGO}
           FROM match_statistics
          WHERE {lado}_team_id = %s AND season = %s
            AND status IN ('FT','AET','PEN')
@@ -211,15 +356,7 @@ def serie_por_mando(cur, team_id: int, em_casa: bool, season, league_id,
            AND (%s::timestamp IS NULL OR match_date < %s::timestamp)
          ORDER BY match_date DESC LIMIT %s
     """, (team_id, season, so_na_liga, league_id, antes_de, antes_de, n))
-    return [{
-        "em_casa": em_casa,
-        "gols_pro": r[f"{lado}_goals"], "gols_contra": r[f"{outro}_goals"],
-        "gols_pro_1t": r[f"{lado}_goals_ht"], "gols_contra_1t": r[f"{outro}_goals_ht"],
-        "escanteios_pro": r[f"{lado}_corners"], "escanteios_contra": r[f"{outro}_corners"],
-        "amarelos_pro": r[f"{lado}_yellow_cards"], "amarelos_contra": r[f"{outro}_yellow_cards"],
-        "chutes_alvo_pro": r[f"{lado}_shots_on"], "chutes_alvo_contra": r[f"{outro}_shots_on"],
-        "posse": r[f"{lado}_possession"],
-    } for r in cur.fetchall()]
+    return _serie_do_time([{**r, "team_id": team_id} for r in cur.fetchall()], team_id)
 
 def _sem_vazios(d):
     if isinstance(d, dict):
@@ -319,6 +456,10 @@ def montar_fatos(dados: dict, liga: str | None, formato: str, tabela: dict,
                                 else f["away_team"] if ida["gols_visitante"] > ida["gols_mandante"]
                                 else "empate"),
     } if ida else None)
+    # Jogadores no mando desta partida, como a aba Jogadores com "Casa / Fora".
+    jog = dados.get("jogadores") or {}
+    mando_casa = {j.get("fixture_id") for j in casa if j.get("em_casa")}
+    mando_fora = {j.get("fixture_id") for j in fora if not j.get("em_casa")}
     return _sem_vazios({
         "jogo": {
             "mandante": f["home_team"], "visitante": f["away_team"],
@@ -331,16 +472,20 @@ def montar_fatos(dados: dict, liga: str | None, formato: str, tabela: dict,
         "mandante": {
             "nome": f["home_team"],
             "EM_CASA_na_temporada": numeros_do_time(casa_em_casa),
-            "ultimos_5_em_casa": numeros_do_time(casa_em_casa[:5]),
-            "temporada_geral": numeros_do_time(casa),
+            "ultimos_5_em_casa": numeros_curtos(casa_em_casa[:5]),
+            "temporada_geral": numeros_curtos(casa),
+            "jogadores_em_casa": numeros_dos_jogadores(
+                (jog.get("home") or {}).get("lista") or [], mando_casa),
             "tabela": tabela.get(hid),
             "tecnico": tecnicos.get(hid),
         },
         "visitante": {
             "nome": f["away_team"],
             "FORA_na_temporada": numeros_do_time(fora_fora),
-            "ultimos_5_fora": numeros_do_time(fora_fora[:5]),
-            "temporada_geral": numeros_do_time(fora),
+            "ultimos_5_fora": numeros_curtos(fora_fora[:5]),
+            "temporada_geral": numeros_curtos(fora),
+            "jogadores_fora": numeros_dos_jogadores(
+                (jog.get("away") or {}).get("lista") or [], mando_fora),
             "tabela": tabela.get(aid),
             "tecnico": tecnicos.get(aid),
         },
@@ -449,15 +594,19 @@ def tecnicos_dos_times(cur, ids: list) -> dict:
 #: jogo de ida dizia "nao da' pra saber se e' ida ou volta".
 #: 5 (18/10/2026): o arbitro com a temporada inteira, contra a liga, e a
 #: temperatura do confronto.
-VERSAO = 5
+#: 6 (19/10/2026): todos os mercados da aba Mercados (faltas, chutes,
+#: impedimentos, defesas, 1o e 2o tempo, resultado) e os jogadores.
+VERSAO = 6
 
 SYSTEM = """Você escreve a leitura de pré-jogo do Raio-X do PickIA, um site brasileiro de análise de apostas esportivas. Quem lê está no celular, decidindo se aposta, e quer saber em segundos como cada time joga e quais mercados os números sustentam.
 
 Fonte:
 - Use SOMENTE os números do JSON. Não invente lesão, escalação, notícia, odd, motivação ou história. Dado que não veio não existe.
-- RESPEITE O MANDO. Do mandante, leia "EM_CASA_na_temporada"; do visitante, "FORA_na_temporada". Esses dois cobrem a temporada inteira no mando e são a base de toda leitura. "ultimos_5_em_casa"/"ultimos_5_fora" dizem se o time mudou de fase no mando: cite quando divergirem da temporada. "temporada_geral" (casa e fora juntos) serve só para confirmar ou contrastar, e quando usar diga que é o geral. Diga a amostra do jeito certo ("em 14 jogos em casa").
-- Todo campo "pct_" é PERCENTUAL DE JOGOS (em quantos jogos aconteceu), nunca percentual de gols. Ex.: pct_marcou_no_1t = 60 significa "marcou no 1º tempo em 6 de cada 10 jogos".
-- "time" são os números do próprio time (o que ele faz e o que cede); "jogo" são totais das partidas dele.
+- RESPEITE O MANDO. Do mandante, leia "EM_CASA_na_temporada"; do visitante, "FORA_na_temporada". Esses dois cobrem a temporada inteira no mando, trazem TODOS os mercados e são a base de toda leitura. "ultimos_5_em_casa"/"ultimos_5_fora" (só médias) dizem se o time mudou de fase no mando: cite quando divergirem da temporada. "temporada_geral" (casa e fora juntos, só médias) serve só para confirmar ou contrastar, e quando usar diga que é o geral. Diga a amostra do jeito certo ("em 14 jogos em casa").
+- Cada mercado traz "media", "jogos" (quantos têm o número) e "pct_mais_de": {"4.5": 70} = passou de 4,5 em 70% dos jogos. Under da linha = 100 menos esse número. Só vêm as linhas com 65 ou mais ou 35 ou menos: linha que não veio ficou entre 36 e 64 e não serve. Todo "pct" é PERCENTUAL DE JOGOS, nunca de gols.
+- "time" são os números do próprio time (o que ele faz e o que cede); "jogo" são totais das partidas dele (os dois times somados). Sufixo "_1t"/"_2t" = só aquele tempo.
+- LEIA TODOS os mercados antes de escolher: gols, escanteios, cartões, chutes no alvo, chutes, faltas, impedimentos, defesas do goleiro, 1º e 2º tempo, resultado, ambas marcam, ambos recebem cartão. Escolha os mais fortes, não os de sempre.
+- Jogadores ("jogadores_em_casa"/"jogadores_fora"): só os jogos do time neste mando. "pct_jogos_com": {"1+": 80} = fez 1 ou mais em 80% dos jogos que jogou. Prefira "titular_provavel": true.
 - Só chame a amostra de curta quando o mando tiver menos de 8 jogos.
 
 O que escrever:
@@ -465,8 +614,9 @@ O que escrever:
 - "times": um item para o mandante e um para o visitante, nessa ordem.
   - "perfil": dominante (posse alta, mais chutes e escanteios a favor que contra), ofensivo (marca muito, mas também sofre), equilibrado, defensivo (sofre pouco e marca pouco), reativo (pouca posse, cede escanteios e chutes, joga no contra-ataque). Escolha pelo mando desta partida.
   - "leitura": 1 ou 2 frases sobre como o time joga NESTE mando, com números.
-  - "mercados": até 3 mercados DO PRÓPRIO TIME com pct de 65 ou mais ("over") ou 35 ou menos ("under"). Ex.: "Chapecoense sofre gol", "Athletico-PR mais de 4,5 escanteios". Nada entre 36 e 64. Se nenhum passar, lista vazia.
-- "mercados_do_jogo": até 3 linhas do JOGO (gols, escanteios, cartões, ambas marcam, gol no 1º tempo) em que o mandante em casa E o visitante fora apontam para o mesmo lado. Discordaram, não entra.
+  - "mercados": até 3 mercados DO PRÓPRIO TIME com pct de 65 ou mais ("over") ou 35 ou menos ("under"). Ex.: "Chapecoense sofre gol", "Athletico-PR mais de 4,5 escanteios", "Ceará mais de 11,5 faltas". Nada entre 36 e 64. Um mercado por família (não repita escanteios em duas linhas): no over, a linha mais alta que ainda passa de 65; no under, a mais baixa que fica em 35 ou menos. Se nenhum passar, lista vazia.
+  - "jogadores": até 3 mercados de jogador DESTE time com 65 ou mais, tendencia "over". "mercado" com o nome e a linha ("Pedro 1+ chute no alvo"), "leitura" com a amostra ("em 9 de 12 jogos em casa"). Um por jogador. Se nenhum passar, lista vazia.
+- "mercados_do_jogo": até 3 linhas do JOGO (qualquer mercado de "jogo", inclusive 1º e 2º tempo) em que o mandante em casa E o visitante fora apontam para o mesmo lado. Discordaram, não entra.
 - Em todo mercado, "pct" é o percentual que sustenta a tendência (para "under", o percentual de jogos em que NÃO aconteceu), e "tendencia" tem que bater com a "leitura".
 - "contexto": tabela, técnico e formato. Em "liga" posição e mando pesam; em mata-mata o jogo é decidido no placar e os times se fecham (na ida e volta, a 2ª partida depende da 1ª: "perna" diz se este é o jogo de ida ou de volta; na volta, com "jogo_de_ida", diga quem precisa do resultado e como isso muda o jogo); em "grupos" e "copa" a amostra mistura competições. Técnico só se tiver 3 ou menos jogos seguidos.
 - Árbitro ("arbitro"): pesa SÓ em cartões e faltas, nunca em gols ou escanteios. Compare com a liga ("apita 6,2 pontos de cartão por jogo; a liga, 4,9"; pontos de cartão = amarelo + 2 x vermelho). "perfil_de_faltas" (contra as faltas da liga) vale para mercado de faltas. "perfil" rigoroso ou leniente e "temperatura" (o árbitro junto com o histórico de cartões do confronto direto) entram em "contexto" e podem sustentar ou derrubar um mercado de cartões do jogo; "amostra_curta" não sustenta nada.
@@ -500,8 +650,9 @@ _SCHEMA = {
                                "enum": ["dominante", "ofensivo", "equilibrado", "defensivo", "reativo"]},
                     "leitura": {"type": "string"},
                     "mercados": {"type": "array", "items": _MERCADO},
+                    "jogadores": {"type": "array", "items": _MERCADO},
                 },
-                "required": ["lado", "perfil", "leitura", "mercados"],
+                "required": ["lado", "perfil", "leitura", "mercados", "jogadores"],
                 "additionalProperties": False,
             },
         },
@@ -522,11 +673,14 @@ def numeros_da_tela(fatos: dict) -> dict:
     for lado, chave in (("mandante", "EM_CASA_na_temporada"), ("visitante", "FORA_na_temporada")):
         n = (fatos.get(lado) or {}).get(chave) or {}
         t = n.get("time") or {}
+
+        def m(nome):
+            return (t.get(nome) or {}).get("media")
         saida[lado] = {
             "jogos": n.get("jogos"), "forma": n.get("forma_recente_primeiro"),
-            "gols_pro": t.get("gols_pro_media"), "gols_contra": t.get("gols_contra_media"),
-            "pct_marcou": t.get("pct_marcou"), "pct_sofreu": t.get("pct_sofreu"),
-            "escanteios_pro": t.get("escanteios_pro_media"),
+            "gols_pro": m("gols_feitos"), "gols_contra": m("gols_sofridos"),
+            "pct_marcou": n.get("pct_marcou"), "pct_sofreu": n.get("pct_sofreu"),
+            "escanteios_pro": m("escanteios_a_favor"),
         }
     return saida
 
@@ -583,6 +737,7 @@ def chamar_modelo(fatos: dict) -> tuple[dict, int, int]:
     conteudo["times"] = (conteudo.get("times") or [])[:2]
     for t in conteudo["times"]:
         t["mercados"] = (t.get("mercados") or [])[:3]
+        t["jogadores"] = (t.get("jogadores") or [])[:3]
     conteudo["mercados_do_jogo"] = (conteudo.get("mercados_do_jogo") or [])[:3]
     u = resposta.usage
     return conteudo, int(u.input_tokens or 0), int(u.output_tokens or 0)

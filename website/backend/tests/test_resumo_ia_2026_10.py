@@ -33,13 +33,67 @@ def test_numeros_do_time_conta_as_linhas():
     n = resumo_ia.numeros_do_time(jogos)
     assert n["jogos"] == 4
     assert n["forma_recente_primeiro"] == "VEVE"
-    assert n["jogo"]["pct_over_2_5_gols"] == 50          # 3 e 5 gols
+    # 3 e 5 gols: 50% fica entre 36 e 64, nao vira mercado e nao vai pro modelo
+    assert "2.5" not in n["jogo"]["gols"]["pct_mais_de"] and n["jogo"]["gols"]["pct_mais_de"]["1.5"] == 75
+    assert n["pct_marcou"] == 75 and n["pct_sofreu"] == 75
     assert n["jogo"]["pct_ambas_marcam"] == 75
-    assert n["jogo"]["pct_gol_no_1t"] == 100             # so' o jogo com folha do 1T conta
-    assert n["jogo"]["escanteios_total_media"] == 9
-    assert n["time"]["pct_marcou"] == 75 and n["time"]["pct_sofreu"] == 75
-    assert n["time"]["escanteios_pro_media"] == 5 and n["time"]["pct_escanteios_pro_over_4_5"] == 100
+    # so' o jogo com folha do 1T conta
+    assert n["jogo"]["gols_1t"] == {"media": 1, "jogos": 1, "pct_mais_de": {"0.5": 100, "1.5": 0, "2.5": 0}}
+    assert n["jogo"]["escanteios"]["media"] == 9
+    assert n["time"]["gols_feitos"]["pct_mais_de"]["0.5"] == 75
+    assert n["time"]["gols_sofridos"]["pct_mais_de"]["0.5"] == 75
+    assert n["time"]["escanteios_a_favor"]["media"] == 5
+    assert n["time"]["escanteios_a_favor"]["pct_mais_de"]["4.5"] == 100
+    assert n["resultado"] == {"pct_vitoria": 50, "pct_empate": 50, "pct_derrota": 0}
+    assert n["time"]["faltas_cometidas"] is None                 # sem o numero, sem mercado
     assert resumo_ia.numeros_do_time([]) is None
+
+
+def test_todos_os_mercados_da_aba_entram():
+    j = {**_jogo(1, 0), "faltas_pro": 14, "faltas_contra": 10, "chutes_pro": 12, "chutes_contra": 9,
+         "impedimentos_pro": 2, "impedimentos_contra": 1, "defesas_pro": 3, "defesas_contra": 4,
+         "escanteios_pro_1t": 2, "escanteios_contra_1t": 3, "vermelhos_pro": 1, "vermelhos_contra": 0}
+    n = resumo_ia.numeros_do_time([j, j])
+    assert n["time"]["faltas_cometidas"]["pct_mais_de"]["13.5"] == 100
+    assert n["jogo"]["faltas"]["media"] == 24 and n["jogo"]["chutes"]["media"] == 21
+    assert n["time"]["impedimentos"]["media"] == 2 and n["time"]["defesas_do_goleiro"]["media"] == 3
+    assert n["jogo"]["escanteios_1t"]["media"] == 5 and n["jogo"]["escanteios_2t"]["media"] == 4
+    assert n["jogo"]["pct_teve_vermelho"] == 100 and n["jogo"]["pct_ambos_recebem_cartao"] == 100
+
+
+def test_jogadores_so_no_mando_e_so_linhas_fortes():
+    def g(fid, chutes_alvo, faltas=0):
+        return {"fixture_id": fid, "minutos": 90, "chutes_alvo": chutes_alvo, "faltas": faltas,
+                "chutes": chutes_alvo, "gols": 0}
+    lista = [
+        {"nome": "Pedro", "posicao": "F", "titular_provavel": True,
+         "jogos": [g(1, 2), g(2, 1), g(3, 1), g(4, 0), g(99, 0)]},
+        {"nome": "Banco", "posicao": "M", "jogos": [g(1, 1), g(2, 1)]},       # 2 jogos: fora
+        {"nome": "Goleiro", "posicao": "G", "jogos": [{**g(f, 0), "defesas": 4} for f in (1, 2, 3, 4)]},
+    ]
+    saida = resumo_ia.numeros_dos_jogadores(lista, {1, 2, 3, 4})
+    assert [p["nome"] for p in saida] == ["Pedro", "Goleiro"]
+    pedro = saida[0]
+    assert pedro["jogos"] == 4                                   # o jogo 99 e' do outro mando
+    assert pedro["mercados"]["chutes_alvo"]["pct_jogos_com"] == {"1+": 75}   # 2+ (25%) nao vai
+    assert "faltas" not in pedro["mercados"]                     # 0% em tudo
+    assert set(saida[1]["mercados"]) == {"defesas"}              # goleiro so' defesas
+
+
+def test_entrada_cabe_no_custo():
+    """Todos os mercados so' no bloco do mando: ultimos 5 e geral vao so' com
+    as medias. A entrada inteira tem que ficar bem abaixo de ~6 mil tokens."""
+    j = {**_jogo(1, 0), "faltas_pro": 14, "faltas_contra": 10, "chutes_pro": 12, "chutes_contra": 9,
+         "impedimentos_pro": 2, "impedimentos_contra": 1, "defesas_pro": 3, "defesas_contra": 4,
+         "escanteios_pro_1t": 2, "escanteios_contra_1t": 3, "amarelos_pro_1t": 1, "amarelos_contra_1t": 0,
+         "chutes_alvo_pro_1t": 2, "chutes_alvo_contra_1t": 1, "gols_pro_1t": 1, "gols_contra_1t": 0,
+         "fixture_id": 1}
+    serie = [j] * 16
+    curto = resumo_ia.numeros_curtos(serie)
+    assert "time" not in curto and curto["medias_do_time"]["faltas_cometidas"] == 14
+    fatos = resumo_ia.montar_fatos(_dados(), "Serie A", "liga", {}, {}, {}, serie, serie)
+    texto = json.dumps(fatos, ensure_ascii=False, separators=(",", ":"))
+    assert len(texto) < 14000                     # ~4 caracteres por token
 
 
 def _dados():
@@ -161,7 +215,8 @@ def test_chamada_usa_modelo_barato_json_e_corta_em_4(monkeypatch):
     pedido = {}
     m = [{"mercado": f"m{i}", "tendencia": "over", "leitura": "l"} for i in range(6)]
     saida = {"resumo": "r", "contexto": "c", "alerta": "", "mercados_do_jogo": m,
-             "times": [{"lado": "mandante", "perfil": "dominante", "leitura": "l", "mercados": m}] * 3}
+             "times": [{"lado": "mandante", "perfil": "dominante", "leitura": "l", "mercados": m,
+                        "jogadores": m}] * 3}
 
     class _Msgs:
         def create(self, **kw):
@@ -178,6 +233,7 @@ def test_chamada_usa_modelo_barato_json_e_corta_em_4(monkeypatch):
     assert pedido["max_tokens"] >= 8000
     assert len(conteudo["mercados_do_jogo"]) == 3 and len(conteudo["times"]) == 2
     assert len(conteudo["times"][0]["mercados"]) == 3 and (t_in, t_out) == (1500, 300)
+    assert len(conteudo["times"][0]["jogadores"]) == 3
 
 
 def test_falha_do_modelo_fica_gravada_e_nao_levanta(monkeypatch):
@@ -206,14 +262,17 @@ def test_serie_por_mando_le_so_o_lado_do_mando():
         def execute(self, sql, params):
             self.sql, self.params = sql, params
         def fetchall(self):
-            return [{"home_goals": 2, "away_goals": 1, "home_goals_ht": 1, "away_goals_ht": 0,
+            return [{"fixture_id": 5, "match_date": None, "home_team_id": 3, "away_team_id": 7,
+                     "home_goals": 2, "away_goals": 1, "home_goals_ht": 1, "away_goals_ht": 0,
                      "home_corners": 6, "away_corners": 3, "home_yellow_cards": 1, "away_yellow_cards": 3,
+                     "home_red_cards": 0, "away_red_cards": 1, "home_fouls": 10, "away_fouls": 15,
                      "home_shots_on": 5, "away_shots_on": 2, "home_possession": "58%", "away_possession": "42%"}]
     c = C()
     fora = resumo_ia.serie_por_mando(c, 7, False, 2026, 71, True, None)
     assert "away_team_id = %s" in c.sql and c.params[0] == 7
     assert fora[0]["gols_pro"] == 1 and fora[0]["escanteios_pro"] == 3 and fora[0]["posse"] == "42%"
-    assert resumo_ia.numeros_do_time(fora)["time"]["posse_media"] == 42
+    assert fora[0]["em_casa"] is False and fora[0]["faltas_pro"] == 15
+    assert resumo_ia.numeros_do_time(fora)["posse_media"] == 42
 
 def test_numeros_da_tela_saem_da_conta_e_nao_da_ia(modelo):
     serie = [_jogo(2, 1, ep=6), _jogo(0, 0, ep=4), _jogo(1, 2, ep=5)]
