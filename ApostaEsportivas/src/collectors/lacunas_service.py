@@ -131,6 +131,52 @@ def de_graca() -> dict:
     return saida
 
 
+#: TUDO DE UMA VEZ (19/10/2026, pedido do usuario: "tem que pegar tudo de uma
+#: vez"). O 1o tempo custa 1 requisicao por partida, e o teto fixo de 300
+#: deixava 815 jogos de 2026 pra 3 dias. Agora o teto e' o que sobra da cota
+#: acima desta reserva, que fica pro resto do dia (ao vivo, odds, liquidacao).
+#: O usuario aceitou o risco de o ao vivo apertar no fim do dia da cota (21h
+#: de Brasilia) no dia em que o backfill grande roda.
+RESERVA_DA_COTA = 5000
+
+
+def _restante_da_cota() -> int | None:
+    """Quantas requisicoes sobram hoje: a medida deste processo, ou a do
+    banco (api_quota_daily, a menor que o site e o motor viram). None = nao
+    sabemos, e ai' fica o teto fixo."""
+    try:
+        from services import api_quota
+        restante = api_quota.restante_conhecido()
+        if restante is not None:
+            return restante
+    except Exception:
+        pass
+    try:
+        conn = get_connection()
+    except Exception:
+        return None
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT restante_min FROM api_quota_daily WHERE dia = CURRENT_DATE")
+        linha = cur.fetchone()
+        return int(linha[0]) if linha and linha[0] is not None else None
+    except Exception:
+        conn.rollback()
+        return None
+    finally:
+        cur.close()
+        conn.close()
+
+
+def teto_pela_cota(teto_fixo: int, faltam: int, restante: int | None) -> int:
+    """O fixo, ou mais quando a cota deixa: ate' `faltam`, sem descer da
+    RESERVA_DA_COTA. Nunca menos que o fixo (o fixo ja' cabia antes)."""
+    if restante is None:
+        return teto_fixo
+    # +100: o backfill gasta antes no placar do intervalo, do mesmo teto.
+    return max(teto_fixo, min(faltam + 100, restante - RESERVA_DA_COTA))
+
+
 def _preencher(rotulo: str, teto: int) -> None:
     if rotulo == "1o tempo":
         from collectors.match_statistics_sync_service import MatchStatisticsSyncService
@@ -154,8 +200,16 @@ def preencher(escala: float = 1.0) -> dict:
         faltam = (antes.get(rotulo) or (0, 0))[0]
         if not faltam:
             continue
+        teto = max(1, int(teto * escala))
+        if rotulo == "1o tempo":
+            restante = _restante_da_cota()
+            teto_cota = teto_pela_cota(teto, faltam, restante)
+            if teto_cota > teto:
+                print(f"[LACUNAS] 1o tempo: cota com {restante} sobrando, "
+                      f"teto {teto} -> {teto_cota} (reserva {RESERVA_DA_COTA})")
+            teto = teto_cota
         try:
-            _preencher(rotulo, max(1, int(teto * escala)))
+            _preencher(rotulo, teto)
         except Exception as e:
             print(f"[LACUNAS] {rotulo} falhou: {e}")
     depois = cobertura()
