@@ -14,6 +14,62 @@ interface Dia {
   tokens_in: number; tokens_out: number; custo_usd: number
 }
 interface Uso { dias: Dia[]; modelo: string; teto_dia: number; ligado: boolean }
+interface Grupo { grupo: string; n: number; acertos: number; pct_acerto: number; pct_prometido: number | null }
+interface Acertos { dias: number; jogos: number; grupos: Grupo[] }
+
+const NOME_DO_GRUPO: Record<string, string> = {
+  total: 'Todos', 'tendencia:over': 'Over', 'tendencia:under': 'Under',
+  'escopo:jogo': 'Mercados do jogo', 'escopo:time': 'Mercados de time',
+  'mercado:gols': 'Gols', 'mercado:escanteios': 'Escanteios', 'mercado:cartoes': 'Cartões',
+  'mercado:chutes_alvo': 'Chutes no alvo', 'mercado:faltas': 'Faltas', 'mercado:chutes': 'Chutes',
+  'mercado:impedimentos': 'Impedimentos',
+}
+
+/*
+ * A IA ACERTA? (19/10/2026, pedido do usuário: medir antes de confiar.) Cada
+ * mercado da leitura conferido no placar final, contra o percentual que ela
+ * prometia. Acerto bem abaixo do prometido = o histórico cru engana e a
+ * leitura promete demais. Só conta leitura com atalho (de 19/10 em diante).
+ */
+function AcertosDaIA() {
+  const [a, setA] = useState<Acertos | null>(null)
+  useEffect(() => { api.get('/admin/leituras-ia/acertos').then(r => setA(r.data)).catch(() => {}) }, [])
+  if (!a) return null
+  return (
+    <div className="pt-3 border-t border-line/60 space-y-2">
+      <p className="text-xs font-bold text-ink-1">A IA acerta?</p>
+      {a.grupos.length === 0 ? (
+        <p className="text-xs text-ink-3">Nenhum jogo com leitura já terminou. Os números aparecem conforme os jogos acabam.</p>
+      ) : (
+        <>
+          <p className="text-[11px] text-ink-4">{a.jogos} jogos nos últimos {a.dias} dias. Amostra abaixo de 100 mercados ainda oscila muito.</p>
+          <div className="overflow-x-auto -mx-4 px-4">
+            <table className="w-full text-xs tabular-nums">
+              <thead>
+                <tr className="text-ink-4 text-left">
+                  <th className="py-1.5 pr-3 font-semibold">Mercado</th>
+                  <th className="py-1.5 pr-3 font-semibold text-right">Conferidos</th>
+                  <th className="py-1.5 pr-3 font-semibold text-right">Acertou</th>
+                  <th className="py-1.5 font-semibold text-right">Prometia</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line/60">
+                {a.grupos.map(g => (
+                  <tr key={g.grupo} className="text-ink-2">
+                    <td className="py-1.5 pr-3">{NOME_DO_GRUPO[g.grupo] ?? g.grupo}</td>
+                    <td className="py-1.5 pr-3 text-right">{g.n}</td>
+                    <td className="py-1.5 pr-3 text-right font-bold text-ink-1">{g.pct_acerto}%</td>
+                    <td className="py-1.5 text-right">{g.pct_prometido == null ? '—' : `${g.pct_prometido}%`}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
 
 const usd = (v: number) => `US$ ${v.toFixed(v < 1 ? 4 : 2)}`
 
@@ -78,6 +134,7 @@ export default function AdminLeiturasIA() {
           </table>
         </div>
       )}
+      <AcertosDaIA />
     </div>
   )
 }

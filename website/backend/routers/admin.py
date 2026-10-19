@@ -204,6 +204,22 @@ def leituras_ia(current_user: dict = Depends(require_admin)):
         cur.close(); conn.close()
 
 
+@router.get("/leituras-ia/acertos")
+def leituras_ia_acertos(current_user: dict = Depends(require_admin)):
+    """Os mercados da Leitura da IA conferidos no placar · ver resumo_ia.acertos."""
+    import resumo_ia
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        return resumo_ia.acertos(cur)
+    except Exception:
+        conn.rollback()
+        logging.getLogger(__name__).warning("[ADMIN] leituras-ia/acertos", exc_info=True)
+        return {"dias": 60, "jogos": 0, "grupos": []}
+    finally:
+        cur.close(); conn.close()
+
+
 @router.get("/users")
 def list_users(current_user: dict = Depends(require_admin)):
     conn = get_connection()

@@ -149,6 +149,25 @@ def _valor(j: dict, contador: str, quem: str, periodo: str = "total"):
     return None if a is None or b is None else a + b
 
 
+_COLUNAS_DO_CONTADOR = {"gols": "goals", "escanteios": "corners", "amarelos": "yellow_cards",
+                        "chutes_alvo": "shots_on", "faltas": "fouls", "chutes": "total_shots",
+                        "impedimentos": "offsides", "defesas": "goalkeeper_saves"}
+_COLUNAS_DO_1T = {"gols": "goals_ht", "escanteios": "corners_1h", "amarelos": "yellow_cards_1h",
+                  "chutes_alvo": "shots_on_1h"}
+
+
+def pelo_mandante(j: dict) -> dict:
+    """Linha de match_statistics (home_*/away_*) -> formato pro/contra de
+    _valor, do ponto de vista do mandante. O jogo soma os dois lados, entao
+    pra mercado do jogo o ponto de vista nao muda a conta."""
+    saida = {}
+    for c, col in _COLUNAS_DO_CONTADOR.items():
+        saida[f"{c}_pro"], saida[f"{c}_contra"] = j.get(f"home_{col}"), j.get(f"away_{col}")
+    for c, col in _COLUNAS_DO_1T.items():
+        saida[f"{c}_pro_1t"], saida[f"{c}_contra_1t"] = j.get(f"home_{col}"), j.get(f"away_{col}")
+    return saida
+
+
 def _mercado(jogos: list, contador: str, quem: str, linhas: tuple, periodo: str = "total",
              corte: tuple | None = (35, 65)) -> dict | None:
     """Media e "% de jogos acima de cada linha" de um mercado do Raio-X.
@@ -760,6 +779,84 @@ def uso_por_dia(cur, dias: int = 14) -> list[dict]:
             "custo_usd": round((t_in * PRECO_POR_MTOK[0] + t_out * PRECO_POR_MTOK[1]) / 1e6, 4),
         })
     return saida
+
+
+#: Mercado do atalho -> contador de _valor ("cartoes" e' amarelo, como na tela).
+_CONTADOR_DO_ATALHO = {"gols": "gols", "escanteios": "escanteios", "cartoes": "amarelos",
+                       "chutes_alvo": "chutes_alvo", "faltas": "faltas", "chutes": "chutes",
+                       "impedimentos": "impedimentos"}
+_QUEM_DO_ATALHO = {"jogo": "jogo", "mandante": "pro", "visitante": "contra"}
+
+
+def conferir(atalho: dict, partida: dict) -> bool | None:
+    """O mercado da leitura bateu no jogo? None = sem o numero, linha
+    empatada (devolucao na casa) ou atalho sem quadro ("outro")."""
+    contador = _CONTADOR_DO_ATALHO.get((atalho or {}).get("mercado"))
+    quem = _QUEM_DO_ATALHO.get(atalho.get("de_quem")) if contador else None
+    if not quem:
+        return None
+    v = _valor(pelo_mandante(partida), contador, quem, atalho.get("periodo") or "total")
+    linha = atalho.get("linha")
+    if v is None or linha is None or v == linha:
+        return None
+    return v > linha if atalho.get("lado") == "mais" else v < linha
+
+
+def acertos(cur, dias: int = 60) -> dict:
+    """A IA acerta? (19/10/2026, pedido do usuario: medir antes de confiar.)
+
+    Cada mercado de time e do jogo com atalho (VERSAO 8 em diante), conferido
+    no placar final, contra o pct que a leitura prometia. A ULTIMA leitura de
+    cada jogo (a mais perto do apito). Mercado de jogador fica fora: a ficha
+    dele nao tem atalho. Nenhum token: so' banco.
+    """
+    cur.execute(f"""
+        SELECT DISTINCT ON (r.fixture_id) r.conteudo, ms.*
+          FROM raio_x_resumo_ia r
+          JOIN match_statistics ms ON ms.fixture_id = r.fixture_id
+         WHERE r.status = 'ok' AND ms.status IN ('FT','AET','PEN')
+           AND r.dia > CURRENT_DATE - make_interval(days => %s)
+         ORDER BY r.fixture_id, r.dia DESC
+    """, (dias,))
+    grupos: dict = {}
+
+    def somar(chave, bateu, pct):
+        g = grupos.setdefault(chave, {"n": 0, "acertos": 0, "soma_pct": 0, "com_pct": 0})
+        g["n"] += 1
+        g["acertos"] += int(bateu)
+        if isinstance(pct, (int, float)) and 0 <= pct <= 100:
+            g["soma_pct"] += pct
+            g["com_pct"] += 1
+
+    jogos = 0
+    for r in cur.fetchall():
+        c = r["conteudo"]
+        if isinstance(c, str):
+            try:
+                c = json.loads(c)
+            except ValueError:
+                continue
+        itens = list((c or {}).get("mercados_do_jogo") or [])
+        for t in (c or {}).get("times") or []:
+            itens += t.get("mercados") or []
+        conferidos = 0
+        for m in itens:
+            a = m.get("atalho")
+            bateu = conferir(a, r) if a else None
+            if bateu is None:
+                continue
+            conferidos += 1
+            for chave in ("total", f"mercado:{a['mercado']}", f"tendencia:{m.get('tendencia')}",
+                          "escopo:" + ("jogo" if a.get("de_quem") == "jogo" else "time")):
+                somar(chave, bateu, m.get("pct"))
+        jogos += bool(conferidos)
+
+    def linha(chave, g):
+        return {"grupo": chave, "n": g["n"], "acertos": g["acertos"],
+                "pct_acerto": round(100 * g["acertos"] / g["n"]),
+                "pct_prometido": round(g["soma_pct"] / g["com_pct"]) if g["com_pct"] else None}
+    return {"dias": dias, "jogos": jogos,
+            "grupos": [linha(k, g) for k, g in sorted(grupos.items(), key=lambda kv: -kv[1]["n"])]}
 
 
 def chamar_modelo(fatos: dict) -> tuple[dict, int, int]:
