@@ -61,6 +61,17 @@ def _guardar(chave: str, valor) -> None:
         _cache[chave] = (time.time(), valor)
 
 
+def titulares_oficiais(fixture_id: int) -> dict | None:
+    """{team_id: {ids}} da escalação OFICIAL que a aba Escalação já buscou,
+    só do cache, nunca da API (19/10/2026). O Raio-X e a Leitura da IA usam:
+    a varredura (lineups_sweep) só grava `fixture_lineups` de jogo com pick de
+    jogador, e gravar daqui pularia a anulação dela."""
+    oficial, achou = _do_cache(f"oficial:{fixture_id}", None)
+    if not achou or not oficial:
+        return None
+    return {tid: {p["player_id"] for p in t.get("titulares") or []} for tid, t in oficial.items()}
+
+
 def _api(caminho: str, params: dict) -> list | None:
     """GET na API-Football. None quando falhou (rede, chave, limite)."""
     chave = os.getenv("API_FOOTBALL_KEY", "")

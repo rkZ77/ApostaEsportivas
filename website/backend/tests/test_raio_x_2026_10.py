@@ -329,3 +329,22 @@ def test_cache_em_memoria_tem_teto(monkeypatch):
         fx._guardar(f"k{i}", [])
     assert len(fx._cache) <= fx._CACHE_MAX
     assert f"k{fx._CACHE_MAX + 14}" in fx._cache
+
+
+def test_titulares_da_oficial_que_a_aba_escalacao_ja_buscou(monkeypatch):
+    """19/10/2026: sem oficial em fixture_lineups (a varredura so' grava jogo
+    com pick de jogador), vale a oficial do cache da aba Escalacao · sem API."""
+    import escalacao
+
+    class C:
+        connection = None
+        def execute(self, sql, params=None):
+            self.sql = sql
+        def fetchone(self):
+            return None
+        def fetchall(self):
+            return []
+    monkeypatch.setattr(escalacao, "_cache", {
+        "oficial:77": (0, {1: {"titulares": [{"player_id": 5}]}, 2: {"titulares": [{"player_id": 6}]}})})
+    r = fx._titulares_provaveis(C(), 77, [1, 2])
+    assert r == {1: ({5}, "escalacao oficial"), 2: ({6}, "escalacao oficial")}

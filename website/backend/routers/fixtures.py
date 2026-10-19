@@ -664,6 +664,13 @@ def _titulares_provaveis(cur, fixture_id: int, team_ids: list) -> dict:
         cur.execute("SELECT oficial, titulares FROM fixture_lineups WHERE fixture_id = %s",
                     (fixture_id,))
         r = cur.fetchone()
+        if not (r and r["oficial"] and r["titulares"]):
+            # A oficial que a aba Escalação já buscou (cache, sem API) vale
+            # mais que a provável do banco (19/10/2026).
+            import escalacao
+            da_aba = escalacao.titulares_oficiais(fixture_id)
+            if da_aba:
+                return {t: (da_aba.get(t, set()), "escalacao oficial") for t in team_ids}
         if r and r["titulares"]:
             fonte = "escalacao oficial" if r["oficial"] else "escalacao provavel"
             return {t: (set(r["titulares"]), fonte) for t in team_ids}

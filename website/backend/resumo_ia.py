@@ -505,6 +505,8 @@ def montar_fatos(dados: dict, liga: str | None, formato: str, tabela: dict,
             "data": (f.get("match_datetime") or "")[:16],
             "perna": perna,
             "jogo_de_ida": jogo_de_ida,
+            # De onde vem "titular_provavel" dos jogadores (fixtures._titulares_provaveis).
+            "escalacao": (jog.get("home") or {}).get("fonte_titulares"),
         },
         "amostra_na_temporada": amostra,
         "mandante": {
@@ -647,7 +649,7 @@ Fonte:
 - Cada mercado traz "media", "jogos" (quantos têm o número) e "pct_mais_de": {"4.5": 70} = passou de 4,5 em 70% dos jogos. Under da linha = 100 menos esse número. Só vêm as linhas com 65 ou mais ou 35 ou menos: linha que não veio ficou entre 36 e 64 e não serve. Todo "pct" é PERCENTUAL DE JOGOS, nunca de gols.
 - "time" são os números do próprio time (o que ele faz e o que cede); "jogo" são totais das partidas dele (os dois times somados). Sufixo "_1t"/"_2t" = só aquele tempo.
 - LEIA TODOS os mercados antes de escolher: gols, escanteios, cartões, chutes no alvo, chutes, faltas, impedimentos, defesas do goleiro, 1º e 2º tempo, resultado, ambas marcam, ambos recebem cartão. Escolha os mais fortes, não os de sempre.
-- Jogadores ("jogadores_em_casa"/"jogadores_fora"): só os jogos do time neste mando. "pct_jogos_com": {"1+": 80} = fez 1 ou mais em 80% dos jogos que jogou. Prefira "titular_provavel": true.
+- Jogadores ("jogadores_em_casa"/"jogadores_fora"): só os jogos do time neste mando. "pct_jogos_com": {"1+": 80} = fez 1 ou mais em 80% dos jogos que jogou. Prefira "titular_provavel": true. Com "escalacao" = "escalacao oficial", titular_provavel é o titular confirmado: jogador sem ele não começa jogando e não entra em "jogadores".
 - "media_da_liga" é a régua: "media_de_um_time" é o que um time médio da liga faz por jogo (compare com "time"), "media_do_jogo" é a partida média (compare com "jogo"). Use para dizer se o número do time é alto ou baixo ("faz 13 faltas por jogo em casa; a liga, 11"). Fora da liga (copa, mata-mata) a régua é da própria competição.
 - Só chame a amostra de curta quando o mando tiver menos de 8 jogos.
 
@@ -934,6 +936,45 @@ def _vale(linha) -> bool:
     return True
 
 
+def _conteudo(linha) -> dict:
+    c = (linha or {}).get("conteudo")
+    if isinstance(c, str):
+        try:
+            c = json.loads(c)
+        except ValueError:
+            return {}
+    return c or {}
+
+
+def _escalacao_saiu(cur, fixture_id: int, linha) -> bool:
+    """A escalacao OFICIAL saiu depois da leitura? (19/10/2026, pedido do
+    usuario.) A leitura sai na 1a abertura do dia, horas antes; a escalacao
+    oficial (lineups_sweep) chega ~1h antes do apito. Gera de novo UMA vez,
+    so' com o jogo ainda por comecar: os jogadores da leitura passam a ser
+    os que vao a campo. Custa uma leitura a mais nos jogos reabertos."""
+    if not linha or linha["status"] != "ok" or _conteudo(linha).get("escalacao_oficial"):
+        return False
+    try:
+        cur.execute("""
+            SELECT f.status, fl.oficial AND fl.atualizado_em > %s AS nova
+              FROM fixtures f LEFT JOIN fixture_lineups fl ON fl.fixture_id = f.fixture_id
+             WHERE f.fixture_id = %s
+        """, (linha.get("criado_em"), fixture_id))
+        r = cur.fetchone() or {}
+    except Exception:
+        cur.connection.rollback()
+        return False
+    if r.get("status") not in ("NS", "TBD"):
+        return False
+    if r.get("nova"):
+        return True
+    # Ou a oficial que a aba Escalação já buscou (lineups_sweep so' grava
+    # jogo com pick de jogador). Sem data aqui: a leitura sem a marca
+    # "escalacao_oficial" e' anterior a ela, e a refeita ganha a marca.
+    import escalacao
+    return bool(escalacao.titulares_oficiais(fixture_id))
+
+
 def _resposta(linha: dict) -> dict:
     if linha["status"] == "ok":
         conteudo = linha["conteudo"]
@@ -952,15 +993,18 @@ def resumo_do_jogo(cur, fixture_id: int, montar_raio_x) -> dict:
     """
     dia = _hoje()
     linha = _guardado(cur, fixture_id, dia)
-    if _vale(linha):
+    if _vale(linha) and not _escalacao_saiu(cur, fixture_id, linha):
         return _resposta(linha)
     if not ligado():
-        return {"status": "desligado"}
+        return _resposta(linha) if _vale(linha) else {"status": "desligado"}
 
     with _lock(fixture_id):
         linha = _guardado(cur, fixture_id, dia)
-        if _vale(linha):
+        if _vale(linha) and not _escalacao_saiu(cur, fixture_id, linha):
             return _resposta(linha)
+        # Gerando de novo por causa da escalacao: falha ou teto nunca tiram
+        # do ar a leitura que ja' existe.
+        anterior = linha if _vale(linha) and linha["status"] == "ok" else None
 
         cur.execute("SELECT league_id, season, round, status, home_team_id, away_team_id, match_datetime "
                     "FROM fixtures WHERE fixture_id = %s", (fixture_id,))
@@ -984,8 +1028,10 @@ def resumo_do_jogo(cur, fixture_id: int, montar_raio_x) -> dict:
 
         cur.execute("SELECT COUNT(*) AS n FROM raio_x_resumo_ia WHERE dia = %s AND status = 'ok'",
                     (dia,))
-        if (cur.fetchone() or {}).get("n", 0) >= max_por_dia():
+        if (cur.fetchone() or {}).get("n", 0) >= max_por_dia() and not anterior:
             # Nao grava: amanha (ou com teto maior) o jogo ainda pode ganhar.
+            # A refeita pela escalacao passa: ela sobrescreve a linha do dia
+            # e a contagem nao muda.
             return {"status": "limite", "motivo": "limite de resumos do dia"}
 
         try:
@@ -1011,10 +1057,14 @@ def resumo_do_jogo(cur, fixture_id: int, montar_raio_x) -> dict:
         except Exception as e:
             cur.connection.rollback()
             logger.warning("[RESUMO IA] jogo %s falhou: %s", fixture_id, e)
+            if anterior:
+                return _resposta(anterior)
             _gravar(cur, fixture_id, dia, "falhou", motivo=str(e)[:300])
             return {"status": "falhou"}
         conteudo["numeros"] = numeros_da_tela(fatos)
         conteudo["versao"] = VERSAO
+        # Refeita pela escalacao, ou gerada com ela ja' oficial: nao refaz mais.
+        conteudo["escalacao_oficial"] = bool(anterior) or fatos["jogo"].get("escalacao") == "escalacao oficial"
         _gravar(cur, fixture_id, dia, "ok", conteudo=conteudo, tokens_in=t_in, tokens_out=t_out)
         logger.info("[RESUMO IA] jogo %s gerado (%s in / %s out)", fixture_id, t_in, t_out)
         return {"status": "ok", **conteudo}

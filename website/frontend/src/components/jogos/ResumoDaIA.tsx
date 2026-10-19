@@ -43,6 +43,8 @@ interface Resumo {
   motivo?: string; resumo?: string; times?: LeituraDoTime[]; mercados_do_jogo?: Mercado[]
   contexto?: string; alerta?: string
   numeros?: { mandante?: NumerosDoTime; visitante?: NumerosDoTime }
+  /** A leitura já leu os titulares confirmados (19/10/2026). */
+  escalacao_oficial?: boolean
 }
 interface Props {
   fixtureId: number
@@ -125,6 +127,9 @@ export default function ResumoDaIA({ fixtureId, homeId, awayId, homeNome, awayNo
       <div className="card p-4">
         <Cabecalho />
         <p className="text-sm text-ink-1 leading-relaxed">{r.resumo}</p>
+        {r.escalacao_oficial && (
+          <p className="mt-2 text-[11px] text-ink-3">Atualizada com a escalação oficial.</p>
+        )}
       </div>
 
       {([
