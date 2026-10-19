@@ -339,7 +339,10 @@ def chamar_modelo(fatos: dict) -> tuple[dict, int, int]:
     """(conteudo, tokens de entrada, tokens de saida). Levanta em falha."""
     resposta = resumo_ia._get_client().messages.create(
         model=resumo_ia.MODELO,
-        max_tokens=6000,
+        # Sem raciocinio, como a leitura do jogo (19/10/2026): ele gastava
+        # mais saida pensando que escrevendo. Ver resumo_ia.chamar_modelo.
+        max_tokens=16000,
+        thinking={"type": "disabled"},
         system=[{"type": "text", "text": SYSTEM, "cache_control": {"type": "ephemeral"}}],
         output_config={"effort": "low",
                        "format": {"type": "json_schema", "schema": _SCHEMA}},
