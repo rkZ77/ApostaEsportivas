@@ -339,6 +339,22 @@ def numeros_curtos(jogos: list) -> dict | None:
     }
 
 
+#: Linhas de time da liga (dois por partida) minimas pra media valer: 10 jogos.
+MIN_LIGA = 20
+
+
+def media_da_liga(liga_jogos: list) -> dict | None:
+    """A regua da liga (19/10/2026, pedido do usuario): so' as medias por
+    jogo, pra IA dizer "o Goias faz 13 faltas; a liga, 11". Sai da mesma
+    lista que o Raio-X usa na chance ajustada (fixtures._jogos_da_liga), sem
+    consulta nova. Um time medio da liga = "time"; a partida = "jogo"."""
+    if len(liga_jogos) < MIN_LIGA:
+        return None
+    n = numeros_curtos(liga_jogos)
+    return {"jogos": len(liga_jogos) // 2,
+            "media_de_um_time": n["medias_do_time"], "media_do_jogo": n["medias_do_jogo"]}
+
+
 def serie_por_mando(cur, team_id: int, em_casa: bool, season, league_id,
                     so_na_liga: bool, antes_de, n: int = 60) -> list[dict]:
     """Os jogos do time SO' NO MANDO DESTA PARTIDA, na temporada INTEIRA
@@ -492,6 +508,7 @@ def montar_fatos(dados: dict, liga: str | None, formato: str, tabela: dict,
             "tabela": tabela.get(aid),
             "tecnico": tecnicos.get(aid),
         },
+        "media_da_liga": media_da_liga(dados.get("liga_jogos") or []),
         "confronto_direto": h2h,
         "arbitro": arbitro or ({
             "nome": arb.get("nome"), "jogos": len(arb_jogos),
@@ -599,7 +616,8 @@ def tecnicos_dos_times(cur, ids: list) -> dict:
 #: temperatura do confronto.
 #: 6 (19/10/2026): todos os mercados da aba Mercados (faltas, chutes,
 #: impedimentos, defesas, 1o e 2o tempo, resultado) e os jogadores.
-VERSAO = 6
+#: 7 (19/10/2026): a media da liga como regua.
+VERSAO = 7
 
 SYSTEM = """Você escreve a leitura de pré-jogo do Raio-X do PickIA, um site brasileiro de análise de apostas esportivas. Quem lê está no celular, decidindo se aposta, e quer saber em segundos como cada time joga e quais mercados os números sustentam.
 
@@ -610,6 +628,7 @@ Fonte:
 - "time" são os números do próprio time (o que ele faz e o que cede); "jogo" são totais das partidas dele (os dois times somados). Sufixo "_1t"/"_2t" = só aquele tempo.
 - LEIA TODOS os mercados antes de escolher: gols, escanteios, cartões, chutes no alvo, chutes, faltas, impedimentos, defesas do goleiro, 1º e 2º tempo, resultado, ambas marcam, ambos recebem cartão. Escolha os mais fortes, não os de sempre.
 - Jogadores ("jogadores_em_casa"/"jogadores_fora"): só os jogos do time neste mando. "pct_jogos_com": {"1+": 80} = fez 1 ou mais em 80% dos jogos que jogou. Prefira "titular_provavel": true.
+- "media_da_liga" é a régua: "media_de_um_time" é o que um time médio da liga faz por jogo (compare com "time"), "media_do_jogo" é a partida média (compare com "jogo"). Use para dizer se o número do time é alto ou baixo ("faz 13 faltas por jogo em casa; a liga, 11"). Fora da liga (copa, mata-mata) a régua é da própria competição.
 - Só chame a amostra de curta quando o mando tiver menos de 8 jogos.
 
 O que escrever:
