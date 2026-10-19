@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Sparkles } from 'lucide-react'
+import { ChevronRight, Sparkles } from 'lucide-react'
 import api from '../../services/api'
 import { cn } from '../../lib/cn'
 import { Skeleton } from '../ui'
@@ -21,7 +21,12 @@ import { TeamLogo } from '../TeamLogo'
  */
 
 type Tendencia = 'over' | 'under' | 'dividido'
-export interface Mercado { mercado: string; tendencia: Tendencia; leitura: string; pct?: number }
+/** A linha do mercado em campos, pra abrir a aba Mercados nela (19/10/2026). */
+export interface AtalhoDaIA {
+  mercado: string; de_quem: 'jogo' | 'mandante' | 'visitante'
+  periodo: 'total' | '1t' | '2t'; lado: 'mais' | 'menos'; linha: number
+}
+export interface Mercado { mercado: string; tendencia: Tendencia; leitura: string; pct?: number; atalho?: AtalhoDaIA }
 /** Números do time no mando desta partida, calculados no servidor (nunca pela IA). */
 interface NumerosDoTime {
   jogos?: number; forma?: string; gols_pro?: number; gols_contra?: number
@@ -42,6 +47,10 @@ interface Resumo {
 interface Props {
   fixtureId: number
   homeId?: number; awayId?: number; homeNome?: string; awayNome?: string
+  /** Tocar num mercado com atalho abre a aba Mercados naquela linha. */
+  onAbrirMercado?: (a: AtalhoDaIA) => void
+  /** Tocar num mercado de jogador abre a aba Jogadores. */
+  onAbrirJogadores?: () => void
 }
 
 const TOM: Record<Tendencia, string> = {
@@ -69,7 +78,11 @@ function semLeitura(r: Resumo | null): string {
   }
 }
 
-export default function ResumoDaIA({ fixtureId, homeId, awayId, homeNome, awayNome }: Props) {
+export default function ResumoDaIA({ fixtureId, homeId, awayId, homeNome, awayNome, onAbrirMercado, onAbrirJogadores }: Props) {
+  /* Só liga o toque quando o atalho aponta um quadro de linha que existe:
+     leitura antiga não tem atalho, e "outro" (resultado, ambas) não tem linha. */
+  const abrir = onAbrirMercado && ((m: Mercado) =>
+    m.atalho && m.atalho.mercado !== 'outro' ? () => onAbrirMercado(m.atalho!) : undefined)
   const [r, setR] = useState<Resumo | null>(null)
   const [carregando, setCarregando] = useState(true)
 
@@ -134,11 +147,11 @@ export default function ResumoDaIA({ fixtureId, homeId, awayId, homeNome, awayNo
             </div>
             {r.numeros?.[lado] && <FaixaDeNumeros n={r.numeros[lado]!} mando={mando} />}
             <p className="px-4 pb-3 text-sm text-ink-2 leading-relaxed">{t.leitura}</p>
-            {!!t.mercados.length && <ListaDeMercados mercados={t.mercados} />}
+            {!!t.mercados.length && <ListaDeMercados mercados={t.mercados} abrir={abrir} />}
             {!!t.jogadores?.length && (
               <>
                 <div className="px-4 pt-3 pb-2 border-t border-line/60 text-[11px] font-bold uppercase tracking-wide text-ink-3">Jogadores</div>
-                <ListaDeMercados mercados={t.jogadores} />
+                <ListaDeMercados mercados={t.jogadores} abrir={onAbrirJogadores && (() => onAbrirJogadores)} />
               </>
             )}
           </div>
@@ -148,7 +161,7 @@ export default function ResumoDaIA({ fixtureId, homeId, awayId, homeNome, awayNo
       {!!r.mercados_do_jogo?.length && (
         <div className="card overflow-hidden">
           <div className="px-4 pt-3 pb-2 text-[11px] font-bold uppercase tracking-wide text-ink-3">Mercados do jogo</div>
-          <ListaDeMercados mercados={r.mercados_do_jogo} />
+          <ListaDeMercados mercados={r.mercados_do_jogo} abrir={abrir} />
         </div>
       )}
 
@@ -176,15 +189,23 @@ export default function ResumoDaIA({ fixtureId, homeId, awayId, homeNome, awayNo
 }
 
 /** Também usada pela leitura da liga (ligas/LeituraDaLiga). */
-export function ListaDeMercados({ mercados }: { mercados: Mercado[] }) {
+export function ListaDeMercados({ mercados, abrir }: {
+  mercados: Mercado[]
+  /** Devolve a ação do toque no mercado, ou undefined pra linha sem toque. */
+  abrir?: (m: Mercado) => (() => void) | undefined
+}) {
   return (
     <div className="divide-y divide-line/60 border-t border-line/60">
-      {mercados.map(m => (
-        <div key={m.mercado} className="px-4 py-3 flex items-start gap-3">
+      {mercados.map(m => {
+        const acao = abrir?.(m)
+        const Linha = acao ? 'button' : 'div'
+        return (
+        <Linha key={m.mercado} type={acao ? 'button' : undefined} onClick={acao}
+          className={cn('w-full text-left px-4 py-3 flex items-start gap-3', acao && 'hover:bg-surface-2/60 active:bg-surface-2 transition-colors')}>
           <span className={cn('shrink-0 mt-0.5 w-[68px] text-center py-0.5 rounded border text-[10px] font-bold uppercase tracking-wide', TOM[m.tendencia] ?? TOM.dividido)}>
             {ROTULO[m.tendencia] ?? m.tendencia}
           </span>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="text-sm font-bold text-ink-1">{m.mercado}</div>
             <div className="text-xs text-ink-3 leading-snug mt-0.5">{m.leitura}</div>
             {m.pct != null && m.pct >= 0 && m.pct <= 100 && (
@@ -197,8 +218,10 @@ export function ListaDeMercados({ mercados }: { mercados: Mercado[] }) {
               </div>
             )}
           </div>
-        </div>
-      ))}
+          {acao && <ChevronRight className="shrink-0 mt-0.5 w-4 h-4 text-ink-4" aria-label="Ver no Raio-X" />}
+        </Linha>
+        )
+      })}
     </div>
   )
 }
