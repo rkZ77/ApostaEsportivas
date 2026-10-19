@@ -28,7 +28,11 @@ interface NumerosDoTime {
   pct_marcou?: number; pct_sofreu?: number; escanteios_pro?: number
 }
 type Perfil = 'dominante' | 'ofensivo' | 'equilibrado' | 'defensivo' | 'reativo'
-interface LeituraDoTime { lado: 'mandante' | 'visitante'; perfil: Perfil; leitura: string; mercados: Mercado[] }
+interface LeituraDoTime {
+  lado: 'mandante' | 'visitante'; perfil: Perfil; leitura: string; mercados: Mercado[]
+  /** Mercados de jogador no mando da partida (19/10/2026). Ausente em leitura antiga. */
+  jogadores?: Mercado[]
+}
 interface Resumo {
   status: 'ok' | 'inelegivel' | 'bloqueado' | 'limite' | 'falhou' | 'desligado'
   motivo?: string; resumo?: string; times?: LeituraDoTime[]; mercados_do_jogo?: Mercado[]
@@ -131,6 +135,12 @@ export default function ResumoDaIA({ fixtureId, homeId, awayId, homeNome, awayNo
             {r.numeros?.[lado] && <FaixaDeNumeros n={r.numeros[lado]!} mando={mando} />}
             <p className="px-4 pb-3 text-sm text-ink-2 leading-relaxed">{t.leitura}</p>
             {!!t.mercados.length && <ListaDeMercados mercados={t.mercados} />}
+            {!!t.jogadores?.length && (
+              <>
+                <div className="px-4 pt-3 pb-2 border-t border-line/60 text-[11px] font-bold uppercase tracking-wide text-ink-3">Jogadores</div>
+                <ListaDeMercados mercados={t.jogadores} />
+              </>
+            )}
           </div>
         )
       })}

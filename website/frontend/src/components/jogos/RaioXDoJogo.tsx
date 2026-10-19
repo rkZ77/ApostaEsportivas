@@ -296,7 +296,7 @@ function EstrelaDoTime({ id, nome }: { id: number; nome: string }) {
 const O_QUE_TEM: Record<Aba, [string, string[]]> = {
   mercados: ['Quantas vezes cada linha bateu', ['Gols, escanteios, cartões e chutes, linha a linha', 'Mandante em casa e visitante fora separados', 'A odd das casas ao lado da taxa']],
   estatisticas: ['As estatísticas do jogo, ao vivo', ['Posse, xG, finalizações, escanteios e cartões', 'Jogo inteiro, 1º e 2º tempo, atualizando sozinha', 'O árbitro: faltas, cartões e VAR, e os jogos dele com cada time']],
-  ia: ['A leitura da IA sobre este jogo', ['Os mercados de over e under em que os dois times concordam', 'Tabela, técnico e o peso de liga ou mata-mata', 'O alerta quando a amostra é curta']],
+  ia: ['A leitura da IA sobre este jogo', ['Todos os mercados do Raio-X lidos, e os jogadores em destaque','Tabela, técnico e o peso de liga ou mata-mata', 'O alerta quando a amostra é curta']],
   jogadores: ['Cada jogador, jogo a jogo', ['Chutes, chutes no alvo, faltas e cartões', 'Quem começa jogando hoje', 'Separe seleções de jogador com um toque']],
   escalacao: ['O campinho do jogo', ['Escalação oficial ou provável', 'Desfalques e suspensos', 'Técnico e formação']],
   tabela: ['A tabela da liga', ['Posição, pontos e saldo', 'Campanha em casa e fora', 'Zona de classificação e rebaixamento']],
