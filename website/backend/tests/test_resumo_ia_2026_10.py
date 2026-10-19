@@ -91,6 +91,40 @@ def test_media_da_liga_e_a_regua_e_so_com_amostra():
     assert fatos["media_da_liga"]["media_do_jogo"]["gols"] == 2
 
 
+def test_conferir_o_mercado_no_placar():
+    partida = {"home_goals": 2, "away_goals": 0, "home_goals_ht": 0, "away_goals_ht": 0,
+               "home_corners": 6, "away_corners": 4, "home_fouls": None, "away_fouls": 12}
+    a = lambda **k: {"mercado": "gols", "de_quem": "jogo", "periodo": "total", "lado": "mais",
+                     "linha": 1.5, **k}
+    assert resumo_ia.conferir(a(), partida) is True
+    assert resumo_ia.conferir(a(periodo="1t", linha=0.5), partida) is False
+    assert resumo_ia.conferir(a(periodo="2t"), partida) is True              # 2 - 0
+    assert resumo_ia.conferir(a(de_quem="visitante", linha=0.5), partida) is False   # Fora fez 0
+    assert resumo_ia.conferir(a(mercado="escanteios", de_quem="mandante", lado="menos",
+                                linha=6.5), partida) is True
+    assert resumo_ia.conferir(a(mercado="escanteios", linha=10), partida) is None    # empate
+    assert resumo_ia.conferir(a(mercado="faltas"), partida) is None          # sem o numero
+    assert resumo_ia.conferir(a(mercado="outro"), partida) is None
+
+
+def test_acertos_conta_contra_o_prometido():
+    m = lambda pct, linha: {"mercado": "x", "tendencia": "over", "pct": pct, "leitura": "",
+                            "atalho": {"mercado": "gols", "de_quem": "jogo", "periodo": "total",
+                                       "lado": "mais", "linha": linha}}
+    conteudo = {"mercados_do_jogo": [m(80, 1.5)],
+                "times": [{"mercados": [m(70, 3.5), {"mercado": "velho", "pct": 90}]}]}
+
+    class C:
+        def execute(self, sql, params=None):
+            self.sql = sql
+        def fetchall(self):
+            return [{"conteudo": json.dumps(conteudo), "home_goals": 2, "away_goals": 1}]
+    r = resumo_ia.acertos(C())
+    total = next(g for g in r["grupos"] if g["grupo"] == "total")
+    assert r["jogos"] == 1
+    assert (total["n"], total["acertos"], total["pct_acerto"], total["pct_prometido"]) == (2, 1, 50, 75)
+
+
 def test_entrada_cabe_no_custo():
     """Todos os mercados so' no bloco do mando: ultimos 5 e geral vao so' com
     as medias. A entrada inteira tem que ficar bem abaixo de ~6 mil tokens."""

@@ -139,22 +139,7 @@ def numeros_da_liga(jogos: list[dict]) -> dict | None:
     }
 
 
-_CONTADORES = {"gols": "goals", "escanteios": "corners", "amarelos": "yellow_cards",
-               "chutes_alvo": "shots_on", "faltas": "fouls", "chutes": "total_shots",
-               "impedimentos": "offsides", "defesas": "goalkeeper_saves"}
-_DO_1T = {"gols": "goals_ht", "escanteios": "corners_1h", "amarelos": "yellow_cards_1h",
-          "chutes_alvo": "shots_on_1h"}
-
-
-def _pelo_mandante(j: dict) -> dict:
-    """Linha da partida -> formato pro/contra de resumo_ia._valor (o jogo
-    soma os dois lados, entao o ponto de vista nao muda a conta)."""
-    saida = {}
-    for c, col in _CONTADORES.items():
-        saida[f"{c}_pro"], saida[f"{c}_contra"] = j.get(f"home_{col}"), j.get(f"away_{col}")
-    for c, col in _DO_1T.items():
-        saida[f"{c}_pro_1t"], saida[f"{c}_contra_1t"] = j.get(f"home_{col}"), j.get(f"away_{col}")
-    return saida
+_pelo_mandante = resumo_ia.pelo_mandante
 
 
 #: Tamanho do recorte recente: ~3 rodadas de uma liga de 20 times.
