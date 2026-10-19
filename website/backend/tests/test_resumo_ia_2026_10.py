@@ -80,6 +80,17 @@ def test_jogadores_so_no_mando_e_so_linhas_fortes():
     assert set(saida[1]["mercados"]) == {"defesas"}              # goleiro so' defesas
 
 
+def test_media_da_liga_e_a_regua_e_so_com_amostra():
+    j = {**_jogo(1, 1), "faltas_pro": 11, "faltas_contra": 12}
+    assert resumo_ia.media_da_liga([j] * 10) is None              # 5 jogos: pouco
+    m = resumo_ia.media_da_liga([j] * 40)
+    assert m["jogos"] == 20
+    assert m["media_de_um_time"]["faltas_cometidas"] == 11 and m["media_do_jogo"]["faltas"] == 23
+    dados = {**_dados(), "liga_jogos": [j] * 40}
+    fatos = resumo_ia.montar_fatos(dados, "Serie A", "liga", {}, {}, {})
+    assert fatos["media_da_liga"]["media_do_jogo"]["gols"] == 2
+
+
 def test_entrada_cabe_no_custo():
     """Todos os mercados so' no bloco do mando: ultimos 5 e geral vao so' com
     as medias. A entrada inteira tem que ficar bem abaixo de ~6 mil tokens."""
