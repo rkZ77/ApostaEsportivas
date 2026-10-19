@@ -307,6 +307,56 @@ def test_leitura_de_formato_antigo_e_gerada_de_novo_uma_vez(modelo):
     assert len(modelo) == 1
 
 
+class _CurComEscalacao(_Cur):
+    """A escalacao oficial saiu depois da leitura guardada."""
+
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.saiu = True
+
+    def execute(self, sql, params=None):
+        if "JOIN fixture_lineups" in sql:
+            self._r = [{"status": "NS", "nova": self.saiu}]
+            return
+        super().execute(sql, params)
+
+
+def test_escalacao_oficial_refaz_uma_vez(modelo):
+    cur = _CurComEscalacao()
+    cur.saiu = False
+    resumo_ia.resumo_do_jogo(cur, 10, _dados)                    # leitura da manha
+    assert len(modelo) == 1 and not json.loads(cur.guardado["conteudo"]).get("escalacao_oficial")
+    cur.saiu = True                                               # saiu a escalacao
+    r = resumo_ia.resumo_do_jogo(cur, 10, _dados)
+    assert len(modelo) == 2 and r["escalacao_oficial"] is True
+    resumo_ia.resumo_do_jogo(cur, 10, _dados)                    # nao refaz de novo
+    assert len(modelo) == 2
+
+
+def test_oficial_da_aba_escalacao_tambem_refaz(modelo, monkeypatch):
+    import escalacao
+    cur = _CurComEscalacao()
+    cur.saiu = False
+    resumo_ia.resumo_do_jogo(cur, 10, _dados)
+    monkeypatch.setattr(escalacao, "_cache", {"oficial:10": (0, {1: {"titulares": [{"player_id": 9}]}})})
+    resumo_ia.resumo_do_jogo(cur, 10, _dados)
+    assert len(modelo) == 2
+    assert escalacao.titulares_oficiais(10) == {1: {9}} and escalacao.titulares_oficiais(11) is None
+
+
+def test_refazer_que_falha_ou_bate_no_teto_mantem_a_leitura(modelo, monkeypatch):
+    cur = _CurComEscalacao()
+    cur.saiu = False
+    primeira = resumo_ia.resumo_do_jogo(cur, 10, _dados)
+    cur.saiu = True
+    monkeypatch.setattr(resumo_ia, "chamar_modelo",
+                        lambda f: (_ for _ in ()).throw(RuntimeError("overloaded")))
+    assert resumo_ia.resumo_do_jogo(cur, 10, _dados) == primeira
+    assert cur.guardado["status"] == "ok"
+    monkeypatch.setenv("RESUMO_IA", "off")
+    assert resumo_ia.resumo_do_jogo(cur, 10, _dados) == primeira
+
+
 def test_serie_por_mando_le_so_o_lado_do_mando():
     class C:
         def execute(self, sql, params):
