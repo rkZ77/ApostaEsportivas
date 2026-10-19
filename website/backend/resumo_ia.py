@@ -869,7 +869,14 @@ def chamar_modelo(fatos: dict) -> tuple[dict, int, int]:
         # cada mercado (12/10) a leitura passou do teto e voltava cortada
         # ("resposta incompleta: max_tokens" nos logs de PROD) · a tela
         # mostrava "nao deu para gerar". O teto so' limita; paga-se o que sai.
-        max_tokens=8000,
+        # 16000 e SEM RACIOCINIO (19/10/2026): com todos os mercados e os
+        # jogadores, o Haiku 5.5 pensava ~6 mil tokens antes do JSON (o texto
+        # tem ~1,8 mil), estourava os 8000 ("resposta incompleta: max_tokens")
+        # e passava dos 45s da tela. A conta ja' vem pronta e as regras sao
+        # explicitas: o modelo so' escolhe e escreve. Desligar e' aceito no
+        # Haiku 5.5 com effort `high` ou abaixo. O teto so' limita.
+        max_tokens=16000,
+        thinking={"type": "disabled"},
         system=[{"type": "text", "text": SYSTEM, "cache_control": {"type": "ephemeral"}}],
         output_config={"effort": "low",
                        "format": {"type": "json_schema", "schema": _SCHEMA}},

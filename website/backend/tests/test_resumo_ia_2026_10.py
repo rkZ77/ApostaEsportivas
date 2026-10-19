@@ -275,7 +275,11 @@ def test_chamada_usa_modelo_barato_json_e_corta_em_4(monkeypatch):
     assert pedido["output_config"]["effort"] == "low"
     assert pedido["output_config"]["format"]["type"] == "json_schema"
     # 3500 cortava a leitura no meio em PROD (max_tokens, 13/10/2026).
-    assert pedido["max_tokens"] >= 8000
+    assert pedido["max_tokens"] >= 16000
+    # O raciocinio estourava o teto em PROD (19/10/2026): desligado, e o
+    # Haiku 5.5 so' aceita isso com effort high ou abaixo.
+    assert pedido["thinking"] == {"type": "disabled"}
+    assert pedido["output_config"]["effort"] in ("low", "medium", "high")
     assert len(conteudo["mercados_do_jogo"]) == 3 and len(conteudo["times"]) == 2
     assert len(conteudo["times"][0]["mercados"]) == 3 and (t_in, t_out) == (1500, 300)
     assert len(conteudo["times"][0]["jogadores"]) == 3
