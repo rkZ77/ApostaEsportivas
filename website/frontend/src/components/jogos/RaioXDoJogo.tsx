@@ -22,7 +22,7 @@ import SelectMenu from '../ui/SelectMenu'
 import Campinho from './Campinho'
 import NumeroVivo from '../ui/NumeroVivo'
 import Classificacao from './Classificacao'
-import ResumoDaIA from './ResumoDaIA'
+import ResumoDaIA, { type AtalhoDaIA } from './ResumoDaIA'
 import EstatisticasDoJogo from './EstatisticasDoJogo'
 import ArbitroDoJogo from './ArbitroDoJogo'
 
@@ -183,6 +183,15 @@ export default function RaioXDoJogo({ jogo, trancado = false }: { jogo: JogoBase
      escolhido ao trocar de uma pra outra · ver filtrarPorMando. */
   const [mando, setMando] = useState<Mando>('todos')
   const vistos = useMemo(() => (dados ? filtrarPorMando(dados, mando) : null), [dados, mando])
+  /* DA LEITURA DA IA PRA LINHA (19/10/2026, pedido do usuário): tocar num
+     mercado da leitura abre a aba Mercados naquele mercado, de quem, tempo,
+     lado e linha, e no Casa / Fora, que é o recorte que a IA leu. */
+  const [atalho, setAtalho] = useState<AtalhoDaIA | null>(null)
+  useEffect(() => setAtalho(null), [jogo.fixture_id])
+  const abrirDaIA = (a: AtalhoDaIA) => {
+    setAtalho(a); setMando('mando'); setAba('mercados')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   const nomeJogo = `${dados?.fixture.home_team || jogo.home_team || 'Casa'} x ${dados?.fixture.away_team || jogo.away_team || 'Fora'}`
 
@@ -244,7 +253,10 @@ export default function RaioXDoJogo({ jogo, trancado = false }: { jogo: JogoBase
             homeId={dados.fixture.home_team_id} awayId={dados.fixture.away_team_id}
             homeNome={dados.fixture.home_team} awayNome={dados.fixture.away_team} />
         ) : aba === 'mercados' ? (
-          <AbaMercados dados={vistos!} nomeJogo={nomeJogo} odds={odds} oddsAoVivo={oddsAoVivo} mando={mando} setMando={setMando} />
+          /* A chave remonta a aba quando o atalho muda: a escolha dela é
+             estado interno, e o atalho é só o ponto de partida. */
+          <AbaMercados key={atalho ? JSON.stringify(atalho) : 'livre'} inicial={atalho}
+            dados={vistos!} nomeJogo={nomeJogo} odds={odds} oddsAoVivo={oddsAoVivo} mando={mando} setMando={setMando} />
         ) : aba === 'estatisticas' ? (
           <EstatisticasDoJogo fixtureId={dados.fixture.fixture_id}
             homeId={dados.fixture.home_team_id} awayId={dados.fixture.away_team_id}
@@ -254,7 +266,9 @@ export default function RaioXDoJogo({ jogo, trancado = false }: { jogo: JogoBase
              servidor gerar, então quem não olha não gasta IA. */
           <ResumoDaIA fixtureId={dados.fixture.fixture_id}
             homeId={dados.fixture.home_team_id} awayId={dados.fixture.away_team_id}
-            homeNome={dados.fixture.home_team} awayNome={dados.fixture.away_team} />
+            homeNome={dados.fixture.home_team} awayNome={dados.fixture.away_team}
+            onAbrirMercado={abrirDaIA}
+            onAbrirJogadores={() => { setMando('mando'); setAba('jogadores'); window.scrollTo({ top: 0, behavior: 'smooth' }) }} />
         ) : aba === 'jogadores' ? (
           <AbaJogadores dados={vistos!} nomeJogo={nomeJogo} mando={mando} setMando={setMando} />
         ) : aba === 'escalacao' ? (
@@ -810,25 +824,30 @@ function LinhaDaOdd({ odd, est, bateu, n }: { odd: OddDaCasa | null; est: Estima
 
 /* ── Mercados ───────────────────────────────────────────────────────────── */
 
-function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando }: {
+function AbaMercados({ dados, nomeJogo, odds, oddsAoVivo, mando, setMando, inicial }: {
   dados: RaioX; nomeJogo: string; odds: OddDaCasa[]; oddsAoVivo: boolean; mando: Mando; setMando: (m: Mando) => void
+  /** Vindo de um toque na Leitura da IA: a aba abre nesta linha. */
+  inicial?: AtalhoDaIA | null
 }) {
+  const doAtalho = inicial && MERCADOS_PRINCIPAIS.some(p => p.id === inicial.mercado) ? inicial : null
   /* Mercado + DE QUEM (os dois somados, ou um time só) · ver MERCADOS_PRINCIPAIS. */
   /* Abre no Resultado: é a primeira pergunta de quem olha um jogo. */
-  const [principal, setPrincipal] = useState('resultado')
-  const [quem, setQuem] = useState<'jogo' | 'home' | 'away'>('jogo')
+  const [principal, setPrincipal] = useState(doAtalho?.mercado ?? 'resultado')
+  const [quem, setQuem] = useState<'jogo' | 'home' | 'away'>(
+    doAtalho?.de_quem === 'mandante' ? 'home' : doAtalho?.de_quem === 'visitante' ? 'away' : 'jogo')
   /* "Resultado" não é mercado de linha e tem quadro próprio (QuadrosDeResultado);
      o par de cima continua valendo pra os hooks não mudarem de ordem. */
   const ehResultado = principal === 'resultado'
   const par = MERCADOS_PRINCIPAIS.find(p => p.id === principal) ?? MERCADOS_PRINCIPAIS[0]
   const id = quem === 'jogo' ? par.jogo : par.time
   const mercado = MERCADOS_DE_TIME.find(m => m.id === id)!
-  const [periodoEscolhido, setPeriodo] = useState<Periodo>('total')
+  const [periodoEscolhido, setPeriodo] = useState<Periodo>(doAtalho?.periodo ?? 'total')
   /* Faltas só existem no jogo todo · o seletor fica, desligado, e a conta
      usa "total" sem perder a escolha da pessoa pros outros mercados. */
   const periodo: Periodo = mercado.soTotal ? 'total' : periodoEscolhido
-  const [linhas, setLinhas] = useState<Record<string, number>>({})
-  const [lado, setLado] = useState<Lado>('mais')
+  const [linhas, setLinhas] = useState<Record<string, number>>(() =>
+    doAtalho && doAtalho.linha > 0 ? { [`${id}:${periodo}`]: doAtalho.linha } : {})
+  const [lado, setLado] = useState<Lado>(doAtalho?.lado ?? 'mais')
   const timeFoco: 'home' | 'away' = quem === 'away' ? 'away' : 'home'
   const chaveLinha = `${id}:${periodo}`
   const linha = linhas[chaveLinha] ?? (periodo === 'total' ? mercado.linhaPadrao : mercado.linhaPadraoTempo)

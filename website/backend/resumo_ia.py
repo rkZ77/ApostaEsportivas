@@ -617,7 +617,8 @@ def tecnicos_dos_times(cur, ids: list) -> dict:
 #: 6 (19/10/2026): todos os mercados da aba Mercados (faltas, chutes,
 #: impedimentos, defesas, 1o e 2o tempo, resultado) e os jogadores.
 #: 7 (19/10/2026): a media da liga como regua.
-VERSAO = 7
+#: 8 (19/10/2026): o atalho de cada mercado pra aba Mercados.
+VERSAO = 8
 
 SYSTEM = """Você escreve a leitura de pré-jogo do Raio-X do PickIA, um site brasileiro de análise de apostas esportivas. Quem lê está no celular, decidindo se aposta, e quer saber em segundos como cada time joga e quais mercados os números sustentam.
 
@@ -639,6 +640,7 @@ O que escrever:
   - "mercados": até 3 mercados DO PRÓPRIO TIME com pct de 65 ou mais ("over") ou 35 ou menos ("under"). Ex.: "Chapecoense sofre gol", "Athletico-PR mais de 4,5 escanteios", "Ceará mais de 11,5 faltas". Nada entre 36 e 64. Um mercado por família (não repita escanteios em duas linhas): no over, a linha mais alta que ainda passa de 65; no under, a mais baixa que fica em 35 ou menos. Se nenhum passar, lista vazia.
   - "jogadores": até 3 mercados de jogador DESTE time com 65 ou mais, tendencia "over". "mercado" com o nome e a linha ("Pedro 1+ chute no alvo"), "leitura" com a amostra ("em 9 de 12 jogos em casa"). Um por jogador. Se nenhum passar, lista vazia.
 - "mercados_do_jogo": até 3 linhas do JOGO (qualquer mercado de "jogo", inclusive 1º e 2º tempo) em que o mandante em casa E o visitante fora apontam para o mesmo lado. Discordaram, não entra.
+- "atalho" (em "mercados" e "mercados_do_jogo") diz a mesma linha em campos: "mercado" (gols, escanteios, cartoes = amarelos, chutes_alvo, faltas, chutes, impedimentos; "outro" para resultado, ambas marcam, ambos recebem cartão e defesas), "de_quem" ("jogo" = os dois somados; "mandante"/"visitante" = o que esse time faz. "Goiás sofre gol" é gol do adversário: de_quem do adversário, lado "mais", linha 0.5), "periodo", "lado" ("mais" no over, "menos" no under) e "linha" (ex.: 4.5).
 - Em todo mercado, "pct" é o percentual que sustenta a tendência (para "under", o percentual de jogos em que NÃO aconteceu), e "tendencia" tem que bater com a "leitura".
 - "contexto": tabela, técnico e formato. Em "liga" posição e mando pesam; em mata-mata o jogo é decidido no placar e os times se fecham (na ida e volta, a 2ª partida depende da 1ª: "perna" diz se este é o jogo de ida ou de volta; na volta, com "jogo_de_ida", diga quem precisa do resultado e como isso muda o jogo); em "grupos" e "copa" a amostra mistura competições. Técnico só se tiver 3 ou menos jogos seguidos.
 - Árbitro ("arbitro"): pesa SÓ em cartões e faltas, nunca em gols ou escanteios. Compare com a liga ("apita 6,2 pontos de cartão por jogo; a liga, 4,9"; pontos de cartão = amarelo + 2 x vermelho). "perfil_de_faltas" (contra as faltas da liga) vale para mercado de faltas. "perfil" rigoroso ou leniente e "temperatura" (o árbitro junto com o histórico de cartões do confronto direto) entram em "contexto" e podem sustentar ou derrubar um mercado de cartões do jogo; "amostra_curta" não sustenta nada.
@@ -658,6 +660,29 @@ _MERCADO = {
     "additionalProperties": False,
 }
 
+#: ATALHO PRA ABA MERCADOS (19/10/2026, pedido do usuario): tocar no mercado
+#: da leitura abre o Raio-X naquela linha. Os ids sao os de
+#: lib/raioX.MERCADOS_PRINCIPAIS; "outro" = sem quadro de linha (ambas marcam,
+#: resultado, defesas) e a tela nao liga o toque.
+_ATALHO = {
+    "type": "object",
+    "properties": {
+        "mercado": {"type": "string", "enum": ["gols", "escanteios", "cartoes", "chutes_alvo",
+                                               "faltas", "chutes", "impedimentos", "outro"]},
+        "de_quem": {"type": "string", "enum": ["jogo", "mandante", "visitante"]},
+        "periodo": {"type": "string", "enum": ["total", "1t", "2t"]},
+        "lado": {"type": "string", "enum": ["mais", "menos"]},
+        "linha": {"type": "number"},
+    },
+    "required": ["mercado", "de_quem", "periodo", "lado", "linha"],
+    "additionalProperties": False,
+}
+_MERCADO_COM_ATALHO = {
+    **_MERCADO,
+    "properties": {**_MERCADO["properties"], "atalho": _ATALHO},
+    "required": [*_MERCADO["required"], "atalho"],
+}
+
 _SCHEMA = {
     "type": "object",
     "properties": {
@@ -671,14 +696,14 @@ _SCHEMA = {
                     "perfil": {"type": "string",
                                "enum": ["dominante", "ofensivo", "equilibrado", "defensivo", "reativo"]},
                     "leitura": {"type": "string"},
-                    "mercados": {"type": "array", "items": _MERCADO},
+                    "mercados": {"type": "array", "items": _MERCADO_COM_ATALHO},
                     "jogadores": {"type": "array", "items": _MERCADO},
                 },
                 "required": ["lado", "perfil", "leitura", "mercados", "jogadores"],
                 "additionalProperties": False,
             },
         },
-        "mercados_do_jogo": {"type": "array", "items": _MERCADO},
+        "mercados_do_jogo": {"type": "array", "items": _MERCADO_COM_ATALHO},
         "contexto": {"type": "string"},
         "alerta": {"type": "string"},
     },

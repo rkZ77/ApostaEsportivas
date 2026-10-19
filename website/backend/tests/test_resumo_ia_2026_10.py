@@ -245,6 +245,11 @@ def test_chamada_usa_modelo_barato_json_e_corta_em_4(monkeypatch):
     assert len(conteudo["mercados_do_jogo"]) == 3 and len(conteudo["times"]) == 2
     assert len(conteudo["times"][0]["mercados"]) == 3 and (t_in, t_out) == (1500, 300)
     assert len(conteudo["times"][0]["jogadores"]) == 3
+    # o atalho pra aba Mercados e' obrigatorio nos mercados de time e de jogo
+    esquema = pedido["output_config"]["format"]["schema"]
+    item = esquema["properties"]["mercados_do_jogo"]["items"]
+    assert "atalho" in item["required"]
+    assert "outro" in item["properties"]["atalho"]["properties"]["mercado"]["enum"]
 
 
 def test_falha_do_modelo_fica_gravada_e_nao_levanta(monkeypatch):
