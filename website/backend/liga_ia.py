@@ -40,7 +40,8 @@ logger = logging.getLogger(__name__)
 MIN_JOGOS = 20
 #: Jogos minimos de um time pra ele entrar na lista que vai pro modelo.
 MIN_JOGOS_TIME = 4
-VERSAO = 1
+#: 2 (19/10/2026): todos os mercados do Raio-X na leitura.
+VERSAO = 2
 
 _locks: dict[int, threading.Lock] = {}
 _locks_guarda = threading.Lock()
@@ -127,7 +128,33 @@ def numeros_da_liga(jogos: list[dict]) -> dict | None:
         "pct_over_3_5_amarelos": _pct(jogos, _acima(hy, ay, 3.5)),
         "pct_over_4_5_amarelos": _pct(jogos, _acima(hy, ay, 4.5)),
         "vermelhos_media": _media([_total(j, "home_red_cards", "away_red_cards") for j in jogos]),
+        # TODOS OS MERCADOS DO RAIO-X (19/10/2026, pedido do usuario): faltas,
+        # chutes, chutes no alvo, impedimentos, defesas, 1o e 2o tempo. Mesma
+        # conta da leitura do jogo (resumo_ia._MERCADOS_DO_JOGO). Com ~20
+        # ligas por dia o custo e' pequeno, entao vai a linha inteira (o corte
+        # de 40/60 e' do SYSTEM, nao o de 35/65 do jogo).
+        "mercados": {nome: resumo_ia._mercado([_pelo_mandante(j) for j in jogos], c, q, linhas, p,
+                                              corte=None)
+                     for nome, c, q, p, linhas in resumo_ia._MERCADOS_DO_JOGO},
     }
+
+
+_CONTADORES = {"gols": "goals", "escanteios": "corners", "amarelos": "yellow_cards",
+               "chutes_alvo": "shots_on", "faltas": "fouls", "chutes": "total_shots",
+               "impedimentos": "offsides", "defesas": "goalkeeper_saves"}
+_DO_1T = {"gols": "goals_ht", "escanteios": "corners_1h", "amarelos": "yellow_cards_1h",
+          "chutes_alvo": "shots_on_1h"}
+
+
+def _pelo_mandante(j: dict) -> dict:
+    """Linha da partida -> formato pro/contra de resumo_ia._valor (o jogo
+    soma os dois lados, entao o ponto de vista nao muda a conta)."""
+    saida = {}
+    for c, col in _CONTADORES.items():
+        saida[f"{c}_pro"], saida[f"{c}_contra"] = j.get(f"home_{col}"), j.get(f"away_{col}")
+    for c, col in _DO_1T.items():
+        saida[f"{c}_pro_1t"], saida[f"{c}_contra_1t"] = j.get(f"home_{col}"), j.get(f"away_{col}")
+    return saida
 
 
 #: Tamanho do recorte recente: ~3 rodadas de uma liga de 20 times.
@@ -149,6 +176,8 @@ def numeros_por_time(jogos: list[dict]) -> list[dict]:
                 "gp": j.get(f"{lado}_goals"), "gc": j.get(f"{outro}_goals"),
                 "ep": j.get(f"{lado}_corners"), "ec": j.get(f"{outro}_corners"),
                 "ap": j.get(f"{lado}_yellow_cards"), "ac": j.get(f"{outro}_yellow_cards"),
+                "fp": j.get(f"{lado}_fouls"), "fc": j.get(f"{outro}_fouls"),
+                "sp": j.get(f"{lado}_shots_on"), "sc": j.get(f"{outro}_shots_on"),
             })
     saida = []
     for tid, js in por_time.items():
@@ -163,6 +192,8 @@ def numeros_por_time(jogos: list[dict]) -> list[dict]:
                                      else x["gp"] > 0 and x["gc"] > 0),
             "escanteios_jogo_media": _media([_total(x, "ep", "ec") for x in js]),
             "amarelos_jogo_media": _media([_total(x, "ap", "ac") for x in js]),
+            "faltas_jogo_media": _media([_total(x, "fp", "fc") for x in js]),
+            "chutes_no_alvo_jogo_media": _media([_total(x, "sp", "sc") for x in js]),
         })
     saida.sort(key=lambda t: t["nome"] or "")
     return saida
@@ -206,7 +237,13 @@ def jogos_da_temporada(cur, league_id: int, season) -> list[dict]:
                ms.home_goals, ms.away_goals, ms.home_goals_ht, ms.away_goals_ht,
                ms.home_corners, ms.away_corners,
                ms.home_yellow_cards, ms.away_yellow_cards,
-               ms.home_red_cards, ms.away_red_cards
+               ms.home_red_cards, ms.away_red_cards,
+               ms.home_fouls, ms.away_fouls, ms.home_shots_on, ms.away_shots_on,
+               ms.home_total_shots, ms.away_total_shots, ms.home_offsides, ms.away_offsides,
+               ms.home_goalkeeper_saves, ms.away_goalkeeper_saves,
+               ms.home_corners_1h, ms.away_corners_1h,
+               ms.home_yellow_cards_1h, ms.away_yellow_cards_1h,
+               ms.home_shots_on_1h, ms.away_shots_on_1h
           FROM match_statistics ms
          WHERE ms.league_id = %s AND ms.season = %s
            AND ms.status IN ('FT','AET','PEN')
@@ -271,6 +308,7 @@ Fonte:
 - Use SOMENTE os números do JSON. Não invente lesão, notícia, odd, técnico ou história. Dado que não veio não existe.
 - Todo campo "pct_" é PERCENTUAL DE JOGOS (em quantos jogos aconteceu). Ex.: pct_over_2_5_gols = 62 significa "6 de cada 10 jogos tiveram 3 gols ou mais".
 - "media_das_ligas_do_site" é a régua: compare a liga com ela ("acima da média das ligas que acompanhamos").
+- "mercados" traz TODOS os mercados do Raio-X (gols, escanteios, cartões, chutes no alvo, chutes, faltas, impedimentos, defesas dos goleiros, e 1º e 2º tempo com sufixo "_1t"/"_2t"): "media" por jogo e "pct_mais_de": {"9.5": 62} = passou de 9,5 em 62% dos jogos. Leia todos antes de escolher as tendências: a mais forte pode ser de faltas ou de 1º tempo, não só de gols.
 - Em "times", os números são dos jogos de cada time (casa e fora juntos).
 - "numeros_dos_ultimos_30_jogos", quando vier, é o momento atual. Se uma linha mudou 10 pontos ou mais em relação à temporada, diga (ex.: "nas últimas rodadas os gols caíram"). Se não mudou, não comente.
 - "gols_desvio_padrao" é a volatilidade: acima de 1,7 a liga alterna jogos fechados e abertos, e a média engana; abaixo de 1,4 os placares são parecidos entre si.
@@ -281,7 +319,7 @@ Este texto também vai para o revisor de risco do motor de picks, que só veta p
 
 O que escrever:
 - "resumo": 2 frases, no máximo, sobre o perfil da liga com os números principais.
-- "tendencias": até 4 linhas da LIGA com pct de 60 ou mais ("over") ou 40 ou menos ("under"). Ex.: "Mais de 1,5 gol", "Ambas marcam", "Mais de 9,5 escanteios". Para "under", "pct" é o percentual de jogos em que a linha NÃO bateu. Nada entre 41 e 59.
+- "tendencias": até 4 linhas da LIGA com pct de 60 ou mais ("over") ou 40 ou menos ("under"). Ex.: "Mais de 1,5 gol", "Ambas marcam", "Mais de 9,5 escanteios", "Mais de 22,5 faltas", "Gol no 1º tempo". Um mercado por família, na linha mais forte. Para "under", "pct" é o percentual de jogos em que a linha NÃO bateu. Nada entre 41 e 59.
 - "mando": 1 frase sobre a força de quem joga em casa, com os percentuais de vitória.
 - "momento": 1 frase sobre o recorte recente contra a temporada, quando houver diferença de 10 pontos ou mais em alguma linha. Vazio se não houver recorte ou diferença.
 - "times_over": até 3 times cujos jogos mais passam da média da liga (gols, escanteios ou cartões). "times_under": até 3 cujos jogos mais ficam abaixo. Em cada um, "time" é o nome EXATAMENTE como veio em "nome", e "leitura" é 1 frase curta com o número que justifica. Só times com 6 ou mais jogos.

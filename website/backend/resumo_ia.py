@@ -149,11 +149,13 @@ def _valor(j: dict, contador: str, quem: str, periodo: str = "total"):
     return None if a is None or b is None else a + b
 
 
-def _mercado(jogos: list, contador: str, quem: str, linhas: tuple, periodo: str = "total") -> dict | None:
+def _mercado(jogos: list, contador: str, quem: str, linhas: tuple, periodo: str = "total",
+             corte: tuple | None = (35, 65)) -> dict | None:
     """Media e "% de jogos acima de cada linha" de um mercado do Raio-X.
 
     `jogos` = quantos tem o numero (jogo antigo sem a folha do 1o tempo, ou
-    sem faltas, nao conta nem a favor nem contra · igual a tela)."""
+    sem faltas, nao conta nem a favor nem contra · igual a tela).
+    `corte` (baixo, alto): so' vao as linhas fora da faixa; None = todas."""
     valores = [_valor(j, contador, quem, periodo) for j in jogos]
     validos = [v for v in valores if v is not None]
     if not validos:
@@ -164,7 +166,8 @@ def _mercado(jogos: list, contador: str, quem: str, linhas: tuple, periodo: str 
         "jogos": len(validos),
         # CUSTO (19/10/2026): linha entre 36 e 64 nao vira mercado (regra do
         # SYSTEM), entao nao vai · corta ~metade da entrada. A media fica.
-        "pct_mais_de": {k: v for k, v in pcts.items() if v <= 35 or v >= 65},
+        "pct_mais_de": pcts if corte is None else {k: v for k, v in pcts.items()
+                                                    if v <= corte[0] or v >= corte[1]},
     }
 
 

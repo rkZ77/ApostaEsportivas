@@ -30,6 +30,21 @@ def test_numeros_da_liga_contam_linhas_mando_e_volatilidade():
     assert liga_ia.numeros_da_liga([]) is None
 
 
+def test_liga_le_todos_os_mercados_do_raio_x():
+    j = {**_j(2, 1, hht=1, aht=0), "home_fouls": 12, "away_fouls": 13, "home_shots_on": 5,
+         "away_shots_on": 3, "home_offsides": 2, "away_offsides": 1,
+         "home_corners_1h": 3, "away_corners_1h": 1}
+    m = liga_ia.numeros_da_liga([j, j])["mercados"]
+    assert m["faltas"]["media"] == 25 and m["faltas"]["pct_mais_de"]["24.5"] == 100
+    assert m["chutes_no_alvo"]["media"] == 8 and m["impedimentos"]["media"] == 3
+    assert m["escanteios_1t"]["media"] == 4 and m["gols_2t"]["media"] == 2
+    # a liga manda a linha inteira, inclusive o meio (corte 40/60 e' do SYSTEM)
+    assert set(m["gols"]["pct_mais_de"]) == {"0.5", "1.5", "2.5", "3.5", "4.5"}
+    assert m["chutes"] is None                                  # sem o numero
+    t = liga_ia.numeros_por_time([j] * 4)[0]
+    assert t["faltas_jogo_media"] == 25 and t["chutes_no_alvo_jogo_media"] == 8
+
+
 def test_time_com_poucos_jogos_fica_fora():
     jogos = [_j(2, 1, home=1, away=2)] * 4 + [_j(1, 0, home=3, away=1)]
     times = {t["team_id"]: t for t in liga_ia.numeros_por_time(jogos)}
