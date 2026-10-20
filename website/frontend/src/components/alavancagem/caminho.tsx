@@ -138,14 +138,72 @@ export function ProgressoMeta({ feitos, meta }: { feitos: number; meta: number }
   )
 }
 
-export function LinhaCaminho({ c }: { c: CaminhoEncerrado }) {
+/*
+ * O CAMINHO DA IA (20/10/2026, pedido do usuário: "mostra o caminho da IA se
+ * não peguei o meu caminho").
+ *
+ * Sem caminho próprio, a aba mostrava um card vazio esperando um valor de
+ * entrada · e o produto, que é a escada, ficava invisível justamente pra quem
+ * ainda está decidindo entrar. Aqui é o caminho que a IA fez com os picks
+ * publicados, na mesma regra do placar (fecha na meta, RED custa a entrada),
+ * em reais sobre a entrada da pessoa (ou R$50 de exemplo).
+ */
+export function CaminhoDaIA({ c, exemplo }: {
+  c: { entrada: number; meta: number; steps: AlavStep[]; passos: number; saldo: number; history: CaminhoEncerrado[] }
+  /** Sem entrada própria, o valor é exemplo e o texto diz isso. */
+  exemplo: boolean
+}) {
+  const lucro = c.saldo - c.entrada
+  return (
+    <div className="rounded-lg border border-orange-500/20 bg-orange-500/[0.04] p-4 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-bold text-orange-400">Caminho da IA</p>
+          <p className="text-[11px] text-ink-3 mt-0.5 leading-snug">
+            O caminho que a IA está fazendo com os picks publicados
+            {exemplo ? ', com uma entrada de exemplo de ' : ', com a sua entrada de '}
+            <span className="whitespace-nowrap">{fmtBRL(c.entrada)}</span>.
+          </p>
+        </div>
+        <div className="font-mono text-right shrink-0">
+          <div className="text-xl font-black text-orange-400 tabular-nums">{fmtBRL(c.saldo)}</div>
+          <div className={`text-[11px] tabular-nums ${lucro > 0 ? 'text-accent-ink' : 'text-ink-4'}`}>
+            {c.passos ? `${lucro >= 0 ? '+' : ''}${fmtBRL(lucro)} em jogo` : 'recém-começado'}
+          </div>
+        </div>
+      </div>
+      <div>
+        <div className="flex items-baseline justify-between text-[11px] mb-1.5">
+          <span className="text-ink-3">Degraus até a meta</span>
+          <span className="font-mono text-ink-2"><b className="text-orange-400">{c.passos}</b> de {c.meta}</span>
+        </div>
+        <ProgressoMeta feitos={c.passos} meta={c.meta} />
+      </div>
+      {c.steps.length > 0 && <Escada entrada={c.entrada} steps={c.steps} altura="h-28" />}
+      {c.history.length > 0 && (
+        <details>
+          <summary className="cursor-pointer text-[11px] text-ink-3 hover:text-ink-1 select-none font-semibold">
+            Caminhos anteriores da IA ({c.history.length})
+          </summary>
+          <div className="mt-1">
+            {c.history.map(h => <LinhaCaminho key={h.id} c={h} quem="ia" />)}
+          </div>
+        </details>
+      )}
+    </div>
+  )
+}
+
+export function LinhaCaminho({ c, quem = 'voce' }: { c: CaminhoEncerrado; quem?: 'voce' | 'ia' }) {
   const m = MOTIVO[c.end_reason] ?? MOTIVO.manual
   const { Icone } = m
+  /* "Encerrado por você" não cabe no caminho da IA: ela só fecha na meta ou no RED. */
+  const rotulo = quem === 'ia' && c.end_reason === 'manual' ? 'Encerrado' : m.label
   return (
     <div className="flex items-center gap-3 py-3 border-b border-line last:border-0">
       <Icone className={`w-4 h-4 shrink-0 ${m.cor}`} />
       <div className="flex-1 min-w-0">
-        <p className="text-sm text-ink-1 font-semibold truncate">{m.label}</p>
+        <p className="text-sm text-ink-1 font-semibold truncate">{rotulo}</p>
         <p className="text-[11px] text-ink-4">
           {dataBR(c.ended_at)}, entrou com {fmtBRL(c.initial)}, {c.greens}{' '}
           {c.greens === 1 ? 'green' : 'greens'} no caminho

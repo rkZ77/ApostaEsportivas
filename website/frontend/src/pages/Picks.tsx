@@ -20,7 +20,7 @@ import { aplicarFiltro, FILTRO_INICIAL } from '../lib/mercadoFiltro'
 import EngineStatus from '../components/EngineStatus'
 import FiltrosDePicks, { filtrarPicks, ordenarPicks,
          type OrdemDePick, type BilheteFiltro } from '../components/FiltrosDePicks'
-import { Escada, LinhaCaminho,
+import { CaminhoDaIA, Escada, LinhaCaminho,
          type AlavStep, type CaminhoEncerrado } from '../components/alavancagem/caminho'
 import AnalysisModal from '../components/AnalysisModal'
 import {
@@ -156,6 +156,16 @@ interface AlavSerie {
   open_units?: number
   realized_total?: number
   history?: CaminhoEncerrado[]
+}
+/** O caminho que a IA está fazendo com os picks publicados (20/10/2026) ·
+ *  vem junto da lista em /suggestions/alavancagem, na entrada do usuário. */
+interface CaminhoIA {
+  entrada: number
+  meta: number
+  steps: AlavStep[]
+  passos: number
+  saldo: number
+  history: CaminhoEncerrado[]
 }
 const defaultAlavFilters: AlavFilters = { date_from: '', date_to: TODAY, resultado: 'all' }
 
@@ -2838,6 +2848,7 @@ export default function Picks() {
   // Alavancagem
   const [alavFilters,  setAlavFilters]  = useState<AlavFilters>(defaultAlavFilters)
   const [alavancagem,  setAlavancagem]  = useState<any[]>([])
+  const [alavCaminhoIA, setAlavCaminhoIA] = useState<CaminhoIA | null>(null)
   // null = ainda nao buscou (a aba carrega sob demanda, ver o efeito por aba)
   // Busca, categoria, ordem e estado da aba Mercados. Filtragem é local: a aba
   // já baixa os dois conjuntos inteiros, são poucas dezenas de picks por dia.
@@ -3329,7 +3340,10 @@ export default function Picks() {
     if (f.date_to)   p.date_to   = f.date_to
     if (f.resultado !== 'all') p.resultado = f.resultado
     api.get('/suggestions/alavancagem', { params: p })
-      .then(r => { setAlavancagem(r.data.items ?? []); setAlavHasMore(!!r.data.has_more); setAlavLoaded(true) })
+      .then(r => {
+        setAlavancagem(r.data.items ?? []); setAlavHasMore(!!r.data.has_more); setAlavLoaded(true)
+        setAlavCaminhoIA(r.data.caminho_ia ?? null)
+      })
       .catch(() => setAlavError(true))
       .finally(() => setAlavLoading(false))
   }
@@ -4317,6 +4331,15 @@ export default function Picks() {
                     )}
                   </div>
 
+                  {/* SEM CAMINHO PRÓPRIO, O DA IA (20/10/2026, pedido do usuário):
+                      quem ainda não entrou, ou entrou e não andou nenhum
+                      degrau, vê a escada que a IA está subindo. */}
+                  {alavCaminhoIA && (!userAlavSerie?.configured || !userAlavSerie?.steps?.length) && (
+                    <div className="mb-3">
+                      <CaminhoDaIA c={alavCaminhoIA} exemplo={!userAlavSerie?.configured} />
+                    </div>
+                  )}
+
                   {/* Ponte pra tela de leitura do caminho.
                       Esta aba é onde se OPERA (segue degrau, encerra); o
                       histórico, a escada e os caminhos passados moram em
@@ -4475,8 +4498,13 @@ export default function Picks() {
                       )}
                     </p>
                   )}
+                  {!userAlavSerie?.configured && (
+                    <p className="text-xs text-ink-2 mt-1 mb-1 font-semibold">
+                      Comece o seu caminho: quanto você quer pôr de entrada?
+                    </p>
+                  )}
                   {(!userAlavSerie?.configured || alavInitInput) ? (
-                    <div className="flex gap-2 mt-2">
+                    <div className="flex gap-2 mt-2 max-w-md">
                       <input
                         type="number"
                         min="1"
@@ -4512,14 +4540,16 @@ export default function Picks() {
 
                 {/* Stats da série */}
                 {(() => {
-                  const oldest = [...alavancagem].reverse()
+                  // Sem as cópias do mesmo bilhete (20/10/2026): cada uma virava um green ou red a mais.
+                  const unicos = alavancagem.filter((p: any) => !p.caminho_duplicado)
+                  const oldest = [...unicos].reverse()
                   let bestStreak = 0, tempStreak = 0, resets = 0
                   for (const a of oldest) {
                     if (a.result === 'GREEN')    { tempStreak++; if (tempStreak > bestStreak) bestStreak = tempStreak }
                     else if (a.result === 'RED') { resets++; tempStreak = 0 }
                   }
                   let currentStreak = 0
-                  for (const a of alavancagem) {
+                  for (const a of unicos) {
                     if (!a.result) continue
                     if (a.result === 'GREEN') currentStreak++
                     else break
@@ -4548,7 +4578,13 @@ export default function Picks() {
                       ) : (
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                           {[
-                            {
+                            userBankroll == null && alavCaminhoIA ? {
+                              // Sem caminho próprio, o da IA (20/10/2026) · era um quadro em branco.
+                              label: 'Caminho da IA',
+                              value: `R$${alavCaminhoIA.saldo.toFixed(2)}`,
+                              color: alavCaminhoIA.saldo > alavCaminhoIA.entrada ? 'text-green-400' : 'text-orange-400',
+                              sub: `${alavCaminhoIA.passos} de ${alavCaminhoIA.meta} degraus`,
+                            } : {
                               label: 'Sua banca atual',
                               value: userBankroll != null ? `R$${userBankroll.toFixed(2)}` : '',
                               color: userBankroll != null && userBankroll > initialBankroll ? 'text-green-400' : 'text-orange-400',
@@ -4570,78 +4606,102 @@ export default function Picks() {
                   )
                 })()}
 
-                {/* Caminho da série */}
-                {!alavLoading && alavancagem.length > 0 && (
+                {/* Caminho da série · REDESENHADO (20/10/2026, pedido do usuário).
+                    Era do mais antigo pro mais novo e cortado nos 12 primeiros:
+                    o pick de hoje, que é o caminho em jogo, ficava atrás de
+                    "Mostrar mais". Agora o mais recente vem primeiro, cada
+                    passo com os escudos (picks_alavancagem guarda o id do time
+                    desde 28/08), o degrau do caminho e onde ele fechou. Cópia
+                    do mesmo bilhete no mesmo dia não entra. */}
+                {!alavLoading && alavancagem.length > 0 && (() => {
+                  const passos = alavancagem.filter((p: any) => !p.caminho_duplicado)
+                  return (
                   <div>
-                    <SectionHeader color="bg-orange-400" label="Caminho da Série" />
-                    {alavHasMore && (
-                      <button
-                        onClick={loadMoreAlavancagem}
-                        disabled={alavLoadingMore}
-                        className="w-full text-center text-xs text-ink-3 hover:text-ink-2 disabled:opacity-50 transition-colors py-2 mb-3 border border-line rounded-md hover:border-line-strong font-semibold"
-                      >
-                        {alavLoadingMore ? 'Carregando...' : 'Carregar picks mais antigos'}
-                      </button>
-                    )}
-                    <div className="space-y-0">
-                      {[...alavancagem].reverse().slice(0, alavEtapas).map((pick: any, idx: number, arr: any[]) => {
+                    <SectionHeader color="bg-orange-400" label="Caminho da IA, passo a passo" />
+                    <p className="text-[11px] text-ink-4 -mt-2 mb-3">
+                      Valores com {userAlavSerie?.configured ? 'a sua entrada' : 'uma entrada de exemplo'} de R${(alavCaminhoIA?.entrada ?? 50).toFixed(2)}.
+                    </p>
+                    {/* Largura de leitura: na tela cheia do computador o
+                        valor ficava a um palmo do jogo. */}
+                    <div className="space-y-0 max-w-3xl">
+                      {passos.slice(0, alavEtapas).map((pick: any, idx: number, arr: any[]) => {
                         const res = pick.result
                         const date = pick.match_date
-                          ? new Date(pick.match_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+                          ? new Date(String(pick.match_date).slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
                           : ''
                         const bankBefore = pick.bankroll_before != null ? Number(pick.bankroll_before) : null
                         const bankAfter  = pick.bankroll_after  != null ? Number(pick.bankroll_after)  : null
                         const profit     = bankBefore != null && bankAfter != null ? bankAfter - bankBefore : null
+                        const encerra    = pick.caminho_encerra as 'meta' | 'red' | null | undefined
+                        const pernas = [1, 2, 3].filter(n => pick[`home_team_${n}`])
                         return (
-                          <div key={pick.id} className="flex gap-3">
-                            <div className="flex flex-col items-center w-8 shrink-0">
-                              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black border ${
-                                !res
-                                  ? 'bg-orange-500 border-orange-400 text-on-fill'
-                                  : res === 'GREEN' ? 'bg-green-500/20 border-green-500/40 text-green-400'
-                                  : 'bg-red-500/20 border-red-500/40 text-red-400'
-                              }`}>
-                                {res === 'GREEN' ? '✓' : res === 'RED' ? '✗' : <Clock className="w-3 h-3" />}
+                          <div key={pick.id}>
+                            {/* Onde um caminho fechou: a marca separa este passo
+                                do caminho seguinte, que aparece acima dele. */}
+                            {encerra && idx > 0 && (
+                              <div className={`ml-11 mb-2 text-[10px] font-bold uppercase tracking-wide ${encerra === 'meta' ? 'text-accent-ink' : 'text-red-400'}`}>
+                                {encerra === 'meta' ? 'Caminho fechou na meta' : 'Caminho caiu no RED'}
                               </div>
-                              {idx < arr.length - 1 && (
-                                <div className={`w-0.5 flex-1 my-1 min-h-[16px] ${res === 'GREEN' ? 'bg-green-500/30' : res === 'RED' ? 'bg-red-500/30' : 'bg-surface-2'}`} />
-                              )}
-                            </div>
-                            <div
-                              className={`flex-1 mb-2 rounded-md border px-3 py-2.5 cursor-pointer hover:border-orange-500/40 transition-colors ${
-                                !res ? 'border-orange-500/40 bg-orange-500/5' : 'border-line bg-surface-1'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="flex-1 min-w-0">
-                                  {/* Sem escudo aqui de proposito. picks_alavancagem
-                                      nao tem coluna de team_id: o id so' chega quando a
-                                      fixture ainda existe pra enriquecer, e fixture velha
-                                      e' purgada. O resultado era metade da lista com
-                                      escudo e metade sem, que le como imagem quebrada.
-                                      Nenhum escudo e' consistente; metade nao e'. */}
-                                  <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
-                                    <span className="text-xs font-bold text-ink-1 truncate">{pick.home_team_1}</span>
-                                    <span className="text-ink-4 text-[10px]">vs</span>
-                                    <span className="text-xs font-bold text-ink-1 truncate">{pick.away_team_1}</span>
-                                  </div>
-                                  <div className="text-[10px] text-ink-3">{date}</div>
+                            )}
+                            <div className="flex gap-3">
+                              <div className="flex flex-col items-center w-8 shrink-0">
+                                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black border ${
+                                  !res
+                                    ? 'bg-orange-500 border-orange-400 text-on-fill'
+                                    : res === 'GREEN' ? 'bg-green-500/20 border-green-500/40 text-green-400'
+                                    : res === 'RED' ? 'bg-red-500/20 border-red-500/40 text-red-400'
+                                    : 'bg-surface-2 border-line text-ink-3'
+                                }`}>
+                                  {res === 'GREEN' ? '✓' : res === 'RED' ? '✗' : !res ? <Clock className="w-3 h-3" /> : '='}
                                 </div>
-                                <div className="font-mono text-right shrink-0 space-y-0.5">
-                                  {bankBefore != null && (
-                                    <div className="text-[10px] text-ink-4">R${bankBefore.toFixed(2)}</div>
-                                  )}
-                                  {profit != null && (
-                                    <div className={`text-xs font-black ${profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                      {profit >= 0 ? '+' : ''}R${profit.toFixed(2)}
+                                {idx < arr.length - 1 && (
+                                  <div className={`w-0.5 flex-1 my-1 min-h-[16px] ${res === 'GREEN' ? 'bg-green-500/30' : res === 'RED' ? 'bg-red-500/30' : 'bg-surface-2'}`} />
+                                )}
+                              </div>
+                              <div className={`flex-1 min-w-0 mb-2 rounded-md border px-3 py-2.5 ${
+                                !res ? 'border-orange-500/40 bg-orange-500/5' : 'border-line bg-surface-1'
+                              }`}>
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex-1 min-w-0 space-y-1">
+                                    <div className="flex items-center gap-2 text-[10px] text-ink-3">
+                                      {pick.caminho_passo != null && (
+                                        <span className="px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400 font-bold">
+                                          Degrau {pick.caminho_passo}
+                                        </span>
+                                      )}
+                                      <span>{date}</span>
+                                      {!res && <span className="text-orange-400 font-semibold">Em jogo</span>}
                                     </div>
-                                  )}
-                                  {bankAfter != null && (
-                                    <div className="text-[10px] text-ink-3">Banca: R${bankAfter.toFixed(2)}</div>
-                                  )}
-                                  {!res && bankBefore != null && (
-                                    <div className="text-[10px] text-orange-400 font-semibold">Em aberto</div>
-                                  )}
+                                    {/* No celular um time por linha: lado a lado com a
+                                        coluna de valores, os nomes viravam "Manches...". */}
+                                    {pernas.map(n => (
+                                      <div key={n} className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-1.5 min-w-0">
+                                        <span className="flex items-center gap-1.5 min-w-0">
+                                          <TeamLogo id={pick[`home_team_id_${n}`]} name={pick[`home_team_${n}`]} size={16} />
+                                          <span className="text-xs font-bold text-ink-1 truncate">{pick[`home_team_${n}`]}</span>
+                                        </span>
+                                        <span className="hidden sm:inline text-ink-4 text-[10px] shrink-0">x</span>
+                                        <span className="flex items-center gap-1.5 min-w-0">
+                                          <TeamLogo id={pick[`away_team_id_${n}`]} name={pick[`away_team_${n}`]} size={16} />
+                                          <span className="text-xs font-bold text-ink-1 truncate">{pick[`away_team_${n}`]}</span>
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <div className="font-mono text-right shrink-0 space-y-0.5">
+                                    <div className="text-[10px] text-ink-4">odd {Number(pick.odd_combined).toFixed(2)}</div>
+                                    {bankBefore != null && (
+                                      <div className="text-[10px] text-ink-4">R${bankBefore.toFixed(2)}</div>
+                                    )}
+                                    {profit != null && (
+                                      <div className={`text-xs font-black ${profit > 0 ? 'text-green-400' : profit < 0 ? 'text-red-400' : 'text-ink-3'}`}>
+                                        {profit >= 0 ? '+' : '-'}R${Math.abs(profit).toFixed(2)}
+                                      </div>
+                                    )}
+                                    {!res && pick.potential_return != null && (
+                                      <div className="text-[10px] text-orange-400 font-semibold">vira R${Number(pick.potential_return).toFixed(2)}</div>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -4649,16 +4709,18 @@ export default function Picks() {
                         )
                       })}
                     </div>
-                    {alavancagem.length > alavEtapas && (
+                    {(passos.length > alavEtapas || alavHasMore) && (
                       <button
-                        onClick={() => setAlavEtapas(n => n + 20)}
-                        className="w-full text-center text-xs text-orange-400 hover:text-orange-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong font-semibold"
+                        onClick={() => passos.length > alavEtapas ? setAlavEtapas(n => n + 20) : loadMoreAlavancagem()}
+                        disabled={alavLoadingMore}
+                        className="w-full text-center text-xs text-orange-400 hover:text-orange-300 disabled:opacity-50 transition-colors py-3 border border-line rounded-md hover:border-line-strong font-semibold"
                       >
-                        Mostrar mais etapas ({alavancagem.length - alavEtapas} restantes)
+                        {alavLoadingMore ? 'Carregando...' : 'Mostrar passos mais antigos'}
                       </button>
                     )}
                   </div>
-                )}
+                  )
+                })()}
               </>
             )}
 

@@ -182,6 +182,15 @@ def _caminhos_de_hoje(cur) -> int:
     return int(cur.fetchone()[0])
 
 
+def _jogos_de_hoje(cur) -> set:
+    """fixture_id de toda perna dos caminhos ja' abertos hoje."""
+    cur.execute(f"""
+        SELECT fixture_id_1, fixture_id_2, fixture_id_3 FROM picks_alavancagem
+         WHERE match_date = {HOJE_BR}
+    """)
+    return {f for linha in cur.fetchall() for f in linha if f}
+
+
 def _fixtures_with_odds_today(cur) -> list:
     """Fixtures de hoje, de qualquer liga cadastrada, com pelo menos 1 odd
     na faixa individual -- antes restrito a WC_LEAGUE_ID, ver docstring do
@@ -638,13 +647,23 @@ def run_alavancagem_engine():
         return len({p["_fixture"]["fixture_id"] for p in pool})
 
     gastas: set = set()
+    # Jogos dos caminhos que o dia JA' abriu (outra rodada do motor): em
+    # 02/10 o mesmo bilhete saiu as 03h12 e de novo as 22h47.
+    jogos_gastos: set = _jogos_de_hoje(cur)
     salvos = 0
     vagas = MAX_CAMINHOS_POR_DIA - ja_abertos
     while salvos < vagas:
         # Perna gasta sai das duas tentativas. Dois caminhos que dividem uma
         # perna nao sao dois caminhos: o RED daquela perna fecha os dois, e o
         # usuario teria posto duas entradas na mesma aposta.
-        pools = [(rotulo, [p for p in pool if id(p) not in gastas])
+        # POR JOGO, NAO POR OBJETO (20/10/2026). `id(p)` marcava o dict da
+        # perna, e a MESMA selecao aparece mais de uma vez no pool (uma por
+        # casa/linha): o laco reescolhia a mesma aposta ate' encher as vagas.
+        # Em PROD, 7 dias com 5 bilhetes identicos (02/10: Fortaleza x Nautico
+        # x5) · o placar contava 39 caminhos onde houve 24. Caminho extra nunca
+        # repete JOGO de outro caminho do dia: o mesmo jogo e' o mesmo risco.
+        pools = [(rotulo, [p for p in pool
+                           if id(p) not in gastas and p["_fixture"]["fixture_id"] not in jogos_gastos])
                  for rotulo, pool in tentativas]
 
         # "BASTANTE JOGOS" pro caminho EXTRA. O primeiro sai como sempre saiu;
@@ -682,6 +701,7 @@ def run_alavancagem_engine():
         # Saem do pool ANTES da IA: vetado ou nao, este combo ja' foi
         # considerado, e reoferece-lo daria um laco com a mesma resposta.
         gastas.update(id(p) for p in combo)
+        jogos_gastos.update(p["_fixture"]["fixture_id"] for p in combo)
 
         # §47 -- A IA RECEBE O BILHETE, NAO SO' AS PERNAS.
         #
