@@ -15,6 +15,8 @@ export interface Column<T> {
   align?: 'left' | 'right' | 'center'
   /** Esconde abaixo de sm. Para coluna acessória em tela estreita. */
   hideOnMobile?: boolean
+  /** A coluna que fica com a sobra da largura e encurta o texto com "…". */
+  principal?: boolean
   className?: string
 }
 
@@ -35,10 +37,16 @@ export default function Table<T>({
   minWidth?: number
 }) {
   const alignCls = { left: 'text-left', right: 'text-right', center: 'text-center' }
+  /* LARGURA MÍNIMA SÓ ONDE AS COLUNAS EXISTEM (20/10/2026). Tabela que esconde
+     coluna no celular (hideOnMobile) ficava com duas colunas e os mesmos 460px,
+     e rolava de lado à toa (/palpites-de-futebol-hoje, /performance). Aí o
+     mínimo vale do sm pra cima; sem coluna escondida, vale sempre. */
+  const escondeNoCelular = columns.some(c => c.hideOnMobile)
 
   return (
     <div className={cn('overflow-x-auto', className)}>
-      <table className="w-full text-sm" style={{ minWidth }}>
+      <table className={cn('w-full text-sm', escondeNoCelular && 'sm:min-w-[var(--min-tabela)]')}
+        style={escondeNoCelular ? ({ '--min-tabela': `${minWidth}px` } as React.CSSProperties) : { minWidth }}>
         <thead>
           <tr className="border-b border-line">
             {columns.map(c => (
@@ -73,6 +81,10 @@ export default function Table<T>({
                     'px-3 sm:px-5 py-3 text-ink-2',
                     alignCls[c.align ?? 'left'],
                     c.hideOnMobile && 'hidden sm:table-cell',
+                    // max-w-0 + w-full: a coluna fica com a sobra e o
+                    // `truncate` de dentro passa a valer (em tabela ele so'
+                    // funciona assim · sem isso o nome do time alargava tudo).
+                    c.principal && 'w-full max-w-0',
                     c.className,
                   )}
                 >
