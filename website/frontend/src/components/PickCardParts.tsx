@@ -520,9 +520,9 @@ export function PernaDoBilhete({
         ) : (
           <div className="flex items-center gap-1.5 flex-1 min-w-0">
             <Escudo id={casaId ?? undefined} name={casa ?? ''} size={20} />
-            <span className="text-xs text-ink-2 font-semibold truncate">{casa}</span>
+            <span className="text-xs text-ink-2 font-semibold leading-tight line-clamp-2 break-words min-w-0">{casa}</span>
             <VsOuPlacar aoVivo={aoVivo} pequeno />
-            <span className="text-xs text-ink-2 font-semibold truncate">{fora}</span>
+            <span className="text-xs text-ink-2 font-semibold leading-tight line-clamp-2 break-words min-w-0">{fora}</span>
             <Escudo id={foraId ?? undefined} name={fora ?? ''} size={20} />
           </div>
         )}
@@ -538,7 +538,7 @@ export function PernaDoBilhete({
       </div>
       <dl className="ml-7 mt-1 space-y-0.5">
         <CampoDoPick rotulo="Mercado">
-          <dd className="text-xs text-ink-2 truncate">{mercado}</dd>
+          <dd className="text-xs text-ink-2 line-clamp-2 break-words min-w-0">{mercado}</dd>
         </CampoDoPick>
         {linha && (
           <CampoDoPick rotulo="Linha">
