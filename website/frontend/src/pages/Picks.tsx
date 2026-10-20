@@ -352,8 +352,43 @@ function TabBar({ tab, setTab, canSeeVip, canSeePro, verAoVivo, verBingo, temFal
     },
   ]
 
+  const visiveis = tabs.filter(t => !t.oculta)
+  const tranca = (t: typeof tabs[number]) => (t.premiumOnly && !canSeeVip) || (t.proOnly && !canSeePro)
+
   return (
-    <div className="relative mb-6 -mx-4">
+    <>
+    {/* NO CELULAR, TODAS À VISTA (20/10/2026). A fita rolava e cabiam três
+        abas e meia: Ao Vivo, Múltipla, Alavancagem e Jogador ficavam fora da
+        tela, e aba escondida é aba que ninguém descobre. Aqui viram chips que
+        quebram linha, com o mesmo cadeado e a mesma contagem; do sm pra cima
+        fica a fita com setas. */}
+    <div className="sm:hidden mb-5 flex flex-wrap gap-1.5" role="tablist">
+      {visiveis.map(t => {
+        const count = counts?.[t.key]
+        const ativa = tab === t.key
+        return (
+          <button key={t.key} type="button" role="tab" aria-selected={ativa}
+            onClick={() => setTab(t.key)}
+            onTouchStart={() => onPrefetch?.(t.key)}
+            className={`h-9 px-3 rounded-full border text-xs font-semibold inline-flex items-center gap-1 transition-colors ${
+              ativa ? 'bg-accent/15 border-accent/50 text-ink-1' : 'bg-surface-1 border-line text-ink-3'}`}>
+            {t.label}
+            {t.badge && (
+              <span className={`text-[10px] border px-1 rounded font-bold ${t.badgeCls ?? 'bg-yellow-400/10 text-yellow-400 border-yellow-400/20'}`}>{t.badge}</span>
+            )}
+            {tranca(t) && (
+              <svg className={`w-3 h-3 ${t.proOnly ? 'text-indigo-300' : 'text-yellow-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-label="trancada">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            )}
+            {count != null && count > 0 && (
+              <span className={`text-[11px] font-bold tabular-nums ${ativa ? 'text-ink-2' : 'text-ink-4'}`}>{count}</span>
+            )}
+          </button>
+        )
+      })}
+    </div>
+    <div className="relative mb-6 -mx-4 hidden sm:block">
       {/* Fade da direita indicando que a barra rola. Desbota de surface-0 pra
           surface-0/0, e nao pra `transparent`: transparent e' rgba(0,0,0,0),
           entao o degrade passaria pelo preto no meio e deixaria uma mancha
@@ -479,6 +514,7 @@ function TabBar({ tab, setTab, canSeeVip, canSeePro, verAoVivo, verBingo, temFal
         </div>
       </div>
     </div>
+    </>
   )
 }
 
