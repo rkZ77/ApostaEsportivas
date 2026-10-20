@@ -2641,16 +2641,16 @@ function PlacarDoProduto({ source, tom }: { source: string; tom: string }) {
     { label: 'Picks', value: String(total),               cor: 'text-ink-1' },
     { label: 'Green', value: String(dados.greens ?? 0),   cor: 'text-accent-ink' },
     { label: 'Red',   value: String(dados.reds ?? 0),     cor: 'text-red-400' },
-    { label: 'Win %', value: `${winRate}%`,               cor: winRate >= 55 ? 'text-accent-ink' : 'text-ink-2' },
+    { label: 'Win %', value: `${Math.round(winRate)}%`,               cor: winRate >= 55 ? 'text-accent-ink' : 'text-ink-2' },
     { label: 'Lucro', value: fmtUnits(lucro, 1),          cor: lucro >= 0 ? 'text-accent-ink' : 'text-red-400' },
   ]
 
   return (
     <div className="mt-3">
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      <div className="grid grid-cols-5 gap-1.5 sm:gap-3">
         {tiles.map(({ label, value, cor }) => (
-          <div key={label} className="bg-surface-1 border border-line rounded-md p-3 text-center">
-            <div className={`font-mono text-xl font-black tabular-nums ${cor}`}>{value}</div>
+          <div key={label} className="bg-surface-1 border border-line rounded-md px-1 py-2 sm:p-3 text-center min-w-0">
+            <div className={`font-mono text-sm sm:text-xl font-black tabular-nums truncate ${cor}`}>{value}</div>
             <div className="text-[10px] text-ink-3 mt-1">{label}</div>
           </div>
         ))}
@@ -3559,16 +3559,16 @@ export default function Picks() {
                       vem depois do reset no CSS -- então `[hidden]` perdia e a
                       faixa não fechava com o clique. */}
                   {placarAberto && (
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                  <div className="grid grid-cols-5 gap-1.5 sm:gap-3">
                     {[
                       { label: 'Picks', value: String(quickStats.total ?? 0), color: 'text-ink-1' },
                       { label: 'Green',  value: String(quickStats.greens ?? 0), color: 'text-accent-ink' },
                       { label: 'Red',    value: String(quickStats.reds ?? 0),   color: 'text-red-400' },
-                      { label: 'Win %',  value: `${quickStats.win_rate ?? 0}%`, color: (quickStats.win_rate ?? 0) >= 55 ? 'text-accent-ink' : 'text-ink-2' },
+                      { label: 'Win %',  value: `${Math.round(quickStats.win_rate ?? 0)}%`, color: (quickStats.win_rate ?? 0) >= 55 ? 'text-accent-ink' : 'text-ink-2' },
                       { label: 'Lucro',  value: fmtUnits(lucroUnidades, 1), color: lucroUnidades >= 0 ? 'text-accent-ink' : 'text-red-400' },
                     ].map(({ label, value, color }) => (
-                      <div key={label} className="bg-surface-1 border border-line rounded-md p-3 text-center">
-                        <div className={`font-mono text-xl font-black tabular-nums ${color}`}>{value}</div>
+                      <div key={label} className="bg-surface-1 border border-line rounded-md px-1 py-2 sm:p-3 text-center min-w-0">
+                        <div className={`font-mono text-sm sm:text-xl font-black tabular-nums truncate ${color}`}>{value}</div>
                         <div className="text-[10px] text-ink-3 mt-1">{label}</div>
                       </div>
                     ))}
