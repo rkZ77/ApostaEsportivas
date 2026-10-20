@@ -72,7 +72,7 @@ export function SkeletonPickCard() {
         ))}
       </div>
 
-      <div className="px-5 py-3 space-y-2">
+      <div className="px-4 sm:px-5 py-3 space-y-2">
         <div className="flex items-center gap-2">
           <Skeleton className="h-5 w-5 rounded-full shrink-0" />
           <Skeleton className="h-3 flex-1" />
@@ -81,11 +81,11 @@ export function SkeletonPickCard() {
         <Skeleton className="h-2.5 w-2/5" />
       </div>
 
-      <div className="px-5 pb-3">
+      <div className="px-4 sm:px-5 pb-3">
         <SkeletonText lines={2} />
       </div>
 
-      <div className="flex items-center gap-2 px-5 py-3 border-t border-line/60">
+      <div className="flex items-center gap-2 px-4 sm:px-5 py-3 border-t border-line/60">
         <Skeleton className="h-8 w-20" />
         <Skeleton className="h-8 w-8 ml-auto rounded-md" />
       </div>

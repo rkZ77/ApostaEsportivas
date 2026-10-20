@@ -739,7 +739,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
 
       {/* Hero: Odd | Stake | Retorno */}
       <div className="pick-hero">
-        <div className="flex-1 px-5 py-3 text-center">
+        <div className="flex-1 px-3 sm:px-5 py-3 text-center">
           {/* A ODD DE AGORA OCUPA O LUGAR DA ODD (10/09/2026, pedido do
               usuário). Antes o preço corrente só aparecia dentro do modal de
               pegar bilhete, ou seja: depois da decisão. Quem ainda não pegou vê
@@ -832,22 +832,22 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
       </div>
 
       {/* Times + mercado */}
-      <div className="px-5 py-3 space-y-2">
+      <div className="px-4 sm:px-5 py-3 space-y-2">
         {/* A MESMA CAIXA DA PERNA DO BILHETE · ver caixaDoPick. */}
         <div className={`rounded-md border px-3 py-2 space-y-2 ${caixaDoPick(dica.result)}`}>
         <div className="flex items-center gap-2">
           <SeloDeResultado result={dica.result} />
           <TeamLogo id={dica.home_team_id} name={dica.home_team ?? ''} size={22} />
-          <span className="text-sm font-bold text-ink-1 truncate">{dica.home_team}</span>
+          <span className="text-sm font-bold text-ink-1 leading-tight line-clamp-2 break-words min-w-0">{dica.home_team}</span>
           <VsOuPlacar aoVivo={agora} />
-          <span className="text-sm font-bold text-ink-1 truncate">{dica.away_team}</span>
+          <span className="text-sm font-bold text-ink-1 leading-tight line-clamp-2 break-words min-w-0">{dica.away_team}</span>
           <TeamLogo id={dica.away_team_id} name={dica.away_team ?? ''} size={22} />
         </div>
         {/* Campos rotulados · o desenho de todo card do site desde 02/09.
             Ver CampoDoPick em PickCardParts. */}
         <dl className="space-y-0.5">
           <CampoDoPick rotulo="Mercado">
-            <dd className="text-xs font-semibold text-ink-2 truncate">
+            <dd className="text-xs font-semibold text-ink-2 line-clamp-2 break-words min-w-0">
               {translateMarket(dica.market)}
             </dd>
           </CampoDoPick>
@@ -1172,7 +1172,7 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
 
       {/* Odd hero + retorno */}
       <div className="pick-hero">
-        <div className="flex-1 px-5 py-3 text-center">
+        <div className="flex-1 px-3 sm:px-5 py-3 text-center">
           <div className="text-[10px] text-ink-3 mb-0.5">Odd combinada</div>
           <div className="text-3xl font-black text-green-400">
             {seguido && oddSeguida != null
@@ -1222,7 +1222,7 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
             stakeSeguida={stakeSeguida} oddSeguida={oddSeguida}
             stakePlano={stakeDe(tipo)} banca={banca} />
         ) : (
-          <div className="flex-1 px-5 py-3 text-center">
+          <div className="flex-1 px-3 sm:px-5 py-3 text-center">
             <div className="text-[10px] text-ink-3 mb-0.5">Probabilidade</div>
             <div className={`text-2xl font-black ${pct >= 70 ? 'text-green-400' : 'text-ink-2'}`}>{pct}%</div>
           </div>
@@ -1231,7 +1231,7 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
 
       {/* Legs · o card de cartela é largo (duas colunas da grade), então as
           pernas vão lado a lado. */}
-      <div className="px-5 py-3 grid gap-2 md:grid-cols-2">
+      <div className="px-4 sm:px-5 py-3 grid gap-2 md:grid-cols-2">
         {legs.map((leg: any, i: number) => (
           /* A perna mostra o resultado DELA, não o do bilhete: bilhete GREEN
              implica todas GREEN (dedução); bilhete RED sem o dado da perna
@@ -1467,7 +1467,7 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
       </div>
 
       {/* Bankroll progression */}
-      <div className="px-5 py-3 border-b border-line/60">
+      <div className="px-4 sm:px-5 py-3 border-b border-line/60">
         {userBankroll != null ? (
           <div className="font-mono flex items-center gap-3">
             <div className="flex-1">
@@ -1509,7 +1509,7 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
       </div>
 
       {/* Legs */}
-      <div className="px-5 py-3 space-y-2">
+      <div className="px-4 sm:px-5 py-3 space-y-2">
         {legs.map((leg, i) => (
           /* Resultado da PERNA quando a liquidação gravou (`pernas_final`);
              sem ele, bilhete GREEN implica todas de pé e RED fica neutro. */
@@ -2285,7 +2285,7 @@ function CardResolvido({ p }: { p: PickResolvidoAberto }) {
       {(odd != null || lucro != null) && (
       <div className="pick-hero">
         {odd != null && (
-          <div className="flex-1 px-5 py-3 text-center">
+          <div className="flex-1 px-3 sm:px-5 py-3 text-center">
             <div className="text-[10px] text-ink-3 mb-0.5">Odd</div>
             <div className="text-2xl font-black text-ink-1">{odd.toFixed(2)}</div>
           </div>
@@ -2301,7 +2301,7 @@ function CardResolvido({ p }: { p: PickResolvidoAberto }) {
       </div>
       )}
 
-      <div className="px-5 py-3 space-y-2">
+      <div className="px-4 sm:px-5 py-3 space-y-2">
         <div className={`rounded-md border px-3 py-2 space-y-2 ${caixaDoPick(p.result)}`}>
           {ehBilhete ? (
             <>
@@ -2326,7 +2326,7 @@ function CardResolvido({ p }: { p: PickResolvidoAberto }) {
               {p.market && (
                 <dl className="space-y-0.5">
                   <CampoDoPick rotulo="Mercado">
-                    <dd className="text-xs font-semibold text-ink-2 truncate">{p.market}</dd>
+                    <dd className="text-xs font-semibold text-ink-2 line-clamp-2 break-words min-w-0">{p.market}</dd>
                   </CampoDoPick>
                   {p.line && (
                     <CampoDoPick rotulo="Linha">
@@ -2374,14 +2374,14 @@ function CardTrancado({ p, cls }: { p: TeaserBloqueado; cls: LockCls }) {
           a assinatura abre e' a analise, e essa continua atras da tarja. */}
       {odd != null && (
         <div className="pick-hero">
-          <div className="flex-1 px-5 py-3 text-center">
+          <div className="flex-1 px-3 sm:px-5 py-3 text-center">
             <div className="text-[10px] text-ink-3 mb-0.5">Odd</div>
             <div className="text-2xl font-black text-ink-2">{odd.toFixed(2)}</div>
           </div>
         </div>
       )}
 
-      <div className="px-5 py-3 space-y-2">
+      <div className="px-4 sm:px-5 py-3 space-y-2">
         {/* A MESMA CAIXA DO JOGO dos cards abertos · o confronto nao fica solto
             no corpo em card nenhum do site. A tarja ocupa exatamente o lugar
             dos campos "Mercado" e "Linha", que e' o que ela esconde. */}
@@ -2455,14 +2455,14 @@ function VipLockOverlay({ color = 'yellow', picks, resumo, rotulo = 'picks', res
 
           {odd != null && (
             <div className="pick-hero">
-              <div className="flex-1 px-5 py-3 text-center">
+              <div className="flex-1 px-3 sm:px-5 py-3 text-center">
                 <div className="text-[10px] text-ink-3 mb-0.5">Odd combinada</div>
                 <div className="text-2xl font-black text-ink-2">{odd.toFixed(2)}</div>
               </div>
             </div>
           )}
 
-          <div className="px-5 py-3 space-y-2">
+          <div className="px-4 sm:px-5 py-3 space-y-2">
             {!!resumo.jogos_preview?.length && <PernasEmPreview jogos={resumo.jogos_preview} />}
             <TarjaDeAnalise cls={cls} />
           </div>
@@ -3352,9 +3352,11 @@ export default function Picks() {
       <AnimatePresence>
       </AnimatePresence>
 
-      {/* Modal de boas-vindas · configura banca */}
+      {/* Modal de boas-vindas · configura banca. z-[9996] e nao z-50
+          (20/10/2026): a pilha de avisos (PilhaDeAvisos, z-[9990]) ficava em
+          cima, e no celular o "Ativar notificacoes" cobria o botao amarelo. */}
       {showBancaModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
+        <div className="fixed inset-0 z-[9996] flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
           <div className="bg-surface-1 border border-line rounded-lg max-w-md w-full p-6 shadow-2xl overflow-y-auto max-h-[92dvh]">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-md bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center shrink-0">

@@ -513,7 +513,7 @@ function SuggestionCard({
 
       {/* Hero: Odd | Stake | EV */}
       <div className="pick-hero">
-        <div className="flex-1 px-5 py-3 text-center">
+        <div className="flex-1 px-3 sm:px-5 py-3 text-center">
           {/* "Odd combinada" quando o pick tem pernas · e' o vocabulario da
               multipla, e no Boost o numero e' exatamente isso: o produto das
               duas odds, nao a odd de um mercado. Ver as pernas logo abaixo,
@@ -599,7 +599,7 @@ function SuggestionCard({
       </div>
 
       {/* Times + mercado */}
-      <div className="px-5 py-3 space-y-2">
+      <div className="px-4 sm:px-5 py-3 space-y-2">
         {/* A MESMA CAIXA DA PERNA DO BILHETE (ver caixaDoPick). Sem ela, o VIP
             e a multipla ficavam um embaixo do outro na aba Hoje com desenhos
             diferentes pro mesmo conteudo: o bilhete com o jogo numa caixa que
@@ -612,9 +612,9 @@ function SuggestionCard({
               dela · e' a mesma leitura, da esquerda pra direita. */}
           <SeloDeResultado result={s.result} />
           <TeamLogo id={s.home_team_id} name={s.home_team_name} />
-          <span className="text-sm font-bold text-ink-1 truncate">{s.home_team_name}</span>
+          <span className="text-sm font-bold text-ink-1 leading-tight line-clamp-2 break-words min-w-0">{s.home_team_name}</span>
           <VsOuPlacar aoVivo={agoraDoJogo} />
-          <span className="text-sm font-bold text-ink-1 truncate">{s.away_team_name}</span>
+          <span className="text-sm font-bold text-ink-1 leading-tight line-clamp-2 break-words min-w-0">{s.away_team_name}</span>
           <TeamLogo id={s.away_team_id} name={s.away_team_name} />
         </div>
         {/* PICK COMBINADO MOSTRA AS PERNAS, uma por linha.
@@ -708,7 +708,7 @@ function SuggestionCard({
                 </CampoDoPick>
               )}
               <CampoDoPick rotulo="Mercado">
-                <dd className="text-xs font-semibold text-ink-2 truncate">
+                <dd className="text-xs font-semibold text-ink-2 line-clamp-2 break-words min-w-0">
                   {translateMarket(s.market)}
                 </dd>
               </CampoDoPick>
@@ -733,7 +733,7 @@ function SuggestionCard({
              inteiro desde 02/09. Ver CampoDoPick. */
           <dl className="space-y-0.5">
             <CampoDoPick rotulo="Mercado">
-              <dd className="text-xs font-semibold text-ink-2 truncate">
+              <dd className="text-xs font-semibold text-ink-2 line-clamp-2 break-words min-w-0">
                 {translateMarket(s.market)}
               </dd>
             </CampoDoPick>

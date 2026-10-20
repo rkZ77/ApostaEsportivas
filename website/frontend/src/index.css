@@ -608,7 +608,7 @@
     /* Altura mínima fixa: selo de resultado, Ao Vivo e Pendente têm alturas
        diferentes, e sem piso o topo de cada card da grade ficava de um
        tamanho (09/10/2026, "desalinhado" do usuário). */
-    @apply flex items-center justify-between gap-2 px-5 py-3 min-h-[3.5rem] border-b border-line/60;
+    @apply flex items-center justify-between gap-2 px-4 sm:px-5 py-3 min-h-[3.5rem] border-b border-line/60;
   }
   /* A faixa dos numeros (odd, stake, lucro). `font-mono` vive aqui porque
      numero do site e' sempre mono e a faixa nunca tem outra coisa.
@@ -624,7 +624,7 @@
    * O olho passa a ler o card como uma pilha de blocos do mesmo tipo. */
   .pick-hero {
     @apply font-mono flex items-stretch divide-x divide-line
-           mx-5 mt-3 rounded-md border border-line bg-surface-2/60 overflow-hidden;
+           mx-4 sm:mx-5 mt-3 rounded-md border border-line bg-surface-2/60 overflow-hidden;
   }
   /* Bandeja de acao: rodape do card e qualquer barra de botao encaixada. */
   .pick-tray {
