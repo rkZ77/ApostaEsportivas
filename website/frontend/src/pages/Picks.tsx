@@ -522,22 +522,30 @@ function UserGreeting({ user, isVip, isAdmin, daysUntilExpiry }: {
   }, [user?.expires_at, isVip, isTrial])
 
   return (
-    <div className="card p-4 mb-5 flex items-center gap-4">
-      <Avatar name={user.name} imageUrl={user.avatar_url} size="lg" />
+    /* COMPACTO NO CELULAR (20/10/2026): o cartão ocupava a primeira tela
+       inteira (avatar grande, e-mail, contador de segundos) e o primeiro pick
+       só aparecia rolando. No celular vira uma faixa: avatar pequeno, nome,
+       plano e os dias que faltam. Do sm pra cima, como era. */
+    <div className="card p-3 sm:p-4 mb-4 sm:mb-5 flex items-center gap-3 sm:gap-4">
+      <span className="sm:hidden"><Avatar name={user.name} imageUrl={user.avatar_url} size="sm" /></span>
+      <span className="hidden sm:block"><Avatar name={user.name} imageUrl={user.avatar_url} size="lg" /></span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <h2 className="text-ink-1 font-bold text-lg leading-tight">Olá, {firstName}!</h2>
+          <h2 className="text-ink-1 font-bold text-base sm:text-lg leading-tight">Olá, {firstName}!</h2>
           <span className={planBadgeCls}>{planLabel}</span>
+          {countdown && (
+            <span className="sm:hidden text-[11px] text-ink-3">expira em <b className="text-ink-2 tabular-nums">{countdown.split(' ')[0]}</b></span>
+          )}
         </div>
-        <p className="text-ink-3 text-xs mt-0.5 truncate">{user.email}</p>
+        <p className="hidden sm:block text-ink-3 text-xs mt-0.5 truncate">{user.email}</p>
 
         {/* Assinatura inline.
             "Status atual: VIP" saiu daqui: o plano já aparece no badge ao lado
             do nome e de novo na navbar, e três vezes na mesma tela não informa
             mais que uma. Sobra o que o badge NÃO diz, que é quanto tempo falta. */}
-        <div className="mt-2 flex items-center gap-3 flex-wrap">
+        <div className="mt-1 sm:mt-2 flex items-center gap-3 flex-wrap">
           {countdown && (
-            <span className="text-ink-2 text-xs">
+            <span className="hidden sm:inline text-ink-2 text-xs">
               Expira em <span className="font-mono font-bold text-ink-1 tabular-nums">{countdown}</span>
             </span>
           )}
