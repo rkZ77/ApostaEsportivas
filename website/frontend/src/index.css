@@ -756,3 +756,19 @@
 html[data-gaveta] [data-pilha-avisos] {
   display: none;
 }
+
+/*
+ * GRADE QUE SE ADAPTA AO DIA (20/10/2026). As grades de pick abrem 3 colunas
+ * no xl e 4 no 2xl, e num dia com um ou dois picks o card ficava num terço
+ * da tela com o resto da linha vazio. Com poucos cards, menos colunas: os
+ * cards alargam e a linha fecha. `:has` é o que conta os filhos, sem o
+ * componente precisar saber quantos são. Especificidade (0,2,0) vence o
+ * `xl:grid-cols-*` do Tailwind.
+ */
+@media (min-width: 1280px) {
+  .grade-adapta:not(:has(> :nth-child(3))) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1536px) {
+  .grade-adapta:not(:has(> :nth-child(4))) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .grade-adapta:not(:has(> :nth-child(3))) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

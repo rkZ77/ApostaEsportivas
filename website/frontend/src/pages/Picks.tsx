@@ -1058,7 +1058,7 @@ type TipoDeCartela = keyof typeof CARTELA
  * de tamanho de uma seção pra outra. Agora todos seguem a grade do Premium; a
  * perna do bilhete (PernaDoBilhete) já trunca nome comprido sem quebrar.
  */
-const GRADE_DE_PICKS = 'grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4'
+const GRADE_DE_PICKS = 'grid grade-adapta gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4'
 /** A Alavancagem e' UM card com banca, retorno e odd na mesma linha: numa
  *  coluna de 3 ou 4 ela ficava espremida e a odd saia cortada (20/10/2026,
  *  pedido do usuario: "um pouco maior na largura"). Metade da largura. */
@@ -1948,7 +1948,7 @@ function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando, banca,
                   : 'Aparece quando algum jogo do dia tiver margem suficiente no modelo.')
         } />
       ) : (
-        <div className="lista-longa grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        <div className="lista-longa grid grade-adapta gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {cards.map(c => (
             <SuggestionCard key={c.id} s={c.s} banca={banca} />
           ))}
@@ -2482,7 +2482,7 @@ function VipLockOverlay({ color = 'yellow', picks, resumo, rotulo = 'picks', res
   return (
     <div className="space-y-3">
       {lista.length > 0 && (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        <div className="grid grade-adapta gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {lista.slice(0, 4).map(p => <CardTrancado key={p.id} p={p} cls={cls} />)}
         </div>
       )}
@@ -2502,7 +2502,7 @@ function VipLockOverlay({ color = 'yellow', picks, resumo, rotulo = 'picks', res
            e esticado de ponta a ponta a faixa da odd ficava com o numero
            sozinho no meio de mil pixels vazios. A grade e' a mesma dos outros
            produtos, com um item. */
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        <div className="grid grade-adapta gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
         <div className="pick-card border-line">
           <div className="pick-head">
             <div className="flex items-center gap-2 flex-wrap min-w-0">
@@ -2550,7 +2550,7 @@ function VipLockOverlay({ color = 'yellow', picks, resumo, rotulo = 'picks', res
           {/* A MESMA GRADE dos cards trancados logo acima, e não uma lista:
               é o que faz a pessoa reconhecer que aquilo ali é o mesmo produto
               que está fechado, e não um extrato à parte. */}
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          <div className="grid grade-adapta gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {resolvidos.slice(0, 4).map(p => <CardResolvido key={`${p.pick_type ?? 'vip'}-${p.id}`} p={p} />)}
           </div>
           <p className="text-ink-4 text-[11px]">
@@ -3685,7 +3685,7 @@ export default function Picks() {
                     />
                     {!canSeeVip ? <VipLockOverlay color="yellow" picks={today?.bloqueados?.vip} resolvidos={today?.bloqueados?.resolvidos} /> : (
                       <>
-                        <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                        <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid grade-adapta gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                           {vips.slice(0, 4).map((s: any) => (
                             <SuggestionCard key={s.id} s={s} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(s.fixture_id)} />
                           ))}
@@ -3818,7 +3818,7 @@ export default function Picks() {
                     contagem={boostFreeCards.length + (canSeeVip ? boostVipCards.length : 0)} />
                   {/* Mesmo corte de 4 do VIP. O free vem primeiro pra que o
                       card publico nunca caia fora da amostra. */}
-                  <div className="lista-longa grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                  <div className="lista-longa grid grade-adapta gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                     {[...boostFreeCards.map(c => ({ ...c, k: `bf-${c.id}` })),
                       ...(canSeeVip ? boostVipCards.map(c => ({ ...c, k: `bv-${c.id}` })) : [])]
                       .slice(0, 4).map(c => (
@@ -3859,7 +3859,7 @@ export default function Picks() {
                 <section>
                   <SectionHeader color="bg-purple-400" label="Pick Falta do Dia"
                     contagem={faltasCards.length} />
-                  <div className="lista-longa grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                  <div className="lista-longa grid grade-adapta gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                     {faltasCards.slice(0, 4).map(c => (
                       <SuggestionCard key={`f-${c.id}`} s={c.s}
                         banca={bancaSummary?.has_banca ? bancaSummary : null} />
@@ -3878,7 +3878,7 @@ export default function Picks() {
                 <section>
                   <SectionHeader color="bg-amber-400" label="Pick Jogador do Dia"
                     contagem={playerStatsCards.length} />
-                  <div className="lista-longa grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                  <div className="lista-longa grid grade-adapta gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                     {playerStatsCards.slice(0, 4).map(c => (
                       <SuggestionCard key={`p-${c.id}`} s={c.s}
                         banca={bancaSummary?.has_banca ? bancaSummary : null} />
@@ -3899,7 +3899,7 @@ export default function Picks() {
                 <section>
                   <SectionHeader color="bg-sky-400" label="Defesas do Dia"
                     contagem={goleirosCards.length} />
-                  <div className="lista-longa grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                  <div className="lista-longa grid grade-adapta gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                     {goleirosCards.slice(0, 4).map(c => (
                       <SuggestionCard key={`g-${c.id}`} s={c.s}
                         banca={bancaSummary?.has_banca ? bancaSummary : null} />
@@ -3933,7 +3933,7 @@ export default function Picks() {
                       ao vivo publica em rajada e a secao sozinha ficava mais
                       longa que o resto da pagina inteira. O restante continua a
                       um clique, na aba do produto. */}
-                  <div className="lista-longa grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                  <div className="lista-longa grid grade-adapta gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                     {liveCards.slice(0, 4).map(c => (
                       <SuggestionCard key={`l-${c.id}`} s={c.s}
                         banca={bancaSummary?.has_banca ? bancaSummary : null} />
@@ -4082,7 +4082,7 @@ export default function Picks() {
                       )}
                     </div>
                     {filteredVips.length > 0 ? (
-                      <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                      <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid grade-adapta gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                         {filteredVips.map((s: any) => (
                           <SuggestionCard key={s.id} s={s} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(s.fixture_id)} />
                         ))}
@@ -4699,7 +4699,7 @@ export default function Picks() {
               ) : boostFreeF.length === 0 ? (
                 <SecaoVazia texto="Sem Pick Boost hoje. A IA só publica quando o jogo é forte nas duas pernas ao mesmo tempo." />
               ) : (
-                <div className="lista-longa grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                <div className="lista-longa grid grade-adapta gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                   {boostFreeF.map(p => (
                     <SuggestionCard
                       key={p.id}
@@ -4723,7 +4723,7 @@ export default function Picks() {
             ) : boostVipF.length > 0 && (
               <div>
                 <SectionHeader color="bg-cyan-400" label="Os outros do dia" contagem={boostVipF.length} />
-                <div className="lista-longa grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                <div className="lista-longa grid grade-adapta gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                   {boostVipF.map(p => (
                     <SuggestionCard
                       key={p.id}
