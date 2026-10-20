@@ -53,7 +53,7 @@ import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronDown, ChevronLeft, Che
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import { stakeDe } from '../utils/stakePlan'
 import ResultadoDoPick from '../components/ResultadoDoPick'
-import { fmtUnits, pctProb, capitalizarFrase, plural } from '../utils/format'
+import { brNum, fmtUnits, pctProb, capitalizarFrase, plural } from '../utils/format'
 import { getResultStyle, PICK_TYPE_CLS, PICK_TYPE_BORDER, cascaDoPick, caixaDoPick } from '../utils/resultStyle'
 import { useShareStoryImage, useShareAlavancagemImage, useShareBilheteImage } from '../hooks/useShareStoryImage'
 import { useOddAtualizada } from '../hooks/useOddAtualizada'
@@ -786,7 +786,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
             <div className="flex-1 px-4 py-3 text-center">
               <div className="text-[10px] text-ink-3 mb-0.5">Apostado</div>
               <div className="text-xl font-black text-green-400">{stakeSeguida}u</div>
-              {banca && <div className="text-[11px] text-ink-4">R${(stakeSeguida * banca.unit_value).toFixed(0)}</div>}
+              {banca && <div className="text-[11px] text-ink-4">R$ {brNum((stakeSeguida * banca.unit_value), 0)}</div>}
             </div>
             <div className="flex-1 px-4 py-3 text-center">
               <div className="text-[10px] text-ink-3 mb-0.5">Lucro pot.</div>
@@ -796,7 +796,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
                 return (
                   <>
                     <div className="text-xl font-black text-ink-1">+{profitU.toFixed(2)}u</div>
-                    {banca && <div className="text-[11px] text-green-600 font-semibold">+R${(profitU * banca.unit_value).toFixed(0)}</div>}
+                    {banca && <div className="text-[11px] text-green-600 font-semibold">+R$ {brNum((profitU * banca.unit_value), 0)}</div>}
                   </>
                 )
               })()}
@@ -807,7 +807,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
             <div className="flex-1 px-4 py-3 text-center">
               <div className="text-[10px] text-ink-3 mb-0.5">Apostar</div>
               <div className="text-xl font-black text-green-400">{stakeSuggestion.units}u</div>
-              <div className="text-[11px] text-ink-4">R${stakeSuggestion.amountR.toFixed(0)}</div>
+              <div className="text-[11px] text-ink-4">R$ {brNum(stakeSuggestion.amountR, 0)}</div>
             </div>
             <div className="flex-1 px-4 py-3 text-center">
               <div className="text-[10px] text-ink-3 mb-0.5">Lucro pot.</div>
@@ -815,7 +815,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
                   odd · dois números que não fecham entre si na mesma faixa é
                   o tipo de coisa que faz a pessoa desconfiar da conta inteira. */}
               <div className="text-xl font-black text-ink-1">+{((oddExibida - 1) * stakeSuggestion.units).toFixed(2)}u</div>
-              <div className="text-[11px] text-green-600 font-semibold">+R${((oddExibida - 1) * stakeSuggestion.amountR).toFixed(0)}</div>
+              <div className="text-[11px] text-green-600 font-semibold">+R$ {brNum(((oddExibida - 1) * stakeSuggestion.amountR), 0)}</div>
             </div>
           </>
         ) : dica.result ? (
@@ -1202,7 +1202,7 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
             <div className="flex-1 px-4 py-3 text-center">
               <div className="text-[10px] text-ink-3 mb-0.5">Apostado</div>
               <div className={`text-xl font-black ${estilo.numero}`}>{stakeSeguida}u</div>
-              {banca && <div className="text-[11px] text-ink-4">R${(stakeSeguida * banca.unit_value).toFixed(0)}</div>}
+              {banca && <div className="text-[11px] text-ink-4">R$ {brNum((stakeSeguida * banca.unit_value), 0)}</div>}
             </div>
             <div className="flex-1 px-4 py-3 text-center">
               <div className="text-[10px] text-ink-3 mb-0.5">Lucro pot.</div>
@@ -1212,7 +1212,7 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
                 return (
                   <>
                     <div className="text-xl font-black text-ink-1">+{profitU.toFixed(2)}u</div>
-                    {banca && <div className="text-[11px] text-green-600 font-semibold">+R${(profitU * banca.unit_value).toFixed(0)}</div>}
+                    {banca && <div className="text-[11px] text-green-600 font-semibold">+R$ {brNum((profitU * banca.unit_value), 0)}</div>}
                   </>
                 )
               })()}
@@ -1223,12 +1223,12 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
             <div className="flex-1 px-4 py-3 text-center">
               <div className="text-[10px] text-ink-3 mb-0.5">Apostar</div>
               <div className={`text-xl font-black ${estilo.numero}`}>{stakeSuggestion.units}u</div>
-              <div className="text-[11px] text-ink-4">R${stakeSuggestion.amountR.toFixed(0)}</div>
+              <div className="text-[11px] text-ink-4">R$ {brNum(stakeSuggestion.amountR, 0)}</div>
             </div>
             <div className="flex-1 px-4 py-3 text-center">
               <div className="text-[10px] text-ink-3 mb-0.5">Lucro pot.</div>
               <div className="text-xl font-black text-ink-1">+{((Number(m.total_odd) - 1) * stakeSuggestion.units).toFixed(2)}u</div>
-              <div className="text-[11px] text-green-600 font-semibold">+R${((Number(m.total_odd) - 1) * stakeSuggestion.amountR).toFixed(0)}</div>
+              <div className="text-[11px] text-green-600 font-semibold">+R$ {brNum(((Number(m.total_odd) - 1) * stakeSuggestion.amountR), 0)}</div>
             </div>
           </>
         ) : m.result ? (
@@ -1489,17 +1489,17 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
               {/* flex-wrap (20/10/2026): numa coluna estreita, banca + "se
                   green" + lucro numa linha so' empurravam a Odd pra fora. */}
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                <span className="text-2xl font-black text-green-400">R${stake.toFixed(2)}</span>
+                <span className="text-2xl font-black text-green-400">R$ {brNum(stake)}</span>
                 {!pick.result && (
                   <>
                     <span className="text-ink-4 text-sm" aria-hidden>→</span>
-                    <span className="text-lg font-black text-ink-1">R${potReturn.toFixed(2)}</span>
+                    <span className="text-lg font-black text-ink-1">R$ {brNum(potReturn)}</span>
                     <span className="text-[10px] text-ink-4">se green</span>
                   </>
                 )}
                 {profit != null && (
                   <span className={`text-lg font-black ml-1 ${profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    ({profit >= 0 ? '+' : ''}R${Math.abs(profit).toFixed(2)})
+                    ({profit >= 0 ? '+' : ''}R$ {brNum(Math.abs(profit))})
                   </span>
                 )}
               </div>
@@ -1517,8 +1517,8 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
             </div>
             <div className="text-right">
               <div className="text-[10px] text-ink-3 mb-0.5">Retorno pot.</div>
-              <div className="text-lg font-black text-ink-1">R${potReturn.toFixed(2)}</div>
-              <div className="text-[10px] text-ink-4">base R${stake.toFixed(0)}</div>
+              <div className="text-lg font-black text-ink-1">R$ {brNum(potReturn)}</div>
+              <div className="text-[10px] text-ink-4">base R$ {brNum(stake, 0)}</div>
             </div>
           </div>
         )}
@@ -3318,8 +3318,8 @@ export default function Picks() {
       setUserAlavSerie(s.data)
       setAlavConfirmClose(false)
       setAlavCloseMsg(
-        `Caminho encerrado. R$${Number(r.data.realized_pnl).toFixed(2)} foram pra sua banca. ` +
-        `O próximo começa em R$${Number(r.data.next_initial).toFixed(2)}.`,
+        `Caminho encerrado. R$ ${brNum(Number(r.data.realized_pnl))} foram pra sua banca. ` +
+        `O próximo começa em R$ ${brNum(Number(r.data.next_initial))}.`,
       )
       // A banca principal mudou · o resumo em cache mostraria o valor velho.
       api.get('/banca/summary').then(b => setBancaSummary(b.data)).catch(() => {})
@@ -3733,7 +3733,7 @@ export default function Picks() {
                         <p className="text-xs text-ink-2 leading-relaxed">
                           Banca composta: começa em{' '}
                           <span className="text-orange-400 font-bold">
-                            {userAlavSerie?.configured ? `R$${userAlavSerie.initial_bankroll.toFixed(2)}` : 'sua banca cadastrada'}
+                            {userAlavSerie?.configured ? `R$ ${brNum(userAlavSerie.initial_bankroll)}` : 'sua banca cadastrada'}
                           </span>{' '}
                           e reinveste o lucro a cada GREEN. Reset automático no RED. Odds alvo 1.50.
                         </p>
@@ -4335,10 +4335,10 @@ export default function Picks() {
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <p className="text-[11px] font-bold uppercase tracking-wide text-orange-400">Seu caminho</p>
-                              <p className="font-mono text-3xl font-black text-ink-1 tabular-nums mt-1">R${emJogo.toFixed(2)}</p>
+                              <p className="font-mono text-3xl font-black text-ink-1 tabular-nums mt-1">R$ {brNum(emJogo)}</p>
                               <p className="text-xs text-ink-3 mt-1">
-                                entrada R${entrada.toFixed(2)}
-                                {feitos > 0 && <> · <span className="text-accent-ink font-semibold">+R${lucro.toFixed(2)} em jogo</span></>}
+                                entrada R$ {brNum(entrada)}
+                                {feitos > 0 && <> · <span className="text-accent-ink font-semibold">+R$ {brNum(lucro)} em jogo</span></>}
                               </p>
                             </div>
                             {userAlavSerie.can_close && !alavConfirmClose && (
@@ -4353,8 +4353,8 @@ export default function Picks() {
                           {alavConfirmClose && (
                             <div className="mt-3 rounded-md border border-orange-500/30 bg-surface-1 p-3">
                               <p className="text-xs text-ink-2 leading-snug">
-                                Encerrar agora leva <span className="font-mono font-black text-green-400">+R${(userAlavSerie.open_profit ?? 0).toFixed(2)}</span> pra sua banca
-                                {' '}e recomeça um caminho novo em R${entrada.toFixed(2)}.
+                                Encerrar agora leva <span className="font-mono font-black text-green-400">+R$ {brNum((userAlavSerie.open_profit ?? 0))}</span> pra sua banca
+                                {' '}e recomeça um caminho novo em R$ {brNum(entrada)}.
                               </p>
                               <div className="flex gap-2 mt-2.5">
                                 <button onClick={encerrarCaminho} disabled={alavEncerrando}
@@ -4398,7 +4398,7 @@ export default function Picks() {
                             {feitos >= meta
                               ? 'Meta batida. O caminho fecha e o lucro vai pra sua banca.'
                               : feitos === 0
-                                ? `O próximo green é o 1º degrau. Na meta, a entrada vira cerca de R$${(entrada * 10).toFixed(0)}.`
+                                ? `O próximo green é o 1º degrau. Na meta, a entrada vira cerca de R$ ${brNum((entrada * 10), 0)}.`
                                 : `Faltam ${meta - feitos} ${meta - feitos === 1 ? 'green' : 'greens'}. Você pode encerrar antes quando quiser.`}
                           </p>
                           {!!userAlavSerie.steps?.length && (
@@ -4424,7 +4424,7 @@ export default function Picks() {
                           {alavInitInput ? (
                             <div className="flex gap-2 w-full sm:w-auto sm:ml-auto">
                               <input type="number" min="1" step="10" value={alavInitInput}
-                                placeholder={`Atual: R$${entrada.toFixed(0)}`}
+                                placeholder={`Atual: R$ ${brNum(entrada, 0)}`}
                                 onChange={e => setAlavInitInput(e.target.value)}
                                 className="input font-mono flex-1 sm:w-32 text-sm" />
                               <button onClick={saveAlavInit} disabled={alavInitSaving || !alavInitInput}
@@ -4516,14 +4516,14 @@ export default function Picks() {
                             userBankroll == null && alavCaminhoIA ? {
                               // Sem caminho próprio, o da IA (20/10/2026) · era um quadro em branco.
                               label: 'Caminho da IA',
-                              value: `R$${alavCaminhoIA.saldo.toFixed(2)}`,
+                              value: `R$ ${brNum(alavCaminhoIA.saldo)}`,
                               color: alavCaminhoIA.saldo > alavCaminhoIA.entrada ? 'text-green-400' : 'text-orange-400',
                               sub: `${alavCaminhoIA.passos} de ${alavCaminhoIA.meta} degraus`,
                             } : {
                               label: 'Sua banca atual',
-                              value: userBankroll != null ? `R$${userBankroll.toFixed(2)}` : '',
+                              value: userBankroll != null ? `R$ ${brNum(userBankroll)}` : '',
                               color: userBankroll != null && userBankroll > initialBankroll ? 'text-green-400' : 'text-orange-400',
-                              sub: userBankroll != null && userBankroll > initialBankroll ? `+R$${(userBankroll - initialBankroll).toFixed(2)}` : userAlavSerie?.configured ? 'Início da série' : 'Cadastre sua banca',
+                              sub: userBankroll != null && userBankroll > initialBankroll ? `+R$ ${brNum((userBankroll - initialBankroll))}` : userAlavSerie?.configured ? 'Início da série' : 'Cadastre sua banca',
                             },
                             { label: 'Resets (RED)', value: String(resets), color: resets > 0 ? 'text-red-400' : 'text-ink-3', sub: resets === 0 ? 'Nenhum ainda' : `${resets} reinício${resets > 1 ? 's' : ''}` },
                             { label: 'Série Atual', value: currentStreak > 0 ? `${currentStreak} green${currentStreak > 1 ? 's' : ''}` : '', color: currentStreak >= 3 ? 'text-green-400' : currentStreak > 0 ? 'text-accent-ink' : 'text-ink-3', sub: currentStreak > 0 ? 'seguidos' : 'Aguardando' },
@@ -4554,7 +4554,7 @@ export default function Picks() {
                   <div>
                     <SectionHeader color="bg-orange-400" label="Caminho da IA, passo a passo" />
                     <p className="text-[11px] text-ink-4 -mt-2 mb-3">
-                      Valores com {userAlavSerie?.configured ? 'a sua entrada' : 'uma entrada de exemplo'} de R${(alavCaminhoIA?.entrada ?? 50).toFixed(2)}.
+                      Valores com {userAlavSerie?.configured ? 'a sua entrada' : 'uma entrada de exemplo'} de R$ {brNum((alavCaminhoIA?.entrada ?? 50))}.
                     </p>
                     {/* Largura de leitura: na tela cheia do computador o
                         valor ficava a um palmo do jogo. */}
@@ -4626,15 +4626,15 @@ export default function Picks() {
                                   <div className="font-mono text-right shrink-0 space-y-0.5">
                                     <div className="text-[10px] text-ink-4">odd {Number(pick.odd_combined).toFixed(2)}</div>
                                     {bankBefore != null && (
-                                      <div className="text-[10px] text-ink-4">R${bankBefore.toFixed(2)}</div>
+                                      <div className="text-[10px] text-ink-4">R$ {brNum(bankBefore)}</div>
                                     )}
                                     {profit != null && (
                                       <div className={`text-xs font-black ${profit > 0 ? 'text-green-400' : profit < 0 ? 'text-red-400' : 'text-ink-3'}`}>
-                                        {profit >= 0 ? '+' : '-'}R${Math.abs(profit).toFixed(2)}
+                                        {profit >= 0 ? '+' : '-'}R$ {brNum(Math.abs(profit))}
                                       </div>
                                     )}
                                     {!res && pick.potential_return != null && (
-                                      <div className="text-[10px] text-orange-400 font-semibold">vira R${Number(pick.potential_return).toFixed(2)}</div>
+                                      <div className="text-[10px] text-orange-400 font-semibold">vira R$ {brNum(Number(pick.potential_return))}</div>
                                     )}
                                   </div>
                                 </div>

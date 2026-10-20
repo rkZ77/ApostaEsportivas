@@ -17,6 +17,7 @@
  * Devolve as COLUNAS (fragmento): quem chama já está dentro da faixa do card.
  */
 import { calcProfitUnits } from '../utils/stakeUtils'
+import { brNum } from '../utils/format'
 
 interface Props {
   result: string
@@ -63,7 +64,7 @@ export default function ResultadoDoPick({
         <div className="flex-1 px-4 py-3 text-center">
           <div className="text-[10px] text-ink-3 mb-0.5">Em reais</div>
           {profitR != null ? (
-            <div className={`text-xl font-black ${color}`}>{p >= 0 ? '+' : '-'}R${profitR.toFixed(0)}</div>
+            <div className={`text-xl font-black ${color}`}>{p >= 0 ? '+' : '-'}R$ {brNum(profitR, 0)}</div>
           ) : (
             <div className="text-xl font-black text-ink-4">-</div>
           )}

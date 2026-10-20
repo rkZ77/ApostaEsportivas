@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import api from '../services/api'
-import { plural } from '../utils/format'
+import { brNum, plural } from '../utils/format'
 import { rotuloDoMercado } from '../utils/marketTranslate'
 import { backdropFade, sheetUp } from '../lib/motion'
 import { fecharNoFundo } from '../lib/fecharNoFundo'
@@ -694,13 +694,13 @@ function PickCard({ pick, unitValue, onRefresh, syncedAt }: {
 
   // Header right-side content
   const headerRight = hasCashout ? (
-    <span className="font-mono text-sm font-black text-orange-400">R${Number(pick.cashout_amount).toFixed(2)}</span>
+    <span className="font-mono text-sm font-black text-orange-400">R$ {brNum(Number(pick.cashout_amount))}</span>
   ) : (hasResult || isFinished) ? (
     <div className="font-mono text-right">
       {effectiveResult === 'GREEN' && potRetR != null ? (
-        <span className="text-sm font-black text-green-400">+R${(potRetR - (stakeR ?? 0)).toFixed(2)}</span>
+        <span className="text-sm font-black text-green-400">+R$ {brNum((potRetR - (stakeR ?? 0)))}</span>
       ) : effectiveResult === 'RED' && stakeR != null ? (
-        <span className="text-sm font-black text-red-400">-R${stakeR.toFixed(2)}</span>
+        <span className="text-sm font-black text-red-400">-R$ {brNum(stakeR)}</span>
       ) : pick.result === 'PUSH' ? (
         <span className="text-xs font-bold text-ink-2">Devolvida</span>
       ) : (
@@ -761,11 +761,11 @@ function PickCard({ pick, unitValue, onRefresh, syncedAt }: {
               </span>
             )}
             {stakeR != null && (
-              <span className="font-mono text-sm font-bold text-ink-1">R${stakeR.toFixed(2)}</span>
+              <span className="font-mono text-sm font-bold text-ink-1">R$ {brNum(stakeR)}</span>
             )}
             {aberto && potRetR != null && effOdd > 1 && (
               <span className="font-mono text-xs text-ink-3 whitespace-nowrap">
-                ganha <span className="font-bold text-accent-ink">R${potRetR.toFixed(2)}</span>
+                ganha <span className="font-bold text-accent-ink">R$ {brNum(potRetR)}</span>
               </span>
             )}
             {pick.bet_house && (
@@ -876,7 +876,7 @@ function PickCard({ pick, unitValue, onRefresh, syncedAt }: {
               <div className="font-mono flex justify-between text-sm">
                 <span className="text-ink-2">Montante apostado</span>
                 <span className="text-ink-1 font-semibold">
-                  R${stakeR.toFixed(2)}
+                  R$ {brNum(stakeR)}
                   {emUnidades(stakeR) && <span className="text-ink-3 ml-1.5">{emUnidades(stakeR)}</span>}
                 </span>
               </div>
@@ -885,26 +885,26 @@ function PickCard({ pick, unitValue, onRefresh, syncedAt }: {
               <div className="font-mono flex justify-between text-sm">
                 <span className={`font-bold ${premioR > 0 ? 'text-green-400' : 'text-ink-2'}`}>Retorno</span>
                 <span className={`font-black ${premioR > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  R${premioR.toFixed(2)}
+                  R$ {brNum(premioR)}
                 </span>
               </div>
             )}
             {hasCashout && (
               <div className="font-mono flex justify-between text-sm">
                 <span className="text-ink-2">Cash Out recebido</span>
-                <span className="font-black text-orange-400">R${Number(pick.cashout_amount).toFixed(2)}</span>
+                <span className="font-black text-orange-400">R$ {brNum(Number(pick.cashout_amount))}</span>
               </div>
             )}
             {aberto && potRetR != null && lucroPossivel != null && effOdd > 1 && (
               <>
                 <div className="font-mono flex justify-between text-sm">
                   <span className="text-ink-2">Retorno possível</span>
-                  <span className="text-ink-1 font-semibold">R${potRetR.toFixed(2)}</span>
+                  <span className="text-ink-1 font-semibold">R$ {brNum(potRetR)}</span>
                 </div>
                 <div className="font-mono flex justify-between text-sm">
                   <span className="text-ink-2">Lucro possível</span>
                   <span className="font-black text-accent-ink">
-                    +R${lucroPossivel.toFixed(2)}
+                    +R$ {brNum(lucroPossivel)}
                     {emUnidades(lucroPossivel, true) && <span className="font-semibold text-ink-3 ml-1.5">{emUnidades(lucroPossivel, true)}</span>}
                   </span>
                 </div>
@@ -914,7 +914,7 @@ function PickCard({ pick, unitValue, onRefresh, syncedAt }: {
               <div className="font-mono flex justify-between text-sm">
                 <span className="text-ink-2">Lucro</span>
                 <span className={`font-black ${lucroFinal > 0 ? 'text-green-400' : lucroFinal < 0 ? 'text-red-400' : 'text-ink-2'}`}>
-                  {lucroFinal > 0 ? '+' : lucroFinal < 0 ? '-' : ''}R${Math.abs(lucroFinal).toFixed(2)}
+                  {lucroFinal > 0 ? '+' : lucroFinal < 0 ? '-' : ''}R$ {brNum(Math.abs(lucroFinal))}
                   {emUnidades(lucroFinal, true) && <span className="font-semibold text-ink-3 ml-1.5">{emUnidades(lucroFinal, true)}</span>}
                 </span>
               </div>
@@ -1216,11 +1216,11 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
           quanto está em jogo, quanto pode voltar e como o dia está indo. */}
       {allPicks.length > 0 && resumo && (
         <div className="grid grid-cols-3 rounded-lg border border-line bg-surface-1 divide-x divide-line">
-          <ResumoCelula rotulo="Em jogo" valor={`R$${resumo.emJogo.toFixed(2)}`} />
-          <ResumoCelula rotulo="Pode voltar" valor={`R$${resumo.potencial.toFixed(2)}`} cls="text-ink-1" />
+          <ResumoCelula rotulo="Em jogo" valor={`R$ ${brNum(resumo.emJogo)}`} />
+          <ResumoCelula rotulo="Pode voltar" valor={`R$ ${brNum(resumo.potencial)}`} cls="text-ink-1" />
           <ResumoCelula
             rotulo="Resultado hoje"
-            valor={`${resumo.resultado >= 0 ? '+' : '-'}R$${Math.abs(resumo.resultado).toFixed(2)}`}
+            valor={`${resumo.resultado >= 0 ? '+' : '-'}R$ ${brNum(Math.abs(resumo.resultado))}`}
             cls={resumo.resultado > 0 ? 'text-green-400' : resumo.resultado < 0 ? 'text-red-400' : 'text-ink-2'}
           />
         </div>

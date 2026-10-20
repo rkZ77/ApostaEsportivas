@@ -42,7 +42,7 @@ import { AnimatePresence, m as motion } from 'framer-motion'
 import { Radio, RefreshCw, Timer, CheckCircle2, Clock, PowerOff, CalendarClock,
          Goal, Flag, Target, Crosshair, Lock, Radar, Ban, Square, Share2, Loader2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { capitalizarFrase } from '../utils/format'
+import { brNum, capitalizarFrase } from '../utils/format'
 import api from '../services/api'
 import ApostaModal from './ApostaModal'
 import { Badge, Button, ComoFunciona, EmptyState, ErrorState, LiveDot, PickTypeBadge,
@@ -1233,7 +1233,7 @@ const CardLive = forwardRef<HTMLDivElement, {
               <div className="text-xl font-black text-green-400 tabular-nums">{aposta.unidades}u</div>
               {banca && (
                 <div className="text-[11px] text-ink-4 tabular-nums">
-                  R${(aposta.unidades * banca.unit_value).toFixed(0)}
+                  R$ {brNum((aposta.unidades * banca.unit_value), 0)}
                 </div>
               )}
             </div>
@@ -1242,7 +1242,7 @@ const CardLive = forwardRef<HTMLDivElement, {
               <div className="text-xl font-black text-ink-1 tabular-nums">+{lucroPot.toFixed(2)}u</div>
               {banca && (
                 <div className="text-[11px] text-green-600 font-semibold tabular-nums">
-                  +R${(lucroPot * banca.unit_value).toFixed(0)}
+                  +R$ {brNum((lucroPot * banca.unit_value), 0)}
                 </div>
               )}
             </div>

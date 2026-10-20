@@ -1,3 +1,10 @@
+/** Número no formato brasileiro, com o sinal (20/10/2026): "1.234,50".
+ *  Pra montar "R$ 1.234,50" onde o código fazia `R$${v.toFixed(2)}` e saía
+ *  "R$1234.50" ao lado de outro valor em "R$ 1.234,50". */
+export function brNum(value: number, casas = 2): string {
+  return Number(value).toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas })
+}
+
 export function fmtBRL(value: number): string {
   return 'R$ ' + Math.abs(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }

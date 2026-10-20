@@ -20,7 +20,8 @@ describe('ResultadoDoPick', () => {
     expect(h).toContain('Seu lucro')
     expect(h).toContain('text-green-400')
     expect(h).toContain('Em reais')
-    expect(h).toContain('+R$15')
+    // Formato brasileiro com espaço, "+R$ 15" (20/10/2026 · utils/format.brNum).
+    expect(h).toMatch(/\+R\$ (<!-- -->)?15/)
   })
 
   it('produto sem stake de plano não estampa +0,00u', () => {
