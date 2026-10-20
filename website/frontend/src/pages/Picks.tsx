@@ -1005,6 +1005,10 @@ type TipoDeCartela = keyof typeof CARTELA
  * perna do bilhete (PernaDoBilhete) já trunca nome comprido sem quebrar.
  */
 const GRADE_DE_PICKS = 'grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4'
+/** A Alavancagem e' UM card com banca, retorno e odd na mesma linha: numa
+ *  coluna de 3 ou 4 ela ficava espremida e a odd saia cortada (20/10/2026,
+ *  pedido do usuario: "um pouco maior na largura"). Metade da largura. */
+const GRADE_DA_ALAVANCAGEM = 'grid gap-4 md:grid-cols-2'
 
 // Card de cartela (múltipla e Bingo do Dia)
 function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla' }: { m: any; onClick?: () => void; banca?: { bankroll_current: number; unit_value: number } | null; isLive?: boolean; tipo?: TipoDeCartela }) {
@@ -1470,9 +1474,11 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
       <div className="px-4 sm:px-5 py-3 border-b border-line/60">
         {userBankroll != null ? (
           <div className="font-mono flex items-center gap-3">
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <div className="text-[10px] text-ink-3 mb-1">Sua banca alavancagem</div>
-              <div className="flex items-center gap-2">
+              {/* flex-wrap (20/10/2026): numa coluna estreita, banca + "se
+                  green" + lucro numa linha so' empurravam a Odd pra fora. */}
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                 <span className="text-2xl font-black text-green-400">R${stake.toFixed(2)}</span>
                 {!pick.result && (
                   <>
@@ -3718,7 +3724,7 @@ export default function Picks() {
                           e reinveste o lucro a cada GREEN. Reset automático no RED. Odds alvo 1.50.
                         </p>
                       </div>
-                      <div className={GRADE_DE_PICKS}>
+                      <div className={GRADE_DA_ALAVANCAGEM}>
                       <AlavancagemCard
                         pick={today.alavancagem}
                         userBankroll={userAlavSerie?.configured ? userAlavSerie.current_bankroll : undefined}
@@ -4271,7 +4277,7 @@ export default function Picks() {
                   <div>
                     <SectionHeader color="bg-orange-400" label="Alavancagem do Dia" />
                     {today?.alavancagem ? (
-                      <div className={GRADE_DE_PICKS}>
+                      <div className={GRADE_DA_ALAVANCAGEM}>
                       <AlavancagemCard
                         pick={today.alavancagem}
                         userBankroll={userAlavSerie?.configured ? userAlavSerie.current_bankroll : undefined}
