@@ -3084,7 +3084,7 @@ def get_alavancagem(
                 # usuário em /banca/alavancagem-serie.
                 "caminho_ia": {"entrada": initial, "meta": alavancagem_caminho.META_PADRAO,
                                "steps": aberto["steps"], "passos": aberto["passos"],
-                               "saldo": aberto["saldo"], "history": encerrados[:10]}}
+                               "saldo": aberto["saldo"], "history": encerrados[:60]}}
     finally:
         cur.close()
         conn.close()

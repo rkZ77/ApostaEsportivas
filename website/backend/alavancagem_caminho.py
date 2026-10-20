@@ -150,7 +150,10 @@ def caminhos_da_ia(picks_asc: list, entrada: float, meta: int = META_PADRAO) -> 
             encerrados.append({"id": p["id"], "initial": entrada, "final": depois,
                                "realized": round(depois - entrada, 2),
                                "units": round(saldo - 1, 4), "greens": greens,
-                               "end_reason": fim, "started_at": inicio, "ended_at": data})
+                               "end_reason": fim, "started_at": inicio, "ended_at": data,
+                               # Os degraus do caminho fechado (20/10/2026): a
+                               # mini-escada de cada um na aba.
+                               "steps": list(steps)})
             saldo, passos, greens, inicio, steps = 1.0, 0, 0, None, []
     encerrados.reverse()
     return por_pick, encerrados, {"steps": steps, "passos": passos, "saldo": round(entrada * saldo, 2)}

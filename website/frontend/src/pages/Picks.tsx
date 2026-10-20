@@ -20,7 +20,7 @@ import { aplicarFiltro, FILTRO_INICIAL } from '../lib/mercadoFiltro'
 import EngineStatus from '../components/EngineStatus'
 import FiltrosDePicks, { filtrarPicks, ordenarPicks,
          type OrdemDePick, type BilheteFiltro } from '../components/FiltrosDePicks'
-import { CaminhoDaIA, Escada, LinhaCaminho,
+import { CaminhoDaIA, Escada, HistoricoDeCaminhos, LinhaCaminho,
          type AlavStep, type CaminhoEncerrado } from '../components/alavancagem/caminho'
 import AnalysisModal from '../components/AnalysisModal'
 import {
@@ -1492,7 +1492,7 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
                 <span className="text-2xl font-black text-green-400">R${stake.toFixed(2)}</span>
                 {!pick.result && (
                   <>
-                    <span className="text-ink-4 text-sm">,</span>
+                    <span className="text-ink-4 text-sm" aria-hidden>→</span>
                     <span className="text-lg font-black text-ink-1">R${potReturn.toFixed(2)}</span>
                     <span className="text-[10px] text-ink-4">se green</span>
                   </>
@@ -4313,228 +4313,163 @@ export default function Picks() {
                 {/* Caminho DEPOIS do pick (16/08). Ele estava no topo e
                     empurrava a entrada do dia pra baixo da dobra · o caminho e'
                     o contexto, o pick e' o que se veio ver. */}
-                {/* Config banca alavancagem */}
-                <div ref={alavConfigRef} className="card p-5 border-orange-500/20 scroll-mt-24">
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <p className="font-display text-sm font-bold text-orange-400">Caminho de Alavancagem</p>
-                      <p className="text-xs text-ink-3 mt-0.5">
-                        Cada GREEN reaposta o bolo inteiro. Fecha sozinho em {userAlavSerie?.meta ?? 6} greens,
-                        mas você pode encerrar antes quando quiser
-                      </p>
-                    </div>
-                    {userAlavSerie?.configured && (
-                      <div className="font-mono text-right">
-                        <div className="text-2xl font-black text-orange-400">R${userAlavSerie.current_bankroll.toFixed(2)}</div>
-                        <div className="text-xs text-ink-4">entrada: R${userAlavSerie.initial_bankroll.toFixed(2)}</div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* SEM CAMINHO PRÓPRIO, O DA IA (20/10/2026, pedido do usuário):
-                      quem ainda não entrou, ou entrou e não andou nenhum
-                      degrau, vê a escada que a IA está subindo. */}
-                  {alavCaminhoIA && (!userAlavSerie?.configured || !userAlavSerie?.steps?.length) && (
-                    <div className="mb-3">
-                      <CaminhoDaIA c={alavCaminhoIA} exemplo={!userAlavSerie?.configured} />
-                    </div>
-                  )}
-
-                  {/* Ponte pra tela de leitura do caminho.
-                      Esta aba é onde se OPERA (segue degrau, encerra); o
-                      histórico, a escada e os caminhos passados moram em
-                      /banca/alavancagem. Sem este botão a tela de leitura só
-                      era alcançável por quem passasse pela Minha Banca · ou
-                      seja, ninguém que estivesse justamente acompanhando o
-                      caminho. */}
-                  {userAlavSerie?.configured && (
-                    <button
-                      onClick={() => navigate('/banca/alavancagem')}
-                      className="w-full mb-3 flex items-center justify-center gap-1.5 text-xs font-semibold text-ink-2 hover:text-ink-1 border border-line-strong hover:border-orange-400/40 px-3 py-2.5 rounded-md transition-colors"
-                    >
-                      <TrendingUp className="w-3.5 h-3.5 shrink-0 text-orange-400" />
-                      Ver o caminho completo e o histórico
-                    </button>
-                  )}
-
-                  {/* O ponto todo da tela: enquanto o caminho roda, esse número
-                      não é saldo · está inteiro apostado na próxima entrada. */}
-                  {userAlavSerie?.configured && (
-                    <div className="mb-3 rounded-lg border border-orange-500/20 bg-orange-500/[0.06] px-3 py-2.5">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-[11px] text-ink-3">
-                            {(userAlavSerie.open_profit ?? 0) > 0
-                              ? <>Lucro em jogo: <span className="font-mono font-black text-orange-400">+R${(userAlavSerie.open_profit ?? 0).toFixed(2)}</span>
-                                 {!!userAlavSerie.open_units && <span className="text-ink-4"> ({userAlavSerie.open_units >= 0 ? '+' : ''}{userAlavSerie.open_units.toFixed(2)}u)</span>}</>
-                              : 'Caminho recém-começado'}
-                          </p>
-                          <p className="text-[11px] text-ink-4 mt-0.5 leading-snug">
-                            Não conta na sua banca enquanto o caminho estiver rodando.
-                            {' '}Se der RED você perde só os R${userAlavSerie.initial_bankroll.toFixed(2)} da entrada.
-                          </p>
-                        </div>
-                        {userAlavSerie.can_close && !alavConfirmClose && (
-                          <button
-                            onClick={() => { setAlavConfirmClose(true); setAlavCloseMsg('') }}
-                            className="shrink-0 bg-orange-500 hover:bg-orange-400 text-on-fill font-black px-3 py-2 rounded-md text-xs transition-colors"
-                          >
-                            Encerrar
-                          </button>
-                        )}
-                      </div>
-
-                      {alavConfirmClose && (
-                        <div className="mt-3 pt-3 border-t border-orange-500/20">
-                          <p className="text-xs text-ink-2 leading-snug">
-                            Encerrar agora leva <span className="font-mono font-black text-green-400">+R${(userAlavSerie.open_profit ?? 0).toFixed(2)}</span> pra sua banca
-                            {' '}e recomeça um caminho novo em R${userAlavSerie.initial_bankroll.toFixed(2)}.
-                          </p>
-                          <div className="flex gap-2 mt-2.5">
-                            <button
-                              onClick={encerrarCaminho}
-                              disabled={alavEncerrando}
-                              className="bg-green-500 hover:bg-green-400 disabled:opacity-50 text-black font-black px-3 py-2 rounded-md text-xs transition-colors"
-                            >
-                              {alavEncerrando ? 'Encerrando...' : 'Confirmar e sacar'}
-                            </button>
-                            <button
-                              onClick={() => setAlavConfirmClose(false)}
-                              className="px-3 py-2 rounded-md border border-line-strong text-ink-3 hover:text-ink-1 text-xs font-bold transition-colors"
-                            >
-                              Continuar o caminho
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {alavCloseMsg && (
-                        <p className="text-xs text-green-400 font-semibold mt-2 leading-snug">{alavCloseMsg}</p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Progresso até a meta. O caminho fecha sozinho ao bater, e
-                      esse é o ponto: composto que não para é lucro que nunca
-                      existe, porque um RED lá na frente transforma tudo em pó. */}
-                  {userAlavSerie?.configured && !!userAlavSerie.meta && (() => {
+                {/* CARD DO CAMINHO, REDESENHADO (20/10/2026, pedido do usuário:
+                    "está estranho, aparecendo IA"). Era uma pilha de caixas
+                    soltas (escada da IA em cima do caminho da pessoa, aviso,
+                    progresso, um <details> fechado, um texto de realizado e um
+                    botão). Agora: quem tem caminho vê SÓ o dele, em quatro
+                    faixas · o número em jogo, os degraus até a meta, o
+                    histórico em gráfico e as ações. Quem não tem vê o da IA e
+                    o convite pra começar. */}
+                <div ref={alavConfigRef} className="card border-orange-500/20 scroll-mt-24 overflow-hidden max-w-4xl">
+                  {userAlavSerie?.configured ? (() => {
+                    const meta = userAlavSerie.meta ?? 6
                     const feitos = userAlavSerie.greens_no_caminho ?? 0
-                    const meta = userAlavSerie.meta!
-                    const faltam = Math.max(0, meta - feitos)
+                    const emJogo = userAlavSerie.current_bankroll
+                    const entrada = userAlavSerie.initial_bankroll
+                    const lucro = emJogo - entrada
                     return (
-                      <div className="mb-4 rounded-lg border border-orange-500/20 bg-orange-500/[0.04] px-4 py-3">
-                        <div className="flex items-baseline justify-between gap-3 mb-2">
-                          <span className="text-xs text-ink-3">Progresso do caminho</span>
-                          <span className="font-mono text-sm">
-                            <span className="text-orange-400 font-black text-lg">{feitos}</span>
-                            <span className="text-ink-4"> de {meta} greens</span>
-                          </span>
+                      <>
+                        {/* 1 · o número em jogo */}
+                        <div className="p-5 bg-gradient-to-br from-orange-500/[0.08] to-transparent border-b border-line/60">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-[11px] font-bold uppercase tracking-wide text-orange-400">Seu caminho</p>
+                              <p className="font-mono text-3xl font-black text-ink-1 tabular-nums mt-1">R${emJogo.toFixed(2)}</p>
+                              <p className="text-xs text-ink-3 mt-1">
+                                entrada R${entrada.toFixed(2)}
+                                {feitos > 0 && <> · <span className="text-accent-ink font-semibold">+R${lucro.toFixed(2)} em jogo</span></>}
+                              </p>
+                            </div>
+                            {userAlavSerie.can_close && !alavConfirmClose && (
+                              <button
+                                onClick={() => { setAlavConfirmClose(true); setAlavCloseMsg('') }}
+                                className="shrink-0 h-10 bg-orange-500 hover:bg-orange-400 text-on-fill font-black px-4 rounded-md text-xs transition-colors"
+                              >
+                                Encerrar e sacar
+                              </button>
+                            )}
+                          </div>
+                          {alavConfirmClose && (
+                            <div className="mt-3 rounded-md border border-orange-500/30 bg-surface-1 p-3">
+                              <p className="text-xs text-ink-2 leading-snug">
+                                Encerrar agora leva <span className="font-mono font-black text-green-400">+R${(userAlavSerie.open_profit ?? 0).toFixed(2)}</span> pra sua banca
+                                {' '}e recomeça um caminho novo em R${entrada.toFixed(2)}.
+                              </p>
+                              <div className="flex gap-2 mt-2.5">
+                                <button onClick={encerrarCaminho} disabled={alavEncerrando}
+                                  className="bg-green-500 hover:bg-green-400 disabled:opacity-50 text-black font-black px-3 py-2 rounded-md text-xs transition-colors">
+                                  {alavEncerrando ? 'Encerrando...' : 'Confirmar e sacar'}
+                                </button>
+                                <button onClick={() => setAlavConfirmClose(false)}
+                                  className="px-3 py-2 rounded-md border border-line-strong text-ink-3 hover:text-ink-1 text-xs font-bold transition-colors">
+                                  Continuar o caminho
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                          {alavCloseMsg && <p className="text-xs text-green-400 font-semibold mt-2 leading-snug">{alavCloseMsg}</p>}
+                          <p className="text-[11px] text-ink-4 mt-3 leading-snug">
+                            O valor só vai pra sua banca quando o caminho fecha. Se der RED, você perde só a entrada.
+                          </p>
                         </div>
-                        {/* Degraus com numero dentro · a fileira de tracinhos de
-                            1,5px era pequena demais pra contar de relance, que e
-                            a unica coisa que se quer saber aqui. */}
-                        <div className="flex gap-1.5">
-                          {Array.from({ length: meta }).map((_, i) => (
-                            <span
-                              key={i}
-                              className={`flex-1 h-7 rounded-md flex items-center justify-center text-[11px] font-black transition-colors ${
-                                i < feitos
-                                  ? 'bg-orange-400 text-surface-0'
-                                  : 'bg-surface-2 text-ink-4 border border-line'
-                              }`}
-                            >
-                              {i + 1}
+
+                        {/* 2 · os degraus até a meta, e a escada quando já subiu */}
+                        <div className="p-5 border-b border-line/60 space-y-3">
+                          <div className="flex items-baseline justify-between">
+                            <span className="text-xs text-ink-3 font-semibold">Degraus até a meta</span>
+                            <span className="font-mono text-sm">
+                              <span className="text-orange-400 font-black text-lg">{feitos}</span>
+                              <span className="text-ink-4"> de {meta} greens</span>
                             </span>
-                          ))}
+                          </div>
+                          <div className="flex gap-1.5">
+                            {Array.from({ length: meta }).map((_, i) => (
+                              <span key={i}
+                                className={`flex-1 h-8 rounded-md flex items-center justify-center text-[11px] font-black transition-colors ${
+                                  i < feitos ? 'bg-orange-400 text-surface-0'
+                                  : i === feitos ? 'border-2 border-orange-400/70 text-orange-400 bg-orange-500/5'
+                                  : 'bg-surface-2 text-ink-4 border border-line'}`}>
+                                {i < feitos ? '✓' : i + 1}
+                              </span>
+                            ))}
+                          </div>
+                          <p className="text-[11px] text-ink-4">
+                            {feitos >= meta
+                              ? 'Meta batida. O caminho fecha e o lucro vai pra sua banca.'
+                              : feitos === 0
+                                ? `O próximo green é o 1º degrau. Na meta, a entrada vira cerca de R$${(entrada * 10).toFixed(0)}.`
+                                : `Faltam ${meta - feitos} ${meta - feitos === 1 ? 'green' : 'greens'}. Você pode encerrar antes quando quiser.`}
+                          </p>
+                          {!!userAlavSerie.steps?.length && (
+                            <Escada entrada={entrada} steps={userAlavSerie.steps} altura="h-28" />
+                          )}
                         </div>
-                        <p className="text-[11px] text-ink-4 mt-2 leading-snug">
-                          {faltam === 0
-                            ? 'Meta batida. O caminho fecha e o lucro vai pra sua banca.'
-                            : `Faltam ${faltam} ${faltam === 1 ? 'green' : 'greens'} pra fechar sozinho. Você pode encerrar antes quando quiser.`}
+
+                        {/* 3 · o histórico em gráfico (era um <details> fechado) */}
+                        {!!userAlavSerie.history?.length && (
+                          <div className="p-5 border-b border-line/60">
+                            <p className="text-xs text-ink-3 font-semibold mb-3">Seus caminhos anteriores</p>
+                            <HistoricoDeCaminhos history={userAlavSerie.history} quem="voce" />
+                          </div>
+                        )}
+
+                        {/* 4 · ações */}
+                        <div className="p-4 flex flex-wrap items-center gap-2 bg-surface-0/40">
+                          <button onClick={() => navigate('/banca/alavancagem')}
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-2 hover:text-ink-1 border border-line-strong hover:border-orange-400/40 px-3 py-2 rounded-md transition-colors">
+                            <TrendingUp className="w-3.5 h-3.5 text-orange-400" />
+                            Caminho completo
+                          </button>
+                          {alavInitInput ? (
+                            <div className="flex gap-2 w-full sm:w-auto sm:ml-auto">
+                              <input type="number" min="1" step="10" value={alavInitInput}
+                                placeholder={`Atual: R$${entrada.toFixed(0)}`}
+                                onChange={e => setAlavInitInput(e.target.value)}
+                                className="input font-mono flex-1 sm:w-32 text-sm" />
+                              <button onClick={saveAlavInit} disabled={alavInitSaving || !alavInitInput}
+                                className="bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-on-fill font-black px-4 py-2 rounded-md text-sm transition-colors">
+                                {alavInitSaving ? '...' : 'Alterar'}
+                              </button>
+                              <button onClick={() => setAlavInitInput('')} aria-label="Cancelar"
+                                className="px-3 py-2 rounded-md border border-line-strong text-ink-3 hover:text-ink-1 transition-colors"><XIcon className="w-4 h-4" /></button>
+                            </div>
+                          ) : (
+                            <button onClick={() => setAlavInitInput(String(entrada))}
+                              className="sm:ml-auto text-xs px-3 py-2 rounded-md border border-line-strong text-ink-3 hover:text-ink-1 hover:border-orange-400/40 font-semibold transition-colors">
+                              Alterar entrada
+                            </button>
+                          )}
+                          {alavInitError && <p className="w-full text-xs text-red-400">{alavInitError}</p>}
+                        </div>
+                      </>
+                    )
+                  })() : (
+                    <div className="p-5 space-y-4">
+                      <div>
+                        <p className="font-display text-sm font-bold text-orange-400">Caminho de Alavancagem</p>
+                        <p className="text-xs text-ink-3 mt-0.5">
+                          Cada GREEN reaposta o bolo inteiro. Fecha sozinho em {userAlavSerie?.meta ?? 6} greens,
+                          e você pode encerrar antes quando quiser.
                         </p>
                       </div>
-                    )
-                  })()}
-
-                  {/* A ESCADA, e não a fileira de tags (07/09).
-                      O caminho até aqui era uma linha de "R$30 › R$37 › R$46"
-                      em fonte 10: os números estavam todos lá e o salto do
-                      composto, que é o produto inteiro, não aparecia. É o mesmo
-                      gráfico de /banca/alavancagem, mais baixo porque aqui ele
-                      é o contexto do pick do dia e não o assunto da tela. */}
-                  {!!userAlavSerie?.steps?.length && (
-                    <div className="mb-4">
-                      <p className="text-[11px] text-ink-3 mb-2">Caminho até aqui</p>
-                      <Escada entrada={userAlavSerie.initial_bankroll}
-                              steps={userAlavSerie.steps} altura="h-28" />
-                    </div>
-                  )}
-
-                  {/* Caminhos anteriores com a mesma linha da tela de leitura:
-                      motivo do fim, entrada, greens e o que virou saldo. O
-                      <details> antigo espremia isso numa frase por caminho, e
-                      o caminho é a unidade de conta do produto. */}
-                  {!!userAlavSerie?.history?.length && (
-                    <details className="mb-3">
-                      <summary className="cursor-pointer text-[11px] text-ink-3 hover:text-ink-1 select-none font-semibold">
-                        Caminhos anteriores ({userAlavSerie.history.length})
-                      </summary>
-                      <div className="mt-1">
-                        {userAlavSerie.history.map(h => (
-                          <LinhaCaminho key={h.id} c={h} />
-                        ))}
+                      {/* Sem caminho próprio, o da IA: a escada que ela está subindo. */}
+                      {alavCaminhoIA && <CaminhoDaIA c={alavCaminhoIA} exemplo />}
+                      <div className="rounded-md border border-orange-500/25 bg-orange-500/[0.05] p-4">
+                        <p className="text-sm font-bold text-ink-1">Comece o seu caminho</p>
+                        <p className="text-xs text-ink-3 mt-0.5">Quanto você quer pôr de entrada? Se der RED, é só isso que você perde.</p>
+                        <div className="flex gap-2 mt-3 max-w-md">
+                          <input type="number" min="1" step="10" placeholder="Ex: 100" value={alavInitInput}
+                            onChange={e => setAlavInitInput(e.target.value)}
+                            className="input font-mono flex-1 text-sm" />
+                          <button onClick={saveAlavInit} disabled={alavInitSaving || !alavInitInput}
+                            className="bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-on-fill font-black px-4 py-2 rounded-md text-sm transition-colors">
+                            {alavInitSaving ? '...' : 'Começar'}
+                          </button>
+                        </div>
+                        {alavInitError && <p className="text-xs text-red-400 mt-2">{alavInitError}</p>}
                       </div>
-                    </details>
-                  )}
-
-                  {!!userAlavSerie?.realized_total && (
-                    <p className="text-[11px] text-ink-4 mb-3">
-                      Já realizado em caminhos encerrados:{' '}
-                      <span className={`font-mono font-bold ${userAlavSerie.realized_total >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {userAlavSerie.realized_total >= 0 ? '+' : ''}R${userAlavSerie.realized_total.toFixed(2)}
-                      </span>
-                      {userAlavSerie.realized_units != null && (
-                        <span className="text-ink-4"> ({userAlavSerie.realized_units >= 0 ? '+' : ''}{userAlavSerie.realized_units.toFixed(2)}u)</span>
-                      )}
-                    </p>
-                  )}
-                  {!userAlavSerie?.configured && (
-                    <p className="text-xs text-ink-2 mt-1 mb-1 font-semibold">
-                      Comece o seu caminho: quanto você quer pôr de entrada?
-                    </p>
-                  )}
-                  {(!userAlavSerie?.configured || alavInitInput) ? (
-                    <div className="flex gap-2 mt-2 max-w-md">
-                      <input
-                        type="number"
-                        min="1"
-                        step="10"
-                        placeholder={userAlavSerie?.configured ? `Atual: R$${userAlavSerie.initial_bankroll.toFixed(0)}` : 'Ex: 100'}
-                        value={alavInitInput}
-                        onChange={e => setAlavInitInput(e.target.value)}
-                        className="input font-mono flex-1 text-sm"
-                      />
-                      <button
-                        onClick={saveAlavInit}
-                        disabled={alavInitSaving || !alavInitInput}
-                        className="bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-on-fill font-black px-4 py-2 rounded-md text-sm transition-colors"
-                      >
-                        {alavInitSaving ? '...' : userAlavSerie?.configured ? 'Alterar' : 'Definir'}
-                      </button>
-                      {userAlavSerie?.configured && (
-                        <button onClick={() => setAlavInitInput('')} aria-label="Cancelar" className="px-3 py-2 rounded-md border border-line-strong text-ink-3 hover:text-ink-1 transition-colors"><XIcon className="w-4 h-4" /></button>
-                      )}
                     </div>
-                  ) : (
-                    <button
-                      onClick={() => setAlavInitInput(String(userAlavSerie.initial_bankroll))}
-                      className="text-[11px] px-3 py-2 rounded-md border border-line-strong text-ink-2 hover:text-ink-1 hover:border-orange-400/40 font-bold transition-colors"
-                    >
-                      Alterar valor inicial
-                    </button>
-                  )}
-                  {alavInitError && (
-                    <p className="text-xs text-red-400 mt-2">{alavInitError}</p>
                   )}
                 </div>
 
