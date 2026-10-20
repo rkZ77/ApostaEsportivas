@@ -152,6 +152,7 @@ export function UltimosPicks({
     {
       key: 'jogo',
       header: 'Jogo',
+      principal: true,
       cell: p => (
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">

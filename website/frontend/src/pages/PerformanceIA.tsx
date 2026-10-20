@@ -144,6 +144,7 @@ function ClvSection({ data, loading }: { data: ClvData | null; loading: boolean 
     {
       key: 'jogo',
       header: 'Jogo',
+      principal: true,
       cell: r => (
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
