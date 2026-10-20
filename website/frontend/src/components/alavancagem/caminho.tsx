@@ -1,6 +1,7 @@
 import { m as motion } from 'framer-motion'
 import { Flag, Target, TrendingDown } from 'lucide-react'
 import { fmtBRL, fmtSigned, fmtUnits } from '../../utils/format'
+import { Tooltip } from '../ui'
 
 /*
  * O CAMINHO, escrito uma vez só (2026-09-07).
@@ -36,6 +37,138 @@ export interface CaminhoEncerrado {
   end_reason: 'manual' | 'red' | 'meta'
   started_at: string | null
   ended_at: string | null
+  /** Os degraus do caminho · só o caminho da IA traz (20/10/2026). */
+  steps?: AlavStep[]
+}
+
+const curta = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '')
+
+/*
+ * O HISTÓRICO DOS CAMINHOS, EM GRÁFICO (20/10/2026, pedido do usuário: "mostra
+ * melhor os caminhos que já deram certo, gráfico").
+ *
+ * Era uma lista de linhas dentro de um <details>. Três peças agora:
+ *   · o placar dos caminhos fechados (quantos, quantos na meta, o resultado);
+ *   · uma barra por caminho, em ordem de data, pra cima no lucro e pra baixo
+ *     na entrada perdida · é o formato do produto: muitos reds pequenos e
+ *     poucas metas grandes, e só o gráfico mostra que as metas pagam os reds;
+ *   · os que bateram a meta, cada um com a mini-escada do bolo.
+ * Verde e vermelho aqui são estado (meta/red), sempre com o rótulo junto.
+ */
+export function HistoricoDeCaminhos({ history, quem = 'ia' }: {
+  history: CaminhoEncerrado[]
+  quem?: 'ia' | 'voce'
+}) {
+  if (!history.length) return null
+  const cronologico = [...history].reverse()
+  const total = history.reduce((s, c) => s + c.realized, 0)
+  const unidades = history.reduce((s, c) => s + c.units, 0)
+  const naMeta = history.filter(c => c.end_reason === 'meta')
+  /* O ZERO NA PROPORÇÃO, não no meio: o RED custa só a entrada e a meta paga
+     ~10x, então com o zero no meio metade do gráfico ficava vazia. */
+  const maxGanho = Math.max(0, ...history.map(c => c.realized))
+  const maxPerda = Math.max(0, ...history.map(c => -c.realized))
+  const escala = (maxGanho + maxPerda) || 1
+  const zeroPct = (maxGanho / escala) * 100
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-2">
+        {[
+          ['Resultado', `${total >= 0 ? '+' : '−'}R$${Math.round(Math.abs(total)).toLocaleString('pt-BR')}`, fmtUnits(unidades, 1), total >= 0 ? 'text-accent-ink' : 'text-red-400'],
+          ['Caminhos', String(history.length), 'fechados', 'text-ink-1'],
+          ['Na meta', String(naMeta.length), `de ${history.length}`, 'text-accent-ink'],
+        ].map(([rotulo, valor, sub, cor]) => (
+          <div key={rotulo} className="rounded-md border border-line bg-surface-1 px-2 py-2.5 text-center min-w-0">
+            <div className={`font-mono text-sm sm:text-lg font-black tabular-nums break-all leading-tight ${cor}`}>{valor}</div>
+            <div className="text-[10px] text-ink-3 font-semibold">{rotulo}</div>
+            <div className="text-[10px] text-ink-4 tabular-nums">{sub}</div>
+          </div>
+        ))}
+      </div>
+
+      <div>
+        <div className="flex items-baseline justify-between mb-2">
+          <p className="text-[11px] text-ink-3 font-semibold">Resultado de cada caminho</p>
+          <p className="flex items-center gap-3 text-[10px] text-ink-4">
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-accent" />meta</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-red-500/70" />red</span>
+          </p>
+        </div>
+        {/* Zero no meio: metade de cima pro lucro, de baixo pra entrada perdida.
+            Escala pelo maior |valor| dos dois lados, pra comparar os tamanhos. */}
+        <div className="relative h-32 flex items-stretch gap-[2px]">
+          <div className="absolute inset-x-0 border-t border-line-strong pointer-events-none" style={{ top: `${zeroPct}%` }} />
+          {cronologico.map(c => {
+            const pct = (Math.abs(c.realized) / escala) * 100
+            const sobe = c.realized >= 0
+            return (
+              <Tooltip key={c.id} className="flex-1 min-w-0 h-full" text={
+                <div className="space-y-0.5 text-[11px]">
+                  <div className="font-bold text-ink-1">{MOTIVO[c.end_reason]?.label ?? 'Encerrado'}</div>
+                  <div className="text-ink-3">{dataBR(c.started_at)} a {dataBR(c.ended_at)}</div>
+                  <div className="text-ink-2">{c.greens} {c.greens === 1 ? 'green' : 'greens'}, entrada {fmtBRL(c.initial)}</div>
+                  <div className={`font-mono font-black ${sobe ? 'text-accent-ink' : 'text-red-400'}`}>{sobe ? '+' : '−'}{fmtBRL(c.realized)}</div>
+                </div>
+              }>
+                <div className="relative w-full h-full" aria-label={`${curta(c.ended_at)}: ${sobe ? '+' : '-'}${fmtBRL(c.realized)}`}>
+                  <motion.div
+                    initial={{ height: 0 }} animate={{ height: `${Math.max(2, pct)}%` }}
+                    transition={{ type: 'spring', stiffness: 220, damping: 26 }}
+                    style={sobe ? { bottom: `${100 - zeroPct}%` } : { top: `${zeroPct}%` }}
+                    className={`absolute inset-x-0 ${sobe ? 'rounded-t bg-accent' : 'rounded-b bg-red-500/70'}`}
+                  />
+                </div>
+              </Tooltip>
+            )
+          })}
+        </div>
+        <div className="flex justify-between text-[10px] text-ink-4 mt-1">
+          <span>{curta(cronologico[0]?.ended_at ?? null)}</span>
+          <span>{curta(cronologico[cronologico.length - 1]?.ended_at ?? null)}</span>
+        </div>
+      </div>
+
+      {naMeta.length > 0 && (
+        <div>
+          <p className="text-[11px] text-ink-3 font-semibold mb-2">
+            {quem === 'ia' ? 'Os caminhos da IA que bateram a meta' : 'Os seus caminhos que bateram a meta'}
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {naMeta.map(c => (
+              <div key={c.id} className="rounded-md border border-accent/25 bg-accent/[0.04] p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[11px] text-ink-3">{curta(c.started_at) === curta(c.ended_at) ? curta(c.ended_at) : `${curta(c.started_at)} a ${curta(c.ended_at)}`}, {c.greens} greens</p>
+                    <p className="text-xs text-ink-2 mt-0.5">
+                      <span className="whitespace-nowrap">{fmtBRL(c.initial)}</span> virou <b className="text-ink-1 whitespace-nowrap">{fmtBRL(c.final)}</b>
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0 font-mono">
+                    <div className="text-sm font-black text-accent-ink tabular-nums">+{fmtBRL(c.realized)}</div>
+                    <div className="text-[10px] text-ink-4 tabular-nums">×{(c.final / (c.initial || 1)).toFixed(1)}</div>
+                  </div>
+                </div>
+                {!!c.steps?.length && (
+                  <>
+                    <div className="mt-2 flex items-end gap-[3px] h-10">
+                      {[c.initial, ...c.steps.map(s => s.after)].map((v, i, arr) => (
+                        <div key={i} title={i ? c.steps![i - 1].match : 'Entrada'}
+                          className={`flex-1 rounded-t ${i ? 'bg-accent/80' : 'bg-ink-4/50'}`}
+                          style={{ height: `${Math.max(6, (v / Math.max(...arr)) * 100)}%` }} />
+                      ))}
+                    </div>
+                    <p className="mt-1.5 text-[10px] text-ink-4 leading-snug line-clamp-2">
+                      {c.steps.map(s => s.match).join(' · ')}
+                    </p>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 export const MOTIVO: Record<string, { label: string; cor: string; Icone: typeof Flag }> = {
@@ -168,7 +301,7 @@ export function CaminhoDaIA({ c, exemplo }: {
         <div className="font-mono text-right shrink-0">
           <div className="text-xl font-black text-orange-400 tabular-nums">{fmtBRL(c.saldo)}</div>
           <div className={`text-[11px] tabular-nums ${lucro > 0 ? 'text-accent-ink' : 'text-ink-4'}`}>
-            {c.passos ? `${lucro >= 0 ? '+' : ''}${fmtBRL(lucro)} em jogo` : 'recém-começado'}
+            {c.passos ? `${fmtSigned(lucro)} em jogo` : 'recém-começado'}
           </div>
         </div>
       </div>
@@ -181,14 +314,9 @@ export function CaminhoDaIA({ c, exemplo }: {
       </div>
       {c.steps.length > 0 && <Escada entrada={c.entrada} steps={c.steps} altura="h-28" />}
       {c.history.length > 0 && (
-        <details>
-          <summary className="cursor-pointer text-[11px] text-ink-3 hover:text-ink-1 select-none font-semibold">
-            Caminhos anteriores da IA ({c.history.length})
-          </summary>
-          <div className="mt-1">
-            {c.history.map(h => <LinhaCaminho key={h.id} c={h} quem="ia" />)}
-          </div>
-        </details>
+        <div className="pt-3 border-t border-orange-500/15">
+          <HistoricoDeCaminhos history={c.history} quem="ia" />
+        </div>
       )}
     </div>
   )

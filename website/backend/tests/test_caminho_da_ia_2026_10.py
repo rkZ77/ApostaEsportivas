@@ -23,7 +23,7 @@ def test_red_zera_e_custa_so_a_entrada():
     por, fechados, aberto = ac.caminhos_da_ia(picks, 50)
     assert por[2]["bankroll_before"] == 100 and por[2]["bankroll_after"] == 0
     assert por[2]["caminho_encerra"] == "red"
-    assert fechados[0] == {"id": 2, "initial": 50, "final": 0, "realized": -50, "units": -1.0,
+    assert {k: v for k, v in fechados[0].items() if k != "steps"} == {"id": 2, "initial": 50, "final": 0, "realized": -50, "units": -1.0,
                            "greens": 1, "end_reason": "red", "started_at": "2026-10-01",
                            "ended_at": "2026-10-02"}
     assert por[3]["bankroll_before"] == 50 and aberto["steps"][0]["match"] == "Casa3 x Fora3"
@@ -65,3 +65,9 @@ def test_bilhete_repetido_no_dia_conta_uma_vez():
 def test_placar_tambem_descarta_a_copia():
     sql = ac.subquery_dos_caminhos()
     assert "DISTINCT ON (match_date, fixture_id_1, market_1, line_1" in sql and "FROM unicos" in sql
+
+
+def test_caminho_fechado_leva_os_degraus():
+    picks = [_p(1, "GREEN", 2), _p(2, "GREEN", 1.5), _p(3, "RED", 1.5)]
+    _, fechados, _ = ac.caminhos_da_ia(picks, 10)
+    assert [s["after"] for s in fechados[0]["steps"]] == [20, 30, 0]
