@@ -55,6 +55,25 @@ export default function AgenteButton() {
     } catch { /* ignora */ }
   }, [clamp])
 
+  /* SOME ENQUANTO ROLA, NO CELULAR (20/10/2026). Parado no canto, o botão
+     cobria a ponta direita dos cards (o "Pendente", a porcentagem, a odd)
+     justamente enquanto a pessoa lê. Rolando, ele sai; 0,7 s depois de parar,
+     volta. No computador sobra espaço e ele fica. */
+  const [rolando, setRolando] = useState(false)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return
+    const celular = window.matchMedia('(max-width: 767px)')
+    let t: ReturnType<typeof setTimeout> | undefined
+    const onScroll = () => {
+      if (!celular.matches) return
+      setRolando(true)
+      clearTimeout(t)
+      t = setTimeout(() => setRolando(false), 700)
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => { window.removeEventListener('scroll', onScroll); clearTimeout(t) }
+  }, [])
+
   useEffect(() => {
     const onResize = () => setPos(p => (p ? clamp(p.x, p.y) : p))
     window.addEventListener('resize', onResize)
@@ -137,7 +156,7 @@ export default function AgenteButton() {
                  assinante (ver routers/chat.py), então o passo aponta para o
                  botão de verdade. */
               data-tour="agente"
-              className="relative touch-none select-none cursor-grab active:cursor-grabbing"
+              className={`relative touch-none select-none cursor-grab active:cursor-grabbing transition-opacity duration-200 ${rolando ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
