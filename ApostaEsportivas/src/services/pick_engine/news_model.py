@@ -10,6 +10,7 @@ sentimento) -- fora de escopo ate existir dado real. O cruzamento de nome
 entre /injuries e /fixtures/lineups pode falhar por grafia (acento,
 abreviacao); nesse caso o jogador cai como "nao confirmado como titular
 recente" em vez de quebrar -- sinal sempre rotulado como aproximacao."""
+import json
 import os
 import requests
 from dotenv import load_dotenv, find_dotenv
@@ -20,6 +21,73 @@ API_KEY = os.getenv("API_FOOTBALL_KEY")
 HEADERS = {"x-apisports-key": API_KEY}
 BASE = "https://v3.football.api-sports.io"
 
+#: COTA SEM DONO (20/10/2026). Este modulo chamava a API por fora de
+#: utils/api_client, sem `api_quota.registrar`: o painel de cota somava ~3,4
+#: mil requisicoes por dia a menos do que a API cobrava (19/10: 3.865
+#: contadas, 7.309 gastas). E o dossie pede /injuries de cada time em CADA
+#: processo (cada pipeline do Rodar Tudo e cada ciclo do ao vivo), sem cache
+#: entre eles. Agora conta, e guarda no banco por CACHE_HORAS.
+CACHE_HORAS = 3
+
+
+def _registrar(resposta, origem: str) -> None:
+    try:
+        from services import api_quota
+        api_quota.registrar(getattr(resposta, "headers", None), origem)
+    except Exception:
+        pass
+
+
+def _cache_ler(fixture_id: int, team_id: int):
+    """A lista guardada ha' menos de CACHE_HORAS, ou None. Nunca levanta."""
+    try:
+        from utils.db_utils import get_connection
+        conn = get_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS injuries_cache (
+                    fixture_id INTEGER NOT NULL, team_id INTEGER NOT NULL,
+                    payload JSONB NOT NULL, buscado_em TIMESTAMP NOT NULL DEFAULT NOW(),
+                    PRIMARY KEY (fixture_id, team_id))
+            """)
+            cur.execute("""
+                SELECT payload FROM injuries_cache
+                 WHERE fixture_id = %s AND team_id = %s
+                   AND buscado_em > NOW() - make_interval(hours => %s)
+            """, (fixture_id, team_id, CACHE_HORAS))
+            linha = cur.fetchone()
+            conn.commit()
+            if not linha:
+                return None
+            dado = linha[0]
+            return json.loads(dado) if isinstance(dado, str) else dado
+        finally:
+            cur.close()
+            conn.close()
+    except Exception:
+        return None
+
+
+def _cache_gravar(fixture_id: int, team_id: int, lista: list) -> None:
+    try:
+        from utils.db_utils import get_connection
+        conn = get_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute("""
+                INSERT INTO injuries_cache (fixture_id, team_id, payload, buscado_em)
+                VALUES (%s, %s, %s, NOW())
+                ON CONFLICT (fixture_id, team_id) DO UPDATE
+                   SET payload = EXCLUDED.payload, buscado_em = NOW()
+            """, (fixture_id, team_id, json.dumps(lista, ensure_ascii=False)))
+            conn.commit()
+        finally:
+            cur.close()
+            conn.close()
+    except Exception:
+        pass
+
 
 def fetch_injuries(team_id: int, fixture_id: int = None, season: int = None,
                     league_id: int = None, levantar: bool = False) -> list:
@@ -29,7 +97,11 @@ def fetch_injuries(team_id: int, fixture_id: int = None, season: int = None,
 
     `levantar=True` repassa a falha em vez de devolver []: quem precisa
     separar "ninguem fora" de "nao consegui perguntar" (o contexto atual do
-    motor) pede assim."""
+    motor) pede assim. Por partida, sai do cache do banco quando fresco."""
+    if fixture_id:
+        guardado = _cache_ler(fixture_id, team_id)
+        if guardado is not None:
+            return guardado
     try:
         if fixture_id:
             params = {"fixture": fixture_id, "team": team_id}
@@ -37,6 +109,7 @@ def fetch_injuries(team_id: int, fixture_id: int = None, season: int = None,
             params = {"team": team_id, "season": season, "league": league_id}
 
         r = requests.get(f"{BASE}/injuries", headers=HEADERS, params=params, timeout=15)
+        _registrar(r, "motor_desfalques")
         r.raise_for_status()
 
         result = []
@@ -58,6 +131,8 @@ def fetch_injuries(team_id: int, fixture_id: int = None, season: int = None,
                 "type": player.get("type") or item.get("type") or "",
                 "reason": player.get("reason") or item.get("reason") or "",
             })
+        if fixture_id:
+            _cache_gravar(fixture_id, team_id, result)
         return result
 
     except Exception as e:
@@ -74,6 +149,7 @@ def fetch_recent_starters(team_id: int, last: int = 5) -> dict:
     try:
         r = requests.get(f"{BASE}/fixtures", headers=HEADERS,
                           params={"team": team_id, "last": last}, timeout=15)
+        _registrar(r, "motor_titulares")
         r.raise_for_status()
         fixtures = r.json().get("response", [])
 
@@ -82,6 +158,7 @@ def fetch_recent_starters(team_id: int, last: int = 5) -> dict:
             try:
                 lr = requests.get(f"{BASE}/fixtures/lineups", headers=HEADERS,
                                    params={"fixture": fx_id, "team": team_id}, timeout=15)
+                _registrar(lr, "motor_titulares")
                 lr.raise_for_status()
                 lineups = lr.json().get("response", [])
                 if not lineups:
