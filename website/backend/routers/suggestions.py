@@ -2550,7 +2550,10 @@ def _sql_do_lucro(chave: str, tabela: str) -> str:
                 f" COALESCE(cam.caminho_profit, 0) AS profit"
                 f" FROM {tabela} pa"
                 f" LEFT JOIN {alavancagem_caminho.subquery_dos_caminhos()} cam"
-                f" ON cam.pick_id = pa.id")
+                f" ON cam.pick_id = pa.id"
+                # Copia do mesmo bilhete (20/10/2026): liquidada e fora da
+                # subconsulta dos caminhos, nao conta green/red de novo.
+                f" WHERE pa.result IS NULL OR cam.pick_id IS NOT NULL")
     return (f"                SELECT result, profit * {STAKE_PADRAO[chave]} AS profit"
             f" FROM {tabela}")
 
@@ -3021,21 +3024,14 @@ def get_alavancagem(
     conn = get_connection()
     cur = conn.cursor()
     try:
-        conditions: list = []
-        params: list = []
-        if date_from:
-            conditions.append("pa.match_date >= %s")
-            params.append(date_from)
-        if date_to:
-            conditions.append("pa.match_date <= %s")
-            params.append(date_to)
-        if resultado == "pending":
-            conditions.append("pa.result IS NULL")
-        elif resultado and resultado != "all":
-            conditions.append("pa.result = %s"); params.append(resultado)
-        where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+        # O FILTRO VEM DEPOIS, NUNCA DENTRO (20/10/2026). O caminho depende do
+        # passo anterior: filtrar no SQL recomecava a conta no primeiro dia
+        # do filtro e inventava um caminho que nunca existiu (a mesma regra de
+        # alavancagem_caminho, que o placar ja' seguia).
         rows = _safe_query(cur, f"""
             SELECT pa.id, pa.match_date, pa.tipo,
+                   -- a chave do bilhete (alavancagem_caminho.chave_do_bilhete)
+                   pa.fixture_id_1, pa.fixture_id_2, pa.fixture_id_3, pa.market_3, pa.line_3,
                    pa.home_team_1, pa.away_team_1, pa.market_1, pa.line_1, pa.odd_1, pa.bet_house_1,
                    pa.confidence_1, pa.prob_real_1, pa.reasoning_1,
                    pa.home_team_2, pa.away_team_2, pa.market_2, pa.line_2, pa.odd_2, pa.bet_house_2,
@@ -3047,44 +3043,48 @@ def get_alavancagem(
             FROM picks_alavancagem pa
             LEFT JOIN fixtures f1 ON f1.fixture_id = pa.fixture_id_1
             LEFT JOIN fixtures f2 ON f2.fixture_id = pa.fixture_id_2
-            {where}
-            ORDER BY pa.match_date DESC
-        """, params)
+            ORDER BY pa.match_date DESC, pa.id DESC
+        """, [])
 
-        # Busca bankroll inicial do usuário (default 50)
+        # Entrada do usuário (default 50) · a mesma do caminho dele.
         user_id = current_user["id"]
         init_row = _safe_query_one(cur, "SELECT alav_bankroll_init FROM user_banca WHERE user_id = %s", (user_id,))
         initial = float(init_row["alav_bankroll_init"]) if init_row and init_row["alav_bankroll_init"] else 50.0
 
-        # Calcula bankroll em ordem cronológica (ASC) e depois retorna em DESC
+        # O CAMINHO DA IA, com a regra do produto (20/10/2026): fecha na
+        # meta, RED zera e encerra, PUSH devolve. A conta antiga nunca fechava
+        # na meta (o bolo crescia pra sempre) e no RED mostrava a banca
+        # "voltando" a entrada, em vez da entrada perdida.
         picks = [dict(r) for r in rows]
-        picks_asc = sorted(picks, key=lambda p: p["match_date"])
-        bankroll = initial
-        bankroll_map: dict[int, dict] = {}
-        for p in picks_asc:
-            odd = float(p["odd_combined"] or 1)
-            bk_before = round(bankroll, 2)
-            result = p.get("result")
-            if result == "GREEN":
-                bankroll = round(bankroll * odd, 2)
-            elif result == "RED":
-                bankroll = initial
-            # PUSH / HALF-WIN / HALF-LOSS: mantém bankroll (simplificado)
-            bk_after = round(bankroll, 2) if result else None
-            bankroll_map[p["id"]] = {
-                "bankroll_before":  bk_before,
-                "bankroll_after":   bk_after,
-                "potential_return": round(bk_before * odd, 2),
-            }
-
+        picks_asc = sorted(picks, key=lambda p: (str(p["match_date"]), p["id"]))
+        por_pick, encerrados, aberto = alavancagem_caminho.caminhos_da_ia(picks_asc, initial)
         for p in picks:
-            p.update(bankroll_map.get(p["id"], {}))
+            p.update(por_pick.get(p["id"], {}))
+
+        def _passa(p) -> bool:
+            d = str(p["match_date"])[:10]
+            if date_from and d < date_from:
+                return False
+            if date_to and d > date_to:
+                return False
+            if resultado == "pending":
+                return p.get("result") is None
+            if resultado and resultado != "all":
+                return p.get("result") == resultado
+            return True
+        picks = [p for p in picks if _passa(p)]
 
         # picks está em ordem DESC (mais recente primeiro) -- pagina por cima
         # da lista já com o bankroll calculado a partir da série completa.
         total = len(picks)
         page = picks[offset:offset + limit]
-        return {"items": page, "total": total, "has_more": offset + limit < total}
+        return {"items": page, "total": total, "has_more": offset + limit < total,
+                # O caminho que a IA está fazendo, pra quem não tem o seu
+                # (20/10/2026, pedido do usuário). Mesmo formato do caminho do
+                # usuário em /banca/alavancagem-serie.
+                "caminho_ia": {"entrada": initial, "meta": alavancagem_caminho.META_PADRAO,
+                               "steps": aberto["steps"], "passos": aberto["passos"],
+                               "saldo": aberto["saldo"], "history": encerrados[:10]}}
     finally:
         cur.close()
         conn.close()

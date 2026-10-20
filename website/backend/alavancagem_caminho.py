@@ -81,6 +81,81 @@ from __future__ import annotations
 META_PADRAO = 6
 
 
+#: O que faz dois bilhetes do mesmo dia serem O MESMO bilhete.
+_CHAVE_DO_BILHETE = ("match_date, fixture_id_1, market_1, line_1, "
+                     "fixture_id_2, market_2, line_2, fixture_id_3, market_3, line_3")
+
+
+def chave_do_bilhete(p: dict) -> tuple:
+    """A mesma chave em Python (caminhos_da_ia)."""
+    return tuple(str(p.get(c)) for c in _CHAVE_DO_BILHETE.replace(" ", "").split(","))
+
+
+def multiplicador(result: str | None, odd) -> float | None:
+    """O mesmo CASE de `_sql_multiplicador`, em Python. None = sem resultado."""
+    if not result:
+        return None
+    o = float(odd or 1)
+    return {"GREEN": o, "HALF-WIN": 1 + (o - 1) / 2, "HALF-LOSS": 0.5, "PUSH": 1.0}.get(result, 0.0)
+
+
+def caminhos_da_ia(picks_asc: list, entrada: float, meta: int = META_PADRAO) -> tuple[dict, list, dict]:
+    """O caminho que a IA fez com os picks publicados, em reais (20/10/2026).
+
+    A MESMA regra de `subquery_dos_caminhos` (que conta o placar), passo a
+    passo: entra com `entrada`, cada passo multiplica o bolo, RED zera e
+    encerra, `meta` passos encerram. O passo seguinte a um encerramento abre
+    um caminho novo. `picks_asc` em ordem cronologica, com `id`, `result`,
+    `odd_combined` e `match_date`; o pick sem resultado e' o degrau em jogo.
+
+    Devolve (por_pick, encerrados, aberto):
+      por_pick[id] = {bankroll_before, bankroll_after, potential_return,
+                      caminho_passo, caminho_encerra ('meta'|'red'|None)}
+      encerrados   = [{initial, final, realized, units, greens, end_reason,
+                       started_at, ended_at}] do mais recente pro mais antigo
+      aberto       = {steps: [...], passos, saldo} do caminho em andamento
+    """
+    por_pick: dict = {}
+    encerrados: list = []
+    saldo, passos, greens, inicio, steps = 1.0, 0, 0, None, []
+    vistos: set = set()
+    for p in picks_asc:
+        chave = chave_do_bilhete(p)
+        if chave in vistos:   # copia do mesmo bilhete: fora do caminho
+            por_pick[p["id"]] = {"caminho_duplicado": True}
+            continue
+        vistos.add(chave)
+        data = str(p.get("match_date") or "")[:10] or None
+        inicio = inicio or data
+        antes = round(entrada * saldo, 2)
+        mult = multiplicador(p.get("result"), p.get("odd_combined"))
+        if mult is None:   # o degrau de hoje, ainda em jogo
+            por_pick[p["id"]] = {"bankroll_before": antes, "bankroll_after": None,
+                                 "potential_return": round(antes * float(p.get("odd_combined") or 1), 2),
+                                 "caminho_passo": passos + 1, "caminho_encerra": None}
+            continue
+        saldo *= mult
+        passos += 1
+        greens += 1 if mult > 1 else 0
+        depois = round(entrada * saldo, 2)
+        fim = "red" if mult == 0 else "meta" if passos >= meta else None
+        por_pick[p["id"]] = {"bankroll_before": antes, "bankroll_after": depois,
+                             "potential_return": round(antes * float(p.get("odd_combined") or 1), 2),
+                             "caminho_passo": passos, "caminho_encerra": fim}
+        steps.append({"pick_id": p["id"], "result": "RED" if mult == 0 else "GREEN",
+                      "odd": float(p.get("odd_combined") or 1), "date": data,
+                      "match": f'{p.get("home_team_1") or ""} x {p.get("away_team_1") or ""}'.strip(" x"),
+                      "before": antes, "after": depois})
+        if fim:
+            encerrados.append({"id": p["id"], "initial": entrada, "final": depois,
+                               "realized": round(depois - entrada, 2),
+                               "units": round(saldo - 1, 4), "greens": greens,
+                               "end_reason": fim, "started_at": inicio, "ended_at": data})
+            saldo, passos, greens, inicio, steps = 1.0, 0, 0, None, []
+    encerrados.reverse()
+    return por_pick, encerrados, {"steps": steps, "passos": passos, "saldo": round(entrada * saldo, 2)}
+
+
 def _sql_multiplicador(coluna_odd: str, coluna_result: str) -> str:
     """Quanto o dinheiro do caminho e' multiplicado por este passo.
 
@@ -116,11 +191,21 @@ def subquery_dos_caminhos(meta: int = META_PADRAO) -> str:
     e' erro de sintaxe, dentro de um `FROM (...)` e' valido.
     """
     return f"""(
-    WITH RECURSIVE ordenado AS (
-        SELECT id, ROW_NUMBER() OVER (ORDER BY match_date, id) AS n,
-               {_sql_multiplicador("odd_combined", "result")} AS mult
+    WITH RECURSIVE unicos AS (
+        -- BILHETE REPETIDO CONTA UMA VEZ (20/10/2026). O motor gravou o
+        -- MESMO bilhete 5 vezes em 7 dias (ver alavancagem_pipeline,
+        -- jogos_gastos), e cada copia virava um passo do caminho: 39
+        -- caminhos fechados e +46,9u onde houve 24 e +32,9u. Fica o de menor
+        -- id; as copias saem desta subconsulta e, com ela, do placar.
+        SELECT DISTINCT ON ({_CHAVE_DO_BILHETE}) id, match_date, odd_combined, result
           FROM picks_alavancagem
          WHERE result IS NOT NULL
+         ORDER BY {_CHAVE_DO_BILHETE}, id
+    ),
+    ordenado AS (
+        SELECT id, ROW_NUMBER() OVER (ORDER BY match_date, id) AS n,
+               {_sql_multiplicador("odd_combined", "result")} AS mult
+          FROM unicos
     ),
     caminho AS (
         SELECT n, id, mult, mult AS saldo, 1 AS passos,
