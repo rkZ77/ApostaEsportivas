@@ -1165,7 +1165,7 @@ const CardLive = forwardRef<HTMLDivElement, {
           outra faixa mais abaixo, então o mesmo dado aparecia em dois pesos
           tipográficos diferentes conforme a aba. */}
       <div className="pick-hero">
-        <div className="flex-1 px-5 py-3 text-center">
+        <div className="flex-1 px-3 sm:px-5 py-3 text-center">
           <div className="text-[10px] text-ink-3 mb-0.5">
             {oddCorrente != null ? 'Odd agora' : 'Odd'}
           </div>
@@ -1260,7 +1260,7 @@ const CardLive = forwardRef<HTMLDivElement, {
 
       {/* Times, placar e mercado · o placar entra no lugar do "vs" porque ao
           vivo ele é parte da identificação do jogo, não um detalhe. */}
-      <div className="px-5 py-3 space-y-2">
+      <div className="px-4 sm:px-5 py-3 space-y-2">
         {/* A MESMA CAIXA DA PERNA DO BILHETE · ver caixaDoPick. */}
         <div className={`rounded-md border px-3 py-2 space-y-2 ${caixaDoPick(pick.result)}`}>
         <div className="flex items-center gap-2">
@@ -1284,7 +1284,7 @@ const CardLive = forwardRef<HTMLDivElement, {
             abaixo já mostra onde o jogo está em relação à linha. */}
         <dl className="space-y-0.5">
           <CampoDoPick rotulo="Mercado">
-            <dd className="text-xs font-semibold text-ink-2 truncate">
+            <dd className="text-xs font-semibold text-ink-2 line-clamp-2 break-words min-w-0">
               {nomeDoMercadoComGrade(pick.market, pick.line)}
             </dd>
           </CampoDoPick>
@@ -1324,7 +1324,7 @@ const CardLive = forwardRef<HTMLDivElement, {
       {/* A barra da linha continua no corpo: ao vivo, "onde o jogo está em
           relação ao número" é a leitura que decide entrar. */}
       {temBarra && (
-        <div className="px-5 pb-3">
+        <div className="px-4 sm:px-5 pb-3">
           <BarraDaLinha atual={Number(pick.current_val)} linha={linhaNum} direcao={direcao}
             rotulo={pick.stat_label?.toLowerCase()} />
         </div>
@@ -1379,7 +1379,7 @@ const CardLive = forwardRef<HTMLDivElement, {
 
       {/* Rodapé · ação à esquerda e prazo da odd à direita, no lugar onde o
           card VIP põe compartilhar. */}
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-2 px-5 py-3 border-t border-line/60 mt-auto">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-2 px-4 sm:px-5 py-3 border-t border-line/60 mt-auto">
         {/* MESMO SELO DOS OUTROS CARDS (2026-09-06, pedido do usuário): pick já
             pego vira "Bilhete registrado" no lugar do botão, com a moldura verde
             do pré-jogo (ver PickCardFooter). Antes era uma frase solta ("Em

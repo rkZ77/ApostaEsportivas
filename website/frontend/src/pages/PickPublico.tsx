@@ -72,7 +72,7 @@ export default function PickPublico() {
         <p className="text-ink-4 text-sm mb-6">O link pode ter expirado ou sido removido.</p>
         <Link
           to="/"
-          className="inline-flex items-center justify-center text-sm font-bold text-accent-ink bg-accent/10 border border-accent/30 hover:bg-accent/20 rounded-md px-5 py-2.5 min-h-[40px] transition-colors"
+          className="inline-flex items-center justify-center text-sm font-bold text-accent-ink bg-accent/10 border border-accent/30 hover:bg-accent/20 rounded-md px-4 sm:px-5 py-2.5 min-h-[40px] transition-colors"
         >
           Ir para o Pick IA
         </Link>

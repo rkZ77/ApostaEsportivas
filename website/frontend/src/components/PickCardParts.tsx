@@ -54,7 +54,7 @@ export function PickCardFooter({
     : 'Configurar banca'
 
   return (
-    <div className={cn('pick-tray flex items-center gap-2 px-5 py-3 mt-auto', className)}>
+    <div className={cn('pick-tray flex items-center gap-2 px-4 sm:px-5 py-3 mt-auto', className)}>
       {onBet && (
         <button
           onClick={onBet}
@@ -128,7 +128,7 @@ export function PickExplainButton({
   className?: string
 }) {
   return (
-    <div className={cn('px-5 pb-3', className)}>
+    <div className={cn('px-4 sm:px-5 pb-3', className)}>
       <button
         onPointerEnter={onIntencao}
         onPointerDown={onIntencao}
@@ -224,7 +224,7 @@ export function PickProbability({
   const aproximado = pctAoVivo == null && pctMercado == null && probability == null
 
   return (
-    <div className={cn('px-5 pb-3', className)}>
+    <div className={cn('px-4 sm:px-5 pb-3', className)}>
       <div className="flex justify-between items-baseline text-[10px] mb-1">
         <span className="text-ink-4 flex items-center gap-1.5">
           {pctAoVivo != null ? (
