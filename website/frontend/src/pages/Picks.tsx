@@ -4481,74 +4481,21 @@ export default function Picks() {
                   )}
                 </div>
 
-                {/* Stats da série */}
-                {(() => {
-                  // Sem as cópias do mesmo bilhete (20/10/2026): cada uma virava um green ou red a mais.
-                  const unicos = alavancagem.filter((p: any) => !p.caminho_duplicado)
-                  const oldest = [...unicos].reverse()
-                  let bestStreak = 0, tempStreak = 0, resets = 0
-                  for (const a of oldest) {
-                    if (a.result === 'GREEN')    { tempStreak++; if (tempStreak > bestStreak) bestStreak = tempStreak }
-                    else if (a.result === 'RED') { resets++; tempStreak = 0 }
-                  }
-                  let currentStreak = 0
-                  for (const a of unicos) {
-                    if (!a.result) continue
-                    if (a.result === 'GREEN') currentStreak++
-                    else break
-                  }
-                  const userBankroll  = userAlavSerie?.configured ? userAlavSerie.current_bankroll : null
-                  const initialBankroll = userAlavSerie?.configured ? userAlavSerie.initial_bankroll : 50
-
-                  return (
-                    <div>
-                      <SectionHeader color="bg-orange-400" label="Progresso da Série" />
-                      {alavLoading ? (
-                        <div className="flex justify-center py-6"><Spinner tone="orange" /></div>
-                      ) : alavError ? (
-                        <div className="card p-8 text-center border-dashed">
-                          <p className="text-ink-2 text-sm font-semibold mb-1">Erro ao carregar a série</p>
-                          <p className="text-ink-4 text-xs mb-3">Não foi possível conectar ao servidor.</p>
-                          <button onClick={() => doFetchAlavancagem(alavFilters)} className="text-xs text-orange-400 hover:text-orange-300 font-semibold transition-colors">
-                            Tentar novamente
-                          </button>
-                        </div>
-                      ) : !alavancagem.length ? (
-                        <div className="card p-8 text-center border-dashed border-orange-500/20">
-                          <p className="text-ink-3 text-sm font-semibold">Série ainda não iniciada.</p>
-                          <p className="text-ink-4 text-xs mt-1">Os stats aparecem assim que os primeiros picks forem gerados.</p>
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                          {[
-                            userBankroll == null && alavCaminhoIA ? {
-                              // Sem caminho próprio, o da IA (20/10/2026) · era um quadro em branco.
-                              label: 'Caminho da IA',
-                              value: `R$ ${brNum(alavCaminhoIA.saldo)}`,
-                              color: alavCaminhoIA.saldo > alavCaminhoIA.entrada ? 'text-green-400' : 'text-orange-400',
-                              sub: `${alavCaminhoIA.passos} de ${alavCaminhoIA.meta} degraus`,
-                            } : {
-                              label: 'Sua banca atual',
-                              value: userBankroll != null ? `R$ ${brNum(userBankroll)}` : '',
-                              color: userBankroll != null && userBankroll > initialBankroll ? 'text-green-400' : 'text-orange-400',
-                              sub: userBankroll != null && userBankroll > initialBankroll ? `+R$ ${brNum((userBankroll - initialBankroll))}` : userAlavSerie?.configured ? 'Início da série' : 'Cadastre sua banca',
-                            },
-                            { label: 'Resets (RED)', value: String(resets), color: resets > 0 ? 'text-red-400' : 'text-ink-3', sub: resets === 0 ? 'Nenhum ainda' : `${resets} reinício${resets > 1 ? 's' : ''}` },
-                            { label: 'Série Atual', value: currentStreak > 0 ? `${currentStreak} green${currentStreak > 1 ? 's' : ''}` : '', color: currentStreak >= 3 ? 'text-green-400' : currentStreak > 0 ? 'text-accent-ink' : 'text-ink-3', sub: currentStreak > 0 ? 'seguidos' : 'Aguardando' },
-                            { label: 'Melhor Série', value: bestStreak > 0 ? `${bestStreak} green${bestStreak > 1 ? 's' : ''}` : '', color: 'text-yellow-400', sub: bestStreak > 0 ? 'recorde da série' : 'Ainda sem greens' },
-                          ].map(({ label, value, color, sub }) => (
-                            <div key={label} className="card p-4 text-center">
-                              <div className={`font-mono text-xl font-black ${color}`}>{value}</div>
-                              <div className="text-xs text-ink-3 font-semibold mt-0.5">{label}</div>
-                              <div className="text-[10px] text-ink-4 mt-0.5">{sub}</div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })()}
-
+                {/* "Progresso da Série" SAIU (20/10/2026): repetia o card do
+                    caminho (o valor em jogo, os resets e a sequência), e o
+                    gráfico do histórico já mostra cada RED. O carregando e o
+                    erro da série, que moravam nele, ficam aqui. */}
+                {alavLoading ? (
+                  <div className="flex justify-center py-6"><Spinner tone="orange" /></div>
+                ) : alavError ? (
+                  <div className="card p-8 text-center border-dashed">
+                    <p className="text-ink-2 text-sm font-semibold mb-1">Erro ao carregar o caminho</p>
+                    <p className="text-ink-4 text-xs mb-3">Não foi possível conectar ao servidor.</p>
+                    <button onClick={() => doFetchAlavancagem(alavFilters)} className="text-xs text-orange-400 hover:text-orange-300 font-semibold transition-colors">
+                      Tentar novamente
+                    </button>
+                  </div>
+                ) : null}
                 {/* Caminho da série · REDESENHADO (20/10/2026, pedido do usuário).
                     Era do mais antigo pro mais novo e cortado nos 12 primeiros:
                     o pick de hoje, que é o caminho em jogo, ficava atrás de
