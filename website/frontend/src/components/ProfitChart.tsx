@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AnimatePresence, m as motion } from 'framer-motion'
+import { brNum } from '../utils/format'
 
 interface DayData {
   match_date: string
@@ -109,7 +110,7 @@ export default function ProfitChart({
   const fmtVal = (v: number) => {
     const sign = v >= 0 ? '+' : '-'
     const abs = Math.abs(v)
-    if (unit === 'R$') return `${sign}R$${abs.toFixed(2)}`
+    if (unit === 'R$') return `${sign}R$ ${brNum(abs)}`
     return `${v >= 0 ? '+' : ''}${v.toFixed(1)}${unit}`
   }
 

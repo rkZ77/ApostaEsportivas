@@ -28,7 +28,7 @@ import AdminAlertaIA from '../components/AdminAlertaIA'
 import AdminReds from '../components/AdminReds'
 import AdminMudancas from '../components/AdminMudancas'
 import { Secao, GuiaDaAba, abrirSecao, BOTAO_PEQUENO } from '../components/AdminSecao'
-import { fmtBRL } from '../utils/format'
+import { brNum, fmtBRL } from '../utils/format'
 import { sinalizarNavegacao } from '../services/progressBus'
 
 interface User {
@@ -1535,7 +1535,7 @@ export default function Admin() {
                         <p className="text-ink-4 text-[11px] truncate">{p.user_email}</p>
                       </div>
                       <span className="text-green-400 font-semibold font-mono text-sm shrink-0">
-                        R${Number(p.amount).toFixed(2)}
+                        R$ {brNum(Number(p.amount))}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap mt-1.5">
@@ -1569,7 +1569,7 @@ export default function Admin() {
                           <div className="text-ink-4">{p.user_email}</div>
                         </td>
                         <td className="px-4 py-2 capitalize text-ink-2">{p.plan_key}</td>
-                        <td className="px-4 py-2 text-green-400 font-semibold font-mono">R${Number(p.amount).toFixed(2)}</td>
+                        <td className="px-4 py-2 text-green-400 font-semibold font-mono">R$ {brNum(Number(p.amount))}</td>
                         <td className="px-4 py-2 text-ink-2">{p.payment_method ?? ''}</td>
                         <td className="px-4 py-2">
                           <span className={p.status === 'approved' ? 'badge-green' : 'badge-free'}>
@@ -2062,7 +2062,7 @@ export default function Admin() {
                     </td>
                     <td className="px-4 py-3 text-xs text-ink-2 font-mono">
                       {u.bankroll_current != null
-                        ? <><div className="text-ink-1 font-semibold">R${u.bankroll_current.toFixed(0)}</div><div className="text-ink-4">{u.unit_value != null ? `U R$${u.unit_value.toFixed(0)}` : ''}</div></>
+                        ? <><div className="text-ink-1 font-semibold">R$ {brNum(u.bankroll_current, 0)}</div><div className="text-ink-4">{u.unit_value != null ? `U R$ ${brNum(u.unit_value, 0)}` : ''}</div></>
                         : null}
                     </td>
                     <td className="px-4 py-3">
@@ -2163,7 +2163,7 @@ export default function Admin() {
                   Expira: <span className="text-ink-2">{u.expires_at ? u.expires_at.slice(0, 10) : ''}</span>
                   {expiryWarning(u.expires_at)}
                 </div>
-                <div>Banca: <span className="font-mono text-ink-2">{u.bankroll_current != null ? `R$${u.bankroll_current.toFixed(0)}` : ''}</span></div>
+                <div>Banca: <span className="font-mono text-ink-2">{u.bankroll_current != null ? `R$ ${brNum(u.bankroll_current, 0)}` : ''}</span></div>
                 <div>Cadastro: <span className="text-ink-2">{new Date(u.created_at).toLocaleDateString('pt-BR')}</span></div>
               </div>
 

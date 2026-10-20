@@ -4,7 +4,7 @@ import { AnimatePresence, m as motion } from 'framer-motion'
 import { toastUp, fadeInUp } from '../lib/motion'
 import api from '../services/api'
 import { prefetchAnalise } from '../services/analisePick'
-import { pctProb, capitalizarFrase } from '../utils/format'
+import { brNum, pctProb, capitalizarFrase } from '../utils/format'
 import { calcVipStake, calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import { stakeDe, contaEmUnidades } from '../utils/stakePlan'
 import ResultadoDoPick from './ResultadoDoPick'
@@ -551,7 +551,7 @@ function SuggestionCard({
             <div className="flex-1 px-4 py-3 text-center">
               <div className="text-[10px] text-ink-3 mb-0.5">Apostado</div>
               <div className="text-xl font-black text-green-400">{stakeSeguida}u</div>
-              {banca && <div className="text-[11px] text-ink-4">R${(stakeSeguida * banca.unit_value).toFixed(0)}</div>}
+              {banca && <div className="text-[11px] text-ink-4">R$ {brNum((stakeSeguida * banca.unit_value), 0)}</div>}
             </div>
             <div className="flex-1 px-4 py-3 text-center">
               <div className="text-[10px] text-ink-3 mb-0.5">Lucro pot.</div>
@@ -561,7 +561,7 @@ function SuggestionCard({
                 return (
                   <>
                     <div className="text-xl font-black text-ink-1">+{profitU.toFixed(2)}u</div>
-                    {banca && <div className="text-[11px] text-green-600 font-semibold">+R${(profitU * banca.unit_value).toFixed(0)}</div>}
+                    {banca && <div className="text-[11px] text-green-600 font-semibold">+R$ {brNum((profitU * banca.unit_value), 0)}</div>}
                   </>
                 )
               })()}
@@ -572,14 +572,14 @@ function SuggestionCard({
             <div className="flex-1 px-4 py-3 text-center">
               <div className="text-[10px] text-ink-3 mb-0.5">Apostar</div>
               <div className="text-xl font-black text-green-400">{stakeSuggestion.units}u</div>
-              <div className="text-[11px] text-ink-4">R${stakeSuggestion.amountR.toFixed(0)}</div>
+              <div className="text-[11px] text-ink-4">R$ {brNum(stakeSuggestion.amountR, 0)}</div>
             </div>
             <div className="flex-1 px-4 py-3 text-center">
               <div className="text-[10px] text-ink-3 mb-0.5">Lucro pot.</div>
               {/* Mesma odd do topo · duas contas que não fecham entre si na
                   mesma faixa fazem duvidar da conta inteira. */}
               <div className="text-xl font-black text-ink-1">+{((oddExibida - 1) * stakeSuggestion.units).toFixed(2)}u</div>
-              <div className="text-[11px] text-green-600 font-semibold">+R${((oddExibida - 1) * stakeSuggestion.amountR).toFixed(0)}</div>
+              <div className="text-[11px] text-green-600 font-semibold">+R$ {brNum(((oddExibida - 1) * stakeSuggestion.amountR), 0)}</div>
             </div>
           </>
         ) : s.result ? (
