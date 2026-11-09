@@ -102,6 +102,11 @@ MEDICOES = (
     # do que os times dizem? Hoje isso vai so' pro dossie da IA.
     ("arbitro_e_classico", "Árbitro e clássico (cartão além do esperado pelos times)",
      "scripts/medir_arbitro_e_classico.py", []),
+    # 09/11: qual regua de selecao o pre-jogo deveria usar (piso 70%, edge,
+    # ancora de mercado), em TODOS os candidatos do VIP, nao so' nos
+    # publicados. So' le; trocar a regua do motor e' decisao do usuario.
+    ("regua_unica", "Régua do pré-jogo (piso 70% x âncora de mercado)",
+     "scripts/medir_regua_unica.py", []),
 )
 
 
