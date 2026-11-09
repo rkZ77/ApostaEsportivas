@@ -120,7 +120,7 @@ class TestQuemLe:
 
 
 class TestSoAsLigasAtivas:
-    """Perfil de liga custa uma chamada da Anthropic POR LIGA.
+    """Perfil de liga custa uma chamada da OpenAI POR LIGA.
 
     `get_all_leagues` varria a tabela inteira, entao a Copa do Mundo
     (desativada na limpeza dos pipelines) e qualquer liga que o backfill de

@@ -8,8 +8,7 @@
 # A lista anterior (httpx, pandas, numpy, scipy, playwright) nao tinha um
 # unico import no codigo -- era heranca de uma fase antiga do projeto.
 
-anthropic
-openai         # so services/league_analysis_service.py (comando "ligas")
+openai         # a IA do projeto (revisao dos picks, perfil de liga, regulamento)
 psycopg2-binary
 python-dotenv
 requests

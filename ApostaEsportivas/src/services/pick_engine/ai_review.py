@@ -11,71 +11,31 @@ from utils.db_utils import get_connection
 from utils import esquema
 
 
-# Provider padrao por pipeline (2026-07-31, pedido do usuario): Claude nos
-# fluxos gratuitos/alavancagem, OpenAI no VIP e na multipla. Sempre pode ser
-# sobrescrito por env -- ver a cascata em AIReviewSettings.from_env.
-DEFAULT_PROVIDERS = {
-    "dica": "anthropic",
-    "alavancagem": "anthropic",
-    "vip": "openai",
-    "multipla": "openai",
-    # BINGO DO DIA (2026-09-08) no mesmo provedor do VIP e da multipla, e
-    # pelo mesmo motivo dos dois: e' bilhete combinado montado com a regua do
-    # VIP, entao o parecer que ele precisa e' o de contexto de partida (time
-    # ja' classificado, jogo decidido, elenco reserva) sobre QUATRO jogos de
-    # uma vez -- a leitura mais cara que o gate faz em qualquer produto.
-    "bingo": "openai",
-    # `goleiros` continua aqui e nao e' usado por ninguem desde 27/08: o motor
-    # virou o metodo `saves` do Player Stats, que passa por "player_stats".
-    # Fica como rastro de qual provedor aquele produto usava.
-    "goleiros": "openai",
-    # PLAYER STATS e AO VIVO ganharam gate em 2026-09-04, os dois no OpenAI
-    # (decisao do usuario). Sao os dois motores que decidem sobre uma aposta
-    # de ALTA VARIANCIA -- prop de um jogador so', e partida em andamento --
-    # e e' onde o parecer independente vale o modelo mais caro.
-    "player_stats": "openai",
-    "live": "openai",
-    # Faltas fica no Claude junto com os outros fluxos de volume: o pick sai
-    # de tabela empirica medida, nao de score composto, entao o parecer da IA
-    # aqui e' checagem de contexto (classico, decisao ja definida, elenco
-    # reserva) -- nao precisa do modelo mais caro pra isso.
-    "faltas": "anthropic",
-}
+# PROVEDOR UNICO: OpenAI (09/11/2026, pedido do usuario: "tira todas ia do
+# claude e deixa somente ia do open gpt"). Ate' aqui dica, alavancagem e faltas
+# iam pra Anthropic e o resto pra OpenAI; agora todo pipeline revisa no mesmo
+# provedor. A lista fica pra o painel continuar sabendo quais pipelines tem gate.
+DEFAULT_PROVIDERS = {p: "openai" for p in (
+    "dica", "alavancagem", "vip", "multipla", "bingo", "goleiros",
+    "player_stats", "live", "faltas")}
 
-# Nao existe default de modelo pra OpenAI: o ID tem que vir do env. Chutar um
-# ID errado faz a chamada falhar e o gate aprovar em silencio -- exatamente o
-# bug que o claude-3-5-haiku-latest (aposentado em 19/02/2026) causava aqui.
-#
-# Anthropic saiu do claude-opus-5 pro claude-sonnet-5 em 2026-08-07: o parecer
-# aqui e' classificacao binaria com schema fechado ("vete so' com contradicao
-# objetiva no JSON", ver _system_prompt) -- nao e' trabalho de modelo de
-# fronteira. Sonnet 5 custa 3/15 por milhao de tokens contra 5/25 do Opus 5,
-# aceita effort igual e nao muda uma linha de codigo. Pra cortar mais, o
-# claude-haiku-4-5 (1/5) ja' e' seguro desde que _aceita_effort exista.
-DEFAULT_MODELS = {"anthropic": "claude-sonnet-5", "openai": ""}
-
-# `output_config.effort` nao existe na linha inteira: Haiku 4.5 e Sonnet 4.5
-# devolvem 400 quando o campo vem junto. Como este gate FALHA ABERTO, esse 400
-# nao apareceria como erro no produto -- viraria status "unavailable" e decision
-# "approve", ou seja: baixar o modelo pra economizar desligaria a revisao em
-# silencio. Mesmo modo de falha do comentario acima.
-#
-# A lista e' de quem ACEITA effort, nunca de quem rejeita: modelo novo que nao
-# esteja aqui entra sem o campo, que e' o lado seguro (perde o controle de
-# profundidade, nao a revisao inteira).
-_MODELOS_COM_EFFORT = (
-    "claude-opus-5", "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6",
-    "claude-opus-4-5", "claude-sonnet-5", "claude-sonnet-4-6",
-    "claude-fable-5", "claude-mythos-5",
-)
+# Nao existe default de ID de modelo: ele vem do env. Chutar um ID errado faz
+# a chamada falhar -- e com on_failure=block, o pick nao sai. Sem variavel
+# propria, o pipeline herda AI_REVIEW_MODEL_VIP (ver from_env).
+DEFAULT_MODELS = {"openai": ""}
 
 
-def aceita_effort(model: str) -> bool:
-    return model.startswith(_MODELOS_COM_EFFORT)
+def _modelo_valido(valor: str | None) -> str | None:
+    """ID `claude-*` que tenha sobrado numa variavel do Railway e' ignorado:
+    mandado pra OpenAI ele so' devolve erro, e erro aqui bloqueia o pick."""
+    v = (valor or "").strip()
+    if not v or v.lower().startswith("claude"):
+        return None
+    return v
 
-# Formato do parecer. No Anthropic vira structured output (o modelo nao
-# consegue devolver fora do schema); no OpenAI o json_object nao valida
-# schema, entao normalize_review continua sendo a rede de seguranca.
+
+# Formato do parecer: json_schema strict na OpenAI. normalize_review continua
+# sendo a rede de seguranca.
 REVIEW_SCHEMA = {
     "type": "object",
     "properties": {
@@ -92,8 +52,8 @@ REVIEW_SCHEMA = {
 @dataclass(frozen=True)
 class AIReviewSettings:
     mode: str = "off"
-    provider: str = "anthropic"
-    model: str = "claude-sonnet-5"
+    provider: str = "openai"
+    model: str = ""
     cache_hours: int = 24
     # No Opus 5 o thinking vem ligado por padrao e max_tokens limita thinking
     # + resposta juntos: 350 truncava o JSON antes de fechar.
@@ -122,14 +82,21 @@ class AIReviewSettings:
             return default
 
         mode = value("AI_REVIEW_MODE", "off").lower()
-        provider = value("AI_REVIEW_PROVIDER", DEFAULT_PROVIDERS.get(pipeline, "anthropic")).lower()
         if mode not in {"off", "shadow", "enforce"}:
             raise ValueError("AI_REVIEW_MODE deve ser off, shadow ou enforce")
-        if provider not in {"anthropic", "openai"}:
-            raise ValueError("AI_REVIEW_PROVIDER deve ser anthropic ou openai")
+        pedido = value("AI_REVIEW_PROVIDER", "openai").lower()
+        if pedido != "openai":
+            # Variavel antiga no Railway (ex.: AI_REVIEW_PROVIDER_DICA=anthropic)
+            # nao derruba o gate: o projeto so' tem OpenAI desde 09/11/2026.
+            print(f"[AI_REVIEW] {pipeline or 'global'}: AI_REVIEW_PROVIDER={pedido} ignorado, "
+                  f"o projeto usa so' OpenAI.")
+        provider = "openai"
 
-        model = value("AI_REVIEW_MODEL", DEFAULT_MODELS[provider])
-        if not model and provider == "openai":
+        # Mesma cascata de value(), pulando ID claude-* (ver _modelo_valido).
+        chaves_modelo = ([f"AI_REVIEW_MODEL_{scope}_{environment}", f"AI_REVIEW_MODEL_{scope}"]
+                         if scope else []) + [f"AI_REVIEW_MODEL_{environment}", "AI_REVIEW_MODEL"]
+        model = next((m for m in (_modelo_valido(os.getenv(k)) for k in chaves_modelo) if m), "")
+        if not model:
             # HERDA O MODELO DO VIP (2026-09-04). Nao existe default de ID pra
             # OpenAI (ver o comentario de DEFAULT_MODELS), entao um pipeline
             # OpenAI sem `AI_REVIEW_MODEL_<SCOPE>` proprio nasce com o gate
@@ -148,8 +115,8 @@ class AIReviewSettings:
             # do pipeline e procuraria "AI_REVIEW_MODEL_VIP_LIVE", um nome que
             # nao quer dizer nada. Aqui a unica cascata que faz sentido e' a de
             # AMBIENTE.
-            model = (os.getenv(f"AI_REVIEW_MODEL_VIP_{environment}")
-                     or os.getenv("AI_REVIEW_MODEL_VIP") or "").strip()
+            model = (_modelo_valido(os.getenv(f"AI_REVIEW_MODEL_VIP_{environment}"))
+                     or _modelo_valido(os.getenv("AI_REVIEW_MODEL_VIP")) or "")
         if mode != "off" and not model:
             # Desliga o gate em vez de deixar toda revisao falhar e "aprovar".
             # Sem modelo, zero evento no painel -- silencio visivel, nao falso ok.
@@ -461,30 +428,10 @@ class AIReviewGate:
     def _call_model(self, payload: str) -> object:
         if self._call_model_override:
             return self._call_model_override(self._system_prompt(), payload)
-        if self.settings.provider == "anthropic":
-            from anthropic import Anthropic
-            # Sem temperature: removido do Opus 4.7 em diante, retorna 400.
-            # output_config.format garante JSON valido pelo schema; effort=low
-            # mantem o thinking curto num parecer que e so um veredito -- mas so
-            # entra pra modelo que aceita o campo (ver _MODELOS_COM_EFFORT).
-            output_config = {"format": {"type": "json_schema", "schema": REVIEW_SCHEMA}}
-            if aceita_effort(self.settings.model):
-                output_config["effort"] = self.settings.effort
-            response = Anthropic().messages.create(
-                model=self.settings.model, max_tokens=self.settings.max_tokens,
-                system=self._system_prompt(),
-                output_config=output_config,
-                messages=[{"role": "user", "content": payload}],
-            )
-            if response.stop_reason == "refusal":
-                raise RuntimeError("provedor recusou a revisao por politica de conteudo (recusou)")
-            # Com thinking ligado, content[0] pode ser um bloco de thinking --
-            # nunca indexar direto, procurar o bloco de texto.
-            return next((b.text for b in response.content if b.type == "text"), "")
         from openai import OpenAI
         # Sem temperature: a familia gpt-5 de raciocinio rejeita valor != 1.
-        # json_schema + strict garante o formato, igual ao lado Anthropic; o
-        # json_object antigo so prometia "algum JSON", nao o schema certo.
+        # json_schema + strict garante o formato; o json_object antigo so'
+        # prometia "algum JSON", nao o schema certo.
         response = OpenAI().chat.completions.create(
             model=self.settings.model,
             response_format={"type": "json_schema", "json_schema": {

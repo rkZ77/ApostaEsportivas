@@ -141,7 +141,7 @@ def test_metodo_novo_nasce_fora_do_pipeline_diario():
 
 @pytest.mark.parametrize("nome, porque", [
     ("live", "motor em validacao, so' faz sentido durante os jogos"),
-    ("ligas", "chama a Anthropic, custo real por rodada"),
+    ("ligas", "chama a OpenAI, custo real por rodada"),
 ])
 def test_comandos_caros_ficam_fora_do_tudo(nome, porque):
     assert main.COMANDOS_POR_NOME[nome].etapa == "", porque

@@ -49,7 +49,7 @@ _OPTIONAL_VARS = {
     # Sem o secret o webhook falha FECHADO (403 em tudo), entao a assinatura
     # some do site sem nenhum sinal. Faltar aqui e' incidente, nao detalhe.
     "MERCADOPAGO_WEBHOOK_SECRET": "confirmacao automatica de pagamento (webhook)",
-    "ANTHROPIC_API_KEY": "IA / picks",
+    "OPENAI_API_KEY": "IA (revisao dos picks, leituras, chat)",
     "RESEND_API_KEY": "envio de emails",
     "TURNSTILE_SECRET_KEY": "verificação anti-bot (captcha) no login/cadastro",
     "VAPID_PRIVATE_KEY": "push notifications",
@@ -907,7 +907,7 @@ def health_providers():
     """Diz quais integracoes opcionais estao CONFIGURADAS -- nao se respondem.
 
     Nao chama ninguem de proposito: um health check que bate na API do
-    MercadoPago, da Anthropic e do Resend a cada visita vira custo e vira
+    MercadoPago, da OpenAI e do Resend a cada visita vira custo e vira
     fonte de rate limit. O que este endpoint responde e a pergunta que
     realmente aparece depois de um deploy: "faltou variavel no Railway?".
     """

@@ -25,7 +25,13 @@ LEAGUE_SEASONS: dict[int, int] = {
 
 FEATURED_LEAGUE_IDS = set(LEAGUES.values())
 
-CLAUDE_MODEL = os.getenv("CHAT_AGENT_MODEL", "claude-haiku-4-5-20251001")
+def chat_model() -> str:
+    """Modelo OpenAI do agente: CHAT_AGENT_MODEL, senao o modelo OpenAI do
+    projeto (ver ia_openai.modelo). Desde 09/11/2026 a IA do site e' so' OpenAI."""
+    import ia_openai
+    return ia_openai.modelo("CHAT_AGENT_MODEL")
+
+
 MAX_TOKENS   = int(os.getenv("CHAT_AGENT_MAX_TOKENS", "2000"))
 MAX_HISTORY_MESSAGES = 6
 

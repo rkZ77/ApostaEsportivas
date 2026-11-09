@@ -40,7 +40,7 @@ class LeaguesService:
         """So' as ATIVAS -- e o nome do metodo mentia ate' 2026-09-11.
 
         Ele varria `leagues` inteira, e quem o chama e' o gerador de perfil de
-        liga: uma chamada da Anthropic POR LIGA. Com a tabela inteira, a Copa do
+        liga: uma chamada da OpenAI POR LIGA. Com a tabela inteira, a Copa do
         Mundo (desativada desde a limpeza dos pipelines) e qualquer liga que o
         backfill de historico tivesse descoberto entravam na conta -- credito
         gasto pra descrever competicao que o projeto nao acompanha.
