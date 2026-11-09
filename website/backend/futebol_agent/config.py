@@ -26,8 +26,8 @@ LEAGUE_SEASONS: dict[int, int] = {
 FEATURED_LEAGUE_IDS = set(LEAGUES.values())
 
 def chat_model() -> str:
-    """Modelo OpenAI do agente: CHAT_AGENT_MODEL, senao o modelo OpenAI do
-    projeto (ver ia_openai.modelo). Desde 09/11/2026 a IA do site e' so' OpenAI."""
+    """Modelo OpenAI do agente: CHAT_AGENT_MODEL, senao o mais barato
+    (ia_openai.MODELO_BARATO). Desde 09/11/2026 a IA do site e' so' OpenAI."""
     import ia_openai
     return ia_openai.modelo("CHAT_AGENT_MODEL")
 

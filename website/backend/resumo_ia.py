@@ -34,8 +34,8 @@ import ia_openai
 
 
 def modelo() -> str:
-    """Modelo OpenAI da leitura (ver ia_openai.modelo): RESUMO_IA_MODEL, senao o
-    modelo OpenAI do projeto. Desde 09/11/2026 a IA do site e' so' OpenAI."""
+    """Modelo OpenAI da leitura: RESUMO_IA_MODEL, senao o mais barato
+    (ia_openai.MODELO_BARATO). Desde 09/11/2026 a IA do site e' so' OpenAI."""
     return ia_openai.modelo("RESUMO_IA_MODEL")
 
 

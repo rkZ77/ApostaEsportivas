@@ -367,7 +367,10 @@ async def run_agent(user_message: str, history: list[dict],
                 + history + [{"role": "user", "content": user_message}])
     client   = get_client()
     model    = chat_model()
-    extra    = {"reasoning_effort": "low"} if ia_openai.raciocina(model) else {}
+    # "none": no gpt-6-luna o Chat Completions so' chama ferramenta sem
+    # raciocinio (documentacao da OpenAI, 09/11/2026). O agente so' busca dado
+    # e redige; a conta vem pronta das ferramentas.
+    extra    = {"reasoning_effort": "none"} if ia_openai.raciocina(model) else {}
 
     for _ in range(12):
         response = await asyncio.to_thread(

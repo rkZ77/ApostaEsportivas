@@ -4,11 +4,13 @@ O projeto usava a Anthropic na leitura do Raio-X (resumo_ia), na leitura da
 liga (liga_ia) e no agente do chat. Tudo passou pra OpenAI, e este modulo e' a
 unica porta: cliente, escolha de modelo e chamada com JSON validado.
 
-QUAL MODELO. Nao existe ID chutado aqui -- ID errado faz toda chamada falhar.
-A cascata e' a do proprio Railway: a variavel especifica do recurso, depois
-`OPENAI_MODEL`, depois `AI_REVIEW_MODEL_VIP` (que ja' e' "o modelo OpenAI do
-projeto", usado pelo gate do VIP). Valor `claude-*` que tenha sobrado numa
-variavel antiga e' ignorado: mandado pra OpenAI ele so' gera erro.
+QUAL MODELO (09/11/2026, pedido do usuario: "coloca o modelo mais barato").
+A variavel especifica do recurso, se existir; senao MODELO_BARATO. O ID foi
+conferido na documentacao oficial da OpenAI nesse dia: `gpt-6-luna` e' o mais
+barato ativo (US$ 0,10 entrada / 0,50 saida por milhao) e o indicado pra volume
+alto. `gpt-5-nano` e `gpt-5-mini` estao descontinuados (saem em 11/12/2026).
+Valor `claude-*` que tenha sobrado numa variavel antiga e' ignorado: mandado
+pra OpenAI ele so' gera erro.
 """
 from __future__ import annotations
 
@@ -33,23 +35,21 @@ def _valido(valor: str | None) -> str | None:
     return v
 
 
+MODELO_BARATO = "gpt-6-luna"
+
+
 def modelo(variavel: str | None = None) -> str:
-    """O ID do modelo OpenAI pra este recurso, ou "" se nenhum estiver
-    configurado (quem chama trata como IA desligada)."""
-    ambiente = os.getenv("DB_ENV", "prod").strip().upper()
-    for nome in ([variavel] if variavel else []) + [
-            "OPENAI_MODEL", f"AI_REVIEW_MODEL_VIP_{ambiente}", "AI_REVIEW_MODEL_VIP"]:
-        v = _valido(os.getenv(nome))
-        if v:
-            return v
-    return ""
+    """O ID do modelo OpenAI pra este recurso: a variavel dele no Railway, ou
+    MODELO_BARATO."""
+    proprio = _valido(os.getenv(variavel)) if variavel else None
+    return proprio or MODELO_BARATO
 
 
 def raciocina(model: str) -> bool:
     """Familias de raciocinio aceitam `reasoning_effort`; as outras devolvem
     400 com o campo. Na duvida, nao manda (perde o controle, nao a chamada)."""
     m = (model or "").lower()
-    return m.startswith(("gpt-5", "o1", "o3", "o4"))
+    return m.startswith(("gpt-5", "gpt-6", "o1", "o3", "o4"))
 
 
 def cliente():
@@ -83,7 +83,7 @@ def json_estruturado(system: str, conteudo: str, schema: dict, nome: str,
     """(json, tokens de entrada, tokens de saida). Levanta em falha ou
     resposta cortada -- nunca devolve JSON pela metade."""
     if not model:
-        raise RuntimeError("modelo OpenAI nao configurado (OPENAI_MODEL)")
+        raise RuntimeError("modelo OpenAI nao configurado")
     extra = {"reasoning_effort": esforco} if raciocina(model) else {}
     resposta = cliente().chat.completions.create(
         model=model,
