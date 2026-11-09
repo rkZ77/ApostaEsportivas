@@ -81,7 +81,7 @@ PROMPT = (
 
 def _perguntar(nome_liga: str, pais: str | None, season: int) -> dict:
     """Uma chamada, JSON validado por schema. OpenAI (a IA do projeto desde
-    09/11/2026): RULES_MODEL, senao o modelo OpenAI do projeto."""
+    09/11/2026): RULES_MODEL, senao o mais barato (ia_openai.MODELO_BARATO)."""
     from services import ia_openai
 
     modelo = ia_openai.modelo("RULES_MODEL")

@@ -289,8 +289,7 @@ def test_resposta_cortada_levanta(monkeypatch):
 
 def test_id_claude_que_sobrou_no_env_e_ignorado(monkeypatch):
     monkeypatch.setenv("RESUMO_IA_MODEL", "claude-haiku-5-5")
-    monkeypatch.setenv("OPENAI_MODEL", "gpt-5-mini")
-    assert resumo_ia.modelo() == "gpt-5-mini"
+    assert resumo_ia.modelo() == "gpt-6-luna"
 
 
 def test_falha_do_modelo_fica_gravada_e_nao_levanta(monkeypatch):

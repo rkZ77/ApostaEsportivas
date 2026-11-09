@@ -42,7 +42,7 @@ class LeagueAnalysisService:
     def __init__(self):
         # So' OpenAI desde 09/11/2026 (pedido do usuario). AI_MODEL_NAME ainda
         # vale "claude-sonnet-4-6" no .env antigo; ia_openai.modelo ignora
-        # ID claude-* e cai no modelo OpenAI do projeto.
+        # ID claude-* e cai no mais barato (ia_openai.MODELO_BARATO).
         self.model = ia_openai.modelo("AI_MODEL_NAME")
 
         self.LEAGUE_ANALYSIS_PROMPT = """

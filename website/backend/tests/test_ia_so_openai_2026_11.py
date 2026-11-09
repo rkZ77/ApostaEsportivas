@@ -29,16 +29,14 @@ def test_requirements_sem_anthropic():
         assert not any(l.strip().lower().startswith("anthropic") for l in linhas), req
 
 
-def test_modelo_segue_a_cascata_e_ignora_id_claude(monkeypatch):
-    for v in ("CHAT_AGENT_MODEL", "OPENAI_MODEL", "AI_REVIEW_MODEL_VIP", "AI_REVIEW_MODEL_VIP_PROD", "DB_ENV"):
-        monkeypatch.delenv(v, raising=False)
-    assert ia_openai.modelo("CHAT_AGENT_MODEL") == ""
-    monkeypatch.setenv("AI_REVIEW_MODEL_VIP", "gpt-vip")
-    assert ia_openai.modelo("CHAT_AGENT_MODEL") == "gpt-vip"
-    monkeypatch.setenv("OPENAI_MODEL", "gpt-geral")
-    assert ia_openai.modelo("CHAT_AGENT_MODEL") == "gpt-geral"
+def test_modelo_padrao_e_o_mais_barato_e_ignora_id_claude(monkeypatch):
+    """09/11/2026: sem variavel propria, o mais barato ativo (gpt-6-luna,
+    conferido na documentacao da OpenAI). gpt-5-nano/mini saem em 11/12/2026."""
+    monkeypatch.delenv("CHAT_AGENT_MODEL", raising=False)
+    assert ia_openai.MODELO_BARATO == "gpt-6-luna"
+    assert ia_openai.modelo("CHAT_AGENT_MODEL") == "gpt-6-luna"
     monkeypatch.setenv("CHAT_AGENT_MODEL", "claude-haiku-4-5-20251001")
-    assert ia_openai.modelo("CHAT_AGENT_MODEL") == "gpt-geral"
+    assert ia_openai.modelo("CHAT_AGENT_MODEL") == "gpt-6-luna"
     monkeypatch.setenv("CHAT_AGENT_MODEL", "gpt-chat")
     assert ia_openai.modelo("CHAT_AGENT_MODEL") == "gpt-chat"
 
@@ -56,6 +54,7 @@ def test_strict_so_quando_o_schema_e_fechado():
 
 def test_raciocinio_so_pra_familia_que_aceita():
     assert ia_openai.raciocina("gpt-5-mini") and ia_openai.raciocina("o4-mini")
+    assert ia_openai.raciocina("gpt-6-luna")
     assert not ia_openai.raciocina("gpt-4o-mini")
 
 
@@ -76,7 +75,7 @@ def test_ferramentas_vao_no_formato_da_openai():
 
 
 def test_agente_chama_ferramenta_e_responde(monkeypatch):
-    monkeypatch.setenv("CHAT_AGENT_MODEL", "gpt-chat")
+    monkeypatch.delenv("CHAT_AGENT_MODEL", raising=False)
     pedidos, executadas = [], []
 
     def resposta(msg, fim):
@@ -104,7 +103,9 @@ def test_agente_chama_ferramenta_e_responde(monkeypatch):
 
     assert texto == "Cobrimos o Brasileirao."
     assert executadas == [("get_ligas_cobertas", {}, {"user_id": 7, "plano": "vip"})]
-    assert pedidos[0]["model"] == "gpt-chat" and pedidos[0]["messages"][0]["role"] == "system"
+    assert pedidos[0]["model"] == "gpt-6-luna" and pedidos[0]["messages"][0]["role"] == "system"
+    # gpt-6-luna so' chama ferramenta no Chat Completions com raciocinio "none".
+    assert pedidos[0]["reasoning_effort"] == "none"
     segunda = pedidos[1]["messages"]
     assert segunda[-1] == {"role": "tool", "tool_call_id": "c1", "content": "Brasileirao Serie A"}
     assert historico[-1] == {"role": "assistant", "content": "Cobrimos o Brasileirao."}
