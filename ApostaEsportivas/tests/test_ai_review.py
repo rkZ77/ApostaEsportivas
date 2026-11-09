@@ -3,20 +3,8 @@ import os
 import pytest
 
 from services.pick_engine.ai_review import (
-    AIReviewGate, AIReviewSettings, aceita_effort, build_review_payload, normalize_review,
+    AIReviewGate, AIReviewSettings, build_review_payload, normalize_review,
 )
-
-
-def test_effort_so_vai_para_modelo_que_aceita():
-    """Regressao preventiva: Haiku 4.5 e Sonnet 4.5 devolvem 400 se
-    output_config.effort vier junto. Como o gate falha aberto, esse 400 nao
-    apareceria como erro -- viraria approve em silencio, desligando a revisao
-    justamente quando alguem troca pro modelo mais barato pra economizar."""
-    assert aceita_effort("claude-sonnet-5")
-    assert aceita_effort("claude-opus-5")
-    assert not aceita_effort("claude-haiku-4-5")
-    assert not aceita_effort("claude-haiku-4-5-20251001")
-    assert not aceita_effort("modelo-novo-que-ninguem-mapeou")
 
 
 @pytest.fixture
@@ -64,15 +52,26 @@ def test_invalid_response_fails_open():
     assert normalize_review("fora do formato")["decision"] == "approve"
 
 
-def test_provider_padrao_por_pipeline(env_limpo):
+def test_todo_pipeline_revisa_na_openai(env_limpo):
+    """09/11/2026: o projeto so' usa OpenAI. Free, alavancagem e faltas, que
+    iam pra Anthropic, herdam o modelo OpenAI do VIP."""
     env_limpo.setenv("AI_REVIEW_MODE", "shadow")
     env_limpo.setenv("AI_REVIEW_MODEL_VIP", "modelo-openai")
-    env_limpo.setenv("AI_REVIEW_MODEL_MULTIPLA", "modelo-openai")
-    assert AIReviewSettings.from_env("dica").provider == "anthropic"
-    assert AIReviewSettings.from_env("alavancagem").provider == "anthropic"
-    assert AIReviewSettings.from_env("vip").provider == "openai"
-    assert AIReviewSettings.from_env("multipla").provider == "openai"
-    assert AIReviewSettings.from_env("dica").model == "claude-sonnet-5"
+    for pipeline in ("dica", "alavancagem", "faltas", "vip", "multipla", "bingo", "live"):
+        s = AIReviewSettings.from_env(pipeline)
+        assert s.provider == "openai" and s.model == "modelo-openai", pipeline
+
+
+def test_variavel_antiga_da_anthropic_nao_derruba_o_gate(env_limpo):
+    """Railway com AI_REVIEW_PROVIDER_DICA=anthropic e AI_REVIEW_MODEL_DICA
+    claude-*: mandar o ID claude pra OpenAI so' daria erro, e erro bloqueia o
+    pick. O gate ignora os dois e usa o modelo OpenAI do projeto."""
+    env_limpo.setenv("AI_REVIEW_MODE", "enforce")
+    env_limpo.setenv("AI_REVIEW_PROVIDER_DICA", "anthropic")
+    env_limpo.setenv("AI_REVIEW_MODEL_DICA", "claude-sonnet-5")
+    env_limpo.setenv("AI_REVIEW_MODEL_VIP", "gpt-modelo")
+    s = AIReviewSettings.from_env("dica")
+    assert (s.provider, s.model, s.mode) == ("openai", "gpt-modelo", "enforce")
 
 
 def test_env_do_pipeline_vence_o_global(env_limpo):

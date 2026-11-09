@@ -1,10 +1,13 @@
 import asyncio
 import logging
+import json
 import os
+from types import SimpleNamespace
 from typing import Any
-import anthropic
 
-from futebol_agent.config import CLAUDE_MODEL, MAX_TOKENS, MAX_HISTORY_MESSAGES
+import ia_openai
+
+from futebol_agent.config import MAX_TOKENS, MAX_HISTORY_MESSAGES, chat_model
 from futebol_agent.prompts import SYSTEM_PROMPT
 from futebol_agent.tools.live_matches import get_live_matches, get_today_matches
 from futebol_agent.tools.match_stats import (
@@ -31,14 +34,18 @@ from futebol_agent.tools.formatters import (
 
 logger = logging.getLogger(__name__)
 
-_client: anthropic.Anthropic | None = None
+def get_client():
+    """Cliente OpenAI do site (ia_openai). Desde 09/11/2026 o agente e' so' OpenAI."""
+    return ia_openai.cliente()
 
 
-def get_client() -> anthropic.Anthropic:
-    global _client
-    if _client is None:
-        _client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
-    return _client
+def _tools_openai() -> list[dict]:
+    """TOOLS fica no formato de sempre (name/description/input_schema), que e'
+    o que os testes e quem le o codigo conhecem; a OpenAI recebe a traducao."""
+    return [{"type": "function", "function": {
+        "name": t["name"], "description": t.get("description", ""),
+        "parameters": t.get("input_schema") or {"type": "object", "properties": {}}}}
+        for t in TOOLS]
 
 
 #: Ferramentas que leem o BANCO DO SITE. As demais falam com a API-Football.
@@ -327,24 +334,23 @@ async def _execute_tool(tool_name: str, tool_input: dict,
 
 
 def _clean_history(messages: list[dict]) -> list[dict]:
+    """So' as falas de texto (user/assistant), sem chamadas de ferramenta.
+    Aceita o formato antigo em blocos ([{"type": "text", ...}]) e o devolve
+    como texto simples, que e' o que a OpenAI e o front usam."""
     result = []
     for msg in messages:
-        content = msg["content"]
+        role = msg.get("role") if isinstance(msg, dict) else None
+        if role not in ("user", "assistant"):
+            continue
+        if msg.get("tool_calls"):
+            continue
+        content = msg.get("content")
+        if isinstance(content, list):
+            partes = [b.get("text", "") for b in content
+                      if isinstance(b, dict) and b.get("type") == "text"]
+            content = "\n".join(p for p in partes if p)
         if isinstance(content, str) and content:
-            result.append(msg)
-            continue
-        if not isinstance(content, list):
-            continue
-        if content and isinstance(content[0], dict) and content[0].get("type") == "tool_result":
-            continue
-        text_blocks = []
-        for block in content:
-            if hasattr(block, "type") and block.type == "text":
-                text_blocks.append({"type": "text", "text": block.text})
-            elif isinstance(block, dict) and block.get("type") == "text":
-                text_blocks.append(block)
-        if text_blocks:
-            result.append({"role": msg["role"], "content": text_blocks})
+            result.append({"role": role, "content": content})
     return result
 
 
@@ -356,49 +362,54 @@ async def run_agent(user_message: str, history: list[dict],
     ferramentas pessoais respondem que nao ha sessao em vez de vazar dado de
     outra conta.
     """
-    history  = history[-MAX_HISTORY_MESSAGES:]
-    messages = history + [{"role": "user", "content": user_message}]
+    history  = _clean_history(history[-MAX_HISTORY_MESSAGES:])
+    messages = ([{"role": "system", "content": SYSTEM_PROMPT}]
+                + history + [{"role": "user", "content": user_message}])
     client   = get_client()
+    model    = chat_model()
+    extra    = {"reasoning_effort": "low"} if ia_openai.raciocina(model) else {}
 
-    while True:
+    for _ in range(12):
         response = await asyncio.to_thread(
-            client.messages.create,
-            model=CLAUDE_MODEL,
-            max_tokens=MAX_TOKENS,
-            system=[{"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
-            tools=TOOLS,
+            client.chat.completions.create,
+            model=model,
+            max_completion_tokens=MAX_TOKENS,
+            tools=_tools_openai(),
             messages=messages,
+            **extra,
         )
-
-        messages.append({"role": "assistant", "content": response.content})
+        escolha = response.choices[0]
+        msg = escolha.message
 
         usage = response.usage
-        logger.debug(
-            f"[TOKENS] input={usage.input_tokens} "
-            f"cache_read={getattr(usage,'cache_read_input_tokens',0)} "
-            f"output={usage.output_tokens}"
-        )
+        logger.debug(f"[TOKENS] input={getattr(usage, 'prompt_tokens', 0)} "
+                     f"output={getattr(usage, 'completion_tokens', 0)}")
 
-        if response.stop_reason == "end_turn":
-            text = next(
-                (block.text for block in response.content if hasattr(block, "text")),
-                "Sem resposta.",
-            )
-            updated_history = _clean_history(messages)[-MAX_HISTORY_MESSAGES:]
-            return text, updated_history
-
-        if response.stop_reason == "tool_use":
-            tool_calls = [b for b in response.content if b.type == "tool_use"]
-            results    = await asyncio.gather(
+        if msg.tool_calls:
+            messages.append({"role": "assistant", "content": msg.content or "",
+                             "tool_calls": [{"id": c.id, "type": "function",
+                                             "function": {"name": c.function.name,
+                                                          "arguments": c.function.arguments}}
+                                            for c in msg.tool_calls]})
+            tool_calls = []
+            for c in msg.tool_calls:
+                try:
+                    entrada = json.loads(c.function.arguments or "{}")
+                except ValueError:
+                    entrada = {}
+                tool_calls.append(SimpleNamespace(id=c.id, name=c.function.name, input=entrada))
+            results = await asyncio.gather(
                 *[_execute_tool(tc.name, tc.input, contexto) for tc in tool_calls],
                 return_exceptions=True,
             )
-            tool_results = []
             for tc, result in zip(tool_calls, results):
                 content = f"ERRO: {result}" if isinstance(result, Exception) else str(result)
-                tool_results.append({"type": "tool_result", "tool_use_id": tc.id, "content": content})
-            messages.append({"role": "user", "content": tool_results})
-        else:
-            break
+                messages.append({"role": "tool", "tool_call_id": tc.id, "content": content})
+            continue
+
+        text = msg.content or "Sem resposta."
+        messages.append({"role": "assistant", "content": text})
+        updated_history = _clean_history(messages)[-MAX_HISTORY_MESSAGES:]
+        return text, updated_history
 
     return "Não foi possível gerar uma resposta.", history

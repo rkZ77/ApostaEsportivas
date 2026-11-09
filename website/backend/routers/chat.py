@@ -280,7 +280,7 @@ async def chat(body: ChatRequest, current_user: dict = Depends(get_current_user)
     if faq_answer:
         return StreamingResponse(_stream_text(faq_answer), media_type="text/event-stream")
 
-    # Análise real de jogos (tools + Claude) é exclusiva de quem paga, free só tem
+    # Análise real de jogos (tools + OpenAI) é exclusiva de quem paga, free só tem
     # acesso ao FAQ acima, pra não gerar custo de API.
     #
     # Desde 12/09/2026 o agente acompanha o Ao Vivo e fica no Pick IA Pro: os
@@ -293,7 +293,7 @@ async def chat(body: ChatRequest, current_user: dict = Depends(get_current_user)
         return StreamingResponse(_stream_text(_UPGRADE_PRO), media_type="text/event-stream")
 
     if not _AGENT_OK or run_agent is None:
-        raise HTTPException(503, "Agente indisponível. Configure ANTHROPIC_API_KEY.")
+        raise HTTPException(503, "Agente indisponível. Configure OPENAI_API_KEY.")
 
     history = [
         {"role": m.role, "content": m.content}

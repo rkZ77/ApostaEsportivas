@@ -120,7 +120,8 @@ class _Cur:
 @pytest.fixture
 def modelo(monkeypatch):
     chamadas = []
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
+    monkeypatch.setenv("OPENAI_API_KEY", "x")
+    monkeypatch.setenv("RESUMO_IA_MODEL", "gpt-5-mini")
     monkeypatch.delenv("RESUMO_IA", raising=False)
 
     def falso(fatos):
@@ -152,33 +153,42 @@ def test_sem_amostra_e_teto_nao_gastam(modelo, monkeypatch):
 
 
 def test_desligado_sem_chave(monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     assert liga_ia.leitura_da_liga(_Cur(), 71) == {"status": "desligado"}
 
 
 def test_falha_do_modelo_fica_gravada(monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
+    monkeypatch.setenv("OPENAI_API_KEY", "x")
+    monkeypatch.setenv("RESUMO_IA_MODEL", "gpt-5-mini")
     monkeypatch.setattr(liga_ia, "chamar_modelo", lambda f: (_ for _ in ()).throw(RuntimeError("x")))
     cur = _Cur()
     assert liga_ia.leitura_da_liga(cur, 71) == {"status": "falhou"}
     assert cur.guardado["status"] == "falhou" and cur.perfil_motor is None
 
 
-def test_chamada_usa_modelo_barato_e_corta_as_listas(monkeypatch):
-    from types import SimpleNamespace as NS
+def test_chamada_usa_openai_e_corta_as_listas(monkeypatch):
     pedido = {}
     t = [{"time": f"t{i}", "leitura": "l"} for i in range(6)]
     m = [{"mercado": "m", "tendencia": "over", "pct": 70, "leitura": "l"}] * 6
     saida = {"resumo": "r", "tendencias": m, "mando": "", "momento": "", "alerta": "",
              "times_over": t, "times_under": t}
+    monkeypatch.setenv("RESUMO_IA_MODEL", "gpt-5-mini")
+    _openai_falso(monkeypatch, saida, pedido)
+    import resumo_ia
+    conteudo, _, _ = liga_ia.chamar_modelo({})
+    assert pedido["model"] == resumo_ia.modelo() and pedido["reasoning_effort"] == "low"
+    assert len(conteudo["tendencias"]) == 4 and len(conteudo["times_over"]) == 3
 
-    class _Msgs:
+
+def _openai_falso(monkeypatch, saida, pedido, finish="stop"):
+    """Cliente OpenAI de mentira no ia_openai (a IA do site desde 09/11/2026)."""
+    from types import SimpleNamespace as NS
+    import ia_openai
+
+    class _Comp:
         def create(self, **kw):
             pedido.update(kw)
-            return NS(stop_reason="end_turn", content=[NS(type="text", text=json.dumps(saida))],
-                      usage=NS(input_tokens=10, output_tokens=5))
-    import resumo_ia
-    monkeypatch.setattr(resumo_ia, "_client", NS(messages=_Msgs()))
-    conteudo, _, _ = liga_ia.chamar_modelo({})
-    assert pedido["model"] == resumo_ia.MODELO and pedido["output_config"]["effort"] == "low"
-    assert len(conteudo["tendencias"]) == 4 and len(conteudo["times_over"]) == 3
+            return NS(choices=[NS(finish_reason=finish,
+                                  message=NS(content=json.dumps(saida), refusal=None))],
+                      usage=NS(prompt_tokens=1500, completion_tokens=300))
+    monkeypatch.setattr(ia_openai, "_client", NS(chat=NS(completions=_Comp())))

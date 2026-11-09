@@ -30,7 +30,15 @@ logger = logging.getLogger(__name__)
 
 BRT = timezone(timedelta(hours=-3))
 
-MODELO = os.getenv("RESUMO_IA_MODEL", "claude-haiku-5-5")
+import ia_openai
+
+
+def modelo() -> str:
+    """Modelo OpenAI da leitura (ver ia_openai.modelo): RESUMO_IA_MODEL, senao o
+    modelo OpenAI do projeto. Desde 09/11/2026 a IA do site e' so' OpenAI."""
+    return ia_openai.modelo("RESUMO_IA_MODEL")
+
+
 #: Jogos minimos do mandante em casa e do visitante fora na temporada.
 MIN_JOGOS = 3
 #: Falha da API nao trava o jogo o dia inteiro: depois disto tenta de novo.
@@ -44,7 +52,7 @@ _client = None
 
 def ligado() -> bool:
     return os.getenv("RESUMO_IA", "on").strip().lower() != "off" \
-        and bool(os.getenv("ANTHROPIC_API_KEY"))
+        and ia_openai.disponivel() and bool(modelo())
 
 
 def max_por_dia() -> int:
@@ -64,11 +72,7 @@ def _lock(fixture_id: int) -> threading.Lock:
 
 
 def _get_client():
-    global _client
-    if _client is None:
-        import anthropic
-        _client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
-    return _client
+    return ia_openai.cliente()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -753,7 +757,7 @@ def numeros_da_tela(fatos: dict) -> dict:
     return saida
 
 #: US$ por milhao de tokens do Haiku 5.5 (entrada, saida). So' pra estimar o
-#: custo no /admin · a fatura de verdade e' a do console da Anthropic.
+#: custo no /admin · a fatura de verdade e' a do painel da OpenAI.
 PRECO_POR_MTOK = (0.10, 0.50)
 
 
@@ -862,38 +866,21 @@ def acertos(cur, dias: int = 60) -> dict:
 
 
 def chamar_modelo(fatos: dict) -> tuple[dict, int, int]:
-    """(conteudo, tokens de entrada, tokens de saida). Levanta em falha."""
-    resposta = _get_client().messages.create(
-        model=MODELO,
-        # 8000, e nao 3500 (14/10/2026): com os numeros do time e a forca de
-        # cada mercado (12/10) a leitura passou do teto e voltava cortada
-        # ("resposta incompleta: max_tokens" nos logs de PROD) · a tela
-        # mostrava "nao deu para gerar". O teto so' limita; paga-se o que sai.
-        # 16000 e SEM RACIOCINIO (19/10/2026): com todos os mercados e os
-        # jogadores, o Haiku 5.5 pensava ~6 mil tokens antes do JSON (o texto
-        # tem ~1,8 mil), estourava os 8000 ("resposta incompleta: max_tokens")
-        # e passava dos 45s da tela. A conta ja' vem pronta e as regras sao
-        # explicitas: o modelo so' escolhe e escreve. Desligar e' aceito no
-        # Haiku 5.5 com effort `high` ou abaixo. O teto so' limita.
-        max_tokens=16000,
-        thinking={"type": "disabled"},
-        system=[{"type": "text", "text": SYSTEM, "cache_control": {"type": "ephemeral"}}],
-        output_config={"effort": "low",
-                       "format": {"type": "json_schema", "schema": _SCHEMA}},
-        messages=[{"role": "user",
-                   "content": json.dumps(fatos, ensure_ascii=False, separators=(",", ":"))}],
-    )
-    if resposta.stop_reason != "end_turn":
-        raise RuntimeError(f"resposta incompleta: {resposta.stop_reason}")
-    texto = next(b.text for b in resposta.content if b.type == "text")
-    conteudo = json.loads(texto)
+    """(conteudo, tokens de entrada, tokens de saida). Levanta em falha.
+
+    16000 de teto (13-19/10/2026): com todos os mercados e jogadores a leitura
+    passava de 3500 e de 8000 e voltava cortada. O teto so' limita; paga-se o
+    que sai. Esforco de raciocinio baixo: a conta ja' vem pronta, o modelo so'
+    escolhe e escreve (e a tela espera 45s)."""
+    conteudo, t_in, t_out = ia_openai.json_estruturado(
+        SYSTEM, json.dumps(fatos, ensure_ascii=False, separators=(",", ":")),
+        _SCHEMA, "leitura_do_jogo", modelo(), max_tokens=16000, esforco="low")
     conteudo["times"] = (conteudo.get("times") or [])[:2]
     for t in conteudo["times"]:
         t["mercados"] = (t.get("mercados") or [])[:3]
         t["jogadores"] = (t.get("jogadores") or [])[:3]
     conteudo["mercados_do_jogo"] = (conteudo.get("mercados_do_jogo") or [])[:3]
-    u = resposta.usage
-    return conteudo, int(u.input_tokens or 0), int(u.output_tokens or 0)
+    return conteudo, t_in, t_out
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -921,7 +908,7 @@ def _gravar(cur, fixture_id, dia, status, conteudo=None, motivo=None,
             criado_em = NOW()
     """, (fixture_id, dia, status,
           json.dumps(conteudo, ensure_ascii=False) if conteudo is not None else None,
-          motivo, MODELO if status == "ok" else None, tokens_in, tokens_out))
+          motivo, modelo() if status == "ok" else None, tokens_in, tokens_out))
     cur.connection.commit()
 
 

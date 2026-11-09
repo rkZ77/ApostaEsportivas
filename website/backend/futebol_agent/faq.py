@@ -2,9 +2,9 @@
 
 Perguntas genéricas ("quais os planos", "como funciona a alavancagem")
 não precisam de IA nem de dados ao vivo — responder direto aqui evita
-chamar a API do Claude, então fica liberado pra qualquer plano (inclusive
+chamar a API da IA (OpenAI), então fica liberado pra qualquer plano (inclusive
 free) sem custo e sem limite diário. Só a análise real de jogos (tools +
-Claude) continua exclusiva de quem paga.
+OpenAI) continua exclusiva de quem paga.
 """
 
 from rapidfuzz import fuzz, process

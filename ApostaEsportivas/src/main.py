@@ -1315,7 +1315,7 @@ COMANDOS: tuple = (
             detalhe="medias                  so os times com media velha\n"
                     "medias full             APAGA a tabela e reprocessa todo time"),
     Comando("ligas", "Atualizar perfis de ligas (IA)",
-            "Atualiza perfis de ligas (IA · consome crédito da Anthropic)",
+            "Atualiza perfis de ligas (IA · consome crédito da OpenAI)",
             lambda *a: cmd_ligas()),
 )
 

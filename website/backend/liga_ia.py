@@ -336,28 +336,15 @@ _SCHEMA = {
 
 
 def chamar_modelo(fatos: dict) -> tuple[dict, int, int]:
-    """(conteudo, tokens de entrada, tokens de saida). Levanta em falha."""
-    resposta = resumo_ia._get_client().messages.create(
-        model=resumo_ia.MODELO,
-        # Sem raciocinio, como a leitura do jogo (19/10/2026): ele gastava
-        # mais saida pensando que escrevendo. Ver resumo_ia.chamar_modelo.
-        max_tokens=16000,
-        thinking={"type": "disabled"},
-        system=[{"type": "text", "text": SYSTEM, "cache_control": {"type": "ephemeral"}}],
-        output_config={"effort": "low",
-                       "format": {"type": "json_schema", "schema": _SCHEMA}},
-        messages=[{"role": "user",
-                   "content": json.dumps(fatos, ensure_ascii=False, separators=(",", ":"))}],
-    )
-    if resposta.stop_reason != "end_turn":
-        raise RuntimeError(f"resposta incompleta: {resposta.stop_reason}")
-    texto = next(b.text for b in resposta.content if b.type == "text")
-    conteudo = json.loads(texto)
+    """(conteudo, tokens de entrada, tokens de saida). Levanta em falha.
+    Mesmo cliente, modelo e teto da leitura do jogo (resumo_ia.chamar_modelo)."""
+    conteudo, t_in, t_out = resumo_ia.ia_openai.json_estruturado(
+        SYSTEM, json.dumps(fatos, ensure_ascii=False, separators=(",", ":")),
+        _SCHEMA, "leitura_da_liga", resumo_ia.modelo(), max_tokens=16000, esforco="low")
     conteudo["tendencias"] = (conteudo.get("tendencias") or [])[:4]
     conteudo["times_over"] = (conteudo.get("times_over") or [])[:3]
     conteudo["times_under"] = (conteudo.get("times_under") or [])[:3]
-    u = resposta.usage
-    return conteudo, int(u.input_tokens or 0), int(u.output_tokens or 0)
+    return conteudo, t_in, t_out
 
 
 def _com_escudo(conteudo: dict, times: list[dict]) -> None:
@@ -462,7 +449,7 @@ def _gravar(cur, league_id, dia, status, conteudo=None, motivo=None,
             criado_em = NOW()
     """, (league_id, dia, status,
           json.dumps(conteudo, ensure_ascii=False) if conteudo is not None else None,
-          motivo, resumo_ia.MODELO if status == "ok" else None, tokens_in, tokens_out))
+          motivo, resumo_ia.modelo() if status == "ok" else None, tokens_in, tokens_out))
     cur.connection.commit()
 
 

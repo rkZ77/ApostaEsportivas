@@ -214,7 +214,8 @@ class _Cur:
 @pytest.fixture
 def modelo(monkeypatch):
     chamadas = []
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
+    monkeypatch.setenv("OPENAI_API_KEY", "x")
+    monkeypatch.setenv("RESUMO_IA_MODEL", "gpt-5-mini")
     monkeypatch.delenv("RESUMO_IA", raising=False)
 
     def falso(fatos):
@@ -251,47 +252,50 @@ def test_jogo_encerrado_e_teto_do_dia_nao_gastam(modelo, monkeypatch):
 
 
 def test_desligado_sem_chave(monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     assert resumo_ia.resumo_do_jogo(_Cur(), 10, _dados) == {"status": "desligado"}
 
 
-def test_chamada_usa_modelo_barato_json_e_corta_em_4(monkeypatch):
-    from types import SimpleNamespace as NS
+def test_chamada_usa_openai_json_e_corta_em_4(monkeypatch):
     pedido = {}
     m = [{"mercado": f"m{i}", "tendencia": "over", "leitura": "l"} for i in range(6)]
     saida = {"resumo": "r", "contexto": "c", "alerta": "", "mercados_do_jogo": m,
              "times": [{"lado": "mandante", "perfil": "dominante", "leitura": "l", "mercados": m,
                         "jogadores": m}] * 3}
-
-    class _Msgs:
-        def create(self, **kw):
-            pedido.update(kw)
-            return NS(stop_reason="end_turn",
-                      content=[NS(type="thinking"), NS(type="text", text=json.dumps(saida))],
-                      usage=NS(input_tokens=1500, output_tokens=300))
-    monkeypatch.setattr(resumo_ia, "_client", NS(messages=_Msgs()))
+    monkeypatch.setenv("RESUMO_IA_MODEL", "gpt-5-mini")
+    _openai_falso(monkeypatch, saida, pedido)
     conteudo, t_in, t_out = resumo_ia.chamar_modelo({"jogo": {}})
-    assert pedido["model"] == "claude-haiku-5-5"
-    assert pedido["output_config"]["effort"] == "low"
-    assert pedido["output_config"]["format"]["type"] == "json_schema"
-    # 3500 cortava a leitura no meio em PROD (max_tokens, 13/10/2026).
-    assert pedido["max_tokens"] >= 16000
-    # O raciocinio estourava o teto em PROD (19/10/2026): desligado, e o
-    # Haiku 5.5 so' aceita isso com effort high ou abaixo.
-    assert pedido["thinking"] == {"type": "disabled"}
-    assert pedido["output_config"]["effort"] in ("low", "medium", "high")
+    assert pedido["model"] == "gpt-5-mini"
+    assert pedido["reasoning_effort"] == "low"
+    assert pedido["response_format"]["type"] == "json_schema"
+    # 3500 cortava a leitura no meio em PROD (13/10/2026).
+    assert pedido["max_completion_tokens"] >= 16000
     assert len(conteudo["mercados_do_jogo"]) == 3 and len(conteudo["times"]) == 2
     assert len(conteudo["times"][0]["mercados"]) == 3 and (t_in, t_out) == (1500, 300)
     assert len(conteudo["times"][0]["jogadores"]) == 3
     # o atalho pra aba Mercados e' obrigatorio nos mercados de time e de jogo
-    esquema = pedido["output_config"]["format"]["schema"]
+    esquema = pedido["response_format"]["json_schema"]["schema"]
     item = esquema["properties"]["mercados_do_jogo"]["items"]
     assert "atalho" in item["required"]
     assert "outro" in item["properties"]["atalho"]["properties"]["mercado"]["enum"]
 
 
+def test_resposta_cortada_levanta(monkeypatch):
+    monkeypatch.setenv("RESUMO_IA_MODEL", "gpt-5-mini")
+    _openai_falso(monkeypatch, {}, {}, finish="length")
+    with pytest.raises(RuntimeError, match="incompleta"):
+        resumo_ia.chamar_modelo({"jogo": {}})
+
+
+def test_id_claude_que_sobrou_no_env_e_ignorado(monkeypatch):
+    monkeypatch.setenv("RESUMO_IA_MODEL", "claude-haiku-5-5")
+    monkeypatch.setenv("OPENAI_MODEL", "gpt-5-mini")
+    assert resumo_ia.modelo() == "gpt-5-mini"
+
+
 def test_falha_do_modelo_fica_gravada_e_nao_levanta(monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
+    monkeypatch.setenv("OPENAI_API_KEY", "x")
+    monkeypatch.setenv("RESUMO_IA_MODEL", "gpt-5-mini")
 
     def quebra(fatos):
         raise RuntimeError("overloaded")
@@ -386,3 +390,17 @@ def test_numeros_da_tela_saem_da_conta_e_nao_da_ia(modelo):
     assert n["mandante"]["pct_marcou"] == 67 and n["visitante"]["escanteios_pro"] == 5
     r = resumo_ia.resumo_do_jogo(_Cur(), 10, _dados)
     assert set(r["numeros"]) == {"mandante", "visitante"}
+
+
+def _openai_falso(monkeypatch, saida, pedido, finish="stop"):
+    """Cliente OpenAI de mentira no ia_openai (a IA do site desde 09/11/2026)."""
+    from types import SimpleNamespace as NS
+    import ia_openai
+
+    class _Comp:
+        def create(self, **kw):
+            pedido.update(kw)
+            return NS(choices=[NS(finish_reason=finish,
+                                  message=NS(content=json.dumps(saida), refusal=None))],
+                      usage=NS(prompt_tokens=1500, completion_tokens=300))
+    monkeypatch.setattr(ia_openai, "_client", NS(chat=NS(completions=_Comp())))

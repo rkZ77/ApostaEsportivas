@@ -80,26 +80,20 @@ PROMPT = (
 
 
 def _perguntar(nome_liga: str, pais: str | None, season: int) -> dict:
-    """Uma chamada, JSON validado por schema. Anthropic por padrao (mesmo
-    provedor default do ai_review pros fluxos que nao exigem o modelo caro)."""
-    from anthropic import Anthropic
+    """Uma chamada, JSON validado por schema. OpenAI (a IA do projeto desde
+    09/11/2026): RULES_MODEL, senao o modelo OpenAI do projeto."""
+    from services import ia_openai
 
-    modelo = os.getenv("RULES_MODEL", "claude-sonnet-5")
+    modelo = ia_openai.modelo("RULES_MODEL")
     pergunta = (
         f"Competicao: {nome_liga}"
         + (f" ({pais})" if pais else "")
         + f"\nTemporada: {season}\n\n"
         "Como e' disputado o mata-mata dela nessa temporada?"
     )
-    resposta = Anthropic().messages.create(
-        model=modelo, max_tokens=600, system=PROMPT,
-        output_config={"format": {"type": "json_schema", "schema": ESQUEMA}},
-        messages=[{"role": "user", "content": pergunta}],
-    )
-    if resposta.stop_reason == "refusal":
-        raise RuntimeError("provedor recusou responder")
-    texto = next((b.text for b in resposta.content if b.type == "text"), "")
-    return json.loads(texto or "{}"), modelo
+    conteudo, _, _ = ia_openai.json_estruturado(
+        PROMPT, pergunta, ESQUEMA, "regulamento", modelo, max_tokens=4000)
+    return conteudo, modelo
 
 
 def _competicoes_sem_regulamento(cur, liga_alvo: int | None) -> list:
