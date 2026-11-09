@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 
 _client = None
 
@@ -28,11 +29,25 @@ def disponivel() -> bool:
     return bool(chave())
 
 
+# Modelos que a OpenAI desliga em 11/12/2026 (doc de deprecations conferida em
+# 09/11/2026). Valor antigo numa variavel do Railway vira o substituto aqui,
+# senao a chamada comeca a falhar nesse dia -- e na revisao dos picks, falha
+# bloqueia o pick. Snapshots com data (gpt-5-mini-2025-08-07) contam tambem.
+SUBSTITUTOS = {
+    "gpt-5": "gpt-5.6-terra",
+    "gpt-5-mini": "gpt-5.6-terra",
+    "gpt-5-nano": "gpt-6-luna",
+    "o3": "gpt-5.6-terra",
+}
+_SNAPSHOT = re.compile(r"-\d{4}-\d{2}-\d{2}$")
+
+
 def _valido(valor: str | None) -> str | None:
     v = (valor or "").strip()
     if not v or v.lower().startswith("claude"):
         return None
-    return v
+    base = _SNAPSHOT.sub("", v.lower())
+    return SUBSTITUTOS.get(base, v)
 
 
 MODELO_BARATO = "gpt-6-luna"

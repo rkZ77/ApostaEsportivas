@@ -27,11 +27,11 @@ DEFAULT_MODELS = {"openai": ""}
 
 def _modelo_valido(valor: str | None) -> str | None:
     """ID `claude-*` que tenha sobrado numa variavel do Railway e' ignorado:
-    mandado pra OpenAI ele so' devolve erro, e erro aqui bloqueia o pick."""
-    v = (valor or "").strip()
-    if not v or v.lower().startswith("claude"):
-        return None
-    return v
+    mandado pra OpenAI ele so' devolve erro, e erro aqui bloqueia o pick.
+    Modelo que a OpenAI desliga em 11/12/2026 (gpt-5, gpt-5-mini, gpt-5-nano,
+    o3) vira o substituto -- mesma regra de ia_openai._valido."""
+    from services import ia_openai
+    return ia_openai._valido(valor)
 
 
 # Formato do parecer: json_schema strict na OpenAI. normalize_review continua

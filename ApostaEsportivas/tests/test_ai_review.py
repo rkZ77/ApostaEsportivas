@@ -74,6 +74,17 @@ def test_variavel_antiga_da_anthropic_nao_derruba_o_gate(env_limpo):
     assert (s.provider, s.model, s.mode) == ("openai", "gpt-modelo", "enforce")
 
 
+def test_revisao_com_modelo_que_a_openai_desliga_troca_pelo_substituto(env_limpo):
+    """gpt-5-mini sai do ar em 11/12/2026; com enforce, falha bloqueia o pick.
+    O gate usa o substituto em vez do ID que vai parar de existir."""
+    env_limpo.setenv("AI_REVIEW_MODE", "enforce")
+    env_limpo.setenv("AI_REVIEW_MODEL_VIP", "gpt-5-mini")
+    assert AIReviewSettings.from_env("vip").model == "gpt-5.6-terra"
+    assert AIReviewSettings.from_env("dica").model == "gpt-5.6-terra"
+    env_limpo.setenv("AI_REVIEW_MODEL_DICA", "gpt-5-nano-2025-08-07")
+    assert AIReviewSettings.from_env("dica").model == "gpt-6-luna"
+
+
 def test_env_do_pipeline_vence_o_global(env_limpo):
     env_limpo.setenv("AI_REVIEW_MODE", "shadow")
     env_limpo.setenv("AI_REVIEW_MODE_VIP", "enforce")

@@ -215,7 +215,7 @@ class _Cur:
 def modelo(monkeypatch):
     chamadas = []
     monkeypatch.setenv("OPENAI_API_KEY", "x")
-    monkeypatch.setenv("RESUMO_IA_MODEL", "gpt-5-mini")
+    monkeypatch.setenv("RESUMO_IA_MODEL", "gpt-5.6-terra")
     monkeypatch.delenv("RESUMO_IA", raising=False)
 
     def falso(fatos):
@@ -262,10 +262,10 @@ def test_chamada_usa_openai_json_e_corta_em_4(monkeypatch):
     saida = {"resumo": "r", "contexto": "c", "alerta": "", "mercados_do_jogo": m,
              "times": [{"lado": "mandante", "perfil": "dominante", "leitura": "l", "mercados": m,
                         "jogadores": m}] * 3}
-    monkeypatch.setenv("RESUMO_IA_MODEL", "gpt-5-mini")
+    monkeypatch.setenv("RESUMO_IA_MODEL", "gpt-5.6-terra")
     _openai_falso(monkeypatch, saida, pedido)
     conteudo, t_in, t_out = resumo_ia.chamar_modelo({"jogo": {}})
-    assert pedido["model"] == "gpt-5-mini"
+    assert pedido["model"] == "gpt-5.6-terra"
     assert pedido["reasoning_effort"] == "low"
     assert pedido["response_format"]["type"] == "json_schema"
     # 3500 cortava a leitura no meio em PROD (13/10/2026).
@@ -281,7 +281,7 @@ def test_chamada_usa_openai_json_e_corta_em_4(monkeypatch):
 
 
 def test_resposta_cortada_levanta(monkeypatch):
-    monkeypatch.setenv("RESUMO_IA_MODEL", "gpt-5-mini")
+    monkeypatch.setenv("RESUMO_IA_MODEL", "gpt-5.6-terra")
     _openai_falso(monkeypatch, {}, {}, finish="length")
     with pytest.raises(RuntimeError, match="incompleta"):
         resumo_ia.chamar_modelo({"jogo": {}})
@@ -294,7 +294,7 @@ def test_id_claude_que_sobrou_no_env_e_ignorado(monkeypatch):
 
 def test_falha_do_modelo_fica_gravada_e_nao_levanta(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "x")
-    monkeypatch.setenv("RESUMO_IA_MODEL", "gpt-5-mini")
+    monkeypatch.setenv("RESUMO_IA_MODEL", "gpt-5.6-terra")
 
     def quebra(fatos):
         raise RuntimeError("overloaded")
