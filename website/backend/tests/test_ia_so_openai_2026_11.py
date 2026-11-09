@@ -109,3 +109,15 @@ def test_agente_chama_ferramenta_e_responde(monkeypatch):
     segunda = pedidos[1]["messages"]
     assert segunda[-1] == {"role": "tool", "tool_call_id": "c1", "content": "Brasileirao Serie A"}
     assert historico[-1] == {"role": "assistant", "content": "Cobrimos o Brasileirao."}
+
+
+def test_modelo_que_a_openai_desliga_vira_o_substituto(monkeypatch):
+    """gpt-5/mini/nano e o3 saem em 11/12/2026: valor antigo no Railway nao
+    pode derrubar a IA nesse dia."""
+    casos = {"gpt-5": "gpt-5.6-terra", "gpt-5-mini": "gpt-5.6-terra",
+             "gpt-5-mini-2025-08-07": "gpt-5.6-terra", "GPT-5-nano": "gpt-6-luna",
+             "o3": "gpt-5.6-terra", "gpt-5.6-terra": "gpt-5.6-terra",
+             "gpt-6-luna": "gpt-6-luna", "o4-mini": "o4-mini"}
+    for antes, depois in casos.items():
+        monkeypatch.setenv("CHAT_AGENT_MODEL", antes)
+        assert ia_openai.modelo("CHAT_AGENT_MODEL") == depois, antes
