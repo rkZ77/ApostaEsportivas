@@ -62,6 +62,57 @@ def test_recalibrada_e_so_sombra_no_orchestrator():
     assert len(usos) == 1 and '"prob_recalibrada_sombra":' in usos[0]
 
 
+# ── corte ligado (24/11/2026) ───────────────────────────────────────────────
+@pytest.mark.parametrize("valor, esperado", [(None, "on"), ("sombra", "sombra"),
+                                             (" SOMBRA", "sombra"), ("x", "on")])
+def test_modo_recalibracao(monkeypatch, valor, esperado):
+    if valor is None:
+        monkeypatch.delenv("MOTOR_RECALIBRACAO", raising=False)
+    else:
+        monkeypatch.setenv("MOTOR_RECALIBRACAO", valor)
+    assert rc.modo() == esperado
+
+
+def test_valor_some_e_o_corte_que_foi_medido():
+    """p_corrigida * odd <= 1 sai; e' a regra do bloco 3 da medicao."""
+    curva = [(0.74, 0.686, 300)]                        # tira 5,4 pontos
+    some = {"taxa_real": 0.74, "odd": 1.42}             # 0.686*1.42 = 0.974
+    fica = {"taxa_real": 0.74, "odd": 1.50}             # 0.686*1.50 = 1.029
+    assert rc.valor_some(some, curva) is True and some["prob_recalibrada"] == pytest.approx(0.686)
+    assert rc.valor_some(fica, curva) is False
+    # Sem curva, sem odd ou sem probabilidade: nunca corta.
+    assert rc.valor_some({"taxa_real": 0.74, "odd": 1.42}, []) is False
+    assert rc.valor_some({"taxa_real": 0.74, "odd": None}, curva) is False
+    assert rc.valor_some({"taxa_real": None, "odd": 1.42}, curva) is False
+
+
+def test_corte_nao_troca_a_probabilidade_publicada():
+    """A taxa_real fica a do motor: trocar faria a curva aprender em cima da
+    propria correcao no ledger."""
+    c = {"taxa_real": 0.74, "odd": 1.50}
+    rc.valor_some(c, [(0.74, 0.686, 300)])
+    assert c["taxa_real"] == 0.74
+
+
+def test_orchestrator_corta_na_probabilidade_final():
+    """O corte vem DEPOIS da camada probabilistica (a taxa que vai pro ledger)
+    e respeita a chave."""
+    fonte = open(os.path.join(RAIZ, "src", "services", "pick_engine", "orchestrator.py"),
+                 encoding="utf-8").read()
+    camada = fonte.index("candidates = apply_probability_layer(\n        candidates, config, calibrators")
+    corte = fonte.index("recalibracao.valor_some(c, curva_recal)")
+    assert corte > camada
+    assert 'config.corte_recalibracao and recalibracao.modo() == "on"' in fonte
+
+
+def test_corte_so_no_vip():
+    """Nos outros produtos os cortados renderam bem (medicao de 24/11)."""
+    from services.pick_engine import config as cfg
+    assert cfg.VIP_CONFIG.corte_recalibracao is True
+    for nome in ("DEFAULT_CONFIG", "DICA_CONFIG", "ALAVANCAGEM_CONFIG", "BINGO_CONFIG"):
+        assert getattr(cfg, nome).corte_recalibracao is False, nome
+
+
 # ── MOTOR_1T ────────────────────────────────────────────────────────────────
 @pytest.mark.parametrize("valor, esperado", [(None, "on"), ("off", "off"), ("OFF ", "off"),
                                              ("on", "on"), ("talvez", "on")])

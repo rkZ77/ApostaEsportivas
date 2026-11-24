@@ -472,6 +472,14 @@ class PickEngineConfig:
     use_selection_bias: bool = False
     use_market_anchor: bool = False
 
+    # CORTE DA RECALIBRACAO (2026-11-24): tira o candidato cujo valor some na
+    # chance corrigida pelo historico (ver pick_engine/recalibracao.py). SO' o
+    # VIP liga. Na confirmacao desde 11/10 os cortados do VIP renderam -12,0%
+    # (n=274, ±9,5) contra +2,1% dos que ficaram; nos outros produtos os
+    # cortados renderam BEM (bingo +13%, free +9%, multipla +6%, alavancagem
+    # +10%), que bate com a calibracao: so' o VIP promete mais do que acerta.
+    corte_recalibracao: bool = False
+
     # Gate de contexto (mata-mata, agregado, rivalidade medida) -- LIGADO por
     # padrao, diferente das tres flags acima. A distincao nao e' de gosto:
     #
@@ -592,6 +600,7 @@ VIP_CONFIG = PickEngineConfig(
     enforce_odd_band=True,
     min_odd=1.45, max_odd=15.0,
     conservative_odd_low=1.45, conservative_odd_high=2.00,
+    corte_recalibracao=True,     # 24/11/2026, ver o campo
 )
 
 # Dica do Dia: MESMA regua do VIP (2026-09-02, decisao do usuario).

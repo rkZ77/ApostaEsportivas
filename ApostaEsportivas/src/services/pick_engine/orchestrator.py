@@ -333,7 +333,8 @@ def analyze_fixture_markets(
     eliminated_markets = []
     if calibration_data is None:
         calibration_data = calibration.get_market_calibration()
-    # SOMBRA (2026-10-08): so' alimenta `prob_recalibrada_sombra` no rastro.
+    # Curva da recalibracao: `prob_recalibrada_sombra` por linha (rastro) e,
+    # desde 24/11/2026, o corte do fim desta funcao (recalibracao.modo).
     try:
         curva_recal = recalibracao.curva_em_cache()
     except Exception:
@@ -960,7 +961,8 @@ def analyze_fixture_markets(
                     "btts" if family == "btts" else "total", line_val, direcao)
                     if dc_lambdas else None),
                 # SOMBRA: a taxa corrigida pelo historico do proprio motor (ver
-                # recalibracao.py). Nunca entra na conta.
+                # recalibracao.py), na taxa DESTA etapa. O corte de verdade usa
+                # `prob_recalibrada`, na taxa final, no fim da funcao.
                 "prob_recalibrada_sombra": recalibracao.aplicar(taxa_ajustada, curva_recal),
                 "model_fit_diff":      fit_poisson,
                 "referee_probability": referee_linha,
@@ -1219,6 +1221,29 @@ def analyze_fixture_markets(
     candidates = apply_probability_layer(
         candidates, config, calibrators=calibrators, clv_by_market=clv_by_market,
     )
+
+    # RECALIBRACAO (ligada em 24/11/2026, ver recalibracao.modo): sai o
+    # candidato cujo valor some na probabilidade corrigida. Depois da camada
+    # probabilistica porque a curva foi ajustada na probabilidade FINAL, a que
+    # vai pro ledger. So' no produto que liga (config.corte_recalibracao, hoje
+    # o VIP); nos outros `prob_recalibrada` fica so' gravada.
+    corta_recal = config.corte_recalibracao and recalibracao.modo() == "on"
+    sobreviventes = []
+    for c in candidates:
+        if recalibracao.valor_some(c, curva_recal) and corta_recal:
+            motivo = (f"valor some na recalibracao: chance corrigida "
+                      f"{c['prob_recalibrada'] * 100:.1f}% x odd {c['odd']} <= 1")
+            _rastrear(rastro, nivel="familia", market_type=c.get("market_type"),
+                      scope=c.get("scope"), status="eliminada", motivo=motivo)
+            if debug:
+                eliminated_markets.append({
+                    "family": c.get("market_type"), "scope": c.get("scope"),
+                    "market_type": c.get("market_type"), "reason": motivo,
+                })
+            continue
+        sobreviventes.append(c)
+    candidates = sobreviventes
+
     for c in candidates:
         c["avaliacao"] = avaliacao_separada(c, data_quality_score)
 
