@@ -357,38 +357,14 @@ function TabBar({ tab, setTab, canSeeVip, canSeePro, verAoVivo, verBingo, temFal
 
   return (
     <>
-    {/* NO CELULAR, TODAS À VISTA (20/10/2026). A fita rolava e cabiam três
-        abas e meia: Ao Vivo, Múltipla, Alavancagem e Jogador ficavam fora da
-        tela, e aba escondida é aba que ninguém descobre. Aqui viram chips que
-        quebram linha, com o mesmo cadeado e a mesma contagem; do sm pra cima
-        fica a fita com setas. */}
-    <div className="sm:hidden mb-5 flex flex-wrap gap-1.5" role="tablist">
-      {visiveis.map(t => {
-        const count = counts?.[t.key]
-        const ativa = tab === t.key
-        return (
-          <button key={t.key} type="button" role="tab" aria-selected={ativa}
-            onClick={() => setTab(t.key)}
-            onTouchStart={() => onPrefetch?.(t.key)}
-            className={`h-9 px-3 rounded-full border text-xs font-semibold inline-flex items-center gap-1 transition-colors ${
-              ativa ? 'bg-accent/15 border-accent/50 text-ink-1' : 'bg-surface-1 border-line text-ink-3'}`}>
-            {t.label}
-            {t.badge && (
-              <span className={`text-[10px] border px-1 rounded font-bold ${t.badgeCls ?? 'bg-yellow-400/10 text-yellow-400 border-yellow-400/20'}`}>{t.badge}</span>
-            )}
-            {tranca(t) && (
-              <svg className={`w-3 h-3 ${t.proOnly ? 'text-indigo-300' : 'text-yellow-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-label="trancada">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
-            )}
-            {count != null && count > 0 && (
-              <span className={`text-[11px] font-bold tabular-nums ${ativa ? 'text-ink-2' : 'text-ink-4'}`}>{count}</span>
-            )}
-          </button>
-        )
-      })}
-    </div>
-    <div className="relative mb-6 -mx-4 hidden sm:block">
+    {/* UMA FITA SO', NO CELULAR TAMBEM (24/11/2026, "o menu da pagina picks
+        fica ruim"). De 20/10 ate' aqui o celular tinha chips que quebravam
+        linha: dez botoes de larguras diferentes em 3 linhas (~240 px) antes do
+        primeiro pick, com "Meus Bilhetes" sozinho na ultima. Agora e' a fita do
+        desktop (~44 px). O que fazia a fita esconder aba continua resolvido de
+        outro jeito: a aba ativa centraliza sozinha, a vizinha aparece cortada
+        e o degrade da ponta diz que tem mais pra arrastar. */}
+    <div className="relative mb-5 sm:mb-6 -mx-4" role="tablist">
       {/* Fade da direita indicando que a barra rola. Desbota de surface-0 pra
           surface-0/0, e nao pra `transparent`: transparent e' rgba(0,0,0,0),
           entao o degrade passaria pelo preto no meio e deixaria uma mancha
@@ -396,11 +372,14 @@ function TabBar({ tab, setTab, canSeeVip, canSeePro, verAoVivo, verBingo, temFal
       {/* O degrade vai a 20 (era 10): ele e' o que apaga o rotulo ANTES da
           seta chegar nele. Com 40px a aba de baixo ainda estava legivel
           debaixo do botao, e as duas coisas competiam no mesmo lugar. */}
+      {/* No celular o degrade e' mais curto (w-10): com 80px numa tela de 360
+          ele apagava uma aba e meia, e a aba cortada pela metade e' justamente
+          o convite pra arrastar. */}
       {podeDir && (
-        <div className="pointer-events-none absolute right-0 top-0 h-full w-20 bg-gradient-to-l from-surface-0 via-surface-0 to-surface-0/0 z-10" />
+        <div className="pointer-events-none absolute right-0 top-0 h-full w-10 sm:w-20 bg-gradient-to-l from-surface-0 sm:via-surface-0 to-surface-0/0 z-10" />
       )}
       {podeEsq && (
-        <div className="pointer-events-none absolute left-0 top-0 h-full w-20 bg-gradient-to-r from-surface-0 via-surface-0 to-surface-0/0 z-10" />
+        <div className="pointer-events-none absolute left-0 top-0 h-full w-10 sm:w-20 bg-gradient-to-r from-surface-0 sm:via-surface-0 to-surface-0/0 z-10" />
       )}
       {/* As setas ficam FORA do container que rola: dentro dele elas andariam
           junto com as abas e sairiam de cena na primeira arrastada.
@@ -429,11 +408,12 @@ function TabBar({ tab, setTab, canSeeVip, canSeePro, verAoVivo, verBingo, temFal
       )}
       <div ref={barraRef} className="flex border-b border-line overflow-x-auto scrollbar-none">
         <div ref={fitaRef} className="flex px-4">
-        {tabs.filter(t => !t.oculta).map(t => {
+        {visiveis.map(t => {
           const count = counts?.[t.key]
           return (
             <motion.button
               key={t.key}
+              type="button" role="tab" aria-selected={tab === t.key}
               data-aba={t.key}
               whileTap={{ scale: 0.95 }}
               onClick={() => setTab(t.key)}
@@ -445,7 +425,7 @@ function TabBar({ tab, setTab, canSeeVip, canSeePro, verAoVivo, verBingo, temFal
               onPointerEnter={() => onPrefetch?.(t.key)}
               onTouchStart={() => onPrefetch?.(t.key)}
               onFocus={() => onPrefetch?.(t.key)}
-              className={`relative px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold mr-1 whitespace-nowrap flex-shrink-0 transition-colors ${
+              className={`relative px-3 sm:px-4 py-3 min-h-[44px] text-[13px] sm:text-sm font-semibold mr-0.5 sm:mr-1 whitespace-nowrap flex-shrink-0 transition-colors ${
                 tab === t.key ? 'text-ink-1' : 'text-ink-3 hover:text-ink-2'
               }`}
             >
@@ -476,7 +456,7 @@ function TabBar({ tab, setTab, canSeeVip, canSeePro, verAoVivo, verBingo, temFal
                   o Pro, amarelo quando é a assinatura. Um cadeado amarelo numa
                   aba de selo roxo mandava dois sinais diferentes sobre a mesma
                   tranca. */}
-              {((t.premiumOnly && !canSeeVip) || (t.proOnly && !canSeePro)) && (
+              {tranca(t) && (
                 <svg className={`ml-1 w-3 h-3 inline-block align-middle ${t.proOnly ? 'text-indigo-300' : 'text-yellow-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
@@ -504,7 +484,7 @@ function TabBar({ tab, setTab, canSeeVip, canSeePro, verAoVivo, verBingo, temFal
                 </span>
               )}
               {tab === t.key ? (
-                <motion.div layoutId="picks-tab-underline" className="absolute left-0 right-0 -bottom-px h-0.5 bg-green-500" transition={{ type: 'spring', stiffness: 500, damping: 40 }} />
+                <motion.div layoutId="picks-tab-underline" className="absolute left-3 right-3 sm:left-0 sm:right-0 -bottom-px h-0.5 rounded-full bg-accent" transition={{ type: 'spring', stiffness: 500, damping: 40 }} />
               ) : (
                 <div className="absolute left-0 right-0 -bottom-px h-0.5 bg-transparent" />
               )}
