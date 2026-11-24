@@ -3204,17 +3204,29 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
 
     # ── Pré-aquece o cache de fixtures em lote (1 chamada a cada 20 fixtures
     # em vez de 1 chamada por fixture/perna dentro do loop abaixo) ──────────
+    #
+    # SO' DO QUE VAI APARECER (24/11/2026). O laco de baixo pula todo pick ja'
+    # resolvido que nao e' de hoje, mas este pre-aquecimento buscava na
+    # API-Football o jogo de TODO pick que o usuario ja' seguiu na vida. Jogo
+    # encerrado vive 5 min no cache e o front chama esta rota a cada 60s, entao
+    # a cada 5 min o historico inteiro de cada usuario ia de novo pra API, em
+    # serie: a rota levava 3 a 6 s em PROD, estourava o limite por minuto da
+    # API ("rateLimit: Too many requests", 21/11) e prendia thread do servidor.
+    # A regra e' a mesma do laco (`_vai_aparecer`).
+    def _vai_aparecer(p) -> bool:
+        return p.get("result") is None or p.get("match_date") == today_br
+
     all_fixture_ids: set[int] = set()
     for p in vip_map.values():
-        if p["fixture_id"]:
+        if p["fixture_id"] and _vai_aparecer(p):
             all_fixture_ids.add(p["fixture_id"])
     for p in free_map.values():
-        if p["fixture_id"]:
+        if p["fixture_id"] and _vai_aparecer(p):
             all_fixture_ids.add(p["fixture_id"])
     for p in live_map.values():
-        if p["fixture_id"]:
+        if p["fixture_id"] and _vai_aparecer(p):
             all_fixture_ids.add(p["fixture_id"])
-    for p in [p for m in cartela_maps for p in m.values()]:
+    for p in [p for m in cartela_maps for p in m.values() if _vai_aparecer(p)]:
         legs_raw = p["games"]
         if isinstance(legs_raw, str):
             try: legs_raw = json.loads(legs_raw)
@@ -3224,11 +3236,18 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
             if fid:
                 all_fixture_ids.add(fid)
     for p in alavancagem_map.values():
+        if not _vai_aparecer(p):
+            continue
         for i in (1, 2, 3):
             fid = p.get(f"fixture_id_{i}")
             if fid:
                 all_fixture_ids.add(fid)
     for p in pessoal_map.values():
+        # Bilhete pessoal aparece aberto ou fechado HOJE (mesma regra do laco).
+        fechado_em = p.get("settled_at")
+        if p.get("result") is not None and (
+                fechado_em is None or _data_br(fechado_em) != today_br):
+            continue
         for perna in _pernas_pessoais(p):
             all_fixture_ids.add(perna["fixture_id"])
 

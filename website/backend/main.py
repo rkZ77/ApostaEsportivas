@@ -356,6 +356,12 @@ async def erro_nao_tratado(request: Request, exc: Exception):
 _rate_store: dict[str, list[float]] = defaultdict(list)
 RATE_LIMIT = 300
 RATE_WINDOW = 60
+#: O /admin conta num balde PROPRIO e maior (24/11/2026). Em 23/11 o painel
+#: acompanhando o pipeline (status, log e revisao de IA a cada ~1,5 s) junto
+#: com as outras abas passou de 300/min, e o 429 caiu em TUDO -- ate'
+#: /api/auth/me e /api/fixtures/today: pro admin, o site "caiu". Rota de admin
+#: sem admin responde 403 na hora, entao a folga nao abre nada caro.
+RATE_LIMIT_ADMIN = 1200
 
 _login_failures: dict[str, list[float]] = defaultdict(list)
 LOGIN_MAX_FAILURES = 10
@@ -371,6 +377,10 @@ RESET_WINDOW = 900
 
 _TRUST_XFF = os.getenv("TRUST_X_FORWARDED_FOR", "false").lower() in ("1", "true", "yes")
 
+from jose import jwt as _jwt  # noqa: E402
+from auth_utils import (ALGORITHM as _JWT_ALG, COOKIE_NAME,  # noqa: E402
+                        SECRET_KEY as _JWT_SECRET)
+
 
 def _get_real_ip(request: Request) -> str:
     cf_ip = request.headers.get("CF-Connecting-IP")
@@ -381,6 +391,33 @@ def _get_real_ip(request: Request) -> str:
         if forwarded:
             return forwarded.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
+
+
+def _chave_do_limite(request: Request) -> str:
+    """De quem e' esta requisicao, pro limite geral (24/11/2026).
+
+    Logado, conta POR USUARIO; visitante (ou token invalido/vencido), por IP.
+    So' por IP, varias pessoas atras do mesmo IP dividiam 300/min: celular no
+    Brasil sai quase todo por CGNAT (a operadora poe muita gente num IP so'), e
+    o site e' usado mais no celular -- com movimento, todos tomavam 429 juntos.
+
+    A assinatura do token e' conferida: sem isso qualquer um inventaria um
+    `sub` por requisicao e nunca seria limitado. Login, esqueci-a-senha e reset
+    continuam por IP (forca bruta e' por origem, nao por conta).
+    """
+    token = request.cookies.get(COOKIE_NAME)
+    if not token:
+        auth = request.headers.get("Authorization") or ""
+        if auth.lower().startswith("bearer "):
+            token = auth[7:].strip()
+    if token:
+        try:
+            dados = _jwt.decode(token, _JWT_SECRET, algorithms=[_JWT_ALG])
+            if dados.get("sub") and dados.get("type", "access") == "access":
+                return f"u:{dados['sub']}"
+        except Exception:
+            pass
+    return f"ip:{_get_real_ip(request)}"
 
 
 @app.middleware("http")
@@ -399,10 +436,14 @@ async def rate_limiter(request: Request, call_next):
     ip = _get_real_ip(request)
     now = time.time()
 
-    _rate_store[ip] = [t for t in _rate_store[ip] if now - t < RATE_WINDOW]
-    if len(_rate_store[ip]) >= RATE_LIMIT:
-        return JSONResponse({"detail": "Muitas requisicoes. Tente novamente em breve."}, status_code=429)
-    _rate_store[ip].append(now)
+    admin = request.url.path.startswith("/api/admin/")
+    chave = ("admin|" if admin else "") + _chave_do_limite(request)
+    teto = RATE_LIMIT_ADMIN if admin else RATE_LIMIT
+    _rate_store[chave] = [t for t in _rate_store[chave] if now - t < RATE_WINDOW]
+    if len(_rate_store[chave]) >= teto:
+        return JSONResponse({"detail": "Muitas requisicoes. Tente novamente em breve."},
+                            status_code=429, headers={"Retry-After": str(RATE_WINDOW)})
+    _rate_store[chave].append(now)
 
     if request.url.path in ("/api/auth/login", "/api/auth/register"):
         _login_failures[ip] = [t for t in _login_failures[ip] if now - t < LOGIN_LOCKOUT_SECS]
