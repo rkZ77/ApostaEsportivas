@@ -97,6 +97,20 @@ def test_admin_tem_balde_proprio(cliente):
     assert cliente.get("/api/_teste_ok", cookies=a).status_code == 200
 
 
+# ── healthcheck do Railway ──────────────────────────────────────────────────
+def test_healthcheck_do_railway_responde_a_api(cliente):
+    """24/11/2026: o painel apontava pra /health, que nao existe e caia no
+    index.html do site (200 de qualquer jeito). O railway.json passou a usar
+    /api/health, que nao depende do banco. Tem que responder JSON 200 com o
+    host que o Railway usa no healthcheck."""
+    import json
+    r = cliente.get("/api/health", headers={"host": "healthcheck.railway.app"})
+    assert r.status_code == 200 and r.json() == {"status": "ok"}
+    cfg = json.load(open(os.path.join(RAIZ, "..", "..", "railway.json"), encoding="utf-8"))
+    assert cfg["deploy"]["healthcheckPath"] == "/api/health"
+    assert cfg["deploy"]["restartPolicyType"] == "ALWAYS"
+
+
 # ── /suggestions/odds-agora ─────────────────────────────────────────────────
 class _CurOdds:
     def __init__(self, n):
