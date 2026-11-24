@@ -4,6 +4,7 @@ from typing import Optional
 import json
 import logging
 import re
+import threading
 import psycopg2.extras
 from database import get_connection
 from taxa_acerto import taxa_acerto
@@ -4670,6 +4671,14 @@ _MAX_FIXTURES_ODDS_AGORA = 25
 
 _odds_agora_cache: dict = {"ts": 0.0, "dados": {}}
 
+#: UMA atualizacao por vez (24/11/2026). Sem isto, todo mundo que chegava no
+#: vencimento do cache disparava as ate' 25 leituras da API, cada um, e em
+#: serie: a rota levava 3,5-4,4 s no celular (log do Railway, 21/11).
+_odds_agora_lock = threading.Lock()
+#: Leituras de odd ao mesmo tempo na atualizacao. Baixo de proposito: a
+#: API-Football tem limite POR MINUTO, e 25 de uma vez ja' estourou (21/11).
+_ODDS_AGORA_PARALELO = 4
+
 
 @router.get("/odds-agora")
 def odds_agora_prejogo(current_user: dict = Depends(get_current_user)):
@@ -4685,13 +4694,35 @@ def odds_agora_prejogo(current_user: dict = Depends(get_current_user)):
     no momento do clique.
     """
     import time as _t
-    from routers.live import (_fetch_prematch_odds, _find_prematch_odd,
-                              _casas_ativas, LIVE_STATUSES, FT_STATUSES)
 
     agora = _t.time()
     if agora - _odds_agora_cache["ts"] < _TTL_ODDS_PRE_AGORA:
         return {"disponivel": True, "picks": _odds_agora_cache["dados"],
                 "idade_seg": int(agora - _odds_agora_cache["ts"])}
+
+    # Outra requisicao ja' esta' atualizando: quem tem leitura anterior leva
+    # ela na hora (odd de vitrine, um minuto a mais nao muda nada); so' a
+    # primeira visita do processo, sem leitura nenhuma, espera a atualizacao.
+    if not _odds_agora_lock.acquire(blocking=False):
+        if _odds_agora_cache["ts"]:
+            return {"disponivel": True, "picks": _odds_agora_cache["dados"],
+                    "idade_seg": int(agora - _odds_agora_cache["ts"])}
+        with _odds_agora_lock:
+            return {"disponivel": True, "picks": _odds_agora_cache["dados"],
+                    "idade_seg": int(_t.time() - _odds_agora_cache["ts"])}
+    try:
+        # Alguem pode ter terminado a atualizacao entre a leitura acima e o lock.
+        if _t.time() - _odds_agora_cache["ts"] < _TTL_ODDS_PRE_AGORA:
+            return {"disponivel": True, "picks": _odds_agora_cache["dados"],
+                    "idade_seg": int(_t.time() - _odds_agora_cache["ts"])}
+        return _atualizar_odds_agora(agora)
+    finally:
+        _odds_agora_lock.release()
+
+
+def _atualizar_odds_agora(agora: float) -> dict:
+    """O corpo de /odds-agora quando o cache venceu (com o lock na mao)."""
+    from routers.live import _fetch_prematch_odds, _find_prematch_odd, _casas_ativas
 
     conn = get_connection()
     cur = conn.cursor()
@@ -4740,12 +4771,16 @@ def odds_agora_prejogo(current_user: dict = Depends(get_current_user)):
     fixtures = fixtures[:_MAX_FIXTURES_ODDS_AGORA]
 
     casas = _casas_ativas()
-    por_fixture: dict = {}
-    for fid in fixtures:
+
+    def _ler(fid):
         try:
-            por_fixture[fid] = _fetch_prematch_odds(fid)
+            return fid, _fetch_prematch_odds(fid)
         except Exception:
-            por_fixture[fid] = []
+            return fid, []
+
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=_ODDS_AGORA_PARALELO) as pool:
+        por_fixture: dict = dict(pool.map(_ler, fixtures))
 
     dados: dict = {}
     for l in linhas:
