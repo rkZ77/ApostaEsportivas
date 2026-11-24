@@ -235,11 +235,27 @@ def test_primeira_abertura_gera_e_a_segunda_le_do_banco(modelo):
 
 
 def test_sem_amostra_nao_chama_o_modelo_e_guarda_o_motivo(modelo):
-    cur = _Cur(casa=2, fora=7)
+    cur = _Cur(casa=0, fora=7)
     r = resumo_ia.resumo_do_jogo(cur, 10, _dados)
-    assert r["status"] == "inelegivel" and "2 jogo" in r["motivo"]
+    assert r["status"] == "inelegivel" and "0 jogo" in r["motivo"]
     assert cur.guardado["status"] == "inelegivel"
     assert modelo == []
+
+
+def test_um_jogo_em_casa_e_um_fora_ja_gera(modelo):
+    """23/11/2026: basta 1 jogo do mandante em casa e 1 do visitante fora."""
+    r = resumo_ia.resumo_do_jogo(_Cur(casa=1, fora=1), 10, _dados)
+    assert r["status"] == "ok" and len(modelo) == 1
+
+
+def test_amostra_curta_guardada_e_conferida_de_novo(modelo):
+    """O jogo marcado sem amostra mais cedo ganha a leitura quando o mando
+    passa a ter jogo, no mesmo dia (sem esperar a linha de amanha)."""
+    cur = _Cur(casa=0, fora=1)
+    assert resumo_ia.resumo_do_jogo(cur, 10, _dados)["status"] == "inelegivel"
+    cur.casa = 1
+    assert resumo_ia.resumo_do_jogo(cur, 10, _dados)["status"] == "ok"
+    assert len(modelo) == 1
 
 
 def test_jogo_encerrado_e_teto_do_dia_nao_gastam(modelo, monkeypatch):

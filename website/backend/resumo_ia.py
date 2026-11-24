@@ -10,9 +10,12 @@ CUSTO, QUE E' A CONDICAO DO PEDIDO ("nada muito gastar com IA"):
     banco. Prod e noprod usam o mesmo banco, entao tambem dividem o resumo.
   - Modelo barato (Haiku 5.5), esforco baixo, saida curta e em JSON.
   - So' os dados que o site ja' tem · nenhuma chamada a API-Football.
-  - So' jogo com amostra: mandante com 3+ jogos em casa e visitante com 3+
+  - So' jogo com amostra: mandante com 1+ jogo em casa e visitante com 1+
     fora na temporada (na liga, quando e' liga; em qualquer competicao,
-    quando e' copa · mata-mata nao junta 3 jogos dentro da propria copa).
+    quando e' copa · mata-mata nao junta jogos dentro da propria copa).
+    Era 3+ ate' 23/11/2026; o usuario pediu pra gerar com qualquer jogo no
+    mando. Com 1 ou 2 jogos no mando a leitura sai sem mercado (1 jogo da'
+    100% em tudo) · so' descreve o que aconteceu.
   - Teto por dia (RESUMO_IA_MAX_DIA) e desligamento por RESUMO_IA=off.
 
 Falhou ou nao tem amostra: a linha fica gravada com o motivo, e o Raio-X
@@ -40,7 +43,8 @@ def modelo() -> str:
 
 
 #: Jogos minimos do mandante em casa e do visitante fora na temporada.
-MIN_JOGOS = 3
+MIN_JOGOS = 1
+#: Com 1 ou 2 jogos no mando o time nao aponta mercado: a regra vai no SYSTEM.
 #: Falha da API nao trava o jogo o dia inteiro: depois disto tenta de novo.
 _REPETIR_FALHA_MIN = 30
 _ENCERRADO = ("FT", "AET", "PEN", "CANC", "ABD", "PST", "AWD", "WO")
@@ -656,6 +660,7 @@ Fonte:
 - Jogadores ("jogadores_em_casa"/"jogadores_fora"): só os jogos do time neste mando. "pct_jogos_com": {"1+": 80} = fez 1 ou mais em 80% dos jogos que jogou. Prefira "titular_provavel": true. Com "escalacao" = "escalacao oficial", titular_provavel é o titular confirmado: jogador sem ele não começa jogando e não entra em "jogadores".
 - "media_da_liga" é a régua: "media_de_um_time" é o que um time médio da liga faz por jogo (compare com "time"), "media_do_jogo" é a partida média (compare com "jogo"). Use para dizer se o número do time é alto ou baixo ("faz 13 faltas por jogo em casa; a liga, 11"). Fora da liga (copa, mata-mata) a régua é da própria competição.
 - Só chame a amostra de curta quando o mando tiver menos de 8 jogos.
+- Mando com 1 ou 2 jogos ("amostra_na_temporada"): esse time fica com "mercados" e "jogadores" vazios, e "mercados_do_jogo" fica vazio. Descreva só o que aconteceu ("no único jogo em casa, venceu por 2 a 0 com 7 escanteios") e diga no "alerta" que a amostra ainda é curta demais para apontar mercado.
 
 O que escrever:
 - "resumo": no máximo 2 frases sobre o confronto: quem chega melhor no mando e o que os números apontam.
@@ -927,6 +932,11 @@ def _vale(linha) -> bool:
             except ValueError:
                 return False
         return (c or {}).get("versao", 1) >= VERSAO
+    if linha["status"] == "inelegivel":
+        # Amostra curta e' conferida de novo a cada abertura: e' uma contagem
+        # no banco, sem modelo. Assim o jogo ganha a leitura quando um jogo
+        # termina no meio do dia (ou quando o minimo muda), sem esperar amanha.
+        return False
     return True
 
 
