@@ -317,7 +317,12 @@ async def identidade_da_requisicao(request: Request, call_next):
         raise
     ms = (time.perf_counter() - inicio) * 1000
     resposta.headers["X-Request-Id"] = rid
-    if ms > 500 or resposta.status_code >= 500:
+    # Foto e escudo do proxy ficam fora do aviso de lentidao (24/11/2026): na
+    # primeira abertura depois de um deploy (o cache em disco some) vinham ~60
+    # avisos de ~510 ms por Raio-X e escondiam as rotas lentas de verdade.
+    # Imagem so' entra no log se passar de 3 s ou der erro.
+    teto_ms = 3000 if request.url.path.startswith("/api/proxy/") else 500
+    if ms > teto_ms or resposta.status_code >= 500:
         logger.warning("[REQ %s] %s %s -> %s em %.0fms",
                        rid, request.method, request.url.path,
                        resposta.status_code, ms)
@@ -684,6 +689,46 @@ def aquecer_imagens(itens) -> None:
 fixtures.aquecer_imagens = aquecer_imagens
 
 
+#: UM CLIENTE SO' PRO PROVEDOR DE IMAGEM (24/11/2026). Era um AsyncClient novo
+#: por imagem: cada foto pagava conexao + TLS do zero, e boa parte dos ~510 ms
+#: por foto (log de PROD, Raio-X depois de um deploy) era esse aperto de mao.
+#: Preso ao event loop que o criou: o TestClient sobe um loop por instancia.
+_http_imagens: dict = {"cliente": None, "loop": None}
+
+
+def _cliente_imagens() -> httpx.AsyncClient:
+    loop = asyncio.get_running_loop()
+    c = _http_imagens["cliente"]
+    if c is None or c.is_closed or _http_imagens["loop"] is not loop:
+        c = httpx.AsyncClient(timeout=8.0, limits=httpx.Limits(
+            max_connections=20, max_keepalive_connections=10))
+        _http_imagens.update(cliente=c, loop=loop)
+    return c
+
+
+#: Busca da MESMA imagem em andamento: quem chega junto espera essa, em vez de
+#: ir ao provedor de novo (o log mostrava a mesma foto buscada 2x no segundo).
+_imagem_em_voo: dict[str, asyncio.Future] = {}
+
+
+async def _esperar_aquecimento(kind: str, item_id: int, cache_path: pathlib.Path) -> bytes | None:
+    """O aquecimento em segundo plano (aquecer_imagens) ja' esta' buscando esta
+    imagem? Espera ela chegar no disco (ate' 4 s) em vez de buscar em dobro."""
+    with _aquecendo_lock:
+        aquecendo = (kind, int(item_id)) in _aquecendo
+    if not aquecendo:
+        return None
+    for _ in range(20):
+        await asyncio.sleep(0.2)
+        cached = await run_in_threadpool(_ler_cache_logo, cache_path)
+        if cached is not None:
+            return cached
+        with _aquecendo_lock:
+            if (kind, int(item_id)) not in _aquecendo:
+                return await run_in_threadpool(_ler_cache_logo, cache_path)
+    return None
+
+
 async def _serve_logo(kind: str, item_id: int, *, paletizar: bool = True) -> Response:
     cache_path = _logo_disk_cache / f"{kind}_{item_id}_{_LOGO_CACHE_V}.png"
     if await run_in_threadpool(_sem_imagem_recente, cache_path):
@@ -700,22 +745,50 @@ async def _serve_logo(kind: str, item_id: int, *, paletizar: bool = True) -> Res
     if cached is not None:
         return Response(cached, media_type="image/png", headers=_LOGO_CACHE_HEADERS)
 
+    cached = await _esperar_aquecimento(kind, item_id, cache_path)
+    if cached is not None:
+        return Response(cached, media_type="image/png", headers=_LOGO_CACHE_HEADERS)
+
+    chave = cache_path.name
+    em_voo = _imagem_em_voo.get(chave)
+    if em_voo is not None:
+        resultado = await asyncio.shield(em_voo)
+    else:
+        em_voo = asyncio.get_running_loop().create_future()
+        _imagem_em_voo[chave] = em_voo
+        resultado = None
+        try:
+            resultado = await _buscar_imagem(kind, item_id, paletizar, cache_path)
+        finally:
+            _imagem_em_voo.pop(chave, None)
+            if not em_voo.done():
+                em_voo.set_result(resultado)
+
+    if isinstance(resultado, bytes):
+        return Response(resultado, media_type="image/png", headers=_LOGO_CACHE_HEADERS)
+    if resultado == "sem":
+        return Response(status_code=404, headers=_SEM_IMAGEM_HEADERS)
+    return Response(status_code=404)
+
+
+async def _buscar_imagem(kind: str, item_id: int, paletizar: bool,
+                         cache_path: pathlib.Path):
+    """bytes da imagem reduzida, "sem" (o provedor nao tem) ou None (erro)."""
     url = f"{_LOGO_BASE}/{kind}s/{item_id}.png"
     try:
-        async with httpx.AsyncClient(timeout=8.0) as client:
-            r = await client.get(url)
-            if r.status_code == 200 and r.content:
-                conteudo = await run_in_threadpool(_reduzir_logo, r.content, paletizar)
-                await run_in_threadpool(_gravar_cache_logo, cache_path, conteudo)
-                return Response(conteudo, media_type="image/png", headers=_LOGO_CACHE_HEADERS)
-            if r.status_code == 404:
-                # So' o 404 do provedor vira "sem imagem" guardado; erro de rede
-                # ou 5xx continua tentando na proxima visita.
-                await run_in_threadpool(_gravar_cache_logo, _marcador_sem_imagem(cache_path), b"")
-                return Response(status_code=404, headers=_SEM_IMAGEM_HEADERS)
+        r = await _cliente_imagens().get(url)
+        if r.status_code == 200 and r.content:
+            conteudo = await run_in_threadpool(_reduzir_logo, r.content, paletizar)
+            await run_in_threadpool(_gravar_cache_logo, cache_path, conteudo)
+            return conteudo
+        if r.status_code == 404:
+            # So' o 404 do provedor vira "sem imagem" guardado; erro de rede
+            # ou 5xx continua tentando na proxima visita.
+            await run_in_threadpool(_gravar_cache_logo, _marcador_sem_imagem(cache_path), b"")
+            return "sem"
     except Exception:
         pass
-    return Response(status_code=404)
+    return None
 
 
 @app.get("/api/proxy/team/{team_id}.png", include_in_schema=False)

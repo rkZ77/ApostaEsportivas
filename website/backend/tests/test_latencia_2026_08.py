@@ -237,7 +237,8 @@ def test_reducao_de_escudo_nao_roda_no_event_loop():
     """FONTE. `_reduzir_logo` e' LANCZOS + quantize do Pillow, CPU pura, e rodava
     dentro de um handler async. Com um worker so', isso e' o site inteiro parado
     enquanto os ~20 escudos de uma tela de Picks sao processados."""
-    corpo = _codigo("main.py", "_serve_logo")
+    # Desde 24/11/2026 a busca no provedor mora em `_buscar_imagem`.
+    corpo = _codigo("main.py", "_serve_logo") + _codigo("main.py", "_buscar_imagem")
     assert "run_in_threadpool(_reduzir_logo" in corpo
     assert "run_in_threadpool(_ler_cache_logo" in corpo
 
