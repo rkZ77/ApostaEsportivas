@@ -71,8 +71,8 @@ function semLeitura(r: Resumo | null): string {
     case 'inelegivel':
       return r.motivo === 'jogo encerrado'
         ? 'A leitura da IA é de antes do jogo, e este já acabou.'
-        : 'Ainda não há jogos suficientes dos dois times nesta temporada para uma leitura confiável '
-          + '(precisa de 3 do mandante em casa e 3 do visitante fora).'
+        : 'A leitura da IA sai quando o mandante tiver ao menos 1 jogo em casa e o visitante '
+          + '1 jogo fora nesta temporada.'
     case 'bloqueado': return 'A leitura da IA é do plano Pro.'
     case 'limite': return 'A leitura da IA atingiu o limite de hoje. Volte amanhã.'
     case 'desligado': return 'A leitura da IA está desligada no momento.'
