@@ -56,29 +56,29 @@ export interface StoryImageInput {
 }
 
 // ── Tipografia ───────────────────────────────────────────────────────────
-// As mesmas duas famílias do site (index.css / tailwind.config): Space
-// Nunito no display, Inter nos números. Antes tudo era system-ui,
-// então a imagem compartilhada não parecia do mesmo produto que a página.
+// As mesmas famílias do site (index.css / tailwind.config): Space Grotesk
+// no display, Geist no texto e nos números (desde 24/11/2026; era Nunito +
+// Inter). Antes tudo era system-ui, então a imagem compartilhada não parecia
+// do mesmo produto que a página.
 //
 // Canvas não espera webfont carregar: se desenhar antes, cai no fallback
 // silenciosamente e o resultado varia por dispositivo. ensureFonts() força o
 // carregamento uma vez e é aguardado por todos os builders.
-const DISPLAY = 'Nunito, -apple-system, BlinkMacSystemFont, sans-serif'
-const MONO = 'Inter, -apple-system, BlinkMacSystemFont, sans-serif'
-const SANS = 'Nunito, -apple-system, BlinkMacSystemFont, sans-serif'
+const DISPLAY = '"Space Grotesk", -apple-system, BlinkMacSystemFont, sans-serif'
+const MONO = 'Geist, -apple-system, BlinkMacSystemFont, sans-serif'
+const SANS = 'Geist, -apple-system, BlinkMacSystemFont, sans-serif'
 
 // Pedir um peso que a família não carrega faz o navegador SIMULAR o negrito
 // (faux bold), e o traço sintetizado muda de aparelho pra aparelho: a mesma
 // pick sairia com espessura diferente em dois celulares. Por isso cada teto
 // abaixo espelha o que index.html realmente baixa.
 //
-// Nunito: 400..800.  Inter (numeros): 400..700.
-const clamp800 = (peso: number) => Math.min(peso, 800)
+// Space Grotesk: 500..700.  Geist (texto e numeros): 400..700.
 const clamp700 = (peso: number) => Math.min(peso, 700)
 
-const fontDisplay = (peso: number, tam: number) => `${clamp800(peso)} ${tam}px ${DISPLAY}`
+const fontDisplay = (peso: number, tam: number) => `${Math.max(500, clamp700(peso))} ${tam}px ${DISPLAY}`
 const fontMono = (peso: number, tam: number) => `${clamp700(peso)} ${tam}px ${MONO}`
-const fontSans = (peso: number, tam: number) => `${clamp800(peso)} ${tam}px ${SANS}`
+const fontSans = (peso: number, tam: number) => `${clamp700(peso)} ${tam}px ${SANS}`
 
 let fontesPromise: Promise<void> | null = null
 function ensureFonts(): Promise<void> {
@@ -86,12 +86,11 @@ function ensureFonts(): Promise<void> {
   const fonts = (document as any).fonts
   if (!fonts?.load) return (fontesPromise = Promise.resolve())
   fontesPromise = Promise.all([
-    fonts.load('800 58px Nunito'),
-    fonts.load('600 28px Nunito'),
-    fonts.load('700 52px Inter'),
-    fonts.load('500 24px Inter'),
-    fonts.load('800 40px Nunito'),
-    fonts.load('700 26px Nunito'),
+    fonts.load('700 58px "Space Grotesk"'),
+    fonts.load('600 28px "Space Grotesk"'),
+    fonts.load('700 52px Geist'),
+    fonts.load('500 24px Geist'),
+    fonts.load('400 24px Geist'),
   ])
     .then(() => undefined)
     // Falha de rede na fonte não pode impedir o compartilhamento: cai no

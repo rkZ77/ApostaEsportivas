@@ -5,42 +5,50 @@
 @import './fontes.css';
 
 /*
- * A FONTE DO SISTEMA, NA MEDIDA DA NUNITO (2026-10-06).
+ * A FONTE DO SISTEMA, NA MEDIDA DA FONTE WEB (2026-10-06; Geist e Space
+ * Grotesk desde 24/11/2026).
  *
- * O hero pre-renderizado (scripts/prerender-hero.mjs) pinta antes de a Nunito
- * chegar, entao ele pinta na fonte do sistema. Quando o React sobe, a Home
- * troca aquele paragrafo por um novo, ja' na Nunito · e o novo era MAIOR:
- * a caixa de cada linha mede ascent + descent da fonte, 1,364 na Nunito
- * contra 1,172 na Roboto, 1,33 na Segoe UI e 1,117 na Arial. Elemento novo e
- * maior vira novo candidato a LCP, e o LCP saia do hero estatico (1,5 s no
- * teste) para o do React (2,1 s; 3,7 s no Lighthouse do PageSpeed).
+ * O hero pre-renderizado (scripts/prerender-hero.mjs) pinta antes de a fonte
+ * web chegar, entao ele pinta na fonte do sistema. Quando o React sobe, a Home
+ * troca aquele texto por um novo, ja' na fonte web · se o novo for MAIOR, vira
+ * novo candidato a LCP (foi o que aconteceu com a Nunito: LCP de 1,5 s pra
+ * 2,1 s; 3,7 s no Lighthouse do PageSpeed).
  *
- * Esta face e' a fonte do sistema com as metricas verticais da Nunito
- * (ascent 101,1%, descent 35,3%, sem line-gap · lidas do proprio woff2). A
- * largura media das quatro fica a 3% da Nunito; o size-adjust de 103% deixa a
- * substituta um fio MAIOR, nunca menor, porque o que nao pode acontecer e' o
- * texto final ocupar mais area que o primeiro. De brinde, a troca de fonte
- * deixa de mexer o layout.
+ * Por isso cada fonte web tem a sua face de reserva: a fonte do sistema com as
+ * metricas verticais e a largura da fonte web, lidas do proprio woff2 e
+ * medidas contra a Arial num texto tipico do site (fontkit, 24/11/2026):
+ *   Geist          size-adjust 102,8%  ascent 97,7%  descent 28,7%
+ *   Space Grotesk  size-adjust 101%    ascent 97,4%  descent 28,9%
+ * A troca de fonte deixa de mexer o layout.
  *
  * Pesos separados porque `local()` aponta pra um arquivo so': sem a face 700
  * o titulo sairia em negrito sintetico da Regular.
  */
 @font-face {
-  font-family: 'Nunito Fallback';
+  font-family: 'Geist Fallback';
   font-weight: 400;
   src: local('Roboto'), local('Roboto-Regular'), local('Segoe UI'), local('Helvetica Neue'), local('Arial'), local('ArialMT');
-  size-adjust: 103%;
-  ascent-override: 101.1%;
-  descent-override: 35.3%;
+  size-adjust: 102.8%;
+  ascent-override: 97.7%;
+  descent-override: 28.7%;
   line-gap-override: 0%;
 }
 @font-face {
-  font-family: 'Nunito Fallback';
+  font-family: 'Geist Fallback';
   font-weight: 700;
   src: local('Roboto Bold'), local('Roboto-Bold'), local('Segoe UI Bold'), local('SegoeUI-Bold'), local('Helvetica Neue Bold'), local('Arial Bold'), local('Arial-BoldMT');
-  size-adjust: 103%;
-  ascent-override: 101.1%;
-  descent-override: 35.3%;
+  size-adjust: 102.8%;
+  ascent-override: 97.7%;
+  descent-override: 28.7%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Space Grotesk Fallback';
+  font-weight: 700;
+  src: local('Roboto Bold'), local('Roboto-Bold'), local('Segoe UI Bold'), local('SegoeUI-Bold'), local('Helvetica Neue Bold'), local('Arial Bold'), local('Arial-BoldMT');
+  size-adjust: 101%;
+  ascent-override: 97.4%;
+  descent-override: 28.9%;
   line-gap-override: 0%;
 }
 
@@ -317,8 +325,9 @@
   /*
    * Todo `font-mono` do site ganha algarismo tabular.
    *
-   * A familia `mono` deixou de ser JetBrains Mono e passou a ser Inter (ver
-   * tailwind.config.js). Inter e proporcional, entao sem esta regra o "1" fica
+   * A familia `mono` deixou de ser JetBrains Mono e passou a ser Inter, e
+   * desde 24/11/2026 e' a Geist (ver tailwind.config.js). As duas sao
+   * proporcionais, entao sem esta regra o "1" fica
    * mais estreito que o "8" e a coluna de odd, de percentual e de placar
    * dançaria a cada digito que muda -- que era exatamente o motivo de existir
    * uma monoespaçada ali.
@@ -410,7 +419,7 @@
 
   body {
     @apply bg-surface-0 text-ink-2 antialiased;
-    font-family: Nunito, 'Nunito Fallback', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    font-family: Geist, 'Geist Fallback', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
     /* Folga da barra de navegação inferior do celular · a própria barra
        publica a altura (components/BarraInferior). Sem ela, 0. */
     padding-bottom: var(--barra-inferior, 0px);
@@ -419,17 +428,25 @@
   /*
    * Voz 1 · titulo.
    *
-   * Nunito, a mesma do corpo. Uma familia so' no site inteiro: titulo se
-   * separa do texto por PESO e TAMANHO, nao por familia. Da' menos ruido e
-   * tira um arquivo de fonte do carregamento.
+   * Space Grotesk desde 24/11/2026 ("tira cara de IA do site"). Ate' ali era a
+   * Nunito, a mesma do corpo e arredondada: titulo e texto tinham a mesma
+   * voz, e a voz era de template. Grotesca geometrica com tracking apertado
+   * le como produto editado, e separa o titulo do texto sem depender so' de
+   * peso. A palavra de destaque de um titulo pode ir em `.font-serif`
+   * (Instrument Serif italico).
    */
   h1, h2, h3, .font-display {
-    font-family: Nunito, 'Nunito Fallback', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-    /* Nunito ja e uma fonte arredondada e de contraste baixo: o tracking
-       negativo que a Inter precisava aqui deixava as letras se tocando.
-       -0.01em segura a densidade do titulo sem colar. */
-    letter-spacing: -0.01em;
+    font-family: 'Space Grotesk', 'Space Grotesk Fallback', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    letter-spacing: -0.025em;
     @apply text-ink-1;
+  }
+  /* A palavra de destaque: serifa italica, peso normal, tracking quase neutro
+     (o -0.025em do titulo apertaria demais uma italica fina). */
+  .font-serif {
+    font-family: 'Instrument Serif', Georgia, 'Times New Roman', serif;
+    font-style: italic;
+    font-weight: 400;
+    letter-spacing: -0.01em;
   }
 
   /* Foco visivel consistente no site inteiro, em vez de outline do navegador */
@@ -521,15 +538,14 @@
   .section-head {
     @apply text-center mb-10;
   }
-  /* 700 e o peso de titulo do site (o carregamento vai ate 800, reservado
-     pro numero grande). Nunito arredondada em 800 num titulo de secao ja
-     puxa pra banner promocional, que e' o que o produto nao e'. */
+  /* 700 e o peso de titulo do site, e o teto das fontes carregadas (Space
+     Grotesk 500..700, Geist 400..700): font-extrabold/black caem no 700. */
   .section-title {
     @apply font-display text-2xl md:text-3xl font-bold text-ink-1 mb-2.5 leading-tight;
   }
-  /* Subtitulo um degrau abaixo do corpo (13px, nao 14px): Nunito tem altura
-     de x generosa e, no mesmo tamanho do texto normal, a linha de apoio
-     competia com o titulo em vez de servir de respiro. */
+  /* Subtitulo um degrau abaixo do corpo (13px, nao 14px): no mesmo tamanho
+     do texto normal, a linha de apoio competia com o titulo em vez de servir
+     de respiro. */
   .section-sub {
     @apply text-ink-2 text-[13px] max-w-lg mx-auto leading-relaxed;
   }

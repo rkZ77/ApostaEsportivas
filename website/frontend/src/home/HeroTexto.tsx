@@ -36,8 +36,14 @@ import { Button, LiveDot } from '../components/ui'
  */
 
 /** As tres linhas do titulo. Uma por elemento porque a quebra e' escolhida,
- *  nao consequencia da largura da tela. */
-const HEADLINE = ['Futebol analisado', 'com estatística real,', 'não com achismo.']
+ *  nao consequencia da largura da tela.
+ *
+ *  DESTAQUE EM UMA PALAVRA (24/11/2026, "tira cara de IA"). A linha do meio
+ *  inteira em verde e' o desenho mais batido de pagina gerada. Agora o titulo
+ *  fica todo na cor do texto e so' "achismo" ganha a serifa italica na cor da
+ *  marca: e' a palavra contra a qual o produto se posiciona. */
+const HEADLINE = ['Futebol analisado', 'com estatística real,', 'não com ']
+const DESTAQUE = 'achismo.'
 
 export default function HeroTexto({ animar = true }: { animar?: boolean }) {
   const entra = (extra: string) => (animar ? `entra ${extra} ` : '')
@@ -51,14 +57,18 @@ export default function HeroTexto({ animar = true }: { animar?: boolean }) {
         </span>
       </div>
 
-      <h1 className="font-display text-4xl md:text-5xl font-bold leading-[1.08] tracking-tight mb-5">
+      {/* Linhas fixas so' do lg pra cima (`lg:block`). No celular "com
+          estatistica real," nao cabe numa linha em tamanho de titulo, e a
+          quebra forcada deixava "real," sozinho · ali o texto corre e o
+          `text-wrap: balance` divide por igual. A entrada anima o titulo
+          inteiro (transform nao age em span inline). */}
+      <h1 className={`${entra('entra-1')}font-display text-[2.4rem] sm:text-5xl lg:text-[3.4rem] font-semibold leading-[1.04] tracking-[-0.035em] mb-5 [text-wrap:balance]`}>
         {HEADLINE.map((line, i) => (
-          <span
-            key={line}
-            className={`${animar ? 'entra ' : ''}block ${i === 1 ? 'text-accent-ink' : ''}`}
-            style={animar ? { animationDelay: `${i * 40}ms` } : undefined}
-          >
+          <span key={line} className="lg:block">
             {line}
+            {i === HEADLINE.length - 1
+              ? <em className="font-serif text-accent-ink">{DESTAQUE}</em>
+              : ' '}
           </span>
         ))}
       </h1>
