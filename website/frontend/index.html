@@ -105,16 +105,24 @@
       TLS de novo pra so' entao comecar o woff2. Tres idas e voltas em serie,
       a maior fatia dos 750 ms de bloqueio de renderizacao medidos no PageSpeed.
 
-      O preload abaixo e' so' da Nunito latin, que e' a fonte de tudo o que
-      aparece na primeira tela. A Inter (usada apenas nos numeros, ver
-      .font-mono) e o latin-ext ficam de fora: preload demais compete por banda
+      O preload abaixo e' so' do latin da Geist (texto) e da Space Grotesk
+      (titulo do hero), as duas que aparecem na primeira tela · 50 KB somadas,
+      contra 85 KB da Nunito + Inter de antes. A Instrument Serif (uma palavra
+      por titulo) e o latin-ext ficam de fora: preload demais compete por banda
       com o proprio JavaScript e atrasa o que ele deveria adiantar.
     -->
     <link
       rel="preload"
       as="font"
       type="font/woff2"
-      href="/fonts/nunito-latin.woff2"
+      href="/fonts/geist-latin.woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      href="/fonts/space-grotesk-latin.woff2"
       crossorigin
     />
 

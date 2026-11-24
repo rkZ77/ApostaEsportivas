@@ -60,7 +60,9 @@ const ISCA = 'Mercado escondido'
 function Escudo({ id, nome }: { id?: number | null; nome: string }) {
   const src = escudoDoTime(id ?? undefined)
   const [falhou, setFalhou] = useState(false)
-  const iniciais = nome.split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase()
+  /* `?? ''`: um time sem nome na resposta derrubava a Home inteira no
+     ErrorBoundary (achado em 24/11/2026), e a Home e' a porta do site. */
+  const iniciais = (nome ?? '').split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase()
   return (
     <span className="w-14 h-14 rounded-full bg-surface-2 border border-line flex items-center justify-center shrink-0">
       {src && !falhou ? (
@@ -97,7 +99,9 @@ export default function FreePickHero({ revelar = true, onCarregou }: {
 
   useEffect(() => {
     api.get('/public/free-pick-today')
-      .then(r => setPick(r.data ?? null))
+      // So' vira pick o que TEM id: resposta vazia ou fora do formato some do
+      // card em vez de quebrar a Home.
+      .then(r => setPick(r.data && typeof r.data === 'object' && 'id' in r.data ? r.data : null))
       .catch(() => setPick(null))
       .finally(() => { setLoading(false); onCarregou?.() })
   }, [user?.id])

@@ -13,8 +13,15 @@
  */
 import { writeFile, mkdir } from 'node:fs/promises'
 
+/*
+ * TIPOGRAFIA NOVA (24/11/2026, "tira cara de IA do site"). A Nunito,
+ * arredondada, era boa parte da cara de template. Agora:
+ *   Space Grotesk · titulos (h1-h3, .font-display)
+ *   Geist         · texto e numeros (.font-mono vira Geist com tabular-nums)
+ *   Instrument Serif italico · so' a palavra de destaque de um titulo (.font-serif)
+ */
 const CSS_URL =
-  'https://fonts.googleapis.com/css2?family=Nunito:wght@400..800&family=Inter:wght@400..700&display=swap'
+  'https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Space+Grotesk:wght@500..700&family=Instrument+Serif:ital@1&display=swap'
 
 // UA de Chrome: sem isso o Google devolve o CSS antigo, com ttf no lugar de woff2.
 const UA =
@@ -28,7 +35,11 @@ const UA =
  * numero (ver .font-mono no index.css), e o latin-ext dela sozinho pesava
  * 85 KB pra nada.
  */
-const QUERO = { Nunito: ['latin', 'latin-ext'], Inter: ['latin'] }
+const QUERO = {
+  Geist: ['latin', 'latin-ext'],          // nome de time (Legia Warszawa, Besiktas)
+  'Space Grotesk': ['latin', 'latin-ext'],
+  'Instrument Serif': ['latin'],          // uma palavra por titulo, sempre em portugues
+}
 
 const cabecalho = `/*
  * FONTES SERVIDAS PELO PROPRIO DOMINIO. ARQUIVO GERADO · nao editar a mao.
@@ -40,8 +51,8 @@ const cabecalho = `/*
  * maior fatia dos 750 ms de bloqueio de renderizacao medidos no PageSpeed.
  *
  * Agora os woff2 moram em public/fonts e vem pela mesma conexao que ja' trouxe
- * o HTML. O da Nunito latin tem <link rel=preload> no index.html, entao o
- * download comeca junto com o CSS em vez de esperar por ele.
+ * o HTML. A Geist e a Space Grotesk latin tem <link rel=preload> no
+ * index.html, entao o download comeca junto com o CSS em vez de esperar por ele.
  *
  * Regerar com: node scripts/baixar-fontes.mjs
  */
@@ -59,9 +70,10 @@ for (const [, subset, corpo] of blocos) {
   if (!QUERO[familia]?.includes(subset)) continue
 
   const peso = /font-weight: ([^;]+);/.exec(corpo)[1].trim()
+  const estilo = (/font-style: ([^;]+);/.exec(corpo)?.[1] ?? 'normal').trim()
   const url = /url\((\S+?)\)/.exec(corpo)[1]
   const faixa = /unicode-range: ([^;]+);/.exec(corpo)[1].trim()
-  const nome = `${familia.toLowerCase()}-${subset}.woff2`
+  const nome = `${familia.toLowerCase().replace(/\s+/g, '-')}${estilo === 'italic' ? '-italic' : ''}-${subset}.woff2`
 
   const bytes = Buffer.from(await (await fetch(url)).arrayBuffer())
   await writeFile(`public/fonts/${nome}`, bytes)
@@ -69,7 +81,7 @@ for (const [, subset, corpo] of blocos) {
 
   faces.push(`@font-face {
   font-family: '${familia}';
-  font-style: normal;
+  font-style: ${estilo};
   font-weight: ${peso};
   font-display: swap;
   src: url('/fonts/${nome}') format('woff2');
