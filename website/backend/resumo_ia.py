@@ -988,12 +988,22 @@ def _resposta(linha: dict) -> dict:
     return {"status": linha["status"], "motivo": linha.get("motivo")}
 
 
-def resumo_do_jogo(cur, fixture_id: int, montar_raio_x) -> dict:
+def resumo_do_jogo(cur, fixture_id: int, montar_raio_x,
+                   liberar=None, reconectar=None) -> dict:
     """O resumo do dia: do banco, ou gerado agora se for a primeira abertura.
 
     `montar_raio_x()` devolve os dados do Raio-X (routers/fixtures.py) · so'
     e' chamado quando vai gerar. Um lock por jogo no processo: dez pessoas
     abrindo o mesmo jogo ao mesmo tempo viram UMA chamada ao modelo.
+
+    SEM FILA E SEM PRENDER O BANCO (24/11/2026). Quem chega com a geracao do
+    mesmo jogo em andamento recebe `{"status": "gerando"}` na hora (a tela
+    pergunta de novo em segundos), em vez de esperar o lock: cada espera
+    prendia uma thread do servidor por ate' ~20 s, e um jogo novo aberto por
+    muita gente junto esgotava as threads do site inteiro. E, com
+    `liberar`/`reconectar` (a rota passa), a conexao volta ao pool enquanto o
+    modelo pensa e outra e' aberta so' pra gravar: o pool tem 10, e dez
+    leituras novas ao mesmo tempo travavam o banco pra todo mundo.
     """
     dia = _hoje()
     linha = _guardado(cur, fixture_id, dia)
@@ -1002,73 +1012,106 @@ def resumo_do_jogo(cur, fixture_id: int, montar_raio_x) -> dict:
     if not ligado():
         return _resposta(linha) if _vale(linha) else {"status": "desligado"}
 
-    with _lock(fixture_id):
-        linha = _guardado(cur, fixture_id, dia)
-        if _vale(linha) and not _escalacao_saiu(cur, fixture_id, linha):
-            return _resposta(linha)
-        # Gerando de novo por causa da escalacao: falha ou teto nunca tiram
-        # do ar a leitura que ja' existe.
-        anterior = linha if _vale(linha) and linha["status"] == "ok" else None
+    trava = _lock(fixture_id)
+    if not trava.acquire(blocking=False):
+        return {"status": "gerando"}
+    proprio = []          # conexao aberta aqui pra gravar, fechada no fim
+    try:
+        return _gerar(cur, fixture_id, dia, montar_raio_x, liberar, reconectar, proprio)
+    finally:
+        trava.release()
+        for conn in proprio:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
-        cur.execute("SELECT league_id, season, round, status, home_team_id, away_team_id, match_datetime "
-                    "FROM fixtures WHERE fixture_id = %s", (fixture_id,))
-        fix = cur.fetchone()
-        if not fix:
-            return {"status": "inelegivel", "motivo": "jogo fora da agenda"}
-        if fix.get("status") in _ENCERRADO:
-            return {"status": "inelegivel", "motivo": "jogo encerrado"}
 
-        tabela = tabela_dos_times(cur, fix["league_id"],
-                                  [fix["home_team_id"], fix["away_team_id"]])
-        formato = formato_da_partida(fix["round"], bool(tabela))
-        amostra = amostra_da_temporada(cur, fix["home_team_id"], fix["away_team_id"],
-                                       fix["league_id"], fix["season"],
-                                       so_na_liga=(formato == "liga"))
-        if amostra["mandante_em_casa"] < MIN_JOGOS or amostra["visitante_fora"] < MIN_JOGOS:
-            motivo = (f"amostra curta: mandante com {amostra['mandante_em_casa']} jogo(s) em casa "
-                      f"e visitante com {amostra['visitante_fora']} fora na temporada")
-            _gravar(cur, fixture_id, dia, "inelegivel", motivo=motivo)
-            return {"status": "inelegivel", "motivo": motivo}
+def _gerar(cur, fixture_id, dia, montar_raio_x, liberar, reconectar, proprio) -> dict:
+    """O corpo da geracao, ja' com o lock do jogo na mao (ver resumo_do_jogo)."""
 
-        cur.execute("SELECT COUNT(*) AS n FROM raio_x_resumo_ia WHERE dia = %s AND status = 'ok'",
-                    (dia,))
-        if (cur.fetchone() or {}).get("n", 0) >= max_por_dia() and not anterior:
-            # Nao grava: amanha (ou com teto maior) o jogo ainda pode ganhar.
-            # A refeita pela escalacao passa: ela sobrescreve a linha do dia
-            # e a contagem nao muda.
-            return {"status": "limite", "motivo": "limite de resumos do dia"}
+    def _cursor_pra_gravar():
+        nonlocal cur
+        if cur is None:
+            conn = reconectar()
+            proprio.append(conn)
+            cur = conn.cursor()
+        return cur
 
-        try:
-            dados = montar_raio_x()
-            # Jogo de VOLTA que o texto da rodada nao entrega (Libertadores:
-            # "Semi-finals"): o Raio-X achou a ida no banco (14/10/2026).
-            if ((dados.get("competicao") or {}).get("perna")
-                    and formato.startswith("mata-mata")):
-                formato = "mata-mata ida e volta"
-            cur.execute("SELECT name FROM leagues WHERE league_id = %s LIMIT 1",
-                        (fix["league_id"],))
-            liga = (cur.fetchone() or {}).get("name")
-            na_liga = formato == "liga"
-            casa_em_casa = serie_por_mando(cur, fix["home_team_id"], True, fix["season"],
-                                           fix["league_id"], na_liga, fix.get("match_datetime"))
-            fora_fora = serie_por_mando(cur, fix["away_team_id"], False, fix["season"],
-                                        fix["league_id"], na_liga, fix.get("match_datetime"))
-            fatos = montar_fatos(dados, liga, formato, tabela,
-                                 tecnicos_dos_times(cur, [fix["home_team_id"], fix["away_team_id"]]),
-                                 amostra, casa_em_casa, fora_fora,
-                                 arbitro=_arbitro_seguro(cur, fixture_id))
-            conteudo, t_in, t_out = chamar_modelo(fatos)
-        except Exception as e:
+    linha = _guardado(cur, fixture_id, dia)
+    if _vale(linha) and not _escalacao_saiu(cur, fixture_id, linha):
+        return _resposta(linha)
+    # Gerando de novo por causa da escalacao: falha ou teto nunca tiram
+    # do ar a leitura que ja' existe.
+    anterior = linha if _vale(linha) and linha["status"] == "ok" else None
+
+    cur.execute("SELECT league_id, season, round, status, home_team_id, away_team_id, match_datetime "
+                "FROM fixtures WHERE fixture_id = %s", (fixture_id,))
+    fix = cur.fetchone()
+    if not fix:
+        return {"status": "inelegivel", "motivo": "jogo fora da agenda"}
+    if fix.get("status") in _ENCERRADO:
+        return {"status": "inelegivel", "motivo": "jogo encerrado"}
+
+    tabela = tabela_dos_times(cur, fix["league_id"],
+                              [fix["home_team_id"], fix["away_team_id"]])
+    formato = formato_da_partida(fix["round"], bool(tabela))
+    amostra = amostra_da_temporada(cur, fix["home_team_id"], fix["away_team_id"],
+                                   fix["league_id"], fix["season"],
+                                   so_na_liga=(formato == "liga"))
+    if amostra["mandante_em_casa"] < MIN_JOGOS or amostra["visitante_fora"] < MIN_JOGOS:
+        motivo = (f"amostra curta: mandante com {amostra['mandante_em_casa']} jogo(s) em casa "
+                  f"e visitante com {amostra['visitante_fora']} fora na temporada")
+        _gravar(cur, fixture_id, dia, "inelegivel", motivo=motivo)
+        return {"status": "inelegivel", "motivo": motivo}
+
+    cur.execute("SELECT COUNT(*) AS n FROM raio_x_resumo_ia WHERE dia = %s AND status = 'ok'",
+                (dia,))
+    if (cur.fetchone() or {}).get("n", 0) >= max_por_dia() and not anterior:
+        # Nao grava: amanha (ou com teto maior) o jogo ainda pode ganhar.
+        # A refeita pela escalacao passa: ela sobrescreve a linha do dia
+        # e a contagem nao muda.
+        return {"status": "limite", "motivo": "limite de resumos do dia"}
+
+    try:
+        dados = montar_raio_x()
+        # Jogo de VOLTA que o texto da rodada nao entrega (Libertadores:
+        # "Semi-finals"): o Raio-X achou a ida no banco (14/10/2026).
+        if ((dados.get("competicao") or {}).get("perna")
+                and formato.startswith("mata-mata")):
+            formato = "mata-mata ida e volta"
+        cur.execute("SELECT name FROM leagues WHERE league_id = %s LIMIT 1",
+                    (fix["league_id"],))
+        liga = (cur.fetchone() or {}).get("name")
+        na_liga = formato == "liga"
+        casa_em_casa = serie_por_mando(cur, fix["home_team_id"], True, fix["season"],
+                                       fix["league_id"], na_liga, fix.get("match_datetime"))
+        fora_fora = serie_por_mando(cur, fix["away_team_id"], False, fix["season"],
+                                    fix["league_id"], na_liga, fix.get("match_datetime"))
+        fatos = montar_fatos(dados, liga, formato, tabela,
+                             tecnicos_dos_times(cur, [fix["home_team_id"], fix["away_team_id"]]),
+                             amostra, casa_em_casa, fora_fora,
+                             arbitro=_arbitro_seguro(cur, fixture_id))
+        if liberar is not None and reconectar is not None:
+            # Ate' aqui so' leitura: a conexao volta limpa ao pool e fica
+            # livre pro resto do site durante a espera do modelo.
             cur.connection.rollback()
-            logger.warning("[RESUMO IA] jogo %s falhou: %s", fixture_id, e)
-            if anterior:
-                return _resposta(anterior)
-            _gravar(cur, fixture_id, dia, "falhou", motivo=str(e)[:300])
-            return {"status": "falhou"}
-        conteudo["numeros"] = numeros_da_tela(fatos)
-        conteudo["versao"] = VERSAO
-        # Refeita pela escalacao, ou gerada com ela ja' oficial: nao refaz mais.
-        conteudo["escalacao_oficial"] = bool(anterior) or fatos["jogo"].get("escalacao") == "escalacao oficial"
-        _gravar(cur, fixture_id, dia, "ok", conteudo=conteudo, tokens_in=t_in, tokens_out=t_out)
-        logger.info("[RESUMO IA] jogo %s gerado (%s in / %s out)", fixture_id, t_in, t_out)
-        return {"status": "ok", **conteudo}
+            liberar()
+            cur = None
+        conteudo, t_in, t_out = chamar_modelo(fatos)
+    except Exception as e:
+        if cur is not None:
+            cur.connection.rollback()
+        logger.warning("[RESUMO IA] jogo %s falhou: %s", fixture_id, e)
+        if anterior:
+            return _resposta(anterior)
+        _gravar(_cursor_pra_gravar(), fixture_id, dia, "falhou", motivo=str(e)[:300])
+        return {"status": "falhou"}
+    conteudo["numeros"] = numeros_da_tela(fatos)
+    conteudo["versao"] = VERSAO
+    # Refeita pela escalacao, ou gerada com ela ja' oficial: nao refaz mais.
+    conteudo["escalacao_oficial"] = bool(anterior) or fatos["jogo"].get("escalacao") == "escalacao oficial"
+    _gravar(_cursor_pra_gravar(), fixture_id, dia, "ok", conteudo=conteudo,
+            tokens_in=t_in, tokens_out=t_out)
+    logger.info("[RESUMO IA] jogo %s gerado (%s in / %s out)", fixture_id, t_in, t_out)
+    return {"status": "ok", **conteudo}

@@ -258,6 +258,48 @@ def test_amostra_curta_guardada_e_conferida_de_novo(modelo):
     assert len(modelo) == 1
 
 
+def test_geracao_em_andamento_nao_faz_fila(modelo):
+    """24/11/2026: com o mesmo jogo sendo gerado, volta "gerando" na hora em
+    vez de prender uma thread do servidor esperando o lock."""
+    trava = resumo_ia._lock(10)
+    trava.acquire()
+    try:
+        assert resumo_ia.resumo_do_jogo(_Cur(), 10, _dados) == {"status": "gerando"}
+    finally:
+        trava.release()
+    assert modelo == []
+    assert resumo_ia.resumo_do_jogo(_Cur(), 10, _dados)["status"] == "ok"   # lock solto
+
+
+def test_conexao_volta_ao_pool_durante_o_modelo(monkeypatch):
+    """A conexao da rota e' devolvida ANTES do modelo e uma nova grava."""
+    monkeypatch.setenv("OPENAI_API_KEY", "x")
+    monkeypatch.setenv("RESUMO_IA_MODEL", "gpt-5.6-terra")
+    monkeypatch.delenv("RESUMO_IA", raising=False)
+    ordem = []
+    rota, nova = _Cur(), _Cur()
+
+    class _Conn:
+        def cursor(self):
+            return nova
+
+        def close(self):
+            ordem.append("fechou_a_nova")
+
+    def falso(fatos):
+        ordem.append("modelo")
+        return {"resumo": "r", "mercados": [], "contexto": "", "alerta": ""}, 1, 1
+    monkeypatch.setattr(resumo_ia, "chamar_modelo", falso)
+
+    r = resumo_ia.resumo_do_jogo(
+        rota, 11, _dados,
+        liberar=lambda: ordem.append("liberou"),
+        reconectar=lambda: (ordem.append("reconectou"), _Conn())[1])
+    assert r["status"] == "ok"
+    assert ordem == ["liberou", "modelo", "reconectou", "fechou_a_nova"]
+    assert rota.guardado is None and nova.guardado["status"] == "ok"
+
+
 def test_jogo_encerrado_e_teto_do_dia_nao_gastam(modelo, monkeypatch):
     assert resumo_ia.resumo_do_jogo(
         _Cur(fixture={"league_id": 71, "season": 2026, "round": None, "status": "FT",

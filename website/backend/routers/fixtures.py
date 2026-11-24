@@ -916,11 +916,15 @@ def get_resumo_ia(fixture_id: int, current_user: dict = Depends(get_current_user
     conn = get_connection()
     cur = conn.cursor()
     try:
+        # `liberar`/`reconectar` (24/11/2026): a conexao volta ao pool durante
+        # a espera do modelo · ver resumo_ia.resumo_do_jogo. `conn.close()` do
+        # pool e' idempotente, entao o `finally` daqui continua seguro.
         return resumo_ia.resumo_do_jogo(
             cur, fixture_id,
             lambda: cache_publico.obter(
                 f"raio-x:{fixture_id}:None:None:{_JOGOS_RAIO_X_TEMPORADA}", _RAIO_X_TTL,
-                lambda: _montar_raio_x(fixture_id, None, None, None, _JOGOS_RAIO_X_TEMPORADA)))
+                lambda: _montar_raio_x(fixture_id, None, None, None, _JOGOS_RAIO_X_TEMPORADA)),
+            liberar=conn.close, reconectar=get_connection)
     except Exception:
         # Tabela ainda nao criada, banco ocupado: o Raio-X segue sem o bloco.
         conn.rollback()

@@ -39,7 +39,7 @@ interface LeituraDoTime {
   jogadores?: Mercado[]
 }
 interface Resumo {
-  status: 'ok' | 'inelegivel' | 'bloqueado' | 'limite' | 'falhou' | 'desligado'
+  status: 'ok' | 'inelegivel' | 'bloqueado' | 'limite' | 'falhou' | 'desligado' | 'gerando'
   motivo?: string; resumo?: string; times?: LeituraDoTime[]; mercados_do_jogo?: Mercado[]
   contexto?: string; alerta?: string
   numeros?: { mandante?: NumerosDoTime; visitante?: NumerosDoTime }
@@ -90,13 +90,27 @@ export default function ResumoDaIA({ fixtureId, homeId, awayId, homeNome, awayNo
 
   useEffect(() => {
     let vivo = true
+    let espera: ReturnType<typeof setTimeout> | undefined
     setR(null)
     setCarregando(true)
-    api.get(`/fixtures/${fixtureId}/resumo-ia`, { timeout: 45000 })
-      .then(res => { if (vivo) setR(res.data) })
-      .catch(() => {})
-      .finally(() => { if (vivo) setCarregando(false) })
-    return () => { vivo = false }
+    /* "gerando" (24/11/2026): outra pessoa abriu este jogo primeiro e a IA já
+       está escrevendo. O servidor responde na hora em vez de segurar a
+       conexão na fila, e a tela pergunta de novo a cada 4 s, até ~48 s. */
+    const buscar = (tentativa: number) => {
+      api.get(`/fixtures/${fixtureId}/resumo-ia`, { timeout: 45000 })
+        .then(res => {
+          if (!vivo) return
+          if (res.data?.status === 'gerando' && tentativa < 12) {
+            espera = setTimeout(() => buscar(tentativa + 1), 4000)
+            return
+          }
+          setR(res.data)
+          setCarregando(false)
+        })
+        .catch(() => { if (vivo) setCarregando(false) })
+    }
+    buscar(0)
+    return () => { vivo = false; if (espera) clearTimeout(espera) }
   }, [fixtureId])
 
   if (carregando) {
