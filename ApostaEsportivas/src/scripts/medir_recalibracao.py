@@ -18,6 +18,13 @@ TRES PERGUNTAS, na ordem em que decidem:
      rendem pior que as que ela mantem? Se render igual, a correcao so' corta
      volume sem melhorar nada -- e o produto vende pick de valor, entao esta e'
      a que decide.
+
+CORTE LIGADO EM 24/11/2026 (recalibracao.modo), SO' NO VIP
+(config.corte_recalibracao). Daqui em diante o VIP so' manda pro ledger
+pernas que passaram no corte, entao o bloco 3 encolhe sozinho e a
+leitura "poucas pernas mudariam" passa a ser o esperado, nao motivo pra
+desligar. O que decide manter ligado: o bloco 1 seguir "melhor" e o ROI das
+pernas novas (medir_calibracao) nao piorar.
 """
 from __future__ import annotations
 
@@ -119,6 +126,7 @@ def main():
               f"ROI={'-' if r is None else f'{r:+.3f}'}  ±2ep={'-' if e is None else f'{2 * e:.3f}'}")
 
     print("\n=== Leitura ===")
+    print(f"  (MOTOR_RECALIBRACAO={recalibracao.modo()}: pernas desde 24/11/2026 ja' passaram pelo corte)")
     r_f, r_s = roi(ficam), roi(sairiam)
     e_s = ep_roi(sairiam)
     if br >= bm:

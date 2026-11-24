@@ -1,4 +1,5 @@
-"""Recalibracao da probabilidade pelo proprio historico · EM SOMBRA (2026-10-08).
+"""Recalibracao da probabilidade pelo proprio historico · sombra desde
+2026-10-08, CORTE LIGADO em 2026-11-24 (ver `modo`).
 
 O QUE A MEDICAO MOSTROU. `medir_calibracao_dos_picks.py` em PROD, 850 pernas
 desde 01/08: na faixa de 70-80% o motor promete 74,0% e acerta 66,8% (±4,9),
@@ -116,6 +117,44 @@ def pares_do_ledger(cur, desde=None, ate=None) -> list:
         saida.append((_prob(r["probability"]), r["result"] == "GREEN",
                       float(r["odd"]) if r.get("odd") else None, r["match_date"]))
     return saida
+
+
+def modo() -> str:
+    """`MOTOR_RECALIBRACAO`: on | sombra. Padrao `on` desde 24/11/2026.
+
+    LIGADO PELA MEDICAO. `medir_recalibracao.py` disse "vale ligar" de 10/11 a
+    23/11, todo dia: na confirmacao a curva erra menos (Brier 0,2382 -> 0,2349)
+    e as pernas em que o valor some com a probabilidade corrigida (p*odd <= 1)
+    renderam -5,6% contra +3,8% das que ficam.
+
+    O QUE `on` FAZ e' exatamente o que foi medido, e nada alem: o candidato
+    cujo valor some na probabilidade corrigida SAI (ver `valor_some`) -- so'
+    no produto com `config.corte_recalibracao` (hoje o VIP, o unico em que os
+    cortados renderam pior; ver o campo em config.py). A
+    probabilidade publicada continua a do motor -- trocar ela faria a curva
+    aprender em cima da propria correcao (o ledger viraria a curva) e virar
+    identidade sozinha, e mexeria no piso de 70% sem medicao.
+    `sombra` volta ao comportamento antigo: so' grava, nao corta.
+    """
+    import os
+    m = os.getenv("MOTOR_RECALIBRACAO", "on").strip().lower()
+    return m if m in ("on", "sombra") else "on"
+
+
+def valor_some(c: dict, curva) -> bool:
+    """Grava `prob_recalibrada` no candidato e diz se o valor some com ela.
+
+    Usa a probabilidade FINAL do candidato (a que vai pro ledger) -- e' nela
+    que a curva foi ajustada e medida. Sem curva, sem odd ou sem probabilidade:
+    nunca corta.
+    """
+    p = aplicar(c.get("taxa_real"), curva)
+    c["prob_recalibrada"] = p
+    try:
+        odd = float(c.get("odd") or 0)
+    except (TypeError, ValueError):
+        return False
+    return p is not None and odd > 1 and p * odd <= 1
 
 
 def curva_em_cache() -> list:

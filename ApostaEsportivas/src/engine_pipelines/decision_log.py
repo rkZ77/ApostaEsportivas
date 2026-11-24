@@ -355,6 +355,8 @@ def _candidate_summary(c: dict) -> dict:
         "dixon_coles_sombra": c.get("dixon_coles_sombra"),
         # Recalibracao em sombra (08/10) · ver pick_engine/recalibracao.py.
         "prob_recalibrada_sombra": c.get("prob_recalibrada_sombra"),
+        # A da probabilidade FINAL, a que decide o corte desde 24/11/2026.
+        "prob_recalibrada": c.get("prob_recalibrada"),
         # CONTEXTO ATUAL (2026-10-08): a probabilidade com e sem o contexto,
         # a amostra efetiva e os fatores, gravados ligado ou nao -- e' o que
         # scripts/medir_contexto_atual.py cruza com o resultado.
