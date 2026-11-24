@@ -97,6 +97,122 @@ def test_admin_tem_balde_proprio(cliente):
     assert cliente.get("/api/_teste_ok", cookies=a).status_code == 200
 
 
+# ── /suggestions/odds-agora ─────────────────────────────────────────────────
+class _CurOdds:
+    def __init__(self, n):
+        self.n, self._r = n, []
+
+    def execute(self, sql, params=None):
+        self._r = ([{"pick_type": "vip", "id": i, "fixture_id": 100 + i, "market_type": "goals",
+                     "market": "Gols", "line": "Over 2.5", "odd": 1.80} for i in range(self.n)]
+                   if "picks_vip" in sql else [])
+
+    def fetchall(self):
+        return self._r
+
+    def close(self):
+        pass
+
+
+class _ConnOdds:
+    def __init__(self, n):
+        self._cur = _CurOdds(n)
+
+    def cursor(self):
+        return self._cur
+
+    def rollback(self):
+        pass
+
+    def close(self):
+        pass
+
+
+@pytest.fixture
+def odds(monkeypatch):
+    import threading
+    import time
+    from routers import live, suggestions
+    chamadas = []
+
+    def ler(fid):
+        chamadas.append(fid)
+        time.sleep(0.2)
+        return [{"fid": fid}]
+    monkeypatch.setattr(live, "_fetch_prematch_odds", ler)
+    monkeypatch.setattr(live, "_find_prematch_odd", lambda *a, **k: (1.90, "Casa"))
+    monkeypatch.setattr(live, "_casas_ativas", lambda: [])
+    monkeypatch.setattr(suggestions, "get_connection", lambda: _ConnOdds(8))
+    suggestions._odds_agora_cache.update({"ts": 0.0, "dados": {}})
+    yield suggestions, chamadas, threading
+    suggestions._odds_agora_cache.update({"ts": 0.0, "dados": {}})
+
+
+def test_odds_agora_le_em_paralelo(odds):
+    import time
+    suggestions, chamadas, _ = odds
+    t0 = time.time()
+    r = suggestions.odds_agora_prejogo(current_user={})
+    assert len(r["picks"]) == 8 and len(chamadas) == 8
+    assert time.time() - t0 < 1.0        # 8 x 0,2 s em serie dariam 1,6 s
+
+
+def test_odds_agora_uma_atualizacao_por_vez(odds):
+    """Quem chega durante a atualizacao leva a leitura anterior na hora."""
+    import time
+    suggestions, chamadas, threading = odds
+    suggestions._odds_agora_cache.update({"ts": 1.0, "dados": {"vip:0": {"odd": 1.5}}})
+    t = threading.Thread(target=suggestions.odds_agora_prejogo, kwargs={"current_user": {}})
+    t.start()
+    time.sleep(0.05)
+    t0 = time.time()
+    r = suggestions.odds_agora_prejogo(current_user={})
+    assert time.time() - t0 < 0.1 and r["picks"] == {"vip:0": {"odd": 1.5}}
+    t.join()
+    assert len(chamadas) == 8            # so' a primeira foi a API
+
+
+# ── /admin/overview ─────────────────────────────────────────────────────────
+def test_admin_overview_uma_ida_por_tabela(monkeypatch):
+    """Eram ~28 consultas em serie (2-6 s). Agora uma por tabela de picks, e o
+    formato da resposta e' o mesmo de antes."""
+    from routers import admin
+    consultas = []
+
+    class _Cur:
+        def execute(self, sql, params=None):
+            consultas.append(" ".join(sql.split()))
+            self._sql = sql
+
+        def fetchone(self):
+            if "ontem_green" in self._sql:
+                return {"n": 4, "pendentes": 1, "ontem_green": 2, "ontem_red": 1,
+                        "ontem_push": 0, "ontem_pendentes": 0, "velhos": 1}
+            return {}
+
+        def close(self):
+            pass
+
+    class _Conn:
+        def cursor(self):
+            return _Cur()
+
+        def rollback(self):
+            pass
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(admin, "get_connection", lambda: _Conn())
+    monkeypatch.setattr(admin, "_api_football_status", lambda: None)
+    r = admin.admin_overview(current_user={})
+    assert len(consultas) <= 15, len(consultas)
+    assert not any("COUNT(*) FROM player_match_stats" in c for c in consultas)
+    assert r["picks_hoje"]["vip"] == {"n": 4, "pendentes": 1}
+    assert r["ontem"]["vip"] == {"green": 2, "red": 1, "push": 0, "pendentes": 0}
+    assert r["pendentes_antigos"] == 8      # 1 por tabela, nas 8 do bloco "ontem"
+
+
 # ── /live/my-picks ──────────────────────────────────────────────────────────
 def test_minhas_apostas_so_aquece_o_que_vai_aparecer():
     fonte = open(os.path.join(RAIZ, "routers", "live.py"), encoding="utf-8").read()

@@ -3697,6 +3697,33 @@ def admin_overview(current_user: dict = Depends(require_admin)):
         # do Player Stats), mas o dia antigo continua no banco e um zero ali e'
         # informacao, nao ruido -- diferente da tela do assinante, onde a secao
         # some quando nao ha' pick.
+        # UMA IDA AO BANCO POR TABELA (24/11/2026). Hoje, ontem e pendentes
+        # antigos eram tres consultas por tabela, em serie, ~28 no painel: a
+        # ~150 ms cada, o /admin levava 2 a 6 s pra abrir (log do Railway).
+        # Agora `_resumo_da_tabela` responde as tres de uma vez; o default
+        # continua por tabela, entao tabela faltando so' zera ela.
+        resumos: dict = {}
+
+        def _resumo_da_tabela(tabela: str) -> dict:
+            if tabela not in resumos:
+                resumos[tabela] = uma(f"""
+                    SELECT COUNT(*) FILTER (WHERE match_date = {HOJE_BR})          AS n,
+                           COUNT(*) FILTER (WHERE match_date = {HOJE_BR}
+                                              AND result IS NULL)                  AS pendentes,
+                           COUNT(*) FILTER (WHERE match_date = {HOJE_BR} - 1
+                                              AND result IN ('GREEN','HALF-WIN'))  AS ontem_green,
+                           COUNT(*) FILTER (WHERE match_date = {HOJE_BR} - 1
+                                              AND result IN ('RED','HALF-LOSS'))   AS ontem_red,
+                           COUNT(*) FILTER (WHERE match_date = {HOJE_BR} - 1
+                                              AND result IN ('PUSH','VOID'))       AS ontem_push,
+                           COUNT(*) FILTER (WHERE match_date = {HOJE_BR} - 1
+                                              AND result IS NULL)                  AS ontem_pendentes,
+                           COUNT(*) FILTER (WHERE match_date < {HOJE_BR} - 1
+                                              AND result IS NULL)                  AS velhos
+                      FROM {tabela}
+                """, None)
+            return resumos[tabela]
+
         picks = {}
         for rotulo, tabela in (("vip", "picks_vip"), ("free", "picks_free"),
                                ("multiplas", "picks_multiplas"),
@@ -3711,11 +3738,9 @@ def admin_overview(current_user: dict = Depends(require_admin)):
                                # existe onde o motor rodou entra sem guarda
                                # extra -- vira zero, nao erro.
                                ("live", "picks_live")):
-            picks[rotulo] = uma(
-                f"SELECT COUNT(*) AS n, COUNT(*) FILTER (WHERE result IS NULL) AS pendentes "
-                f"FROM {tabela} WHERE match_date = {HOJE_BR}",
-                {"n": 0, "pendentes": 0},
-            )
+            r = _resumo_da_tabela(tabela)
+            picks[rotulo] = ({"n": r["n"], "pendentes": r["pendentes"]} if r
+                             else {"n": 0, "pendentes": 0})
 
         # Saude da coleta. Sem isso, "nao saiu pick hoje" fica indistinguivel
         # de "a coleta nem rodou" -- que sao problemas completamente
@@ -3735,7 +3760,12 @@ def admin_overview(current_user: dict = Depends(require_admin)):
                    (SELECT MAX(match_date) FROM match_statistics)              AS ultimo_jogo_coletado,
                    (SELECT COUNT(*) FROM leagues)                              AS ligas,
                    (SELECT COUNT(*) FROM teams)                                AS times,
-                   (SELECT COUNT(*) FROM player_match_stats)                   AS estatisticas_jogador
+                   -- ESTIMATIVA DO POSTGRES (24/11/2026): o COUNT(*) das 162
+                   -- mil linhas levava 2,2 s sozinho e o painel so' mostra o
+                   -- tamanho da tabela. reltuples e' atualizado pelo
+                   -- autovacuum/ANALYZE; -1 (nunca analisada) vira NULL.
+                   (SELECT NULLIF(GREATEST(reltuples, -1), -1)::bigint FROM pg_class
+                     WHERE oid = 'player_match_stats'::regclass)               AS estatisticas_jogador
         """, {})
 
         financeiro = uma("""
@@ -3756,18 +3786,14 @@ def admin_overview(current_user: dict = Depends(require_admin)):
                                ("faltas", "picks_faltas"),
                                ("player_stats", "picks_player_stats"),
                                ("boost", "picks_boost"), ("live", "picks_live")):
-            linha = uma(f"""
-                SELECT COUNT(*) FILTER (WHERE result IN ('GREEN','HALF-WIN'))  AS green,
-                       COUNT(*) FILTER (WHERE result IN ('RED','HALF-LOSS'))   AS red,
-                       COUNT(*) FILTER (WHERE result IN ('PUSH','VOID'))       AS push,
-                       COUNT(*) FILTER (WHERE result IS NULL)                  AS pendentes
-                  FROM {tabela} WHERE match_date = {HOJE_BR} - 1
-            """, None)
-            if linha and any(linha.values()):
+            r = _resumo_da_tabela(tabela)
+            if not r:
+                continue
+            linha = {"green": r["ontem_green"], "red": r["ontem_red"],
+                     "push": r["ontem_push"], "pendentes": r["ontem_pendentes"]}
+            if any(linha.values()):
                 ontem[rotulo] = linha
-            velhos = uma(f"SELECT COUNT(*) AS n FROM {tabela} "
-                         f"WHERE result IS NULL AND match_date < {HOJE_BR} - 1", {"n": 0})
-            pendentes_antigos += int((velhos or {}).get("n") or 0)
+            pendentes_antigos += int(r.get("velhos") or 0)
 
         return {
             "usuarios": usuarios,
