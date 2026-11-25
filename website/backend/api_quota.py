@@ -54,6 +54,11 @@ _H_RESTANTE = "x-ratelimit-requests-remaining"
 _lock = threading.Lock()
 _estado: dict = {"dia": None, "limite": None, "restante_min": None, "origem": None}
 
+#: Guarda que este processo JÁ tentou semear o dia no banco. Uma tentativa só
+#: por dia: se o banco falhar, seguimos com o estado vazio (mesmo comportamento
+#: de antes) em vez de consultar a cada leitura do painel.
+_hidratado_em: date | None = None
+
 
 #: "6.812" (ponto de milhar) contra "6812.0" (float). A diferença é o que vem
 #: DEPOIS do último ponto: três dígitos é milhar, o resto é decimal. Sem esta
@@ -188,8 +193,59 @@ def _contar(dia: date, origem: str) -> None:
     except Exception:
         logger.debug("[API_QUOTA] falha ao contar (ignorado)", exc_info=True)
 
+def _hidratar(hoje: date) -> None:
+    """Semente do dia vinda da tabela `api_quota_daily`, para o processo que
+    acabou de subir.
+
+    `estado_atual` costuma ser lido ANTES do primeiro `registrar` do dia neste
+    processo (o painel abre, e os gates consultam, antes de qualquer chamada à
+    API-Football passar por aqui). Sem a semente, a memória vazia dizia "cota
+    inteira disponível" -- permissivo demais após um restart, justamente quando
+    o dia já ia gasto. A linha do dia tem o MENOR `restante` visto por qualquer
+    processo (site, motor), então ela é a mesma verdade que a memória teria se
+    não tivesse reiniciado.
+
+    Uma tentativa por dia e por processo; toda falha é engolida (é
+    instrumentação) e o comportamento volta a ser o de antes: estado vazio.
+    """
+    global _hidratado_em
+    if _hidratado_em == hoje:
+        return
+    _hidratado_em = hoje
+    try:
+        from database import get_connection
+        conn = get_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute("""
+                SELECT limite, restante_min, origem_min
+                  FROM api_quota_daily
+                 WHERE dia = %s
+            """, (hoje,))
+            linha = cur.fetchone()
+        finally:
+            cur.close()
+            conn.close()
+    except Exception:
+        logger.debug("[API_QUOTA] falha ao hidratar (ignorado)", exc_info=True)
+        return
+    if linha and linha[1] is not None:
+        with _lock:
+            # A memória pode ter recebido um registrar enquanto o banco
+            # respondia (e recomeçado o dia); só semeia se ela ainda estiver
+            # defasada -- seja vazia, seja com o dia de ontem.
+            if _estado["dia"] != hoje:
+                _estado.update({"dia": hoje, "limite": linha[0],
+                                "restante_min": int(linha[1]),
+                                "origem": linha[2]})
+
+
 def estado_atual() -> dict:
-    """O que está em memória neste processo. Leitura barata, sem banco."""
+    """O dia de verdade: memória deste processo, semeada do banco quando o
+    processo acabou de subir (uma consulta no pior caso do dia)."""
+    hoje = date.today()
+    if _estado["dia"] != hoje and _hidratado_em != hoje:
+        _hidratar(hoje)
     with _lock:
         d = dict(_estado)
     if d["limite"] and d["restante_min"] is not None:

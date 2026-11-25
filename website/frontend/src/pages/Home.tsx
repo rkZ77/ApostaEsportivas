@@ -201,7 +201,18 @@ export default function Home() {
         name: `${p.tier === 'pro' ? 'Pick IA Pro' : 'Pick IA'} ${p.label}`,
         price: p.price.toFixed(2),
         priceCurrency: 'BRL',
-        billingIncrement: p.iso_period,
+        /*
+         * O schema.org não aceita duração ISO ("P3M") em billingIncrement: o
+         * campo pertence ao UnitPriceSpecification e é um número de unidades
+         * (unitCode MON = mês, ANN = ano, códigos UN/CEFACT).
+         */
+        priceSpecification: {
+          '@type': 'UnitPriceSpecification',
+          price: p.price.toFixed(2),
+          priceCurrency: 'BRL',
+          billingIncrement: p.months % 12 === 0 ? 1 : p.months,
+          unitCode: p.months % 12 === 0 ? 'ANN' : 'MON',
+        },
       })),
     ],
   }

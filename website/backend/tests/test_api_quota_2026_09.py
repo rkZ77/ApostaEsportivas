@@ -114,6 +114,51 @@ def test_estado_atual_deriva_consumo_e_percentual(monkeypatch):
     assert d["pct_usado"] == 20.0
 
 
+def test_estado_atual_semeia_do_banco_quando_o_processo_volta(monkeypatch):
+    """Depois de um restart, os gates liam memória vazia e viam "cota inteira
+    disponível" -- permissivo demais num dia que já ia gasto. A primeira leitura
+    deve semeá-la com a linha do dia gravada por QUALQUER processo (site, motor)."""
+    _zerar()
+    monkeypatch.setattr(api_quota, "_hidratado_em", None)
+
+    class _FakeCur:
+        def execute(self, *a): pass
+        def fetchone(self): return (7500, 4200, "live")
+        def close(self): pass
+
+    class _FakeConn:
+        def cursor(self): return _FakeCur()
+        def close(self): pass
+
+    monkeypatch.setattr("database.get_connection", lambda: _FakeConn())
+    d = api_quota.estado_atual()
+    assert d["limite"] == 7500
+    assert d["restante_min"] == 4200
+    assert d["consumidas"] == 3300
+    assert d["pct_usado"] == 44.0
+
+    # A leitura é barata: uma tentativa por dia e por processo. Segunda leitura
+    # nem consulta -- e uma segunda SEM banco continua com o estado seedado.
+    monkeypatch.setattr("database.get_connection",
+                        lambda: (_ for _ in ()).throw(RuntimeError("não deve consultar")))
+    d2 = api_quota.estado_atual()
+    assert d2["restante_min"] == 4200
+
+
+def test_hidratacao_falhada_nao_levanta_nem_repete_venta(monkeypatch):
+    """Banco fora do ar: comportamento volta a ser o de antes (estado vazio) e
+    não vira martelada de consulta a cada painel aberto."""
+    _zerar()
+    monkeypatch.setattr(api_quota, "_hidratado_em", None)
+    monkeypatch.setattr("database.get_connection",
+                        lambda: (_ for _ in ()).throw(RuntimeError("banco fora")))
+    assert api_quota.estado_atual()["restante_min"] is None
+    # Segunda tentativa nem chega ao banco (a falha do dia já aconteceu).
+    monkeypatch.setattr("database.get_connection",
+                        lambda: (_ for _ in ()).throw(RuntimeError("não deve consultar")))
+    assert api_quota.estado_atual()["restante_min"] is None
+
+
 # ───────────────── nada aqui pode derrubar uma requisição ───────────────────
 
 

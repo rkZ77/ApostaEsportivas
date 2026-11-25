@@ -3960,7 +3960,7 @@ export default function Picks() {
             )}
 
 
-            <button onClick={() => navigate('/resultados')}
+            <button onClick={() => navigate('/resultados?produto=free')}
               className="w-full text-center text-xs text-accent-ink hover:text-green-400 transition-colors py-3 border border-line rounded-md hover:border-line-strong font-semibold">
               Ver todos os resultados
             </button>
@@ -4067,7 +4067,7 @@ export default function Picks() {
               })()}
             </div>
 
-            <button onClick={() => navigate('/resultados')}
+            <button onClick={() => navigate('/resultados?produto=vip')}
               className="w-full text-center text-xs text-yellow-400 hover:text-yellow-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong font-semibold">
               Ver todos os resultados
             </button>
@@ -4144,7 +4144,7 @@ export default function Picks() {
             </div>
 
 
-            <button onClick={() => navigate('/resultados')}
+            <button onClick={() => navigate('/resultados?produto=multiplas')}
               className="w-full text-center text-xs text-blue-400 hover:text-blue-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong font-semibold">
               Ver todos os resultados
             </button>
@@ -4219,7 +4219,7 @@ export default function Picks() {
               )}
             </div>
 
-            <button onClick={() => navigate('/resultados')}
+            <button onClick={() => navigate('/resultados?produto=bingo')}
               className="w-full text-center text-xs text-rose-400 hover:text-rose-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong font-semibold">
               Ver todos os resultados
             </button>
@@ -4619,7 +4619,7 @@ export default function Picks() {
             )}
 
 
-            <button onClick={() => navigate('/resultados')}
+            <button onClick={() => navigate('/resultados?produto=alavancagem')}
               className="w-full text-center text-xs text-orange-400 hover:text-orange-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong font-semibold">
               Ver todos os resultados
             </button>
@@ -4703,7 +4703,7 @@ export default function Picks() {
               </div>
             )}
 
-            <button onClick={() => navigate('/resultados')}
+            <button onClick={() => navigate('/resultados?produto=boost')}
               className="w-full text-center text-xs text-cyan-400 hover:text-cyan-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong font-semibold">
               Ver todos os resultados
             </button>
@@ -4763,7 +4763,7 @@ export default function Picks() {
               </>
             )}
 
-            <button onClick={() => navigate('/resultados')}
+            <button onClick={() => navigate('/resultados?produto=faltas')}
               className="w-full text-center text-xs text-purple-400 hover:text-purple-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong font-semibold">
               Ver todos os resultados
             </button>
@@ -4854,7 +4854,7 @@ export default function Picks() {
                   />
                 )}
 
-                <button onClick={() => navigate('/resultados')}
+                <button onClick={() => navigate('/resultados?produto=player_stats')}
                   className="w-full text-center text-xs text-amber-400 hover:text-amber-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong font-semibold">
                   Ver todos os resultados
                 </button>

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import { Trophy } from 'lucide-react'
 import api from '../services/api'
@@ -494,7 +494,6 @@ export default function ResultadosPublicos() {
   const [data, setData] = useState<PublicData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
-  const [source, setSource] = useState('all')
   /* RECORTE UNICO DA PAGINA (2026-09-11, pedido do usuario).
 
      Era so' o mes, e mes nao responde a pergunta mais comum: "como foi
@@ -515,6 +514,17 @@ export default function ResultadosPublicos() {
 
   const { user } = useAuth()
   const verBingo = bingoVisivel(user?.plan === 'admin')
+  /* `?produto=live` abre a página já recortada no produto (os botões "Ver todos
+     os resultados" das abas de /picks apontam pra cá). O valor só é lido na
+     entrada: depois, o menu da página manda. Valor desconhecido -- ou produto
+     que o menu desta página não ofereceria (o Bingo pra quem não o vê) --
+     fica em `all`. */
+  const [searchParams] = useSearchParams()
+  const produtoDaUrl = searchParams.get('produto') ?? 'all'
+  const [source, setSource] = useState(
+    produtosDoFiltro(verBingo)
+      .includes(produtoDaUrl as typeof PRODUTOS_BASE[number]) ? produtoDaUrl : 'all',
+  )
   const [tab, setTab] = useState<'resumo' | 'por_liga' | 'por_jogo' | 'por_mes' | 'alavancagem'>('resumo')
 
   // "Picks recentes" · paginação (server-side, ver recent_limit/recent_offset em /public/results)
