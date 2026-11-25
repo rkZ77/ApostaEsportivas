@@ -124,6 +124,14 @@ def test_healthcheck_do_railway_responde_a_api(cliente):
     assert cfg["deploy"]["restartPolicyType"] == "ALWAYS"
 
 
+def test_webp_sai_como_imagem():
+    """25/11/2026: os prints da Home (e o avatar do agente) iam como
+    application/octet-stream em PROD. Local (3.13) passava; o CI e' 3.12."""
+    import mimetypes
+    assert mimetypes.guess_type("leitura.webp")[0] == "image/webp"
+    assert 'add_type("image/webp", ".webp")' in open(os.path.join(RAIZ, "main.py"), encoding="utf-8").read()
+
+
 # ── /suggestions/odds-agora ─────────────────────────────────────────────────
 class _CurOdds:
     def __init__(self, n):
