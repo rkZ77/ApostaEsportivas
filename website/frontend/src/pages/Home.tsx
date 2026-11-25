@@ -34,6 +34,7 @@ const Products   = lazy(() => import('../home/Products'))
 const Leagues    = lazy(() => import('../home/Leagues'))
 const ProvaSocial = lazy(() => import('../home/ProvaSocial'))
 const FinalCTA   = lazy(() => import('../home/FinalCTA'))
+const PorDentro  = lazy(() => import('../home/PorDentro'))
 
 /*
  * Home.
@@ -265,6 +266,10 @@ export default function Home() {
           saíram de medição no viewport de 390px · elas não precisam ser exatas
           (a seção cresce se precisar), precisam evitar que a barra de rolagem
           e o conteúdo seguinte pulem quando a seção nasce. */}
+      {/* O produto por dentro, logo depois da promessa (25/11/2026): print real
+          e a conferência do que a leitura acertou e errou. */}
+      <SecaoAdiada alturaMinima={2200}><PorDentro /></SecaoAdiada>
+
       <SecaoAdiada alturaMinima={770}><RecentResults summary={data?.summary ?? null} /></SecaoAdiada>
 
       {/* PRODUTO ANTES DE MÉTODO (12/09).
