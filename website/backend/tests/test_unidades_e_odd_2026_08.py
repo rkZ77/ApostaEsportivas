@@ -68,7 +68,9 @@ def test_home_troca_ligas_cobertas_pelo_lucro():
     saindo de `summary.leagues_count`, nunca do tamanho de `by_league`.
     """
     banda = _front_codigo("home/StatsBand.tsx")
-    for tile in ("Picks publicadas", "Assertividade", "ROI acumulado", "Lucro da IA"):
+    # "Assertividade" virou "Win rate" (2026-11): o mesmo numero tinha tres
+    # rotulos em tres telas, e o publico de tipster reconhece o de la.
+    for tile in ("Picks publicadas", "Win rate", "ROI acumulado", "Lucro da IA"):
         assert f"label: '{tile}'" in banda, f"{tile} sumiu da faixa"
     assert "label: 'Ligas cobertas'" not in banda, "o lucro devia ter tomado esse lugar"
     assert "leaguesCount" in banda and "by_league" not in banda
@@ -231,11 +233,16 @@ def test_picks_mostra_lucro_que_o_endpoint_ja_devolvia():
 
 def test_performance_da_ia_so_ganhou_o_tile():
     """A tela nao foi reorganizada: os quatro indicadores originais seguem, na
-    ordem original, e o lucro entra como quinto."""
+    ordem original, e o lucro entra como quinto.
+
+    O primeiro tile era "Assertividade"; em 2026-11 ele virou "Win rate", o
+    mesmo rotulo da faixa da Home e da aba Resultados (antes eram tres
+    rotulos para o mesmo numero).
+    """
     tela = _front_codigo("pages/PerformanceIA.tsx")
-    for original in ("Assertividade", "Picks resolvidos", "ROI acumulado", "Ligas cobertas"):
+    for original in ("Win rate", "Picks resolvidos", "ROI acumulado", "Ligas cobertas"):
         assert original in tela, f"{original} sumiu da Performance da IA"
-    assert tela.index("Assertividade") < tela.index("Lucro da IA")
+    assert tela.index("Win rate") < tela.index("Lucro da IA")
 
 
 # O convite de plano deixou de ser faixa no topo do PageShell em 21/08 (pedido

@@ -100,7 +100,7 @@ export default function StatsBand({
       tone: 'text-ink-1',
     },
     {
-      label: 'Assertividade',
+      label: 'Win rate',
       value: <NumberTicker value={wr} suffix="%" />,
       tone: wr >= 55 ? 'text-accent-ink' : 'text-ink-1',
     },

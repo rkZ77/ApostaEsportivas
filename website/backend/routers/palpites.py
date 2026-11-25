@@ -150,7 +150,9 @@ def _desempenho(cur, league_id: Optional[int]) -> dict:
                COUNT(*) FILTER (WHERE t.result = 'HALF-WIN') AS half_wins,
                COUNT(*) FILTER (WHERE t.result = 'PUSH')     AS push,
                COALESCE(SUM(t.profit), 0)                 AS profit,
-               COALESCE(SUM(t.stake),  0)                 AS stake_total
+               -- Yield real: push devolve a entrada, entao a stake dele nao
+               -- arrisca nada (mesma regra de /api/public/results).
+               COALESCE(SUM(t.stake) FILTER (WHERE t.result <> 'PUSH'), 0) AS stake_total
         FROM ({union}) t
         {filtro}
     """, p)

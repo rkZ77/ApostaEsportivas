@@ -2639,16 +2639,20 @@ def get_quick_stats(
         # Lia so' picks_vip, entao "5 greens seguidos" descrevia um pipeline e
         # aparecia colado num total que somava todos. Dois numeros vizinhos
         # falando de conjuntos diferentes e' pior que nao ter o segundo.
-        uniao_recente = "\n                UNION ALL\n".join(
-            f"                SELECT result, match_date, id FROM {tabela}"
+        # O id COLIDE ENTRE TABELAS (vip #12 e free #12 no mesmo dia): desempatar
+        # por id so' deixa a ordem com o plano de execucao do planner, e a
+        # "sequencia atual" quebra ou nostram no empate. A fonte desempata, e
+        # sai junto na ordem pra ser deterministico.
+        uniao_recente_rotulada = "\n                UNION ALL\n".join(
+            f"                SELECT '{chave}' AS source, result, match_date, id FROM {tabela}"
             for _chave, tabela in fontes
         )
         recent = _safe_query(cur, f"""
             SELECT result, match_date, id FROM (
-{uniao_recente}
+{uniao_recente_rotulada}
             ) AS todos
             WHERE result IS NOT NULL
-            ORDER BY match_date DESC, id DESC
+            ORDER BY match_date DESC, source, id DESC
             LIMIT 20
         """)
         streak = 0

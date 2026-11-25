@@ -251,7 +251,7 @@ export default function PerformanceIA() {
   return (
     <PageShell
       title="Performance da IA"
-      description="Assertividade, ROI e valor de fechamento dos picks gerados pela IA. Histórico público e auditável."
+      description="Win rate, ROI e valor de fechamento dos picks gerados pela IA. Histórico público e auditável."
       canonical="https://pickia.com.br/performance"
       width="full"
       nav={user ? true : <PublicNav width="full" />}
@@ -279,7 +279,7 @@ export default function PerformanceIA() {
                 estiveram · o lucro em unidades entra como quinto, no fim, sem
                 reorganizar o resto. */}
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-              <StatTile label="Assertividade" value={`${wr}%`} tone={wr >= 55 ? 'green' : 'default'} />
+              <StatTile label="Win rate" value={`${wr}%`} tone={wr >= 55 ? 'green' : 'default'} />
               <StatTile label="Picks resolvidos" value={String(s.total)} />
               <StatTile
                 label="ROI acumulado"

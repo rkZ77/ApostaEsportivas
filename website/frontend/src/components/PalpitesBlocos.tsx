@@ -64,7 +64,7 @@ export function PlacarPublico({ dados, rotulo }: { dados: DesempenhoPublico; rot
     <section>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <StatTile
-          label="Assertividade"
+          label="Win rate"
           value={`${dados.win_rate}%`}
           tone={dados.win_rate >= 55 ? 'green' : 'default'}
         />

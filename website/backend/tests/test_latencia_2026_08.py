@@ -203,7 +203,9 @@ def test_slim_pula_os_blocos_que_a_home_nao_usa():
     for bloco, nome in (("months_rows", "months"), ("by_day", "by_day"),
                         ("by_league", "by_league")):
         assert f'{bloco} = [] if not _quer("{nome}") else' in corpo, bloco
-    assert "counts_row = None if slim" in corpo or "counts_row = [] if slim" in corpo
+    # O bloco `counts` saiu (2026-11): nenhuma tela lia a resposta, a chave da
+    # multipla divergia do resto da API e ele ignorava o recorte de data. Se
+    # ele voltar, volta com a chave certa e respeitando o date_cond.
 
 
 def test_contagem_de_ligas_sai_do_proprio_resumo():

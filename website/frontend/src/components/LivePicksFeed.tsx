@@ -1210,15 +1210,19 @@ const CardLive = forwardRef<HTMLDivElement, {
               <>
                 {/* Sem cor de ganho/perda pra quem não apostou (14/10/2026,
                     pedido do usuário): "o site perdeu, eu usuário não". */}
+                {/* O profit guardado é de 1u, e o pick ao vivo aposta o plano
+                    (2u desde 14/10): mesmo peso do placar público e da stake
+                    sugerida do card. Sem isso, o mesmo pick saía +0,85u aqui
+                    e +1,70u na página de Resultados. */}
                 <div className={`text-xl font-black tabular-nums ${!seguido ? 'text-ink-1'
                   : Number(pick.profit) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {Number(pick.profit) >= 0 ? '+' : ''}{Number(pick.profit).toFixed(2)}u
+                  {Number(pick.profit) >= 0 ? '+' : ''}{(Number(pick.profit) * stakeDe('live')).toFixed(2)}u
                 </div>
                 {!seguido && <div className="text-[10px] text-ink-4">você não apostou</div>}
                 {banca && seguido && (
                   <div className="text-[11px] text-ink-4 tabular-nums">
                     {Number(pick.profit) >= 0 ? '+' : '-'}R$
-                    {Math.abs(Number(pick.profit) * banca.unit_value).toFixed(0)}
+                    {Math.abs(Number(pick.profit) * stakeDe('live') * banca.unit_value).toFixed(0)}
                   </div>
                 )}
               </>

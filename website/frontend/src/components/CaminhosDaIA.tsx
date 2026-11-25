@@ -6,6 +6,11 @@ import { fmtUnits } from '../utils/format'
 interface CaminhoDaIA {
   encerrou_em: string
   passos: number
+  /* Greens e o que a META conta (o placar publica `greens` desde que a meta
+     passe a fechar por greens): caminho que andou com anulada no meio fecha
+     com passos > greens, e rotular de "greens" o numero de passos era
+     inflar o proprio placar. */
+  greens?: number
   motivo: 'meta' | 'red'
   unidades: number
 }
@@ -59,7 +64,7 @@ export default function CaminhosDaIA({ compacto = false }: { compacto?: boolean 
     .map(c => ({
       label: `${c.encerrou_em.slice(8, 10)}/${c.encerrou_em.slice(5, 7)}`,
       value: c.unidades,
-      meta: c.motivo === 'meta' ? `${c.passos} greens` : `RED no ${c.passos}º`,
+      meta: c.motivo === 'meta' ? `${c.greens ?? c.passos} greens` : `RED no ${c.passos}º`,
     }))
 
   /* Ate' onde os caminhos chegaram.
