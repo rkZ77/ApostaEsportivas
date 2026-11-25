@@ -8,6 +8,10 @@ import { avisarEscrita, desmarcarBilhete, marcarBilhete } from '../lib/sincronia
 // withCredentials envia/recebe cookies httpOnly automaticamente
 const api = axios.create({ baseURL: '/api', withCredentials: true, timeout: 15000 })
 
+/* Esperas do retry de GET pós 5xx/conexão cortada (ver interceptor abaixo). */
+const _RETRY_GET_ESPERAS = [800, 2000]
+const _aguardar = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
+
 let _refreshing: Promise<unknown> | null = null
 
 // Endpoints onde um 401 significa "credencial errada" (form) ou onde deixar
@@ -120,6 +124,26 @@ api.interceptors.response.use(
     // só trocou de aba.
     if (axios.isCancel(err) || err.code === 'ERR_CANCELED') {
       return Promise.reject(err)
+    }
+
+    /* DEPLOY NÃO É SERVIDOR QUEBRADO (25/11/2026).
+
+       A cada novo deploy o container reinicia, e as requisições que chegam
+       nessa janela levam 502/5xx ou conexão cortada no MEIO de uma tela
+       normal -- era o toast vermelho "Erro no servidor" logo na carga da
+       página, sem bug nenhum no código. GET é idempotente, então tentar de
+       novo é seguro: duas esperas curtas (0.8s, 2s) cobrem o reinício na
+       quase totalidade dos deploys, e o chamador nem fica sabendo. POST não
+       repete (não é idempotente), e erro de servidor de verdade que sobrevive
+       aos retries continua aparecendo pro usuário como antes. */
+    if ((original?.method ?? '').toLowerCase() === 'get'
+        && (err.response?.status >= 500 || (!err.response && navigator.onLine !== false))) {
+      const tentativa: number = original._retryDeploy ?? 0
+      if (tentativa < _RETRY_GET_ESPERAS.length) {
+        original._retryDeploy = tentativa + 1
+        await _aguardar(_RETRY_GET_ESPERAS[tentativa])
+        return api(original)
+      }
     }
 
     if (!err.response) {
