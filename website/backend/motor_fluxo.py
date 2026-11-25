@@ -240,7 +240,9 @@ def _live() -> dict:
                         "contrário cotado.",
              "limiares": {"EV mínimo": _limiar(c, "ev_minimo"),
                           "confiança mínima": _limiar(c, "confianca_minima"),
-                          "sinais convergentes mínimos": _limiar(c, "sinais_minimos_convergentes")}},
+                          "sinais convergentes mínimos": _limiar(c, "sinais_minimos_convergentes"),
+                          "odd mínima": _limiar(c, "odd_minima"),
+                          "odd máxima": _limiar(c, "odd_maxima")}},
             {"nome": "Gate de IA e gravação",
              "faz": "Mesmo revisor do Pré Live. O pick carimba a validade da odd, "
                     "porque preço ao vivo evapora.",
