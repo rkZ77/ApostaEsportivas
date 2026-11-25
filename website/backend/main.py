@@ -361,11 +361,17 @@ async def erro_nao_tratado(request: Request, exc: Exception):
 _rate_store: dict[str, list[float]] = defaultdict(list)
 RATE_LIMIT = 300
 RATE_WINDOW = 60
-#: O /admin conta num balde PROPRIO e maior (24/11/2026). Em 23/11 o painel
-#: acompanhando o pipeline (status, log e revisao de IA a cada ~1,5 s) junto
-#: com as outras abas passou de 300/min, e o 429 caiu em TUDO -- ate'
-#: /api/auth/me e /api/fixtures/today: pro admin, o site "caiu". Rota de admin
-#: sem admin responde 403 na hora, entao a folga nao abre nada caro.
+#: IMAGEM NAO GASTA O LIMITE DA API (25/11/2026). Foto e escudo moram em
+#: /api/proxy/, entao contavam nos 300/min. Um Raio-X pede ~60 fotos: no minuto
+#: do 429 de 23/11, 210 das 296 requisicoes eram foto de jogador (71%), e o
+#: bloqueio caiu em /api/auth/me e /api/fixtures/today. Cinco jogos abertos
+#: seguidos "derrubavam" o site. Balde proprio e folgado: continua havendo teto
+#: (a rota busca no provedor), mas estourar ele so' troca foto por iniciais.
+RATE_LIMIT_IMAGEM = 3000
+#: O /admin tambem tem balde proprio (24/11/2026), pra tela que consulta em
+#: laco nao disputar com o resto do site. Nao foi a causa do 429 de 23/11 (16
+#: das 296). Rota de admin sem admin responde 403 na hora, entao a folga nao
+#: abre nada caro.
 RATE_LIMIT_ADMIN = 1200
 
 _login_failures: dict[str, list[float]] = defaultdict(list)
@@ -441,9 +447,13 @@ async def rate_limiter(request: Request, call_next):
     ip = _get_real_ip(request)
     now = time.time()
 
-    admin = request.url.path.startswith("/api/admin/")
-    chave = ("admin|" if admin else "") + _chave_do_limite(request)
-    teto = RATE_LIMIT_ADMIN if admin else RATE_LIMIT
+    if request.url.path.startswith("/api/proxy/"):
+        balde, teto = "imagem|", RATE_LIMIT_IMAGEM
+    elif request.url.path.startswith("/api/admin/"):
+        balde, teto = "admin|", RATE_LIMIT_ADMIN
+    else:
+        balde, teto = "", RATE_LIMIT
+    chave = balde + _chave_do_limite(request)
     _rate_store[chave] = [t for t in _rate_store[chave] if now - t < RATE_WINDOW]
     if len(_rate_store[chave]) >= teto:
         return JSONResponse({"detail": "Muitas requisicoes. Tente novamente em breve."},

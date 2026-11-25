@@ -5,8 +5,9 @@ era 429 do limite de requisicoes e rota presa esperando.
 
   1. O limite contava POR IP. Celular no Brasil sai por CGNAT (muita gente num
      IP so'), entao varias pessoas dividiam os mesmos 300/min.
-  2. O /admin acompanhando o pipeline gastava o MESMO balde do resto do site: em
-     23/11 o 429 caiu ate' em /api/auth/me.
+  2. FOTO DE JOGADOR contava no limite da API: 210 das 296 requisicoes do
+     minuto do 429 de 23/11. (O /admin, apontado primeiro como culpado, fez 16;
+     ele tambem ganhou balde proprio.)
   3. /api/live/my-picks levava 3 a 6 s: buscava na API-Football o jogo de todo
      pick que o usuario ja' seguiu na vida, a cada 5 min (o front chama a cada
      60 s), e o laco nem mostrava os ja' resolvidos.
@@ -35,12 +36,14 @@ def cliente(monkeypatch):
         return {"ok": True}
 
     rotas = [APIRoute("/api/_teste_ok", ok, methods=["GET"]),
+             APIRoute("/api/proxy/_teste_ok", ok, methods=["GET"]),
              APIRoute("/api/admin/_teste_ok", ok, methods=["GET"])]
     for r in rotas:
         main.app.router.routes.insert(0, r)
     main._rate_store.clear()
     monkeypatch.setattr(main, "RATE_LIMIT", 3)
     monkeypatch.setattr(main, "RATE_LIMIT_ADMIN", 5)
+    monkeypatch.setattr(main, "RATE_LIMIT_IMAGEM", 8)
     try:
         yield TestClient(main.app, raise_server_exceptions=False)
     finally:
@@ -86,6 +89,16 @@ def test_429_diz_quando_tentar_de_novo(cliente):
         cliente.get("/api/_teste_ok")
     r = cliente.get("/api/_teste_ok")
     assert r.status_code == 429 and r.headers.get("retry-after") == str(main.RATE_WINDOW)
+
+
+def test_foto_nao_gasta_o_limite_da_api(cliente):
+    """25/11/2026: abrir varios jogos (~60 fotos cada) bloqueava ate' o login."""
+    a = {main.COOKIE_NAME: _token("1")}
+    for _ in range(8):
+        assert cliente.get("/api/proxy/_teste_ok", cookies=a).status_code == 200
+    assert cliente.get("/api/proxy/_teste_ok", cookies=a).status_code == 429   # ainda ha' teto
+    for _ in range(3):
+        assert cliente.get("/api/_teste_ok", cookies=a).status_code == 200
 
 
 def test_admin_tem_balde_proprio(cliente):
