@@ -15,7 +15,8 @@ import { cn } from '../lib/cn'
  * O JOGO NÃO FOI ESCOLHIDO PELO RESULTADO: é a leitura de Série A mais recente
  * com jogo encerrado no dia em que a seção foi feita. A conferência mostra o
  * que errou junto com o que acertou. Se for trocar o exemplo, troque pela
- * mesma regra, e confira cada linha em match_statistics.
+ * mesma regra, e confira cada linha em match_statistics. O nome do arquivo leva
+ * o fixture_id: a Cloudflare guarda 30 dias, e nome repetido serviria o antigo.
  */
 
 const CONFERENCIA = [
@@ -59,12 +60,12 @@ export default function PorDentro() {
         </div>
 
         <div className="grid gap-8 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:gap-12 items-start">
-          <Print src="/prints/leitura.webp" w={716} h={1856}
+          <Print src="/prints/leitura-1492469.webp" w={716} h={1856}
             alt="Tela da leitura da IA: resumo do jogo e bloco do Santos em casa, com médias e mercados em percentual"
             legenda="Tela real do Pick IA, com a leitura publicada naquele dia (recorte)." />
 
           <div className="min-w-0 space-y-8">
-            <Print src="/prints/mercados.webp" w={700} h={892}
+            <Print src="/prints/mercados-1492469.webp" w={700} h={892}
               alt="Tela dos mercados do jogo em que o mandante em casa e o visitante fora apontam para o mesmo lado"
               legenda="Aqui só entram as linhas em que o mandante em casa e o visitante fora apontam para o mesmo lado." />
 
