@@ -8,6 +8,7 @@ import { getResultStyle, PICK_TYPE_LABEL } from '../utils/resultStyle'
 import api from '../services/api'
 import { pctProb, fmtUnits } from '../utils/format'
 import PickSocial from './PickSocial'
+import { TeamLogo } from './TeamLogo'
 import { calcVipStake, calcFreeStake, calcMultiplaStake } from '../utils/stakeUtils'
 import { translateMarket, translateLine, linhaDoJogador } from '../utils/marketTranslate'
 import { PlayerPhoto } from './TeamLogo'
@@ -26,8 +27,6 @@ interface OddRow {
   market_name: string; value_name: string; odd_value: number
   bookmaker_name: string; market_type: string; side_team: string
 }
-
-const TEAM_LOGO = (id?: number) => id ? `/api/proxy/team/${id}.png` : null
 
 /*
  * `on-fill` nos dois preenchimentos coloridos, e não `ink-1`.
@@ -120,8 +119,6 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
   ]
 
   const s = data?.suggestion
-  const homeLogo = TEAM_LOGO(s?.home_team_id)
-  const awayLogo = TEAM_LOGO(s?.away_team_id)
   const resultStyle = getResultStyle(s?.result)
   /*
    * Probabilidade estimada, nao confianca.
@@ -218,12 +215,11 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
 
             {s ? (
               <div className="flex items-center gap-3">
-                {/* Casa */}
+                {/* Casa · o TeamLogo é o único, com iniciais quando o provedor
+                    não tem o escudo (antes virava buraco, e o nome ficava
+                    colado na borda). */}
                 <div className="flex-1 flex items-center gap-2 min-w-0">
-                  {homeLogo && (
-                    <img src={homeLogo} alt="" width={32} height={32} className="w-8 h-8 object-contain shrink-0"
-                      onError={e => (e.currentTarget.style.display = 'none')} />
-                  )}
+                  <TeamLogo id={s.home_team_id} name={s.home_team_name} size={32} />
                   <span className="font-black text-ink-1 text-sm leading-tight truncate">{s.home_team_name}</span>
                 </div>
 
@@ -250,10 +246,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                 {/* Visitante */}
                 <div className="flex-1 flex items-center gap-2 justify-end min-w-0">
                   <span className="font-black text-ink-1 text-sm leading-tight truncate text-right">{s.away_team_name}</span>
-                  {awayLogo && (
-                    <img src={awayLogo} alt="" width={32} height={32} className="w-8 h-8 object-contain shrink-0"
-                      onError={e => (e.currentTarget.style.display = 'none')} />
-                  )}
+                  <TeamLogo id={s.away_team_id} name={s.away_team_name} size={32} />
                 </div>
               </div>
             ) : (
@@ -470,22 +463,14 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                         {s.legs.map((g: any, i: number) => {
                           const homeTeam = g.home_team || g.home || ''
                           const awayTeam = g.away_team || g.away || ''
-                          const homeLogo = g.home_team_id ? `/api/proxy/team/${g.home_team_id}.png` : null
-                          const awayLogo = g.away_team_id ? `/api/proxy/team/${g.away_team_id}.png` : null
                           return (
                             <div key={i} className="bg-surface-1 border border-line rounded-lg px-4 py-3">
                               <div className="flex items-center justify-between gap-2">
                                 <div className="flex items-center gap-1.5 flex-1 min-w-0 flex-wrap">
-                                  {homeLogo && (
-                                    <img src={homeLogo} alt="" width={16} height={16} className="w-4 h-4 object-contain shrink-0"
-                                      onError={e => (e.currentTarget.style.display = 'none')} />
-                                  )}
+                                  <TeamLogo id={g.home_team_id} name={homeTeam} size={16} />
                                   <span className="text-sm font-semibold text-ink-1 truncate">{homeTeam}</span>
                                   <span className="text-ink-4 text-xs shrink-0">vs</span>
-                                  {awayLogo && (
-                                    <img src={awayLogo} alt="" width={16} height={16} className="w-4 h-4 object-contain shrink-0"
-                                      onError={e => (e.currentTarget.style.display = 'none')} />
-                                  )}
+                                  <TeamLogo id={g.away_team_id} name={awayTeam} size={16} />
                                   <span className="text-sm font-semibold text-ink-1 truncate">{awayTeam}</span>
                                 </div>
                                 <span className="text-green-400 font-black shrink-0">{g.odd ? Number(g.odd).toFixed(2) : ''}</span>
@@ -550,6 +535,8 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
               reasoning: s.reasoning,
               homeTeam: s.home_team_name ?? s.home_team,
               awayTeam: s.away_team_name ?? s.away_team,
+              homeTeamId: s.home_team_id ?? undefined,
+              awayTeamId: s.away_team_id ?? undefined,
             }}
           />
         )}

@@ -23,6 +23,7 @@ import FiltrosDePicks, { filtrarPicks, ordenarPicks,
 import { CaminhoDaIA, Escada, HistoricoDeCaminhos, LinhaCaminho,
          type AlavStep, type CaminhoEncerrado } from '../components/alavancagem/caminho'
 import AnalysisModal from '../components/AnalysisModal'
+import { TeamLogo, LeagueLogo } from '../components/TeamLogo'
 import {
   CampoAoVivo, CampoDeu, CampoDoPick, HoraOuMinuto, PernaDoBilhete, PickCardFooter, PickExplainButton, PickProbability, SeloDeResultado,
   SeloDoEstado, VsOuPlacar,
@@ -78,30 +79,10 @@ function wcPhase(dateStr?: string): string | null {
   return null
 }
 
-// Helpers de logo
-const TEAM_LOGO   = (id?: number) => id ? `/api/proxy/team/${id}.png` : null
-
-const LEAGUE_LOGO = (id?: number) => id ? `/api/proxy/league/${id}.png` : null
-
-function TeamLogo({ id, name, size = 24 }: { id?: number; name: string; size?: number }) {
-  const src = TEAM_LOGO(id)
-  if (!src) return null
-  return (
-    <img src={src} alt={name} width={size} height={size} loading="lazy"
-      className="object-contain shrink-0" style={{ width: size, height: size }}
-      onError={e => (e.currentTarget.style.display = 'none')} />
-  )
-}
-
-function LeagueLogo({ id, name, size = 18 }: { id?: number; name?: string; size?: number }) {
-  const src = LEAGUE_LOGO(id)
-  if (!src) return null
-  return (
-    <img src={src} alt={name ?? ''} width={size} height={size} loading="lazy"
-      className="object-contain shrink-0 opacity-80" style={{ width: size, height: size }}
-      onError={e => (e.currentTarget.style.display = 'none')} />
-  )
-}
+// Escudos e emblemas agora vêm do componente único (`components/TeamLogo`),
+// com fallback de iniciais quando o provedor não tem a imagem -- sobravam as
+// cópias locais daqui (`TEAM_LOGO`, `LeagueLogo` com `opacity-80`), que
+// escondiam a si mesmas no erro e deixavam buraco na linha do confronto.
 
 // Tipos
 /* `aovivo` foi renomeada pra `minhas_apostas` em 2026-08-11.
@@ -950,6 +931,8 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
           reasoning: dica.reasoning,
           homeTeam: dica.home_team,
           awayTeam: dica.away_team,
+          homeTeamId: dica.home_team_id,
+          awayTeamId: dica.away_team_id,
         }}
       />
     )}
@@ -1335,6 +1318,8 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
           reasoning: m.reasoning,
           homeTeam: legs[0]?.home ?? legs[0]?.home_team,
           awayTeam: legs.length > 1 ? `+${legs.length - 1} jogo${legs.length - 1 > 1 ? 's' : ''}` : (legs[0]?.away ?? legs[0]?.away_team),
+          homeTeamId: legs[0]?.homeId,
+          awayTeamId: legs.length > 1 ? null : legs[0]?.awayId,
           // A série vem PERNA A PERNA · não existe uma que descreva o bilhete.
           pickId: m.id,
           pickType: tipo,
@@ -1632,6 +1617,8 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
             { market: pick.market_3, line: pick.line_3, odd: pick.odd_3 },
           ].filter(l => l.market),
           reasoning: [pick.reasoning_1, pick.reasoning_2, pick.reasoning_3].filter(Boolean).join('\n\n'),
+          homeTeamId: pick.home_team_id_1,
+          awayTeamId: pick.away_team_id_1,
         }}
       />
     )}

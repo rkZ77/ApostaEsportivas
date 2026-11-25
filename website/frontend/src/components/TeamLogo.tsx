@@ -30,18 +30,42 @@ function useJaCarregada(marcar: (v: boolean) => void) {
 
 export function TeamLogo({ id, name, size = 22 }: { id?: number; name: string; size?: number }) {
   const src = escudoDoTime(id)
-  /* Entra suave em vez de pular (12/10/2026) · o tamanho ja' e' reservado pelo
-     width/height, entao nada na linha se mexe enquanto ele chega. */
+  /* ESCUDO QUE NÃO CHEGA NÃO DEIXA BURACO (2026-11).
+   *
+   * Antes o escudo falho escondia a si mesmo (`display:none` no onError) e a
+   * linha do confronto ficava com um vão antes do nome -- em lista, o vão lê
+   * como bug de renderização. O mesmo desenho do PlayerPhoto: as iniciais
+   * ficam DEBAIXO da imagem, então time sem escudo no provedor mostra um
+   * círculo com a sigla, e nada salta quando a imagem entra suave.
+   *
+   * Callers que passam `name=""` (Campinho, Árbitro · o rótulo do time vem de
+   * outro elemento) recebem só a imagem, como antes: as iniciais são o
+   * fallback do NOME, não do escudo.
+   */
   const [carregou, setCarregou] = useState(false)
+  const [falhou, setFalhou] = useState(false)
   const ref = useJaCarregada(setCarregou)
   if (!src) return null
   return (
-    <img ref={ref} src={src} alt={name} width={size} height={size} loading="lazy" decoding="async"
-      className={cn('object-contain shrink-0 transition-opacity duration-300',
-                    carregou ? 'opacity-100' : 'opacity-0')}
-      style={{ width: size, height: size }}
-      onLoad={() => setCarregou(true)}
-      onError={e => (e.currentTarget.style.display = 'none')} />
+    <span className="relative shrink-0 grid place-items-center select-none"
+      style={{ width: size, height: size }} title={name || undefined} aria-hidden="true">
+      {name.trim() && (!carregou || falhou) && (
+        <span className="absolute inset-0 rounded-full bg-surface-3 border border-line
+                         grid place-items-center uppercase">
+          <span className="font-black text-ink-4" style={{ fontSize: Math.round(size * 0.36) }}>
+            {iniciaisDoNome(name)}
+          </span>
+        </span>
+      )}
+      {!falhou && (
+        <img ref={ref} src={src} alt={name} width={size} height={size} loading="lazy" decoding="async"
+          className={cn('relative object-contain transition-opacity duration-300',
+                        carregou || !name.trim() ? 'opacity-100' : 'opacity-0')}
+          style={{ width: size, height: size }}
+          onLoad={() => setCarregou(true)}
+          onError={() => setFalhou(true)} />
+      )}
+    </span>
   )
 }
 
@@ -115,7 +139,10 @@ function medirTom(img: HTMLImageElement): TomDoEscudo {
 export function LeagueLogo({ id, name, size = 16 }: { id?: number; name?: string; size?: number }) {
   const src = LEAGUE_LOGO(id)
   const [tom, setTom] = useState<TomDoEscudo>(() => (id != null && TOM_DO_ESCUDO.get(id)) || 'normal')
-  if (!src) return null
+  const [falhou, setFalhou] = useState(false)
+  /* Liga sem emblema não rende a moldura vazia: some, e o nome da liga
+     fica sozinho na linha, como antes de existir escudo. */
+  if (!src || falhou) return null
   return (
     <span
       className={cn(
@@ -134,7 +161,7 @@ export function LeagueLogo({ id, name, size = 16 }: { id?: number; name?: string
           TOM_DO_ESCUDO.set(id, t)
           setTom(t)
         }}
-        onError={e => (e.currentTarget.style.display = 'none')} />
+        onError={() => setFalhou(true)} />
     </span>
   )
 }

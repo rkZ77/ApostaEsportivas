@@ -1,5 +1,4 @@
-import { useState } from 'react'
-import { escudoDoTime } from '../lib/aoVivo'
+import { TeamLogo } from './TeamLogo'
 
 /*
  * O RADAR, DESENHADO COMO RADAR (10/09/2026, pedido do usuário).
@@ -45,23 +44,10 @@ const MAX_JANELA = 90
 /** Quantos alvos cabem sem virar sopa de escudo. O resto segue nos cartões. */
 const MAX_ALVOS = 8
 
+/* Escudo delegado ao TeamLogo único (fallback de iniciais). A cópia daqui era
+   a primeira com o fallback, e ficou para trás: sem lazy, sem fade. */
 function Escudo({ id, nome }: { id?: number | null; nome?: string | null }) {
-  /* Escudo que não vem NÃO PODE VIRAR QUADRADO VAZIO · o alvo é o jogo, e um
-     buraco no lugar do time faz o radar parecer quebrado. Mesma queda dos
-     outros escudos do site: a inicial do time. */
-  const [falhou, setFalhou] = useState(false)
-  const src = escudoDoTime(id ?? undefined)
-  if (!src || falhou) {
-    return (
-      <span className="w-3.5 h-3.5 rounded-full bg-surface-3 border border-line shrink-0
-                       flex items-center justify-center text-[7px] font-bold text-ink-4 uppercase">
-        {(nome ?? '?').slice(0, 1)}
-      </span>
-    )
-  }
-  return <img src={src} alt="" aria-hidden="true" width={14} height={14}
-              onError={() => setFalhou(true)}
-              className="w-3.5 h-3.5 object-contain shrink-0" />
+  return <TeamLogo id={id ?? undefined} name={nome ?? ''} size={14} />
 }
 
 export default function VarreduraDoRadar({ partidas }: { partidas: Alvo[] }) {

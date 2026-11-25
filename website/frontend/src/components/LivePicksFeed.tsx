@@ -54,7 +54,7 @@ import { translateLine, translateMarket, metadesDaLinha, nomeDoMercadoComGrade }
 import { LeagueLogo, TeamLogo } from './TeamLogo'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
 import { pctProb } from '../utils/format'
-import { rotuloDoStatus, escudoDoTime } from '../lib/aoVivo'
+import { rotuloDoStatus } from '../lib/aoVivo'
 import { stakeDe } from '../utils/stakePlan'
 import NumeroVivo from './ui/NumeroVivo'
 import { sinalizarNavegacao } from '../services/progressBus'
@@ -280,24 +280,11 @@ function minutoVivo(p: EmLeitura, segundosExtras: number): { minuto: number | nu
  * Ela SÓ aparece com a busca ligada. Fita girando com o motor parado seria
  * animação decorativa mentindo sobre o estado do produto.
  */
-/* Placeholder de escudo quando não há id de time */
+/* Placeholder de escudo quando não há id de time · delega ao TeamLogo único,
+   que tem o fallback de iniciais. Este era mais uma cópia local (sem lazy,
+   sem fade, dot de uma letra só). */
 function TeamLogoOrDot({ id, name }: { id?: number | null; name?: string | null }) {
-  const [err, setErr] = useState(false)
-  const src = escudoDoTime(id ?? undefined)
-  if (!src || err) {
-    return (
-      <span className="w-[18px] h-[18px] rounded-full bg-surface-3 border border-line shrink-0
-                       flex items-center justify-center text-[8px] font-bold text-ink-4 uppercase">
-        {(name ?? '?').slice(0, 1)}
-      </span>
-    )
-  }
-  return (
-    <img src={src} alt={name ?? ''} width={18} height={18}
-      className="object-contain shrink-0"
-      style={{ width: 18, height: 18 }}
-      onError={() => setErr(true)} />
-  )
+  return <TeamLogo id={id ?? undefined} name={name ?? ''} size={18} />
 }
 
 /* A FITA DE BUSCA SAIU (10/09/2026, pedido do usuário).
@@ -1452,6 +1439,8 @@ const CardLive = forwardRef<HTMLDivElement, {
           reasoning: pick.reasoning,
           homeTeam: pick.home_team_name,
           awayTeam: pick.away_team_name,
+          homeTeamId: pick.home_team_id,
+          awayTeamId: pick.away_team_id,
           minuteAtCreation: pick.minute_at_creation,
           homeGoalsAtCreation: pick.home_goals_at_creation,
           awayGoalsAtCreation: pick.away_goals_at_creation,

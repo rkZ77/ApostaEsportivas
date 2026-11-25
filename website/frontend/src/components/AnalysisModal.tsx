@@ -9,6 +9,7 @@ import { Skeleton } from './ui'
 import { carregarAnalise, type AnalisePick } from '../services/analisePick'
 import MarketForm from './MarketForm'
 import AmostraDoMotor from './AmostraDoMotor'
+import { TeamLogo } from './TeamLogo'
 
 /*
  * "Entenda esta análise".
@@ -100,6 +101,10 @@ export interface AnalysisData {
    */
   homeTeam?: string | null
   awayTeam?: string | null
+  /** Ids dos times no provedor · alimenta os escudos do subtítulo. Opcional
+   *  como os nomes: quem não tem id fica com as iniciais, e nunca quebra. */
+  homeTeamId?: number | null
+  awayTeamId?: number | null
   /**
    * PICK DE JOGADOR · quem, e qual número.
    *
@@ -257,6 +262,27 @@ export default function AnalysisModal({
     ? explainMarket(data.marketRaw, data.lineRaw ?? undefined)
     : ''
 
+  /* O subtítulo em dois pedaços: a linha de times (COM escudo, quando o
+     chamador passa os ids · era texto cru, e o modal não tinha nenhuma
+     imagem do jogo) e o resto, como já era. */
+  const restoDoSubtitulo = temPernas
+    ? plural(data.legs!.length, 'seleção', 'seleções')
+    /* Pick de jogador: o nome primeiro, e a linha em número puro. O
+       subtítulo saía "Chutes no alvo, Pedro · 2 ou mais chutes no alvo"
+       · o mesmo mercado duas vezes numa linha de 40 caracteres. */
+    : data.playerName
+      ? `${data.playerName}, ${data.lineValue ?? ''}${data.lineValue != null ? ' ou mais ' : ''}${data.market.toLowerCase()}`
+      : `${data.market}${data.line ? `, ${data.line}` : ''}`
+  const linhaDeTimes = data.homeTeam && data.awayTeam ? (
+    <span className="inline-flex items-center gap-1.5 align-middle">
+      <TeamLogo id={data.homeTeamId ?? undefined} name={data.homeTeam} size={16} />
+      <span className="text-ink-1 font-semibold">{data.homeTeam}</span>
+      <span className="text-ink-4">x</span>
+      <TeamLogo id={data.awayTeamId ?? undefined} name={data.awayTeam} size={16} />
+      <span className="text-ink-1 font-semibold">{data.awayTeam}</span>
+    </span>
+  ) : null
+
   return (
     <Modal
       onClose={onClose}
@@ -268,17 +294,11 @@ export default function AnalysisModal({
          duas vezes ("Over 1.5 FT + Under 2.5 HT, Over 1.5 FT · Under 2.5 HT").
          Repetir isso no subtítulo não informa nada e ainda empurra o conteúdo
          pra baixo. As pernas de verdade estão no bloco próprio, logo abaixo. */
-      description={[
-        data.homeTeam && data.awayTeam ? `${data.homeTeam} x ${data.awayTeam}` : null,
-        temPernas
-          ? plural(data.legs!.length, 'seleção', 'seleções')
-          /* Pick de jogador: o nome primeiro, e a linha em número puro. O
-             subtítulo saía "Chutes no alvo, Pedro · 2 ou mais chutes no alvo"
-             · o mesmo mercado duas vezes numa linha de 40 caracteres. */
-          : data.playerName
-            ? `${data.playerName}, ${data.lineValue ?? ''}${data.lineValue != null ? ' ou mais ' : ''}${data.market.toLowerCase()}`
-            : `${data.market}${data.line ? `, ${data.line}` : ''}`,
-      ].filter(Boolean).join(', ')}
+      description={
+        linhaDeTimes
+          ? <>{linhaDeTimes}{restoDoSubtitulo ? `, ${restoDoSubtitulo}` : ''}</>
+          : restoDoSubtitulo
+      }
     >
       <div className="p-5 space-y-5">
 

@@ -878,6 +878,8 @@ function SuggestionCard({
           reasoning: s.reasoning,
           homeTeam: s.home_team_name,
           awayTeam: s.away_team_name,
+          homeTeamId: s.home_team_id,
+          awayTeamId: s.away_team_id,
           /* Pick combinado explica PERNA A PERNA. O modal já sabia fazer isso
              (a múltipla usa desde sempre) -- o card é que não passava, então o
              Boost abria a análise mostrando "Over 1.5 FT + Under 2.5 HT" como

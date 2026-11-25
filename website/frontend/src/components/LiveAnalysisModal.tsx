@@ -3,6 +3,7 @@ import Modal from './ui/Modal'
 import { Badge } from './ui'
 import MarketForm from './MarketForm'
 import { BarraDeChance } from './AnalysisModal'
+import { TeamLogo } from './TeamLogo'
 import { explainMarket, regraDoMercado, translateLine, translateMarket } from '../utils/marketTranslate'
 
 /*
@@ -45,6 +46,9 @@ export interface LiveAnalysisData {
 
   homeTeam: string
   awayTeam: string
+  /** Ids dos times no provedor · alimenta os escudos do subtítulo. */
+  homeTeamId?: number | null
+  awayTeamId?: number | null
 
   /* Snapshot da criação */
   minuteAtCreation?: number | null
@@ -187,7 +191,16 @@ export default function LiveAnalysisModal({
       width="lg"
       acimaDeTudo
       title="Entenda esta análise"
-      description={`${data.homeTeam} x ${data.awayTeam}, ${translateMarket(data.market)}${data.line ? ` ${translateLine(data.line)}` : ''}`}
+      description={<>
+        <span className="inline-flex items-center gap-1.5 align-middle">
+          <TeamLogo id={data.homeTeamId ?? undefined} name={data.homeTeam} size={16} />
+          <span className="text-ink-1 font-semibold">{data.homeTeam}</span>
+          <span className="text-ink-4">x</span>
+          <TeamLogo id={data.awayTeamId ?? undefined} name={data.awayTeam} size={16} />
+          <span className="text-ink-1 font-semibold">{data.awayTeam}</span>
+        </span>
+        {`, ${translateMarket(data.market)}${data.line ? ` ${translateLine(data.line)}` : ''}`}
+      </>}
     >
       <div className="p-5 space-y-5">
 
