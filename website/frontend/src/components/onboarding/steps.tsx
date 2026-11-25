@@ -199,7 +199,7 @@ function PassoConfirmarEmail() {
       <Linhas itens={[['Teste do Pro', '2 dias'], ['Custo', 'R$ 0,00']]} />
       <p className="text-xs text-ink-2 leading-relaxed">
         A assinatura abre todos os picks do dia, as múltiplas e a alavancagem. Sem confirmar,
-        a conta segue no plano gratuito, com 1 pick por dia.
+        a conta segue no plano gratuito, com até 3 picks grátis por dia.
       </p>
       {user?.email && (
         <p className="text-[11px] text-ink-3 leading-relaxed">

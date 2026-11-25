@@ -5,7 +5,7 @@ import {
   Table, type Column,
 } from './ui'
 import { rotuloDoMercado } from '../utils/marketTranslate'
-import { PaisDaLigaTag } from './TeamLogo'
+import { PaisDaLigaTag, TeamLogo } from './TeamLogo'
 import { nomeDaLiga } from '../lib/paisDaLiga'
 import { caminhoDoJogo } from '../lib/jogoPublico'
 import { fmtUnits, STAKE_LABEL_PADRAO } from '../utils/format'
@@ -27,6 +27,9 @@ export interface JogoPublico {
   fixture_id: number
   home_team: string
   away_team: string
+  /** Id do time no provedor · alimenta o escudo (/api/proxy/team/<id>.png). */
+  home_team_id?: number | null
+  away_team_id?: number | null
   league_id: number
   league_name: string
   /** Horário de Brasília sem fuso: ler por slice, nunca com new Date. */
@@ -37,6 +40,8 @@ export interface PickPublico {
   match_date: string
   home_team_name: string | null
   away_team_name: string | null
+  home_team_id?: number | null
+  away_team_id?: number | null
   market: string | null
   line: string | null
   odd: number | null
@@ -64,7 +69,7 @@ export function PlacarPublico({ dados, rotulo }: { dados: DesempenhoPublico; rot
     <section>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <StatTile
-          label="Assertividade"
+          label="Win rate"
           value={`${dados.win_rate}%`}
           tone={dados.win_rate >= 55 ? 'green' : 'default'}
         />
@@ -121,8 +126,12 @@ export function ListaDeJogos({
                     {j.match_datetime ? String(j.match_datetime).slice(11, 16) : '--:--'}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm text-ink-1 truncate">
-                      {j.home_team} x {j.away_team}
+                    <p className="text-sm text-ink-1 flex items-center gap-1.5 min-w-0">
+                      <TeamLogo id={j.home_team_id ?? undefined} name={j.home_team} size={18} />
+                      <span className="truncate">{j.home_team}</span>
+                      <span className="text-[10px] text-ink-4 shrink-0">x</span>
+                      <TeamLogo id={j.away_team_id ?? undefined} name={j.away_team} size={18} />
+                      <span className="truncate">{j.away_team}</span>
                     </p>
                     {comLiga && (
                       <p className="text-[11px] text-ink-4 truncate">{j.league_name}</p>
@@ -155,11 +164,13 @@ export function UltimosPicks({
       principal: true,
       cell: p => (
         <div className="min-w-0">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 min-w-0">
             <PickTypeBadge type={p.source} short />
-            <span className="text-xs text-ink-1 truncate">
-              {p.home_team_name} x {p.away_team_name}
-            </span>
+            <TeamLogo id={p.home_team_id ?? undefined} name={p.home_team_name ?? ''} size={14} />
+            <span className="text-xs text-ink-1 truncate">{p.home_team_name}</span>
+            <span className="text-[10px] text-ink-4 shrink-0">x</span>
+            <TeamLogo id={p.away_team_id ?? undefined} name={p.away_team_name ?? ''} size={14} />
+            <span className="text-xs text-ink-1 truncate">{p.away_team_name}</span>
           </div>
           <p className="text-[10px] text-ink-4 truncate mt-0.5">
             {rotuloDoMercado(p.market ?? undefined, p.line ?? undefined)}

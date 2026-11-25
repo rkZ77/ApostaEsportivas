@@ -83,6 +83,9 @@ export function usePlans() {
      */
     monthly: byTierCycle('pro', 'mensal') ?? FALLBACK[4],
     monthlyBase: byTierCycle('base', 'mensal') ?? FALLBACK[0],
+    /* O anual do Pro alimenta a âncora "por dia" da grade da Home: o número
+       só é verdade dentro do ciclo que o produz. */
+    anualPro: byTierCycle('pro', 'anual') ?? FALLBACK[7],
   }
 }
 

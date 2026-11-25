@@ -53,6 +53,7 @@ from routers.live import (  # noqa: F401
     _parse_stats, _pick_status, _profit_for_result, _stat_for_market,
     _sync_followed_result, _travado_antes_do_apito,
     _fetch_live_odds_mundo, _find_live_odd,
+    _HORAS_PARA_ANULAR, _SWEEP_MAX_AGE_DAYS,
 )
 
 logger = logging.getLogger(__name__)
@@ -198,15 +199,25 @@ def liquidar_pendentes(cur, conn, limite: int = 30) -> dict:
     """
     resumo = {"liquidados": 0, "erros": 0}
     try:
-        cur.execute("""
+        cur.execute(f"""
             SELECT id, fixture_id, market, market_type, line, odd,
-                   home_team_name, away_team_name, home_team_id, away_team_id
+                   home_team_name, away_team_name, home_team_id, away_team_id,
+                   created_at
             FROM picks_live
             WHERE result IS NULL
               AND status IN (%s, %s)
+              -- MESMA JANELA DA VARREDURA (resolve_all_pending, 3 dias):
+              -- pick ao vivo nasce e morre dentro de uma partida; quem ficou
+              -- pendente ha' tres dias nao volta. Sem o corte, cada pick
+              -- irresolvivel (fixture sumido da API) re-tentava bulk + fetch
+              -- individual a CADA passada -- e este endpoint roda no poll do
+              -- feed de assinante -- gastando cota sem progresso nenhum.
+              AND created_at >= %s
             ORDER BY created_at DESC
             LIMIT %s
-        """, (STATUS_ATIVO, STATUS_EXPIRADO, limite))
+        """, (STATUS_ATIVO, STATUS_EXPIRADO,
+              _agora_naive() - timedelta(days=_SWEEP_MAX_AGE_DAYS),
+              limite))
         pendentes = cur.fetchall()
     except Exception as e:
         logger.error("[LIVE-PICKS] consulta de pendentes falhou: %s", e)
@@ -236,6 +247,33 @@ def liquidar_pendentes(cur, conn, limite: int = 30) -> dict:
             # mesmas cautelas: linha de quarto so' trava quando o resultado
             # final nao pode virar meia-vitoria, e Under so' trava pra RED.
             # Nao ha' regra nova aqui, ha' uma regra que o Live nao usava.
+            # PICK QUE O PROVEDOR NUNCA VAI ENTREGAR sai da fila como PUSH
+            # (mesma regra de _anulacao_sem_estatistica: a casa devolve a
+            # entrada de mercado que nao pode ser conferido). Fonte nao
+            # respondeu a partida (ou devolveu status NS), noite adentro. O
+            # pick ao vivo nasce DURANTE a partida, entao "NS" depois de 12 horas
+            # significa fixture perdido pra sempre -- e sem esta saida ele
+            # re-cotava a cada passada gastando cota, fora do alcance de
+            # _anulacao_sem_estatistica, que so' vira com fixture em maos
+            # (status FT/LIVE). Valor e auditoria seguem nulos: nada foi
+            # calculado, o push e' do jogo, nao do mercado.
+            if status == "NS":
+                criado = p.get("created_at")
+                horas = (
+                    (_agora_naive() - criado).total_seconds() / 3600.0
+                    if criado else None
+                )
+                if horas is None or horas < _HORAS_PARA_ANULAR:
+                    continue
+                _save_live_pick_result(
+                    p["id"], settlement.PUSH, float(p["odd"] or 1), conn,
+                    motivo="o provedor não publicou o jogo",
+                )
+                resumo["liquidados"] += 1
+                logger.warning("[LIVE-PICKS] #%s -> PUSH (fixture sumido ha' %.0fh)",
+                               p["id"], horas)
+                continue
+
             if status not in FT_STATUSES and status not in LIVE_STATUSES:
                 continue
 
@@ -1308,6 +1346,13 @@ def estatisticas(
         # e medido a parte de proposito (ver a docstring abaixo), entao o
         # recorte tem que existir aqui tambem.
         #
+        # PESO DO PLANO (igual a /public/results desde 14/10): aqui profit saia
+        # CRU (1u por pick) enquanto o placar publico soma
+        # picks_live.profit * stake_de('live'). O mesmo conjunto saia +12,4u na
+        # aba do produto e +24,8u na pagina de Resultados. O roi divisao por
+        # resolvidos, entao o peso cancela e o numero dele nao muda.
+        peso = stake_plan.stake_de("live")
+        #
         # Corta por `match_date` e nao por `created_at`: o pick nasce durante a
         # partida, entao os dois quase sempre coincidem -- mas quando um jogo
         # vira o dia, o resultado pertence ao dia da PARTIDA, que e como o
@@ -1347,7 +1392,7 @@ def estatisticas(
             SELECT market_type,
                    COUNT(*) FILTER (WHERE result IS NOT NULL) AS resolvidos,
                    COUNT(*) FILTER (WHERE result = 'GREEN')   AS greens,
-                   COALESCE(SUM(profit) FILTER (WHERE result IS NOT NULL), 0) AS profit
+                   COALESCE(SUM(profit) * {peso} FILTER (WHERE result IS NOT NULL), 0) AS profit
             FROM picks_live
             {onde}
             GROUP BY market_type
@@ -1360,7 +1405,7 @@ def estatisticas(
 
     resolvidos = int(linha.get("resolvidos") or 0)
     greens = int(linha.get("greens") or 0)
-    lucro = float(linha.get("profit") or 0)
+    lucro = float(linha.get("profit") or 0) * peso
     return {
         "disponivel": True,
         # Vai na resposta pra o card de divulgacao nao ter que reconstruir o
@@ -1388,8 +1433,9 @@ def estatisticas(
                                 int(linha.get("half_wins") or 0),
                                 int(linha.get("push") or 0)),
         "profit": round(lucro, 2),
-        # ROI sobre 1 unidade por pick, mesma convencao do resto do site.
-        "roi": round(lucro / resolvidos * 100, 1) if resolvidos else 0.0,
+        # ROI: o peso cancela entre numerador e denominador (stake resolvida),
+        # entao o numero dele nao depende do plano.
+        "roi": round(lucro / (resolvidos * peso) * 100, 1) if resolvidos else 0.0,
         "ev_medio": round(float(linha["ev_medio"]), 4) if linha.get("ev_medio") is not None else None,
         "confianca_media": round(float(linha["confianca_media"]), 4) if linha.get("confianca_media") is not None else None,
         "minuto_medio": round(float(linha["minuto_medio"]), 1) if linha.get("minuto_medio") is not None else None,

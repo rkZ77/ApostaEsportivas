@@ -102,10 +102,16 @@ class TestOFreeVeUmaOfertaDeVerdade:
         assert "[...MODULOS_PAGOS, ...MODULOS_PRO]" in bloco
 
     def test_mostra_o_preco_de_entrada(self):
-        """Uma tela de plano sem preço obriga a pessoa a ir procurar em outra."""
+        """Uma tela de plano sem preço obriga a pessoa a ir procurar em outra.
+
+        2026-11: o "A partir de" parou de citar o MENSAIS do produto e passou
+        a citar o menor preço por mês da grade (`precoBaseDeEntrada`, que sai
+        de byTier('base')) -- o mensal é o ciclo mais caro, não o de entrada.
+        O que o teste protege continua: o preço vem do catálogo, não da mão.
+        """
         bloco = self._bloco_do_free()
-        assert "monthlyBase" in bloco
-        assert "fmtPlanPrice(monthlyBase.price)" in bloco
+        assert "precoBaseDeEntrada" in bloco
+        assert "fmtPlanPrice(precoBaseDeEntrada)" in bloco
 
     def test_o_preco_nao_e_digitado(self):
         """Mesmo motivo de sempre: o valor anunciado tem que ser o cobrado."""

@@ -648,7 +648,7 @@ def _quebra_por_pipeline(entries: list, unit_value: float) -> list[dict]:
             "pnl":          round(pnl, 2),
             "units":        round(units, 2),
             "staked_units": round(staked, 2),
-            "win_rate":     round(taxa_acerto(greens, total, half_w, push_n)),
+            "win_rate":     taxa_acerto(greens, total, half_w, push_n),
             "yield":        round(units / staked * 100, 1) if staked > 0 else 0.0,
         })
 
@@ -973,7 +973,7 @@ def get_banca(
         half_wins = sum(1 for e in resolved if e["result"] == "HALF-WIN")
         half_loss = sum(1 for e in resolved if e["result"] == "HALF-LOSS")
         total_pnl = sum(e["pnl"] for e in resolved if e["pnl"] is not None)
-        win_rate  = round(taxa_acerto(greens, len(resolved), half_wins, push))
+        win_rate  = taxa_acerto(greens, len(resolved), half_wins, push)
         # ROI de crescimento: ganho sobre banca inicial em R$
         roi = round(total_pnl / bankroll_start * 100, 1) if bankroll_start else 0
         # Yield tipster: lucro em unidades / unidades apostadas × 100

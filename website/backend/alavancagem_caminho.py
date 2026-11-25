@@ -138,7 +138,13 @@ def caminhos_da_ia(picks_asc: list, entrada: float, meta: int = META_PADRAO) -> 
         passos += 1
         greens += 1 if mult > 1 else 0
         depois = round(entrada * saldo, 2)
-        fim = "red" if mult == 0 else "meta" if passos >= meta else None
+        # A META E' DE GREENS, NAO DE PASSOS (nome dela: "6 greens seguidos").
+        # Encerrava em `passos >= meta`, e passo e' QUALQUER pick resolvido:
+        # PUSH (mult 1.0) e HALF-LOSS (mult 0.5) tambem incrementavam -- um
+        # caminho com 2 anuladas fechava "na meta" no 6o passo com 4 greens,
+        # pagando (multiplicador-1)u antes do que a regra publicada manda.
+        # PUSH e meia-derrota continuam andando o caminho; green e' o que conta.
+        fim = "red" if mult == 0 else "meta" if greens >= meta else None
         por_pick[p["id"]] = {"bankroll_before": antes, "bankroll_after": depois,
                              "potential_return": round(antes * float(p.get("odd_combined") or 1), 2),
                              "caminho_passo": passos, "caminho_encerra": fim}
@@ -180,8 +186,8 @@ def _sql_multiplicador(coluna_odd: str, coluna_result: str) -> str:
 def subquery_dos_caminhos(meta: int = META_PADRAO) -> str:
     """Subconsulta que devolve, por pick liquidado, o que ele rendeu AO CAMINHO.
 
-    Sai `pick_id`, `encerra`, `passos`, `caminho_profit` e `caminho_stake`. Os
-    dois ultimos sao zero em todo passo que NAO encerra -- e andam sempre
+    Sai `pick_id`, `encerra`, `passos`, `greens`, `caminho_profit` e
+    `caminho_stake`. Os dois ultimos sao zero em todo passo que NAO encerra -- e andam sempre
     juntos, que e' a regra numero 1 de stake_plan.py: mexer no lucro sem mexer
     na stake faz o ROI saltar por um fator que nao existe.
 
@@ -211,8 +217,12 @@ def subquery_dos_caminhos(meta: int = META_PADRAO) -> str:
           FROM unicos
     ),
     caminho AS (
-        SELECT n, id, mult, mult AS saldo, 1 AS passos,
-               (mult = 0 OR 1 >= {meta}) AS encerra
+        SELECT n, id, mult, mult AS saldo, 1 AS passos, (mult > 1)::int AS greens,
+               -- A meta e' DE GREENS, nao de passos (ver caminhos_da_ia): PUSH
+               -- (mult 1.0) e meia-derrota (mult 0.5) andam o caminho e nao
+               -- contam. Mesma conta do Python, pro placar e a banca dizerem
+               -- o mesmo sobre o mesmo caminho.
+               (mult = 0 OR (mult > 1)::int >= {meta}) AS encerra
           FROM ordenado WHERE n = 1
         UNION ALL
         -- `c.encerra` do passo anterior e' o gatilho de reinicio: quando ele e'
@@ -221,12 +231,15 @@ def subquery_dos_caminhos(meta: int = META_PADRAO) -> str:
         SELECT o.n, o.id, o.mult,
                CASE WHEN c.encerra THEN o.mult ELSE c.saldo * o.mult END,
                CASE WHEN c.encerra THEN 1     ELSE c.passos + 1     END,
+               CASE WHEN c.encerra THEN (o.mult > 1)::int
+                    ELSE c.greens + (o.mult > 1)::int END AS greens,
                (o.mult = 0
-                OR (CASE WHEN c.encerra THEN 1 ELSE c.passos + 1 END) >= {meta})
+                OR (CASE WHEN c.encerra THEN 0 ELSE c.greens END
+                    + (o.mult > 1)::int) >= {meta})
           FROM caminho c
           JOIN ordenado o ON o.n = c.n + 1
     )
-    SELECT id AS pick_id, passos, encerra,
+    SELECT id AS pick_id, passos, greens, encerra,
            CASE WHEN encerra THEN ROUND(saldo - 1, 4) ELSE 0 END::numeric
                 AS caminho_profit,
            CASE WHEN encerra THEN 1 ELSE 0 END::numeric AS caminho_stake

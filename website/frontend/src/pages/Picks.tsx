@@ -23,6 +23,7 @@ import FiltrosDePicks, { filtrarPicks, ordenarPicks,
 import { CaminhoDaIA, Escada, HistoricoDeCaminhos, LinhaCaminho,
          type AlavStep, type CaminhoEncerrado } from '../components/alavancagem/caminho'
 import AnalysisModal from '../components/AnalysisModal'
+import { TeamLogo, LeagueLogo } from '../components/TeamLogo'
 import {
   CampoAoVivo, CampoDeu, CampoDoPick, HoraOuMinuto, PernaDoBilhete, PickCardFooter, PickExplainButton, PickProbability, SeloDeResultado,
   SeloDoEstado, VsOuPlacar,
@@ -78,30 +79,10 @@ function wcPhase(dateStr?: string): string | null {
   return null
 }
 
-// Helpers de logo
-const TEAM_LOGO   = (id?: number) => id ? `/api/proxy/team/${id}.png` : null
-
-const LEAGUE_LOGO = (id?: number) => id ? `/api/proxy/league/${id}.png` : null
-
-function TeamLogo({ id, name, size = 24 }: { id?: number; name: string; size?: number }) {
-  const src = TEAM_LOGO(id)
-  if (!src) return null
-  return (
-    <img src={src} alt={name} width={size} height={size} loading="lazy"
-      className="object-contain shrink-0" style={{ width: size, height: size }}
-      onError={e => (e.currentTarget.style.display = 'none')} />
-  )
-}
-
-function LeagueLogo({ id, name, size = 18 }: { id?: number; name?: string; size?: number }) {
-  const src = LEAGUE_LOGO(id)
-  if (!src) return null
-  return (
-    <img src={src} alt={name ?? ''} width={size} height={size} loading="lazy"
-      className="object-contain shrink-0 opacity-80" style={{ width: size, height: size }}
-      onError={e => (e.currentTarget.style.display = 'none')} />
-  )
-}
+// Escudos e emblemas agora vêm do componente único (`components/TeamLogo`),
+// com fallback de iniciais quando o provedor não tem a imagem -- sobravam as
+// cópias locais daqui (`TEAM_LOGO`, `LeagueLogo` com `opacity-80`), que
+// escondiam a si mesmas no erro e deixavam buraco na linha do confronto.
 
 // Tipos
 /* `aovivo` foi renomeada pra `minhas_apostas` em 2026-08-11.
@@ -263,9 +244,9 @@ function TabBar({ tab, setTab, canSeeVip, canSeePro, verAoVivo, verBingo, temFal
     {
       /* Pick Boost · combinação fixa (Over 1.5 FT + Under 2.5 HT) em que o
          motor escolhe os JOGOS, não o mercado.
-         SEM `premiumOnly`: um pick por dia é gratuito, e uma aba marcada VIP
-         que abre com um pick liberado dentro contradiz o próprio selo. O
-         restante do dia vem trancado, com o mesmo teaser dos outros. */
+         SEM `premiumOnly`: o primeiro pick do dia é gratuito, e uma aba
+         marcada VIP que abre com um pick liberado dentro contradiz o próprio
+         selo. O restante do dia vem trancado, com o mesmo teaser dos outros. */
       key: 'boost' as Tab, label: 'Boost',
       /* O "NOVO" saiu: o Pick Boost estreou em 28/08/2026 e um selo de
          novidade que ninguém retira vira mobília. Se um produto realmente
@@ -950,6 +931,8 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
           reasoning: dica.reasoning,
           homeTeam: dica.home_team,
           awayTeam: dica.away_team,
+          homeTeamId: dica.home_team_id,
+          awayTeamId: dica.away_team_id,
         }}
       />
     )}
@@ -1335,6 +1318,8 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false, tipo = 'multipla'
           reasoning: m.reasoning,
           homeTeam: legs[0]?.home ?? legs[0]?.home_team,
           awayTeam: legs.length > 1 ? `+${legs.length - 1} jogo${legs.length - 1 > 1 ? 's' : ''}` : (legs[0]?.away ?? legs[0]?.away_team),
+          homeTeamId: legs[0]?.homeId,
+          awayTeamId: legs.length > 1 ? null : legs[0]?.awayId,
           // A série vem PERNA A PERNA · não existe uma que descreva o bilhete.
           pickId: m.id,
           pickType: tipo,
@@ -1632,6 +1617,8 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
             { market: pick.market_3, line: pick.line_3, odd: pick.odd_3 },
           ].filter(l => l.market),
           reasoning: [pick.reasoning_1, pick.reasoning_2, pick.reasoning_3].filter(Boolean).join('\n\n'),
+          homeTeamId: pick.home_team_id_1,
+          awayTeamId: pick.away_team_id_1,
         }}
       />
     )}
@@ -2551,7 +2538,7 @@ function VipLockOverlay({ color = 'yellow', picks, resumo, rotulo = 'picks', res
           <p className="text-ink-3 text-xs leading-relaxed">
             {temTeaser
               ? 'O jogo e a odd você já vê. O mercado, a análise da IA e a sugestão de stake abrem na assinatura.'
-              : '10 a 20 picks por dia com análise completa da IA e resultados em tempo real.'}
+              : 'Todos os picks do dia com análise completa da IA e resultado acompanhado no histórico.'}
           </p>
         </div>
         <Link
@@ -2657,7 +2644,7 @@ function PlacarDoProduto({ source, tom }: { source: string; tom: string }) {
     { label: 'Picks', value: String(total),               cor: 'text-ink-1' },
     { label: 'Green', value: String(dados.greens ?? 0),   cor: 'text-accent-ink' },
     { label: 'Red',   value: String(dados.reds ?? 0),     cor: 'text-red-400' },
-    { label: 'Win %', value: `${Math.round(winRate)}%`,               cor: winRate >= 55 ? 'text-accent-ink' : 'text-ink-2' },
+    { label: 'Win %', value: `${winRate.toFixed(1)}%`,            cor: winRate >= 55 ? 'text-accent-ink' : 'text-ink-2' },
     { label: 'Lucro', value: fmtUnits(lucro, 1),          cor: lucro >= 0 ? 'text-accent-ink' : 'text-red-400' },
   ]
 
@@ -3939,11 +3926,12 @@ export default function Picks() {
                           borda="border-green-500/20" fundo="bg-green-500/5">
               <>
                 <p>
-                  Um pick gratuito publicado diariamente pela <span className="text-ink-1 font-bold">IA</span>. Analisamos centenas de
-                  jogos e selecionamos o <span className="text-green-400 font-bold">1 pick com maior confiança</span> para disponibilizar para todos os usuários.
+                  Picks gratuitos publicados diariamente pela <span className="text-ink-1 font-bold">IA</span>. Analisamos centenas de
+                  jogos e publicamos <span className="text-green-400 font-bold">até 3 picks com maior confiança</span> por dia
+                  para todos os usuários.
                 </p>
                 <p>
-                  Ideal para quem quer experimentar a qualidade das análises antes de assinar o VIP.
+                  Ideal para quem quer experimentar a qualidade das análises antes de assinar o Pick IA.
                   Inclui mercado, odd, casa de apostas e raciocínio da IA.
                 </p>
                 <PlacarDoProduto source="free" tom="text-green-400/70" />
@@ -3986,8 +3974,8 @@ export default function Picks() {
               <>
                 <p>
                   Picks exclusivos gerados pela <span className="text-ink-1 font-bold">IA</span> com análise estatística avançada.
-                  A cada dia a IA processa forma recente, confrontos diretos, odds de mercado e gera
-                  {' '}<span className="text-yellow-400 font-bold">10 a 20 picks de alta confiança</span>.
+                  A cada dia a IA processa forma recente, confrontos diretos, odds de mercado e publica
+                  {' '}<span className="text-yellow-400 font-bold">todos os picks de alta confiança que passam no corte</span>.
                 </p>
                 <p>
                   Cada pick inclui análise completa: estatísticas dos times, forma dos últimos jogos, previsão por mercado,

@@ -43,15 +43,22 @@ export function taxaAcerto(r: {
 }): number | null {
   const resolvidos = r.total - (r.push ?? 0)
   if (resolvidos <= 0) return null
-  return Math.round(((r.greens + (r.half_wins ?? 0)) / resolvidos) * 100)
+  /* UMA casa decimal, como o backend devolve (by_source): num site que fica
+     meses com a mesma base, 63% e 63,3% lado a lado parecem números
+     diferentes. Arredondar em telas diferentes foi o que gerou o 66% contra
+     63,3% que motivou a unificação acima. */
+  return Math.round(((r.greens + (r.half_wins ?? 0)) / resolvidos) * 1000) / 10
 }
 
 /**
  * Legenda do plano de stake, usada enquanto `/public/results` não respondeu.
  * A resposta traz `stake_label` montado em backend/stake_plan.py, que é a
- * fonte da verdade · isto aqui é só o texto de partida.
+ * fonte da verdade · isto aqui é só o texto de partida. ESPELHA
+ * `rotulo_curto()`: o ao vivo mudou pra 2u em 14/10 e quem chamar antes da
+ * resposta não pode receber o 4u velho.
  */
-export const STAKE_LABEL_PADRAO = 'Premium e ao vivo 4u, free e mercados 3u, múltipla 1u'
+export const STAKE_LABEL_PADRAO =
+  'Premium 4u, ao vivo 2u, free e mercados 3u, múltipla 1u, alavancagem 1u por caminho'
 
 /**
  * Lucro em unidades, sempre com sinal. `+42,7u` · `−1,00u`.

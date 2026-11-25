@@ -270,7 +270,7 @@ export default function Checkout() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const { plans, byTierCycle } = usePlans()
+  const { plans, byTierCycle, byTier } = usePlans()
   const [selectedTier, setSelectedTier] = useState<PlanTier>(TIER_PADRAO)
   const [selectedCycle, setSelectedCycle] = useState<string>(POPULAR_CYCLE)
   const [loading, setLoading] = useState(false)
@@ -355,6 +355,27 @@ export default function Checkout() {
         */}
         <ProvaPublica compacta />
 
+        {/* O CONVITE DO TESTE MORAVA SÓ EM /planos. Quem chega aqui pelo botão
+            "Assinar" de um card trancado pode estar elegível ao trial e nunca
+            ter olhado a página de planos: sem este bloco, a única tela do
+            funil com o dedo no pagamento não menciona que dá pra provar 2
+            dias de graça. A elegibilidade é o mesmo par (plan, trial_used)
+            que /planos usa. */}
+        {user?.plan === 'free' && user.trial_used !== true && (
+          <div className="card p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="flex-1">
+              <p className="text-ink-1 font-bold text-sm">Antes de pagar: 2 dias do Pro grátis</p>
+              <p className="text-ink-3 text-xs mt-0.5">
+                Conta elegível ao teste. O Pro inteiro abre por 2 dias, sem pagamento nenhum.
+              </p>
+            </div>
+            <Link to="/planos"
+              className="btn-primary shrink-0 text-xs px-5 py-2.5 min-h-[44px] inline-flex items-center justify-center font-black">
+              Ativar teste grátis
+            </Link>
+          </div>
+        )}
+
         {/* Qual produto · o primeiro dos dois eixos da compra.
 
             Vem ANTES da lista de benefícios e da grade de preço porque é ele
@@ -364,7 +385,14 @@ export default function Checkout() {
           <h2 className="text-ink-1 font-bold mb-3">Escolha o plano</h2>
           <div className="grid grid-cols-2 gap-3">
             {(['base', 'pro'] as PlanTier[]).map(tier => {
-              const mensal = byTierCycle(tier, 'mensal')
+              /* "A partir de" pelo MENOR preço por mês do tier, não pelo
+                 mensal. O mensal é o ciclo mais caro: no Pro ele anunciava
+                 "a partir de R$ 39,90/mês" quando o anual custa R$ 29,99/mês
+                 -- número citável que piora quanto maior a grade. */
+              const doTierDele = byTier(tier)
+              const aPartirDe = doTierDele.length > 0
+                ? Math.min(...doTierDele.map(p => p.price_per_month))
+                : undefined
               const ativo = selectedTier === tier
               return (
                 <button
@@ -376,14 +404,14 @@ export default function Checkout() {
                       : 'border-line bg-surface-1 hover:border-line-strong'}`}
                 >
                   <div className="text-ink-1 font-bold text-sm">
-                    {mensal?.tier_label ?? (tier === 'pro' ? 'Pick IA Pro' : 'Pick IA')}
+                    {byTierCycle(tier, 'mensal')?.tier_label ?? (tier === 'pro' ? 'Pick IA Pro' : 'Pick IA')}
                   </div>
                   <div className="text-ink-3 text-xs mt-0.5">
                     {tier === 'pro' ? 'Com picks ao vivo e agente' : 'Todo o pré-jogo'}
                   </div>
-                  {mensal && (
+                  {aPartirDe != null && (
                     <div className="font-mono text-ink-2 text-xs mt-2">
-                      a partir de {fmtPlanPrice(mensal.price)}/mês
+                      a partir de {fmtPlanPrice(aPartirDe)}/mês
                     </div>
                   )}
                 </button>

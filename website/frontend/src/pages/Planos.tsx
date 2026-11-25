@@ -55,11 +55,14 @@ interface CardDeAssinaturaProps {
   /** O de cima ganha a borda de destaque. Só um pode ter. */
   destaque: boolean
   cta: string
+  /** Para onde o botão leva. O padrão é o cadastro: quem vê os cards sem
+      login ainda não tem conta. Logado (grade do free), leva ao checkout. */
+  ctaTo?: string
   rodape: string
 }
 
 function CardDeAssinatura({
-  nome, Icone, resumo, modulos, planos, destaque, cta, rodape,
+  nome, Icone, resumo, modulos, planos, destaque, cta, ctaTo, rodape,
 }: CardDeAssinaturaProps) {
   /*
    * O selo de melhor preço compara dentro do PRÓPRIO produto. Uma régua só
@@ -137,7 +140,7 @@ function CardDeAssinatura({
       </div>
 
       <Link
-        to="/login?mode=register"
+        to={ctaTo ?? '/login?mode=register'}
         className={`${destaque ? 'btn-primary' : 'btn-ghost'} inline-flex items-center justify-center w-full text-sm min-h-[44px]`}
       >
         {cta}
@@ -150,7 +153,13 @@ function CardDeAssinatura({
 export default function Planos() {
   const navigate = useNavigate()
   const { user, isVip, isAdmin, daysUntilExpiry, updateUser } = useAuth()
-  const { plans, monthly, monthlyBase, byId, byTier, loaded } = usePlans()
+  const { plans, monthly, byId, byTier, loaded } = usePlans()
+
+  /* O MENOR preço por mês do produto pré-jogo: é ele que a frase "A partir
+     de" cita. O mensal é o ciclo mais caro do produto, não o de entrada. */
+  const precoBaseDeEntrada = byTier('base').reduce<number | null>(
+    (menor, pl) => (menor === null || pl.price_per_month < menor ? pl.price_per_month : menor),
+    null)
 
   const [meData, setMeData]               = useState<any>(null)
   const [trialUsed, setTrialUsed]         = useState<boolean | null>(null)
@@ -602,11 +611,12 @@ export default function Planos() {
               </div>
 
               <h2 className="font-display text-xl font-bold text-ink-1 mt-2 mb-1.5">
-                Você está vendo 1 pick por dia. A IA publica o resto.
+                Você vê até 3 picks grátis por dia. A IA publica o resto.
               </h2>
               <p className="text-ink-3 text-sm leading-relaxed mb-5">
                 Todo dia o motor calcula os jogos das ligas cobertas e publica só o que passou
-                no corte. A dica do dia é um deles. Os outros ficam fechados.
+                no corte. As frees do dia -- 1 a 3, conforme o calendário de jogos -- abrem;
+                o resto fica fechado.
               </p>
 
               <ProvaPublica compacta />
@@ -623,11 +633,17 @@ export default function Planos() {
 
               <div className="flex flex-col sm:flex-row sm:items-center gap-3 pt-4 border-t border-line">
                 <p className="flex-1 text-ink-3 text-xs">
-                  {monthlyBase
-                    ? <>A partir de <span className="text-ink-1 font-bold">{fmtPlanPrice(monthlyBase.price)}</span> por mês. {SEM_RENOVACAO_AUTOMATICA}</>
+                  {/* "A partir de" é o MENOR preço por mês do produto (no caso,
+                      o ciclo anual), não o mensal: o mensal é a entrada mais
+                      cara do produto, e a frase tinha que valer pra grade. */}
+                  {precoBaseDeEntrada
+                    ? <>A partir de <span className="text-ink-1 font-bold">{fmtPlanPrice(precoBaseDeEntrada)}</span> por mês. {SEM_RENOVACAO_AUTOMATICA}</>
                     : SEM_RENOVACAO_AUTOMATICA}
                 </p>
-                <button onClick={() => navigate('/checkout')}
+                <button onClick={() => {
+                  const grade = document.getElementById('grade-planos')
+                  if (grade) grade.scrollIntoView({ behavior: 'smooth' })
+                }}
                   className="btn-primary shrink-0 text-sm px-6 min-h-[44px]">
                   Ver os planos
                 </button>
@@ -636,6 +652,37 @@ export default function Planos() {
               {memberSince && (
                 <p className="text-ink-4 text-[11px] mt-3">Membro desde {memberSince}</p>
               )}
+            </div>
+
+            {/* A GRADE COMPLETA PARA QUEM JÁ É FREE (2026-11). O visitante
+                deslogado via os dois cards com a grade de quatro ciclos; o
+                free logado não via nada disso e caía direto no checkout, uma
+                tela que pergunta COMO pagar antes de ter respondido O QUÊ. Os
+                mesmos cards, com o CTA apontando pro checkout porque a conta
+                já existe. */}
+            <div id="grade-planos" className="space-y-5 scroll-mt-20">
+              <CardDeAssinatura
+                nome="Pick IA"
+                Icone={Crown}
+                resumo={`Tudo do Free, mais os ${MODULOS_PAGOS.length} módulos de pré-jogo.`}
+                modulos={MODULOS_PAGOS}
+                planos={byTier('base')}
+                destaque={false}
+                cta="Assinar o Pick IA"
+                ctaTo="/checkout"
+                rodape="Todos os picks de pré-jogo, sem limite por dia."
+              />
+              <CardDeAssinatura
+                nome="Pick IA Pro"
+                Icone={Crown}
+                resumo={`Tudo do Pick IA, mais ${MODULOS_PRO.map(m => m.titulo.toLowerCase()).join(' e ')}.`}
+                modulos={MODULOS_PRO}
+                planos={byTier('pro')}
+                destaque
+                cta="Testar o Pro grátis por 2 dias"
+                ctaTo="/checkout"
+                rodape="2 dias com tudo aberto para você decidir."
+              />
             </div>
           </div>
         )}

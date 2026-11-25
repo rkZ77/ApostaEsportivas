@@ -59,7 +59,7 @@ export const MODULOS: Modulo[] = [
   {
     Icon: Gift,
     titulo: 'Dica do dia',
-    desc: 'Um pick gratuito por dia, aberto para qualquer conta. Serve para conferir o método antes de assinar.',
+    desc: 'O pick em destaque de cada dia, gratuito, aberto para qualquer conta. Serve para conferir o método antes de assinar.',
     plano: 'ambos',
     tag: { label: 'Free', tone: 'green' },
   },

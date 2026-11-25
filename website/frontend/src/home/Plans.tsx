@@ -49,7 +49,7 @@ const BASE_ITEMS: Array<[boolean, string]> = [
 /* O Pro é tudo. */
 const PRO_ITEMS = [...MODULOS_FREE, ...MODULOS_PAGOS, ...MODULOS_PRO].map(m => m.titulo)
 
-export default function Plans({ monthly, monthlyBase }: { monthly: Plan; monthlyBase: Plan }) {
+export default function Plans({ monthly, monthlyBase, anual }: { monthly: Plan; monthlyBase: Plan; anual: Plan }) {
   return (
     <section id="planos" className="section section-alt">
       <div className="shell">
@@ -116,7 +116,11 @@ export default function Plans({ monthly, monthlyBase }: { monthly: Plan; monthly
               {fmtPlanPrice(monthly.price)}<span className="text-base font-semibold text-ink-3">/mês</span>
             </p>
             <p className="text-ink-3 text-xs mb-6">
-              Menos de {fmtPlanPrice(monthly.price / 30)} por dia. Pagamento único, sem renovação automática.
+              {/* A âncora "por dia" só vale junto do ciclo que a sustenta: no
+                  mensal (R$ 39,90) sairia "menos de R$ 1,34" bem embaixo de um
+                  número que o leitor divide à mão e acha queimado. No ciclo
+                  anual (R$ 29,99/mês) a conta fecha abaixo de R$ 1. */}
+              No ciclo anual, sai a {fmtPlanPrice(anual.price / anual.days)} por dia. Pagamento único, sem renovação automática.
             </p>
             <ul className="space-y-2.5 mb-5">
               {PRO_ITEMS.map(t => (

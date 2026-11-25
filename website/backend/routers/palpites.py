@@ -150,7 +150,9 @@ def _desempenho(cur, league_id: Optional[int]) -> dict:
                COUNT(*) FILTER (WHERE t.result = 'HALF-WIN') AS half_wins,
                COUNT(*) FILTER (WHERE t.result = 'PUSH')     AS push,
                COALESCE(SUM(t.profit), 0)                 AS profit,
-               COALESCE(SUM(t.stake),  0)                 AS stake_total
+               -- Yield real: push devolve a entrada, entao a stake dele nao
+               -- arrisca nada (mesma regra de /api/public/results).
+               COALESCE(SUM(t.stake) FILTER (WHERE t.result <> 'PUSH'), 0) AS stake_total
         FROM ({union}) t
         {filtro}
     """, p)
@@ -176,6 +178,7 @@ def _ultimos_picks(cur, league_id: Optional[int], limite: int) -> list:
     p = (league_id,) if league_id is not None else ()
     linhas = _q(cur, f"""
         SELECT t.match_date, t.home_team_name, t.away_team_name,
+               t.home_team_id, t.away_team_id,
                t.market, t.line, t.odd, t.result, t.source, t.league_name
         FROM ({union}) t
         {filtro}
@@ -203,7 +206,9 @@ def _jogos(cur, league_id: Optional[int], limite: int) -> list:
     filtro = "AND f.league_id = %s" if league_id is not None else ""
     p = (league_id,) if league_id is not None else ()
     linhas = _q(cur, f"""
-        SELECT f.fixture_id, f.home_team, f.away_team, f.league_id,
+        SELECT f.fixture_id, f.home_team, f.away_team,
+               f.home_team_id, f.away_team_id,
+               f.league_id,
                COALESCE(l.name, 'Liga ' || f.league_id) AS league_name,
                f.match_datetime
         FROM fixtures f

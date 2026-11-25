@@ -860,7 +860,7 @@ export default function ResultadosPublicos() {
                   <div className="text-[11px] text-ink-4 mt-0.5">unidades</div>
                 </div>
                 {[
-                  { label: 'Win Rate', value: `${winRatePct}%`,   color: (winRatePct ?? 0) >= 55 ? 'text-accent-ink' : 'text-ink-2' },
+                  { label: 'Win rate', value: `${winRatePct}%`,   color: (winRatePct ?? 0) >= 55 ? 'text-accent-ink' : 'text-ink-2' },
                   { label: 'Picks',    value: String(s.total),    color: 'text-ink-1' },
                   { label: 'Greens',   value: String(s.greens),   color: 'text-green-400' },
                   { label: 'Reds',     value: String(s.reds),     color: 'text-red-400' },

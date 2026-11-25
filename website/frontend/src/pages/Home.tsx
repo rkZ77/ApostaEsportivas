@@ -108,7 +108,7 @@ export default function Home() {
   const [data, setData] = useState<PublicData | null>(null)
   const [loaded, setLoaded] = useState(false)
 
-  const { plans, monthly, monthlyBase } = usePlans()
+  const { plans, monthly, monthlyBase, anualPro } = usePlans()
 
   /*
    * REVELAÇÃO COLETIVA DO TOPO.
@@ -289,7 +289,7 @@ export default function Home() {
           gente em vez de motor. Some sozinha quando não há ranking. */}
       <SecaoAdiada alturaMinima={360}><ProvaSocial /></SecaoAdiada>
 
-      <SecaoAdiada alturaMinima={1890}><Plans monthly={monthly} monthlyBase={monthlyBase} /></SecaoAdiada>
+      <SecaoAdiada alturaMinima={1890}><Plans monthly={monthly} monthlyBase={monthlyBase} anual={anualPro} /></SecaoAdiada>
 
       <SecaoAdiada alturaMinima={580}><FinalCTA /></SecaoAdiada>
 

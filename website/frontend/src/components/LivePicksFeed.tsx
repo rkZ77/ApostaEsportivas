@@ -54,7 +54,7 @@ import { translateLine, translateMarket, metadesDaLinha, nomeDoMercadoComGrade }
 import { LeagueLogo, TeamLogo } from './TeamLogo'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
 import { pctProb } from '../utils/format'
-import { rotuloDoStatus, escudoDoTime } from '../lib/aoVivo'
+import { rotuloDoStatus } from '../lib/aoVivo'
 import { stakeDe } from '../utils/stakePlan'
 import NumeroVivo from './ui/NumeroVivo'
 import { sinalizarNavegacao } from '../services/progressBus'
@@ -280,24 +280,11 @@ function minutoVivo(p: EmLeitura, segundosExtras: number): { minuto: number | nu
  * Ela SÓ aparece com a busca ligada. Fita girando com o motor parado seria
  * animação decorativa mentindo sobre o estado do produto.
  */
-/* Placeholder de escudo quando não há id de time */
+/* Placeholder de escudo quando não há id de time · delega ao TeamLogo único,
+   que tem o fallback de iniciais. Este era mais uma cópia local (sem lazy,
+   sem fade, dot de uma letra só). */
 function TeamLogoOrDot({ id, name }: { id?: number | null; name?: string | null }) {
-  const [err, setErr] = useState(false)
-  const src = escudoDoTime(id ?? undefined)
-  if (!src || err) {
-    return (
-      <span className="w-[18px] h-[18px] rounded-full bg-surface-3 border border-line shrink-0
-                       flex items-center justify-center text-[8px] font-bold text-ink-4 uppercase">
-        {(name ?? '?').slice(0, 1)}
-      </span>
-    )
-  }
-  return (
-    <img src={src} alt={name ?? ''} width={18} height={18}
-      className="object-contain shrink-0"
-      style={{ width: 18, height: 18 }}
-      onError={() => setErr(true)} />
-  )
+  return <TeamLogo id={id ?? undefined} name={name ?? ''} size={18} />
 }
 
 /* A FITA DE BUSCA SAIU (10/09/2026, pedido do usuário).
@@ -1210,15 +1197,19 @@ const CardLive = forwardRef<HTMLDivElement, {
               <>
                 {/* Sem cor de ganho/perda pra quem não apostou (14/10/2026,
                     pedido do usuário): "o site perdeu, eu usuário não". */}
+                {/* O profit guardado é de 1u, e o pick ao vivo aposta o plano
+                    (2u desde 14/10): mesmo peso do placar público e da stake
+                    sugerida do card. Sem isso, o mesmo pick saía +0,85u aqui
+                    e +1,70u na página de Resultados. */}
                 <div className={`text-xl font-black tabular-nums ${!seguido ? 'text-ink-1'
                   : Number(pick.profit) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {Number(pick.profit) >= 0 ? '+' : ''}{Number(pick.profit).toFixed(2)}u
+                  {Number(pick.profit) >= 0 ? '+' : ''}{(Number(pick.profit) * stakeDe('live')).toFixed(2)}u
                 </div>
                 {!seguido && <div className="text-[10px] text-ink-4">você não apostou</div>}
                 {banca && seguido && (
                   <div className="text-[11px] text-ink-4 tabular-nums">
                     {Number(pick.profit) >= 0 ? '+' : '-'}R$
-                    {Math.abs(Number(pick.profit) * banca.unit_value).toFixed(0)}
+                    {Math.abs(Number(pick.profit) * stakeDe('live') * banca.unit_value).toFixed(0)}
                   </div>
                 )}
               </>
@@ -1448,6 +1439,8 @@ const CardLive = forwardRef<HTMLDivElement, {
           reasoning: pick.reasoning,
           homeTeam: pick.home_team_name,
           awayTeam: pick.away_team_name,
+          homeTeamId: pick.home_team_id,
+          awayTeamId: pick.away_team_id,
           minuteAtCreation: pick.minute_at_creation,
           homeGoalsAtCreation: pick.home_goals_at_creation,
           awayGoalsAtCreation: pick.away_goals_at_creation,

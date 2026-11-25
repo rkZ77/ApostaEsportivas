@@ -672,22 +672,17 @@ def _resultados_publicos(month, source, recent_limit, recent_offset, slim, bloco
         # quebrava -- erro de contagem de parametro, nao de logica, o tipo que
         # so aparece quando alguem filtra.
         builders = _builders(cur)
-        # A contagem por tipo (mais abaixo) le' as tabelas cruas, entao a perna
-        # do ao vivo so' entra quando a tabela existe -- mesma guarda de
-        # `_builders`, escrita aqui porque aquela consulta nao passa por ele.
-        # Mesma guarda para o Bingo, pelo motivo do gate e nao pelo da tabela:
-        # `bingo_total` sairia > 0 numa resposta onde nenhuma cartela aparece.
-        sql_bingo_resolvido = (
-            "UNION ALL SELECT 'bingo' AS source FROM picks_bingo"
-            " WHERE result IS NOT NULL"
-            if "bingo" in builders else ""
-        )
-        sql_live_resolvido = (
-            "UNION ALL SELECT 'live' AS source FROM picks_live"
-            " WHERE result IS NOT NULL"
-            if "live" in builders else ""
-        )
         single = source in builders
+        # FONTE PEDIDA E NAO EXISTENTE responde 400, e nao o placar geral:
+        # mismatch de chave ('multipla' vs 'multiplas') ou fonte oculta (bingo
+        # atras do gate) voltava com TODOS os produtos sem dizer nada -- um
+        # numero que nao e' de ninguem. Mesma postura de
+        # suggestions.py::_fontes, que ja' rejeitava o caso.
+        if source and source not in builders:
+            raise HTTPException(
+                400,
+                f"Fonte desconhecida: {source}. Validas: {', '.join(sorted(builders))}",
+            )
         union_sql = _build_union(builders, date_cond, source if single else None)
         # cada sub-query tem 1 placeholder; o UNION precisa de um por builder
         p = date_params if single else date_params * len(builders)
@@ -702,10 +697,14 @@ def _resultados_publicos(month, source, recent_limit, recent_offset, slim, bloco
                 COUNT(*) FILTER (WHERE result = 'HALF-WIN')      AS half_wins,
                 COUNT(*) FILTER (WHERE result = 'HALF-LOSS')     AS half_losses,
                 COALESCE(SUM(profit), 0)                         AS profit,
-                COALESCE(SUM(stake),  0)                         AS stake_total,
+                -- Yield real: push devolve a entrada, entao a stake dela nao
+                -- arrisca nada e sai do denominador. Com ela dentro, o ROI
+                -- publicado fica sistematicamente abaixo do real (filter de
+                -- PUSH exclui so' a stake, o lucro de push ja' e' zero).
+                COALESCE(SUM(stake) FILTER (WHERE result <> 'PUSH'), 0) AS stake_total,
                 ROUND(
                     COALESCE(SUM(profit), 0) /
-                    NULLIF(COALESCE(SUM(stake), 0), 0) * 100, 1
+                    NULLIF(COALESCE(SUM(stake) FILTER (WHERE result <> 'PUSH'), 0), 0) * 100, 1
                 )                                                 AS roi,
                 -- A Home so' precisa do NUMERO de ligas cobertas, e lia isso do
                 -- tamanho de `by_league`, o que obrigava a montar a quebra por
@@ -775,7 +774,8 @@ def _resultados_publicos(month, source, recent_limit, recent_offset, slim, bloco
                 COUNT(*) FILTER (WHERE t.result = 'HALF-LOSS') AS half_losses,
                 COUNT(*) FILTER (WHERE t.result = 'PUSH')      AS push,
                 COALESCE(SUM(t.profit), 0)                AS profit,
-                COALESCE(SUM(t.stake), 0)                 AS stake_total,
+                -- Mesma regra do sumário: push devolve a entrada.
+                COALESCE(SUM(t.stake) FILTER (WHERE t.result <> 'PUSH'), 0) AS stake_total,
                 COALESCE(l.name, 'Liga ' || t.league_id)  AS league_name
             FROM ({union_sql}) AS t
             LEFT JOIN leagues l ON l.league_id = t.league_id
@@ -802,7 +802,8 @@ def _resultados_publicos(month, source, recent_limit, recent_offset, slim, bloco
                    COUNT(*) FILTER (WHERE result = 'HALF-LOSS') AS half_losses,
                    COUNT(*) FILTER (WHERE result = 'PUSH')      AS push,
                    COALESCE(SUM(profit), 0)                 AS profit,
-                   COALESCE(SUM(stake),  0)                 AS stake_total
+                   -- Mesma regra do sumário: push devolve a entrada.
+                   COALESCE(SUM(stake) FILTER (WHERE result <> 'PUSH'), 0) AS stake_total
             FROM ({union_sql}) AS t
             GROUP BY match_date, source
             ORDER BY match_date
@@ -842,39 +843,15 @@ def _resultados_publicos(month, source, recent_limit, recent_offset, slim, bloco
             cur, date_cond, date_params, single_source,
             limit=recent_limit, offset=recent_offset)
 
-        # ── Contagem por tipo ─────────────────────────────────────────────────
-        counts_row = None if slim else _q1(cur, f"""
-            SELECT
-                COUNT(*) FILTER (WHERE source = 'vip')        AS vip_total,
-                COUNT(*) FILTER (WHERE source = 'free')       AS free_total,
-                COUNT(*) FILTER (WHERE source = 'multipla')   AS multipla_total,
-                COUNT(*) FILTER (WHERE source = 'bingo')      AS bingo_total,
-                COUNT(*) FILTER (WHERE source = 'alavancagem') AS alavancagem_total,
-                COUNT(*) FILTER (WHERE source = 'faltas')     AS faltas_total,
-                COUNT(*) FILTER (WHERE source = 'goleiros')   AS goleiros_total,
-                COUNT(*) FILTER (WHERE source = 'player_stats') AS player_stats_total,
-                COUNT(*) FILTER (WHERE source = 'boost')        AS boost_total,
-                COUNT(*) FILTER (WHERE source = 'live')         AS live_total
-            FROM (
-                SELECT 'vip'        AS source FROM picks_vip        WHERE result IS NOT NULL
-                UNION ALL
-                SELECT 'free'       AS source FROM picks_free       WHERE result IS NOT NULL
-                UNION ALL
-                SELECT 'multipla'   AS source FROM picks_multiplas  WHERE result IS NOT NULL
-                {sql_bingo_resolvido}
-                UNION ALL
-                SELECT 'alavancagem' AS source FROM picks_alavancagem WHERE result IS NOT NULL
-                UNION ALL
-                SELECT 'faltas'     AS source FROM picks_faltas     WHERE result IS NOT NULL
-                UNION ALL
-                SELECT 'goleiros'   AS source FROM picks_goleiros   WHERE result IS NOT NULL
-                UNION ALL
-                SELECT 'player_stats' AS source FROM picks_player_stats WHERE result IS NOT NULL
-                UNION ALL
-                SELECT 'boost'      AS source FROM picks_boost      WHERE result IS NOT NULL
-                {sql_live_resolvido}
-            ) AS t
-        """)
+        # ── BLOCO `counts` REMOVIDO (2026-11) ─────────────────────────────────
+        #
+        # Era uma contagem por tipo num UNION próprio com DOIS defeitos, e
+        # nenhum consumidor no site: nenhuma tela lia a resposta. A chave da
+        # múltipla divergia do resto da API (`multipla` no counts, `multiplas`
+        # no summary/by_source/today-summary), e o bloco ignorava o `date_cond`
+        # -- filtrar por mês mudava o summary e não mudava o counts, dois
+        # números que se contradiziam na mesma resposta. Um número contraditório
+        # esperando o primeiro consumidor sai antes disso acontecer.
 
         return {
             "available_months": available_months,
@@ -885,7 +862,6 @@ def _resultados_publicos(month, source, recent_limit, recent_offset, slim, bloco
             "by_source_day": [dict(r) for r in by_source_day],
             "recent":  [dict(r) for r in recent],
             "recent_total": recent_total,
-            "counts":  dict(counts_row) if counts_row else {},
             # Legenda do plano de stake, montada em stake_plan.py junto com os
             # pesos. Vai na resposta pra que trocar o plano troque o texto da
             # tela no mesmo commit -- legenda velha grudada em numero novo e'
@@ -912,7 +888,7 @@ def _mask_first(full_name: str) -> str:
 def public_pick(pick_type: str, pick_id: int):
     """Teaser público de pick para compartilhamento. Nao expoe market/reasoning."""
     valid = {"vip", "free", "multipla", "bingo", "alavancagem", "faltas", "goleiros",
-             "player_stats"}
+             "player_stats", "boost"}
     # O link compartilhado de uma cartela do Bingo é público por definição ·
     # enquanto o produto está em teste (feature_flags.py) ele não existe aqui,
     # senão bastaria o id na URL para ver a cartela sem sessão nenhuma.
@@ -1443,6 +1419,7 @@ def public_alavancagem_caminhos():
         caminhos = _q(cur, f"""
             SELECT pa.match_date                       AS encerrou_em,
                    cam.passos                          AS passos,
+                   cam.greens                          AS greens,
                    CASE WHEN pa.result = 'RED' THEN 'red' ELSE 'meta' END AS motivo,
                    cam.caminho_profit                  AS unidades
               FROM picks_alavancagem pa
@@ -1485,6 +1462,9 @@ def public_alavancagem_caminhos():
             "caminhos": [{
                 "encerrou_em": str(c["encerrou_em"]),
                 "passos": int(c["passos"]),
+                # Greens é o que a META conta: caminho com anulada no meio
+                # fecha com passos > greens, e a tela precisa do número certo.
+                "greens": int(c["greens"] or 0),
                 "motivo": c["motivo"],
                 "unidades": round(float(c["unidades"] or 0), 4),
             } for c in caminhos],
@@ -1540,8 +1520,10 @@ def public_leaderboard():
                     COUNT(*) FILTER (WHERE result = 'HALF-WIN')   AS half_wins,
                     COUNT(*) FILTER (WHERE result = 'PUSH')       AS push,
                     ROUND(
+                        -- Mesma regra do placar: push devolve a entrada,
+                        -- entao a stake dele nao entra no yield.
                         COALESCE(SUM(profit) FILTER (WHERE result IS NOT NULL), 0) /
-                        NULLIF(COALESCE(SUM(stake_units) FILTER (WHERE result IS NOT NULL), 0), 0) * 100,
+                        NULLIF(COALESCE(SUM(stake_units) FILTER (WHERE result NOT IN ('PUSH')), 0), 0) * 100,
                         1
                     ) AS yield_roi
                 FROM resolved

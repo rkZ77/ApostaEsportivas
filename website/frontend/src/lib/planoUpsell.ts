@@ -80,7 +80,7 @@ export function convitePlano(
     if (podeGanharTrial) return null
     return {
       titulo: 'Você está no plano gratuito',
-      texto: '1 pick por dia. A assinatura abre todos.',
+      texto: 'Até 3 picks grátis por dia. A assinatura abre todos.',
       cta: 'Ver os planos',
       to: '/planos',
       tone: 'yellow',

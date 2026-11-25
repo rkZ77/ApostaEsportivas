@@ -13,7 +13,7 @@ import LinhasDeCampo from '../components/ui/LinhasDeCampo'
 
 const POINTS = [
   '2 dias com o Pick IA Pro aberto',
-  'Cancele quando quiser',
+  'Sem renovação automática',
 ]
 
 export default function FinalCTA() {
