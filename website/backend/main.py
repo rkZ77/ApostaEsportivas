@@ -1093,6 +1093,9 @@ elif _gsc_token:
 # de novo, depois do CSS, que e' exatamente o que o preload existe pra evitar.
 mimetypes.add_type("font/woff2", ".woff2")
 mimetypes.add_type("font/woff", ".woff")
+# O Python 3.12 da imagem nao conhece .webp (entrou no 3.13): saia como
+# application/octet-stream, com nosniff, e dependia do navegador adivinhar.
+mimetypes.add_type("image/webp", ".webp")
 
 _dist = _base_dir / "dist"
 
